@@ -48,6 +48,12 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
 .s-aguardando-devolutiva { background: var(--amber-bg); color: var(--amber); }
 .s-aguardando-entrevista { background: var(--blue-bg); color: var(--blue); }
+.sf-aguardando-teste     { background: var(--blue-bg); color: var(--blue); }
+.sf-aguardando-aprovacao { background: var(--amber-bg); color: var(--amber); }
+.sf-cancelado            { background: var(--red-bg); color: var(--red); }
+.sf-nao-compareceu       { background: var(--red-bg); color: var(--red); }
+.sf-contratado           { background: #1A5C2A; color: #CFFF00; font-weight: 600; }
+.sf-nao-contratado       { background: #F0F0F0; color: #666; }
 .s-aprovado-para-teste   { background: #1A5C2A; color: #CFFF00; font-weight: 600; }
 .s-nao-selecionado       { background: #F0F0F0; color: #666; }
 .s-nao-entrou            { background: var(--red-bg); color: var(--red); }
@@ -158,7 +164,7 @@ function normEntrevista(obj) {
     selecionado:       v('selecionado'),
     data:              v('data_da_entrevista','data_entrevista','data'),
     horario:           v('horario','hora','horario_entrevista','horario_do_teste'),
-    status_entrevista: v('status_entrevista','status','resultado','situacao'),
+    status_entrevista: v('status_da_entrevista','status_entrevista','status','resultado','situacao'),
     entrevistador:     v('entrevistador','entrevistadora'),
     observacoes:       v('observacoes','observacao','obs','feedback'),
     status_final:      v('status_final','resultado_final','contratado'),
@@ -243,27 +249,47 @@ function escH(s) {
 }
 function slugStatus(s) {
   if (!s) return 'default';
-  var l = s.toLowerCase();
+  var l = s.toLowerCase().trim();
   if (l.indexOf('aguardando devolutiva')>=0) return 'aguardando-devolutiva';
   if (l.indexOf('aguardando entrevista')>=0) return 'aguardando-entrevista';
   if (l.indexOf('aprovado para teste')>=0)   return 'aprovado-para-teste';
-  if (l.indexOf('selecionado')>=0)            return 'nao-selecionado';
-  if (l.indexOf('entrou')>=0)                 return 'nao-entrou';
+  if (l.indexOf('nao realizada')>=0 || l.indexOf('não realizada')>=0) return 'nao-entrou';
+  if (l.indexOf('nao selecionado')>=0 || l.indexOf('não selecionado')>=0) return 'nao-selecionado';
+  if (l.indexOf('nao entrou')>=0 || l.indexOf('não entrou')>=0) return 'nao-entrou';
   return 'default';
 }
 function slugFinal(s) {
   if (!s) return 'aguardando';
-  var l = s.toLowerCase();
+  var l = s.toLowerCase().trim();
   if (l === 'contratado') return 'contratado';
   if (l.indexOf('nao_contratado')>=0 || l.indexOf('não contratado')>=0 || l.indexOf('nao compareceu')>=0 || l.indexOf('não compareceu')>=0 || l.indexOf('cancelado')>=0) return 'nao-contratado';
   if (l.indexOf('aguardando')>=0) return 'aguardando';
   return 'nao-contratado';
 }
+
+function slugTeste(s) {
+  if (!s) return 'aguardando-teste';
+  var l = s.toLowerCase().trim();
+  if (l.indexOf('aguardando teste')>=0)     return 'aguardando-teste';
+  if (l.indexOf('aguardando aprovacao')>=0 || l.indexOf('aguardando aprovação')>=0) return 'aguardando-aprovacao';
+  if (l.indexOf('cancelado')>=0)            return 'cancelado';
+  if (l.indexOf('nao compareceu')>=0 || l.indexOf('não compareceu')>=0) return 'nao-compareceu';
+  if (l === 'contratado')                   return 'contratado';
+  if (l.indexOf('nao contratado')>=0 || l.indexOf('não contratado')>=0) return 'nao-contratado';
+  return 'nao-contratado';
+}
 function parseDateBR(s) {
   if (!s) return null;
-  var p = s.split('/');
-  if (p.length!==3) return null;
-  return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+  var p = s.trim().split('/');
+  if (p.length===3) {
+    return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+  }
+  if (p.length===2) {
+    // formato DD/MM — usa o ano atual
+    var ano = new Date().getFullYear();
+    return new Date(ano, parseInt(p[1])-1, parseInt(p[0]));
+  }
+  return null;
 }
 function waLink(contato) {
   var num = (contato||'').replace(/\D/g,'');
@@ -283,6 +309,18 @@ function contactHTML(c) {
 // ─── Filtros ──────────────────────────────────────────────────────────────────
 function getSrc() { return state.tab==='entrevistas' ? entrevistas : testes; }
 
+function isHorarioZero(h) {
+  if (!h) return true;
+  var s = h.trim().replace(/\s/g,'');
+  return s==='' || s==='0' || s==='00' || s==='0:00' || s==='00:00' || s==='0:0';
+}
+
+function isValorZero(v) {
+  if (!v) return true;
+  var num = v.replace(/R\$\s*/i,'').replace(/\./g,'').replace(',','.');
+  return parseFloat(num) === 0 || isNaN(parseFloat(num));
+}
+
 function getFiltered() {
   var src=getSrc(), f=state.filters;
   var hoje=new Date(); hoje.setHours(0,0,0,0);
@@ -291,6 +329,8 @@ function getFiltered() {
   return src.filter(function(r) {
     var d=parseDateBR(r.data);
     if (d && (d<dMin||d>dMax)) return false;
+    if (state.tab==='entrevistas' && isHorarioZero(r.horario)) return false;
+    if (state.tab==='testes' && isValorZero(r.pretensao)) return false;
     if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
     if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
     if (f.data!=='Todos' && r.data!==f.data) return false;
@@ -338,7 +378,18 @@ function renderFilters() {
   var html='<div class="filters-row">';
   html+=sel('Unidade','unidade',unique(src.map(function(r){return r.unidade;})),f.unidade);
   html+=sel('Departamento','departamento',unique(deptSrc.map(function(r){return r.departamento;})),f.departamento);
-  html+=sel('Data','data',unique(src.map(function(r){return r.data;})).reverse(),f.data);
+  // Só mostra datas dentro da janela de 10 dias
+  var hoje=new Date(); hoje.setHours(0,0,0,0);
+  var dMin=new Date(hoje); dMin.setDate(dMin.getDate()-10);
+  var dMax=new Date(hoje); dMax.setDate(dMax.getDate()+10);
+  var datasJanela = src.map(function(r){return r.data;}).filter(function(d){
+    var dt=parseDateBR(d);
+    return dt && dt>=dMin && dt<=dMax;
+  }).filter(function(d,i,arr){ return arr.indexOf(d)===i; }) // unique
+  .sort(function(a,b){
+    return parseDateBR(a)-parseDateBR(b); // crescente por data real
+  });
+  html+=sel('Data','data',datasJanela,f.data);
   html+=sel('Entrevistador','entrevistador',unique(src.map(function(r){return r.entrevistador;})),f.entrevistador);
   html+=sel('Status','status',getStatusOpts(),f.status);
   html+='</div><div class="filters-actions"><button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>';
@@ -351,13 +402,15 @@ function cardEntrevista(r) {
   var sf=slugStatus(r.status_entrevista), sfLabel=r.status_entrevista||'Sem status';
   var horOk=r.horario&&r.horario!=='0:00'&&r.horario!=='0'&&r.horario!=='00:00';
   var sfFinal=slugFinal(r.status_final);
+  var isAguardandoDev = r.status_entrevista && r.status_entrevista.toLowerCase().indexOf('aguardando devolutiva')>=0;
+  var btnDev = r.link ? '<a class="btn-devolutiva" href="'+escH(r.link)+'" target="_blank"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Enviar devolutiva</a>' : '';
   var footer;
   if (sfFinal==='contratado') {
     footer='<div class="card-footer"><span class="check-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Contratado</span></div>';
-  } else if (sfFinal==='aguardando') {
-    footer='<div class="card-footer"><div class="meta-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Aguardando feedback</div>'+(r.link?'<a class="btn-devolutiva" href="'+escH(r.link)+'" target="_blank"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Enviar feedback</a>':'')+'</div>';
+  } else if (isAguardandoDev) {
+    footer='<div class="card-footer"><div class="meta-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Devolutiva pendente</div><a class="btn-devolutiva" href="'+(r.link||'#')+'" target="_blank"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Enviar devolutiva</a></div>';
   } else {
-    footer='<div class="card-footer"><span class="valor-badge">'+escH(r.pretensao||'—')+'</span>'+(r.link?'<a class="btn-devolutiva" href="'+escH(r.link)+'" target="_blank"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Feedback</a>':'')+'</div>';
+    footer='';
   }
   return '<div class="card">'+
     '<div class="card-header"><div>'+
@@ -371,20 +424,13 @@ function cardEntrevista(r) {
     '<div class="card-field"><span class="field-label">Data</span><span class="field-value">'+escH(r.data)+(horOk?' · '+escH(r.horario):'')+'</span></div>'+
     '<div class="card-field"><span class="field-label">Entrevistador</span><span class="field-value">'+escH(r.entrevistador)+'</span></div>'+
     '<div class="card-field"><span class="field-label">Recrutador</span><span class="field-value">'+escH(r.recrutador)+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Pretensão</span><span class="field-value">'+(r.pretensao && !isValorZero(r.pretensao) ? escH(r.pretensao) : 'Não informou')+'</span></div>'+
     '</div>'+footer+'</div>';
 }
 
 function cardTeste(r) {
-  var sf=slugFinal(r.status_final), sfLabel=r.status_final||'Aguardando';
+  var sf=slugTeste(r.status_final), sfLabel=r.status_final||'Aguardando';
   var horOk=r.horario&&r.horario!=='0:00'&&r.horario!=='0'&&r.horario!=='00:00';
-  var footer;
-  if (sf==='contratado') {
-    footer='<div class="card-footer"><span class="check-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Contratado</span></div>';
-  } else if (sf==='aguardando') {
-    footer='<div class="card-footer"><div class="meta-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Aguardando resultado</div></div>';
-  } else {
-    footer='<div class="card-footer"><span class="valor-badge">'+escH(sfLabel)+'</span></div>';
-  }
   return '<div class="card">'+
     '<div class="card-header"><div>'+
     '<div class="candidate-name">'+escH(r.nome)+'</div>'+
@@ -397,7 +443,7 @@ function cardTeste(r) {
     '<div class="card-field"><span class="field-label">Data</span><span class="field-value">'+escH(r.data)+(horOk?' · '+escH(r.horario):'')+'</span></div>'+
     '<div class="card-field"><span class="field-label">Turno</span><span class="field-value">'+escH(r.recrutador)+'</span></div>'+
     '<div class="card-field"><span class="field-label">Valor Diária</span><span class="field-value">'+escH(r.pretensao)+'</span></div>'+
-    '</div>'+footer+'</div>';
+    '</div></div>';
 }
 
 function emptyState() {
