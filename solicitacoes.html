@@ -51,7 +51,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   background: var(--bg);
   padding: 16px 20px;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   border-bottom: 1px solid var(--border);
 }
@@ -332,10 +332,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
     <span class="kpi-label">Pendentes</span>
     <span class="kpi-value" id="kpi-pendentes">–</span>
   </div>
-  <div class="kpi-item">
-    <span class="kpi-label">SLA Médio (dias)</span>
-    <span class="kpi-value" id="kpi-sla">–</span>
-  </div>
+
 </div>
 
 <!-- FILTERS -->
@@ -461,14 +458,11 @@ function buildCard(sol) {
         '<span class="field-label">Abertura</span>' +
         '<span class="field-value">' + sol.abertura + '</span>' +
       '</div>' +
-      '<div class="field-group">' +
+      (sol.atualizacao ? '<div class="field-group">' +
         '<span class="field-label">Atualização</span>' +
         '<span class="field-value">' + sol.atualizacao + '</span>' +
-      '</div>' +
-      '<div class="field-group">' +
-        '<span class="field-label">SLA (dias)</span>' +
-        '<span class="field-value">' + sol.sla + '</span>' +
-      '</div>' +
+      '</div>' : '') +
+
       (sol.devolutiva && sol.devolutiva.trim() ? '<div class="field-group full">' +
         '<span class="field-label">Devolutiva</span>' +
         '<span class="field-value">' + sol.devolutiva + '</span>' +
@@ -545,14 +539,10 @@ function updateKPIs() {
   var fin = src.filter(function(d){ return d.status === 'Finalizado'; }).length;
   var and = src.filter(function(d){ return d.status === 'Em andamento'; }).length;
   var pen = src.filter(function(d){ return d.status === 'Pendente'; }).length;
-  var slaArr = src.map(function(d){ return d.sla || 0; });
-  var slaAvg = slaArr.length ? Math.round(slaArr.reduce(function(a,b){ return a+b; }, 0) / slaArr.length) : 0;
-
   document.getElementById('kpi-total').textContent      = total;
   document.getElementById('kpi-finalizados').textContent = fin;
   document.getElementById('kpi-andamento').textContent   = and > 0 ? and : '–';
   document.getElementById('kpi-pendentes').textContent   = pen;
-  document.getElementById('kpi-sla').textContent         = slaAvg;
 
   document.getElementById('kpi-andamento').className = and === 0 ? 'kpi-value dash' : 'kpi-value';
 }
@@ -560,17 +550,15 @@ function updateKPIs() {
 // ─── MAPEAMENTO DAS COLUNAS DA PLANILHA ──────────────────────────────────────
 // Ajuste os índices (0-based) conforme os cabeçalhos reais da aba
 var COL = {
-  id:           0,   // Coluna A
   titulo:       7,   // Coluna H (descrição da solicitação)
-  tipo:         2,   // Coluna C
-  unidade:      3,   // Coluna D
+  unidade:      2,   // Coluna C
   departamento: 4,   // Coluna E
-  solicitante:  5,   // Coluna F
-  abertura:     6,   // Coluna G
+  solicitante:  3,   // Coluna D
+  tipo:         5,   // Coluna F
+  abertura:     0,   // Coluna A
   status:       16,  // Coluna Q
-  devolutiva:   8,   // Coluna I
-  atualizacao:  9,   // Coluna J
-  sla:          10   // Coluna K
+  devolutiva:   15,  // Coluna P
+  atualizacao:  9    // Coluna J
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -608,10 +596,7 @@ function rowToObj(row) {
   function cell(i) { return (row[i] || '').toString().trim(); }
   // Remove horário da data (ex: "04/04/2026 13:14:36" → "04/04/2026")
   function dateOnly(str) { return str ? str.split(' ')[0] : ''; }
-  var slaRaw = cell(COL.sla);
-  var slaNum = parseFloat(slaRaw.replace(',', '.'));
   return {
-    id:           cell(COL.id),
     titulo:       cell(COL.titulo),
     tipo:         cell(COL.tipo),
     unidade:      cell(COL.unidade),
@@ -620,8 +605,7 @@ function rowToObj(row) {
     abertura:     dateOnly(cell(COL.abertura)),
     status:       cell(COL.status),
     devolutiva:   cell(COL.devolutiva),
-    atualizacao:  dateOnly(cell(COL.atualizacao)),
-    sla:          isNaN(slaNum) ? 0 : slaNum
+    atualizacao:  dateOnly(cell(COL.atualizacao))
   };
 }
 
@@ -723,7 +707,7 @@ function fetchAndRender() {
         var row = rows[i];
         if (!row || row.every(function(c){ return !c; })) continue;
         var obj = rowToObj(row);
-        if (!obj.titulo && !obj.id) continue;
+        if (!obj.titulo) continue;
         var dtAbertura = parseDateBR(obj.abertura);
         if (dtAbertura && dtAbertura < limite) continue;
         DATA.push(obj);
