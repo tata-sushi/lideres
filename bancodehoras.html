@@ -28,23 +28,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .header-title { font-size: 20px; font-weight: 700; color: var(--carbon); letter-spacing: -0.3px; }
 .header-sub { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; margin-top: 1px; }
 
-/* ── Tabs de semana — padrão TATÁ: ativo = carbon sólido + citric ── */
-.semana-tabs {
-  background: var(--surface); border-bottom: 2px solid var(--border);
-  padding: 0 20px; display: flex; gap: 0; overflow-x: auto; scrollbar-width: none;
-}
-.semana-tabs::-webkit-scrollbar { display: none; }
-.semana-tab {
-  font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500;
-  letter-spacing: 1px; text-transform: uppercase;
-  color: var(--muted); padding: 12px 16px;
-  border: none; background: none; cursor: pointer;
-  border-bottom: 2px solid transparent; margin-bottom: -2px;
-  white-space: nowrap; flex-shrink: 0; transition: all 0.15s;
-}
-.semana-tab:hover { color: var(--carbon); }
-/* ★ PADRÃO TATÁ: aba ativa = carbon sólido + texto citric */
-.semana-tab.active { background: var(--carbon); color: var(--citric); border-bottom-color: var(--carbon); }
 
 /* ── Filters ── */
 .filters-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; }
@@ -75,15 +58,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .error-msg { font-size: 13px; color: var(--red); }
 .error-hint { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); line-height: 1.6; }
 
-/* ── KPI Cards — grid horizontal branco ── */
-.kpi-section { padding: 20px 20px 0; }
-.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-.kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); }
-.kpi-label { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-.kpi-value { font-size: 28px; font-weight: 700; color: var(--carbon); letter-spacing: -1px; line-height: 1; }
-.kpi-sub { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 4px; }
-.kpi-positive .kpi-value { color: var(--green); }
-.kpi-negative .kpi-value { color: var(--red); }
 
 /* ── Content ── */
 .content { padding: 20px 20px 90px; }
@@ -135,7 +109,7 @@ tbody tr:hover { background: #FAFAFA; }
 .footer-date { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.4); }
 
 @media (min-width: 768px) {
-  .kpi-section, .content, .filters-wrap, .semana-tabs { max-width: 960px; margin-left: auto; margin-right: auto; }
+  .kpi-section, .content, .filters-wrap { max-width: 960px; margin-left: auto; margin-right: auto; }
   .filters-row { flex-wrap: nowrap; }
 }
 </style>
@@ -150,9 +124,6 @@ tbody tr:hover { background: #FAFAFA; }
     <div class="header-sub">TATÁ Sushi · RH</div>
   </div>
 </header>
-
-<!-- TABS DE SEMANA -->
-<div class="semana-tabs" id="semana-tabs"></div>
 
 <!-- FILTROS -->
 <div class="filters-wrap">
@@ -184,11 +155,6 @@ tbody tr:hover { background: #FAFAFA; }
 
 <!-- ERROR -->
 <div id="error-state" style="display:none"></div>
-
-<!-- KPI (fora do data-container para aparecer logo) -->
-<div class="kpi-section" id="kpi-section" style="display:none">
-  <div class="kpi-grid" id="kpi-grid"></div>
-</div>
 
 <!-- CONTEÚDO -->
 <div class="data-container" id="data-container">
@@ -279,10 +245,8 @@ async function loadData() {
     buildSemanas();
     buildSnapshots();
     buildFilterOptions();
-    buildSemanaTabs();
     document.getElementById('loading-state').style.display = 'none';
-    document.getElementById('kpi-section').style.display   = 'block';
-    document.getElementById('data-container').classList.add('ready');
+      document.getElementById('data-container').classList.add('ready');
     renderAll();
     renderFooterDate();
   } catch(e) {
@@ -409,55 +373,6 @@ function clearFilters() {
   renderAll();
 }
 
-// ─── TABS ────────────────────────────────────────────────────────────────────
-function buildSemanaTabs() {
-  var html = SEMANAS.map(function(s) {
-    return '<button class="semana-tab' + (s === SEM_ATIVA ? ' active' : '') +
-      '" data-key="' + s + '" onclick="selectSemana(\'' + s + '\')">' +
-      semKeyToLabel(s) + '</button>';
-  }).join('');
-  document.getElementById('semana-tabs').innerHTML = html;
-  setTimeout(function() {
-    var el = document.querySelector('.semana-tab.active');
-    if (el) el.scrollIntoView({ inline: 'nearest', behavior: 'smooth' });
-  }, 100);
-}
-
-function selectSemana(key) {
-  SEM_ATIVA = key;
-  document.querySelectorAll('.semana-tab').forEach(function(t) {
-    t.classList.toggle('active', t.dataset.key === key);
-  });
-  renderAll();
-}
-
-// ─── KPI ─────────────────────────────────────────────────────────────────────
-function renderKPI(data) {
-  var total     = data.length;
-  var negativos = data.filter(function(c) { return c.saldo < 0; }).length;
-  var somaPos   = data.reduce(function(a,c) { return c.saldo > 0 ? a + c.saldo : a; }, 0);
-  var somaNeg   = data.reduce(function(a,c) { return c.saldo < 0 ? a + c.saldo : a; }, 0);
-  var pctNeg    = total > 0 ? ((negativos / total) * 100).toFixed(0) : 0;
-
-  document.getElementById('kpi-grid').innerHTML =
-    kpiCard('COLABORADORES',  total,           '',                          '') +
-    kpiCard('SALDO POSITIVO', fmtH(somaPos),  'h acumuladas',              'positive') +
-    kpiCard('SALDO NEGATIVO', fmtH(somaNeg),  'h em débito',               'negative') +
-    kpiCard('COM DÉBITO',     pctNeg + '%',   negativos + ' colaboradores', '');
-}
-
-function kpiCard(label, val, sub, cls) {
-  return '<div class="kpi-card' + (cls ? ' kpi-' + cls : '') + '">' +
-    '<div class="kpi-label">' + label + '</div>' +
-    '<div class="kpi-value">' + val + '</div>' +
-    (sub ? '<div class="kpi-sub">' + sub + '</div>' : '') +
-    '</div>';
-}
-
-function fmtH(n) {
-  var s = n >= 0 ? '' : '−'; var a = Math.abs(n);
-  return a >= 1000 ? s + (a/1000).toFixed(1) + 'k' : s + a.toFixed(0);
-}
 
 // ─── BARRAS ──────────────────────────────────────────────────────────────────
 function renderBarsEl(elId, data, groupFn) {
@@ -611,7 +526,6 @@ function renderTable(data) {
 // ─── RENDER ALL ──────────────────────────────────────────────────────────────
 function renderAll() {
   var data = getFiltered();
-  renderKPI(data);
   renderBarsEl('bar-depto',   data, function(r) { return r.depto; });
   renderBarsEl('bar-unidade', data, function(r) { return r.unidade; });
   renderWeek();
