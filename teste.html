@@ -484,13 +484,20 @@ function getDomingoDaSemana(offset) {
 function parseDateBR(str) {
   if (!str) return null;
   str = String(str).trim();
+  // DD/MM/AAAA
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) {
     var p = str.split('/');
     return new Date(+p[2], +p[1]-1, +p[0]);
   }
+  // AAAA-MM-DD ou ISO (ex: "2026-01-24T03:00:00.000Z" do Google Sheets)
   if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
     var q = str.slice(0,10).split('-');
     return new Date(+q[0], +q[1]-1, +q[2]);
+  }
+  // Fallback: parse nativo normalizado para meia-noite local
+  var d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   }
   return null;
 }
@@ -525,9 +532,10 @@ function apiGet() {
   return fetch(APPS_SCRIPT_URL + '?action=read').then(function(r){ return r.json(); });
 }
 function apiPost(body) {
+  // Usa text/plain para evitar preflight CORS (Apps Script não suporta OPTIONS)
   return fetch(APPS_SCRIPT_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(body),
     redirect: 'follow'
   }).then(function(r){ return r.json(); });
@@ -541,7 +549,14 @@ function carregarDados() {
     dadosGlobais = (res.rows || []).map(function(r){
       return Object.assign({}, r, { unidade: normalizarUnidade(r.unidade), status: (r.status||'').toUpperCase() });
     });
+    // Debug: log primeira linha para verificar formato de data
+    if (dadosGlobais.length > 0) {
+      console.log('[TATA DEBUG] Total linhas:', dadosGlobais.length);
+      console.log('[TATA DEBUG] Primeira data raw:', dadosGlobais[0].data, '| parsed:', parseDateBR(dadosGlobais[0].data));
+      console.log('[TATA DEBUG] Semana atual seg:', getSegundaDaSemana(offsetSemana), 'dom:', getDomingoDaSemana(offsetSemana));
+    }
     filtrarEAgrupar();
+    console.log('[TATA DEBUG] dadosAgrupados:', dadosAgrupados.length);
     renderDados();
     setLoadingState(false);
   }).catch(function(err){
