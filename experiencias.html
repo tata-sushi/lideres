@@ -319,6 +319,7 @@ var SHEETS_CONFIG = {
   //          E=DATA_ADMISSAO | F=DIAS_CONTRATO | G=STATUS_DEVOLUTIVA
 };
 // ─────────────────────────────────────────────────────────────────────────────
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzwNRq62hQIMmsuIs0MmKJ-DgIL44mNSQ1z2iE4YCyN4Fms-kkjNp16l5gfUVCXwWELHg/exec';
 
 var hoje = new Date();
 var feedbacks = {};
@@ -747,15 +748,43 @@ function handleOverlayClick(e) {
 }
 
 function enviarFeedback() {
-  feedbacks[colabAtual.nome] = {
-    respostas: respostasModal,
-    obs: document.getElementById('obs-geral').value,
-    avaliador: document.getElementById('avaliador-nome').value,
-    data: document.getElementById('avaliador-data').textContent
+  var avaliador = document.getElementById('avaliador-nome').value;
+  if (!avaliador) { showToast('Selecione o avaliador(a)'); return; }
+
+  var btnSubmit = document.getElementById('btn-submit');
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = 'Salvando...';
+
+  var payload = {
+    action:       'salvarAvaliacao',
+    periodo:      colabAtual.fase === 46 ? 2 : 1,
+    mt:           colabAtual.mt || '',
+    nome:         colabAtual.nome,
+    unidade:      colabAtual.unidade,
+    departamento: colabAtual.departamento || '',
+    avaliador:    avaliador,
+    obs:          document.getElementById('obs-geral').value,
+    respostas:    respostasModal
   };
-  fecharModal();
-  showToast('Avaliação salva: ' + colabAtual.nome);
-  renderCards();
+
+  fetch(APPS_SCRIPT_URL, {
+    method:  'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body:    JSON.stringify(payload)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (!data.ok) throw new Error(data.erro || 'Erro desconhecido');
+    feedbacks[colabAtual.nome] = { respostas: respostasModal, avaliador: avaliador };
+    fecharModal();
+    showToast('Avaliação salva: ' + colabAtual.nome);
+    renderCards();
+  })
+  .catch(function(err) {
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = 'Salvar Avaliação';
+    showToast('Erro ao salvar: ' + err.message);
+  });
 }
 
 function showToast(msg) {
