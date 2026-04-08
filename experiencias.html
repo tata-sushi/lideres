@@ -319,6 +319,7 @@ var SHEETS_CONFIG = {
   //          E=DATA_ADMISSAO | F=DIAS_CONTRATO | G=STATUS_DEVOLUTIVA
 };
 // ─────────────────────────────────────────────────────────────────────────────
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzwNRq62hQIMmsuIs0MmKJ-DgIL44mNSQ1z2iE4YCyN4Fms-kkjNp16l5gfUVCXwWELHg/exec';
 
 var hoje = new Date();
 var feedbacks = {};
@@ -359,8 +360,12 @@ function parseLinha(row) {
   }
 
   var diasContrato = parseInt(row[5] || '14', 10);
-  // Normaliza para fase 14 ou 46: ≤ 14 dias = fase 14, caso contrário = fase 46
-  var fase = diasContrato <= 14 ? 14 : 46;
+  var status = (row[6] || '').trim();
+
+  // Fase determinada pelo status:
+  // - Se já avaliado no 1º e aprovado → fase 46
+  // - Caso contrário → fase 14 (independente dos dias decorridos)
+  var fase = (status === 'Av. 1º Período') ? 46 : 14;
 
   return {
     mt:           (row[0] || '').trim(),
@@ -372,7 +377,7 @@ function parseLinha(row) {
     admissao:     admissao,
     fase:         fase,
     diasContrato: diasContrato,
-    statusDevolutiva: (row[6] || '').trim()
+    statusDevolutiva: status
   };
 }
 
@@ -396,6 +401,19 @@ function carregarDados() {
         setError('Nenhum colaborador encontrado na planilha.<br>Verifique se a aba é "Sheet1" e se há dados a partir da linha 2.');
         return;
       }
+      // Ocultar colaboradores encerrados no 1º ou 2º período
+      var statusOcultos = ['Não Efetivado 1º', 'Não Efetivado 2º', 'Av. 2º Período'];
+      colaboradores = colaboradores.filter(function(c) {
+        return statusOcultos.indexOf(c.statusDevolutiva) === -1;
+      });
+      // Popular feedbacks com base no STATUS_DEVOLUTIVA da planilha
+      feedbacks = {};
+      colaboradores.forEach(function(c) {
+        var s = c.statusDevolutiva;
+        if ((s === 'Av. 1º Período' && c.fase === 14) || s === 'Av. 2º Período') {
+          feedbacks[c.nome] = { avaliador: '', respostas: {} };
+        }
+      });
       setLoading(false);
       document.getElementById('mainContent').style.display = 'block';
       renderCards();
@@ -449,7 +467,12 @@ function makeCard(c) {
   var pass     = diffDias(c.admissao);
   var urgente  = isUrgente(c);
   var pct      = Math.min(100, Math.round(pass / c.fase * 100));
-  var temFb    = !!feedbacks[c.nome];
+
+  // Avaliado apenas se o status corresponde à fase atual do colaborador
+  var status = c.statusDevolutiva || '';
+  var temFb  = (c.fase === 14 && status === 'Av. 1º Período') ||
+               (c.fase === 46 && status === 'Av. 2º Período') ||
+               !!feedbacks[c.nome];
 
   // badge de status/fase
   var badgeClass, badgeLabel;
@@ -499,7 +522,7 @@ function makeCard(c) {
       '<div class="card-progress-wrap"><div class="card-progress-fill" style="width:' + pct + '%"></div></div>' +
     '</div>' +
     '<div class="card-footer">' +
-      '<button class="' + btnClass + '" onclick="abrirModal(' + cardIdx + ')">' + btnLabel + '</button>' +
+      '<button class="' + btnClass + '" ' + (temFb ? 'disabled' : 'onclick="abrirModal(' + cardIdx + ')"') + '>' + btnLabel + '</button>' +
     '</div>' +
   '</div>';
 }
@@ -747,15 +770,44 @@ function handleOverlayClick(e) {
 }
 
 function enviarFeedback() {
-  feedbacks[colabAtual.nome] = {
-    respostas: respostasModal,
-    obs: document.getElementById('obs-geral').value,
-    avaliador: document.getElementById('avaliador-nome').value,
-    data: document.getElementById('avaliador-data').textContent
+  var avaliador = document.getElementById('avaliador-nome').value;
+  if (!avaliador) { showToast('Selecione o avaliador(a)'); return; }
+
+  var btnSubmit = document.getElementById('btn-submit');
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = 'Salvando...';
+
+  var payload = {
+    action:       'salvarAvaliacao',
+    periodo:      colabAtual.fase === 46 ? 2 : 1,
+    mt:           colabAtual.mt || '',
+    nome:         colabAtual.nome,
+    unidade:      colabAtual.unidade,
+    departamento: colabAtual.departamento || '',
+    avaliador:    avaliador,
+    obs:          document.getElementById('obs-geral').value,
+    respostas:    respostasModal
   };
-  fecharModal();
-  showToast('Avaliação salva: ' + colabAtual.nome);
-  renderCards();
+
+  fetch(APPS_SCRIPT_URL, {
+    method:  'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body:    JSON.stringify(payload)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (!data.ok) throw new Error(data.erro || 'Erro desconhecido');
+    var nomeColab = colabAtual.nome;
+    feedbacks[nomeColab] = { respostas: respostasModal, avaliador: avaliador };
+    fecharModal();
+    showToast('Avaliação salva: ' + nomeColab);
+    renderCards();
+  })
+  .catch(function(err) {
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = 'Salvar Avaliação';
+    showToast('Erro ao salvar: ' + err.message);
+  });
 }
 
 function showToast(msg) {
