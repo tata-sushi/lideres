@@ -117,18 +117,16 @@ function avaliarEntrevista(e) {
     var sheet = SpreadsheetApp.openById(ID_PLANILHA).getSheetByName(NOME_ABA_ENTREVISTAS);
     if (!sheet) return respostaJSON(false, 'Aba CONTROLE DE ENTREVISTAS não encontrada');
 
+    // Usa match exato de headers (igual ao salvarFeedback)
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var colNome = -1, colContato = -1, colStatus = -1, colObs = -1, colContRef = -1, colDataHora = -1;
+    var cab = headers.map(function(h) { return h.toString().trim().toUpperCase(); });
 
-    for (var i = 0; i < headers.length; i++) {
-      var h = normalizarHeader(headers[i].toString());
-      if (h === 'nome') colNome = i;
-      if (h === 'contato' || h === 'telefone' || h === 'whatsapp') colContato = i;
-      if (h === 'status_da_entrevista' || h === 'status') colStatus = i;
-      if (h.indexOf('observa') >= 0 || h === 'feedback' || h === 'obs') colObs = i;
-      if (h.indexOf('contato_de_refer') >= 0 || h.indexOf('referencia') >= 0) colContRef = i;
-      if (h === 'feedback_enviado_em' || h === 'data_feedback') colDataHora = i;
-    }
+    var colNome     = cab.indexOf('NOME');
+    var colContato  = cab.indexOf('CONTATO');
+    var colStatus   = cab.indexOf('STATUS DA ENTREVISTA');
+    var colObs      = cab.indexOf('OBSERVAÇÕES DAS ENTREVISTAS');
+    var colContRef  = cab.indexOf('CONTATO DE REFERÊNCIA');
+    var colDataHora = cab.indexOf('FEEDBACK_ENVIADO_EM');
 
     if (colStatus === -1) return respostaJSON(false, 'Coluna STATUS DA ENTREVISTA não encontrada');
 
