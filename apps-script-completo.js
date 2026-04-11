@@ -2,14 +2,11 @@ const ID_PLANILHA = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
 const NOME_ABA_ENTREVISTAS = 'CONTROLE DE ENTREVISTAS';
 const NOME_ABA_TESTES = 'CONTROLE DE TESTES';
 
-// ─── Roteador principal ───────────────────────────────────────────────────────
 function doGet(e) {
-  // Rota: avaliação de teste (chamada pelo recrutamento1.html)
   if (e.parameter.acao === 'avaliar-teste') {
     return avaliarTeste(e);
   }
 
-  // Rota padrão: devolutiva de entrevista (fluxo existente por token)
   try {
     const token = (e.parameter.t || '').trim();
     if (!token) return HtmlService.createHtmlOutput('<h3>Link inválido.</h3>');
@@ -28,46 +25,42 @@ function doGet(e) {
   }
 }
 
-// ─── Avaliação de Teste ───────────────────────────────────────────────────────
 function avaliarTeste(e) {
-  var callback = e.parameter.callback || '';
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var nome     = (e.parameter.nome    || '').trim();
-    var contato  = (e.parameter.contato || '').trim();
-    var status   = (e.parameter.status  || '').trim();
-    var obs      = (e.parameter.obs     || '').trim();
+    var nome    = (e.parameter.nome    || '').trim();
+    var contato = (e.parameter.contato || '').trim();
+    var status  = (e.parameter.status  || '').trim();
+    var obs     = (e.parameter.obs     || '').trim();
 
-    if (!nome || !contato || !status) {
-      return respostaJSONP(callback, false, 'Parâmetros incompletos');
-    }
+    if (!nome || !contato || !status)
+      return respostaJSON(false, 'Parâmetros incompletos');
 
     var sheet = SpreadsheetApp.openById(ID_PLANILHA).getSheetByName(NOME_ABA_TESTES);
-    if (!sheet) return respostaJSONP(callback, false, 'Aba CONTROLE DE TESTES não encontrada');
+    if (!sheet) return respostaJSON(false, 'Aba não encontrada');
 
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     var colNome = -1, colContato = -1, colStatus = -1, colObs = -1;
 
     for (var i = 0; i < headers.length; i++) {
-      var h = normalizar(headers[i].toString());
+      var h = normalizarHeader(headers[i].toString());
       if (h === 'nome' || h === 'candidato') colNome = i;
       if (h === 'contato' || h === 'telefone' || h === 'whatsapp') colContato = i;
       if (h === 'status' || h === 'resultado' || h === 'situacao') colStatus = i;
       if (h.indexOf('observa') >= 0 || h === 'obs') colObs = i;
     }
 
-    if (colNome === -1 || colContato === -1 || colStatus === -1) {
-      return respostaJSONP(callback, false, 'Colunas NOME, CONTATO ou STATUS não encontradas');
-    }
+    if (colNome === -1 || colContato === -1 || colStatus === -1)
+      return respostaJSON(false, 'Colunas não encontradas');
 
     var rows = sheet.getDataRange().getValues();
     var targetRow = -1;
-    var nomeB    = normalizar(nome);
+    var nomeB    = stripAcentos(nome.toLowerCase());
     var contatoB = contato.replace(/\D/g, '');
 
     for (var r = 1; r < rows.length; r++) {
-      var nomeR    = normalizar(rows[r][colNome].toString().trim());
+      var nomeR    = stripAcentos(rows[r][colNome].toString().trim().toLowerCase());
       var contatoR = rows[r][colContato].toString().replace(/\D/g, '');
       if (nomeR === nomeB && contatoR === contatoB) {
         targetRow = r + 1;
@@ -75,21 +68,20 @@ function avaliarTeste(e) {
       }
     }
 
-    if (targetRow === -1) return respostaJSONP(callback, false, 'Candidato não encontrado');
+    if (targetRow === -1) return respostaJSON(false, 'Candidato não encontrado: ' + nomeB + ' / ' + contatoB);
 
     sheet.getRange(targetRow, colStatus + 1).setValue(status);
     if (colObs >= 0 && obs) sheet.getRange(targetRow, colObs + 1).setValue(obs);
 
-    return respostaJSONP(callback, true, 'Status atualizado com sucesso');
+    return respostaJSON(true, 'Status atualizado com sucesso');
 
   } catch (err) {
-    return respostaJSONP(callback, false, err.message || 'Erro desconhecido');
+    return respostaJSON(false, err.message || 'Erro desconhecido');
   } finally {
     lock.releaseLock();
   }
 }
 
-// ─── Entrevistas (funções existentes) ────────────────────────────────────────
 function buscarEntrevistaPorToken_(token) {
   const sheet = SpreadsheetApp.openById(ID_PLANILHA).getSheetByName(NOME_ABA_ENTREVISTAS);
   if (!sheet) throw new Error('Aba não encontrada.');
@@ -97,8 +89,8 @@ function buscarEntrevistaPorToken_(token) {
   const dados = sheet.getDataRange().getValues();
   const cab = dados[0].map(h => String(h).trim().toUpperCase());
 
-  const colToken     = cab.indexOf('TOKEN_FEEDBACK');
-  const colNome      = cab.indexOf('NOME');
+  const colToken      = cab.indexOf('TOKEN_FEEDBACK');
+  const colNome       = cab.indexOf('NOME');
   const colTokenUsado = cab.indexOf('TOKEN_USADO');
 
   if (colToken === -1 || colNome === -1) throw new Error('Colunas obrigatórias não encontradas.');
@@ -121,9 +113,9 @@ function salvarFeedback(payload) {
   const status   = String(payload.status   || '').trim();
   const feedback = String(payload.feedback || '').trim();
 
-  const nomeContato1 = String(payload.nomeContatoReferencia  || '').trim();
+  const nomeContato1 = String(payload.nomeContatoReferencia    || '').trim();
   const telContato1  = String(payload.telefoneContatoReferencia  || '').trim();
-  const nomeContato2 = String(payload.nomeContatoReferencia2 || '').trim();
+  const nomeContato2 = String(payload.nomeContatoReferencia2   || '').trim();
   const telContato2  = String(payload.telefoneContatoReferencia2 || '').trim();
 
   function montarContato(nome, tel) {
@@ -150,9 +142,8 @@ function salvarFeedback(payload) {
   const colEnviadoEm  = cab.indexOf('FEEDBACK_ENVIADO_EM');
   const colTokenUsado = cab.indexOf('TOKEN_USADO');
 
-  if (colToken === -1 || colStatus === -1 || colObs === -1 || colContato === -1) {
+  if (colToken === -1 || colStatus === -1 || colObs === -1 || colContato === -1)
     throw new Error('Colunas obrigatórias não encontradas.');
-  }
 
   let linhaEncontrada = 0;
   for (let i = 1; i < dados.length; i++) {
@@ -180,15 +171,95 @@ function respostaJSON(sucesso, mensagem) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-function respostaJSONP(callback, sucesso, mensagem) {
-  var json = JSON.stringify({ success: sucesso, message: mensagem });
-  var output = callback ? callback + '(' + json + ')' : json;
-  var mime = callback ? ContentService.MimeType.JAVASCRIPT : ContentService.MimeType.JSON;
-  return ContentService.createTextOutput(output).setMimeType(mime);
+function stripAcentos(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
-function normalizar(s) {
+function normalizarHeader(s) {
   return s.toLowerCase().trim()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, '_');
+}
+
+// ─── Funções de teste (não são chamadas em produção) ─────────────────────────
+function testarAvaliacaoTeste() {
+  var sheet = SpreadsheetApp.openById(ID_PLANILHA).getSheetByName(NOME_ABA_TESTES);
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  Logger.log('=== HEADERS ===');
+  headers.forEach(function(h, i) {
+    Logger.log('Col ' + (i+1) + ': [' + h + '] → ' + normalizarHeader(h.toString()));
+  });
+  var rows = sheet.getDataRange().getValues();
+  Logger.log('=== PRIMEIRAS LINHAS ===');
+  for (var r = 1; r <= Math.min(5, rows.length-1); r++) {
+    Logger.log('Linha ' + (r+1) + ': nome=[' + rows[r][0] + '] contato=[' + rows[r][1] + ']');
+  }
+}
+
+function testarAguardandoAprovacao() {
+  var sheet = SpreadsheetApp.openById(ID_PLANILHA).getSheetByName(NOME_ABA_TESTES);
+  var rows = sheet.getDataRange().getValues();
+  var headers = rows[0];
+  var colNome = -1, colContato = -1, colStatus = -1;
+  for (var i = 0; i < headers.length; i++) {
+    var h = normalizarHeader(headers[i].toString());
+    if (h === 'nome') colNome = i;
+    if (h === 'contato') colContato = i;
+    if (h === 'status') colStatus = i;
+  }
+  Logger.log('colNome=' + colNome + ' colContato=' + colContato + ' colStatus=' + colStatus);
+  var encontrados = 0;
+  for (var r = 1; r < rows.length; r++) {
+    var status = rows[r][colStatus].toString().trim();
+    if (stripAcentos(status.toLowerCase()).indexOf('aguardando aprovacao') >= 0) {
+      encontrados++;
+      Logger.log('Linha ' + (r+1) + ': nome=[' + rows[r][colNome] + '] contato=[' + rows[r][colContato] + '] status=[' + status + ']');
+    }
+  }
+  Logger.log('Total com Aguardando aprovacao: ' + encontrados);
+}
+
+function testarEscreverAline() {
+  var nome    = 'Aline Santos Paixão';
+  var contato = '86 8188-7737';
+
+  var sheet = SpreadsheetApp.openById(ID_PLANILHA).getSheetByName(NOME_ABA_TESTES);
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var colNome = -1, colContato = -1, colStatus = -1;
+
+  for (var i = 0; i < headers.length; i++) {
+    var h = normalizarHeader(headers[i].toString());
+    if (h === 'nome') colNome = i;
+    if (h === 'contato') colContato = i;
+    if (h === 'status') colStatus = i;
+  }
+
+  Logger.log('Colunas: nome=' + colNome + ' contato=' + colContato + ' status=' + colStatus);
+
+  var rows = sheet.getDataRange().getValues();
+  var nomeB    = stripAcentos(nome.toLowerCase());
+  var contatoB = contato.replace(/\D/g, '');
+
+  Logger.log('Buscando: [' + nomeB + '] / [' + contatoB + ']');
+
+  for (var r = 1; r < rows.length; r++) {
+    var nomeR    = stripAcentos(rows[r][colNome].toString().trim().toLowerCase());
+    var contatoR = rows[r][colContato].toString().replace(/\D/g, '');
+    if (nomeR === nomeB && contatoR === contatoB) {
+      Logger.log('ENCONTRADA na linha ' + (r + 1) + '! Atualizando status...');
+      sheet.getRange(r + 1, colStatus + 1).setValue('TESTE_OK');
+      Logger.log('Feito! Verifica a planilha na linha ' + (r + 1));
+      return;
+    }
+  }
+
+  Logger.log('NÃO ENCONTRADA — comparando linha da Aline:');
+  for (var r = 1; r < rows.length; r++) {
+    if (rows[r][colNome].toString().toLowerCase().indexOf('aline') >= 0) {
+      var nomeR = stripAcentos(rows[r][colNome].toString().trim().toLowerCase());
+      var contatoR = rows[r][colContato].toString().replace(/\D/g, '');
+      Logger.log('nomeR=[' + nomeR + '] esperado=[' + nomeB + '] igual=' + (nomeR === nomeB));
+      Logger.log('contatoR=[' + contatoR + '] esperado=[' + contatoB + '] igual=' + (contatoR === contatoB));
+    }
+  }
 }
