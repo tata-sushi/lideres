@@ -202,6 +202,7 @@ var SHEET_TESTES      = 'CONTROLE DE TESTES';
 // ─── Estado ──────────────────────────────────────────────────────────────────
 var entrevistas = [];
 var testes = [];
+var _testeCache = [];
 var state = {
   tab: 'entrevistas',
   filters: { unidade: 'Todos', departamento: 'Todos', data: 'Todos', entrevistador: 'Todos', status: 'Todos' },
@@ -521,14 +522,13 @@ function cardTeste(r) {
   var sf=slugTeste(r.status_final), sfLabel=r.status_final||'Aguardando';
   var horOk=r.horario&&r.horario!=='0:00'&&r.horario!=='0'&&r.horario!=='00:00';
   var isAguardandoAprov = sf==='aguardando-aprovacao' || (r.status_final && norm(r.status_final.toLowerCase()).indexOf('aguardando aprovacao')>=0);
-  var footer;
+  var footer='';
   if (sf==='contratado') {
     footer='<div class="card-footer"><span class="check-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Contratado</span></div>';
   } else if (isAguardandoAprov) {
-    var dataJson=escH(JSON.stringify({nome:r.nome,contato:r.contato,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,turno:r.recrutador,valor:r.pretensao}));
-    footer='<div class="card-footer"><div class="meta-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Aguardando avaliação</div><button class="btn-avaliar" onclick=\'abrirModal('+dataJson.replace(/'/g,"\\'")+')\'><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Avaliar</button></div>';
-  } else {
-    footer='';
+    var idx=_testeCache.length;
+    _testeCache.push({nome:r.nome,contato:r.contato,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,turno:r.recrutador,valor:r.pretensao});
+    footer='<div class="card-footer">'+'<div class="meta-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Aguardando avaliação</div>'+'<button class="btn-avaliar" onclick="abrirModal('+idx+')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Avaliar</button>'+'</div>';
   }
   return '<div class="card">'+
     '<div class="card-header"><div>'+
@@ -557,6 +557,7 @@ function render() {
   renderFilters();
   var c=document.getElementById('content');
   if (!filtered.length) { c.innerHTML=emptyState(); return; }
+  _testeCache=[];
   c.innerHTML=filtered.map(function(r){ return state.tab==='entrevistas'?cardEntrevista(r):cardTeste(r); }).join('');
   document.getElementById('footer-date').textContent='Atualizado: '+new Date().toLocaleString('pt-BR');
 }
@@ -579,8 +580,9 @@ function clearFilters() {
 }
 
 // ─── Modal de Avaliação ──────────────────────────────────────────────────────
-function abrirModal(dados) {
-  var d = typeof dados === 'string' ? JSON.parse(dados) : dados;
+function abrirModal(idx) {
+  var d = _testeCache[idx];
+  if (!d) return;
   document.getElementById('modal-nome').textContent = d.nome || '';
   document.getElementById('modal-contato').innerHTML = contactHTML(d.contato);
   document.getElementById('modal-unidade').textContent = d.unidade || '';
