@@ -109,7 +109,7 @@ body {
 .chip-avatar.admin { background: var(--carbon); color: var(--citric); }
 .chip-avatar.lider { background: var(--blue-bg); color: var(--blue); }
 
-.chip-name { font-size: 12px; font-weight: 600; color: var(--text); }
+.chip-name { font-size: 12px; font-weight: 700; color: var(--text); }
 .chip-caret { color: var(--muted); display: flex; align-items: center; }
 
 .profile-menu {
@@ -140,6 +140,8 @@ body {
 /* btn lançar */
 .btn-nova { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; background: var(--carbon); color: var(--citric); border: none; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; cursor: pointer; text-transform: uppercase; transition: opacity 0.15s; white-space: nowrap; flex-shrink: 0; }
 .btn-nova:hover { opacity: 0.85; }
+.btn-nova-label { display: inline; }
+@media (max-width: 480px) { .btn-nova-label { display: none; } }
 .btn-lancar:hover { opacity: 0.85; }
 
 
@@ -543,7 +545,7 @@ body {
     <div id="header-right" style="margin-left:auto;display:flex;align-items:center;gap:6px;overflow:hidden;min-width:0;flex-shrink:1;"></div>
     <button class="btn-nova" onclick="openModal()">
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      Lançar
+      <span class="btn-nova-label">Realizar Lançamento</span>
     </button>
   </header>
 
@@ -705,12 +707,11 @@ body {
     <div class="m-meta" style="padding-top:10px;grid-template-columns:1fr">
       <div class="field"><label>Tipo de Movimentação</label>
         <select id="f-tipo" onchange="onTipoChange()" style="width:100%">
-          <option>Entrada</option>
-          <option>Saída — Admissão</option>
-          <option>Saída — Lavanderia</option>
-          <option>Transferência</option>
-          <option>Devolução</option>
-          <option>Ajuste de Inventário</option>
+          <option>Reabastecimento Estoque (entrada)</option>
+          <option>Reposição Periódica (saída)</option>
+          <option>Perda/Furto (saída)</option>
+          <option>Lavanderia (entrada)</option>
+          <option>Devolução (entrada)</option>
         </select>
       </div>
     </div>
@@ -902,7 +903,7 @@ function initApp() {
   if (hr) {
     hr.innerHTML =
       '<div class="user-chip" onclick="toggleMenu(event)">' +
-        '<span id="chip-name">' + u.short + '</span>' +
+        '<span id="chip-name">' + u.name + '</span>' +
         '<svg width="8" height="5" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="#999" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
       '</div>' +
       '<div class="profile-menu" id="profile-menu">' +
@@ -1124,20 +1125,7 @@ function setMode(m) {
 
 /* ══ TIPO CHANGE ══ */
 function onTipoChange() {
-  var tipo = document.getElementById('f-tipo').value;
-  var row  = document.getElementById('transfer-row');
-  var from = document.getElementById('transfer-from');
-  var un   = document.getElementById('f-unidade').value;
-  if (tipo === 'Transferência') {
-    row.classList.add('show');
-    from.textContent = un || '—';
-    var dest = document.getElementById('f-destino');
-    Array.from(dest.options).forEach(function(o){
-      o.style.display = (!o.value || o.value !== un) ? '' : 'none';
-    });
-  } else {
-    row.classList.remove('show');
-  }
+  // Nenhum tipo atual exige UI adicional
 }
 
 /* ══ KIT ══ */
@@ -1237,7 +1225,7 @@ function checkSaldo(rows) {
   if (!saldo) return [];
   var req = {};
   rows.forEach(function(r) {
-    var isSaida = r.tipo.indexOf('Saída') === 0 || r.tipo === 'Transferência';
+    var isSaida = r.tipo.indexOf('(saída)') !== -1;
     if (isSaida) { req[r.item] = (req[r.item]||0) + r.quantidade; }
   });
   return Object.keys(req).filter(function(item){ return req[item] > (saldo[item]||0); })
@@ -1366,13 +1354,14 @@ function imprimirRecibo() {
   // Motivo da entrega — inferir do tipo
   var tipo = (m.tipo||'');
   var motivos = {
-    'admissao':   tipo.indexOf('Admissão')   !== -1,
-    'troca':      tipo.indexOf('Tamanho')    !== -1 || tipo.indexOf('Troca') !== -1,
-    'reposicao':  tipo.indexOf('Devolução')  !== -1 || tipo.indexOf('Reposição') !== -1,
-    'perda':      tipo.indexOf('Perda')      !== -1 || tipo.indexOf('Roubo') !== -1
+    'reabastecimento': tipo.indexOf('Reabastecimento') !== -1,
+    'reposicao':       tipo.indexOf('Reposição')       !== -1,
+    'perda':           tipo.indexOf('Perda')           !== -1,
+    'lavanderia':      tipo.indexOf('Lavanderia')      !== -1,
+    'devolucao':       tipo.indexOf('Devolução')       !== -1
   };
-  // default admissão se nenhum
-  if (!motivos.admissao && !motivos.troca && !motivos.reposicao && !motivos.perda) motivos.admissao = true;
+  // default reabastecimento se nenhum
+  if (!motivos.reabastecimento && !motivos.reposicao && !motivos.perda && !motivos.lavanderia && !motivos.devolucao) motivos.reabastecimento = true;
 
   function chk(val) { return val ? '&#10003;' : '&#9744;'; }
 
@@ -1417,11 +1406,12 @@ function imprimirRecibo() {
     '</table>' +
 
     '<div class="rp-motivo">' +
-      '<strong>Motivo da Entrega:</strong>&nbsp;&nbsp;&nbsp;' +
-      '<span class="rp-chk">'+chk(motivos.admissao)+' Admissão</span>' +
-      '<span class="rp-chk">'+chk(motivos.troca)+' Troca de Tamanho</span>' +
-      '<span class="rp-chk">'+chk(motivos.reposicao)+' Reposição</span>' +
-      '<span class="rp-chk">'+chk(motivos.perda)+' Perda/Roubo</span>' +
+      '<strong>Motivo da Movimentação:</strong>&nbsp;&nbsp;&nbsp;' +
+      '<span class="rp-chk">'+chk(motivos.reabastecimento)+' Reabastecimento Estoque</span>' +
+      '<span class="rp-chk">'+chk(motivos.reposicao)+' Reposição Periódica</span>' +
+      '<span class="rp-chk">'+chk(motivos.perda)+' Perda/Furto</span>' +
+      '<span class="rp-chk">'+chk(motivos.lavanderia)+' Lavanderia</span>' +
+      '<span class="rp-chk">'+chk(motivos.devolucao)+' Devolução</span>' +
     '</div>' +
 
     '<div class="rp-block">' +
@@ -1479,7 +1469,7 @@ function openModal() {
   document.getElementById('saldo-error').classList.remove('show');
   document.getElementById('btn-enviar').style.display = '';
   document.getElementById('transfer-row').classList.remove('show');
-  document.getElementById('f-tipo').value = 'Entrada';
+  document.getElementById('f-tipo').value = 'Reabastecimento Estoque (entrada)';
   livreId = 0; updateLoteCount(); setMode('kit');
 }
 
