@@ -63,11 +63,11 @@ function avaliarTeste(e) {
 
     var rows = sheet.getDataRange().getValues();
     var targetRow = -1;
-    var nomeB    = nome.toLowerCase();
+    var nomeB    = normalizar(nome);
     var contatoB = contato.replace(/\D/g, '');
 
     for (var r = 1; r < rows.length; r++) {
-      var nomeR    = rows[r][colNome].toString().trim().toLowerCase();
+      var nomeR    = normalizar(rows[r][colNome].toString().trim());
       var contatoR = rows[r][colContato].toString().replace(/\D/g, '');
       if (nomeR === nomeB && contatoR === contatoB) {
         targetRow = r + 1;

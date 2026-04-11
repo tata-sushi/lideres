@@ -194,9 +194,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   </div>
 </div>
 
-<!-- iframe oculto para envio ao Apps Script sem CORS -->
-<iframe name="gas-iframe" style="display:none"></iframe>
-
 <!-- Modal de Devolutiva da Entrevista -->
 <div class="modal-overlay" id="modal-entrevista" onclick="if(event.target===this)fecharModalEntrevista()">
   <div class="modal">
@@ -699,39 +696,32 @@ function salvarAvaliacao() {
   btnSalvar.textContent = 'Salvando...';
   btnSalvar.disabled = true;
 
-  // Envia via form hidden → iframe (sem CORS)
-  var form = document.createElement('form');
-  form.method = 'GET';
-  form.action = APPS_SCRIPT_URL;
-  form.target = 'gas-iframe';
-
-  var campos = {
+  var params = new URLSearchParams({
     acao:    'avaliar-teste',
     nome:    d.nome,
     contato: d.contato,
     status:  valor,
     obs:     obs
-  };
-  Object.keys(campos).forEach(function(k) {
-    var inp = document.createElement('input');
-    inp.type = 'hidden';
-    inp.name = k;
-    inp.value = campos[k];
-    form.appendChild(inp);
   });
 
-  document.body.appendChild(form);
-  form.submit();
-  document.body.removeChild(form);
-
-  // Aguarda 2s e assume sucesso (form→iframe não retorna resposta)
-  setTimeout(function() {
-    btnSalvar.textContent = 'Salvar';
-    btnSalvar.disabled = false;
-    alert('Avaliação salva!\n\nCandidato: ' + d.nome + '\nStatus: ' + valor);
-    fecharModal();
-    loadAllData();
-  }, 2000);
+  fetch(APPS_SCRIPT_URL + '?' + params.toString())
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btnSalvar.textContent = 'Salvar';
+      btnSalvar.disabled = false;
+      if (data.success) {
+        alert('Avaliação salva!\n\nCandidato: ' + d.nome + '\nStatus: ' + valor);
+        fecharModal();
+        loadAllData();
+      } else {
+        alert('Erro ao salvar: ' + (data.message || 'resposta inválida'));
+      }
+    })
+    .catch(function(err) {
+      btnSalvar.textContent = 'Salvar';
+      btnSalvar.disabled = false;
+      alert('Erro de conexão:\n' + err.message);
+    });
 }
 
 // ─── Modal de Entrevista ─────────────────────────────────────────────────────
