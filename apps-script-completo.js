@@ -29,46 +29,58 @@ function avaliarTeste(e) {
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    var linha   = parseInt(e.parameter.linha  || '0', 10);
     var nome    = (e.parameter.nome    || '').trim();
     var contato = (e.parameter.contato || '').trim();
     var status  = (e.parameter.status  || '').trim();
     var obs     = (e.parameter.obs     || '').trim();
 
-    if (!nome || !contato || !status)
+    if (!status)
       return respostaJSON(false, 'Parâmetros incompletos');
 
     var sheet = SpreadsheetApp.openById(ID_PLANILHA).getSheetByName(NOME_ABA_TESTES);
     if (!sheet) return respostaJSON(false, 'Aba não encontrada');
 
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var colNome = -1, colContato = -1, colStatus = -1, colObs = -1;
+    var colStatus = -1, colObs = -1;
 
     for (var i = 0; i < headers.length; i++) {
       var h = normalizarHeader(headers[i].toString());
-      if (h === 'nome' || h === 'candidato') colNome = i;
-      if (h === 'contato' || h === 'telefone' || h === 'whatsapp') colContato = i;
       if (h === 'status' || h === 'resultado' || h === 'situacao') colStatus = i;
       if (h.indexOf('observa') >= 0 || h === 'obs') colObs = i;
     }
 
-    if (colNome === -1 || colContato === -1 || colStatus === -1)
-      return respostaJSON(false, 'Colunas não encontradas');
+    if (colStatus === -1)
+      return respostaJSON(false, 'Coluna STATUS não encontrada');
 
-    var rows = sheet.getDataRange().getValues();
     var targetRow = -1;
-    var nomeB    = stripAcentos(nome.toLowerCase());
-    var contatoB = contato.replace(/\D/g, '');
 
-    for (var r = 1; r < rows.length; r++) {
-      var nomeR    = stripAcentos(rows[r][colNome].toString().trim().toLowerCase());
-      var contatoR = rows[r][colContato].toString().replace(/\D/g, '');
-      if (nomeR === nomeB && contatoR === contatoB) {
-        targetRow = r + 1;
-        break;
+    // Prioridade: usar número da linha diretamente (evita ambiguidade com duplicatas)
+    if (linha > 1) {
+      targetRow = linha;
+    } else {
+      // Fallback: busca por nome + contato
+      if (!nome || !contato)
+        return respostaJSON(false, 'Parâmetros incompletos');
+      var colNome = -1, colContato = -1;
+      for (var i = 0; i < headers.length; i++) {
+        var h = normalizarHeader(headers[i].toString());
+        if (h === 'nome' || h === 'candidato') colNome = i;
+        if (h === 'contato' || h === 'telefone' || h === 'whatsapp') colContato = i;
       }
+      if (colNome === -1 || colContato === -1)
+        return respostaJSON(false, 'Colunas NOME/CONTATO não encontradas');
+      var rows = sheet.getDataRange().getValues();
+      var nomeB    = stripAcentos(nome.toLowerCase());
+      var contatoB = contato.replace(/\D/g, '');
+      for (var r = 1; r < rows.length; r++) {
+        var nomeR    = stripAcentos(rows[r][colNome].toString().trim().toLowerCase());
+        var contatoR = rows[r][colContato].toString().replace(/\D/g, '');
+        if (nomeR === nomeB && contatoR === contatoB) { targetRow = r + 1; break; }
+      }
+      if (targetRow === -1)
+        return respostaJSON(false, 'Candidato não encontrado: ' + nomeB + ' / ' + contatoB);
     }
-
-    if (targetRow === -1) return respostaJSON(false, 'Candidato não encontrado: ' + nomeB + ' / ' + contatoB);
 
     sheet.getRange(targetRow, colStatus + 1).setValue(status);
     if (colObs >= 0 && obs) sheet.getRange(targetRow, colObs + 1).setValue(obs);
