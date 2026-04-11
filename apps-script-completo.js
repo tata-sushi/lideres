@@ -30,6 +30,7 @@ function doGet(e) {
 
 // ─── Avaliação de Teste ───────────────────────────────────────────────────────
 function avaliarTeste(e) {
+  var callback = e.parameter.callback || '';
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -39,11 +40,11 @@ function avaliarTeste(e) {
     var obs      = (e.parameter.obs     || '').trim();
 
     if (!nome || !contato || !status) {
-      return respostaJSON(false, 'Parâmetros incompletos');
+      return respostaJSONP(callback, false, 'Parâmetros incompletos');
     }
 
     var sheet = SpreadsheetApp.openById(ID_PLANILHA).getSheetByName(NOME_ABA_TESTES);
-    if (!sheet) return respostaJSON(false, 'Aba CONTROLE DE TESTES não encontrada');
+    if (!sheet) return respostaJSONP(callback, false, 'Aba CONTROLE DE TESTES não encontrada');
 
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     var colNome = -1, colContato = -1, colStatus = -1, colObs = -1;
@@ -57,7 +58,7 @@ function avaliarTeste(e) {
     }
 
     if (colNome === -1 || colContato === -1 || colStatus === -1) {
-      return respostaJSON(false, 'Colunas NOME, CONTATO ou STATUS não encontradas');
+      return respostaJSONP(callback, false, 'Colunas NOME, CONTATO ou STATUS não encontradas');
     }
 
     var rows = sheet.getDataRange().getValues();
@@ -74,15 +75,15 @@ function avaliarTeste(e) {
       }
     }
 
-    if (targetRow === -1) return respostaJSON(false, 'Candidato não encontrado');
+    if (targetRow === -1) return respostaJSONP(callback, false, 'Candidato não encontrado');
 
     sheet.getRange(targetRow, colStatus + 1).setValue(status);
     if (colObs >= 0 && obs) sheet.getRange(targetRow, colObs + 1).setValue(obs);
 
-    return respostaJSON(true, 'Status atualizado com sucesso');
+    return respostaJSONP(callback, true, 'Status atualizado com sucesso');
 
   } catch (err) {
-    return respostaJSON(false, err.message || 'Erro desconhecido');
+    return respostaJSONP(callback, false, err.message || 'Erro desconhecido');
   } finally {
     lock.releaseLock();
   }
@@ -177,6 +178,13 @@ function respostaJSON(sucesso, mensagem) {
   return ContentService
     .createTextOutput(JSON.stringify({ success: sucesso, message: mensagem }))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function respostaJSONP(callback, sucesso, mensagem) {
+  var json = JSON.stringify({ success: sucesso, message: mensagem });
+  var output = callback ? callback + '(' + json + ')' : json;
+  var mime = callback ? ContentService.MimeType.JAVASCRIPT : ContentService.MimeType.JSON;
+  return ContentService.createTextOutput(output).setMimeType(mime);
 }
 
 function normalizar(s) {

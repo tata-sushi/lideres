@@ -696,16 +696,14 @@ function salvarAvaliacao() {
   btnSalvar.textContent = 'Salvando...';
   btnSalvar.disabled = true;
 
-  var url = APPS_SCRIPT_URL
-    + '?acao=avaliar-teste'
-    + '&nome='    + encodeURIComponent(d.nome)
-    + '&contato=' + encodeURIComponent(d.contato)
-    + '&status='  + encodeURIComponent(valor)
-    + '&obs='     + encodeURIComponent(obs);
+  var cbName = '_cb_' + Date.now();
+  var script = document.createElement('script');
 
-  fetch(url)
-  .then(function(r) { return r.json(); })
-  .then(function(res) {
+  window[cbName] = function(res) {
+    delete window[cbName];
+    document.head.removeChild(script);
+    btnSalvar.textContent = 'Salvar';
+    btnSalvar.disabled = false;
     if (res.success) {
       alert('Avaliação salva!\n\nCandidato: ' + d.nome + '\nStatus: ' + valor);
       fecharModal();
@@ -713,14 +711,25 @@ function salvarAvaliacao() {
     } else {
       alert('Erro ao salvar: ' + (res.message || 'Tente novamente'));
     }
-  })
-  .catch(function(err) {
-    alert('Erro de conexão: ' + err.message + '\nTente novamente.');
-  })
-  .finally(function() {
+  };
+
+  script.onerror = function() {
+    delete window[cbName];
+    document.head.removeChild(script);
     btnSalvar.textContent = 'Salvar';
     btnSalvar.disabled = false;
-  });
+    alert('Erro de conexão. Tente novamente.');
+  };
+
+  script.src = APPS_SCRIPT_URL
+    + '?acao=avaliar-teste'
+    + '&callback=' + cbName
+    + '&nome='     + encodeURIComponent(d.nome)
+    + '&contato='  + encodeURIComponent(d.contato)
+    + '&status='   + encodeURIComponent(valor)
+    + '&obs='      + encodeURIComponent(obs);
+
+  document.head.appendChild(script);
 }
 
 // ─── Modal de Entrevista ─────────────────────────────────────────────────────
