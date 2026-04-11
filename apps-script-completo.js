@@ -6,6 +6,9 @@ function doGet(e) {
   if (e.parameter.acao === 'avaliar-teste') {
     return avaliarTeste(e);
   }
+  if (e.parameter.acao === 'avaliar-entrevista') {
+    return avaliarEntrevista(e);
+  }
 
   try {
     const token = (e.parameter.t || '').trim();
@@ -86,6 +89,79 @@ function avaliarTeste(e) {
     if (colObs >= 0 && obs) sheet.getRange(targetRow, colObs + 1).setValue(obs);
 
     return respostaJSON(true, 'Status atualizado com sucesso');
+
+  } catch (err) {
+    return respostaJSON(false, err.message || 'Erro desconhecido');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ─── Avaliação de Entrevista ──────────────────────────────────────────────────
+function avaliarEntrevista(e) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var linha    = parseInt(e.parameter.linha    || '0', 10);
+    var nome     = (e.parameter.nome     || '').trim();
+    var contato  = (e.parameter.contato  || '').trim();
+    var status   = (e.parameter.status   || '').trim();
+    var feedback = (e.parameter.feedback || '').trim();
+    var ref1nome = (e.parameter.ref1nome || '').trim();
+    var ref1tel  = (e.parameter.ref1tel  || '').trim();
+    var ref2nome = (e.parameter.ref2nome || '').trim();
+    var ref2tel  = (e.parameter.ref2tel  || '').trim();
+
+    if (!status) return respostaJSON(false, 'Parâmetros incompletos');
+
+    var sheet = SpreadsheetApp.openById(ID_PLANILHA).getSheetByName(NOME_ABA_ENTREVISTAS);
+    if (!sheet) return respostaJSON(false, 'Aba CONTROLE DE ENTREVISTAS não encontrada');
+
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var colNome = -1, colContato = -1, colStatus = -1, colObs = -1, colContRef = -1, colDataHora = -1;
+
+    for (var i = 0; i < headers.length; i++) {
+      var h = normalizarHeader(headers[i].toString());
+      if (h === 'nome') colNome = i;
+      if (h === 'contato' || h === 'telefone' || h === 'whatsapp') colContato = i;
+      if (h === 'status_da_entrevista' || h === 'status') colStatus = i;
+      if (h.indexOf('observa') >= 0 || h === 'feedback' || h === 'obs') colObs = i;
+      if (h.indexOf('contato_de_refer') >= 0 || h.indexOf('referencia') >= 0) colContRef = i;
+      if (h === 'feedback_enviado_em' || h === 'data_feedback') colDataHora = i;
+    }
+
+    if (colStatus === -1) return respostaJSON(false, 'Coluna STATUS DA ENTREVISTA não encontrada');
+
+    var targetRow = -1;
+
+    if (linha > 1) {
+      targetRow = linha;
+    } else {
+      if (!nome || !contato) return respostaJSON(false, 'Parâmetros incompletos');
+      var rows = sheet.getDataRange().getValues();
+      var nomeB    = stripAcentos(nome.toLowerCase());
+      var contatoB = contato.replace(/\D/g, '');
+      for (var r = 1; r < rows.length; r++) {
+        var nomeR    = stripAcentos(rows[r][colNome].toString().trim().toLowerCase());
+        var contatoR = rows[r][colContato].toString().replace(/\D/g, '');
+        if (nomeR === nomeB && contatoR === contatoB) { targetRow = r + 1; break; }
+      }
+      if (targetRow === -1) return respostaJSON(false, 'Candidato não encontrado');
+    }
+
+    sheet.getRange(targetRow, colStatus + 1).setValue(status);
+    if (colObs >= 0 && feedback) sheet.getRange(targetRow, colObs + 1).setValue(feedback);
+
+    // Monta contatos de referência
+    function juntarContato(nome, tel) {
+      if (nome && tel) return nome + ' - ' + tel;
+      return nome || tel || '';
+    }
+    var contatos = [juntarContato(ref1nome, ref1tel), juntarContato(ref2nome, ref2tel)].filter(Boolean).join(' / ');
+    if (colContRef >= 0 && contatos) sheet.getRange(targetRow, colContRef + 1).setValue(contatos);
+    if (colDataHora >= 0) sheet.getRange(targetRow, colDataHora + 1).setValue(new Date());
+
+    return respostaJSON(true, 'Devolutiva registrada com sucesso');
 
   } catch (err) {
     return respostaJSON(false, err.message || 'Erro desconhecido');
