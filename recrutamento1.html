@@ -270,6 +270,7 @@ var SHEET_ID          = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
 var API_KEY           = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
 var SHEET_ENTREVISTAS = 'CONTROLE DE ENTREVISTAS';
 var SHEET_TESTES      = 'CONTROLE DE TESTES';
+var APPS_SCRIPT_URL   = ''; // ← Cole aqui a URL do Apps Script após implantação
 
 // ─── Estado ──────────────────────────────────────────────────────────────────
 var entrevistas = [];
@@ -652,7 +653,10 @@ function clearFilters() {
 }
 
 // ─── Modal de Avaliação ──────────────────────────────────────────────────────
+var _modalTesteIdx = -1;
+
 function abrirModal(idx) {
+  _modalTesteIdx = idx;
   var d = _testeCache[idx];
   if (!d) return;
   document.getElementById('modal-nome').textContent = d.nome || '';
@@ -676,20 +680,48 @@ function fecharModal() {
   document.body.style.overflow = '';
 }
 
-function selecionarOpcao(el) {
-  var labels = document.querySelectorAll('#modal-avaliacao .modal-radio-label');
-  for (var i=0; i<labels.length; i++) { labels[i].classList.remove('selected'); }
-  el.classList.add('selected');
-  el.querySelector('input').checked = true;
-}
-
 function salvarAvaliacao() {
   var valor = document.getElementById('modal-avaliacao-status').value;
   if (!valor) { alert('Selecione uma opção de avaliação.'); return; }
   var obs = document.getElementById('modal-obs').value;
-  var nome = document.getElementById('modal-nome').textContent;
-  alert('Avaliação registrada!\n\nCandidato: ' + nome + '\nResultado: ' + valor + (obs ? '\nObs: ' + obs : ''));
-  fecharModal();
+  var d = _testeCache[_modalTesteIdx];
+  if (!d) { alert('Erro: dados do candidato não encontrados.'); return; }
+
+  if (!APPS_SCRIPT_URL) {
+    alert('URL do Apps Script não configurada.');
+    return;
+  }
+
+  var btnSalvar = document.querySelector('#modal-avaliacao .modal-btn-save');
+  btnSalvar.textContent = 'Salvando...';
+  btnSalvar.disabled = true;
+
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      nome: d.nome,
+      contato: d.contato,
+      status: valor,
+      observacoes: obs
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    if (res.success) {
+      alert('Avaliação salva com sucesso!\n\nCandidato: ' + d.nome + '\nStatus: ' + valor);
+      fecharModal();
+      loadAllData(); // recarregar dados da planilha
+    } else {
+      alert('Erro ao salvar: ' + (res.message || 'Tente novamente'));
+    }
+  })
+  .catch(function(err) {
+    alert('Erro de conexão: ' + err.message + '\nTente novamente.');
+  })
+  .finally(function() {
+    btnSalvar.textContent = 'Salvar';
+    btnSalvar.disabled = false;
+  });
 }
 
 // ─── Modal de Entrevista ─────────────────────────────────────────────────────
