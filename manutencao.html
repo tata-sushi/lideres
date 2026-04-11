@@ -627,12 +627,13 @@ function histHTML(r) {
       feed += '<span class="h-resp">'+esc(dv.responsavel)+'</span></div>';
       feed += '<div class="h-obs">'+esc(dv.obs)+'</div>';
       if (dv.custo) feed += '<div class="h-cost">Custo: '+esc(dv.custo)+'</div>';
+      if (dv.foto) feed += '<div style="margin-top:6px"><a href="'+dv.foto+'" target="_blank" style="font-family:DM Mono,monospace;font-size:10px;color:var(--blue);text-decoration:underline;text-underline-offset:2px;">&#128247; Ver foto</a></div>';
       feed += '</div>';
     }
   }
   var openClass = isOpen ? ' open' : '';
   var visClass  = isOpen ? ' vis'  : '';
-  var btn = '<button class="hist-btn'+openClass+'" onclick="toggleHist('+JSON.stringify(r.id)+')">';
+  var btn = '<button class="hist-btn'+openClass+'" onclick="toggleHist(\'' + r.id + '\')">';
   btn += '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ';
   btn += label+' <span class="arr">&#9660;</span></button>';
   return '<div class="hist-toggle card-field full">'+btn+'<div class="hist-feed'+visClass+'" id="hist-'+r.id+'">'+feed+'</div></div>';
@@ -646,6 +647,42 @@ function toggleHist(id) {
   else               { feed.classList.remove('vis'); if(btn) btn.classList.remove('open'); }
 }
 
+// SLA
+function calcSLA(r) {
+  // Converte dd/MM/yyyy [HH:mm] para Date
+  function parseDate(str) {
+    if (!str) return null;
+    var parts = str.trim().split(' ');
+    var d = parts[0].split('/');
+    if (d.length < 3) return null;
+    var base = new Date(+d[2], +d[1]-1, +d[0]);
+    if (parts[1]) {
+      var t = parts[1].split(':');
+      base.setHours(+t[0], +t[1]||0);
+    }
+    return base;
+  }
+  function diffStr(ms) {
+    var s = Math.floor(ms/1000);
+    var m = Math.floor(s/60);
+    var h = Math.floor(m/60);
+    var d = Math.floor(h/24);
+    if (d > 0) return d+'d '+(h%24)+'h';
+    if (h > 0) return h+'h '+(m%60)+'m';
+    return m+'m';
+  }
+  var abertura = parseDate(r.data_abertura);
+  if (!abertura) return '—';
+  if (r.status === 'Finalizado') {
+    // pega timestamp da devolutiva de finalização
+    var devs = (r.devolutivas||[]).filter(function(d){ return d.status === 'Finalizado'; });
+    var fim = devs.length ? parseDate(devs[0].ts) : null;
+    if (!fim) return '—';
+    return diffStr(fim - abertura);
+  }
+  return diffStr(Date.now() - abertura);
+}
+
 // CARD
 function cardHTML(r) {
   var footer = '';
@@ -653,10 +690,12 @@ function cardHTML(r) {
     var custos = (r.devolutivas||[]).filter(function(d){ return d.custo; }).map(function(d){ return d.custo; }).join(' + ');
     footer = '<div class="card-footer"><span class="check-ok">';
     footer += '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
-    footer += ' Finalizado'+(custos?' &middot; '+esc(custos):'')+'</span></div>';
+    footer += ' Finalizado'+(custos?' &middot; '+esc(custos):'')+'</span>';
+    footer += '<div class="meta-pill" style="margin-left:auto;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> SLA: '+calcSLA(r)+'</div>';
+    footer += '</div>';
   } else {
     footer = '<div class="card-footer">';
-    footer += '<div class="meta-pill"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Prazo: '+esc(r.data_prazo)+'</div>';
+    footer += '<div class="meta-pill"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> SLA: '+calcSLA(r)+'</div>';
     footer += '<button class="btn-dev" onclick="openModal(\'' + r.id + '\')">';
     footer += '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
     footer += ' Devolutiva</button></div>';
@@ -694,6 +733,7 @@ function buildHistFeed(devolutivas) {
       h += '<span class="mh-ts">'+esc(dv.ts)+'</span><span class="mh-resp">'+esc(dv.responsavel)+'</span></div>';
       h += '<div class="mh-text">'+esc(dv.obs)+'</div>';
       if (dv.custo) h += '<div class="mh-cost">Custo: '+esc(dv.custo)+'</div>';
+      if (dv.foto) h += '<div style="margin-top:6px"><a href="'+dv.foto+'" target="_blank" style="font-family:DM Mono,monospace;font-size:10px;color:var(--blue);text-decoration:underline;text-underline-offset:2px;">&#128247; Ver foto</a></div>';
     }
     h += '</div>';
   });
@@ -771,24 +811,37 @@ function submitDevolutiva() {
   var resp       = document.getElementById('dev-responsavel').value || r.executor;
   var novoStatus = document.getElementById('dev-status').value;
   var custo      = document.getElementById('dev-custo').value;
+  var fotoInput  = document.getElementById('dev-foto');
+  var fotoFile   = fotoInput && fotoInput.files && fotoInput.files[0];
 
-  showLoading('Salvando...');
-  apiPost({
-    action: 'registrar_devolutiva',
-    data: { id_chamado:r.id, responsavel:resp, status:novoStatus, obs:obs, custo:custo, tipo:'update', needs_help:novoStatus==='Finalizado'?false:r.needs_help }
-  }, function(err, data) {
-    hideLoading();
-    if (err) { alert('Erro ao salvar: '+err); return; }
-    r.devolutivas.unshift({ ts:(data&&data.ts?data.ts:nowLocal()), responsavel:resp, status:novoStatus, obs:obs, custo:custo, tipo:'update' });
-    r.status = novoStatus;
-    r.executor = resp;
-    if (novoStatus==='Finalizado') r.needs_help = false;
-    closeModal();
-    render();
-    var t = document.getElementById('toast');
-    t.classList.add('show');
-    setTimeout(function(){ t.classList.remove('show'); }, 2500);
-  });
+  function doSubmit(fotoB64) {
+    showLoading('Salvando...');
+    apiPost({
+      action: 'registrar_devolutiva',
+      data: { id_chamado:r.id, responsavel:resp, status:novoStatus, obs:obs, custo:custo, tipo:'update', needs_help:novoStatus==='Finalizado'?false:r.needs_help, foto:fotoB64||'' }
+    }, function(err, data) {
+      hideLoading();
+      if (err) { alert('Erro ao salvar: '+err); return; }
+      r.devolutivas.unshift({ ts:(data&&data.ts?data.ts:nowLocal()), responsavel:resp, status:novoStatus, obs:obs, custo:custo, tipo:'update', foto:fotoB64||'' });
+      r.status = novoStatus;
+      r.executor = resp;
+      if (novoStatus==='Finalizado') r.needs_help = false;
+      if (fotoInput) fotoInput.value = '';
+      var fp = document.getElementById('dev-foto-preview'); if(fp){fp.style.display='none';fp.querySelector('img').src='';}
+      closeModal();
+      render();
+      var t = document.getElementById('toast');
+      t.classList.add('show');
+      setTimeout(function(){ t.classList.remove('show'); }, 2500);
+    });
+  }
+  if (fotoFile) {
+    var reader = new FileReader();
+    reader.onload = function(e){ doSubmit(e.target.result); };
+    reader.readAsDataURL(fotoFile);
+  } else {
+    doSubmit('');
+  }
 }
 
 // FAB — NOVO CHAMADO
@@ -845,6 +898,9 @@ function submitNovoChamado() {
     ['fab-titulo','fab-obs'].forEach(function(id){
       var el=document.getElementById(id); if(el) el.value='';
     });
+    // reset foto fab
+    var _fi2=document.getElementById('fab-foto'); if(_fi2) _fi2.value='';
+    var _fp2=document.getElementById('fab-foto-preview'); if(_fp2){_fp2.style.display='none';_fp2.querySelector('img').src='';}
     // reset foto
     var _fi=document.getElementById('fab-foto'); if(_fi) _fi.value='';
     var _fp=document.getElementById('fab-foto-preview'); if(_fp){_fp.style.display='none';_fp.querySelector('img').src='';}
