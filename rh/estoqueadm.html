@@ -594,28 +594,28 @@ body {
       <div class="kpi-card">
         <div class="kpi-label">Uniformes</div>
         <div class="kpi-num" id="kpi-u">278</div>
-        <div class="kpi-money"><strong>R$ 15.702,87</strong><br>R$ 56,29 unit.</div>
+        <div class="kpi-money" id="kpi-money-u"><strong>R$ 0,00</strong><br>— unit.</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Calçados</div>
         <div class="kpi-num" id="kpi-c">47</div>
-        <div class="kpi-money"><strong>R$ 4.230,00</strong><br>R$ 90,00 unit.</div>
+        <div class="kpi-money" id="kpi-money-c"><strong>R$ 0,00</strong><br>— unit.</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">EPI's</div>
         <div class="kpi-num" id="kpi-e">220</div>
-        <div class="kpi-money"><strong>R$ 6.567,42</strong><br>R$ 45,46 unit.</div>
+        <div class="kpi-money" id="kpi-money-e"><strong>R$ 0,00</strong><br>— unit.</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Brindes</div>
         <div class="kpi-num" id="kpi-b">219</div>
-        <div class="kpi-money"><strong>R$ 1.326,82</strong><br>R$ 19,97 unit.</div>
+        <div class="kpi-money" id="kpi-money-b"><strong>R$ 0,00</strong><br>— unit.</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-body">
           <div class="kpi-label">Papelaria</div>
           <div class="kpi-num" id="kpi-p">272</div>
-          <div class="kpi-money"><strong>R$ 1.171,79</strong><br>R$ 9,15 unit.</div>
+          <div class="kpi-money" id="kpi-money-p"><strong>R$ 0,00</strong><br>— unit.</div>
         </div>
       </div>
     </div></div>
@@ -1111,12 +1111,29 @@ function setUnitFilter(unit, btn) {
 }
 
 /* ══ RENDER DASH ══ */
+function fmtBRL(v) {
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function fmtUnit(total, qtd) {
+  if (!qtd) return '—';
+  return 'R$ ' + (total / qtd).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' unit.';
+}
+
 function renderDash() {
   var key = (currentUser && currentUser.type === 'lider') ? currentUser.unit : (activeUnitFilter === 'all' ? 'all' : activeUnitFilter);
   if (!DATA[key]) key = 'all';
   var d = DATA[key] || DATA['all'];
   var ids = ['u','c','e','b','p'];
-  ids.forEach(function(k) { document.getElementById('kpi-'+k).textContent = d.kpi[k][0]; });
+  ids.forEach(function(k) {
+    var kpi  = d.kpi[k];
+    var qtd  = kpi[0] || 0;
+    var tot  = kpi[1] || 0;
+    var el   = document.getElementById('kpi-'+k);
+    if (el) el.textContent = qtd;
+    // Atualizar linha de valor monetário abaixo do KPI
+    var elM  = document.getElementById('kpi-money-'+k);
+    if (elM) elM.innerHTML = '<strong>' + fmtBRL(tot) + '</strong><br>' + fmtUnit(tot, qtd);
+  });
   bars('b-u',d.bars.u); bars('b-c',d.bars.c); bars('b-e',d.bars.e); bars('b-b',d.bars.b); bars('b-p',d.bars.p);
 }
 
@@ -1625,25 +1642,39 @@ var CAT_MAP = {
 
 function recalcData() {
   var units = ['Itaim Bibi','Pinheiros','Poke - Pinheiros','TATÁ House','Administrativo'];
-  var newData = { all: { kpi: {u:[0],c:[0],e:[0],b:[0],p:[0]}, bars: {u:[],c:[],e:[],b:[],p:[]} } };
 
-  // Acumular por unidade
+  // kpi: [qtd, total_R$, custo_medio_unit]
+  var newData = { all: { kpi: {u:[0,0,0],c:[0,0,0],e:[0,0,0],b:[0,0,0],p:[0,0,0]}, bars: {u:[],c:[],e:[],b:[],p:[]} } };
+
   units.forEach(function(unit) {
     var s = SALDO[unit];
     if (!s) return;
 
-    newData[unit] = { kpi: {u:[0],c:[0],e:[0],b:[0],p:[0]}, bars: {u:[],c:[],e:[],b:[],p:[]} };
+    newData[unit] = { kpi: {u:[0,0,0],c:[0,0,0],e:[0,0,0],b:[0,0,0],p:[0,0,0]}, bars: {u:[],c:[],e:[],b:[],p:[]} };
 
-    // Mapear item → categoria pelo CATALOG
     Object.keys(s).forEach(function(itemName) {
-      var qty = s[itemName] || 0;
+      // Suporta formato novo { qtd, custo_medio, categoria } e legado (número)
+      var entry = s[itemName];
+      var qty, custo;
+      if (typeof entry === 'object' && entry !== null) {
+        qty   = entry.qtd         || 0;
+        custo = entry.custo_medio || 0;
+      } else {
+        qty   = Number(entry) || 0;
+        custo = 0;
+      }
+
       var cat = getCatForItem(itemName);
       var k   = CAT_MAP[cat];
       if (!k) return;
 
-      // KPI: soma quantidade
+      var totalItem = qty * custo;
+
+      // KPI: [qtd, total_R$, acum_custo_para_media]
       newData[unit].kpi[k][0] += qty;
+      newData[unit].kpi[k][1] += totalItem;
       newData['all'].kpi[k][0] += qty;
+      newData['all'].kpi[k][1] += totalItem;
 
       // Barras
       var barUnit = newData[unit].bars[k];
@@ -1654,7 +1685,6 @@ function recalcData() {
       if (ea) ea.q += qty; else barAll.push({n:itemName, q:qty});
     });
 
-    // Ordenar barras por quantidade desc e limitar a 8
     ['u','c','e','b','p'].forEach(function(k){
       newData[unit].bars[k].sort(function(a,b){return b.q-a.q;});
       newData[unit].bars[k] = newData[unit].bars[k].slice(0,8);
