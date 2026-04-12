@@ -555,6 +555,80 @@ body {
 </head>
 <body>
 
+<!-- ══ AUTH GATE — session guard (lideres) ══════════════════════ -->
+<style>
+html[data-auth="pending"] body > *:not(#auth-gate) { visibility: hidden; }
+html[data-auth="denied"]  body > *:not(#auth-gate) { display: none !important; }
+html[data-auth="ok"]      #auth-gate               { display: none !important; }
+#auth-gate { position:fixed; inset:0; z-index:99999; background:#F4F4F4; color:#35383F;
+  display:flex; align-items:center; justify-content:center; padding:24px; font-family:"DM Sans",sans-serif; }
+#auth-gate .gate-box { max-width:420px; width:100%; background:#FFF; border:1px solid #E2E2E2;
+  border-radius:16px; padding:32px 28px; text-align:center; }
+#auth-gate h2 { font-size:20px; font-weight:700; margin-bottom:10px; color:#111; }
+#auth-gate p  { font-size:14px; color:#555; line-height:1.55; margin-bottom:22px; }
+#auth-gate .gate-user { display:inline-block; font-family:"DM Mono",monospace; font-size:11px;
+  font-weight:600; color:#35383F; background:#F4F4F4; border:1px solid #E2E2E2;
+  border-radius:100px; padding:4px 10px; margin-bottom:18px; }
+#auth-gate .gate-btn { display:inline-flex; align-items:center; gap:8px; background:#35383F;
+  color:#FFF; border:none; border-radius:100px; padding:11px 22px; font-size:13px;
+  font-weight:600; text-decoration:none; }
+#auth-gate .gate-spin { width:28px; height:28px; border-radius:50%; border:3px solid #E2E2E2;
+  border-top-color:#35383F; animation:gate-spin .8s linear infinite; margin:0 auto 14px; }
+@keyframes gate-spin { to { transform:rotate(360deg); } }
+html[data-auth="pending"] #auth-gate .gate-denied  { display:none; }
+html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
+</style>
+<div id="auth-gate">
+  <div class="gate-box">
+    <div class="gate-loading">
+      <div class="gate-spin"></div>
+      <h2>Verificando acesso...</h2>
+      <p>Confirmando sua permissão.</p>
+    </div>
+    <div class="gate-denied">
+      <h2>Sem acesso</h2>
+      <span class="gate-user" id="gate-user"></span>
+      <p>Seu perfil não possui permissão para esta página. Procure a Gestão.</p>
+      <a class="gate-btn" href="https://lideres.tatasushi.tech/">← Voltar ao Portal</a>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  document.documentElement.setAttribute('data-auth', 'pending');
+  var PORTAL_URL    = 'https://lideres.tatasushi.tech/';
+  var PAGE_ID       = 'estoqueadm';
+  var PAGE_URL_FRAG = '/rh/estoqueadm';
+  var session;
+  try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
+  if (!session || !session.displayName || !session.expiresAt || session.expiresAt < Date.now()) {
+    window.location.replace(PORTAL_URL); return;
+  }
+  if (typeof session.perfil === 'undefined' || typeof session.paginas === 'undefined') {
+    localStorage.removeItem('lideres_session'); window.location.replace(PORTAL_URL); return;
+  }
+  var perfil  = (session.perfil || '').toLowerCase();
+  var paginas = Array.isArray(session.paginas) ? session.paginas : [];
+  var hasAccess = perfil === 'admin' || paginas.some(function(p) {
+    var id  = String(p && p.id  || '').toLowerCase();
+    var url = String(p && p.url || '').toLowerCase();
+    return id === PAGE_ID || url.indexOf(PAGE_URL_FRAG) !== -1;
+  });
+  if (!hasAccess) {
+    document.documentElement.setAttribute('data-auth', 'denied');
+    document.addEventListener('DOMContentLoaded', function() {
+      var u = document.getElementById('gate-user');
+      if (u) u.textContent = session.displayName;
+    });
+    return;
+  }
+  window.__lideresUser    = session.displayName;
+  window.__lideresSession = session;
+  document.documentElement.setAttribute('data-auth', 'ok');
+})();
+</script>
+<!-- ══ /AUTH GATE ═══════════════════════════════════════════════ -->
+
 <!-- ══ LOADING SCREEN ══ -->
 <div id="loading-screen">
   <div class="loading-inner">
