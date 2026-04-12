@@ -590,9 +590,125 @@ body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(--t1); 
   letter-spacing: .04em;
   margin-top: 1px;
 }
+
+/* ── Session guard ───────────────────────────────────────────── */
+html[data-auth="pending"] body > *:not(#auth-gate) { visibility: hidden; }
+html[data-auth="denied"] body > *:not(#auth-gate)  { display: none !important; }
+html[data-auth="ok"] #auth-gate                    { display: none !important; }
+
+#auth-gate {
+  position: fixed; inset: 0; z-index: 9999;
+  background: #F4F4F4; color: #35383F;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; font-family: "DM Sans", sans-serif;
+}
+#auth-gate .gate-box {
+  max-width: 420px; width: 100%;
+  background: #FFFFFF; border: 1px solid #E2E2E2; border-radius: 16px;
+  padding: 32px 28px; text-align: center;
+}
+#auth-gate .gate-icon {
+  width: 56px; height: 56px; margin: 0 auto 18px;
+  border-radius: 50%; background: #F4F4F4;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid #E2E2E2;
+}
+#auth-gate h2 {
+  font-size: 20px; font-weight: 700; margin-bottom: 10px; color: #111;
+}
+#auth-gate p {
+  font-size: 14px; color: #555; line-height: 1.55; margin-bottom: 22px;
+}
+#auth-gate .gate-user {
+  display: inline-block; font-family: "DM Mono", monospace;
+  font-size: 11px; font-weight: 600; color: #35383F;
+  background: #F4F4F4; border: 1px solid #E2E2E2;
+  border-radius: 100px; padding: 4px 10px; margin-bottom: 18px;
+}
+#auth-gate .gate-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #35383F; color: #FFF; border: none; border-radius: 100px;
+  padding: 11px 22px; font-family: "DM Sans", sans-serif;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  text-decoration: none;
+}
+#auth-gate .gate-btn:hover { background: #111; }
+#auth-gate .gate-spin {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 3px solid #E2E2E2; border-top-color: #35383F;
+  animation: gate-spin 0.8s linear infinite; margin: 0 auto 14px;
+}
+@keyframes gate-spin { to { transform: rotate(360deg); } }
+html[data-auth="pending"] #auth-gate .gate-denied  { display: none; }
+html[data-auth="denied"]  #auth-gate .gate-loading { display: none; }
 </style>
 </head>
 <body>
+
+<!-- ── AUTH GATE ─────────────────────────────────────────────── -->
+<div id="auth-gate" aria-live="polite">
+  <div class="gate-box">
+    <div class="gate-loading">
+      <div class="gate-spin"></div>
+      <h2>Verificando acesso...</h2>
+      <p>Confirmando sua permissão na Governança de Processos.</p>
+    </div>
+    <div class="gate-denied">
+      <div class="gate-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#35383F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </div>
+      <h2>Sem acesso</h2>
+      <span class="gate-user" id="gate-user"></span>
+      <p>Seu perfil não possui permissão para acessar a <strong>Governança de Processos</strong>. Caso acredite que isso é um erro, procure a Gestão.</p>
+      <a class="gate-btn" href="https://lideres.tatasushi.tech/">
+        ← Voltar ao Portal
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Session guard (executa antes de tudo) ──────────────────────
+(function() {
+  document.documentElement.setAttribute('data-auth', 'pending');
+  var PORTAL_URL    = 'https://lideres.tatasushi.tech/';
+  var PAGE_ID       = 'compliance';
+  var PAGE_URL_FRAG = '/compliance';
+  var session;
+  try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
+
+  // Sem sessão válida → volta ao portal para logar
+  if (!session || !session.displayName || !session.expiresAt || session.expiresAt < Date.now()) {
+    window.location.replace(PORTAL_URL);
+    return;
+  }
+
+  // Admin sempre tem acesso; outros: checa lista de páginas
+  var perfil  = (session.perfil || '').toLowerCase();
+  var paginas = Array.isArray(session.paginas) ? session.paginas : [];
+  var hasAccess = perfil === 'admin' || paginas.some(function(p) {
+    var id  = String(p && p.id  || '').toLowerCase();
+    var url = String(p && p.url || '').toLowerCase();
+    return id === PAGE_ID || url.indexOf(PAGE_URL_FRAG) !== -1;
+  });
+
+  if (!hasAccess) {
+    document.documentElement.setAttribute('data-auth', 'denied');
+    document.addEventListener('DOMContentLoaded', function() {
+      var u = document.getElementById('gate-user');
+      if (u) u.textContent = session.displayName;
+    });
+    return;
+  }
+
+  // Autorizado — expõe usuário para o resto do script
+  window.__lideresUser = session.displayName;
+  document.documentElement.setAttribute('data-auth', 'ok');
+})();
+</script>
 
 <!-- HEADER -->
 <div class="header">
@@ -824,11 +940,17 @@ function setFooterDate() {
   document.querySelectorAll(".page-footer-date").forEach(function(el) { el.textContent = s; });
 }
 
-// Tentar pegar usuario de sessionStorage (se vier do login de outro arquivo)
-var saved = sessionStorage.getItem("gp_user");
-if (saved) {
-  document.getElementById("header-user").textContent = saved;
-  currentUser = saved;
+// Usuário autenticado vem do auth-gate (lideres_session no localStorage)
+if (window.__lideresUser) {
+  document.getElementById("header-user").textContent = window.__lideresUser;
+  currentUser = window.__lideresUser;
+} else {
+  // Fallback — tenta sessionStorage antigo (compat)
+  var saved = sessionStorage.getItem("gp_user");
+  if (saved) {
+    document.getElementById("header-user").textContent = saved;
+    currentUser = saved;
+  }
 }
 
 setFooterDate();

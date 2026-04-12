@@ -373,7 +373,7 @@
       </div>
 
       <!-- GOVERNANÇA -->
-      <a class="dash-card dash-card--gov" href="https://lideres.tatasushi.tech/compliance/" target="_blank" rel="noopener">
+      <a class="dash-card dash-card--gov" href="https://lideres.tatasushi.tech/compliance/">
         <div class="card-icon"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="20" width="20" height="2" rx="1"/><rect x="4" y="11" width="2" height="9"/><rect x="11" y="11" width="2" height="9"/><rect x="18" y="11" width="2" height="9"/><polygon points="12 2 2 9 22 9"/></svg></div>
         <div class="card-body"><h4>Governança de Processos</h4><p>Gestão e acompanhamento dos processos internos.</p></div>
         <div class="card-arrow">→</div>
@@ -385,42 +385,61 @@
 </div>
 
 <script>
-        const USERS = [
-    { password: '4821', displayName: 'Luis Carlos' },
-    { password: '7394', displayName: 'Luciano Gomes' },
-    { password: '1568', displayName: 'Carlos Mateus' },
-    { password: '9032', displayName: 'Ana Macedo' },
-    { password: '6674', displayName: 'Paulino Nunes' },
-    { password: '842867', displayName: 'Victor Carvalho' },
-    { password: '8457', displayName: 'Cinthia Moreno' },
-    { password: '3906', displayName: 'Elizabeth Augusta' },
-    { password: '5712', displayName: 'Roberto Kanashiro' },
-    { password: '6648', displayName: 'Fabio Shiguematsu' },
-    { password: '1275', displayName: 'Cesar Spichincoff' },
-  ];
+  // ── Autenticação via Apps Script (Mapa de Liderança) ──────────────────────
+  const AUTH_URL = 'https://script.google.com/macros/s/AKfycbykOWkQ3ceH_50bmc_3dcLjUrE9V4Ropbraxc0yykMIp6W8eDVtpyo2XmN1Y_KJQzol/exec';
+
   document.getElementById('password').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 
   // Duração da sessão: 7 dias (em milissegundos)
   const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000;
 
-  function doLogin() {
-    const p = document.getElementById('password').value;
+  function showError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg || 'Usuário ou senha incorretos.';
+    el.classList.add('show');
+    document.getElementById('password').value = '';
+    document.getElementById('password').focus();
+  }
+
+  async function doLogin() {
+    const p   = document.getElementById('password').value;
     const sel = document.getElementById('leader-select').value;
-    const user = USERS.find(x => x.displayName===sel && x.password===p);
-    if(user) {
-      document.getElementById('error-msg').classList.remove('show');
-      document.getElementById('display-name').textContent = user.displayName;
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('dashboard-screen').style.display = 'flex';
-      // Salvar sessão no localStorage
-      localStorage.setItem('lideres_session', JSON.stringify({
-        displayName: user.displayName,
-        expiresAt: Date.now() + SESSION_DURATION
-      }));
-    } else {
-      document.getElementById('error-msg').classList.add('show');
-      document.getElementById('password').value = '';
-      document.getElementById('password').focus();
+    if (!sel) { showError('Selecione um líder.'); return; }
+    if (!p)   { showError('Digite a senha.');      return; }
+
+    const btn = document.querySelector('.btn-login');
+    const originalText = btn.textContent;
+    btn.textContent = 'Entrando...';
+    btn.disabled = true;
+
+    try {
+      const url = AUTH_URL
+        + '?action=auth'
+        + '&usuario=' + encodeURIComponent(sel)
+        + '&senha='   + encodeURIComponent(p);
+      const res  = await fetch(url);
+      const data = await res.json();
+
+      if (data && data.ok) {
+        document.getElementById('error-msg').classList.remove('show');
+        document.getElementById('display-name').textContent = data.nome;
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('dashboard-screen').style.display = 'flex';
+        localStorage.setItem('lideres_session', JSON.stringify({
+          displayName: data.nome,
+          unidade:     data.unidade || '',
+          perfil:      data.perfil  || '',
+          paginas:     data.paginas || [],
+          expiresAt:   Date.now() + SESSION_DURATION
+        }));
+      } else {
+        showError((data && data.erro) || 'Usuário ou senha incorretos.');
+      }
+    } catch (err) {
+      showError('Erro de conexão. Tente novamente.');
+    } finally {
+      btn.textContent = originalText;
+      btn.disabled = false;
     }
   }
 
