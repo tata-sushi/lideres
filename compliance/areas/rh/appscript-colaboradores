@@ -1,0 +1,112 @@
+// ══════════════════════════════════════════════════════════════════════════
+//   APPS SCRIPT — Colaboradores (API web para formulário de sanções)
+// ══════════════════════════════════════════════════════════════════════════
+//
+//   Script SEPARADO do auth.gs. Lê a aba "Colaboradores" da mesma planilha
+//   (alimentada pelo sync do RHiD) e expõe um endpoint público para o
+//   formulário de sanções disciplinares autopreencher matrícula a partir
+//   do nome do colaborador, filtrado pela unidade do líder logado.
+//
+//   Planilha: https://docs.google.com/spreadsheets/d/14UsviSQbpJBPUNW1cuvCDnem7IRknSHBcxZg6jnq7pk
+//
+//   Colunas da aba "Colaboradores" (populada pelo sync RHiD):
+//     A=Nome | B=Matrícula | C=Unidade(centro de custo) | D=Departamento
+//     E=Data de Admissão | F=ID Departamento | G=ID Centro de Custo
+//
+//   Endpoint exposto via doGet:
+//     ?action=listColaboradores&unidade=<unidade>
+//        → devolve colaboradores da unidade (filtra pela coluna D)
+//     ?action=listColaboradores
+//        → devolve todos os colaboradores (sem filtro)
+//
+//   Deploy:
+//     1. Na MESMA planilha → Extensões → Apps Script → Novo projeto (botão +)
+//        OU criar um novo script desvinculado e usar openById
+//     2. Cole este arquivo como Code.gs
+//     3. Implantar → Nova implantação → Aplicativo da Web
+//        - Executar como: Eu
+//        - Quem tem acesso: Qualquer pessoa
+//     4. Copie a URL e atualize COLAB_URL no sancoes.html
+//
+// ══════════════════════════════════════════════════════════════════════════
+
+var SHEET_ID = '14UsviSQbpJBPUNW1cuvCDnem7IRknSHBcxZg6jnq7pk';
+var ABA_COL  = 'Colaboradores';
+
+// ── Entrada principal ──────────────────────────────────────────
+function doGet(e) {
+  var action = e && e.parameter && e.parameter.action ? e.parameter.action : '';
+
+  var result;
+
+  if (action === 'listColaboradores') {
+    var unidade = (e.parameter.unidade || '').toString();
+    result = listarColaboradores(unidade);
+  } else {
+    result = { ok: false, erro: 'Ação desconhecida: ' + action };
+  }
+
+  return ContentService
+    .createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ── Lista colaboradores filtrados por unidade (coluna D) ───────
+function listarColaboradores(unidadeFiltro) {
+  try {
+    var ss    = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(ABA_COL);
+    if (!sheet) {
+      return { ok: false, erro: 'Aba "' + ABA_COL + '" não encontrada.' };
+    }
+
+    var dados = sheet.getDataRange().getValues();
+    if (dados.length < 2) {
+      return { ok: true, colaboradores: [] };
+    }
+
+    var alvo = _normalizar(unidadeFiltro);
+    var colaboradores = [];
+
+    for (var i = 1; i < dados.length; i++) {
+      var row = dados[i];
+
+      var nome      = String(row[0] || '').trim();   // A
+      var matricula = String(row[1] || '').trim();   // B
+      var unidade   = String(row[3] || '').trim();   // D (Departamento/Unidade)
+
+      if (!nome || !matricula) continue;
+
+      // Se veio unidade no filtro, só inclui quem bate
+      if (alvo && _normalizar(unidade) !== alvo) continue;
+
+      colaboradores.push({
+        nome:      nome,
+        matricula: matricula,
+        unidade:   unidade
+      });
+    }
+
+    // Ordena por nome
+    colaboradores.sort(function(a, b) {
+      return a.nome.localeCompare(b.nome, 'pt-BR');
+    });
+
+    return {
+      ok: true,
+      unidade: unidadeFiltro,
+      total: colaboradores.length,
+      colaboradores: colaboradores
+    };
+
+  } catch (err) {
+    return { ok: false, erro: err.toString() };
+  }
+}
+
+// ── Normaliza string pra comparação (remove acentos + lowercase + trim) ─
+function _normalizar(s) {
+  return String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim().toLowerCase().replace(/\s+/g, ' ');
+}

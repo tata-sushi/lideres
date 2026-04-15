@@ -1125,7 +1125,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="form-grid">
         <div class="form-row">
           <label class="form-label">Nome do colaborador</label>
-          <input class="form-input" id="f-nome" type="text" placeholder="Nome completo">
+          <input class="form-input" id="f-nome" list="f-nome-list" type="text" placeholder="Digite ou selecione..." autocomplete="off">
+          <datalist id="f-nome-list"></datalist>
         </div>
         <div class="form-row">
           <label class="form-label">Data da ocorrência</label>
@@ -1311,6 +1312,51 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     }
   })();
 
+  /* ── COLABORADORES (aba "Colaboradores" da planilha, via Apps Script separado) ── */
+  var COLAB_URL = 'https://script.google.com/macros/s/REPLACE_WITH_NEW_DEPLOY_URL/exec';
+  var __colabCache = null; // [{ nome, matricula, unidade }]
+
+  async function carregarColaboradores() {
+    if (__colabCache) return __colabCache;
+    try {
+      var session = window.__lideresSession || JSON.parse(localStorage.getItem('lideres_session') || '{}');
+      var unidade = session && session.unidade ? session.unidade : '';
+      var url = COLAB_URL + '?action=listColaboradores&unidade=' + encodeURIComponent(unidade);
+      var res = await fetch(url);
+      var data = await res.json();
+      __colabCache = (data && data.ok && Array.isArray(data.colaboradores)) ? data.colaboradores : [];
+    } catch (e) {
+      console.warn('Falha ao carregar colaboradores:', e);
+      __colabCache = [];
+    }
+    return __colabCache;
+  }
+
+  function popularDatalistColabs(colabs) {
+    var dl = document.getElementById('f-nome-list');
+    if (!dl) return;
+    dl.innerHTML = '';
+    colabs.forEach(function(c) {
+      var opt = document.createElement('option');
+      opt.value = c.nome;
+      opt.setAttribute('data-matricula', c.matricula);
+      dl.appendChild(opt);
+    });
+  }
+
+  // Ao escolher/digitar um nome, busca a matrícula correspondente
+  (function(){
+    var nomeEl = document.getElementById('f-nome');
+    if (!nomeEl) return;
+    nomeEl.addEventListener('input', function() {
+      if (!__colabCache) return;
+      var v = nomeEl.value.trim().toLowerCase();
+      var match = __colabCache.find(function(c){ return c.nome.toLowerCase() === v; });
+      var mat = document.getElementById('f-matricula');
+      if (match && mat) mat.value = match.matricula;
+    });
+  })();
+
   /* ── MODAL FORM ── */
   function openFormModal() {
     document.getElementById('form-modal').classList.add('open');
@@ -1329,6 +1375,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         if (unid && !unid.value) unid.value = session.unidade;
       }
     }
+    // carrega dropdown de colaboradores filtrado pela unidade
+    carregarColaboradores().then(popularDatalistColabs);
   }
   function closeFormModal() {
     document.getElementById('form-modal').classList.remove('open');
