@@ -4,29 +4,31 @@
 //
 //   Script SEPARADO do auth.gs. Lê a aba "Colaboradores" da mesma planilha
 //   (alimentada pelo sync do RHiD) e expõe um endpoint público para o
-//   formulário de sanções disciplinares autopreencher matrícula a partir
-//   do nome do colaborador, filtrado pela unidade do líder logado.
+//   formulário de sanções disciplinares autopreencher matrícula/cargo a
+//   partir do nome do colaborador, filtrado pela unidade do líder logado.
 //
 //   Planilha: https://docs.google.com/spreadsheets/d/14UsviSQbpJBPUNW1cuvCDnem7IRknSHBcxZg6jnq7pk
 //
 //   Colunas da aba "Colaboradores" (populada pelo sync RHiD):
-//     A=Nome | B=Matrícula | C=Unidade | D=Departamento
-//     E=Data de Admissão | F=ID Departamento | G=ID Centro de Custo
+//     A=Nome | B=Matrícula | C=Cargo | D=Status | E=Unidade | F=Departamento
+//     G=ID Centro de Custo | H=ID Departamento | I=Data de Admissão
 //
 //   Endpoint exposto via doGet:
 //     ?action=listColaboradores&unidade=<unidade>
-//        → devolve colaboradores da unidade (filtra pela coluna D)
+//        → devolve colaboradores ATIVOS da unidade informada
 //     ?action=listColaboradores
-//        → devolve todos os colaboradores (sem filtro)
+//        → devolve todos os colaboradores ATIVOS
 //
 //   Deploy:
-//     1. Na MESMA planilha → Extensões → Apps Script → Novo projeto (botão +)
-//        OU criar um novo script desvinculado e usar openById
+//     1. script.google.com → Novo projeto
 //     2. Cole este arquivo como Code.gs
 //     3. Implantar → Nova implantação → Aplicativo da Web
 //        - Executar como: Eu
 //        - Quem tem acesso: Qualquer pessoa
 //     4. Copie a URL e atualize COLAB_URL no sancoes.html
+//
+//   Ao editar o script depois: Implantar → Gerenciar implantações →
+//   ✏️ Editar → Versão: Nova versão → Implantar (URL não muda).
 //
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -51,7 +53,7 @@ function doGet(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ── Lista colaboradores filtrados por unidade (coluna D) ───────
+// ── Lista colaboradores ATIVOS filtrados por unidade (coluna E) ─
 function listarColaboradores(unidadeFiltro) {
   try {
     var ss    = SpreadsheetApp.openById(SHEET_ID);
@@ -71,19 +73,27 @@ function listarColaboradores(unidadeFiltro) {
     for (var i = 1; i < dados.length; i++) {
       var row = dados[i];
 
-      var nome      = String(row[0] || '').trim();   // A
-      var matricula = String(row[1] || '').trim();   // B
-      var unidade   = String(row[2] || '').trim();   // C (Unidade)
+      var nome         = String(row[0] || '').trim();   // A
+      var matricula    = String(row[1] || '').trim();   // B
+      var cargo        = String(row[2] || '').trim();   // C
+      var status       = String(row[3] || '').trim();   // D
+      var unidade      = String(row[4] || '').trim();   // E  ← filtro
+      var departamento = String(row[5] || '').trim();   // F
 
       if (!nome || !matricula) continue;
+
+      // Só colaboradores ATIVOS
+      if (_normalizar(status) !== 'ativo') continue;
 
       // Se veio unidade no filtro, só inclui quem bate
       if (alvo && _normalizar(unidade) !== alvo) continue;
 
       colaboradores.push({
-        nome:      nome,
-        matricula: matricula,
-        unidade:   unidade
+        nome:         nome,
+        matricula:    matricula,
+        cargo:        cargo,
+        unidade:      unidade,
+        departamento: departamento
       });
     }
 
