@@ -1125,8 +1125,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="form-grid">
         <div class="form-row">
           <label class="form-label">Nome do colaborador</label>
-          <input class="form-input" id="f-nome" list="f-nome-list" type="text" placeholder="Digite ou selecione..." autocomplete="off">
-          <datalist id="f-nome-list"></datalist>
+          <select class="form-select" id="f-nome">
+            <option value="">Selecione o colaborador...</option>
+          </select>
         </div>
         <div class="form-row">
           <label class="form-label">Data da ocorrência</label>
@@ -1137,18 +1138,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="form-grid">
         <div class="form-row">
           <label class="form-label">Cargo do colaborador</label>
-          <input class="form-input" id="f-cargo-colab" type="text" placeholder="Ex: Atendente, Cozinheira...">
+          <input class="form-input" id="f-cargo-colab" type="text" placeholder="Preenche ao selecionar o nome" readonly style="background:var(--bg);cursor:not-allowed;">
         </div>
         <div class="form-row">
           <label class="form-label">Matrícula</label>
-          <input class="form-input" id="f-matricula" type="text" placeholder="Nº de matrícula">
+          <input class="form-input" id="f-matricula" type="text" placeholder="Preenche ao selecionar o nome" readonly style="background:var(--bg);cursor:not-allowed;">
         </div>
       </div>
 
       <div class="form-grid">
         <div class="form-row">
           <label class="form-label">Unidade</label>
-          <input class="form-input" id="f-unidade" type="text" placeholder="Ex: Itaim Bibi">
+          <input class="form-input" id="f-unidade" type="text" placeholder="Ex: Itaim Bibi" readonly style="background:var(--bg);cursor:not-allowed;">
         </div>
         <div class="form-row">
           <label class="form-label">Tipo de sanção</label>
@@ -1332,31 +1333,36 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     return __colabCache;
   }
 
-  function popularDatalistColabs(colabs) {
-    var dl = document.getElementById('f-nome-list');
-    if (!dl) return;
-    dl.innerHTML = '';
+  function popularSelectColabs(colabs) {
+    var sel = document.getElementById('f-nome');
+    if (!sel) return;
+    // preserva a primeira option (placeholder) e remove o resto
+    sel.innerHTML = '<option value="">Selecione o colaborador...</option>';
     colabs.forEach(function(c) {
       var opt = document.createElement('option');
       opt.value = c.nome;
-      opt.setAttribute('data-matricula', c.matricula);
-      dl.appendChild(opt);
+      opt.textContent = c.nome;
+      sel.appendChild(opt);
     });
   }
 
-  // Ao escolher/digitar um nome, busca a matrícula correspondente
+  // Ao selecionar um nome, preenche matrícula e cargo automaticamente
   (function(){
     var nomeEl = document.getElementById('f-nome');
     if (!nomeEl) return;
-    nomeEl.addEventListener('input', function() {
+    nomeEl.addEventListener('change', function() {
       if (!__colabCache) return;
-      var v = nomeEl.value.trim().toLowerCase();
-      var match = __colabCache.find(function(c){ return c.nome.toLowerCase() === v; });
-      if (!match) return;
+      var v = nomeEl.value;
+      var match = __colabCache.find(function(c){ return c.nome === v; });
       var mat = document.getElementById('f-matricula');
-      if (mat) mat.value = match.matricula;
       var cargoCol = document.getElementById('f-cargo-colab');
-      if (cargoCol && match.cargo) cargoCol.value = match.cargo;
+      if (match) {
+        if (mat) mat.value = match.matricula || '';
+        if (cargoCol) cargoCol.value = match.cargo || '';
+      } else {
+        if (mat) mat.value = '';
+        if (cargoCol) cargoCol.value = '';
+      }
     });
   })();
 
@@ -1379,7 +1385,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       }
     }
     // carrega dropdown de colaboradores filtrado pela unidade
-    carregarColaboradores().then(popularDatalistColabs);
+    carregarColaboradores().then(popularSelectColabs);
   }
   function closeFormModal() {
     document.getElementById('form-modal').classList.remove('open');
