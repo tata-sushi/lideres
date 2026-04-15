@@ -1133,32 +1133,46 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         </div>
       </div>
 
-      <div class="form-row">
-        <label class="form-label">Tipo de sanção</label>
-        <select class="form-select" id="f-tipo">
+      <div class="form-grid">
+        <div class="form-row">
+          <label class="form-label">Cargo do colaborador</label>
+          <input class="form-input" id="f-cargo-colab" type="text" placeholder="Ex: Atendente, Cozinheira...">
+        </div>
+        <div class="form-row">
+          <label class="form-label">Matrícula</label>
+          <input class="form-input" id="f-matricula" type="text" placeholder="Nº de matrícula">
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-row">
+          <label class="form-label">Unidade</label>
+          <input class="form-input" id="f-unidade" type="text" placeholder="Ex: Itaim Bibi">
+        </div>
+        <div class="form-row">
+          <label class="form-label">Tipo de sanção</label>
+          <select class="form-select" id="f-tipo">
+            <option value="">Selecione...</option>
+            <option value="verbal">Advertência Verbal</option>
+            <option value="escrita">Advertência Escrita</option>
+            <option value="suspensao">Suspensão</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row" id="f-dias-wrap" style="display:none;">
+        <label class="form-label">Dias de suspensão</label>
+        <select class="form-select" id="f-dias">
           <option value="">Selecione...</option>
-          <option value="verbal">Advertência Verbal</option>
-          <option value="escrita">Advertência Escrita</option>
-          <option value="suspensao">Suspensão</option>
+          <option value="1">1 dia</option>
+          <option value="3">3 dias</option>
+          <option value="5">5 dias</option>
         </select>
       </div>
 
       <div class="form-row">
         <label class="form-label">Descrição da infração</label>
         <textarea class="form-textarea" id="f-descricao" placeholder="Descreva os fatos objetivamente: o que ocorreu, quando, onde e qual o impacto gerado..."></textarea>
-      </div>
-
-      <div class="form-divider">Testemunhas</div>
-
-      <div class="form-grid">
-        <div class="form-row">
-          <label class="form-label">Testemunha 1</label>
-          <input class="form-input" id="f-test1" type="text" placeholder="Nome completo">
-        </div>
-        <div class="form-row">
-          <label class="form-label">Testemunha 2</label>
-          <input class="form-input" id="f-test2" type="text" placeholder="Nome completo (opcional)">
-        </div>
       </div>
 
       <div class="form-divider">Assinaturas</div>
@@ -1284,6 +1298,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         var cargo = document.getElementById('f-cargo');
         if (cargo && !cargo.value) cargo.value = session.cargo;
       }
+      if (session.unidade) {
+        var unid = document.getElementById('f-unidade');
+        if (unid && !unid.value) unid.value = session.unidade;
+      }
     }
 
     if (document.readyState === 'loading') {
@@ -1297,7 +1315,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   function openFormModal() {
     document.getElementById('form-modal').classList.add('open');
     document.body.style.overflow = 'hidden';
-    // garante que o líder fique preenchido mesmo se o usuário tiver limpado
+    // garante que o líder e unidade fiquem preenchidos mesmo se o usuário tiver limpado
     var session = window.__lideresSession;
     if (session && session.displayName) {
       var lider = document.getElementById('f-lider');
@@ -1305,6 +1323,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       if (session.cargo) {
         var cargo = document.getElementById('f-cargo');
         if (cargo && !cargo.value) cargo.value = session.cargo;
+      }
+      if (session.unidade) {
+        var unid = document.getElementById('f-unidade');
+        if (unid && !unid.value) unid.value = session.unidade;
       }
     }
   }
@@ -1316,63 +1338,191 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     if (e.target === this) closeFormModal();
   });
 
+  // mostra/esconde campo "dias de suspensão" conforme o tipo
+  (function(){
+    var tipoEl = document.getElementById('f-tipo');
+    var diasWrap = document.getElementById('f-dias-wrap');
+    if (tipoEl && diasWrap) {
+      tipoEl.addEventListener('change', function(){
+        diasWrap.style.display = tipoEl.value === 'suspensao' ? '' : 'none';
+      });
+    }
+  })();
+
+  function escHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
   function gerarPDF() {
     var nome     = document.getElementById('f-nome').value.trim();
-    var data     = document.getElementById('f-data').value;
-    var tipo     = document.getElementById('f-tipo');
-    var tipoTxt  = tipo.options[tipo.selectedIndex].text;
+    var dataVal  = document.getElementById('f-data').value;
+    var tipoSel  = document.getElementById('f-tipo');
+    var tipoVal  = tipoSel.value; // verbal | escrita | suspensao
     var desc     = document.getElementById('f-descricao').value.trim();
-    var test1    = document.getElementById('f-test1').value.trim();
-    var test2    = document.getElementById('f-test2').value.trim();
+    var cargoColab = document.getElementById('f-cargo-colab').value.trim();
+    var matricula  = document.getElementById('f-matricula').value.trim();
+    var unidade    = document.getElementById('f-unidade').value.trim();
+    var dias       = document.getElementById('f-dias').value;
     var lider    = document.getElementById('f-lider').value.trim();
-    var cargo    = document.getElementById('f-cargo').value.trim();
+    var cargoLid = document.getElementById('f-cargo').value.trim();
 
-    if (!nome || !data || !tipo.value || !desc) {
+    if (!nome || !dataVal || !tipoVal || !desc) {
       alert('Preencha ao menos: nome, data, tipo de sanção e descrição.');
       return;
     }
 
-    var dataFmt = new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', {day:'2-digit', month:'long', year:'numeric'});
+    var dOcorr = new Date(dataVal + 'T12:00:00');
+    var dataFmt = dOcorr.toLocaleDateString('pt-BR');
+    var agora   = new Date();
+    var emitidoEm = agora.toLocaleDateString('pt-BR') + ', ' + agora.toLocaleTimeString('pt-BR');
+    var cidade = 'São Paulo';
+
+    // checkboxes do tipo
+    function chk(v) { return tipoVal === v ? '<span class="rp-box on">✓</span>' : '<span class="rp-box"></span>'; }
+    function chkDia(v) { return (tipoVal === 'suspensao' && String(dias) === String(v)) ? '<span class="rp-box on">✓</span>' : '<span class="rp-box"></span>'; }
+
+    var titulo = tipoVal === 'verbal'    ? 'Aviso de Advertência Verbal'
+              : tipoVal === 'escrita'   ? 'Aviso de Advertência'
+              : tipoVal === 'suspensao' ? 'Aviso de Suspensão Disciplinar'
+              : 'Aviso de Advertência';
+
+    var css = '' +
+      '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}' +
+      ':root{--carbon:#34373F;--ink-1:#111;--ink-2:#222;--ink-3:#212121;--gray-1:#444;--gray-2:#666;--gray-3:#888;--bg-strip:#F4F4F4;--bg-box:#FAFAFA;--border:#DDD;--border-soft:#EDEDED;}' +
+      'body{background:#CBD5E1;font-family:"DM Sans","Helvetica Neue",Arial,sans-serif;min-height:100vh;padding:32px 16px 64px;display:flex;flex-direction:column;align-items:center;color:var(--ink-1);}' +
+      '.page{width:100%;max-width:760px;background:#fff;padding:34px 46px 44px;box-shadow:0 4px 32px rgba(0,0,0,0.18);font-size:10px;line-height:1.55;color:var(--ink-2);}' +
+      '.rp-header{display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:1.5px solid var(--ink-1);margin-bottom:18px;}' +
+      '.rp-header-title{flex:1;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-1);line-height:1.25;}' +
+      '.rp-header-right{flex-shrink:0;text-align:right;font-size:9px;color:var(--gray-1);line-height:1.65;}' +
+      '.rp-header-right strong{color:var(--ink-1);font-weight:700;}' +
+      '.rp-header-right small{display:block;font-size:8px;color:var(--gray-3);font-weight:400;margin-top:1px;}' +
+      '.rp-intro-row{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap;}' +
+      '.rp-intro-field{display:flex;align-items:center;gap:10px;min-width:0;}' +
+      '.rp-intro-field.grow{flex:1;min-width:0;}' +
+      '.rp-intro-label{font-family:"DM Mono",monospace;font-size:8px;text-transform:uppercase;letter-spacing:.6px;color:var(--gray-3);white-space:nowrap;flex-shrink:0;}' +
+      '.rp-intro-value{flex:1;background:var(--bg-strip);padding:5px 12px;font-size:10px;font-weight:700;color:var(--ink-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:3px;min-width:0;}' +
+      '.rp-intro-value-sm{flex:0 0 auto;min-width:72px;text-align:center;}' +
+      '.rp-intro-value-md{flex:0 0 auto;min-width:110px;}' +
+      '.rp-body{font-size:10px;color:var(--ink-2);line-height:1.7;margin-bottom:14px;text-align:justify;}' +
+      '.rp-motivo-lbl{font-weight:700;font-size:10px;color:var(--ink-2);margin-bottom:6px;}' +
+      '.rp-motivo-box{background:var(--bg-box);border:1px solid var(--border);padding:9px 13px;margin-bottom:14px;font-size:9px;color:var(--gray-1);line-height:1.7;border-radius:2px;}' +
+      '.rp-tipo-wrap{border:1px solid var(--border);background:var(--bg-box);padding:6px 14px;margin-bottom:14px;border-radius:2px;}' +
+      '.rp-tipo-row{display:grid;grid-template-columns:148px repeat(3,1fr);align-items:center;padding:7px 0;}' +
+      '.rp-tipo-row-dias{border-top:1px solid var(--border-soft);}' +
+      '.rp-tipo-lbl{font-weight:700;font-size:10px;color:var(--ink-2);white-space:nowrap;}' +
+      '.rp-dias-lbl{font-size:10px;color:var(--gray-1);white-space:nowrap;}' +
+      '.rp-chk{display:flex;align-items:center;gap:6px;font-size:9px;color:var(--ink-2);white-space:nowrap;}' +
+      '.rp-box{width:11px;height:11px;flex-shrink:0;border:1.3px solid #555;border-radius:2px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;line-height:1;}' +
+      '.rp-box.on{background:var(--carbon);border-color:var(--carbon);color:#fff;font-weight:700;}' +
+      '.rp-section-title{font-weight:700;font-size:10px;color:var(--ink-2);margin-bottom:6px;}' +
+      '.rp-list{padding-left:18px;margin-bottom:14px;list-style:none;}' +
+      '.rp-list li{font-size:10px;color:var(--ink-3);line-height:1.7;margin-bottom:2px;position:relative;padding-left:12px;}' +
+      '.rp-list li::before{content:"\\2022";position:absolute;left:0;color:var(--ink-3);font-weight:700;}' +
+      '.rp-importante{border:1px solid var(--border);background:var(--bg-strip);padding:10px 14px;margin-bottom:18px;border-radius:2px;}' +
+      '.rp-importante-title{font-weight:700;font-size:10px;color:var(--ink-2);margin-bottom:4px;}' +
+      '.rp-importante-text{font-size:9px;color:var(--gray-1);line-height:1.7;}' +
+      '.rp-cidade{text-align:right;font-size:9px;color:var(--ink-2);margin-bottom:26px;}' +
+      '.rp-sigs{display:flex;gap:48px;margin-bottom:22px;}' +
+      '.rp-sig{flex:1;min-width:0;}' +
+      '.rp-sig-line{border-top:1.2px solid #000;margin-bottom:6px;}' +
+      '.rp-sig-label{font-size:9px;color:var(--gray-2);margin-bottom:3px;}' +
+      '.rp-sig-name{font-size:11px;font-weight:700;color:var(--ink-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+      '.rp-sig-role{font-size:9px;color:var(--gray-2);font-weight:400;margin-top:1px;}' +
+      '.rp-wit-label{font-size:9px;color:var(--gray-1);margin-bottom:12px;font-weight:600;}' +
+      '.rp-wit-row{display:flex;gap:48px;}' +
+      '.rp-wit{flex:1;min-width:0;}' +
+      '.rp-wit-line{border-top:1px solid #aaa;margin-bottom:5px;}' +
+      '.rp-wit-name{font-family:"DM Mono",monospace;font-size:8px;color:var(--gray-3);text-transform:uppercase;letter-spacing:.4px;}' +
+      '@media print{body{background:#fff;padding:0;}.page{box-shadow:none;width:100%;max-width:100%;padding:24px 36px 36px;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}.rp-intro-row,.rp-motivo-box,.rp-tipo-wrap,.rp-importante,.rp-box.on{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}';
 
     var html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
-      '<style>body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:0;padding:40px}' +
-      'h1{font-size:16px;font-weight:700;text-align:center;margin-bottom:4px}' +
-      '.sub{text-align:center;font-size:11px;color:#555;margin-bottom:32px}' +
-      'table{width:100%;border-collapse:collapse;margin-bottom:20px}' +
-      'td{padding:8px 10px;border:1px solid #ddd;font-size:12px;vertical-align:top}' +
-      'td:first-child{width:35%;font-weight:700;background:#f5f5f5}' +
-      '.field-desc{border:1px solid #ddd;padding:12px;border-radius:4px;min-height:100px;margin-bottom:20px;font-size:12px;line-height:1.7}' +
-      '.sig-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px;margin-top:48px}' +
-      '.sig{border-top:1px solid #111;padding-top:6px;font-size:11px;text-align:center}' +
-      '.footer{margin-top:48px;text-align:center;font-size:10px;color:#999;border-top:1px solid #eee;padding-top:12px}' +
-      '@media print{body{padding:20px}}</style></head><body>' +
-      '<h1>' + tipoTxt.toUpperCase() + '</h1>' +
-      '<p class="sub">TATÁ Sushi — Gestão de Pessoas &amp; RH</p>' +
-      '<table>' +
-      '<tr><td>Colaborador</td><td>' + nome + '</td></tr>' +
-      '<tr><td>Data da ocorrência</td><td>' + dataFmt + '</td></tr>' +
-      '<tr><td>Tipo de sanção</td><td>' + tipoTxt + '</td></tr>' +
-      '</table>' +
-      '<p style="font-weight:700;margin-bottom:8px;font-size:12px;">DESCRIÇÃO DA INFRAÇÃO</p>' +
-      '<div class="field-desc">' + desc.replace(/\n/g,'<br>') + '</div>' +
-      '<p style="font-weight:700;margin-bottom:8px;font-size:12px;">TESTEMUNHAS</p>' +
-      '<table>' +
-      '<tr><td>Testemunha 1</td><td>' + (test1 || '—') + '</td></tr>' +
-      '<tr><td>Testemunha 2</td><td>' + (test2 || '—') + '</td></tr>' +
-      '</table>' +
-      '<div class="sig-row">' +
-      '<div class="sig">____________________<br>' + (lider || 'Líder Responsável') + '<br>' + (cargo || '') + '</div>' +
-      '<div class="sig">____________________<br>' + nome + '<br>Colaborador</div>' +
-      '<div class="sig">____________________<br>RH / People &amp; Cultura</div>' +
+      '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>' + escHtml(titulo) + ' — TATÁ Sushi</title>' +
+      '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">' +
+      '<style>' + css + '</style></head><body>' +
+      '<div class="page">' +
+        '<div class="rp-header">' +
+          '<div class="rp-header-title">' + escHtml(titulo) +
+            '<small>TATÁ Sushi · Gestão de Pessoas &amp; RH</small>' +
+          '</div>' +
+          '<div class="rp-header-right">' +
+            'Unidade: <strong>' + escHtml(unidade || '—') + '</strong><br>' +
+            'Data: <strong>' + dataFmt + '</strong>' +
+            '<small>Emitido em: ' + emitidoEm + '</small>' +
+          '</div>' +
+        '</div>' +
+        '<div class="rp-intro-row">' +
+          '<div class="rp-intro-field grow">' +
+            '<span class="rp-intro-label">COLABORADOR(A):</span>' +
+            '<span class="rp-intro-value">' + escHtml(nome) + '</span>' +
+          '</div>' +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">CARGO:</span>' +
+            '<span class="rp-intro-value rp-intro-value-md">' + escHtml(cargoColab || '—') + '</span>' +
+          '</div>' +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">MATRÍCULA:</span>' +
+            '<span class="rp-intro-value rp-intro-value-sm">' + escHtml(matricula || '—') + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="rp-body">Na conformidade da Consolidação das Leis do Trabalho, o(a) colaborador(a) acima identificado(a) fica advertido(a) pela falta abaixo discriminada:</div>' +
+        '<div class="rp-motivo-lbl">Ocorrência / Motivo:</div>' +
+        '<div class="rp-motivo-box">' + escHtml(desc).replace(/\n/g,'<br>') + '</div>' +
+        '<div class="rp-tipo-wrap">' +
+          '<div class="rp-tipo-row">' +
+            '<span class="rp-tipo-lbl">Tipo de Penalidade:</span>' +
+            '<span class="rp-chk">' + chk('verbal')    + 'Advertência Verbal</span>' +
+            '<span class="rp-chk">' + chk('escrita')   + 'Advertência Escrita</span>' +
+            '<span class="rp-chk">' + chk('suspensao') + 'Suspensão</span>' +
+          '</div>' +
+          '<div class="rp-tipo-row rp-tipo-row-dias">' +
+            '<span class="rp-dias-lbl">Dias de Suspensão:</span>' +
+            '<span class="rp-chk">' + chkDia(1) + '1 dia</span>' +
+            '<span class="rp-chk">' + chkDia(3) + '3 dias</span>' +
+            '<span class="rp-chk">' + chkDia(5) + '5 dias</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="rp-section-title">Comprometo-me:</div>' +
+        '<ul class="rp-list">' +
+          '<li>Cumprir as normas e regulamentos internos da empresa;</li>' +
+          '<li>Manter conduta adequada no ambiente de trabalho;</li>' +
+          '<li>Respeitar colegas, superiores e clientes;</li>' +
+          '<li>Não reincidir na falta ora discriminada.</li>' +
+        '</ul>' +
+        '<div class="rp-importante">' +
+          '<div class="rp-importante-title">Importante</div>' +
+          '<div class="rp-importante-text">A reincidência na prática de irregularidades ou a prática de novas faltas previstas no Art. 482 da CLT poderá acarretar demissão por justa causa. Este documento possui validade legal e poderá ser utilizado em eventuais processos trabalhistas.</div>' +
+        '</div>' +
+        '<div class="rp-cidade">' + cidade + ', ' + dataFmt + '</div>' +
+        '<div class="rp-sigs">' +
+          '<div class="rp-sig">' +
+            '<div class="rp-sig-line"></div>' +
+            '<div class="rp-sig-label">Assinatura do(a) Colaborador(a)</div>' +
+            '<div class="rp-sig-name">' + escHtml(nome) + '</div>' +
+            '<div class="rp-sig-role">' + escHtml(cargoColab || '') + '</div>' +
+          '</div>' +
+          '<div class="rp-sig">' +
+            '<div class="rp-sig-line"></div>' +
+            '<div class="rp-sig-label">Líder / Responsável que aplicou</div>' +
+            '<div class="rp-sig-name">' + escHtml(lider || '—') + '</div>' +
+            '<div class="rp-sig-role">' + escHtml((cargoLid || '') + (unidade ? ' · ' + unidade : '')) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="rp-wit-label">Testemunhas</div>' +
+        '<div class="rp-wit-row">' +
+          '<div class="rp-wit"><div class="rp-wit-line"></div><div class="rp-wit-name">1ª TESTEMUNHA</div></div>' +
+          '<div class="rp-wit"><div class="rp-wit-line"></div><div class="rp-wit-name">2ª TESTEMUNHA</div></div>' +
+        '</div>' +
       '</div>' +
-      '<div class="footer">TATÁ Sushi &nbsp;|&nbsp; TATÁ Poke &nbsp;|&nbsp; 2016 – 2026 &nbsp;|&nbsp; Gerado em ' + new Date().toLocaleDateString('pt-BR') + '</div>' +
       '</body></html>';
 
     var w = window.open('', '_blank');
     w.document.write(html);
     w.document.close();
     w.focus();
-    setTimeout(function(){ w.print(); }, 500);
+    setTimeout(function(){ w.print(); }, 800);
   }
 
   /* ── MODAL IA ── */
