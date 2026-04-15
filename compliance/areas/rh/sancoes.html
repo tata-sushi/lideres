@@ -1201,17 +1201,17 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <!-- Passo 1 — Relato -->
       <div class="ai-step active" id="ai-s0">
         <p class="ai-question">Relato da ocorrência</p>
-        <p class="ai-hint">Descreva o comportamento e quando aconteceu. Seja objetivo — não precisa usar linguagem formal.</p>
+        <p class="ai-hint">Descreva o comportamento e informe a data. Seja objetivo — não precisa usar linguagem formal.</p>
         <p class="form-label" style="margin-top:4px;">O que aconteceu?</p>
         <textarea class="form-textarea" id="ai-q0" placeholder="Ex: o colaborador chegou 2 horas atrasado sem justificativa e não avisou a equipe..."></textarea>
-        <p class="form-label" style="margin-top:14px;">Quando ocorreu e com qual frequência?</p>
-        <textarea class="form-textarea" id="ai-q1" placeholder="Ex: ocorreu em 14/04/2026, é a terceira ocorrência no mês..."></textarea>
+        <p class="form-label" style="margin-top:14px;">Data do ocorrido</p>
+        <input class="form-input" id="ai-q1" type="date" />
       </div>
 
       <!-- Passo 2 — Detalhes -->
       <div class="ai-step" id="ai-s1">
         <p class="ai-question">Detalhes da sanção</p>
-        <p class="ai-hint">Classificação, cargo do colaborador e tipo de medida a aplicar.</p>
+        <p class="ai-hint">Classificação e tipo de medida a aplicar.</p>
         <p class="form-label" style="margin-top:4px;">Classificação da ocorrência</p>
         <select class="form-select" id="ai-q1b">
           <option value="">Selecione...</option>
@@ -1219,8 +1219,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <option value="Reincidência (2ª ocorrência)">Reincidência (2ª ocorrência)</option>
           <option value="Reincidência múltipla (3+ ocorrências)">Reincidência múltipla (3+ ocorrências)</option>
         </select>
-        <p class="form-label" style="margin-top:14px;">Cargo do colaborador</p>
-        <input class="form-input" id="ai-q4" type="text" placeholder="Ex: Atendente, Sushiman, Auxiliar de cozinha..." />
         <p class="form-label" style="margin-top:14px;">Tipo de sanção</p>
         <select class="form-select" id="ai-q3">
           <option value="">Selecione...</option>
@@ -1445,7 +1443,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   // mapeia o passo aos IDs de campos obrigatórios
   var AI_STEP_FIELDS = {
     0: ['ai-q0', 'ai-q1'],
-    1: ['ai-q1b', 'ai-q4', 'ai-q3']
+    1: ['ai-q1b', 'ai-q3']
   };
 
   function aiStep(dir) {
@@ -1507,8 +1505,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var q1  = document.getElementById('ai-q1').value.trim();
     var q1b = document.getElementById('ai-q1b').value;
     var q3  = document.getElementById('ai-q3');
-    var q4  = document.getElementById('ai-q4').value.trim();
     var tipo = q3.options[q3.selectedIndex].text;
+    // formata a data (input type=date vem em YYYY-MM-DD)
+    var dataFmt = q1;
+    if (q1 && /^\d{4}-\d{2}-\d{2}$/.test(q1)) {
+      try { dataFmt = new Date(q1 + 'T12:00:00').toLocaleDateString('pt-BR', {day:'2-digit', month:'long', year:'numeric'}); } catch(e) {}
+    }
     // tom fixo neutro/formal e base legal inferida do tipo de sanção
     var tomFixo = 'Neutro, formal, objetivo e respeitoso (padrão corporativo)';
     var baseLegalPorTipo = {
@@ -1539,23 +1541,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     }
 
     var prompt = 'Você é um especialista sênior em RH e legislação trabalhista brasileira do TATÁ Sushi.\n\n' +
-      'Com base nas informações abaixo, redija o texto formal de uma ' + tipo + '.\n\n' +
+      'Redija o texto formal de uma ' + tipo + ' com base nas informações abaixo.\n\n' +
       'DIRETRIZES OBRIGATÓRIAS:\n' +
       '- Português brasileiro formal, objetivo e respeitoso (tom neutro padrão corporativo)\n' +
-      '- Aderente à CLT, à Convenção Coletiva e ao Regulamento Interno do TATÁ Sushi\n' +
-      '- Descrever fatos, base legal, impacto e consequências de eventual reincidência\n' +
-      '- Estrutura: (1) Fato observado; (2) Base legal e regimental; (3) Consequência aplicada; (4) Compromisso esperado\n' +
-      '- Texto pronto para ser inserido em documento oficial, sem cabeçalhos extras\n\n' +
-      'CONTEXTO DA OCORRÊNCIA\n' +
-      '- Cargo do colaborador: ' + q4 + '\n' +
+      '- LIMITE MÁXIMO: 350 caracteres (incluindo espaços). Seja conciso.\n' +
+      '- Aderente à CLT, Convenção Coletiva e Regulamento Interno do TATÁ Sushi\n' +
+      '- Mencione o fato, a base legal e a consequência em caso de reincidência\n' +
+      '- Texto único e corrido, pronto para documento oficial, sem títulos ou bullets\n\n' +
+      'CONTEXTO\n' +
       '- Classificação: ' + q1b + '\n' +
       '- Tipo de sanção: ' + tipo + '\n' +
       '- Tom: ' + tomFixo + '\n' +
       '- Base legal aplicável: ' + baseLegal + '\n\n' +
-      'RELATO DOS FATOS\n' +
+      'RELATO\n' +
       '- O que ocorreu: ' + q0 + '\n' +
-      '- Quando e frequência: ' + q1 + '\n\n' +
-      'Retorne APENAS o texto da sanção, sem títulos extras, comentários ou explicações adicionais.';
+      '- Data: ' + dataFmt + '\n\n' +
+      'Retorne APENAS o texto da sanção (máximo 350 caracteres), sem comentários, títulos ou explicações adicionais.';
 
     try {
       var res = await fetch(AI_PROXY_URL, {
@@ -1563,7 +1564,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: AI_MODEL,
-          max_tokens: 1200,
+          max_tokens: 140,
           user: session.displayName,
           messages: [{ role: 'user', content: prompt }]
         })
@@ -1577,6 +1578,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       var texto = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content)
         || (data.content && data.content[0] && data.content[0].text)
         || (data.error ? 'Erro: ' + (data.error.message || data.error) : 'Erro ao gerar o texto. Tente novamente.');
+      // garantia de limite de 350 caracteres (caso a IA ultrapasse)
+      if (typeof texto === 'string' && texto.length > 350) {
+        texto = texto.slice(0, 347).replace(/\s+\S*$/, '') + '...';
+      }
       resultEl.className = 'ai-result';
       resultEl.textContent = texto;
 
@@ -1584,7 +1589,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         ts: new Date().toISOString(),
         user: session.displayName,
         tipo: tipo,
-        cargo: q4,
+        data: dataFmt,
         classificacao: q1b,
         baseLegal: baseLegal,
         resumo: q0.slice(0, 120)
