@@ -805,8 +805,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </div>
     </div>
     <div class="m-meta" style="padding-top:10px">
-      <div class="field"><label>Colaborador</label><input type="text" id="f-colab" placeholder="Nome completo"></div>
-      <div class="field"><label>Matrícula</label><input type="text" id="f-matricula" placeholder="Ex: 00123" inputmode="numeric"></div>
+      <div class="field"><label>Colaborador</label>
+        <select id="f-colab">
+          <option value="">Selecione o colaborador...</option>
+        </select>
+      </div>
+      <div class="field"><label>Matrícula</label><input type="text" id="f-matricula" placeholder="Preenche ao selecionar o nome" readonly style="background:var(--bg);cursor:not-allowed"></div>
     </div>
     <div class="m-meta" style="padding-top:10px;grid-template-columns:1fr">
       <div class="field"><label>Tipo de Movimentação</label>
@@ -1557,6 +1561,56 @@ function imprimirRecibo() {
   logoEl.src = TATA_LOGO_B64;
 }
 
+/* ══ COLABORADORES ══ */
+var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
+var __colabCache = null;
+
+async function carregarColaboradores() {
+  if (__colabCache) return __colabCache;
+  try {
+    var session = window.__lideresSession || JSON.parse(localStorage.getItem('lideres_session') || '{}');
+    var unidade = session && session.unidade ? session.unidade : '';
+    var url = COLAB_URL + '?action=listColaboradores&unidade=' + encodeURIComponent(unidade);
+    var res = await fetch(url);
+    var data = await res.json();
+    __colabCache = (data && data.ok && Array.isArray(data.colaboradores)) ? data.colaboradores : [];
+  } catch (e) {
+    console.warn('Falha ao carregar colaboradores:', e);
+    __colabCache = [];
+  }
+  return __colabCache;
+}
+
+function popularSelectColabsEstoque(colabs) {
+  var sel = document.getElementById('f-colab');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Selecione o colaborador...</option>';
+  colabs.forEach(function(c) {
+    var opt = document.createElement('option');
+    opt.value = c.nome;
+    opt.textContent = c.nome;
+    sel.appendChild(opt);
+  });
+}
+
+(function() {
+  var nomeEl = document.getElementById('f-colab');
+  if (!nomeEl) return;
+  nomeEl.addEventListener('change', function() {
+    if (!__colabCache) return;
+    var v = nomeEl.value;
+    var match = __colabCache.find(function(c) { return c.nome === v; });
+    var mat  = document.getElementById('f-matricula');
+    var unid = document.getElementById('f-unidade');
+    if (match) {
+      if (mat)  mat.value  = match.matricula || '';
+      if (unid && match.unidade) unid.value = match.unidade;
+    } else {
+      if (mat)  mat.value  = '';
+    }
+  });
+})();
+
 /* ══ MODAL ══ */
 function openModal() {
   document.getElementById('f-data').value = new Date().toLocaleDateString('pt-BR');
@@ -1573,7 +1627,10 @@ function openModal() {
   document.getElementById('btn-enviar').style.display = '';
   document.getElementById('transfer-row').classList.remove('show');
   document.getElementById('f-tipo').value = 'Reabastecimento Estoque (entrada)';
+  document.getElementById('f-matricula').value = '';
   livreId = 0; updateLoteCount(); setMode('kit');
+  // carrega dropdown de colaboradores filtrado pela unidade
+  carregarColaboradores().then(popularSelectColabsEstoque);
 }
 
 function closeModal() { document.getElementById('overlay').classList.remove('open'); document.body.style.overflow = ''; }
