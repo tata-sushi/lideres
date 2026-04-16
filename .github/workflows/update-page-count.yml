@@ -1,0 +1,55 @@
+name: Update compliance page count
+
+on:
+  push:
+    paths:
+      - 'compliance/**/*.html'
+
+jobs:
+  update-count:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Count compliance pages and update KPI
+        run: |
+          COUNT=$(find compliance -name '*.html' | wc -l | tr -d ' ')
+          echo "Compliance pages found: $COUNT"
+
+          # Files that contain the drawer KPI
+          FILES=(
+            "compliance/index.html"
+            "compliance/menucompliance.html"
+            "compliance/areas/index.html"
+            "compliance/areas/rh/index.html"
+            "compliance/areas/institucional/index.html"
+            "compliance/areas/rh/sancoes.html"
+          )
+
+          CHANGED=false
+          for f in "${FILES[@]}"; do
+            if [ -f "$f" ]; then
+              # Replace the kpi-pages value with the new count
+              if grep -q 'id="kpi-pages"' "$f"; then
+                sed -i "s|id=\"kpi-pages\">[0-9]*<|id=\"kpi-pages\">${COUNT}<|g" "$f"
+                CHANGED=true
+              fi
+            fi
+          done
+
+          if [ "$CHANGED" = true ] && ! git diff --quiet; then
+            echo "Page count updated to $COUNT"
+          else
+            echo "No changes needed"
+          fi
+
+      - name: Commit and push if changed
+        run: |
+          git diff --quiet && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add compliance/
+          git commit -m "chore: update compliance page count"
+          git push
