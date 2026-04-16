@@ -212,6 +212,20 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   .header-sub { display: none; }
   .btn-nova span.btn-nova-text { display: none; }
 }
+/* ── USER CHIP ── */
+.user-chip { display:flex; align-items:center; gap:6px; padding:4px 10px; background:var(--surface); border:1px solid var(--border); border-radius:100px; cursor:pointer; font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); white-space:nowrap; transition:border-color .15s; }
+.user-chip:hover { border-color:var(--carbon); color:var(--carbon); }
+.chip-name { font-size:12px; font-weight:700; color:var(--text); }
+.profile-wrap { position:relative; }
+.profile-menu { display:none; position:absolute; top:calc(100% + 6px); right:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.10); min-width:180px; z-index:999; overflow:hidden; }
+.profile-menu.open { display:block; }
+.menu-header { padding:10px 14px; border-bottom:1px solid var(--border); }
+.menu-header-name { font-size:13px; font-weight:600; color:var(--text); }
+.menu-header-role { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); margin-top:1px; }
+.menu-item { display:flex; align-items:center; gap:8px; width:100%; padding:10px 14px; background:none; border:none; font-size:13px; cursor:pointer; text-align:left; transition:background .15s; }
+.menu-item:hover { background:var(--bg); }
+.menu-item.danger { color:#c0392b; }
+.menu-item.danger:hover { background:#fff0f0; }
 </style>
 </head>
 <body>
@@ -1062,24 +1076,47 @@ var LOGGED_USER = (function() {
   return '';
 })();
 
-// Exibe nome no header ao lado da logo
+// Exibe chip de usuário no header
 (function() {
   var el = document.getElementById('header-right');
   if (!el) return;
-  // Herda login do index (localStorage lideres_session)
-  var LOGGED_USER = '';
-  try {
-    var saved = JSON.parse(localStorage.getItem('lideres_session'));
-    if (saved && saved.displayName && saved.expiresAt > Date.now()) {
-      LOGGED_USER = saved.displayName;
-    }
-  } catch(e) {}
-  if (!LOGGED_USER) return;
+  var session;
+  try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
+  if (!session || !session.displayName || session.expiresAt <= Date.now()) return;
+  var name = session.displayName;
+  var parts = name.split(' ').filter(function(p){ return p.length > 0; });
+  var short = parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : name;
+  var cargo = session.cargo || session.perfil || '';
   el.innerHTML =
-    '<span style="font-family:DM Mono,monospace;font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:#999;display:none;" class="badge-label">LOGADO COMO</span>' +
-    '<span style="font-family:DM Mono,monospace;font-size:10px;font-weight:600;color:#35383F;background:#F4F4F4;border:1px solid #E2E2E2;border-radius:100px;padding:3px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px;">' +
-    LOGGED_USER + '</span>';
+    '<div class="profile-wrap">' +
+      '<div class="user-chip" onclick="toggleMenu(event)">' +
+        '<span class="chip-name">' + short + '</span>' +
+        '<svg width="8" height="5" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="#999" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '</div>' +
+      '<div class="profile-menu" id="profile-menu">' +
+        '<div class="menu-header">' +
+          '<div class="menu-header-name">' + name + '</div>' +
+          '<div class="menu-header-role">' + cargo + '</div>' +
+        '</div>' +
+        '<button class="menu-item danger" onclick="doLogout()">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Sair' +
+        '</button>' +
+      '</div>' +
+    '</div>';
 })();
+
+function toggleMenu(e) {
+  e.stopPropagation();
+  document.getElementById('profile-menu').classList.toggle('open');
+}
+document.addEventListener('click', function() {
+  var m = document.getElementById('profile-menu');
+  if (m) m.classList.remove('open');
+});
+function doLogout() {
+  localStorage.removeItem('lideres_session');
+  window.location.replace('https://lideres.tatasushi.tech/');
+}
 
 // Preenche campo autor ao abrir modal
 var _origOpenModal = openModal;
