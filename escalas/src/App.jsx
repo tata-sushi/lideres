@@ -43,7 +43,7 @@ const DIAS_META   = [
   { id:'dom', nome:'Domingo', curto:'DOM' },
 ];
 
-const HORA_INICIO = 10;
+const HORA_INICIO = 7;
 const HORA_FIM    = 26;
 const SLOT_MIN    = 30;
 const TOTAL_SLOTS = ((HORA_FIM - HORA_INICIO) * 60) / SLOT_MIN;
@@ -110,8 +110,7 @@ const CFG0_DIA = {
 const CFG0 = Object.fromEntries(DIAS_SEMANA.map(d=>[d,{...CFG0_DIA}]));
 
 const FUNCOES  = ['Maître','Chefe de Fila','Garçom','Cumim','Aprendiz','Sommelier','Host','Barman','Auxiliar','Outro'];
-const UNIDADES = ['Todos','Itaim','Pinheiros'];
-const DEPTOS   = ['Todos','Salão','Cozinha','Bar','Sushibar','Poke','Qualidade','Limpeza','RH','Outro'];
+// UNIDADES e DEPTOS são gerados dinamicamente a partir dos colaboradores
 
 const CORES_POOL = [
   '#35383F','#2A6B35','#2A4A7A','#8B2A1A','#6B2E5F',
@@ -169,6 +168,7 @@ export default function EscalaPainel() {
   const [novoDepto,  setNovoDepto]  = useState('Salão');
   const [expandidos, setExpandidos] = useState({});
   const [turnosAbertos, setTurnosAbertos] = useState({});
+  const [listaColabsAberta, setListaColabsAberta] = useState(true);
   const [ferias, setFerias] = useState([]); // [{id, colabId, dataIni, dataFim, obs}]
   const [feriasAberto, setFeriasAberto] = useState({}); // colabId → bool
   const [novaFeriaIni, setNovaFeriaIni] = useState({});
@@ -381,6 +381,18 @@ export default function EscalaPainel() {
   };
 
   // Filtro
+  // Opções dinâmicas de filtro vindas da planilha de RH
+  const unidadesOpts = useMemo(()=>{
+    const vals = [...new Set(colabs.map(c=>c.unidade).filter(Boolean))].sort();
+    return ['Todos', ...vals];
+  }, [colabs]);
+
+  const deptosOpts = useMemo(()=>{
+    const fonte = filtroUnidade==='Todos' ? colabs : colabs.filter(c=>c.unidade===filtroUnidade);
+    const vals = [...new Set(fonte.map(c=>c.depto).filter(Boolean))].sort();
+    return ['Todos', ...vals];
+  }, [colabs, filtroUnidade]);
+
   const colabsFiltrados = useMemo(()=>colabs.filter(c=>{
     if (filtroUnidade!=='Todos'&&c.unidade!==filtroUnidade) return false;
     if (filtroDepto!=='Todos'&&c.depto!==filtroDepto) return false;
@@ -499,7 +511,7 @@ export default function EscalaPainel() {
       <header style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px',display:'flex',alignItems:'center',gap:14,position:'sticky',top:0,zIndex:100}}>
         <img src={LOGO_SRC} alt="TATÁ Sushi" style={{width:40,height:40,objectFit:'contain',flexShrink:0}}/>
         <div style={{flex:1}}>
-          <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Escalas</div>
+          <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Controle de Escalas</div>
           <div style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted,letterSpacing:'.5px',textTransform:'uppercase',marginTop:1}}>TATÁ Sushi · Operação</div>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
@@ -522,7 +534,7 @@ export default function EscalaPainel() {
             {label:'Dentro da Meta', val:okCount, cor:okCount>0?T.green:T.carbon},
             {label:'Alertas', val:alertas, cor:alertas>0?T.red:T.carbon},
           ].map(k=>(
-            <div key={k.label} className="card" style={{padding:'14px 16px',boxShadow:'none'}}>
+            <div key={k.label} className="card" style={{padding:'14px 16px',boxShadow:'none',display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center'}}>
               <div style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.muted,letterSpacing:'1px',textTransform:'uppercase',marginBottom:6}}>{k.label}</div>
               <div style={{fontSize:36,fontWeight:700,color:k.cor,lineHeight:1}}>{k.val}</div>
             </div>
@@ -533,8 +545,8 @@ export default function EscalaPainel() {
       {/* ── FILTROS ── */}
       <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px'}}>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-          <FiltroSelect label="Unidade" val={filtroUnidade} set={setFiltroUnidade} opts={UNIDADES}/>
-          <FiltroSelect label="Departamento" val={filtroDepto} set={setFiltroDepto} opts={DEPTOS}/>
+          <FiltroSelect label="Unidade" val={filtroUnidade} set={setFiltroUnidade} opts={unidadesOpts}/>
+          <FiltroSelect label="Departamento" val={filtroDepto} set={setFiltroDepto} opts={deptosOpts}/>
         </div>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:10}}>
           <button onClick={limparFiltros} style={{fontFamily:'DM Mono,monospace',fontSize:10,letterSpacing:'.5px',color:T.muted,background:'none',border:'none',cursor:'pointer',textTransform:'uppercase',textDecoration:'underline',textUnderlineOffset:2}}>Limpar filtros</button>
@@ -582,11 +594,7 @@ export default function EscalaPainel() {
         <button className="btn-icon" onClick={()=>setPainel(p=>!p)} title={painelAberto?'Recolher painel':'Expandir painel'}>
           {painelAberto?<PanelLeftClose size={15}/>:<PanelLeftOpen size={15}/>}
         </button>
-        <button className="btn-outline" onClick={copiarAnterior} disabled={diaIdx===0} style={{opacity:diaIdx===0?.4:1}}>
-          <Copy size={11}/>Copiar dia anterior
-        </button>
         <button className="btn-outline" onClick={limparDia}><RotateCcw size={11}/>Limpar dia</button>
-        <button className="btn-dev" onClick={exportCSV}><Download size={11}/>Exportar CSV</button>
       </div>
 
       {/* ── CORPO PRINCIPAL ── */}
@@ -651,10 +659,16 @@ export default function EscalaPainel() {
           </section>
 
           {/* ESCALA POR COLABORADOR */}
-          <div style={{fontFamily:'DM Mono,monospace',fontSize:10,letterSpacing:'1px',textTransform:'uppercase',color:T.muted,marginBottom:10}}>
-            {dia.nome} · Turnos
+          <div onClick={()=>setListaColabsAberta(p=>!p)}
+            style={{fontFamily:'DM Mono,monospace',fontSize:10,letterSpacing:'1px',textTransform:'uppercase',
+            color:T.muted,marginBottom:listaColabsAberta?10:0,cursor:'pointer',userSelect:'none',
+            display:'flex',alignItems:'center',justifyContent:'space-between',
+            padding:'8px 12px',background:T.surface,borderRadius:T.radius,
+            border:`1px solid ${T.border}`,marginBottom:8}}>
+            <span>{dia.nome} · Turnos · {colabsFiltrados.length} colaboradores</span>
+            <span>{listaColabsAberta?'▲':'▼'}</span>
           </div>
-          {colabsFiltrados.map(c=>{
+          {listaColabsAberta&&colabsFiltrados.map(c=>{
             const t=escala[dia.id]?.[c.id]||{};
             const hd=horasTurno(t);
             const sw=stats[c.id];
@@ -792,7 +806,10 @@ export default function EscalaPainel() {
         </div>
 
         {/* ══ COLUNA DIREITA ══ */}
-        <div style={{paddingTop:ehMobile?16:0,position:ehMobile?'static':'sticky',top:70}}>
+        <div style={{paddingTop:ehMobile?16:0,position:ehMobile?'static':'sticky',top:70,
+          height:ehMobile?'auto':'calc(100vh - 70px)',
+          overflowY:ehMobile?'visible':'auto',
+          paddingBottom:20}}>
 
           {/* GRADE VISUAL */}
           <section className="card" style={{marginBottom:12}}>
@@ -902,7 +919,7 @@ export default function EscalaPainel() {
                         {c.funcao} · {s.dias}d trab · {s.folgas}d folga
                       </div>
                       {/* Pílulas por dia */}
-                      <div style={{display:'flex',gap:3,flexWrap:'nowrap',marginBottom:5}}>
+                      <div style={{display:'flex',gap:3,flexWrap:'nowrap',marginBottom:5,overflow:'hidden'}}>
                         {DIAS_META.map(d=>{
                           const td=escala[d.id]?.[c.id]||{};
                           const th=horasTurno(td);
