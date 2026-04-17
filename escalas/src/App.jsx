@@ -976,8 +976,10 @@ export default function EscalaPainel() {
       </div>
 
       {/* FOOTER */}
-      <div style={{textAlign:'center',padding:'14px 20px',borderTop:`1px solid ${T.border}`,background:T.surface,fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted,letterSpacing:'.5px'}}>
-        TATÁ SUSHI · OPERAÇÕES · ESCALA &nbsp;·&nbsp; Atualizado em {hoje}
+      <div style={{marginTop:16,padding:'12px 16px 28px',textAlign:'center'}}>
+        <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,fontWeight:500,letterSpacing:'1px',textTransform:'uppercase',color:'#aaaaaa'}}>
+          TATÁ Sushi &nbsp;|&nbsp; TATÁ Poke &nbsp;|&nbsp; 2016 – 2026
+        </div>
       </div>
     </div>
   );
