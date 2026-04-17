@@ -184,7 +184,6 @@ export default function EscalaPainel() {
     return { [key]: { config: CFG0, escala: escalaVaziaColabs(COLABS0) } };
   });
   const [syncStatus, setSyncStatus] = useState('idle');
-  const saveTimerRef = useRef(null);
 
   useEffect(()=>{
     const fn=()=>setMobile(window.innerWidth<1100);
@@ -212,6 +211,7 @@ export default function EscalaPainel() {
   const key = semanaKey(semanaAtual);
 
   useEffect(()=>{
+    setPendente(false);
     setSyncStatus('loading');
     carregarEscala(key)
       .then(({ escala: escLoaded, config: cfgLoaded }) => {
@@ -283,20 +283,21 @@ export default function EscalaPainel() {
     salvarFerias(novas).catch(() => {});
   };
 
-  const agendarSave = useCallback((k, esc, cfg) => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  const [pendente, setPendente] = useState(false); // tem alterações não salvas
+
+  const salvarManual = useCallback(async () => {
+    const semD = dados[key] || {config:CFG0, escala:escalaVaziaColabs(colabs)};
     setSyncStatus('saving');
-    saveTimerRef.current = setTimeout(async () => {
-      try {
-        await salvarEscala(k, { escala: esc, config: cfg });
-        setSyncStatus('saved');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-      } catch {
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 3000);
-      }
-    }, 1500);
-  }, []);
+    try {
+      await salvarEscala(key, { escala: semD.escala, config: semD.config });
+      setSyncStatus('saved');
+      setPendente(false);
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch {
+      setSyncStatus('error');
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    }
+  }, [key, dados, colabs]);
 
   const semDados = dados[key] || {config:CFG0, escala:escalaVaziaColabs(colabs)};
   const config   = semDados.config;
@@ -304,11 +305,11 @@ export default function EscalaPainel() {
 
   const setConfig = (novoConfig) => {
     setDados(p=>({...p,[key]:{...p[key],config:novoConfig}}));
-    agendarSave(key, semDados?.escala || escalaVaziaColabs(colabs), novoConfig);
+    setPendente(true);
   };
   const setEscala = (novaEscala) => {
     setDados(p=>({...p,[key]:{...p[key],escala:novaEscala}}));
-    agendarSave(key, novaEscala, semDados?.config || CFG0);
+    setPendente(true);
   };
 
   const dia = DIAS_META[diaIdx];
@@ -502,7 +503,7 @@ export default function EscalaPainel() {
           font-family:'DM Mono',monospace;font-size:9px;font-weight:500;white-space:nowrap;}
         .hora-cell{height:${rowH}px;display:flex;align-items:center;justify-content:center;
           font-family:'DM Mono',monospace;font-size:9px;padding:0 4px;
-          position:sticky;left:0;z-index:5;border-right:1px solid ${T.border};background:${T.surface};}
+          position:sticky;left:0;z-index:5;border-right:1px solid ${T.border};background:${T.surface};overflow:hidden;}
         input[type=time]::-webkit-calendar-picker-indicator{opacity:.5;cursor:pointer;}
         .resumo-card{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid ${T.border};border-radius:6px;background:${T.bg};}
       `}</style>
@@ -516,9 +517,21 @@ export default function EscalaPainel() {
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
           {syncStatus==='loading'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.muted,letterSpacing:'.3px'}}>⟳ Carregando...</span>}
-          {syncStatus==='saving'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.amber,letterSpacing:'.3px'}}>● Salvando...</span>}
-          {syncStatus==='saved'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.green,letterSpacing:'.3px'}}>✓ Salvo</span>}
           {syncStatus==='error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red,letterSpacing:'.3px'}}>✗ Erro ao salvar</span>}
+          {syncStatus==='saved'&&!pendente&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.green,letterSpacing:'.3px'}}>✓ Salvo</span>}
+          <button
+            onClick={salvarManual}
+            disabled={!pendente || syncStatus==='saving' || syncStatus==='loading'}
+            style={{
+              fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:700,letterSpacing:'.5px',
+              textTransform:'uppercase',padding:'7px 16px',cursor: (!pendente||syncStatus==='saving')?'not-allowed':'pointer',
+              background: syncStatus==='saving' ? T.border : pendente ? T.carbon : T.border,
+              color: syncStatus==='saving' ? T.muted : pendente ? T.citric : T.muted,
+              border:'none',borderRadius:100,transition:'all .15s',flexShrink:0,
+              opacity: (!pendente && syncStatus!=='saving') ? 0.5 : 1,
+            }}>
+            {syncStatus==='saving' ? '● Salvando...' : '💾 Salvar'}
+          </button>
           <div style={{fontFamily:'DM Mono,monospace',fontSize:9,letterSpacing:'.8px',textTransform:'uppercase',color:T.muted,background:T.bg,border:`1px solid ${T.border}`,borderRadius:100,padding:'4px 12px'}}>
             Victor Augusto Carvalho
           </div>
@@ -854,7 +867,7 @@ export default function EscalaPainel() {
                         else if (naFuncAlm) bg='rgba(26,92,42,.18)';
                         else if (naPrepAlm) bg='rgba(122,74,0,.18)';
                         return (
-                          <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,opacity,borderRight:`1px solid ${T.border}`,borderBottom:borda}}/>
+                          <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,opacity,borderRight:`1px solid ${T.border}`,borderBottom:borda,overflow:'hidden'}}/>
                         );
                       })}
                     </React.Fragment>
