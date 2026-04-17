@@ -34,13 +34,13 @@ const LOGO_SRC = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAAQABAAD/wAARCAL0AvQ
 // ============================================================
 const DIAS_SEMANA = ['seg','ter','qua','qui','sex','sab','dom'];
 const DIAS_META   = [
-  { id:'seg', nome:'Segunda', curto:'SEG' },
-  { id:'ter', nome:'Terça',   curto:'TER' },
-  { id:'qua', nome:'Quarta',  curto:'QUA' },
-  { id:'qui', nome:'Quinta',  curto:'QUI' },
-  { id:'sex', nome:'Sexta',   curto:'SEX' },
-  { id:'sab', nome:'Sábado',  curto:'SAB' },
-  { id:'dom', nome:'Domingo', curto:'DOM' },
+  { id:'seg', nome:'Segunda', curto:'SEG', mini:'S' },
+  { id:'ter', nome:'Terça',   curto:'TER', mini:'T' },
+  { id:'qua', nome:'Quarta',  curto:'QUA', mini:'Q' },
+  { id:'qui', nome:'Quinta',  curto:'QUI', mini:'Q' },
+  { id:'sex', nome:'Sexta',   curto:'SEX', mini:'S' },
+  { id:'sab', nome:'Sábado',  curto:'SAB', mini:'S' },
+  { id:'dom', nome:'Domingo', curto:'DOM', mini:'D' },
 ];
 
 const HORA_INICIO = 7;
@@ -919,7 +919,7 @@ export default function EscalaPainel() {
                         {c.funcao} · {s.dias}d trab · {s.folgas}d folga
                       </div>
                       {/* Pílulas por dia */}
-                      <div style={{display:'flex',gap:3,flexWrap:'nowrap',marginBottom:5,overflow:'hidden'}}>
+                      <div style={{display:'flex',gap:2,flexWrap:'nowrap',marginBottom:5}}>
                         {DIAS_META.map(d=>{
                           const td=escala[d.id]?.[c.id]||{};
                           const th=horasTurno(td);
@@ -929,13 +929,13 @@ export default function EscalaPainel() {
                           const bord = deFerias2 ? '1px solid #1A3A5C' : td.folga ? `1px solid ${T.amber}` : th===0 ? `1px dashed ${T.border}` : 'none';
                           const txtC = deFerias2 ? '#1A3A5C' : td.folga ? T.amber : th>0 ? '#fff' : T.muted;
                           return (
-                            <span key={d.id} title={td.folga?'Folga':th>0?th.toFixed(1)+'h':'Livre'} style={{
+                            <span key={d.id} title={`${d.nome}${td.folga?' · Folga':th>0?' · '+th.toFixed(1)+'h':' · Livre'}`} style={{
                               display:'inline-flex',alignItems:'center',justifyContent:'center',
-                              padding:'2px 5px',borderRadius:100,flexShrink:0,
+                              flex:1,padding:'2px 2px',borderRadius:100,
                               background:bg,border:bord,
-                              fontFamily:'DM Mono,monospace',fontSize:7,fontWeight:600,
-                              color:txtC,letterSpacing:'.3px',minWidth:24,
-                            }}>{d.curto}</span>
+                              fontFamily:'DM Mono,monospace',fontSize:8,fontWeight:700,
+                              color:txtC,letterSpacing:'0',minWidth:0,
+                            }}>{d.mini}</span>
                           );
                         })}
                       </div>
