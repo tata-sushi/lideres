@@ -627,7 +627,7 @@ export default function EscalaPainel() {
         }}>
 
           {/* CONFIG DO DIA */}
-          <section className="card" style={{marginBottom:20}}>
+          <section className="card" style={{marginBottom:6}}>
             <div onClick={()=>setConfigAberta(p=>!p)} style={{padding:'10px 16px',borderBottom:configAberta?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <span className="cat-pill">⚙ Funcionamento</span>
@@ -660,7 +660,7 @@ export default function EscalaPainel() {
 
           {/* ESCALA POR COLABORADOR */}
           <div onClick={()=>setListaColabsAberta(p=>!p)}
-            style={{cursor:'pointer',userSelect:'none',marginBottom:4,
+            style={{cursor:'pointer',userSelect:'none',marginBottom:6,
             display:'flex',alignItems:'center',justifyContent:'space-between',
             padding:'10px 16px',background:T.surface,borderRadius:T.radius,
             border:`1px solid ${T.border}`}}>
