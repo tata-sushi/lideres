@@ -631,7 +631,6 @@ export default function EscalaPainel() {
             <div onClick={()=>setConfigAberta(p=>!p)} style={{padding:'10px 16px',borderBottom:configAberta?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <span className="cat-pill">⚙ Funcionamento</span>
-                <span style={{fontSize:13,fontWeight:600,color:T.carbon}}>{dia.nome}</span>
               </div>
               <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{configAberta?'▲':'▼'}</span>
             </div>
@@ -679,7 +678,7 @@ export default function EscalaPainel() {
                 <div style={{padding:'10px 14px',borderBottom:(turnoAberto&&!t.folga)?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',gap:10,justifyContent:'space-between'}}>
                   <div onClick={()=>setTurnosAbertos(p=>({...p,[c.id]:!turnoAberto}))}
                     style={{display:'flex',alignItems:'center',gap:10,flex:1,minWidth:0,cursor:'pointer',userSelect:'none'}}>
-                    <div style={{width:4,height:34,background:c.cor,borderRadius:2,flexShrink:0}}/>
+                    <div style={{width:4,height:34,background:T.border,borderRadius:2,flexShrink:0}}/>
                     <div style={{minWidth:0,flex:1}}>
                       <div style={{fontSize:14,fontWeight:700,color:T.carbon,letterSpacing:'-0.2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.nome}</div>
                       <div style={{fontFamily:'DM Mono,monospace',fontSize:9,letterSpacing:'.5px',textTransform:'uppercase',color:T.muted,marginTop:2}}>
@@ -715,7 +714,7 @@ export default function EscalaPainel() {
                   </div>
                 </div>
                 {/* Painel de férias */}
-                {feriasAberto[c.id]&&(
+                {turnoAberto&&feriasAberto[c.id]&&(
                   <div style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,background:'#EBF3FA'}}>
                     <div style={{fontFamily:'DM Mono,monospace',fontSize:9,fontWeight:600,letterSpacing:'.8px',textTransform:'uppercase',color:'#1A3A5C',marginBottom:8}}>
                       Períodos de Férias
