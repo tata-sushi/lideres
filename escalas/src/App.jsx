@@ -174,8 +174,8 @@ export default function EscalaPainel() {
   const [novaFeriaIni, setNovaFeriaIni] = useState({});
   const [novaFeriaFim, setNovaFeriaFim] = useState({});
   const [novaFeriaObs, setNovaFeriaObs] = useState({});
-  const [filtroUnidade, setFiltroUnidade] = useState('Todos');
-  const [filtroDepto,   setFiltroDepto]   = useState('Todos');
+  const [filtroUnidade, setFiltroUnidade] = useState('Itaim');
+  const [filtroDepto,   setFiltroDepto]   = useState('Bar');
 
   // Navegação de semanas: { semanaKey: { config, escala } }
   const [semanaAtual, setSemanaAtual] = useState(() => getSegunda(new Date()));
