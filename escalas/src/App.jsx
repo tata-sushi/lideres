@@ -161,9 +161,9 @@ export default function EscalaPainel() {
   const [ehMobile, setMobile]   = useState(false);
   const [painelAberto, setPainel] = useState(true);
   const [mostrarAdd, setMostrarAdd] = useState(false);
-  const [configAberta, setConfigAberta] = useState(true);
-  const [resumoAberto, setResumoAberto] = useState(true);
-  const [gradeAberta,  setGradeAberta]  = useState(true);
+  const [configAberta, setConfigAberta] = useState(false);
+  const [resumoAberto, setResumoAberto] = useState(false);
+  const [gradeAberta,  setGradeAberta]  = useState(false);
   const [novoNome,   setNovoNome]   = useState('');
   const [novoFunc,   setNovoFunc]   = useState('Garçom');
   const [novoUnidade,setNovoUnidade]= useState('Itaim');
