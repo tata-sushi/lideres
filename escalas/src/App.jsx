@@ -162,6 +162,7 @@ export default function EscalaPainel() {
   const [painelAberto, setPainel] = useState(true);
   const [mostrarAdd, setMostrarAdd] = useState(false);
   const [configAberta, setConfigAberta] = useState(true);
+  const [resumoAberto, setResumoAberto] = useState(true);
   const [novoNome,   setNovoNome]   = useState('');
   const [novoFunc,   setNovoFunc]   = useState('Garçom');
   const [novoUnidade,setNovoUnidade]= useState('Itaim');
@@ -628,7 +629,7 @@ export default function EscalaPainel() {
           <section className="card" style={{marginBottom:12}}>
             <div onClick={()=>setConfigAberta(p=>!p)} style={{padding:'10px 16px',borderBottom:configAberta?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
-                <span className="cat-pill">⚙ Config.</span>
+                <span className="cat-pill">⚙ Funcionamento</span>
                 <span style={{fontSize:13,fontWeight:600,color:T.carbon}}>{dia.nome}</span>
               </div>
               <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{configAberta?'▲':'▼'}</span>
@@ -893,13 +894,16 @@ export default function EscalaPainel() {
 
           {/* RESUMO SEMANAL — cards compactos */}
           <section className="card">
-            <div style={{padding:'10px 16px',borderBottom:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div onClick={()=>setResumoAberto(p=>!p)} style={{padding:'10px 16px',borderBottom:resumoAberto?`1px solid ${T.border}`:'none',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer',userSelect:'none'}}>
               <span className="cat-pill">📋 Resumo Semanal</span>
-              <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.mid}}>
-                Meta: <b style={{color:T.carbon}}>{META_HORAS}h</b> · 2 folgas
+              <span style={{display:'flex',alignItems:'center',gap:10}}>
+                <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.mid}}>
+                  Meta: <b style={{color:T.carbon}}>{META_HORAS}h</b> · 2 folgas
+                </span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{color:T.muted,transform:resumoAberto?'rotate(0deg)':'rotate(-90deg)',transition:'transform .2s'}}><polyline points="6 9 12 15 18 9"/></svg>
               </span>
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:8,padding:'12px 16px'}}>
+            {resumoAberto && <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:8,padding:'12px 16px'}}>
               {colabsFiltrados.map(c=>{
                 const s=stats[c.id];
                 if (!s) return null;
@@ -963,11 +967,11 @@ export default function EscalaPainel() {
                   </div>
                 );
               })}
-            </div>
-            <div style={{padding:'10px 16px',borderTop:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between',fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:600,letterSpacing:'.5px',color:T.carbon}}>
+            </div>}
+            {resumoAberto && <div style={{padding:'10px 16px',borderTop:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between',fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:600,letterSpacing:'.5px',color:T.carbon}}>
               <span>TOTAL: {totalSemana.toFixed(1)}h</span>
               <span style={{color:T.muted,fontWeight:400}}>META: {META_HORAS}h · 2 folgas / semana</span>
-            </div>
+            </div>}
           </section>
         </div>
       </div>
