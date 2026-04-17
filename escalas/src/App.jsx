@@ -463,7 +463,7 @@ export default function EscalaPainel() {
   );
 
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif",background:T.bg,minHeight:'100vh',color:T.text,fontSize:14}}>
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:T.bg,minHeight:'100vh',color:T.text,fontSize:14,paddingBottom:60}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
@@ -976,11 +976,10 @@ export default function EscalaPainel() {
       </div>
 
       {/* FOOTER */}
-      <div style={{marginTop:16,padding:'12px 16px 28px',textAlign:'center'}}>
-        <div style={{fontFamily:'"DM Mono",monospace',fontSize:9,fontWeight:500,letterSpacing:'1px',textTransform:'uppercase',color:'#aaaaaa'}}>
-          TATÁ Sushi &nbsp;|&nbsp; TATÁ Poke &nbsp;|&nbsp; 2016 – 2026
-        </div>
-      </div>
+      <footer style={{background:T.carbon,padding:'10px 20px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,position:'fixed',bottom:0,left:0,right:0,zIndex:50}}>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:T.citric,letterSpacing:'1px',textTransform:'uppercase',textAlign:'center'}}>TATÁ SUSHI &nbsp;|&nbsp; TATÁ POKE &nbsp;|&nbsp; 2016 – 2026</span>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:'rgba(255,255,255,.4)',textAlign:'center'}}>Atualizado em {hoje}</span>
+      </footer>
     </div>
   );
 }
