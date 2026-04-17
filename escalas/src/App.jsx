@@ -672,13 +672,12 @@ export default function EscalaPainel() {
 
           {/* ESCALA POR COLABORADOR */}
           <div onClick={()=>setListaColabsAberta(p=>!p)}
-            style={{fontFamily:'DM Mono,monospace',fontSize:10,letterSpacing:'1px',textTransform:'uppercase',
-            color:T.muted,marginBottom:listaColabsAberta?10:0,cursor:'pointer',userSelect:'none',
+            style={{cursor:'pointer',userSelect:'none',marginBottom:8,
             display:'flex',alignItems:'center',justifyContent:'space-between',
-            padding:'8px 12px',background:T.surface,borderRadius:T.radius,
-            border:`1px solid ${T.border}`,marginBottom:8}}>
-            <span>{dia.nome} · Turnos · {colabsFiltrados.length} colaboradores</span>
-            <span>{listaColabsAberta?'▲':'▼'}</span>
+            padding:'10px 16px',background:T.surface,borderRadius:T.radius,
+            border:`1px solid ${T.border}`}}>
+            <span className="cat-pill">🗓 {dia.nome} · Turnos · {colabsFiltrados.length} colaboradores</span>
+            <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{listaColabsAberta?'▲':'▼'}</span>
           </div>
           {listaColabsAberta&&colabsFiltrados.map(c=>{
             const t=escala[dia.id]?.[c.id]||{};
