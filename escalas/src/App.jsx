@@ -627,7 +627,7 @@ export default function EscalaPainel() {
         }}>
 
           {/* CONFIG DO DIA */}
-          <section className="card" style={{marginBottom:12}}>
+          <section className="card" style={{marginBottom:20}}>
             <div onClick={()=>setConfigAberta(p=>!p)} style={{padding:'10px 16px',borderBottom:configAberta?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <span className="cat-pill">⚙ Funcionamento</span>
@@ -658,21 +658,9 @@ export default function EscalaPainel() {
             </div>}
           </section>
 
-          {/* EQUIPE (somente leitura — vem do RH) */}
-          <section className="card" style={{marginBottom:12}}>
-            <div style={{padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <div style={{display:'flex',alignItems:'center',gap:8}}>
-                <span className="cat-pill">👥 Equipe</span>
-                <span style={{fontFamily:'DM Mono,monospace',fontSize:12,color:T.mid}}>{colabs.length} ativos</span>
-              </div>
-              <span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.muted,letterSpacing:'.3px'}}>via RH</span>
-            </div>
-
-          </section>
-
           {/* ESCALA POR COLABORADOR */}
           <div onClick={()=>setListaColabsAberta(p=>!p)}
-            style={{cursor:'pointer',userSelect:'none',marginBottom:8,
+            style={{cursor:'pointer',userSelect:'none',marginBottom:4,
             display:'flex',alignItems:'center',justifyContent:'space-between',
             padding:'10px 16px',background:T.surface,borderRadius:T.radius,
             border:`1px solid ${T.border}`}}>
@@ -823,7 +811,7 @@ export default function EscalaPainel() {
           paddingBottom:20}}>
 
           {/* GRADE VISUAL */}
-          <section className="card" style={{marginBottom:12}}>
+          <section className="card" style={{marginBottom:6}}>
             <div onClick={()=>setGradeAberta(p=>!p)} style={{padding:'10px 16px',borderBottom:gradeAberta?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
               <span className="cat-pill">📅 Grade Visual</span>
               <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{gradeAberta?'▲':'▼'}</span>
