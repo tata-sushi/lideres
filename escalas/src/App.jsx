@@ -200,7 +200,16 @@ export default function EscalaPainel() {
         if (loaded && loaded.length > 0) {
           setColabs(loaded);
           const k = semanaKey(getSegunda(new Date()));
-          setDados({ [k]: { config: CFG0, escala: escalaVaziaColabs(loaded) } });
+          setDados(p => {
+            const base = escalaVaziaColabs(loaded);
+            const existing = p[k] || {};
+            if (existing.escala) {
+              Object.keys(existing.escala).forEach(d => {
+                if (base[d]) Object.assign(base[d], existing.escala[d]);
+              });
+            }
+            return { ...p, [k]: { config: existing.config || CFG0, escala: base } };
+          });
         }
         setSyncStatus('idle');
         // Carregar férias junto
@@ -933,7 +942,7 @@ export default function EscalaPainel() {
                           const th=horasTurno(td);
                           const dataD2 = addDays(semanaAtual, DIAS_META.findIndex(dm=>dm.id===d.id));
                           const deFerias2 = estaDeFerias(c.id, dataD2);
-                          const bg   = deFerias2 ? '#C8DFF0' : td.folga ? T.amberBg : th>0 ? c.cor : 'transparent';
+                          const bg   = deFerias2 ? '#C8DFF0' : td.folga ? T.amberBg : th>0 ? T.carbon : 'transparent';
                           const bord = deFerias2 ? '1px solid #1A3A5C' : td.folga ? `1px solid ${T.amber}` : th===0 ? `1px dashed ${T.border}` : 'none';
                           const txtC = deFerias2 ? '#1A3A5C' : td.folga ? T.amber : th>0 ? '#fff' : T.muted;
                           return (
