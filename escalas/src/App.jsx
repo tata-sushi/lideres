@@ -827,8 +827,8 @@ export default function EscalaPainel() {
           {/* GRADE VISUAL */}
           <section className="card" style={{marginBottom:12}}>
             <div style={{overflow:'auto',maxHeight:'52vh',WebkitOverflowScrolling:'touch',borderTop:`1px solid ${T.border}`}}>
-              <div style={{display:'grid',gridTemplateColumns:`48px repeat(${colabsFiltrados.length},${colW}px)`,minWidth:48+colabsFiltrados.length*colW}}>
-                <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:54,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px'}}>HORA</div>
+              <div style={{display:'grid',gridTemplateColumns:`48px repeat(${colabsFiltrados.length},${colW}px)`,minWidth:48+colabsFiltrados.length*colW,width:'max-content'}}>
+                <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:54,width:48,minWidth:48,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px'}}>HORA</div>
                 {colabsFiltrados.map(c=>(
                   <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'5px 7px',borderLeft:'1px solid #2E3038',borderBottom:`3px solid ${c.cor}`,minHeight:54,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center'}}>
                     <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?10:11.5,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.2px',width:'100%',textAlign:'center'}}>{c.nome}</div>
@@ -852,6 +852,9 @@ export default function EscalaPainel() {
                         color: full ? T.carbon : 'transparent',
                         fontSize: full ? 9.5 : 0,
                         borderBottom: full ? `1px solid ${T.border}` : `1px solid transparent`,
+                        width: 48,
+                        maxWidth: 48,
+                        minWidth: 48,
                       }}>{full ? lbl : ''}</div>
                       {colabsFiltrados.map(c=>{
                         const t=escala[dia.id]?.[c.id]||{};
