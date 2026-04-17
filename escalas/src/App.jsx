@@ -532,9 +532,6 @@ export default function EscalaPainel() {
             }}>
             {syncStatus==='saving' ? '● Salvando...' : '💾 Salvar'}
           </button>
-          <div style={{fontFamily:'DM Mono,monospace',fontSize:9,letterSpacing:'.8px',textTransform:'uppercase',color:T.muted,background:T.bg,border:`1px solid ${T.border}`,borderRadius:100,padding:'4px 12px'}}>
-            {(window.__lideresSession && window.__lideresSession.displayName) || '—'}
-          </div>
         </div>
       </header>
 
