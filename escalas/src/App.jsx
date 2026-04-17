@@ -163,6 +163,7 @@ export default function EscalaPainel() {
   const [mostrarAdd, setMostrarAdd] = useState(false);
   const [configAberta, setConfigAberta] = useState(true);
   const [resumoAberto, setResumoAberto] = useState(true);
+  const [gradeAberta,  setGradeAberta]  = useState(true);
   const [novoNome,   setNovoNome]   = useState('');
   const [novoFunc,   setNovoFunc]   = useState('Garçom');
   const [novoUnidade,setNovoUnidade]= useState('Itaim');
@@ -824,7 +825,11 @@ export default function EscalaPainel() {
 
           {/* GRADE VISUAL */}
           <section className="card" style={{marginBottom:12}}>
-            <div style={{overflow:'auto',maxHeight:'52vh',WebkitOverflowScrolling:'touch',borderTop:`1px solid ${T.border}`}}>
+            <div onClick={()=>setGradeAberta(p=>!p)} style={{padding:'10px 16px',borderBottom:gradeAberta?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
+              <span className="cat-pill">📅 Grade Visual</span>
+              <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{gradeAberta?'▲':'▼'}</span>
+            </div>
+            {gradeAberta && <div style={{overflow:'auto',maxHeight:'52vh',WebkitOverflowScrolling:'touch',borderTop:`1px solid ${T.border}`}}>
               <div style={{display:'grid',gridTemplateColumns:`48px repeat(${colabsFiltrados.length},${colW}px)`,minWidth:48+colabsFiltrados.length*colW,width:'max-content'}}>
                 <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:54,width:48,minWidth:48,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px'}}>HORA</div>
                 {colabsFiltrados.map(c=>(
@@ -875,9 +880,9 @@ export default function EscalaPainel() {
                   );
                 })}
               </div>
-            </div>
+            </div>}
             {/* Legenda abaixo da grade */}
-            <div style={{padding:'10px 16px',borderTop:`1px solid ${T.border}`,display:'flex',gap:12,flexWrap:'wrap',fontFamily:'DM Mono,monospace',fontSize:10,color:T.mid,justifyContent:'center'}}>
+            {gradeAberta && <div style={{padding:'10px 16px',borderTop:`1px solid ${T.border}`,display:'flex',gap:12,flexWrap:'wrap',fontFamily:'DM Mono,monospace',fontSize:10,color:T.mid,justifyContent:'center'}}>
               {[
                 {label:'Prep Almoço',  bg:'rgba(122,74,0,.18)',  border:'1px solid rgba(122,74,0,.4)'},
                 {label:'Func Almoço',  bg:'rgba(26,92,42,.18)',  border:'1px solid rgba(26,92,42,.4)'},
@@ -889,7 +894,7 @@ export default function EscalaPainel() {
                   {l.label}
                 </span>
               ))}
-            </div>
+            </div>}
           </section>
 
           {/* RESUMO SEMANAL — cards compactos */}
@@ -900,7 +905,7 @@ export default function EscalaPainel() {
                 <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.mid}}>
                   Meta: <b style={{color:T.carbon}}>{META_HORAS}h</b> · 2 folgas
                 </span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{color:T.muted,transform:resumoAberto?'rotate(0deg)':'rotate(-90deg)',transition:'transform .2s'}}><polyline points="6 9 12 15 18 9"/></svg>
+                <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{resumoAberto?'▲':'▼'}</span>
               </span>
             </div>
             {resumoAberto && <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:8,padding:'12px 16px'}}>
