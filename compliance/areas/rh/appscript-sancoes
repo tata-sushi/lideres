@@ -1,0 +1,86 @@
+// ══════════════════════════════════════════════════════════════════════════
+//   APPS SCRIPT — Sanções (registro de advertências/suspensões)
+// ══════════════════════════════════════════════════════════════════════════
+//
+//   Recebe um POST de sancoes.html e registra uma linha na aba "Sancoes"
+//   da planilha configurada abaixo.
+//
+//   Colunas da aba "Sancoes":
+//     A=Timestamp | B=DataOcorrencia | C=NomeColaborador | D=Matricula
+//     E=CargoColaborador | F=Unidade | G=TipoSancao | H=DiasSupensao
+//     I=Descricao | J=Lider | K=CargoLider
+//
+//   Planilha de registros: https://docs.google.com/spreadsheets/d/11yE8dH3bklDWSDL3MCMDgp9FjW4OwmPKayKGWm2eoHM
+//
+//   Para atualizar o script: Implantar → Gerenciar implantações →
+//   ✏️ Editar → Versão: Nova versão → Implantar (URL não muda).
+//
+// ══════════════════════════════════════════════════════════════════════════
+
+var SANCOES_SHEET_ID = '11yE8dH3bklDWSDL3MCMDgp9FjW4OwmPKayKGWm2eoHM';
+var ABA_SANCOES      = 'Sancoes';
+
+// ── Entrada principal ──────────────────────────────────────────
+function doPost(e) {
+  try {
+    var payload = JSON.parse(e.postData.contents);
+
+    if (payload.action !== 'registrarSancao') {
+      return _jsonErr('Ação desconhecida: ' + payload.action);
+    }
+
+    return _registrarSancao(payload);
+
+  } catch (err) {
+    return _jsonErr(err.toString());
+  }
+}
+
+// Permite testar o endpoint via URL direto no navegador
+function doGet(e) {
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true, status: 'Sancoes API online' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ── Registra a sanção na aba "Sancoes" ────────────────────────
+function _registrarSancao(p) {
+  var ss    = SpreadsheetApp.openById(SANCOES_SHEET_ID);
+  var sheet = ss.getSheetByName(ABA_SANCOES);
+
+  // Cria a aba com cabeçalho se ainda não existir
+  if (!sheet) {
+    sheet = ss.insertSheet(ABA_SANCOES);
+    sheet.getRange(1, 1, 1, 11).setValues([[
+      'Timestamp', 'DataOcorrencia', 'NomeColaborador', 'Matricula',
+      'CargoColaborador', 'Unidade', 'TipoSancao', 'DiasSupensao',
+      'Descricao', 'Lider', 'CargoLider'
+    ]]);
+    sheet.setFrozenRows(1);
+  }
+
+  sheet.appendRow([
+    new Date().toISOString(),              // A — Timestamp
+    String(p.dataOcorrencia   || ''),      // B — DataOcorrencia (YYYY-MM-DD)
+    String(p.nomeColaborador  || ''),      // C — NomeColaborador
+    String(p.matricula        || ''),      // D — Matricula
+    String(p.cargoColaborador || ''),      // E — CargoColaborador
+    String(p.unidade          || ''),      // F — Unidade
+    String(p.tipoSancao       || ''),      // G — TipoSancao (verbal|escrita|suspensao)
+    String(p.diasSuspensao    || ''),      // H — DiasSupensao (vazio se não for suspensão)
+    String(p.descricao        || ''),      // I — Descricao
+    String(p.lider            || ''),      // J — Lider
+    String(p.cargoLider       || '')       // K — CargoLider
+  ]);
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function _jsonErr(msg) {
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: false, error: msg }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
