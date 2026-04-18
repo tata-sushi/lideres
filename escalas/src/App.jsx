@@ -58,7 +58,7 @@ const horaSlot = (hhmm) => {
   const [h,m] = hhmm.split(':').map(Number);
   if (isNaN(h)||isNaN(m)) return null;
   const ha = h < HORA_INICIO ? h+24 : h;
-  const s = ((ha-HORA_INICIO)*60+m)/SLOT_MIN;
+  const s = Math.floor(((ha-HORA_INICIO)*60+m)/SLOT_MIN);
   return (s<0||s>TOTAL_SLOTS)?null:s;
 };
 
@@ -687,7 +687,7 @@ export default function EscalaPainel() {
                 <div style={{padding:'10px 14px',borderBottom:(turnoAberto&&!t.folga)?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',gap:10,justifyContent:'space-between'}}>
                   <div onClick={()=>setTurnosAbertos(p=>({...p,[c.id]:!turnoAberto}))}
                     style={{display:'flex',alignItems:'center',gap:10,flex:1,minWidth:0,cursor:'pointer',userSelect:'none'}}>
-                    <div style={{width:4,height:34,background:T.border,borderRadius:2,flexShrink:0}}/>
+                    <div style={{width:4,height:34,background:T.carbon,borderRadius:2,flexShrink:0}}/>
                     <div style={{minWidth:0,flex:1}}>
                       <div style={{fontSize:14,fontWeight:700,color:T.carbon,letterSpacing:'-0.2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.nome}</div>
                       <div style={{fontFamily:'DM Mono,monospace',fontSize:9,letterSpacing:'.5px',textTransform:'uppercase',color:T.muted,marginTop:2}}>
