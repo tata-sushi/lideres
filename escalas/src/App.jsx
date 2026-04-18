@@ -828,7 +828,7 @@ export default function EscalaPainel() {
               <div style={{display:'grid',gridTemplateColumns:`48px repeat(${colabsFiltrados.length},${colW}px)`,minWidth:48+colabsFiltrados.length*colW,width:'max-content'}}>
                 <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:54,width:48,minWidth:48,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px'}}>HORA</div>
                 {colabsFiltrados.map(c=>(
-                  <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'5px 7px',borderLeft:'1px solid #2E3038',borderBottom:`3px solid ${c.cor}`,minHeight:54,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center'}}>
+                  <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'5px 7px',borderLeft:'1px solid #2E3038',borderBottom:`3px solid ${T.citric}`,minHeight:54,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center'}}>
                     <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?10:11.5,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.2px',width:'100%',textAlign:'center'}}>{c.nome}</div>
                     <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?9:10.5,fontWeight:400,color:'#FFFFFF',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.1px',opacity:.85,width:'100%',textAlign:'center'}}>
                       {estaDeFerias(c.id,dataDoDia(dia.id)) ? '🏖 Férias' : `${c.funcao} · ${horasTurno(escala[dia.id]?.[c.id]||{}).toFixed(1)}h`}
@@ -862,7 +862,7 @@ export default function EscalaPainel() {
                         let opacity=1;
                         if (deFerias) { bg='rgba(26,58,92,.18)'; opacity=.7; }
                         else if (t.folga) { bg=`repeating-linear-gradient(45deg,transparent,transparent 4px,${T.border} 4px,${T.border} 5px)`; opacity=.5; }
-                        else if (ativo) bg=c.cor;
+                        else if (ativo) bg=T.carbon;
                         else if (naFuncJan) bg='rgba(122,26,26,.18)';
                         else if (naPrepJan) bg='rgba(122,74,0,.18)';
                         else if (naFuncAlm) bg='rgba(26,92,42,.18)';
