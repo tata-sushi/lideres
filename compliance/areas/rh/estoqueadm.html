@@ -807,9 +807,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="m-meta" style="padding-top:10px">
       <div class="field"><label>Colaborador</label>
-        <select id="f-colab">
-          <option value="">Selecione o colaborador...</option>
-        </select>
+        <input type="text" id="f-colab" list="f-colab-list" autocomplete="off" placeholder="Digite ou selecione o colaborador...">
+        <datalist id="f-colab-list"></datalist>
       </div>
       <div class="field"><label>Matrícula</label><input type="text" id="f-matricula" placeholder="Preenche ao selecionar o nome" readonly style="background:var(--bg);cursor:not-allowed"></div>
     </div>
@@ -819,6 +818,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <option>Reabastecimento Estoque (entrada)</option>
           <option>Reposição Periódica (saída)</option>
           <option>Perda/Furto (saída)</option>
+          <option>Teste/Extra (saída)</option>
           <option>Lavanderia (entrada)</option>
           <option>Devolução (entrada)</option>
         </select>
@@ -1276,6 +1276,9 @@ function addLivreItem() {
       '<input class="livre-ca-input" id="li-ca-'+id+'" type="text" placeholder="Ex: 12345" inputmode="numeric">' +
     '</div>';
   document.getElementById('livre-list').appendChild(el);
+  var tamS = document.querySelector('#li-tam-'+id+' select');
+  if (tamS) tamS.addEventListener('change', function() { fillCusto(id); });
+  fillCusto(id);
   updateLoteCount();
 }
 
@@ -1289,11 +1292,49 @@ function onCatChange(id, sel) {
   updateCArow(id, !!f.epi);
 }
 
+function getLastCusto(itemName, tamanho) {
+  var hist = HISTORICO || [];
+  for (var i = hist.length - 1; i >= 0; i--) {
+    var r = hist[i];
+    if (r.item !== itemName || !(r.quantidade > 0)) continue;
+    var tam = String(r.tamanho || '').trim();
+    if (tamanho && tam && tam !== '—' && tam !== tamanho) continue;
+    var c = Math.abs(r.custo_unit || 0);
+    if (c > 0) return c;
+  }
+  return null;
+}
+
+function fillCusto(id) {
+  var itemSel = document.getElementById('li-item-'+id);
+  if (!itemSel) return;
+  var itemName = itemSel.options[itemSel.selectedIndex] ? itemSel.options[itemSel.selectedIndex].text : '';
+  var tamS = document.querySelector('#li-tam-'+id+' select');
+  var tamanho = tamS ? tamS.value : '';
+  var custo = getLastCusto(itemName, tamanho);
+  var el = document.getElementById('li-custo-'+id);
+  if (!el) return;
+  if (custo !== null) {
+    el.value = custo.toFixed(2);
+    el.readOnly = true;
+    el.style.background = '#f4f4f4';
+    el.style.color = '#777';
+  } else {
+    el.readOnly = false;
+    el.style.background = '';
+    el.style.color = '';
+    el.value = '';
+  }
+}
+
 function onItemChange(id) {
   var sel = document.getElementById('li-item-'+id);
   var opt = sel.options[sel.selectedIndex];
   document.getElementById('li-tam-'+id).innerHTML = tamSel(opt.dataset.t||'none');
+  var tamS = document.querySelector('#li-tam-'+id+' select');
+  if (tamS) tamS.addEventListener('change', function() { fillCusto(id); });
   updateCArow(id, opt.dataset.epi==='true');
+  fillCusto(id);
 }
 
 function updateCArow(id, isEpi) {
@@ -1572,21 +1613,20 @@ async function carregarColaboradores() {
 }
 
 function popularSelectColabsEstoque(colabs) {
-  var sel = document.getElementById('f-colab');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">Selecione o colaborador...</option>';
+  var dl = document.getElementById('f-colab-list');
+  if (!dl) return;
+  dl.innerHTML = '';
   colabs.forEach(function(c) {
     var opt = document.createElement('option');
     opt.value = c.nome;
-    opt.textContent = c.nome;
-    sel.appendChild(opt);
+    dl.appendChild(opt);
   });
 }
 
 (function() {
   var nomeEl = document.getElementById('f-colab');
   if (!nomeEl) return;
-  nomeEl.addEventListener('change', function() {
+  nomeEl.addEventListener('input', function() {
     if (!__colabCache) return;
     var v = nomeEl.value;
     var match = __colabCache.find(function(c) { return c.nome === v; });
