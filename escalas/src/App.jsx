@@ -813,7 +813,7 @@ export default function EscalaPainel() {
         </div>
 
         {/* ══ COLUNA DIREITA ══ */}
-        <div style={{paddingTop:ehMobile?16:0,position:ehMobile?'static':'sticky',top:70,
+        <div style={{paddingTop:ehMobile?6:0,position:ehMobile?'static':'sticky',top:70,
           height:ehMobile?'auto':'calc(100vh - 70px)',
           overflowY:ehMobile?'visible':'auto',
           paddingBottom:20}}>
