@@ -79,6 +79,17 @@ body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(--t1); 
 .ac-chip-badge { margin-left:auto; flex-shrink:0; width:18px; height:18px; display:flex; align-items:center; justify-content:center; }
 .ac-chip-badge svg { width:14px; height:14px; stroke:#b08a00; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 
+/* ── BLOQUEADO ── */
+.ac-dept-chip.locked { cursor:not-allowed; pointer-events:none; }
+.ac-dept-chip.locked:hover,
+.ac-dept-chip.locked:active { background:var(--white); border-color:var(--border); }
+.ac-dept-chip.locked:hover .ac-chip-icon svg,
+.ac-dept-chip.locked:active .ac-chip-icon svg { stroke:var(--t1); }
+.ac-dept-chip.locked:hover .ac-chip-label,
+.ac-dept-chip.locked:active .ac-chip-label { color:var(--t1); }
+.ac-chip-badge.locked { background:rgba(180,40,40,0.5); border-radius:6px; padding:2px; }
+.ac-chip-badge.locked svg { stroke:#ff8a8a; }
+
 /* ── BACK BTN ── */
 .back-btn { display:flex; align-items:center; justify-content:center; gap:7px; margin:12px 16px 32px; padding:11px; background:transparent; color:var(--t2); border:1px solid var(--border); border-radius:var(--r); font-family:"DM Mono",monospace; font-size:10px; font-weight:500; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; transition:border-color .15s, color .15s; width:calc(100% - 32px); }
 .back-btn svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
@@ -239,7 +250,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="ac-dept-grid">
 
       <!-- Identidade Conceitual -->
-      <div class="ac-dept-chip" onclick="location.href='idconceitual.html'" style="cursor:pointer">
+      <div class="ac-dept-chip" data-access-id="governanca-institucional-conceitual" data-access-url="/compliance/areas/institucional/idconceitual" onclick="location.href='idconceitual.html'" style="cursor:pointer">
         <div class="ac-chip-icon">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
         </div>
@@ -374,6 +385,41 @@ function closeDrawer() {
     var hu = document.getElementById('header-user');
     if (hu) hu.textContent = session.displayName;
   }
+})();
+
+/* ── Checa acesso e marca chips bloqueados com cadeado ── */
+(function() {
+  var session = window.__lideresSession;
+  if (!session) try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
+  if (!session) return;
+  var perfil  = (session.perfil || '').toLowerCase();
+  var paginas = Array.isArray(session.paginas) ? session.paginas : [];
+  var LOCK_SVG = '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+
+  document.querySelectorAll('.ac-dept-chip[data-access-id]').forEach(function(chip) {
+    var chipId  = chip.getAttribute('data-access-id').toLowerCase();
+    var chipUrl = (chip.getAttribute('data-access-url') || '').toLowerCase();
+    var hasAccess = perfil === 'admin' || paginas.some(function(p) {
+      var id  = String(p && p.id  || '').toLowerCase();
+      var url = String(p && p.url || '').toLowerCase();
+      if (id === chipId) return true;
+      if (chipUrl && url.indexOf(chipUrl) !== -1) return true;
+      return false;
+    });
+    if (!hasAccess) {
+      chip.classList.add('locked');
+      chip.removeAttribute('onclick');
+      chip.style.cursor = 'not-allowed';
+      var badge = chip.querySelector('.ac-chip-badge');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'ac-chip-badge';
+        chip.appendChild(badge);
+      }
+      badge.classList.add('locked');
+      badge.innerHTML = LOCK_SVG;
+    }
+  });
 })();
 </script>
 </body>
