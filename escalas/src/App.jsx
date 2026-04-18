@@ -546,22 +546,6 @@ export default function EscalaPainel() {
         </div>
       </header>
 
-      {/* ── KPIs ── */}
-      <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'16px 20px'}}>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
-          {[
-            {label:'Colaboradores', val:colabsFiltrados.length, cor:T.carbon},
-            {label:'Horas / Semana', val:`${totalSemana.toFixed(0)}h`, cor:T.carbon},
-            {label:'Dentro da Meta', val:okCount, cor:okCount>0?T.green:T.carbon},
-            {label:'Alertas', val:alertas, cor:alertas>0?T.red:T.carbon},
-          ].map(k=>(
-            <div key={k.label} className="card" style={{padding:'14px 16px',boxShadow:'none',display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center'}}>
-              <div style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.muted,letterSpacing:'1px',textTransform:'uppercase',marginBottom:6}}>{k.label}</div>
-              <div style={{fontSize:36,fontWeight:700,color:k.cor,lineHeight:1}}>{k.val}</div>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* ── FILTROS ── */}
       <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px'}}>
