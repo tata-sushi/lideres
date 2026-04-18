@@ -1718,7 +1718,7 @@ function loadFromSheets() {
   });
 }
 
-/* ══ RECALC DATA a partir do SALDO ══ */
+/* ══ RECALC DATA a partir do HISTÓRICO ══ */
 var CAT_MAP = {
   'Uniformes': 'u',
   'Calçados':  'c',
@@ -1726,62 +1726,49 @@ var CAT_MAP = {
   'Brindes':   'b',
   'Papelaria': 'p'
 };
+var CAT_NORM = {'Brinde':'Brindes',"EPI":"EPI's",'Calçado':'Calçados','Uniforme':'Uniformes'};
 
 function recalcData() {
   var units = ['Itaim Bibi','Pinheiros','Poke - Pinheiros','TATÁ House','Administrativo'];
-
-  // kpi: [qtd, total_R$, custo_medio_unit]
   var newData = { all: { kpi: {u:[0,0,0],c:[0,0,0],e:[0,0,0],b:[0,0,0],p:[0,0,0]}, bars: {u:[],c:[],e:[],b:[],p:[]} } };
+  units.forEach(function(unit) {
+    newData[unit] = { kpi: {u:[0,0,0],c:[0,0,0],e:[0,0,0],b:[0,0,0],p:[0,0,0]}, bars: {u:[],c:[],e:[],b:[],p:[]} };
+  });
+
+  (HISTORICO || []).forEach(function(r) {
+    var itemName = r.item;
+    if (!itemName) return;
+
+    var qty   = r.quantidade || 0;
+    var valor = Math.abs(r.custo_unit || 0) * qty;
+
+    var rawCat  = r.categoria;
+    var normCat = rawCat ? (CAT_NORM[rawCat] || rawCat) : null;
+    var cat = (normCat && CAT_MAP[normCat]) ? normCat : getCatForItem(itemName);
+    var k = CAT_MAP[cat];
+    if (!k) return;
+
+    if (newData[r.unidade]) {
+      newData[r.unidade].kpi[k][0] += qty;
+      newData[r.unidade].kpi[k][1] += valor;
+      var barUnit = newData[r.unidade].bars[k];
+      var eu = barUnit.find(function(x){return x.n===itemName;});
+      if (eu) eu.q += qty; else barUnit.push({n:itemName, q:qty});
+    }
+
+    newData['all'].kpi[k][0] += qty;
+    newData['all'].kpi[k][1] += valor;
+    var barAll = newData['all'].bars[k];
+    var ea = barAll.find(function(x){return x.n===itemName;});
+    if (ea) ea.q += qty; else barAll.push({n:itemName, q:qty});
+  });
 
   units.forEach(function(unit) {
-    var s = SALDO[unit];
-    if (!s) return;
-
-    newData[unit] = { kpi: {u:[0,0,0],c:[0,0,0],e:[0,0,0],b:[0,0,0],p:[0,0,0]}, bars: {u:[],c:[],e:[],b:[],p:[]} };
-
-    Object.keys(s).forEach(function(itemName) {
-      // Suporta formato novo { qtd, custo_medio, categoria } e legado (número)
-      var entry = s[itemName];
-      var qty, custo;
-      if (typeof entry === 'object' && entry !== null) {
-        qty   = entry.qtd         || 0;
-        custo = entry.custo_medio || 0;
-      } else {
-        qty   = Number(entry) || 0;
-        custo = 0;
-      }
-
-      var CAT_NORM = {'Brinde':'Brindes','EPI':'EPI\'s','Calçado':'Calçados','Uniforme':'Uniformes'};
-      var rawCat = entry && typeof entry === 'object' && entry.categoria;
-      var normCat = rawCat ? (CAT_NORM[rawCat] || rawCat) : null;
-      var cat = (normCat && CAT_MAP[normCat]) ? normCat : getCatForItem(itemName);
-      var k   = CAT_MAP[cat];
-      if (!k) return;
-
-      var totalItem = qty * custo;
-
-      // KPI: [qtd, total_R$, acum_custo_para_media]
-      newData[unit].kpi[k][0] += qty;
-      newData[unit].kpi[k][1] += totalItem;
-      newData['all'].kpi[k][0] += qty;
-      newData['all'].kpi[k][1] += totalItem;
-
-      // Barras
-      var barUnit = newData[unit].bars[k];
-      var barAll  = newData['all'].bars[k];
-      var eu = barUnit.find(function(x){return x.n===itemName;});
-      var ea = barAll.find(function(x){return x.n===itemName;});
-      if (eu) eu.q += qty; else barUnit.push({n:itemName, q:qty});
-      if (ea) ea.q += qty; else barAll.push({n:itemName, q:qty});
-    });
-
     ['u','c','e','b','p'].forEach(function(k){
       newData[unit].bars[k].sort(function(a,b){return b.q-a.q;});
       newData[unit].bars[k] = newData[unit].bars[k].slice(0,8);
     });
   });
-
-  // Ordenar barras all
   ['u','c','e','b','p'].forEach(function(k){
     newData['all'].bars[k].sort(function(a,b){return b.q-a.q;});
     newData['all'].bars[k] = newData['all'].bars[k].slice(0,8);
@@ -1813,9 +1800,7 @@ function recalcSizes() {
     // Filtrar por unidade ativa
     if (activeUnitFilter !== 'all' && r.unidade !== activeUnitFilter) return;
 
-    var tipoLow = String(r.tipo || '').toLowerCase();
-    var isEntrada = tipoLow.indexOf('saída') === -1 && tipoLow.indexOf('saida') === -1;
-    var qtd = isEntrada ? (r.quantidade || 0) : -(r.quantidade || 0);
+    var qtd = r.quantidade || 0;
 
     if (SZ_ROUPA.indexOf(tam) !== -1) {
       szRoupa[tam] = (szRoupa[tam] || 0) + qtd;
