@@ -29,7 +29,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 /* KPI CARDS */
 .kpi-band{background:var(--surface);border-bottom:1px solid var(--border);padding:20px 24px;}
 .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:1100px;margin:0 auto;}
-.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:4px;}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;}
 .kpi-label{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.8px;text-transform:uppercase;color:var(--muted);}
 .kpi-value{font-size:28px;font-weight:700;color:var(--carbon);line-height:1.1;}
 .kpi-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--mid);margin-top:2px;}
@@ -301,6 +301,41 @@ var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVPDROxvIfl4yaIZqNPlR
 var DATA = [];
 var filtered = [];
 
+function formatDateBR(dateStr) {
+  if (!dateStr) return '';
+  var d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
+  var day = String(d.getDate()).padStart(2, '0');
+  var month = String(d.getMonth() + 1).padStart(2, '0');
+  return day + '/' + month + '/' + d.getFullYear();
+}
+
+function getYear(dateStr) {
+  if (!dateStr) return '';
+  var d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr).slice(-4);
+  return String(d.getFullYear());
+}
+
+function getMonthYear(dateStr) {
+  if (!dateStr) return null;
+  var d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  var month = String(d.getMonth() + 1).padStart(2, '0');
+  return month + '/' + d.getFullYear();
+}
+
+function isIdentificado(r) {
+  if (typeof r.identificado === 'boolean') return r.identificado;
+  var v = String(r.identificado || '').trim().toLowerCase();
+  return v === 'sim' || v === 'true' || v === '1' || v === 'yes';
+}
+
+function toSentenceCase(str) {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
 function loadData() {
   fetch(SCRIPT_URL)
     .then(function(r){ return r.json(); })
@@ -318,11 +353,11 @@ function getFiltered() {
   var dev = document.getElementById('f-devolutiva').value;
   var per = document.getElementById('f-periodo').value;
   return DATA.filter(function(r) {
-    if (ident === 'Sim' && !r.identificado) return false;
-    if (ident === 'Não' && r.identificado) return false;
+    if (ident === 'Sim' && !isIdentificado(r)) return false;
+    if (ident === 'Não' && isIdentificado(r)) return false;
     if (dev === 'Com devolutiva' && !r.devolutiva) return false;
     if (dev === 'Sem devolutiva' && r.devolutiva) return false;
-    if (per && r.data.slice(-4) !== per) return false;
+    if (per && getYear(r.data) !== per) return false;
     return true;
   });
 }
@@ -360,17 +395,17 @@ function renderTable(rows) {
   var html = '';
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
-    var identBadge = r.identificado
+    var identBadge = isIdentificado(r)
       ? '<span class="badge badge-sim">Sim</span>'
       : '<span class="badge badge-nao">Não</span>';
     var devHtml = r.devolutiva
       ? '<span class="devolutiva-filled">'+truncate(r.devolutiva, 60)+'</span>'
       : '<span class="devolutiva-empty">Pendente</span>';
     html += '<tr>';
-    html += '<td style="white-space:nowrap;font-family:\'DM Mono\',monospace;font-size:11px;color:var(--mid)">'+r.data+'</td>';
+    html += '<td style="white-space:nowrap;font-family:\'DM Mono\',monospace;font-size:11px;color:var(--mid)">'+formatDateBR(r.data)+'</td>';
     html += '<td style="white-space:nowrap;font-size:12px;font-weight:500">'+( r.reclamante || '<span style="color:var(--muted);font-style:italic;font-size:11px">Anônimo</span>' )+'</td>';
     html += '<td>'+identBadge+'</td>';
-    html += '<td class="ocorrencia-cell">'+truncate(r.ocorrencia, 120)+'</td>';
+    html += '<td class="ocorrencia-cell">'+truncate(toSentenceCase(r.ocorrencia), 120)+'</td>';
     html += '<td class="devolutiva-cell">'+devHtml+'</td>';
     html += '<td><button class="btn-ver" onclick="openModal('+i+')">Ver</button></td>';
     html += '</tr>';
@@ -381,7 +416,7 @@ function renderTable(rows) {
 var chartIdent = null, chartPeriodo = null;
 
 function renderCharts(rows) {
-  var sim = rows.filter(function(r){return r.identificado;}).length;
+  var sim = rows.filter(function(r){return isIdentificado(r);}).length;
   var nao = rows.length - sim;
 
   if (chartIdent) chartIdent.destroy();
@@ -390,7 +425,7 @@ function renderCharts(rows) {
     type: 'doughnut',
     data: {
       labels: ['Sim','Não'],
-      datasets: [{data:[sim,nao], backgroundColor:['#35383F','#CFFF00'], borderWidth:0}]
+      datasets: [{data:[sim,nao], backgroundColor:['#111111','#35383F'], borderWidth:0}]
     },
     options: {
       plugins: {
@@ -406,11 +441,8 @@ function renderCharts(rows) {
   // Group by month/year
   var periodos = {};
   rows.forEach(function(r) {
-    var parts = r.data.split('/');
-    if (parts.length === 3) {
-      var key = parts[1]+'/'+parts[2];
-      periodos[key] = (periodos[key]||0)+1;
-    }
+    var key = getMonthYear(r.data);
+    if (key) periodos[key] = (periodos[key]||0)+1;
   });
   var keys = Object.keys(periodos).sort(function(a,b){
     var pa = a.split('/'), pb = b.split('/');
@@ -438,7 +470,7 @@ function renderCharts(rows) {
 
 function renderKPI(rows) {
   var total = rows.length;
-  var sim = rows.filter(function(r){return r.identificado;}).length;
+  var sim = rows.filter(function(r){return isIdentificado(r);}).length;
   var nao = total - sim;
   var comDev = rows.filter(function(r){return !!r.devolutiva;}).length;
   var semDev = total - comDev;
@@ -461,8 +493,8 @@ function kpiCard(label, value, sub) {
 function openModal(idx) {
   var r = filtered[idx];
   document.getElementById('m-reclamante').textContent = r.reclamante || 'Anônimo';
-  document.getElementById('m-meta').textContent = r.data + ' · ' + (r.identificado ? 'Identificado' : 'Anônimo');
-  document.getElementById('m-ocorrencia').textContent = r.ocorrencia;
+  document.getElementById('m-meta').textContent = formatDateBR(r.data) + ' · ' + (isIdentificado(r) ? 'Identificado' : 'Anônimo');
+  document.getElementById('m-ocorrencia').textContent = toSentenceCase(r.ocorrencia);
   var devEl = document.getElementById('m-devolutiva');
   if (r.devolutiva) {
     devEl.innerHTML = '<div class="modal-devolutiva">'+r.devolutiva+'</div>';
