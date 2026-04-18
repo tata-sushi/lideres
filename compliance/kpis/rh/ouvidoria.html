@@ -6,6 +6,7 @@
 <title>Ouvidoria — TATÁ Sushi</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -88,6 +89,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .modal-close:hover{opacity:0.85;}
 .btn-ver{font-family:'DM Mono',monospace;font-size:10px;padding:4px 10px;background:var(--carbon);color:var(--citric);border:none;border-radius:4px;cursor:pointer;white-space:nowrap;}
 .btn-ver:hover{opacity:0.85;}
+
+/* SORT & PAGINATION */
+.th-sort{cursor:pointer;user-select:none;white-space:nowrap;}
+.th-sort:hover{color:var(--carbon);}
+.sort-arrow{margin-left:3px;opacity:0.3;font-size:9px;vertical-align:middle;}
+.sort-arrow.active-asc::after{content:'↑';opacity:1;color:var(--carbon);}
+.sort-arrow.active-desc::after{content:'↓';opacity:1;color:var(--carbon);}
+.sort-arrow:not(.active-asc):not(.active-desc)::after{content:'↕';}
+.btn-show-more{display:block;width:100%;padding:11px;background:none;border:none;border-top:1px solid var(--border);font-family:'DM Mono',monospace;font-size:11px;color:var(--mid);cursor:pointer;text-transform:uppercase;letter-spacing:0.5px;}
+.btn-show-more:hover{background:#FAFAFA;color:var(--carbon);}
 
 /* EMPTY */
 .empty-state{text-align:center;padding:48px 20px;color:var(--muted);}
@@ -193,10 +204,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <span class="header-user" id="header-user">—</span>
 </header>
 
-<div class="kpi-band">
-  <div class="kpi-grid" id="kpi-grid"></div>
-</div>
-
 <div class="filters-wrap">
   <div class="filters-inner">
     <div class="filters-row">
@@ -244,7 +251,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
   <div class="chart-card" style="display:flex;flex-direction:column;">
     <div class="chart-title" style="text-align:center;">Ocorrências por competência</div>
-    <canvas id="chart-periodo" height="160"></canvas>
+    <div style="position:relative;height:120px;flex:1;">
+      <canvas id="chart-periodo"></canvas>
+    </div>
   </div>
 </div>
 
@@ -257,11 +266,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <table class="tbl">
         <thead>
           <tr>
-            <th>Data</th>
-            <th>Reclamante</th>
-            <th>Identificado</th>
-            <th>Ocorrência</th>
-            <th>Devolutiva</th>
+            <th class="th-sort" onclick="setSort('data')">Data <span class="sort-arrow" id="sa-data"></span></th>
+            <th class="th-sort" onclick="setSort('reclamante')">Reclamante <span class="sort-arrow" id="sa-reclamante"></span></th>
+            <th class="th-sort" onclick="setSort('identificado')">Identificado <span class="sort-arrow" id="sa-identificado"></span></th>
+            <th class="th-sort" onclick="setSort('ocorrencia')">Ocorrência <span class="sort-arrow" id="sa-ocorrencia"></span></th>
+            <th class="th-sort" onclick="setSort('devolutiva')">Devolutiva <span class="sort-arrow" id="sa-devolutiva"></span></th>
             <th></th>
           </tr>
         </thead>
@@ -271,6 +280,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div id="empty-state" class="empty-state" style="display:none;">
       <p>Nenhuma ocorrência encontrada</p>
     </div>
+    <div id="show-more-wrap" style="display:none;"></div>
   </div>
 </div>
 
@@ -300,6 +310,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVPDROxvIfl4yaIZqNPlRdl5-UTtVSUeUMd5H9GdPn0wXnyaMKtwaLSvn1TdvTMw3Xnw/exec';
 var DATA = [];
 var filtered = [];
+var displayedRows = [];
+var sortState = {col: null, dir: 1};
+var PAGE_SIZE = 10;
+var visibleCount = PAGE_SIZE;
 
 function formatDateBR(dateStr) {
   if (!dateStr) return '';
@@ -364,6 +378,7 @@ function getFiltered() {
 
 function applyFilter() {
   filtered = getFiltered();
+  visibleCount = PAGE_SIZE;
   renderTable(filtered);
   renderKPI(filtered);
   renderCharts(filtered);
@@ -377,6 +392,61 @@ function clearFilters() {
 }
 
 
+function sortRows(rows) {
+  if (!sortState.col) return rows;
+  var col = sortState.col, dir = sortState.dir;
+  return rows.slice().sort(function(a, b) {
+    var av, bv;
+    if (col === 'data') {
+      av = new Date(a.data).getTime() || 0;
+      bv = new Date(b.data).getTime() || 0;
+    } else if (col === 'reclamante') {
+      av = (a.reclamante || '').toLowerCase();
+      bv = (b.reclamante || '').toLowerCase();
+    } else if (col === 'identificado') {
+      av = isIdentificado(a) ? 1 : 0;
+      bv = isIdentificado(b) ? 1 : 0;
+    } else if (col === 'ocorrencia') {
+      av = (a.ocorrencia || '').toLowerCase();
+      bv = (b.ocorrencia || '').toLowerCase();
+    } else if (col === 'devolutiva') {
+      av = a.devolutiva ? 1 : 0;
+      bv = b.devolutiva ? 1 : 0;
+    }
+    if (av < bv) return -dir;
+    if (av > bv) return dir;
+    return 0;
+  });
+}
+
+function updateSortArrows() {
+  var cols = ['data','reclamante','identificado','ocorrencia','devolutiva'];
+  cols.forEach(function(c) {
+    var el = document.getElementById('sa-'+c);
+    if (!el) return;
+    el.className = 'sort-arrow';
+    if (sortState.col === c) {
+      el.className = 'sort-arrow ' + (sortState.dir === 1 ? 'active-asc' : 'active-desc');
+    }
+  });
+}
+
+function setSort(col) {
+  if (sortState.col === col) {
+    sortState.dir *= -1;
+  } else {
+    sortState.col = col;
+    sortState.dir = 1;
+  }
+  visibleCount = PAGE_SIZE;
+  renderTable(filtered);
+}
+
+function showMoreRows() {
+  visibleCount += PAGE_SIZE;
+  renderTable(filtered);
+}
+
 function truncate(str, n) {
   if (!str) return '';
   return str.length > n ? str.slice(0, n) + '…' : str;
@@ -385,16 +455,22 @@ function truncate(str, n) {
 function renderTable(rows) {
   var tbody = document.getElementById('tbl-body');
   var empty = document.getElementById('empty-state');
+  var showMoreWrap = document.getElementById('show-more-wrap');
   document.getElementById('results-count').innerHTML = '<span>'+rows.length+'</span> ocorrência(s)';
   if (!rows.length) {
     tbody.innerHTML = '';
+    displayedRows = [];
     empty.style.display = 'block';
+    showMoreWrap.style.display = 'none';
+    updateSortArrows();
     return;
   }
   empty.style.display = 'none';
+  displayedRows = sortRows(rows);
+  var slice = displayedRows.slice(0, visibleCount);
   var html = '';
-  for (var i = 0; i < rows.length; i++) {
-    var r = rows[i];
+  for (var i = 0; i < slice.length; i++) {
+    var r = slice[i];
     var identBadge = isIdentificado(r)
       ? '<span class="badge badge-sim">Sim</span>'
       : '<span class="badge badge-nao">Não</span>';
@@ -411,6 +487,14 @@ function renderTable(rows) {
     html += '</tr>';
   }
   tbody.innerHTML = html;
+  var remaining = displayedRows.length - visibleCount;
+  if (remaining > 0) {
+    showMoreWrap.style.display = 'block';
+    showMoreWrap.innerHTML = '<button class="btn-show-more" onclick="showMoreRows()">Mostrar mais ' + remaining + ' registro' + (remaining !== 1 ? 's' : '') + '</button>';
+  } else {
+    showMoreWrap.style.display = 'none';
+  }
+  updateSortArrows();
 }
 
 var chartIdent = null, chartPeriodo = null;
@@ -454,16 +538,28 @@ function renderCharts(rows) {
   var ctx2 = document.getElementById('chart-periodo').getContext('2d');
   chartPeriodo = new Chart(ctx2, {
     type: 'bar',
+    plugins: [ChartDataLabels],
     data: {
       labels: keys,
       datasets: [{data:vals, backgroundColor:'#35383F', borderRadius:4}]
     },
     options: {
-      plugins: {legend:{display:false}},
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {display:false},
+        datalabels: {
+          anchor: 'end',
+          align: 'top',
+          color: '#555',
+          font: {family:'DM Mono', size:10, weight:'500'},
+          formatter: function(v) { return v; }
+        }
+      },
       scales: {
         x: {ticks:{font:{family:'DM Mono',size:10}, color:'#999'}},
-        y: {ticks:{font:{family:'DM Mono',size:10}, color:'#999'}, beginAtZero:true, precision:0}
-      }
+        y: {display:false, beginAtZero:true}
+      },
+      layout: {padding: {top:18}}
     }
   });
 }
@@ -480,10 +576,6 @@ function renderKPI(rows) {
   var totalSub = document.getElementById('kpi-total-sub');
   if (totalInline) totalInline.textContent = total;
   if (totalSub) totalSub.textContent = total === 1 ? '1 registro' : total + ' registros';
-  document.getElementById('kpi-grid').innerHTML =
-    kpiCard('Identificados', sim, sim + ' de ' + total + ' (' + pct + '%)') +
-    kpiCard('Com Devolutiva', comDev, comDev + ' de ' + total) +
-    kpiCard('Sem Devolutiva', semDev, 'Pendentes de retorno');
 }
 
 function kpiCard(label, value, sub) {
@@ -491,7 +583,7 @@ function kpiCard(label, value, sub) {
 }
 
 function openModal(idx) {
-  var r = filtered[idx];
+  var r = displayedRows[idx];
   document.getElementById('m-reclamante').textContent = r.reclamante || 'Anônimo';
   document.getElementById('m-meta').textContent = formatDateBR(r.data) + ' · ' + (isIdentificado(r) ? 'Identificado' : 'Anônimo');
   document.getElementById('m-ocorrencia').textContent = toSentenceCase(r.ocorrencia);
