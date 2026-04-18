@@ -1137,6 +1137,7 @@ function setUnitFilter(unit, btn) {
   document.querySelectorAll('#unit-tabs .tab-btn').forEach(function(b){b.classList.remove('active');});
   if (btn) btn.classList.add('active');
   renderDash();
+  recalcSizes();
 }
 
 /* ══ RENDER DASH ══ */
@@ -1161,7 +1162,10 @@ function renderDash() {
     if (el) el.textContent = qtd;
     // Atualizar linha de valor monetário abaixo do KPI
     var elM  = document.getElementById('kpi-money-'+k);
-    if (elM) elM.innerHTML = '<strong>' + fmtBRL(tot) + '</strong><br>' + fmtUnit(tot, qtd);
+    var moneyHtml = (qtd > 0 && tot === 0)
+      ? '<strong>—</strong><br><span style="font-size:9px;color:var(--muted)">sem custo cadastrado</span>'
+      : '<strong>' + fmtBRL(tot) + '</strong><br>' + fmtUnit(tot, qtd);
+    if (elM) elM.innerHTML = moneyHtml;
   });
   bars('b-u',d.bars.u); bars('b-c',d.bars.c); bars('b-e',d.bars.e); bars('b-b',d.bars.b); bars('b-p',d.bars.p);
 }
@@ -1692,7 +1696,7 @@ function loadFromSheets() {
   // Buscar saldo e histórico em paralelo
   Promise.all([
     fetch(GAS_URL + '?action=saldo').then(function(r){ return r.json(); }),
-    fetch(GAS_URL + '?action=historico&n=500').then(function(r){ return r.json(); })
+    fetch(GAS_URL + '?action=historico&n=5000').then(function(r){ return r.json(); })
   ])
   .then(function(results) {
     SALDO     = results[0];
@@ -1746,7 +1750,9 @@ function recalcData() {
         custo = 0;
       }
 
-      var cat = getCatForItem(itemName);
+      var cat = (entry && typeof entry === 'object' && entry.categoria && CAT_MAP[entry.categoria])
+        ? entry.categoria
+        : getCatForItem(itemName);
       var k   = CAT_MAP[cat];
       if (!k) return;
 
@@ -1789,8 +1795,7 @@ function getCatForItem(itemName) {
     var found = CATALOG[cat].find(function(x){ return x.n === itemName; });
     if (found) return cat;
   }
-  // Tentar inferir pelo SALDO se não está no CATALOG
-  return 'Uniformes';
+  return null;
 }
 
 /* ══ RECALC SIZES a partir do SALDO ══ */
