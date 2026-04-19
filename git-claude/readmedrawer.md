@@ -20,6 +20,7 @@ O drawer é o menu lateral direito que aparece ao clicar no botão `+` (header-p
 | `compliance/kpis/index.html` | — |
 | `compliance/kpis/rh/index.html` | — |
 | `compliance/areas/rh/ouvidoria.html` | — |
+| `compliance/ferramentas/index.html` | — |
 
 **Páginas SEM drawer:**
 - `compliance/areas/rh/estoqueadm.html`
