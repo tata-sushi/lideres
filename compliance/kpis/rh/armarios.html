@@ -883,25 +883,26 @@ function onTipoChange() {
   document.getElementById('f-matricula').value = '';
   document.getElementById('f-armario-novo').innerHTML = '<option value="">Selecione…</option>';
 
-  // Líder: unidade sempre fixa; demais: sempre habilitada (auto-preenche do colab, mas edita manualmente se necessário)
   var isLider = currentUser && currentUser.type === 'lider' && currentUser.unit;
-  if (isLider) {
-    unidSel.value = currentUser.unit;
-    unidSel.disabled = true;
-  } else {
-    unidSel.value = '';
-    unidSel.disabled = false;
-  }
 
   if (tipo === 'manut' || tipo === 'liberar_manut') {
+    // Sem colab: unidade precisa ser escolhida pelo usuário (ou fixa no líder)
     rowColab.style.display = 'none';
     rowNovo.style.display  = 'none';
+    if (isLider) { unidSel.value = currentUser.unit; unidSel.disabled = true; }
+    else         { unidSel.value = ''; unidSel.disabled = false; }
   } else if (tipo === 'trocar') {
+    // Unidade vem do colab (base RH) — não editável
     rowColab.style.display = 'grid';
     rowNovo.style.display  = 'grid';
+    unidSel.value = isLider ? currentUser.unit : '';
+    unidSel.disabled = true;
   } else {
+    // atribuir/recolher: unidade do colab, não editável
     rowColab.style.display = 'grid';
     rowNovo.style.display  = 'none';
+    unidSel.value = isLider ? currentUser.unit : '';
+    unidSel.disabled = true;
   }
 
   refreshArmarioList();
@@ -915,6 +916,7 @@ function refreshArmarioList() {
   var tipo  = document.getElementById('f-tipo').value;
   var unit  = document.getElementById('f-unidade').value;
   var colab = document.getElementById('f-colab').value.trim();
+  var mat   = document.getElementById('f-matricula').value.trim();
   var sel   = document.getElementById('f-armario');
   var selNovo = document.getElementById('f-armario-novo');
   var lbl   = document.getElementById('label-armario');
@@ -927,6 +929,7 @@ function refreshArmarioList() {
 
   var items = [];
   var labelText = 'Nº do Armário';
+  var autoSelectId = '';
 
   if (tipo === 'atribuir') {
     items = ARMARIOS.filter(function(a){ return a.unidade === unit && a.status === 'livre'; });
@@ -937,8 +940,15 @@ function refreshArmarioList() {
       if (tipo === 'trocar') selNovo.innerHTML = '<option value="">Selecione…</option>';
       return;
     }
-    items = ARMARIOS.filter(function(a){ return a.unidade === unit && a.colaborador === colab && a.status === 'ocupado'; });
+    // Match por matrícula (mais confiável) ou por nome
+    items = ARMARIOS.filter(function(a){
+      if (a.status !== 'ocupado') return false;
+      if (mat && a.matricula && String(a.matricula).trim() === mat) return true;
+      return a.colaborador === colab;
+    });
     labelText = (tipo === 'trocar') ? 'Armário atual' : 'Armário a recolher';
+    // Auto-selecionar se achou exatamente 1
+    if (items.length === 1) autoSelectId = items[0].id;
   } else if (tipo === 'manut') {
     items = ARMARIOS.filter(function(a){ return a.unidade === unit && a.status !== 'manut'; });
     labelText = 'Armário para manutenção';
@@ -957,6 +967,7 @@ function refreshArmarioList() {
         var extra = ({livre:'Livre', ocupado:a.colaborador||'Ocupado', manut:'Manutenção', bloq:'Bloqueado'}[a.status] || a.status);
         return '<option value="' + a.id + '" data-status="' + a.status + '">' + a.num + ' · ' + extra + '</option>';
       }).join('');
+    if (autoSelectId) sel.value = String(autoSelectId);
   }
 
   if (tipo === 'trocar') {
