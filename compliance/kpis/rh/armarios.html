@@ -95,6 +95,8 @@ body {
 .arm-badge.bloq     { background: #111; color: #fff; }
 .arm-key { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); flex-shrink: 0; display: flex; align-items: center; gap: 3px; }
 .arm-key svg { width: 10px; height: 10px; flex-shrink: 0; }
+.btn-show-more { width: 100%; margin-top: 6px; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); cursor: pointer; text-align: center; display: block; }
+.btn-show-more:hover { border-color: var(--carbon); color: var(--carbon); }
 
 /* ── GRID VISUAL (mapa) ── */
 .mapa-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; box-shadow: var(--shadow); }
@@ -117,7 +119,7 @@ body {
 .mapa-cell:hover { transform: scale(1.06); box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1; position: relative; }
 .mapa-cell.livre   { background: var(--carbon);  border-color: var(--carbon); color: var(--citric); }
 .mapa-cell.ocupado { background: var(--bg);      border-color: var(--border); color: var(--muted); }
-.mapa-cell.manut   { background: var(--red-bg);  border-color: #FECACA;       color: var(--red); }
+.mapa-cell.manut   { background: var(--red);     border-color: var(--red);    color: #fff; }
 .mapa-cell.bloq    { background: #111111;         border-color: #111111;       color: #fff; }
 /* número grande, legível */
 .mapa-cell .cell-num  {
@@ -600,6 +602,7 @@ var activeUnitFilter = 'all';
 var ARMARIOS         = [];   // [{id, unidade, num, status, colaborador, matricula, chave, obs, updated}]
 var HISTORICO        = [];
 var __colabCache     = null;
+var _unitShowCount   = {};
 
 /* ════════════════════════════════════════════════
    DEFINIÇÃO DE ARMÁRIOS POR UNIDADE
@@ -827,6 +830,23 @@ function renderMapa() {
   }).join('');
 }
 
+function _armRow(a) {
+  var badgeCls = { livre:'livre', ocupado:'ocupado', manut:'manut', bloq:'bloq' }[a.status] || 'livre';
+  var badgeLbl = { livre:'Livre', ocupado:'Ocupado', manut:'Manutenção', bloq:'Bloqueado' }[a.status] || a.status;
+  var shortNum = a.num.replace(/^[A-ZÁÃÂÀÉÊÍÓÔÚÇ]+/i, '').replace(/^0+/, '') || a.num;
+  shortNum = shortNum.slice(0, 6);
+  return '<div class="arm-row">' +
+    '<div class="arm-num">' + shortNum + '</div>' +
+    '<div class="arm-user' + (a.colaborador ? '' : ' empty') + '">' + (a.colaborador || 'Sem ocupante') + '</div>' +
+    '<span class="arm-badge ' + badgeCls + '">' + badgeLbl + '</span>' +
+  '</div>';
+}
+
+function showMoreUnit(unit) {
+  _unitShowCount[unit] = (_unitShowCount[unit] || 10) + 10;
+  renderListas();
+}
+
 function renderListas() {
   var src   = filtrar();
   var units = activeUnitFilter === 'all' ? Object.keys(ARMARIOS_CONFIG) : [activeUnitFilter];
@@ -834,20 +854,20 @@ function renderListas() {
   grid.innerHTML = units.map(function(unit) {
     var itens = src.filter(function(a){ return a.unidade === unit; });
     if (!itens.length && activeUnitFilter === 'all') return '';
-    var rows = itens.length
-      ? itens.map(function(a) {
-          var badgeCls = { livre:'livre', ocupado:'ocupado', manut:'manut', bloq:'bloq' }[a.status] || 'livre';
-          var badgeLbl = { livre:'Livre', ocupado:'Ocupado', manut:'Manutenção', bloq:'Bloqueado' }[a.status] || a.status;
-          /* código curto: só números, max 6 chars */
-          var shortNum = a.num.replace(/^[A-ZÁÃÂÀÉÊÍÓÔÚÇ]+/i, '').replace(/^0+/, '') || a.num;
-          shortNum = shortNum.slice(0, 6);
-          return '<div class="arm-row">' +
-            '<div class="arm-num">' + shortNum + '</div>' +
-            '<div class="arm-user' + (a.colaborador ? '' : ' empty') + '">' + (a.colaborador || 'Sem ocupante') + '</div>' +
-            '<span class="arm-badge ' + badgeCls + '">' + badgeLbl + '</span>' +
-          '</div>';
-        }).join('')
-      : '<div class="empty-state">Nenhum armário</div>';
+    var limit   = _unitShowCount[unit] || 10;
+    var shown   = itens.slice(0, limit);
+    var hasMore = itens.length > limit;
+    var rows;
+    if (itens.length) {
+      rows = shown.map(_armRow).join('');
+      if (hasMore) {
+        var remaining = Math.min(10, itens.length - limit);
+        var safeUnit = unit.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        rows += '<button class="btn-show-more" onclick="showMoreUnit(\'' + safeUnit + '\')">Mostrar mais ' + remaining + '</button>';
+      }
+    } else {
+      rows = '<div class="empty-state">Nenhum armário</div>';
+    }
     return '<div class="quad-card">' +
       '<div class="quad-head"><div class="quad-icon">' +
         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="#35383F" stroke-width="1.5"/><path d="M8 3v14M2 10h6" stroke="#35383F" stroke-width="1.5"/><circle cx="11" cy="10" r="1" fill="#35383F"/></svg>' +
@@ -864,6 +884,7 @@ function renderListas() {
    ════════════════════════════════════════════════ */
 function setUnitFilter(unit, btn) {
   activeUnitFilter = unit;
+  _unitShowCount = {};
   document.querySelectorAll('#unit-tabs .tab-btn').forEach(function(b){ b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
   renderTudo();
@@ -881,6 +902,7 @@ function onTipoChange() {
   // Reset
   document.getElementById('f-colab').value     = '';
   document.getElementById('f-matricula').value = '';
+  document.getElementById('f-armario').disabled = false;
   document.getElementById('f-armario-novo').innerHTML = '<option value="">Selecione…</option>';
 
   var isLider = currentUser && currentUser.type === 'lider' && currentUser.unit;
@@ -920,10 +942,13 @@ function refreshArmarioList() {
   var sel   = document.getElementById('f-armario');
   var selNovo = document.getElementById('f-armario-novo');
   var lbl   = document.getElementById('label-armario');
+  var isColabOp = (tipo === 'recolher' || tipo === 'trocar');
 
-  if (!unit) {
+  // For non-colab ops, unit is required
+  if (!unit && !isColabOp) {
     sel.innerHTML = '<option value="">Selecione a unidade primeiro…</option>';
     selNovo.innerHTML = '<option value="">Selecione…</option>';
+    sel.disabled = false;
     return;
   }
 
@@ -934,21 +959,28 @@ function refreshArmarioList() {
   if (tipo === 'atribuir') {
     items = ARMARIOS.filter(function(a){ return a.unidade === unit && a.status === 'livre'; });
     labelText = 'Armário (livre)';
-  } else if (tipo === 'recolher' || tipo === 'trocar') {
+  } else if (isColabOp) {
     if (!colab) {
       sel.innerHTML = '<option value="">Selecione o colaborador primeiro…</option>';
       if (tipo === 'trocar') selNovo.innerHTML = '<option value="">Selecione…</option>';
+      sel.disabled = false;
       return;
     }
-    // Match por matrícula (mais confiável) ou por nome
+    // Search across ALL units — colab may not have unit in HR base
     items = ARMARIOS.filter(function(a){
       if (a.status !== 'ocupado') return false;
       if (mat && a.matricula && String(a.matricula).trim() === mat) return true;
       return a.colaborador === colab;
     });
     labelText = (tipo === 'trocar') ? 'Armário atual' : 'Armário a recolher';
-    // Auto-selecionar se achou exatamente 1
-    if (items.length === 1) autoSelectId = items[0].id;
+    if (items.length === 1) {
+      autoSelectId = items[0].id;
+      // Auto-fill unidade from found armário if still empty
+      if (!unit) {
+        document.getElementById('f-unidade').value = items[0].unidade;
+        unit = items[0].unidade;
+      }
+    }
   } else if (tipo === 'manut') {
     items = ARMARIOS.filter(function(a){ return a.unidade === unit && a.status !== 'manut'; });
     labelText = 'Armário para manutenção';
@@ -969,6 +1001,9 @@ function refreshArmarioList() {
       }).join('');
     if (autoSelectId) sel.value = String(autoSelectId);
   }
+
+  // Lock armário field for recolher (only one armário per colab, user shouldn't change it)
+  sel.disabled = (tipo === 'recolher');
 
   if (tipo === 'trocar') {
     var livres = ARMARIOS.filter(function(a){ return a.unidade === unit && a.status === 'livre'; });
