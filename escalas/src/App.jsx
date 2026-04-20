@@ -523,8 +523,7 @@ export default function EscalaPainel() {
       <header style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px',display:'flex',alignItems:'center',gap:14,position:'sticky',top:0,zIndex:100}}>
         <img src={LOGO_SRC} alt="TATÁ Sushi" style={{width:40,height:40,objectFit:'contain',flexShrink:0}}/>
         <div style={{flex:1}}>
-          <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Controle de Escalas</div>
-          <div style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted,letterSpacing:'.5px',textTransform:'uppercase',marginTop:1}}>TATÁ Sushi · Operação</div>
+          <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Escalas</div>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
           {syncStatus==='loading'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.muted,letterSpacing:'.3px'}}>⟳ Carregando...</span>}
