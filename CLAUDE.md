@@ -14,11 +14,69 @@ Essencial:
 - Mostra tela "Sem acesso" se o perfil não tem permissão
 - Seta `window.__lideresUser` e `window.__lideresSession`
 
-## 2. Identificação do líder no header
+## 2. Header padrão
 
-- O header deve ter `<span class="header-user" id="header-user">—</span>` (nunca nome hardcoded)
-- Script no final preenche via `session.displayName`
-- **NÃO** aplicar `display:none` em `.header-user` nos media queries mobile (senão o nome some)
+### 2.1 Páginas dashboard (filtros, gráficos, tabelas, formulários operacionais)
+
+Exemplos canônicos: `acessorapido/*`, `compliance/kpis/rh/ouvidoria.html`, `compliance/areas/rh/estoqueadm.html`, `testes/abastecimento.html`.
+
+**CSS obrigatório** (copiar/cole, não inventar variações):
+
+```css
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.logo-img { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
+.header-title { font-size: 20px; font-weight: 700; color: var(--carbon); letter-spacing: -0.3px; }
+.header-user {
+  font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500;
+  color: var(--carbon); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 10px; white-space: nowrap; margin-left: auto;
+}
+```
+
+**HTML**:
+
+```html
+<header class="header">
+  <img class="logo-img" src="data:image/png;base64,..." alt="TATÁ"/>
+  <div>
+    <div class="header-title">TITULO_CURTO</div>
+  </div>
+  <span class="header-user" id="header-user">—</span>
+</header>
+```
+
+**Regras**:
+
+- **Logo**: usar o base64 canônico de `compliance/menucompliance.html` (~1807 chars até `...ElFTkSuQmCC`). Logo truncado quebra renderização — sempre copiar o tag `<img>` inteiro de uma dashboard funcionando.
+- **Título curto**: até ~12 chars visíveis, para caber em 1 linha no viewport mobile (~390px) sem wrap. Evitar separadores "·", "&", "/" e complementos ("de", "do", "Controle de…"). Exemplos aprovados: `BCH`, `Gorjeta`, `Recrutamento`, `Solicitações`, `Uniformes`, `Abastecimento`, `Caixa`, `Extras`, `Manutenção`, `Experiências`, `Ouvidoria`.
+- **Font-size do título uniforme em 20px** — nunca 14/16/18px, nunca override em media query.
+- **SEM subtítulo** (`<div class="header-sub">`): nunca adicionar "TATÁ Sushi", "Gente & Gestão", "TATÁ Sushi · <depto>". Header mostra só o título.
+- **`header-user` com id="header-user"**: nunca nome hardcoded. Script final preenche via `session.displayName`. **Não** aplicar `display:none` no mobile (senão o nome some).
+- **Sem media queries** que encolham `.header` (padding), `.logo-img` (width/height) ou `.header-title` (font-size). Proporção idêntica em todos os viewports.
+- **Sem `overflow:hidden` em `.header`** — não é necessário e corta o nome do líder em telas pequenas.
+
+**Botão "+" opcional** (dashboards que abrem formulário de registro):
+
+```html
+<button class="header-plus" onclick="openFab()"><svg>...</svg></button>
+```
+
+Posicionar depois do `#header-user`.
+
+### 2.2 Páginas de menu / institucionais (`compliance/menucompliance.html`, `compliance/areas/institucional/*`, etc.)
+
+Headers de menu têm padrão visual diferente e **não usam `.header-title`** — só logo à esquerda + `#header-user` + botão `+` à direita. CSS já padronizado nos arquivos existentes, não criar variações.
 
 ## 3. Cards de menu (ex.: `compliance/menucompliance.html`)
 
