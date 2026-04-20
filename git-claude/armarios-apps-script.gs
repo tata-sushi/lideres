@@ -175,36 +175,15 @@ function registrarMov(body) {
   var sh = ss.getSheetByName(SHEET_ARMARIOS);
   var rows = sh.getDataRange().getValues();
 
-  var unidadeOut = normOut(body.unidade);
-  var numStr = String(body.num).trim();
-  var targetRow = -1;
+  _gravarArmario(sh, rows, body.unidade, body.num, body.status, body.colaborador, body.matricula, body.chave, body.obs);
 
-  for (var i = 1; i < rows.length; i++) {
-    var uRow = normIn(rows[i][0]);
-    var nRow = String(rows[i][1]).trim();
-    if (uRow === normIn(body.unidade) && nRow === numStr) {
-      targetRow = i + 1;
-      break;
-    }
+  // Se for troca, atualizar também o novo armário com status ocupado
+  if (body.tipo === 'trocar' && body.armarioNovo && body.armarioNovo.num) {
+    var rows2 = sh.getDataRange().getValues();
+    _gravarArmario(sh, rows2, body.unidade, body.armarioNovo.num, 'ocupado',
+                   body.armarioNovo.colaborador, body.armarioNovo.matricula,
+                   body.armarioNovo.chave, '');
   }
-
-  if (targetRow === -1) {
-    targetRow = sh.getLastRow() + 1;
-    sh.getRange(targetRow, 1).setValue(unidadeOut);
-    sh.getRange(targetRow, 2).setValue(body.num);
-  }
-
-  var obsValue;
-  if (body.status === 'livre')       obsValue = 'Liberado';
-  else if (body.status === 'manut')  obsValue = 'Sem Cadeado';
-  else if (body.status === 'bloq')   obsValue = 'Bloqueado';
-  else                                obsValue = String(body.obs || '').trim();
-
-  // Colunas C (matricula), D (nome), E (obs), F (chave)
-  sh.getRange(targetRow, 3).setValue(body.status === 'ocupado' ? (body.matricula || '') : '');
-  sh.getRange(targetRow, 4).setValue(body.status === 'ocupado' ? (body.colaborador || '') : '');
-  sh.getRange(targetRow, 5).setValue(obsValue);
-  sh.getRange(targetRow, 6).setValue(body.chave === 'sim' ? 'Sim' : (body.status === 'ocupado' ? 'Não' : ''));
 
   // Registra histórico
   var shHist = ss.getSheetByName(SHEET_HISTORICO);
@@ -213,22 +192,71 @@ function registrarMov(body) {
     shHist.appendRow(['Data', 'Unidade', 'Número', 'Tipo', 'Colaborador', 'Responsável', 'Observação']);
     shHist.setFrozenRows(1);
   }
-  var tipo =
+
+  var tipoHist = body.tipoLabel || (
     body.status === 'livre'   ? 'Liberação' :
     body.status === 'ocupado' ? 'Ocupação'  :
     body.status === 'manut'   ? 'Manutenção':
-    body.status === 'bloq'    ? 'Bloqueio'  : 'Registro';
+    body.status === 'bloq'    ? 'Bloqueio'  : 'Registro'
+  );
+
+  var numHist = body.num;
+  var colabHist = body.colaborador || '';
+  if (body.tipo === 'trocar' && body.armarioNovo) {
+    numHist   = body.num + ' → ' + body.armarioNovo.num;
+    colabHist = body.armarioNovo.colaborador || '';
+  } else if (body.tipo === 'recolher') {
+    colabHist = body.armarioNovo && body.armarioNovo.colabAntigo
+      ? body.armarioNovo.colabAntigo : (body.colaborador || '');
+  }
+
   shHist.appendRow([
     new Date(),
-    unidadeOut,
-    body.num,
-    tipo,
-    body.colaborador || '',
+    normOut(body.unidade),
+    numHist,
+    tipoHist,
+    colabHist,
     body.responsavel || '',
     body.obs || ''
   ]);
 
   return { ok: true };
+}
+
+/* ────────────────────────────────────────────────── */
+/*  GRAVAR UM ARMÁRIO                                  */
+/* ────────────────────────────────────────────────── */
+function _gravarArmario(sh, rows, unidade, num, status, colaborador, matricula, chave, obs) {
+  var unidadeOut = normOut(unidade);
+  var numStr = String(num).trim();
+  var targetRow = -1;
+
+  for (var i = 1; i < rows.length; i++) {
+    var uRow = normIn(rows[i][0]);
+    var nRow = String(rows[i][1]).trim();
+    if (uRow === normIn(unidade) && nRow === numStr) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  if (targetRow === -1) {
+    targetRow = sh.getLastRow() + 1;
+    sh.getRange(targetRow, 1).setValue(unidadeOut);
+    sh.getRange(targetRow, 2).setValue(num);
+  }
+
+  var obsValue;
+  if (status === 'livre')       obsValue = 'Liberado';
+  else if (status === 'manut')  obsValue = 'Sem Cadeado';
+  else if (status === 'bloq')   obsValue = 'Bloqueado';
+  else                           obsValue = String(obs || '').trim();
+
+  // Colunas C (matricula), D (nome), E (obs), F (chave)
+  sh.getRange(targetRow, 3).setValue(status === 'ocupado' ? (matricula || '') : '');
+  sh.getRange(targetRow, 4).setValue(status === 'ocupado' ? (colaborador || '') : '');
+  sh.getRange(targetRow, 5).setValue(obsValue);
+  sh.getRange(targetRow, 6).setValue(chave === 'sim' ? 'Sim' : (status === 'ocupado' ? 'Não' : ''));
 }
 
 /* ────────────────────────────────────────────────── */

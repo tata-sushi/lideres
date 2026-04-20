@@ -491,44 +491,61 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <input type="text" id="f-data" readonly style="background:var(--bg);color:var(--muted);cursor:default">
       </div>
       <div class="field">
+        <label>Tipo de Operação</label>
+        <select id="f-tipo" onchange="onTipoChange()">
+          <option value="atribuir">Atribuir armário ao colaborador</option>
+          <option value="recolher">Recolher armário (saída)</option>
+          <option value="trocar">Trocar armário do colaborador</option>
+          <option value="manut">Enviar para manutenção</option>
+          <option value="liberar_manut">Liberar após manutenção</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Colaborador + Matrícula (escondido em operações de manutenção) -->
+    <div class="m-meta" id="row-colab" style="padding-top:10px">
+      <div class="field">
         <label>Colaborador</label>
         <input type="text" id="f-colab" list="f-colab-list" autocomplete="off" placeholder="Digite ou selecione…" oninput="onColabInput()">
         <datalist id="f-colab-list"></datalist>
       </div>
-    </div>
-
-    <!-- Matrícula + Unidade — preenchidos pelo nome -->
-    <div class="m-meta" style="padding-top:10px">
       <div class="field">
         <label>Matrícula</label>
         <input type="text" id="f-matricula" placeholder="Preenche ao selecionar o colaborador" readonly style="background:var(--bg);color:var(--muted);cursor:default">
       </div>
-      <div class="field">
-        <label>Unidade</label>
-        <input type="text" id="f-unidade" placeholder="Preenche ao selecionar o colaborador" readonly style="background:var(--bg);color:var(--muted);cursor:default">
-      </div>
     </div>
 
-    <!-- Armário + Status — abaixo -->
+    <!-- Unidade + Armário -->
     <div class="m-meta" style="padding-top:10px">
       <div class="field">
-        <label>Nº do Armário</label>
+        <label>Unidade</label>
+        <select id="f-unidade" onchange="onUnidadeChange()">
+          <option value="">Selecionar…</option>
+          <option>Itaim Bibi</option>
+          <option>Pinheiros</option>
+          <option>Poke - Pinheiros</option>
+          <option>TATÁ House</option>
+        </select>
+      </div>
+      <div class="field">
+        <label id="label-armario">Nº do Armário</label>
         <select id="f-armario">
           <option value="">Selecione a unidade primeiro…</option>
         </select>
       </div>
+    </div>
+
+    <!-- Novo Armário (só para Trocar) -->
+    <div class="m-meta" id="row-novo-armario" style="display:none;padding-top:10px;grid-template-columns:1fr">
       <div class="field">
-        <label>Novo Status</label>
-        <select id="f-status" onchange="onStatusChange()">
-          <option value="livre">🔓 Livre</option>
-          <option value="ocupado">🔒 Ocupado</option>
-          <option value="manut">🔧 Manutenção</option>
-          <option value="bloq">⛔ Bloqueado</option>
+        <label>Novo Armário (livre)</label>
+        <select id="f-armario-novo">
+          <option value="">Selecione…</option>
         </select>
       </div>
     </div>
 
-    <!-- Chave (só aparece se status = ocupado) -->
+    <!-- Chave (só aparece quando operação resulta em ocupado) -->
     <div id="colab-section" style="display:none">
       <div style="padding: 10px 20px 0">
         <div class="field">
@@ -594,7 +611,6 @@ var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7
    ════════════════════════════════════════════════ */
 var currentUser      = null;
 var activeUnitFilter = 'all';
-var selectedStatus   = 'livre';
 var ARMARIOS         = [];   // [{id, unidade, num, status, colaborador, matricula, chave, obs, updated}]
 var HISTORICO        = [];
 var __colabCache     = null;
@@ -868,36 +884,106 @@ function setUnitFilter(unit, btn) {
 }
 
 /* ════════════════════════════════════════════════
-   STATUS SELECT
+   TIPO DE OPERAÇÃO — controla campos do modal
    ════════════════════════════════════════════════ */
-function onStatusChange() {
-  selectedStatus = document.getElementById('f-status').value;
-  document.getElementById('colab-section').style.display = selectedStatus === 'ocupado' ? 'block' : 'none';
+function onTipoChange() {
+  var tipo = document.getElementById('f-tipo').value;
+  var rowColab = document.getElementById('row-colab');
+  var rowNovo  = document.getElementById('row-novo-armario');
+  var unidSel  = document.getElementById('f-unidade');
+  var chaveSec = document.getElementById('colab-section');
+
+  // Reset
+  document.getElementById('f-colab').value     = '';
+  document.getElementById('f-matricula').value = '';
+  document.getElementById('f-armario-novo').innerHTML = '<option value="">Selecione…</option>';
+
+  if (tipo === 'manut' || tipo === 'liberar_manut') {
+    rowColab.style.display = 'none';
+    rowNovo.style.display  = 'none';
+    unidSel.disabled = false;
+    unidSel.value = '';
+    chaveSec.style.display = 'none';
+  } else if (tipo === 'trocar') {
+    rowColab.style.display = 'grid';
+    rowNovo.style.display  = 'grid';
+    unidSel.disabled = true;
+    unidSel.value = '';
+    chaveSec.style.display = 'block';
+  } else {
+    rowColab.style.display = 'grid';
+    rowNovo.style.display  = 'none';
+    unidSel.disabled = true;
+    unidSel.value = '';
+    chaveSec.style.display = (tipo === 'atribuir') ? 'block' : 'none';
+  }
+
+  refreshArmarioList();
 }
 
-function selectStatus(st) {
-  selectedStatus = st;
-  var sel = document.getElementById('f-status');
-  if (sel) sel.value = st;
-  document.getElementById('colab-section').style.display = st === 'ocupado' ? 'block' : 'none';
-}
-
-/* ════════════════════════════════════════════════
-   UNIDADE CHANGE — popula select de armários
-   ════════════════════════════════════════════════ */
 function onUnidadeChange() {
-  var unit = document.getElementById('f-unidade').value;
-  var sel  = document.getElementById('f-armario');
-  if (!unit) { sel.innerHTML = '<option value="">Selecione a unidade primeiro…</option>'; return; }
-  var items = ARMARIOS.filter(function(a){ return a.unidade === unit && a.status === 'livre'; });
-  if (items.length === 0) {
-    sel.innerHTML = '<option value="">Nenhum armário livre nesta unidade</option>';
+  refreshArmarioList();
+}
+
+function refreshArmarioList() {
+  var tipo  = document.getElementById('f-tipo').value;
+  var unit  = document.getElementById('f-unidade').value;
+  var colab = document.getElementById('f-colab').value.trim();
+  var sel   = document.getElementById('f-armario');
+  var selNovo = document.getElementById('f-armario-novo');
+  var lbl   = document.getElementById('label-armario');
+
+  if (!unit) {
+    sel.innerHTML = '<option value="">Selecione a unidade primeiro…</option>';
+    selNovo.innerHTML = '<option value="">Selecione…</option>';
     return;
   }
-  sel.innerHTML = '<option value="">Selecionar armário…</option>' +
-    items.map(function(a){
-      return '<option value="' + a.id + '" data-status="' + a.status + '">' + a.num + ' · Livre</option>';
-    }).join('');
+
+  var items = [];
+  var labelText = 'Nº do Armário';
+
+  if (tipo === 'atribuir') {
+    items = ARMARIOS.filter(function(a){ return a.unidade === unit && a.status === 'livre'; });
+    labelText = 'Armário (livre)';
+  } else if (tipo === 'recolher' || tipo === 'trocar') {
+    if (!colab) {
+      sel.innerHTML = '<option value="">Selecione o colaborador primeiro…</option>';
+      if (tipo === 'trocar') selNovo.innerHTML = '<option value="">Selecione…</option>';
+      return;
+    }
+    items = ARMARIOS.filter(function(a){ return a.unidade === unit && a.colaborador === colab && a.status === 'ocupado'; });
+    labelText = (tipo === 'trocar') ? 'Armário atual' : 'Armário a recolher';
+  } else if (tipo === 'manut') {
+    items = ARMARIOS.filter(function(a){ return a.unidade === unit && a.status !== 'manut'; });
+    labelText = 'Armário para manutenção';
+  } else if (tipo === 'liberar_manut') {
+    items = ARMARIOS.filter(function(a){ return a.unidade === unit && a.status === 'manut'; });
+    labelText = 'Armário em manutenção';
+  }
+
+  if (lbl) lbl.textContent = labelText;
+
+  if (items.length === 0) {
+    sel.innerHTML = '<option value="">Nenhum armário disponível</option>';
+  } else {
+    sel.innerHTML = '<option value="">Selecionar armário…</option>' +
+      items.map(function(a){
+        var extra = ({livre:'Livre', ocupado:a.colaborador||'Ocupado', manut:'Manutenção', bloq:'Bloqueado'}[a.status] || a.status);
+        return '<option value="' + a.id + '" data-status="' + a.status + '">' + a.num + ' · ' + extra + '</option>';
+      }).join('');
+  }
+
+  if (tipo === 'trocar') {
+    var livres = ARMARIOS.filter(function(a){ return a.unidade === unit && a.status === 'livre'; });
+    if (livres.length === 0) {
+      selNovo.innerHTML = '<option value="">Nenhum armário livre</option>';
+    } else {
+      selNovo.innerHTML = '<option value="">Selecionar armário…</option>' +
+        livres.map(function(a){
+          return '<option value="' + a.id + '">' + a.num + ' · Livre</option>';
+        }).join('');
+    }
+  }
 }
 
 /* ════════════════════════════════════════════════
@@ -908,22 +994,26 @@ function editarArmario(id) {
   if (!a) return;
   openModal();
   document.getElementById('modal-title').textContent = 'Armário ' + a.num;
-  var unidSel = document.getElementById('f-unidade');
-  unidSel.value = a.unidade;
-  onUnidadeChange();
-  var armSel = document.getElementById('f-armario');
-  if (a.status !== 'livre') {
-    var lbl = a.num + ' · ' + (a.colaborador || a.status);
-    armSel.insertAdjacentHTML('beforeend',
-      '<option value="' + a.id + '" data-status="' + a.status + '">' + lbl + '</option>');
+
+  // Pré-seleciona o tipo de operação mais provável pelo status atual
+  var tipoSugerido = ({
+    livre:   'atribuir',
+    ocupado: 'recolher',
+    manut:   'liberar_manut',
+    bloq:    'manut'
+  })[a.status] || 'atribuir';
+  document.getElementById('f-tipo').value = tipoSugerido;
+  onTipoChange();
+
+  // Para recolher/trocar, precisa do colab preenchido antes da unidade filtrar armários
+  if (a.colaborador) {
+    document.getElementById('f-colab').value     = a.colaborador;
+    document.getElementById('f-matricula').value = a.matricula || '';
   }
-  armSel.value = a.id;
-  selectStatus(a.status);
-  var stSel = document.getElementById('f-status');
-  if (stSel) stSel.value = a.status;
-  document.getElementById('f-colab').value     = a.colaborador || '';
-  document.getElementById('f-matricula').value = a.matricula   || '';
-  if (a.chave) document.getElementById('f-chave').value = a.chave;
+  document.getElementById('f-unidade').value = a.unidade;
+  refreshArmarioList();
+  document.getElementById('f-armario').value = a.id;
+  if (a.chave && document.getElementById('f-chave')) document.getElementById('f-chave').value = a.chave;
   document.getElementById('f-obs').value = a.obs || '';
 }
 
@@ -950,23 +1040,11 @@ function onColabInput() {
   if (match) {
     document.getElementById('f-matricula').value = match.matricula || '';
     document.getElementById('f-unidade').value   = match.unidade   || '';
-    onUnidadeChange();
   } else {
     document.getElementById('f-matricula').value = '';
     document.getElementById('f-unidade').value   = '';
-    onUnidadeChange();
   }
-}
-
-function onMatriculaInput() {
-  if (!__colabCache) return;
-  var v     = document.getElementById('f-matricula').value.trim();
-  var match = __colabCache.find(function(c){ return (c.matricula || '') === v; });
-  if (match) {
-    document.getElementById('f-colab').value   = match.nome    || '';
-    document.getElementById('f-unidade').value = match.unidade || '';
-    onUnidadeChange();
-  }
+  refreshArmarioList();
 }
 
 /* ════════════════════════════════════════════════
@@ -981,15 +1059,13 @@ function openModal() {
   document.getElementById('modal-title').textContent  = 'Registrar Movimentação';
 
   // reset campos
+  document.getElementById('f-tipo').value      = 'atribuir';
   document.getElementById('f-colab').value     = '';
   document.getElementById('f-matricula').value = '';
   document.getElementById('f-unidade').value   = '';
-  onUnidadeChange();
-  selectStatus('livre');
-  var stSel = document.getElementById('f-status');
-  if (stSel) stSel.value = 'livre';
   document.getElementById('f-obs').value       = '';
   if (document.getElementById('f-chave')) document.getElementById('f-chave').value = 'sim';
+  onTipoChange();
 
   carregarColaboradores().then(function(colabs) {
     var dl = document.getElementById('f-colab-list');
@@ -1015,42 +1091,93 @@ function bgClose(e) {
    SUBMIT
    ════════════════════════════════════════════════ */
 function doSubmit() {
-  var armId  = document.getElementById('f-armario').value;
+  var tipo    = document.getElementById('f-tipo').value;
+  var armId   = document.getElementById('f-armario').value;
   var unidade = document.getElementById('f-unidade').value;
-  if (!unidade)  { showToast('Selecione a unidade.', true); return; }
-  if (!armId)    { showToast('Selecione o armário.', true); return; }
-  var stSel = document.getElementById('f-status');
-  if (stSel) selectedStatus = stSel.value;
-  if (selectedStatus === 'ocupado' && !document.getElementById('f-colab').value.trim()) {
-    showToast('Informe o colaborador para ocupação.', true); return;
-  }
+  var colab   = document.getElementById('f-colab').value.trim();
+  var mat     = document.getElementById('f-matricula').value.trim();
+
+  if (!unidade) { showToast('Selecione a unidade.', true); return; }
+  if (!armId)   { showToast('Selecione o armário.', true); return; }
 
   var arm = ARMARIOS.find(function(a){ return String(a.id) === String(armId); });
   if (!arm) { showToast('Armário não encontrado.', true); return; }
 
+  var needsColab = (tipo === 'atribuir' || tipo === 'recolher' || tipo === 'trocar');
+  if (needsColab && !colab) { showToast('Informe o colaborador.', true); return; }
+
+  var armNovo = null, armNovoId = '';
+  if (tipo === 'trocar') {
+    armNovoId = document.getElementById('f-armario-novo').value;
+    if (!armNovoId) { showToast('Selecione o novo armário.', true); return; }
+    armNovo = ARMARIOS.find(function(a){ return String(a.id) === String(armNovoId); });
+    if (!armNovo) { showToast('Novo armário não encontrado.', true); return; }
+  }
+
+  var novoStatus = ({
+    atribuir:      'ocupado',
+    recolher:      'livre',
+    trocar:        'livre',
+    manut:         'manut',
+    liberar_manut: 'livre'
+  })[tipo];
+
+  var tipoLabel = ({
+    atribuir:      'Atribuição',
+    recolher:      'Devolução',
+    trocar:        'Troca',
+    manut:         'Manutenção',
+    liberar_manut: 'Liberação Manut.'
+  })[tipo];
+
+  var chave = (novoStatus === 'ocupado' && document.getElementById('f-chave'))
+    ? document.getElementById('f-chave').value : '—';
+
   var payload = {
+    tipo:        tipo,
+    tipoLabel:   tipoLabel,
     id:          armId,
     num:         arm.num,
     unidade:     unidade,
-    status:      selectedStatus,
-    colaborador: document.getElementById('f-colab').value.trim(),
-    matricula:   document.getElementById('f-matricula').value.trim(),
-    chave:       selectedStatus === 'ocupado' ? (document.getElementById('f-chave').value) : '—',
+    status:      novoStatus,
+    colaborador: (tipo === 'atribuir') ? colab : '',
+    matricula:   (tipo === 'atribuir') ? mat   : '',
+    chave:       chave,
     obs:         document.getElementById('f-obs').value.trim(),
     responsavel: currentUser ? currentUser.name : '',
     data:        document.getElementById('f-data').value,
     timestamp:   new Date().toISOString()
   };
 
+  if (tipo === 'trocar') {
+    payload.armarioNovo = {
+      id:          armNovoId,
+      num:         armNovo.num,
+      colaborador: colab,
+      matricula:   mat,
+      chave:       chave,
+      statusAntigo: arm.status,
+      colabAntigo:  arm.colaborador
+    };
+  }
+
   setLoad(true);
 
-  // Atualizar localmente imediatamente (feedback otimista)
-  arm.status      = payload.status;
+  // Feedback otimista local
+  arm.status      = novoStatus;
   arm.colaborador = payload.colaborador;
   arm.matricula   = payload.matricula;
   arm.chave       = payload.chave;
   arm.obs         = payload.obs;
   arm.updated     = payload.data;
+
+  if (tipo === 'trocar') {
+    armNovo.status      = 'ocupado';
+    armNovo.colaborador = colab;
+    armNovo.matricula   = mat;
+    armNovo.chave       = chave;
+    armNovo.updated     = payload.data;
+  }
 
   if (GAS_URL_ARMARIO) {
     fetch(GAS_URL_ARMARIO, {
@@ -1059,38 +1186,39 @@ function doSubmit() {
       headers: { 'Content-Type': 'text/plain' },
       body:    JSON.stringify(payload)
     })
-    .then(function() { onSubmitOk(arm, payload); })
+    .then(function() { onSubmitOk(arm, payload, armNovo); })
     .catch(function() { showToast('Erro de conexão com o Apps Script.', true); })
     .finally(function() { setLoad(false); });
   } else {
-    // Modo demo — salva só localmente
     setTimeout(function() {
-      onSubmitOk(arm, payload);
+      onSubmitOk(arm, payload, armNovo);
       setLoad(false);
     }, 600);
   }
 }
 
-function onSubmitOk(arm, payload) {
+function onSubmitOk(arm, payload, armNovo) {
   _lastPayload = payload;
   _lastArm     = arm;
-  // Adicionar ao histórico local
+
   HISTORICO.unshift({
     data:        payload.data,
     unidade:     payload.unidade,
-    num:         arm.num,
-    tipo:        { livre:'Liberação', ocupado:'Ocupação', manut:'Manutenção', bloq:'Bloqueio' }[payload.status] || payload.status,
-    colaborador: payload.colaborador,
+    num:         payload.tipo === 'trocar' ? (arm.num + ' → ' + armNovo.num) : arm.num,
+    tipo:        payload.tipoLabel,
+    colaborador: payload.tipo === 'trocar' ? (payload.armarioNovo.colabAntigo + ' → ' + payload.armarioNovo.colaborador) : (payload.colaborador || (payload.tipo === 'recolher' ? '—' : '')),
     responsavel: payload.responsavel,
     obs:         payload.obs
   });
 
   renderTudo();
   document.getElementById('success-banner').classList.add('show');
-  document.getElementById('success-sub').textContent =
-    arm.num + ' → ' + ({ livre:'Livre', ocupado:'Ocupado', manut:'Em manutenção', bloq:'Bloqueado' }[payload.status] || payload.status);
+  var sub = payload.tipo === 'trocar'
+    ? ('Troca: ' + arm.num + ' → ' + armNovo.num)
+    : (arm.num + ' → ' + payload.tipoLabel);
+  document.getElementById('success-sub').textContent = sub;
   document.getElementById('btn-enviar').style.display = 'none';
-  showToast('Armário ' + arm.num + ' atualizado!', false);
+  showToast('Movimentação registrada!', false);
 }
 
 /* ════════════════════════════════════════════════
