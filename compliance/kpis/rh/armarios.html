@@ -545,20 +545,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </div>
     </div>
 
-    <!-- Chave (só aparece quando operação resulta em ocupado) -->
-    <div id="colab-section" style="display:none">
-      <div style="padding: 10px 20px 0">
-        <div class="field">
-          <label>Chave entregue?</label>
-          <select id="f-chave">
-            <option value="sim">Sim — chave entregue ao colaborador</option>
-            <option value="nao">Não — chave permanece na recepção</option>
-            <option value="extraviada">Chave extraviada / não localizada</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
     <!-- Obs -->
     <div style="padding: 10px 20px 0">
       <div class="field">
@@ -891,31 +877,31 @@ function onTipoChange() {
   var rowColab = document.getElementById('row-colab');
   var rowNovo  = document.getElementById('row-novo-armario');
   var unidSel  = document.getElementById('f-unidade');
-  var chaveSec = document.getElementById('colab-section');
 
   // Reset
   document.getElementById('f-colab').value     = '';
   document.getElementById('f-matricula').value = '';
   document.getElementById('f-armario-novo').innerHTML = '<option value="">Selecione…</option>';
 
+  // Líder: unidade sempre fixa; demais: sempre habilitada (auto-preenche do colab, mas edita manualmente se necessário)
+  var isLider = currentUser && currentUser.type === 'lider' && currentUser.unit;
+  if (isLider) {
+    unidSel.value = currentUser.unit;
+    unidSel.disabled = true;
+  } else {
+    unidSel.value = '';
+    unidSel.disabled = false;
+  }
+
   if (tipo === 'manut' || tipo === 'liberar_manut') {
     rowColab.style.display = 'none';
     rowNovo.style.display  = 'none';
-    unidSel.disabled = false;
-    unidSel.value = '';
-    chaveSec.style.display = 'none';
   } else if (tipo === 'trocar') {
     rowColab.style.display = 'grid';
     rowNovo.style.display  = 'grid';
-    unidSel.disabled = true;
-    unidSel.value = '';
-    chaveSec.style.display = 'block';
   } else {
     rowColab.style.display = 'grid';
     rowNovo.style.display  = 'none';
-    unidSel.disabled = true;
-    unidSel.value = '';
-    chaveSec.style.display = (tipo === 'atribuir') ? 'block' : 'none';
   }
 
   refreshArmarioList();
@@ -1013,7 +999,6 @@ function editarArmario(id) {
   document.getElementById('f-unidade').value = a.unidade;
   refreshArmarioList();
   document.getElementById('f-armario').value = a.id;
-  if (a.chave && document.getElementById('f-chave')) document.getElementById('f-chave').value = a.chave;
   document.getElementById('f-obs').value = a.obs || '';
 }
 
@@ -1037,12 +1022,16 @@ function onColabInput() {
   if (!__colabCache) return;
   var v     = document.getElementById('f-colab').value;
   var match = __colabCache.find(function(c){ return c.nome === v; });
+  var unidSel = document.getElementById('f-unidade');
+  var isLider = currentUser && currentUser.type === 'lider' && currentUser.unit;
   if (match) {
     document.getElementById('f-matricula').value = match.matricula || '';
-    document.getElementById('f-unidade').value   = match.unidade   || '';
+    // Só sobrescreve unidade se o colab tem unidade cadastrada (mantém seleção manual caso contrário)
+    if (!isLider && match.unidade) {
+      unidSel.value = match.unidade;
+    }
   } else {
     document.getElementById('f-matricula').value = '';
-    document.getElementById('f-unidade').value   = '';
   }
   refreshArmarioList();
 }
@@ -1064,7 +1053,6 @@ function openModal() {
   document.getElementById('f-matricula').value = '';
   document.getElementById('f-unidade').value   = '';
   document.getElementById('f-obs').value       = '';
-  if (document.getElementById('f-chave')) document.getElementById('f-chave').value = 'sim';
   onTipoChange();
 
   carregarColaboradores().then(function(colabs) {
@@ -1130,9 +1118,6 @@ function doSubmit() {
     liberar_manut: 'Liberação Manut.'
   })[tipo];
 
-  var chave = (novoStatus === 'ocupado' && document.getElementById('f-chave'))
-    ? document.getElementById('f-chave').value : '—';
-
   var payload = {
     tipo:        tipo,
     tipoLabel:   tipoLabel,
@@ -1142,7 +1127,6 @@ function doSubmit() {
     status:      novoStatus,
     colaborador: (tipo === 'atribuir') ? colab : '',
     matricula:   (tipo === 'atribuir') ? mat   : '',
-    chave:       chave,
     obs:         document.getElementById('f-obs').value.trim(),
     responsavel: currentUser ? currentUser.name : '',
     data:        document.getElementById('f-data').value,
@@ -1155,7 +1139,6 @@ function doSubmit() {
       num:         armNovo.num,
       colaborador: colab,
       matricula:   mat,
-      chave:       chave,
       statusAntigo: arm.status,
       colabAntigo:  arm.colaborador
     };
