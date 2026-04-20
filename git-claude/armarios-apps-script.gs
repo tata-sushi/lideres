@@ -248,7 +248,7 @@ function _gravarArmario(sh, rows, unidade, num, status, colaborador, matricula, 
 
   var obsValue;
   if (status === 'livre')       obsValue = 'Liberado';
-  else if (status === 'manut')  obsValue = 'Sem Cadeado';
+  else if (status === 'manut')  obsValue = 'Manutenção';
   else if (status === 'bloq')   obsValue = 'Bloqueado';
   else                           obsValue = String(obs || '').trim();
 
@@ -256,7 +256,7 @@ function _gravarArmario(sh, rows, unidade, num, status, colaborador, matricula, 
   sh.getRange(targetRow, 3).setValue(status === 'ocupado' ? (matricula || '') : '');
   sh.getRange(targetRow, 4).setValue(status === 'ocupado' ? (colaborador || '') : '');
   sh.getRange(targetRow, 5).setValue(obsValue);
-  sh.getRange(targetRow, 6).setValue(chave === 'sim' ? 'Sim' : (status === 'ocupado' ? 'Não' : ''));
+  sh.getRange(targetRow, 6).setValue(status === 'ocupado' ? 'Sim' : '');
 }
 
 /* ────────────────────────────────────────────────── */
