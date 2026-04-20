@@ -211,6 +211,19 @@ body {
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.err  { background: var(--red); }
 
+/* ── INFO MODAL (consultivo — click no mapa) ── */
+.info-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 200; align-items: flex-end; justify-content: center; }
+.info-overlay.open { display: flex; }
+.info-modal { background: var(--surface); border-radius: 12px 12px 0 0; width: 100%; max-width: 420px; padding-bottom: 28px; }
+.info-handle { width: 36px; height: 4px; background: var(--border); border-radius: 100px; margin: 12px auto 0; }
+.info-header { padding: 14px 20px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.info-num { font-size: 18px; font-weight: 700; color: var(--carbon); letter-spacing: -0.3px; }
+.info-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+.info-row { display: flex; flex-direction: column; gap: 3px; }
+.info-label { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+.info-value { font-size: 13px; color: var(--carbon); font-weight: 500; }
+.info-value.empty { color: var(--muted); font-style: italic; font-weight: 400; }
+
 /* empty state */
 .empty-state { text-align: center; padding: 24px 0; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
 
@@ -263,6 +276,9 @@ body {
   .modal { border-radius: 12px; width: 580px; max-height: 88vh; animation: modalIn 0.25s ease; }
   @keyframes modalIn { from{opacity:0;transform:scale(.97) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
   .modal-handle { display: none; }
+  .info-overlay { align-items: center; }
+  .info-modal { border-radius: 12px; width: 380px; animation: modalIn 0.2s ease; }
+  .info-handle { display: none; }
   .toast { bottom: 28px; left: auto; right: 28px; transform: translateY(20px); }
   .toast.show { transform: translateY(0); }
 }
@@ -573,6 +589,38 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<!-- INFO MODAL (consultivo — click no mapa) -->
+<div class="info-overlay" id="info-overlay" onclick="bgCloseInfo(event)">
+  <div class="info-modal">
+    <div class="info-handle"></div>
+    <div class="info-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="info-num" id="info-num">—</span>
+        <span class="arm-badge" id="info-badge">—</span>
+      </div>
+      <button class="modal-close" onclick="closeInfo()">✕</button>
+    </div>
+    <div class="info-body">
+      <div class="info-row">
+        <div class="info-label">Unidade</div>
+        <div class="info-value" id="info-unidade">—</div>
+      </div>
+      <div class="info-row" id="info-row-colab">
+        <div class="info-label">Colaborador</div>
+        <div class="info-value" id="info-colab">—</div>
+      </div>
+      <div class="info-row" id="info-row-mat">
+        <div class="info-label">Matrícula</div>
+        <div class="info-value" id="info-mat">—</div>
+      </div>
+      <div class="info-row" id="info-row-obs">
+        <div class="info-label">Observação</div>
+        <div class="info-value" id="info-obs">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"><span id="toast-icon"></span><span id="toast-msg"></span></div>
 <!-- RECIBO (print) -->
@@ -650,7 +698,7 @@ function initApp() {
   var ls = document.getElementById('loading-screen');
   if (ls) { ls.classList.add('hidden'); setTimeout(function(){ ls.style.display='none'; }, 350); }
 
-  document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeModal(); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') { closeModal(); closeInfo(); } });
 
   loadData();
 }
@@ -1017,33 +1065,53 @@ function refreshArmarioList() {
 }
 
 /* ════════════════════════════════════════════════
-   EDITAR ARMÁRIO (clique no mapa)
+   INFO ARMÁRIO — consultivo (clique no mapa)
    ════════════════════════════════════════════════ */
 function editarArmario(id) {
   var a = ARMARIOS.find(function(x){ return x.id === id; });
   if (!a) return;
-  openModal();
-  document.getElementById('modal-title').textContent = 'Armário ' + a.num;
 
-  // Pré-seleciona o tipo de operação mais provável pelo status atual
-  var tipoSugerido = ({
-    livre:   'atribuir',
-    ocupado: 'recolher',
-    manut:   'liberar_manut',
-    bloq:    'manut'
-  })[a.status] || 'atribuir';
-  document.getElementById('f-tipo').value = tipoSugerido;
-  onTipoChange();
+  var badgeLabels = { livre:'Livre', ocupado:'Ocupado', manut:'Manutenção', bloq:'Bloqueado' };
+  document.getElementById('info-num').textContent = 'Armário ' + a.num;
 
-  // Para recolher/trocar, precisa do colab preenchido antes da unidade filtrar armários
-  if (a.colaborador) {
-    document.getElementById('f-colab').value     = a.colaborador;
-    document.getElementById('f-matricula').value = a.matricula || '';
+  var badge = document.getElementById('info-badge');
+  badge.textContent = badgeLabels[a.status] || a.status;
+  badge.className = 'arm-badge ' + a.status;
+
+  document.getElementById('info-unidade').textContent = a.unidade || '—';
+
+  var colabEl = document.getElementById('info-colab');
+  colabEl.textContent = a.colaborador || 'Sem ocupante';
+  colabEl.className = 'info-value' + (a.colaborador ? '' : ' empty');
+  document.getElementById('info-row-colab').style.display = '';
+
+  var matRow = document.getElementById('info-row-mat');
+  if (a.matricula) {
+    document.getElementById('info-mat').textContent = a.matricula;
+    matRow.style.display = '';
+  } else {
+    matRow.style.display = 'none';
   }
-  document.getElementById('f-unidade').value = a.unidade;
-  refreshArmarioList();
-  document.getElementById('f-armario').value = a.id;
-  document.getElementById('f-obs').value = a.obs || '';
+
+  var obsRow = document.getElementById('info-row-obs');
+  if (a.obs) {
+    document.getElementById('info-obs').textContent = a.obs;
+    obsRow.style.display = '';
+  } else {
+    obsRow.style.display = 'none';
+  }
+
+  document.getElementById('info-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeInfo() {
+  document.getElementById('info-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function bgCloseInfo(e) {
+  if (e.target === document.getElementById('info-overlay')) closeInfo();
 }
 
 /* ════════════════════════════════════════════════
