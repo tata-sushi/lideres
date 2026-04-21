@@ -324,6 +324,49 @@ Cada seção do corpo é introduzida por uma etiqueta curta seguida de uma linha
 
 ---
 
+## `.dl-card` — Card de download
+
+Padrão de card para bibliotecas de download de arquivos (templates, PDFs, etc.). Referência canônica: `papelaria.html`.
+
+### Estrutura HTML
+
+```html
+<div class="dl-list">
+  <a class="dl-card" href="URL_DO_ARQUIVO" target="_blank" rel="noopener">
+    <div class="dl-icon">
+      <svg viewBox="0 0 24 24"><!-- ícone do tipo de arquivo --></svg>
+    </div>
+    <div>
+      <p class="dl-label">Nome do Arquivo</p>
+      <p class="dl-sub">TIPO · Especificações</p>
+    </div>
+  </a>
+</div>
+```
+
+### CSS
+
+```css
+.dl-list  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dl-card  { background: var(--white); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; display: flex; align-items: center; gap: 10px; text-decoration: none; transition: border-color .15s; }
+.dl-card:hover { border-color: var(--carbon); }
+.dl-icon  { width: 36px; height: 36px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.dl-icon svg { width: 16px; height: 16px; stroke: var(--carbon); fill: none; stroke-width: 1.8; stroke-linecap: round; }
+.dl-label { font-size: 12px; font-weight: 600; color: var(--t1); line-height: 1.3; }
+.dl-sub   { font-family: "DM Mono", monospace; font-size: 9px; color: var(--muted); margin-top: 2px; }
+```
+
+### Regras
+
+- **Grid**: 2 colunas em todos os viewports — sem media query para 1 coluna em mobile (o padding do `.page` é suficiente)
+- **Hover**: só `border-color` muda para `var(--carbon)` — ❌ Sem `transform`, sem accent bar `::before`, sem mudança de ícone
+- **Ícone**: 36×36px, stroke `var(--carbon)` 1.8px — ❌ Nunca colorir com `--citric` no hover
+- **Label**: 12px 600 `var(--t1)` — ❌ Não usar `.dl-name` (13px 500) nem wrapper `.dl-info`
+- **Sub**: DM Mono 9px `var(--muted)` — ❌ Não usar `.dl-meta` (10px)
+- ❌ **Sem elementos decorativos**: sem `.dl-badge` de tipo de arquivo (DOCX, PDF…), sem `.dl-arr` com seta à direita
+
+---
+
 ## `.page` — Wrapper do corpo
 
 ```css
@@ -401,6 +444,7 @@ Envolve todo o conteúdo entre o `.header` e o `.page-footer`. Centraliza e dá 
 - `.mod-header` com `.mod-breadcrumb` (inline, ` &rsaquo; `) + `.mod-title` (DM Sans 26/32px 700) + `.mod-desc` opcional
 - Breadcrumb com cor `var(--green)` = **#1A5C2A**
 - `.sec-div` para cada seção — cor `var(--muted)`, linha via `::after`
+- Cards de download: `.dl-list` (grid 2 col) + `.dl-card` com `.dl-icon` (36×36) + `.dl-label` (12px 600) + `.dl-sub` (DM Mono 9px)
 
 **Footer:**
 - `.page-footer` com `.page-footer-brand`, texto exato da marca
@@ -427,6 +471,9 @@ Envolve todo o conteúdo entre o `.header` e o `.page-footer`. Centraliza e dá 
 - Criar badges `.sec-letter` (A, B, …) no título das seções
 - Criar `<div class="sec-line">` manual — a linha vem do `::after` do `.sec-div`
 - Adicionar `.sec-sub` abaixo do título da seção — use `.mod-desc` no topo da página
+- Usar `.dl-name`/`.dl-meta`/`.dl-info` nos cards de download — classes antigas descontinuadas
+- Adicionar `.dl-badge` (tipo de arquivo) ou `.dl-arr` (seta) nos cards de download
+- Aplicar transform/hover de ícone com `--citric` nos cards de download — hover só no border
 
 ---
 
@@ -469,9 +516,8 @@ Envolve todo o conteúdo entre o `.header` e o `.page-footer`. Centraliza e dá 
 │ Descrição curta…                                │ ← .mod-desc
 │                                                 │
 │ BIBLIOTECA DE ARQUIVOS ─────────────────────    │ ← .sec-div + ::after
-│ [cards]                                         │
-│ GERAR DOCUMENTOS ───────────────────────────    │ ← .sec-div + ::after
-│ [cards]                                         │
+│ [.dl-card] [.dl-card]                           │ ← .dl-list (grid 2 col)
+│ [.dl-card] [.dl-card]                           │
 │                                                 │
 │ [FOOTER INLINE — TATÁ Sushi | TATÁ Poke | ...]  │ ← .page-footer / flui
 └─────────────────────────────────────────────────┘
@@ -573,6 +619,15 @@ Envolve todo o conteúdo entre o `.header` e o `.page-footer`. Centraliza e dá 
     }
     .sec-div::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 
+    /* DOWNLOAD CARDS */
+    .dl-list  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .dl-card  { background: var(--white); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; display: flex; align-items: center; gap: 10px; text-decoration: none; transition: border-color .15s; }
+    .dl-card:hover { border-color: var(--carbon); }
+    .dl-icon  { width: 36px; height: 36px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .dl-icon svg { width: 16px; height: 16px; stroke: var(--carbon); fill: none; stroke-width: 1.8; stroke-linecap: round; }
+    .dl-label { font-size: 12px; font-weight: 600; color: var(--t1); line-height: 1.3; }
+    .dl-sub   { font-family: "DM Mono", monospace; font-size: 9px; color: var(--muted); margin-top: 2px; }
+
     /* FOOTER */
     .page-footer {
       margin-top: 16px;
@@ -628,9 +683,19 @@ Envolve todo o conteúdo entre o `.header` e o `.page-footer`. Centraliza e dá 
       <p class="mod-desc">Descrição curta do que essa página oferece.</p>
     </div>
 
-    <!-- SEÇÃO -->
-    <div class="sec-div">Nome da Seção</div>
-    <!-- conteúdo: cards, lista, prosa, etc. -->
+    <!-- SEÇÃO COM DOWNLOAD CARDS -->
+    <div class="sec-div">Biblioteca de Arquivos</div>
+    <div class="dl-list">
+      <a class="dl-card" href="#" target="_blank" rel="noopener">
+        <div class="dl-icon">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </div>
+        <div>
+          <p class="dl-label">Nome do Arquivo</p>
+          <p class="dl-sub">TIPO · Especificações</p>
+        </div>
+      </a>
+    </div>
 
   </div><!-- /page -->
 
@@ -658,4 +723,4 @@ Envolve todo o conteúdo entre o `.header` e o `.page-footer`. Centraliza e dá 
 
 ---
 
-*Atualizado em 2026-04-21 — padrão de corpo documentado: `.mod-header` (breadcrumb + título + descrição) e `.sec-div` (divisor de seção). Referências canônicas: `idconceitual.html` (prosa) e `papelaria.html` (grid de cards).*
+*Atualizado em 2026-04-21 — padrão de cards de download documentado: `.dl-list` + `.dl-card` + `.dl-icon` + `.dl-label` + `.dl-sub`. Referência canônica: `papelaria.html` (alinhado a `idvisual.html`).*
