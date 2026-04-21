@@ -68,7 +68,8 @@ Especificações completas de layout para **headers e rodapés** das páginas de
 ### Visual
 - **Background**: `var(--bg)` (fundo neutro)
 - **Border**: `1px solid var(--border)` (subtil, cinza claro)
-- **Border-radius**: `var(--radius)` (default ~6px)
+- **Border-radius**: `4px` (**hardcoded, NÃO usar `var(--radius)`**)
+  - ⚠️ Curvatura sutil, quase quadrada — independente do `--radius` geral da página
   - ⚠️ **NÃO redondo** (`100px`): mantém ângulos quadrados, não pill-shaped
 
 ### Preenchimento de Dados
@@ -88,7 +89,8 @@ Especificações completas de layout para **headers e rodapés** das páginas de
 ### Visual
 - **Background**: `var(--carbon)` (preto #35383F)
 - **Border**: `none` (sem borda)
-- **Border-radius**: `var(--radius)` (6px, ângulos suaves)
+- **Border-radius**: `4px` (**hardcoded, NÃO usar `var(--radius)`**)
+  - ⚠️ Mesma curvatura sutil do `.header-user` — consistência visual entre os dois elementos do topo direito
 - **Display**: `flex; align-items: center; justify-content: center` (SVG centralizado)
 - **Cursor**: `pointer`
 
@@ -127,8 +129,8 @@ Especificações completas de layout para **headers e rodapés** das páginas de
 ### ✅ DEVE
 - Logo: 40×40px, base64 canônico, flex-shrink 0
 - Título: 20px, 700 weight, max ~12 chars, **sem media query override**
-- Header-user: monospace 10px, border-radius 6px, margin-left auto
-- Header-plus: 30×30px, SVG 14×14px, stroke-width 2.5px
+- Header-user: monospace 10px, border-radius **4px hardcoded**, margin-left auto
+- Header-plus: 30×30px, border-radius **4px hardcoded**, SVG 14×14px, stroke-width 2.5px
 - Position: sticky top 0 z-index 100
 - Padding: 14px 20px (ambos lados)
 - **Sem overflow:hidden** no header — corta nome em telas pequenas
@@ -139,6 +141,7 @@ Especificações completas de layout para **headers e rodapés** das páginas de
 - `display:none` no header-user em mobile
 - Variações de CSS em media queries para `.header`, `.logo-img`, `.header-title`
 - Redondo (`100px border-radius`) no header-user — mantém quadrado
+- Usar `var(--radius)` no `.header-user` ou `.header-plus` — sempre **4px hardcoded** para manter curvatura sutil consistente
 - `overflow:hidden` no header
 - Logo truncado ou reimplementado — sempre copiar tag inteira
 - Header-user com nome hardcoded — usar script final com `session.displayName`
@@ -156,9 +159,11 @@ Especificações completas de layout para **headers e rodapés** das páginas de
   --citric:    /* amarelo limão #CFFF00 */
   --text:      /* cor padrão de texto */
   --muted:     /* texto desaturado, secundário */
-  --radius:    /* border-radius padrão, ~6px */
+  --radius:    /* border-radius padrão da página (cards, modais, inputs) — ~6–10px */
 }
 ```
+
+⚠️ **`.header-user` e `.header-plus` NÃO usam `--radius`**: são fixos em `4px` hardcoded para manter curvatura sutil uniforme em todo o portal.
 
 ---
 
@@ -214,9 +219,9 @@ Se houver rodapé, seguir padrão similar ao header:
     .header-title { font-size: 20px; font-weight: 700; color: var(--carbon); letter-spacing: -0.3px; }
     .header-user { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; 
       color: var(--carbon); background: var(--bg); border: 1px solid var(--border); 
-      border-radius: 6px; padding: 5px 10px; white-space: nowrap; margin-left: auto; }
+      border-radius: 4px; padding: 5px 10px; white-space: nowrap; margin-left: auto; }
     .header-plus { width: 30px; height: 30px; background: var(--carbon); border: none; 
-      border-radius: 6px; display: flex; align-items: center; justify-content: center; 
+      border-radius: 4px; display: flex; align-items: center; justify-content: center; 
       cursor: pointer; flex-shrink: 0; }
     .header-plus svg { width: 14px; height: 14px; stroke: var(--citric); fill: none; stroke-width: 2.5; stroke-linecap: round; }
   </style>
@@ -239,7 +244,7 @@ Se houver rodapé, seguir padrão similar ao header:
 
 ---
 
-**Data**: 2026-04-20  
+**Data**: 2026-04-21  
 **Páginas Referência**: 
 - `acessorapido/recrutamento.html`
 - `acessorapido/manutencao.html`
