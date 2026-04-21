@@ -55,8 +55,9 @@ Isso distingue páginas de governança (menu/hub/seções) das páginas de dashb
 ## HEADER-USER (Identificação do Líder)
 
 ### Dimensões & Spacing
-- **Padding**: `5px 10px`
-- **Height**: ~24px (single-line)
+- **Padding**: `0 10px` (horizontal) — vertical é `0`, altura vem do `height`
+- **Height**: `28px` (fixo, equalizado com `.header-plus`)
+- **Display**: `inline-flex; align-items: center` (centraliza o texto verticalmente dentro do `height`)
 - **Position**: dentro de `.header-right`, à esquerda do `.header-plus` (gap 8px entre eles)
 
 ### Tipografia
@@ -83,7 +84,7 @@ Isso distingue páginas de governança (menu/hub/seções) das páginas de dashb
 ## HEADER-PLUS (Botão "+")
 
 ### Dimensões
-- **Tamanho**: `30px × 30px` (quadrado)
+- **Tamanho**: `28px × 28px` (quadrado, equalizado com `.header-user`)
 - **Position**: último elemento do `.header-right`
 - **Flex**: `flex-shrink: 0`
 
@@ -111,6 +112,10 @@ Isso distingue páginas de governança (menu/hub/seções) das páginas de dashb
 ### Ação
 - **onclick**: abre o drawer lateral (`openDrawer()`) com menu global de navegação/KPIs
 - Nunca remover o botão — é a navegação principal entre seções de governança
+
+---
+
+> ⚠️ **Estado de migração (2026-04):** apenas `compliance/areas/institucional/papelaria.html` já segue o padrão 28px documentado aqui. As demais páginas de governança (`compliance/menucompliance.html`, `compliance/areas/institucional/index.html`) ainda usam o formato antigo (`.header-plus` 30×30 + `.header-user` com altura natural ~26px). Alinhamento visual dessas páginas é tarefa separada.
 
 ---
 
@@ -259,8 +264,8 @@ if (window.__lideresUser) {
 - Background: `var(--white)`
 - Wrappers `.header-left` + `.header-right` (estrutura flex dividida)
 - Logo: `height="28"` (mobile), base64 canônico, mesmo `<img>` copiado de página funcionando
-- `.header-user`: DM Mono 10px, border-radius **`4px` hardcoded**, `id="header-user"`, fallback `"—"`
-- `.header-plus`: 30×30, background carbon, border-radius **`4px` hardcoded**, SVG 14×14 stroke citric 2.5
+- `.header-user`: DM Mono 10px, **`height: 28px`**, **`display: inline-flex; align-items: center`**, **`padding: 0 10px`**, border-radius **`4px` hardcoded**, `id="header-user"`, fallback `"—"`
+- `.header-plus`: **28×28**, background carbon, border-radius **`4px` hardcoded**, SVG 14×14 stroke citric 2.5
 - Footer: `.page-footer` com `.page-footer-brand` interno, texto exato da marca
 - Script de população via `window.__lideresSession` ou `localStorage.lideres_session`
 
@@ -282,7 +287,7 @@ if (window.__lideresUser) {
 ```
 ┌─────────────────────────────────────────────────┐
 │ [LOGO 28px]                    [USER 10px] [+]  │ ← header (52/60px)
-│                                            30×30│   sticky, z-index 200
+│                              h=28px       28×28 │   sticky, z-index 200
 ├─────────────────────────────────────────────────┤
 │                                                 │
 │          [CONTEÚDO DA PÁGINA]                   │ ← main / cards / grid
@@ -334,10 +339,13 @@ if (window.__lideresUser) {
       color: var(--t1); background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 4px;   /* hardcoded, não var(--r) */
-      padding: 5px 10px;
+      padding: 0 10px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
     }
     .header-plus {
-      width: 30px; height: 30px;
+      width: 28px; height: 28px;
       background: var(--carbon); border: none;
       border-radius: 4px;   /* hardcoded, não var(--r) */
       display: flex; align-items: center; justify-content: center;
@@ -434,12 +442,16 @@ if (window.__lideresUser) {
 **O que é igual entre os dois padrões**:
 - Border-radius `4px` hardcoded em `.header-user` e `.header-plus`
 - Fonte do user: DM Mono 10px 500
-- Botão `+` 30×30 background carbon, SVG 14×14 citric stroke 2.5 round
+- Botão `+` **28×28** background carbon, SVG 14×14 citric stroke 2.5 round
+- `.header-user` e `.header-plus` **equalizados em 28px de altura** (inline-flex no user para centralizar o texto)
 - `#header-user` id + fallback `"—"` + população via script
 
 ---
 
 **Data**: 2026-04-21
-**Páginas Referência**:
+**Páginas Referência (padrão 28px equalizado)**:
+- `compliance/areas/institucional/papelaria.html` ← referência canônica atual
+
+**Páginas pendentes de migração (ainda em 30×30 / altura natural)**:
 - `compliance/menucompliance.html`
 - `compliance/areas/institucional/index.html`
