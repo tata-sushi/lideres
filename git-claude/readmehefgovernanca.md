@@ -27,16 +27,22 @@ Isso garante distribuição `space-between` natural sem depender de `margin-left
 
 ## LOGO
 
-### Tamanho
-- **Dimensões**: altura `28px` (sem `width` explícito — proporcional via aspect-ratio do PNG)
-  - Em desktop, pode crescer para `40px` (opcional, via media query)
-- **Formato**: PNG em base64 (~1775 caracteres)
+### Tamanho Responsivo
+- **Mobile** (< 768px): `height="34px"` (sem `width` explícito — proporcional via aspect-ratio do PNG)
+- **Desktop** (≥ 768px): `height="40px"` (via media query `.header-logo { height: 40px; }`)
+- **Formato**: PNG referenciado via `src="logos/logocompliance.png"` (caminho relativo)
   - **Cor**: Monocromática (preto/carbon sobre fundo claro/branco)
   - **Alt**: `"TATÁ"`
-- **Flex**: dentro do `.header-left`, não encolhe com o viewport
+- **Classe obrigatória**: `.header-logo` (para aplicar media query de responsividade)
+- **Flex**: dentro do `.header-left`, `flex-shrink: 0`
+
+### Estrutura HTML
+```html
+<img class="header-logo" src="logos/logocompliance.png" alt="TATÁ" height="34"/>
+```
 
 ### Regra Crítica
-⚠️ **Logo truncado quebra renderização.** Sempre copiar o `<img>` inteiro de uma página de governança funcionando (ex.: `compliance/menucompliance.html:723`) — nunca recortar ou reinventar a tag. Base64 canônico é o mesmo em todas as páginas de governança.
+⚠️ **Logo truncado quebra renderização.** Sempre copiar o `<img>` inteiro de uma página de governança funcionando (ex.: `compliance/areas/institucional/papelaria.html:382`) — nunca recortar ou reinventar a tag.
 
 ---
 
@@ -115,7 +121,7 @@ Isso distingue páginas de governança (menu/hub/seções) das páginas de dashb
 
 ---
 
-> ⚠️ **Estado de migração (2026-04):** apenas `compliance/areas/institucional/papelaria.html` já segue o padrão 28px documentado aqui. As demais páginas de governança (`compliance/menucompliance.html`, `compliance/areas/institucional/index.html`) ainda usam o formato antigo (`.header-plus` 30×30 + `.header-user` com altura natural ~26px). Alinhamento visual dessas páginas é tarefa separada.
+> ⚠️ **Estado de migração (2026-04):** `compliance/areas/institucional/papelaria.html` segue o novo padrão responsivo com logo 34→40px. As demais páginas de governança ainda podem usar variações antigas. Alinhamento visual dessas páginas é tarefa separada.
 
 ---
 
@@ -125,7 +131,7 @@ Isso distingue páginas de governança (menu/hub/seções) das páginas de dashb
 <!-- HEADER -->
 <div class="header">
   <div class="header-left">
-    <img src="data:image/png;base64,..." alt="TATÁ" height="28"/>
+    <img class="header-logo" src="logos/logocompliance.png" alt="TATÁ" height="34"/>
   </div>
   <div class="header-right">
     <span class="header-user" id="header-user">—</span>
@@ -263,7 +269,7 @@ if (window.__lideresUser) {
 - Position: `sticky; top: 0; z-index: 200`
 - Background: `var(--white)`
 - Wrappers `.header-left` + `.header-right` (estrutura flex dividida)
-- Logo: `height="28"` (mobile), base64 canônico, mesmo `<img>` copiado de página funcionando
+- Logo: `.header-logo` com `height="34"` (mobile) → `height="40px"` (desktop via media query)
 - `.header-user`: DM Mono 10px, **`height: 28px`**, **`display: inline-flex; align-items: center`**, **`padding: 0 10px`**, border-radius **`4px` hardcoded**, `id="header-user"`, fallback `"—"`
 - `.header-plus`: **28×28**, background carbon, border-radius **`4px` hardcoded**, SVG 14×14 stroke citric 2.5
 - Footer: `.page-footer` com `.page-footer-brand` interno, texto exato da marca
@@ -286,17 +292,16 @@ if (window.__lideresUser) {
 
 ```
 ┌─────────────────────────────────────────────────┐
-│ [LOGO 28px]                    [USER 10px] [+]  │ ← header (52/60px)
+│ [LOGO 34→40px]                 [USER 10px] [+]  │ ← header (52→60px)
 │                              h=28px       28×28 │   sticky, z-index 200
 ├─────────────────────────────────────────────────┤
 │                                                 │
 │          [CONTEÚDO DA PÁGINA]                   │ ← main / cards / grid
-│          (cards de menu ou seções)              │
 │                                                 │
 │                                                 │
-├─────────────────────────────────────────────────┤
-│     TATÁ SUSHI | TATÁ POKE | 2016 – 2026       │ ← .page-footer (inline)
-└─────────────────────────────────────────────────┘       DM Mono 9px uppercase
+│                                                 │
+│ [FOOTER INLINE — MARCA]                         │ ← .page-footer / flui
+└─────────────────────────────────────────────────┘
 ```
 
 ---
@@ -374,7 +379,7 @@ if (window.__lideresUser) {
     /* Desktop */
     @media (min-width: 768px) {
       .header { padding: 0 40px; height: 60px; }
-      .header-user { font-size: 10px; }
+      .header-logo { height: 40px; }
       .page-footer { padding: 16px 40px 32px; }
     }
   </style>
@@ -384,7 +389,7 @@ if (window.__lideresUser) {
   <!-- HEADER -->
   <div class="header">
     <div class="header-left">
-      <img src="data:image/png;base64,..." alt="TATÁ" height="28"/>
+      <img class="header-logo" src="logos/logocompliance.png" alt="TATÁ" height="34"/>
     </div>
     <div class="header-right">
       <span class="header-user" id="header-user">—</span>
@@ -428,7 +433,7 @@ if (window.__lideresUser) {
 | Aspecto | Dashboard (`acessorapido/*`) | Governança (`compliance/*`) |
 |---|---|---|
 | Container | `<header class="header">` | `<div class="header">` |
-| Logo | `.logo-img` 40×40 (object-fit contain) | `<img height="28">` |
+| Logo | `.logo-img` 40×40 (object-fit contain) | `.header-logo` 34px → 40px (mobile → desktop) |
 | Título | `.header-title` 20px 700 (obrigatório) | **Não existe** |
 | Wrappers | flat | `.header-left` / `.header-right` |
 | Posição do user | `margin-left: auto` | dentro de `.header-right` |
@@ -445,9 +450,10 @@ if (window.__lideresUser) {
 - Botão `+` **28×28** background carbon, SVG 14×14 citric stroke 2.5 round
 - `.header-user` e `.header-plus` **equalizados em 28px de altura** (inline-flex no user para centralizar o texto)
 - `#header-user` id + fallback `"—"` + população via script
+- Logo responsivo com media query (34px mobile → 40px desktop em padrão governança)
 
 ---
 
-**Data**: 2026-04-21
-**Páginas Referência (padrão 28px equalizado)**:
-- `compliance/areas/institucional/papelaria.html` ← referência canônica atual
+**Data**: 2026-04-21 (atualizado 2026-04-21 com logo responsivo)
+**Páginas Referência**:
+- `compliance/areas/institucional/papelaria.html` ← referência canônica (logo responsivo 34→40px)
