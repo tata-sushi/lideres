@@ -62,7 +62,7 @@ Isso distingue páginas de governança (menu/hub/seções) das páginas de dashb
 
 ### Tipografia
 - **Font-family**: `"DM Mono", monospace`
-- **Font-size**: `10px` (mobile) → `11px` (desktop)
+- **Font-size**: `10px` (mobile) → `10px` (desktop)
 - **Font-weight**: `500`
 - **Color**: `var(--t1)` (#111111 — texto escuro principal)
 
@@ -374,7 +374,7 @@ if (window.__lideresUser) {
     /* Desktop */
     @media (min-width: 768px) {
       .header { padding: 0 40px; height: 60px; }
-      .header-user { font-size: 11px; }
+      .header-user { font-size: 10px; }
       .page-footer { padding: 16px 40px 32px; }
     }
   </style>
@@ -451,7 +451,3 @@ if (window.__lideresUser) {
 **Data**: 2026-04-21
 **Páginas Referência (padrão 28px equalizado)**:
 - `compliance/areas/institucional/papelaria.html` ← referência canônica atual
-
-**Páginas pendentes de migração (ainda em 30×30 / altura natural)**:
-- `compliance/menucompliance.html`
-- `compliance/areas/institucional/index.html`
