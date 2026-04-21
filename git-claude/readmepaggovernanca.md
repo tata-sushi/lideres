@@ -1,12 +1,15 @@
-# Header & Footer — Governança | Portal Líderes TATÁ
+# Página de Governança (Header, Corpo & Footer) | Portal Líderes TATÁ
+
+Especificação completa das páginas de **Governança/Compliance** do Portal Líderes — inclui header, **corpo da página** (breadcrumb, título, descrição e divisores de seção) e rodapé.
 
 > **Atenção:** Este padrão é **distinto** do padrão dashboard (`readmehefdash.md`).  
 > Páginas de Governança não usam `.header-title`, têm altura menor, wrappers `.header-left` / `.header-right`, footer inline `.page-footer` e usam `var(--white)` (não `var(--surface)`) no fundo do header.
 
 **Referências canônicas:**
 - `compliance/menucompliance.html` — menu central
-- `compliance/areas/institucional/index.html` — seção institucional
-- `compliance/areas/institucional/papelaria.html` — **referência canônica** (logo responsivo 34→40px)
+- `compliance/areas/institucional/index.html` — seção institucional (hub com chips)
+- `compliance/areas/institucional/idconceitual.html` — **referência canônica de corpo** (mod-header + sec-div + prosa)
+- `compliance/areas/institucional/papelaria.html` — **referência canônica de corpo** (mod-header + sec-div + grid de cards) e logo responsivo 34→40px
 
 ---
 
@@ -17,14 +20,20 @@
   --carbon: #35383F;   /* fundo do botão + e ícones principais */
   --citric: #CFFF00;   /* stroke do SVG do botão + */
   --white:  #FFFFFF;   /* fundo do header */
-  --bg:     #F4F4F4;   /* fundo do .header-user */
-  --border: #E2E2E2;   /* bordas do header e .header-user */
+  --bg:     #F4F4F4;   /* fundo do body e do .header-user */
+  --border: #E2E2E2;   /* bordas do header, .header-user e linha do .sec-div */
   --t1:     #111111;   /* texto do .header-user */
+  --text:   #111111;   /* texto do .mod-title */
+  --mid:    #555555;   /* texto do .mod-desc */
+  --muted:  #999999;   /* texto do .sec-div */
+  --green:  #1A5C2A;   /* texto do .mod-breadcrumb (verde escuro) */
   --r:      6px;       /* border-radius padrão da página — NÃO usar em header-user/plus */
 }
 ```
 
 > ⚠️ `.header-user` e `.header-plus` **não usam `var(--r)`** — são fixos em `4px` hardcoded.
+
+> ⚠️ `--green` **deve ser `#1A5C2A`** (verde escuro canônico do breadcrumb, alinhado ao `--green-tx` de `idconceitual.html`). Não usar `#3a7a3a` ou outros tons.
 
 ---
 
@@ -224,6 +233,107 @@ if (window.__lideresUser) {
 
 ---
 
+## `.mod-header` — Cabeçalho da página (breadcrumb + título + descrição)
+
+Bloco canônico que identifica cada página de governança dentro do corpo, logo abaixo do `.header` sticky. Substitui qualquer variação ad hoc de hero/breadcrumb.
+
+### Estrutura HTML
+
+```html
+<div class="mod-header">
+  <p class="mod-breadcrumb">
+    <a href="../../menucompliance.html">Governança de Processos</a> &rsaquo;
+    <a href="index.html">Institucional</a> &rsaquo;
+    Nome da Página
+  </p>
+  <h1 class="mod-title">Nome da Página</h1>
+  <p class="mod-desc">Descrição curta da página — o que ela oferece, pra quê serve.</p>
+</div>
+```
+
+### CSS
+
+```css
+.mod-header { padding: 20px 0 0; }
+
+.mod-breadcrumb {
+  font-family: "DM Mono", monospace;
+  font-size: 9px; font-weight: 500;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--green); margin-bottom: 6px;
+}
+.mod-breadcrumb a { color: var(--green); text-decoration: none; }
+
+.mod-title { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1.2; margin-bottom: 8px; }
+.mod-desc  { font-size: 14px; color: var(--mid); line-height: 1.6; margin-bottom: 4px; }
+
+@media (min-width: 768px) {
+  .mod-title { font-size: 32px; }
+}
+```
+
+### Regras
+
+- **Breadcrumb em `<p>` único e inline**: todos os itens numa linha, separados por ` &rsaquo; ` literal. ❌ Nunca usar `<nav class="bc">` com `<span class="bc-sep">` entre itens — padrão antigo.
+- **Item atual (último)**: texto puro, SEM `<a>` e SEM classe extra (tipo `.bc-curr`).
+- **Links intermediários**: em `<a>` herdando cor `var(--green)`.
+- **Cor do breadcrumb**: `var(--green)` = **#1A5C2A** (verde escuro). ❌ Não usar `#3a7a3a` ou outros tons.
+- **Título em DM Sans 26px/32px 700**. ❌ Nunca `DM Serif Display`, nunca `font-size: clamp(…)`.
+- **`.mod-desc` opcional** e pode aparecer mais de uma vez (dois parágrafos). Use `style="margin-top:12px"` no segundo `<p>` se precisar de respiro extra.
+- **Padding horizontal = 0** no `.mod-header`: o wrapper `.page` (padding `0 24px 80px`) já dá o respiro horizontal.
+
+---
+
+## `.sec-div` — Divisor de seção
+
+Cada seção do corpo é introduzida por uma etiqueta curta seguida de uma linha horizontal que se estende até o fim do container. Substitui padrões antigos com badges de letra (A, B, C…) ou blocos `.sec-head`.
+
+### Estrutura HTML
+
+```html
+<div class="sec-div">Nome da Seção</div>
+<!-- conteúdo da seção: grid de cards, lista, prosa, etc. -->
+```
+
+### CSS
+
+```css
+.sec-div {
+  font-family: "DM Mono", monospace;
+  font-size: 9px; font-weight: 500;
+  letter-spacing: .16em; text-transform: uppercase;
+  color: var(--muted);
+  padding: 18px 0 10px;
+  display: flex; align-items: center; gap: 10px;
+}
+.sec-div::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+```
+
+### Regras
+
+- ❌ **Sem badges de letra** (A, B, C…): jamais adicionar `.sec-letter`, `.sec-head` ou envoltório `.sec`.
+- ❌ **Sem `<div class="sec-line">`** manual: a linha vem do `::after` e preenche o espaço restante via `flex: 1`.
+- ❌ **Sem subtítulo** abaixo (`.sec-sub`): se a seção precisa de contexto, use `.mod-desc` no topo da página.
+- **Cor**: `var(--muted)` (#999), uppercase, `letter-spacing: .16em`, DM Mono 9px/500.
+- **Padding horizontal = 0** (herdado do `.page`).
+
+---
+
+## `.page` — Wrapper do corpo
+
+```css
+.page { max-width: 860px; margin: 0 auto; padding: 0 24px 80px; }
+```
+
+Envolve todo o conteúdo entre o `.header` e o `.page-footer`. Centraliza e dá respiro horizontal constante (24px mobile, mantido no desktop pelo `max-width: 860px`).
+
+---
+
 ## Footer — `.page-footer`
 
 ### Estrutura HTML
@@ -275,6 +385,7 @@ if (window.__lideresUser) {
 
 ### ✅ Deve
 
+**Header:**
 - Container: `<div class="header">` (não `<header>`)
 - Height: `52px` mobile / `60px` desktop (fixo)
 - Padding: `0 16px` mobile / `0 40px` desktop
@@ -284,11 +395,20 @@ if (window.__lideresUser) {
 - Logo `.header-logo` com `height="34"` mobile → `40px` desktop via media query
 - `.header-user`: DM Mono 10px, `height: 28px`, `display: inline-flex; align-items: center`, `padding: 0 10px`, border-radius **`4px` hardcoded**, `id="header-user"`, fallback `"—"`
 - `.header-plus`: `28×28`, background carbon, border-radius **`4px` hardcoded**, SVG `14×14` stroke citric `2.5`
-- Footer: `.page-footer` com `.page-footer-brand`, texto exato da marca
+
+**Corpo:**
+- Wrapper `.page { max-width: 860px; margin: 0 auto; padding: 0 24px 80px; }`
+- `.mod-header` com `.mod-breadcrumb` (inline, ` &rsaquo; `) + `.mod-title` (DM Sans 26/32px 700) + `.mod-desc` opcional
+- Breadcrumb com cor `var(--green)` = **#1A5C2A**
+- `.sec-div` para cada seção — cor `var(--muted)`, linha via `::after`
+
+**Footer:**
+- `.page-footer` com `.page-footer-brand`, texto exato da marca
 - Script de população via `window.__lideresSession` ou `localStorage.lideres_session`
 
 ### ❌ Não
 
+**Header/Footer:**
 - Adicionar `.header-title` ou qualquer texto entre logo e user
 - Usar `var(--surface)` em vez de `var(--white)` no header
 - Usar `var(--r)` (6px) no `.header-user` ou `.header-plus` — deve ser `4px` fixo
@@ -298,6 +418,15 @@ if (window.__lideresUser) {
 - Aplicar `overflow: hidden` no `.header`
 - Usar `position: fixed` no `.page-footer`
 - Substituir o texto do footer por links ou outra marca
+
+**Corpo:**
+- Usar `<nav class="bc">` com `<span class="bc-sep">` — sempre `<p class="mod-breadcrumb">` inline
+- Aplicar classe ao item atual do breadcrumb (tipo `.bc-curr`) — é texto puro
+- Usar `DM Serif Display` no título — sempre DM Sans
+- Usar `font-size: clamp(…)` no `.mod-title` — valor fixo 26px/32px
+- Criar badges `.sec-letter` (A, B, …) no título das seções
+- Criar `<div class="sec-line">` manual — a linha vem do `::after` do `.sec-div`
+- Adicionar `.sec-sub` abaixo do título da seção — use `.mod-desc` no topo da página
 
 ---
 
@@ -335,7 +464,14 @@ if (window.__lideresUser) {
 │                              h=28px       28×28 │   sticky, z-index 200
 ├─────────────────────────────────────────────────┤
 │                                                 │
-│          [CONTEÚDO DA PÁGINA]                   │
+│ governança › institucional › papelaria          │ ← .mod-breadcrumb (#1A5C2A)
+│ Papelaria                                       │ ← .mod-title (26/32px 700)
+│ Descrição curta…                                │ ← .mod-desc
+│                                                 │
+│ BIBLIOTECA DE ARQUIVOS ─────────────────────    │ ← .sec-div + ::after
+│ [cards]                                         │
+│ GERAR DOCUMENTOS ───────────────────────────    │ ← .sec-div + ::after
+│ [cards]                                         │
 │                                                 │
 │ [FOOTER INLINE — TATÁ Sushi | TATÁ Poke | ...]  │ ← .page-footer / flui
 └─────────────────────────────────────────────────┘
@@ -352,6 +488,7 @@ if (window.__lideresUser) {
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Minha Seção — Governança</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
       --carbon: #35383F;
@@ -360,6 +497,10 @@ if (window.__lideresUser) {
       --white:  #FFFFFF;
       --border: #E2E2E2;
       --t1:     #111111;
+      --text:   #111111;
+      --mid:    #555555;
+      --muted:  #999999;
+      --green:  #1A5C2A;
       --r:      6px;
     }
 
@@ -367,7 +508,7 @@ if (window.__lideresUser) {
       margin: 0;
       font-family: "DM Sans", sans-serif;
       background: var(--bg);
-      color: var(--t1);
+      color: var(--text);
     }
 
     /* HEADER */
@@ -406,6 +547,32 @@ if (window.__lideresUser) {
       stroke-width: 2.5; stroke-linecap: round;
     }
 
+    /* PAGE (wrapper do corpo) */
+    .page { max-width: 860px; margin: 0 auto; padding: 0 24px 80px; }
+
+    /* MOD HEADER (breadcrumb + título + descrição) */
+    .mod-header { padding: 20px 0 0; }
+    .mod-breadcrumb {
+      font-family: "DM Mono", monospace;
+      font-size: 9px; font-weight: 500;
+      letter-spacing: .14em; text-transform: uppercase;
+      color: var(--green); margin-bottom: 6px;
+    }
+    .mod-breadcrumb a { color: var(--green); text-decoration: none; }
+    .mod-title { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1.2; margin-bottom: 8px; }
+    .mod-desc  { font-size: 14px; color: var(--mid); line-height: 1.6; margin-bottom: 4px; }
+
+    /* SEC DIV (divisor de seção) */
+    .sec-div {
+      font-family: "DM Mono", monospace;
+      font-size: 9px; font-weight: 500;
+      letter-spacing: .16em; text-transform: uppercase;
+      color: var(--muted);
+      padding: 18px 0 10px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .sec-div::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
     /* FOOTER */
     .page-footer {
       margin-top: 16px;
@@ -424,6 +591,7 @@ if (window.__lideresUser) {
     @media (min-width: 768px) {
       .header { padding: 0 40px; height: 60px; }
       .header-logo { height: 40px; }
+      .mod-title { font-size: 32px; }
       .page-footer { padding: 16px 40px 32px; }
     }
   </style>
@@ -446,10 +614,25 @@ if (window.__lideresUser) {
     </div>
   </div>
 
-  <!-- CONTEÚDO -->
-  <main>
-    <!-- cards, seções, chips etc. -->
-  </main>
+  <!-- CORPO -->
+  <div class="page">
+
+    <!-- CABEÇALHO DA PÁGINA -->
+    <div class="mod-header">
+      <p class="mod-breadcrumb">
+        <a href="../../menucompliance.html">Governança de Processos</a> &rsaquo;
+        <a href="index.html">Institucional</a> &rsaquo;
+        Minha Seção
+      </p>
+      <h1 class="mod-title">Minha Seção</h1>
+      <p class="mod-desc">Descrição curta do que essa página oferece.</p>
+    </div>
+
+    <!-- SEÇÃO -->
+    <div class="sec-div">Nome da Seção</div>
+    <!-- conteúdo: cards, lista, prosa, etc. -->
+
+  </div><!-- /page -->
 
   <!-- FOOTER -->
   <div class="page-footer">
@@ -475,4 +658,4 @@ if (window.__lideresUser) {
 
 ---
 
-*Atualizado em 2026-04-21 — logo responsivo 34→40px*
+*Atualizado em 2026-04-21 — padrão de corpo documentado: `.mod-header` (breadcrumb + título + descrição) e `.sec-div` (divisor de seção). Referências canônicas: `idconceitual.html` (prosa) e `papelaria.html` (grid de cards).*
