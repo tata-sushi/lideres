@@ -18,6 +18,9 @@ O drawer é o menu lateral direito que aparece ao clicar no botão `+` (header-p
 | `compliance/areas/institucional/index.html` | — |
 | `compliance/areas/institucional/idconceitual.html` | — |
 | `compliance/kpis/index.html` | — |
+| `compliance/kpis/rh/index.html` | — |
+| `compliance/areas/rh/ouvidoria.html` | — |
+| `compliance/ferramentas/index.html` | — |
 
 **Páginas SEM drawer:**
 - `compliance/areas/rh/estoqueadm.html`
@@ -36,6 +39,14 @@ O drawer tem 5 partes obrigatórias:
    - **Números** — grid 2 colunas com KPIs (Seções, Departamentos, Parceiros, Dashboards, Páginas)
 4. **Footer** — fixo no fundo, com responsável (Victor Carvalho · Gestão & Inovação)
 5. **JavaScript** — funções `openDrawer()` / `closeDrawer()`
+
+> ⚠️ **REGRA CRÍTICA — o drawer é sobre a Governança, não sobre a página**
+>
+> O conteúdo do drawer é SEMPRE institucional do portal **Governança de Processos**:
+> - Versão: `"Governança de Processos" v2.0c`
+> - "O que é": descrição da Governança de Processos (texto padrão do §5)
+> - **NUNCA** colocar descrição, base legal, links ou CTAs da página específica no drawer
+> - Seções extras permitidas: apenas "Ferramentas" com ações do sistema (ver `sancoes.html`)
 
 ## 4. KPI "Páginas" (`id="kpi-pages"`)
 
