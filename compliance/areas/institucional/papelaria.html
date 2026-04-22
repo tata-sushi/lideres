@@ -1101,10 +1101,19 @@ function cvDoPDF() {
   var a1 = addr[0], a2 = addr[1];
   var slug = nome.toLowerCase().replace(/\s+/g, '-');
 
-  var W = 90, H = 54;
+  // Dimensões com sangria de 3mm em cada lado (padrão gráfica)
+  var W_TRIM = 90, H_TRIM = 54;
+  var BLEED  = 3;
+  var W = W_TRIM + 2 * BLEED;   // 96 mm (página final com sangria)
+  var H = H_TRIM + 2 * BLEED;   // 60 mm
+  var TL = BLEED;               // borda esquerda/topo da área de corte
+  var TR = BLEED + W_TRIM;      // borda direita da área de corte
+  var TB = BLEED + H_TRIM;      // borda inferior da área de corte
+
   var BLACK  = [0, 0, 0];
   var WHITE  = [255, 255, 255];
   var CITRIC = [112, 255, 65];
+  var CARBON = [53, 56, 63];
   var GRAY   = [155, 158, 163];
 
   cvBuildLogoDataUrl('brightness(0) invert(1)', function(logoWhite, lW, lH) {
@@ -1113,39 +1122,59 @@ function cvDoPDF() {
         var jsPDF = window.jspdf.jsPDF;
         var doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [W, H] });
 
-        /* FRENTE */
+        function cropMarks(color) {
+          doc.setDrawColor.apply(doc, color);
+          doc.setLineWidth(0.1);
+          var gap = 0.5, len = 2.0;
+          // top-left
+          doc.line(TL - gap - len, TL, TL - gap, TL);
+          doc.line(TL, TL - gap - len, TL, TL - gap);
+          // top-right
+          doc.line(TR + gap, TL, TR + gap + len, TL);
+          doc.line(TR, TL - gap - len, TR, TL - gap);
+          // bottom-left
+          doc.line(TL - gap - len, TB, TL - gap, TB);
+          doc.line(TL, TB + gap, TL, TB + gap + len);
+          // bottom-right
+          doc.line(TR + gap, TB, TR + gap + len, TB);
+          doc.line(TR, TB + gap, TR, TB + gap + len);
+        }
+
+        /* ── FRENTE ── */
         doc.setFillColor.apply(doc, BLACK);
         doc.rect(0, 0, W, H, 'F');
 
         if (logoWhite && lW && lH) {
           var lh = 12.42, lw = lh * (lW / lH);
-          doc.addImage(logoWhite, 'PNG', 5, 4, lw, lh);
+          doc.addImage(logoWhite, 'PNG', TL + 5, TL + 4, lw, lh);
         }
 
         doc.setTextColor.apply(doc, WHITE);
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text(nome, 6, H - 18);
+        doc.text(nome, TL + 6, TB - 18);
 
         doc.setTextColor.apply(doc, CITRIC);
         doc.setFontSize(7);
         doc.setFont('helvetica', 'normal');
-        doc.text(cargo, 6, H - 13);
+        doc.text(cargo, TL + 6, TB - 13);
 
         doc.setTextColor.apply(doc, GRAY);
         doc.setFontSize(6);
-        if (a1) doc.text(a1, 6, H - 8.5);
-        if (a2) doc.text(a2, 6, H - 4.5);
+        if (a1) doc.text(a1, TL + 6, TB - 8.5);
+        if (a2) doc.text(a2, TL + 6, TB - 4.5);
 
         var qrData = cvGetQRDataUrl();
         if (qrData) {
           var qS = 18;
           doc.setFillColor.apply(doc, WHITE);
-          doc.rect(W - qS - 4, H - qS - 4, qS + 2, qS + 2, 'F');
-          doc.addImage(qrData, 'PNG', W - qS - 3, H - qS - 3, qS, qS);
+          doc.rect(TR - qS - 4, TB - qS - 4, qS + 2, qS + 2, 'F');
+          doc.addImage(qrData, 'PNG', TR - qS - 3, TB - qS - 3, qS, qS);
         }
 
-        /* VERSO */
+        cropMarks(WHITE);
+
+        /* ── VERSO ── */
         doc.addPage([W, H], 'landscape');
         doc.setFillColor.apply(doc, CITRIC);
         doc.rect(0, 0, W, H, 'F');
@@ -1154,6 +1183,8 @@ function cvDoPDF() {
           var lh2 = 39, lw2 = lh2 * (ldW / ldH);
           doc.addImage(logoDark, 'PNG', W/2 - lw2/2, H/2 - lh2/2, lw2, lh2);
         }
+
+        cropMarks(CARBON);
 
         doc.save('cartao-tata-' + slug + '.pdf');
         hint.textContent = 'PDF gerado ✓';
