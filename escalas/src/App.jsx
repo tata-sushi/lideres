@@ -483,7 +483,11 @@ export default function EscalaPainel() {
       filtroUnidade!=='Todas'?`Unidade: <strong>${filtroUnidade}</strong>`:'',
       filtroDepto!=='Todos'?`Depto: <strong>${filtroDepto}</strong>`:'',
     ].filter(Boolean).join(' &nbsp;·&nbsp; ');
-    document.getElementById('escala-pdf').innerHTML=`
+    // Cria div diretamente no body (fora do #root do React) para que
+    // "body > *:not(#escala-pdf-print)" funcione corretamente no @media print
+    let printDiv=document.getElementById('escala-pdf-print');
+    if(!printDiv){ printDiv=document.createElement('div'); printDiv.id='escala-pdf-print'; document.body.appendChild(printDiv); }
+    printDiv.innerHTML=`
       <div class="epdf-header">
         <img id="epdf-logo" class="epdf-logo" alt="TATÁ Sushi">
         <div class="epdf-header-center">
@@ -575,10 +579,10 @@ export default function EscalaPainel() {
           position:sticky;left:0;z-index:5;border-right:1px solid ${T.border};background:${T.surface};overflow:hidden;}
         input[type=time]::-webkit-calendar-picker-indicator{opacity:.5;cursor:pointer;}
         .resumo-card{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid ${T.border};border-radius:6px;background:${T.bg};}
-        #escala-pdf{display:none;}
+        #escala-pdf-print{display:none;}
         @media print{
-          body>*:not(#escala-pdf){display:none!important;}
-          #escala-pdf{display:block!important;font-family:'DM Sans','Helvetica Neue',Arial,sans-serif;color:#000;padding:24px 28px;max-width:960px;margin:0 auto;font-size:11px;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+          body>*:not(#escala-pdf-print){display:none!important;}
+          #escala-pdf-print{display:block!important;font-family:'DM Sans','Helvetica Neue',Arial,sans-serif;color:#000;padding:24px 28px;max-width:960px;margin:0 auto;font-size:11px;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
           .epdf-header{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111;}
           .epdf-logo{width:48px;height:48px;object-fit:contain;flex-shrink:0;}
           .epdf-header-center{flex:1;}
@@ -1047,8 +1051,6 @@ export default function EscalaPainel() {
           </section>
         </div>
       </div>
-
-      <div id="escala-pdf"></div>
 
       {/* FOOTER */}
       <footer style={{background:T.carbon,padding:'10px 20px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,position:'fixed',bottom:0,left:0,right:0,zIndex:50}}>
