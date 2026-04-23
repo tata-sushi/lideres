@@ -176,8 +176,8 @@ export default function EscalaPainel() {
   const [novaFeriaIni, setNovaFeriaIni] = useState({});
   const [novaFeriaFim, setNovaFeriaFim] = useState({});
   const [novaFeriaObs, setNovaFeriaObs] = useState({});
-  const [filtroUnidade, setFiltroUnidade] = useState('Itaim');
-  const [filtroDepto,   setFiltroDepto]   = useState('Bar');
+  const [filtroUnidade, setFiltroUnidade] = useState(()=>localStorage.getItem('esc_fUnidade')||'Todos');
+  const [filtroDepto,   setFiltroDepto]   = useState(()=>localStorage.getItem('esc_fDepto')  ||'Todos');
 
   // Navegação de semanas: { semanaKey: { config, escala } }
   const [semanaAtual, setSemanaAtual] = useState(() => getSegunda(new Date()));
@@ -186,6 +186,9 @@ export default function EscalaPainel() {
     return { [key]: { config: CFG0, escala: escalaVaziaColabs(COLABS0) } };
   });
   const [syncStatus, setSyncStatus] = useState('idle');
+
+  useEffect(()=>{ localStorage.setItem('esc_fUnidade', filtroUnidade); },[filtroUnidade]);
+  useEffect(()=>{ localStorage.setItem('esc_fDepto',   filtroDepto);   },[filtroDepto]);
 
   useEffect(()=>{
     const fn=()=>setMobile(window.innerWidth<1100);
