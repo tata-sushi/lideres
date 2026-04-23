@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Download, RotateCcw, Copy, Trash2, Plus, X, UserPlus, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Download, RotateCcw, Copy, Trash2, Plus, X, UserPlus, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, Printer } from 'lucide-react';
 import { carregarEscala, salvarEscala, carregarColaboradores, carregarFerias, salvarFerias } from './api.js';
 
 
@@ -456,6 +456,64 @@ export default function EscalaPainel() {
     a.click();
   };
 
+  const gerarPDF=()=>{
+    const semLabel=semanaLabel(semanaAtual);
+    const dataHoje=new Date().toLocaleString('pt-BR');
+    const thDias=DIAS_META.map((d,i)=>{
+      const dataD=addDays(semanaAtual,i);
+      return `<th>${d.curto}<br><span class="epdf-th-data">${fmtDate(dataD)}</span></th>`;
+    }).join('');
+    const rows=colabsFiltrados.map((c,idx)=>{
+      const tdDias=DIAS_META.map((d,i)=>{
+        const t=escala[d.id]?.[c.id]||{};
+        const dataD=addDays(semanaAtual,i);
+        const deFerias=estaDeFerias(c.id,dataD);
+        if(deFerias) return `<td class="epdf-ferias">FÉRIAS</td>`;
+        if(t.folga)  return `<td class="epdf-folga">FOLGA</td>`;
+        if(!t.t1Ini) return `<td class="epdf-livre">—</td>`;
+        let txt=`${t.t1Ini}–${t.t1Fim}`;
+        if(t.t2Ini&&t.t2Fim) txt+=`<br><span class="epdf-t2">${t.t2Ini}–${t.t2Fim}</span>`;
+        return `<td class="epdf-turno">${txt}</td>`;
+      }).join('');
+      const s=stats[c.id]||{horas:0,folgas:0};
+      const par=idx%2===0?'':' class="epdf-row-alt"';
+      return `<tr${par}><td class="epdf-nome">${c.nome}</td><td class="epdf-fn">${c.funcao}</td>${tdDias}<td class="epdf-total">${s.horas.toFixed(1)}h</td></tr>`;
+    }).join('');
+    const filtroInfo=[
+      filtroUnidade!=='Todas'?`Unidade: <strong>${filtroUnidade}</strong>`:'',
+      filtroDepto!=='Todos'?`Depto: <strong>${filtroDepto}</strong>`:'',
+    ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+    document.getElementById('escala-pdf').innerHTML=`
+      <div class="epdf-header">
+        <img id="epdf-logo" class="epdf-logo" alt="TATÁ Sushi">
+        <div class="epdf-header-center">
+          <div class="epdf-title">Escala Semanal</div>
+          <div class="epdf-sub">${semLabel}${filtroInfo?' &nbsp;·&nbsp; '+filtroInfo:''}</div>
+        </div>
+        <div class="epdf-header-right">Emitido em: ${dataHoje}</div>
+      </div>
+      <table class="epdf-table">
+        <thead><tr>
+          <th class="epdf-th-nome">Colaborador</th>
+          <th class="epdf-th-fn">Função</th>
+          ${thDias}
+          <th>Total</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr>
+          <td colspan="2" class="epdf-tf-label">TOTAL GERAL</td>
+          <td colspan="7"></td>
+          <td class="epdf-tf-val">${totalSemana.toFixed(1)}h</td>
+        </tr></tfoot>
+      </table>
+      <div class="epdf-rodape">${colabsFiltrados.length} colaboradores &nbsp;·&nbsp; Meta: ${META_HORAS}h / semana</div>
+    `;
+    const logoEl=document.getElementById('epdf-logo');
+    logoEl.onload=()=>window.print();
+    logoEl.onerror=()=>window.print();
+    logoEl.src=LOGO_SRC;
+  };
+
   const colW=ehMobile?72:108;
   const rowH=22;
   const hoje=new Date().toLocaleString('pt-BR');
@@ -517,6 +575,36 @@ export default function EscalaPainel() {
           position:sticky;left:0;z-index:5;border-right:1px solid ${T.border};background:${T.surface};overflow:hidden;}
         input[type=time]::-webkit-calendar-picker-indicator{opacity:.5;cursor:pointer;}
         .resumo-card{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid ${T.border};border-radius:6px;background:${T.bg};}
+        #escala-pdf{display:none;}
+        @media print{
+          body>*:not(#escala-pdf){display:none!important;}
+          #escala-pdf{display:block!important;font-family:'DM Sans','Helvetica Neue',Arial,sans-serif;color:#000;padding:24px 28px;max-width:960px;margin:0 auto;font-size:11px;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+          .epdf-header{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111;}
+          .epdf-logo{width:48px;height:48px;object-fit:contain;flex-shrink:0;}
+          .epdf-header-center{flex:1;}
+          .epdf-title{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+          .epdf-sub{font-size:10px;color:#555;margin-top:3px;}
+          .epdf-header-right{font-size:9px;color:#555;text-align:right;flex-shrink:0;align-self:center;}
+          .epdf-table{width:100%;border-collapse:collapse;font-size:9.5px;margin-bottom:10px;}
+          .epdf-table thead tr{background:#35383F!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+          .epdf-table th{padding:6px 5px;color:#fff!important;font-size:9px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;text-align:center;}
+          .epdf-th-nome{text-align:left;width:130px;}
+          .epdf-th-fn{text-align:left;width:90px;}
+          .epdf-th-data{font-weight:400;font-size:8px;opacity:.85;}
+          .epdf-table td{padding:5px 5px;border-bottom:1px solid #eee;text-align:center;vertical-align:middle;}
+          .epdf-nome,.epdf-fn{text-align:left;}
+          .epdf-row-alt{background:#f9f9f9!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+          .epdf-folga{color:#b26200;font-weight:600;font-size:8.5px;}
+          .epdf-ferias{color:#1A3A5C;font-weight:600;font-size:8.5px;}
+          .epdf-livre{color:#bbb;}
+          .epdf-turno{font-family:'DM Mono',monospace;font-size:8.5px;}
+          .epdf-t2{font-size:7.5px;color:#666;}
+          .epdf-total{font-family:'DM Mono',monospace;font-weight:700;font-size:9px;}
+          .epdf-table tfoot td{border-top:2px solid #111;font-weight:700;padding:6px 5px;}
+          .epdf-tf-label{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.04em;}
+          .epdf-tf-val{font-family:'DM Mono',monospace;font-size:11px;text-align:center;}
+          .epdf-rodape{font-size:9px;color:#666;text-align:right;margin-top:6px;}
+        }
       `}</style>
 
       {/* ── HEADER ── */}
@@ -599,6 +687,7 @@ export default function EscalaPainel() {
           {painelAberto?<PanelLeftClose size={15}/>:<PanelLeftOpen size={15}/>}
         </button>
         <button className="btn-outline" onClick={limparDia}><RotateCcw size={11}/>Limpar dia</button>
+        <button className="btn-outline" onClick={gerarPDF}><Printer size={11}/>Imprimir</button>
       </div>
 
       {/* ── CORPO PRINCIPAL ── */}
@@ -958,6 +1047,8 @@ export default function EscalaPainel() {
           </section>
         </div>
       </div>
+
+      <div id="escala-pdf"></div>
 
       {/* FOOTER */}
       <footer style={{background:T.carbon,padding:'10px 20px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,position:'fixed',bottom:0,left:0,right:0,zIndex:50}}>
