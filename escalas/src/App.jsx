@@ -506,7 +506,7 @@ export default function EscalaPainel() {
   };
 
   const colW=ehMobile?72:108;
-  const rowH=22;
+  const rowH=11;
   const hoje=new Date().toLocaleString('pt-BR');
 
   const FiltroSelect=({label,val,set,opts})=>(
