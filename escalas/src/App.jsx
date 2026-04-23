@@ -563,8 +563,7 @@ export default function EscalaPainel() {
           font-family:'DM Mono',monospace;font-size:9px;font-weight:500;white-space:nowrap;}
         .hora-cell{height:${rowH}px;display:flex;align-items:center;justify-content:center;
           font-family:'DM Mono',monospace;font-size:9px;line-height:1;padding:0 4px;
-          position:sticky;left:0;z-index:5;border-right:1px solid ${T.border};background:${T.surface};overflow:visible;}
-        .hora-cell span{display:block;transform:translateY(${rowH/2}px);}
+          position:sticky;left:0;z-index:5;border-right:1px solid ${T.border};background:${T.surface};overflow:hidden;}
         input[type=time]::-webkit-calendar-picker-indicator{opacity:.5;cursor:pointer;}
         .resumo-card{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid ${T.border};border-radius:6px;background:${T.bg};}
         #escala-pdf-print{display:none;}
@@ -930,7 +929,7 @@ export default function EscalaPainel() {
                         width: 48,
                         maxWidth: 48,
                         minWidth: 48,
-                      }}>{full ? <span>{lbl}</span> : ''}</div>
+                      }}>{full ? lbl : ''}</div>
                       {colabsFiltrados.map(c=>{
                         const t=escala[dia.id]?.[c.id]||{};
                         const ativo=turnoSlots(t).has(slot);
