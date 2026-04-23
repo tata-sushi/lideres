@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Download, RotateCcw, Copy, Trash2, Plus, X, UserPlus, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, Printer } from 'lucide-react';
+import { Download, RotateCcw, Copy, Trash2, Plus, X, UserPlus, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, Printer, Save } from 'lucide-react';
 import { carregarEscala, salvarEscala, carregarColaboradores, carregarFerias, salvarFerias } from './api.js';
 
 
@@ -72,6 +72,7 @@ const turnoSlots = (t) => {
   };
   if (t.t1Ini&&t.t1Fim) add(t.t1Ini,t.t1Fim);
   if (t.t2Ini&&t.t2Fim) add(t.t2Ini,t.t2Fim);
+  if (t.t3Ini&&t.t3Fim) add(t.t3Ini,t.t3Fim);
   return s;
 };
 
@@ -134,13 +135,13 @@ const escalaVaziaColabs = (colabs) => {
   const e={};
   DIAS_SEMANA.forEach(d=>{
     e[d]={};
-    colabs.forEach(c=>{ e[d][c.id]={t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',folga:false}; });
+    colabs.forEach(c=>{ e[d][c.id]={t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:false}; });
   });
   return e;
 };
 const escalaComColab = (esc,nc) => {
   const e={...esc};
-  DIAS_SEMANA.forEach(d=>{ e[d]={...e[d],[nc.id]:{t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',folga:false}}; });
+  DIAS_SEMANA.forEach(d=>{ e[d]={...e[d],[nc.id]:{t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:false}}; });
   return e;
 };
 const escalaSemColab = (esc,cid) => {
@@ -169,6 +170,7 @@ export default function EscalaPainel() {
   const [novoUnidade,setNovoUnidade]= useState('Itaim');
   const [novoDepto,  setNovoDepto]  = useState('Salão');
   const [expandidos, setExpandidos] = useState({});
+  const [expandidosT3, setExpandidosT3] = useState({});
   const [turnosAbertos, setTurnosAbertos] = useState({});
   const [listaColabsAberta, setListaColabsAberta] = useState(true);
   const [ferias, setFerias] = useState([]); // [{id, colabId, dataIni, dataFim, obs}]
@@ -346,8 +348,8 @@ export default function EscalaPainel() {
       [dia.id]: {
         ...escala[dia.id],
         [cid]: cur.folga
-          ? {t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',folga:false}
-          : {t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',folga:true}
+          ? {t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:false}
+          : {t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:true}
       }
     };
     setEscala(novaEscala);
@@ -362,7 +364,7 @@ export default function EscalaPainel() {
 
   const limparDia=()=>{
     const nd={...escala,[dia.id]:{}};
-    colabs.forEach(c=>{nd[dia.id][c.id]={t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',folga:false};});
+    colabs.forEach(c=>{nd[dia.id][c.id]={t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:false};});
     setEscala(nd);
   };
 
@@ -451,11 +453,11 @@ export default function EscalaPainel() {
   const okCount=Object.values(stats).filter(s=>s.horas>0&&s.horas<=META_HORAS&&s.folgas>=2).length;
 
   const exportCSV=()=>{
-    const L=[['Semana','Dia','Colaborador','Função','Unidade','Depto','T1 Entrada','T1 Saída','T2 Entrada','T2 Saída','Horas','Folga'].join(';')];
+    const L=[['Semana','Dia','Colaborador','Função','Unidade','Depto','T1 Entrada','T1 Saída','T2 Entrada','T2 Saída','T3 Entrada','T3 Saída','Horas','Folga'].join(';')];
     const sw=semanaLabel(semanaAtual);
     DIAS_META.forEach(d=>colabs.forEach(c=>{
       const t=escala[d.id]?.[c.id]||{};
-      L.push([sw,d.nome,c.nome,c.funcao,c.unidade,c.depto,t.t1Ini||'',t.t1Fim||'',t.t2Ini||'',t.t2Fim||'',horasTurno(t).toFixed(1),t.folga?'FOLGA':''].join(';'));
+      L.push([sw,d.nome,c.nome,c.funcao,c.unidade,c.depto,t.t1Ini||'',t.t1Fim||'',t.t2Ini||'',t.t2Fim||'',t.t3Ini||'',t.t3Fim||'',horasTurno(t).toFixed(1),t.folga?'FOLGA':''].join(';'));
     }));
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([L.join('\n')],{type:'text/csv;charset=utf-8'}));
@@ -480,6 +482,7 @@ export default function EscalaPainel() {
         if(!t.t1Ini) return `<td class="epdf-livre">—</td>`;
         let txt=`${t.t1Ini}–${t.t1Fim}`;
         if(t.t2Ini&&t.t2Fim) txt+=`<br><span class="epdf-t2">${t.t2Ini}–${t.t2Fim}</span>`;
+        if(t.t3Ini&&t.t3Fim) txt+=`<br><span class="epdf-t2">${t.t3Ini}–${t.t3Fim}</span>`;
         return `<td class="epdf-turno">${txt}</td>`;
       }).join('');
       const s=stats[c.id]||{horas:0,folgas:0};
@@ -628,19 +631,6 @@ export default function EscalaPainel() {
           {syncStatus==='loading'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.muted,letterSpacing:'.3px'}}>⟳ Carregando...</span>}
           {syncStatus==='error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red,letterSpacing:'.3px'}}>✗ Erro ao salvar</span>}
           {syncStatus==='saved'&&!pendente&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.green,letterSpacing:'.3px'}}>✓ Salvo</span>}
-          <button
-            onClick={salvarManual}
-            disabled={!pendente || syncStatus==='saving' || syncStatus==='loading'}
-            style={{
-              fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:700,letterSpacing:'.5px',
-              textTransform:'uppercase',padding:'7px 16px',cursor: (!pendente||syncStatus==='saving')?'not-allowed':'pointer',
-              background: syncStatus==='saving' ? T.border : pendente ? T.carbon : T.border,
-              color: syncStatus==='saving' ? T.muted : pendente ? T.citric : T.muted,
-              border:'none',borderRadius:100,transition:'all .15s',flexShrink:0,
-              opacity: (!pendente && syncStatus!=='saving') ? 0.5 : 1,
-            }}>
-            {syncStatus==='saving' ? '● Salvando...' : '💾 Salvar'}
-          </button>
         </div>
       </header>
 
@@ -699,6 +689,11 @@ export default function EscalaPainel() {
         </button>
         <button className="btn-outline" onClick={limparDia}><RotateCcw size={11}/>Limpar dia</button>
         <button className="btn-outline" onClick={gerarPDF}><Printer size={11}/>Imprimir</button>
+        <button className="btn-outline" onClick={salvarManual}
+          disabled={!pendente||syncStatus==='saving'||syncStatus==='loading'}
+          style={{opacity:(!pendente&&syncStatus!=='saving')?0.5:1,cursor:(!pendente||syncStatus==='saving')?'not-allowed':'pointer'}}>
+          <Save size={11}/>{syncStatus==='saving'?'Salvando...':'Salvar'}
+        </button>
       </div>
 
       {/* ── CORPO PRINCIPAL ── */}
@@ -763,6 +758,7 @@ export default function EscalaPainel() {
             const hd=horasTurno(t);
             const sw=stats[c.id];
             const temT2=(t.t2Ini&&t.t2Fim)||expandidos[c.id];
+            const temT3=(t.t3Ini&&t.t3Fim)||expandidosT3[c.id];
             const alertaC=sw&&(sw.horas>META_HORAS||(sw.folgas<2&&sw.dias>0));
             const turnoAberto = turnosAbertos[c.id] !== false; // default aberto
             return (
@@ -874,7 +870,7 @@ export default function EscalaPainel() {
                         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:7,alignItems:'center'}}>
                           <input className="ts-input" type="time" value={t.t2Ini||''} onChange={e=>setTurno(c.id,'t2Ini',e.target.value)}/>
                           <input className="ts-input" type="time" value={t.t2Fim||''} onChange={e=>setTurno(c.id,'t2Fim',e.target.value)}/>
-                          <button onClick={()=>{setTurno(c.id,'t2Ini','');setTurno(c.id,'t2Fim','');setExpandidos(p=>({...p,[c.id]:false}));}}
+                          <button onClick={()=>{setTurno(c.id,'t2Ini','');setTurno(c.id,'t2Fim','');setTurno(c.id,'t3Ini','');setTurno(c.id,'t3Fim','');setExpandidos(p=>({...p,[c.id]:false}));setExpandidosT3(p=>({...p,[c.id]:false}));}}
                             style={{width:28,height:36,border:`1px solid ${T.border}`,background:'transparent',color:T.muted,cursor:'pointer',borderRadius:T.radius,display:'flex',alignItems:'center',justifyContent:'center'}}>
                             <X size={11}/>
                           </button>
@@ -888,6 +884,26 @@ export default function EscalaPainel() {
                         color:T.muted,cursor:'pointer',width:'100%',borderRadius:T.radius,
                       }}>+ Dobra</button>
                     )}
+                    {temT2&&(temT3?(
+                      <div>
+                        <label className="field-label">Turno 3</label>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:7,alignItems:'center'}}>
+                          <input className="ts-input" type="time" value={t.t3Ini||''} onChange={e=>setTurno(c.id,'t3Ini',e.target.value)}/>
+                          <input className="ts-input" type="time" value={t.t3Fim||''} onChange={e=>setTurno(c.id,'t3Fim',e.target.value)}/>
+                          <button onClick={()=>{setTurno(c.id,'t3Ini','');setTurno(c.id,'t3Fim','');setExpandidosT3(p=>({...p,[c.id]:false}));}}
+                            style={{width:28,height:36,border:`1px solid ${T.border}`,background:'transparent',color:T.muted,cursor:'pointer',borderRadius:T.radius,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                            <X size={11}/>
+                          </button>
+                        </div>
+                      </div>
+                    ):(
+                      <button onClick={()=>setExpandidosT3(p=>({...p,[c.id]:true}))} style={{
+                        fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:500,letterSpacing:'.5px',
+                        textTransform:'uppercase',padding:'7px 10px',
+                        border:`1px dashed ${T.border}`,background:'transparent',
+                        color:T.muted,cursor:'pointer',width:'100%',borderRadius:T.radius,
+                      }}>+ Terceiro turno</button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -911,7 +927,7 @@ export default function EscalaPainel() {
               <div style={{display:'grid',gridTemplateColumns:`48px repeat(${colabsFiltrados.length},${colW}px)`,minWidth:48+colabsFiltrados.length*colW,width:'max-content'}}>
                 <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:54,width:48,minWidth:48,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px'}}>HORA</div>
                 {colabsFiltrados.map(c=>(
-                  <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'5px 7px',borderLeft:'1px solid #2E3038',borderBottom:`3px solid ${T.citric}`,minHeight:54,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center'}}>
+                  <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'5px 7px',borderLeft:'1px solid #2E3038',minHeight:54,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center'}}>
                     <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?10:11.5,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.2px',width:'100%',textAlign:'center'}}>{c.nome}</div>
                     <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?9:10.5,fontWeight:400,color:'#FFFFFF',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.1px',opacity:.85,width:'100%',textAlign:'center'}}>
                       {estaDeFerias(c.id,dataDoDia(dia.id)) ? '🏖 Férias' : `${c.funcao} · ${horasTurno(escala[dia.id]?.[c.id]||{}).toFixed(1)}h`}
