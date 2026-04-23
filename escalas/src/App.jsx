@@ -231,11 +231,12 @@ export default function EscalaPainel() {
           [key]: {
             config: cfgLoaded || CFG0,
             escala: (() => {
-              const base = escalaVaziaColabs(colabs);
-              Object.entries(escLoaded || {}).forEach(([dia, diaData]) => {
-                Object.entries(diaData || {}).forEach(([cid, t]) => {
-                  if (base[dia]) base[dia][cid] = t;
-                });
+              // Usa dados carregados diretamente — sem depender de `colabs`
+              // da closure (que pode ser COLABS0 stale no mount inicial).
+              // UI acessa com optional chaining, slots ausentes não quebram.
+              const base = {};
+              DIAS_SEMANA.forEach(dia => {
+                base[dia] = { ...(escLoaded?.[dia] || {}) };
               });
               return base;
             })(),
@@ -244,9 +245,12 @@ export default function EscalaPainel() {
         setSyncStatus('idle');
       })
       .catch(() => {
-        if (!dados[key]) {
-          setDados(p=>({...p,[key]:{config:{...CFG0},escala:escalaVaziaColabs(colabs)}}));
-        }
+        setDados(p => {
+          if (p[key]) return p;
+          const base = {};
+          DIAS_SEMANA.forEach(dia => { base[dia] = {}; });
+          return { ...p, [key]: { config: {...CFG0}, escala: base } };
+        });
         setSyncStatus('idle');
       });
   },[key]);
