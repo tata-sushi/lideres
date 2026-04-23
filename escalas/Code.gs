@@ -38,6 +38,15 @@ var CORES = [
 
 // ── Helpers ──────────────────────────────────────────────────
 
+// Google Sheets auto-converte strings 'YYYY-MM-DD' para Date ao ler de volta.
+// Esta função normaliza o valor da célula para string 'YYYY-MM-DD' em ambos os casos.
+function semanaStr(v) {
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return String(v || '').trim();
+}
+
 function ssEscala() { return SpreadsheetApp.openById(ESCALA_SHEET_ID); }
 
 function aba(nome, cabecalho) {
@@ -137,7 +146,7 @@ function migrarEscalaSchema(sh) {
   if (lastCol >= 10) return; // já está no novo
   var header = sh.getRange(1, 1, 1, lastCol).getValues()[0];
   var folgaCol = header.indexOf('folga');
-  if (folgaCol === 6) {
+  if (folgaCol === 7) {
     // old format: folga está em col 8 (idx 7 na 1-index: col 8)
     sh.insertColumns(folgaCol + 1, 2); // insere 2 colunas antes de folga
     sh.getRange(1, folgaCol + 1, 1, 2).setValues([['t3Ini', 't3Fim']]);
@@ -158,7 +167,7 @@ function getEscala(semana) {
   DIAS.forEach(function(d) { escala[d] = {}; });
 
   rows.forEach(function(r) {
-    if (String(r[0]) !== semana) return;
+    if (semanaStr(r[0]) !== semana) return;
     var dia = r[1], colabId = r[2];
     if (!dia || !colabId) return;
     escala[dia][colabId] = {
@@ -193,7 +202,7 @@ function saveEscala(semana, escala, config) {
   var rows = todasLinhas(sh);
 
   // Mantém outras semanas, substitui a atual
-  var outras = rows.filter(function(r) { return String(r[0]) !== semana; });
+  var outras = rows.filter(function(r) { return semanaStr(r[0]) !== semana; });
   var novas  = [];
 
   DIAS.forEach(function(dia) {
@@ -210,7 +219,11 @@ function saveEscala(semana, escala, config) {
 
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow()-1, 10).clearContent();
   var tudo = outras.concat(novas);
-  if (tudo.length > 0) sh.getRange(2, 1, tudo.length, 10).setValues(tudo);
+  if (tudo.length > 0) {
+    sh.getRange(2, 1, tudo.length, 10).setValues(tudo);
+    // Força coluna A (semana) como texto simples para evitar auto-conversão de datas
+    sh.getRange(2, 1, tudo.length, 1).setNumberFormat('@');
+  }
 
   // ── Configs
   var shC   = aba('Configuracoes', ['semana','dia','campo','valor']);
