@@ -199,29 +199,14 @@ export default function EscalaPainel() {
   },[]);
 
   useEffect(()=>{
-    setSyncStatus('loading');
     carregarColaboradores()
       .then(({ colabs: loaded }) => {
-        if (loaded && loaded.length > 0) {
-          setColabs(loaded);
-          const k = semanaKey(getSegunda(new Date()));
-          setDados(p => {
-            const base = escalaVaziaColabs(loaded);
-            const existing = p[k] || {};
-            if (existing.escala) {
-              Object.keys(existing.escala).forEach(d => {
-                if (base[d]) Object.assign(base[d], existing.escala[d]);
-              });
-            }
-            return { ...p, [k]: { config: existing.config || CFG0, escala: base } };
-          });
-        }
-        setSyncStatus('idle');
-        // Carregar férias junto
+        console.log('[ESC] colabs carregados:', loaded?.length, loaded?.map(c=>c.id));
+        if (loaded && loaded.length > 0) setColabs(loaded);
         return carregarFerias();
       })
       .then(data => { if (data && data.ferias) setFerias(data.ferias); })
-      .catch(() => setSyncStatus('idle'));
+      .catch(err => console.error('[ESC] erro colabs:', err?.message));
   },[]);
 
   const key = semanaKey(semanaAtual);
@@ -229,27 +214,19 @@ export default function EscalaPainel() {
   useEffect(()=>{
     setPendente(false);
     setSyncStatus('loading');
+    console.log('[ESC] carregando semana:', key);
     carregarEscala(key)
       .then(({ escala: escLoaded, config: cfgLoaded }) => {
-        setDados(p => ({
-          ...p,
-          [key]: {
-            config: cfgLoaded || CFG0,
-            escala: (() => {
-              // Usa dados carregados diretamente — sem depender de `colabs`
-              // da closure (que pode ser COLABS0 stale no mount inicial).
-              // UI acessa com optional chaining, slots ausentes não quebram.
-              const base = {};
-              DIAS_SEMANA.forEach(dia => {
-                base[dia] = { ...(escLoaded?.[dia] || {}) };
-              });
-              return base;
-            })(),
-          },
-        }));
+        console.log('[ESC] escala recebida:', JSON.stringify(escLoaded));
+        const base = {};
+        DIAS_SEMANA.forEach(dia => {
+          base[dia] = { ...(escLoaded?.[dia] || {}) };
+        });
+        setDados(p => ({ ...p, [key]: { config: cfgLoaded || CFG0, escala: base } }));
         setSyncStatus('idle');
       })
-      .catch(() => {
+      .catch(err => {
+        console.error('[ESC] erro escala:', err?.message);
         setDados(p => {
           if (p[key]) return p;
           const base = {};
