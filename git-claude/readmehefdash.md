@@ -53,8 +53,9 @@ Especificações completas de layout para **headers e rodapés** das páginas de
 
 ## HEADER-USER (Identificação do Líder)
 ### Dimensões & Spacing
-- **Padding**: `5px 10px` (compacto, tipo badge)
-- **Height**: ~24px (confortável para single-line text)
+- **Padding**: `0 10px` (horizontal only, height controlado por display)
+- **Height**: `28px` (exato, mesma altura do `.header-plus`)
+- **Display**: `inline-flex; align-items: center` (centra verticalmente o nome)
 - **Whitespace**: `white-space: nowrap` (não quebra nome)
 - **Margin**: `margin-left: auto` (empurra para a direita)
 
@@ -82,7 +83,7 @@ Especificações completas de layout para **headers e rodapés** das páginas de
 
 ## HEADER-PLUS (Botão "+", quando houver)
 ### Dimensões
-- **Tamanho**: `30px × 30px` (quadrado, menor que logo)
+- **Tamanho**: `28px × 28px` (quadrado, mesma altura do `.header-user`)
 - **Position**: Depois do `#header-user`
 - **Flex**: `flex-shrink: 0` (não encolhe)
 
@@ -129,8 +130,8 @@ Especificações completas de layout para **headers e rodapés** das páginas de
 ### ✅ DEVE
 - Logo: 40×40px, base64 canônico, flex-shrink 0
 - Título: 20px, 700 weight, max ~12 chars, **sem media query override**
-- Header-user: monospace 10px, border-radius **4px hardcoded**, margin-left auto
-- Header-plus: 30×30px, border-radius **4px hardcoded**, SVG 14×14px, stroke-width 2.5px
+- Header-user: 28px height, padding 0 10px, display inline-flex, monospace 10px, border-radius **4px hardcoded**, white-space nowrap, margin-left auto
+- Header-plus: 28×28px, border-radius **4px hardcoded**, SVG 14×14px, stroke-width 2.5px
 - Position: sticky top 0 z-index 100
 - Padding: 14px 20px (ambos lados)
 - **Sem overflow:hidden** no header — corta nome em telas pequenas
@@ -219,8 +220,9 @@ Se houver rodapé, seguir padrão similar ao header:
     .header-title { font-size: 20px; font-weight: 700; color: var(--carbon); letter-spacing: -0.3px; }
     .header-user { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; 
       color: var(--carbon); background: var(--bg); border: 1px solid var(--border); 
-      border-radius: 4px; padding: 5px 10px; white-space: nowrap; margin-left: auto; }
-    .header-plus { width: 30px; height: 30px; background: var(--carbon); border: none; 
+      border-radius: 4px; padding: 0 10px; height: 28px; display: inline-flex; align-items: center; 
+      white-space: nowrap; margin-left: auto; }
+    .header-plus { width: 28px; height: 28px; background: var(--carbon); border: none; 
       border-radius: 4px; display: flex; align-items: center; justify-content: center; 
       cursor: pointer; flex-shrink: 0; }
     .header-plus svg { width: 14px; height: 14px; stroke: var(--citric); fill: none; stroke-width: 2.5; stroke-linecap: round; }
