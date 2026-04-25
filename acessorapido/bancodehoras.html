@@ -673,10 +673,8 @@ function renderWeek() {
     pontos.forEach(function(p,i) { if (p.neg < 0) c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(p.neg).toFixed(1) + '" r="3" fill="#999"/>'; });
   }
 
-  // ── Labels eixo X (mostrar alternados se n > 6; sempre o último) ──
-  var xStep = n > 6 ? 2 : 1;
+  // ── Labels eixo X ──
   pontos.forEach(function(p,i) {
-    if (i % xStep !== 0 && i !== n-1) return;
     var fill = hasHoliday(p.semKey) ? '#7A4A00' : '#AAAAAA';
     c += '<text x="' + sx(i).toFixed(1) + '" y="' + (H-3) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="' + fill + '">' + p.label + '</text>';
   });
@@ -738,19 +736,21 @@ function toggleSort(col) {
 
 var TABLE_PAGE = 10;
 var _tableRows = [];
+var _tableShown = 10;
 
 function renderTable(data) {
   _tableRows = data.slice().sort(function(a,b) {
     if (sortCol === 'nome') return sortDir * a.nome.localeCompare(b.nome, 'pt-BR');
     return sortDir * (b.saldo - a.saldo);
   });
-  renderTableRows(false);
+  _tableShown = TABLE_PAGE;
+  renderTableRows();
   document.getElementById('count-label').textContent =
     '— ' + data.length + ' resultado' + (data.length !== 1 ? 's' : '');
 }
 
-function renderTableRows(showAll) {
-  var display = showAll ? _tableRows : _tableRows.slice(0, TABLE_PAGE);
+function renderTableRows() {
+  var display = _tableRows.slice(0, _tableShown);
   var html = display.map(function(c) {
     var cls    = c.saldo > 0 ? 'saldo-pos' : (c.saldo < 0 ? 'saldo-neg' : 'saldo-zero');
     var prefix = c.saldo > 0 ? '+' : '';
@@ -759,14 +759,20 @@ function renderTableRows(showAll) {
       '<td style="text-align:right"><span class="' + cls + '">' + prefix + c.saldo.toFixed(2) + '</span></td>' +
       '</tr>';
   }).join('');
-  var resto = _tableRows.length - TABLE_PAGE;
-  if (!showAll && resto > 0) {
+  var resto = _tableRows.length - _tableShown;
+  if (resto > 0) {
+    var proximo = Math.min(TABLE_PAGE, resto);
     html += '<tr><td colspan="2" style="text-align:center;padding:10px">' +
-      '<button onclick="renderTableRows(true)" style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer">Ver mais (' + resto + ')</button>' +
+      '<button onclick="showMoreTable()" style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer">Ver mais (' + proximo + ')</button>' +
       '</td></tr>';
   }
   document.getElementById('tbody-colab').innerHTML = html ||
     '<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Nenhum resultado</td></tr>';
+}
+
+function showMoreTable() {
+  _tableShown += TABLE_PAGE;
+  renderTableRows();
 }
 
 // ─── ABAS ────────────────────────────────────────────────────────────────────
@@ -781,11 +787,15 @@ function switchTab(tab) {
 }
 
 // ─── PAGAMENTOS ───────────────────────────────────────────────────────────────
+function isPagamento(r) {
+  var s = r.status.toLowerCase();
+  var t = r.tipo.toLowerCase();
+  return s.indexOf('pago') !== -1 || s.indexOf('paga') !== -1 ||
+         t.indexOf('pago') !== -1 || t.indexOf('paga') !== -1;
+}
+
 function getPagamentos() {
-  return ALL_ROWS.filter(function(r) {
-    var s = r.status.toLowerCase();
-    return s.indexOf('pago') !== -1 || s.indexOf('paga') !== -1;
-  });
+  return ALL_ROWS.filter(isPagamento);
 }
 
 function renderBarsMontante(elId, data, keyFn) {
@@ -827,8 +837,8 @@ function renderTabelaPagamentos(rows) {
 }
 
 var _pagRendered = false;
-function renderPagamentos() {
-  if (_pagRendered) return;
+function renderPagamentos(force) {
+  if (_pagRendered && !force) return;
   _pagRendered = true;
   var rows = getPagamentos();
   renderBarsMontante('pag-bar-ano',     rows, function(r) { return r.dataStr ? r.dataStr.substring(6, 10) : ''; });
