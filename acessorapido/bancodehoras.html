@@ -360,7 +360,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 var SHEET_ID = '1oW3uXbig4B3gUQegxorxZghMnVrZcXk44AD08gx-cl0';
-var COL = { DATA:0, MT:1, COLABORADOR:2, SALDO:3, STATUS:4, DEPARTAMENTO:5, UNIDADE:6, TIPO:7 };
+var COL = { DATA:0, MT:1, COLABORADOR:2, SALDO:3, STATUS:4, DEPARTAMENTO:5, UNIDADE:6, TIPO:7, SALARIO:8, CUSTO:9 };
 
 // ─── ESTADO ──────────────────────────────────────────────────────────────────
 var ALL_ROWS  = [];
@@ -402,7 +402,8 @@ function parseCSV(csv) {
     var cols = parseCSVLine(line);
     if (cols.length < 4) continue;
     var saldo   = parseFloat((cols[COL.SALDO]||'0').replace(',','.')) || 0;
-    var mt      = parseFloat((cols[COL.MT]||'0').replace(',','.')) || 0;
+    var custoRaw = (cols[COL.CUSTO]||'').replace(/\s+/g,'').replace('R$','').replace(/\./g,'').replace(',','.');
+    var custo   = parseFloat(custoRaw) || 0;
     var dataStr = (cols[COL.DATA]||'').trim();
     ALL_ROWS.push({
       rowIndex: i,
@@ -410,7 +411,7 @@ function parseCSV(csv) {
       semKey:   toSemKey(dataStr),
       nome:     (cols[COL.COLABORADOR]||'').trim(),
       saldo:    saldo,
-      mt:       mt,
+      custo:    custo,
       status:   (cols[COL.STATUS]||'').trim(),
       depto:    (cols[COL.DEPARTAMENTO]||'').trim(),
       unidade:  (cols[COL.UNIDADE]||'').trim(),
@@ -577,16 +578,18 @@ function hasHoliday(semKey) {
 function getWeekSeries(semKey) {
   var snap = (SNAPSHOTS[semKey] || []).filter(function(r) {
     var t = r.tipo.toLowerCase();
-    return t.indexOf('pago') === -1 && t.indexOf('perdido') === -1;
+    return t !== 'pagas' && t !== 'perdidas' && t.indexOf('pago') === -1 && t.indexOf('perdido') === -1;
   });
   var weekRows = ALL_ROWS.filter(function(r) { return r.semKey === semKey; });
   var pos = snap.reduce(function(a,r) { return r.saldo > 0 ? a + r.saldo : a; }, 0);
   var neg = snap.reduce(function(a,r) { return r.saldo < 0 ? a + r.saldo : a; }, 0);
   var pagas = weekRows.reduce(function(a,r) {
-    return r.tipo.toLowerCase().indexOf('pago') !== -1 ? a + Math.abs(r.saldo) : a;
+    var t = r.tipo.toLowerCase();
+    return (t === 'pagas' || t.indexOf('paga') !== -1) ? a + Math.abs(r.saldo) : a;
   }, 0);
   var perdidas = weekRows.reduce(function(a,r) {
-    return r.tipo.toLowerCase().indexOf('perdido') !== -1 ? a + Math.abs(r.saldo) : a;
+    var t = r.tipo.toLowerCase();
+    return (t === 'perdidas' || t.indexOf('perdido') !== -1) ? a + Math.abs(r.saldo) : a;
   }, 0);
   return { semKey: semKey, label: semKeyToLabel(semKey), pos: pos, neg: neg, pagas: pagas, perdidas: perdidas };
 }
@@ -788,10 +791,8 @@ function switchTab(tab) {
 
 // ─── PAGAMENTOS ───────────────────────────────────────────────────────────────
 function isPagamento(r) {
-  var s = r.status.toLowerCase();
   var t = r.tipo.toLowerCase();
-  return s.indexOf('pago') !== -1 || s.indexOf('paga') !== -1 ||
-         t.indexOf('pago') !== -1 || t.indexOf('paga') !== -1;
+  return t === 'pagas' || t.indexOf('paga') !== -1;
 }
 
 function getPagamentos() {
@@ -803,7 +804,7 @@ function renderBarsMontante(elId, data, keyFn) {
   data.forEach(function(r) {
     var key = keyFn(r);
     if (!key) return;
-    map[key] = (map[key] || 0) + r.mt;
+    map[key] = (map[key] || 0) + r.custo;
   });
   var items = Object.keys(map).map(function(k) { return { nome: k, mt: map[k] }; });
   items.sort(function(a,b) { return b.mt - a.mt; });
@@ -823,7 +824,7 @@ function renderBarsMontante(elId, data, keyFn) {
 function renderTabelaPagamentos(rows) {
   var sorted = rows.slice().sort(function(a,b) { return b.mt - a.mt; });
   var html = sorted.map(function(r) {
-    var fmtMt = 'R$ ' + r.mt.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var fmtMt = 'R$ ' + r.custo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     var fmtH  = (r.saldo > 0 ? '+' : '') + r.saldo.toFixed(2) + 'h';
     return '<tr>' +
       '<td>' + escH(r.nome || '—') + '</td>' +
