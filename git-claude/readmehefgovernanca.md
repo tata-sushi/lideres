@@ -30,7 +30,8 @@ Isso garante distribuição `space-between` natural sem depender de `margin-left
 ### Tamanho Responsivo
 - **Mobile** (< 768px): `height="34px"` (sem `width` explícito — proporcional via aspect-ratio do PNG)
 - **Desktop** (≥ 768px): `height="40px"` (via media query `.header-logo { height: 40px; }`)
-- **Formato**: PNG referenciado via `src="logos/logocompliance.png"` (caminho relativo)
+- **Formato**: PNG referenciado via **caminho absoluto** `src="/compliance/areas/institucional/logos/logocompliance.png"`
+  - ⚠️ **Sempre absoluto, nunca relativo** — funciona de qualquer profundidade da árvore (`/compliance/`, `/compliance/areas/`, `/compliance/kpis/rh/`, etc.) sem precisar contar `../`
   - **Cor**: Monocromática (preto/carbon sobre fundo claro/branco)
   - **Alt**: `"TATÁ"`
 - **Classe obrigatória**: `.header-logo` (para aplicar media query de responsividade)
@@ -38,11 +39,11 @@ Isso garante distribuição `space-between` natural sem depender de `margin-left
 
 ### Estrutura HTML
 ```html
-<img class="header-logo" src="logos/logocompliance.png" alt="TATÁ" height="34"/>
+<img class="header-logo" src="/compliance/areas/institucional/logos/logocompliance.png" alt="TATÁ" height="34"/>
 ```
 
 ### Regra Crítica
-⚠️ **Logo truncado quebra renderização.** Sempre copiar o `<img>` inteiro de uma página de governança funcionando (ex.: `compliance/areas/institucional/papelaria.html:382`) — nunca recortar ou reinventar a tag.
+⚠️ **NÃO usar PNG base64 inline.** O asset legado em base64 tem resolução nativa 32×28px e fica borrado/pixelizado quando exibido em 34/40px. Sempre apontar para o arquivo externo `/compliance/areas/institucional/logos/logocompliance.png` (alta resolução, mesmo asset usado em todas as páginas canônicas).
 
 ---
 
@@ -454,6 +455,60 @@ if (window.__lideresUser) {
 
 ---
 
-**Data**: 2026-04-21 (atualizado 2026-04-21 com logo responsivo)
+## AUDITORIA / CONFORMIDADE
+
+### Comando de auditoria (one-liner)
+
+Para listar **todas** as páginas que ainda usam o logo base64 legado (não conformes):
+
+```bash
+grep -rln 'class="header-logo".*data:image' compliance/
+```
+
+> ⚠️ **Não use** `grep -rln '<div class="header">' compliance/` — perde páginas que utilizam a tag semântica `<header class="header">` (idconceitual, idvisual, ferramentas/index, etc.). A query acima cobre **ambos** os containers.
+
+### Checklist de conformidade (por página)
+
+Uma página de governança está **conforme** se cumpre **todos** os critérios:
+
+- [ ] `<img>` do logo usa `class="header-logo"`
+- [ ] `src="/compliance/areas/institucional/logos/logocompliance.png"` (absoluto, não base64)
+- [ ] `height="34"` no `<img>` (mobile)
+- [ ] Media query `@media (min-width: 768px) { .header-logo { height: 40px; } }`
+- [ ] `.header-user` com `height: 28px`, `display: inline-flex`, `padding: 0 10px`, `border-radius: 4px`
+- [ ] `.header-plus` com `28×28`, `border-radius: 4px`, SVG 14×14 stroke citric 2.5
+- [ ] `id="header-user"` + fallback `"—"` + script de população (`window.__lideresSession` ou `localStorage`)
+
+### Status atual (2026-04-21, pós-PR #208)
+
+| # | Página | Container | Logo | Conformidade |
+|---|---|---|---|---|
+| 1 | `compliance/index.html` | `<div>` | ⚠️ base64 | Pendente migração |
+| 2 | `compliance/menucompliance.html` | `<div>` | ✅ asset externo | ✅ Canônico |
+| 3 | `compliance/areas/index.html` | `<div>` | ✅ asset externo | ✅ Canônico |
+| 4 | `compliance/areas/institucional/index.html` | `<div>` | ✅ asset externo | ✅ Canônico |
+| 5 | `compliance/areas/institucional/papelaria.html` | `<div>` | ✅ asset externo | ✅ **Referência canônica** |
+| 6 | `compliance/areas/institucional/idconceitual.html` | `<header>` | ✅ asset externo | ✅ Canônico |
+| 7 | `compliance/areas/institucional/idvisual.html` | `<header>` | ✅ asset externo | ✅ Canônico |
+| 8 | `compliance/areas/rh/index.html` | `<div>` | ✅ asset externo | ✅ Canônico |
+| 9 | `compliance/areas/rh/sancoes.html` | `<div>` | ✅ asset externo | ✅ Canônico |
+| 10 | `compliance/ferramentas/index.html` | `<header>` | ✅ asset externo | ✅ Canônico |
+| 11 | `compliance/kpis/index.html` | `<div>` | ✅ asset externo | ✅ Canônico |
+| 12 | `compliance/kpis/rh/index.html` | `<div>` | ✅ asset externo | ✅ Canônico |
+| 13 | `compliance/kpis/rh/desligamentos.html` | `<div>` | ❌ híbrido | Caso à parte (CSS de dashboard) |
+
+**Resumo**: 11/13 conformes. Pendentes: `compliance/index.html` (migração simples) e `compliance/kpis/rh/desligamentos.html` (revisão arquitetural — usa `.header-logo 40×40 object-fit`, `.header-title`, `.header-sub` do padrão dashboard).
+
+### PRs históricos da migração
+
+- PR #157, #158, #161 — `papelaria.html` (referência canônica inicial)
+- PR #166 — README com logo responsivo 34→40px
+- PR #206 — `institucional/index.html` (primeira migração de outra página)
+- PR #207 — 6 páginas com `<div class="header">` (menucompliance, areas/index, areas/rh/index, areas/rh/sancoes, kpis/index, kpis/rh/index)
+- PR #208 — 3 páginas com `<header class="header">` (idconceitual, idvisual, ferramentas/index) — escaparam do grep restritivo
+
+---
+
+**Data**: 2026-04-21 (atualizado 2026-04-21 com seção de auditoria + caminho absoluto)
 **Páginas Referência**:
-- `compliance/areas/institucional/papelaria.html` ← referência canônica (logo responsivo 34→40px)
+- `compliance/areas/institucional/papelaria.html` ← referência canônica (logo responsivo 34→40px, asset externo)
