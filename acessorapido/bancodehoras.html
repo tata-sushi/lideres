@@ -81,7 +81,18 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
 /* SVG charts */
 .week-chart { width: 100%; overflow: hidden; }
-.week-svg { width: 100%; height: 140px; display: block; }
+.week-svg { width: 100%; height: 160px; display: block; }
+
+/* ── Tabs ── */
+.tabs-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 16px; display: flex; }
+.tab-btn { background: none; border: none; border-bottom: 2px solid transparent; padding: 10px 16px; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.5px; color: var(--muted); cursor: pointer; }
+.tab-btn.active { color: var(--carbon); border-bottom-color: var(--carbon); }
+.tab-btn:hover:not(.active) { color: var(--carbon); }
+
+/* ── Pagamentos view ── */
+.pag-content { padding: 16px 16px 90px; }
+.pag-status { display: inline-block; font-family: 'DM Mono', monospace; font-size: 10px; background: var(--green-bg); color: var(--green); padding: 2px 7px; border-radius: 4px; }
+.pag-mt { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 600; color: var(--green); }
 
 /* Tabela */
 .table-wrap { overflow-x: auto; }
@@ -109,8 +120,9 @@ tbody tr:hover { background: #FAFAFA; }
 .footer-date { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.4); }
 
 @media (min-width: 768px) {
-  .content, .filters-wrap { max-width: 960px; margin-left: auto; margin-right: auto; }
+  .content, .filters-wrap, .pag-content { max-width: 960px; margin-left: auto; margin-right: auto; }
   .content { padding: 20px 20px 90px; }
+  .pag-content { padding: 20px 20px 90px; }
   .chart-block { padding: 20px; }
   .filters-wrap { padding: 12px 20px; }
   .filters-row { flex-wrap: nowrap; }
@@ -203,6 +215,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <span class="header-user" id="header-user" style="margin-left:auto;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:#F4F4F4;border:1px solid #E2E2E2;border-radius:4px;padding:0 10px;height:28px;display:inline-flex;align-items:center;color:#111;">—</span>
 </header>
 
+<!-- ABAS -->
+<div class="tabs-bar">
+  <button class="tab-btn active" id="tab-btn-saldos" onclick="switchTab('saldos')">Saldos</button>
+  <button class="tab-btn" id="tab-btn-pagamentos" onclick="switchTab('pagamentos')">Pagamentos</button>
+</div>
+
+<!-- VIEW: SALDOS -->
+<div id="view-saldos">
+
 <!-- FILTROS -->
 <div class="filters-wrap">
   <div class="filters-row">
@@ -258,11 +279,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-block">
       <div class="chart-title">Evolução Semanal — Saldo Acumulado</div>
       <div class="week-chart">
-        <svg id="week-svg" class="week-svg" viewBox="0 0 700 140" preserveAspectRatio="none"></svg>
+        <svg id="week-svg" class="week-svg" viewBox="0 0 700 160" preserveAspectRatio="none"></svg>
       </div>
       <div class="legend">
-        <div class="legend-item"><div class="legend-dot" style="background:var(--carbon)"></div> Saldo Positivo</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#999"></div> Saldo Negativo</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#35383F"></div> Positivo</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1A5C2A"></div> Pagas</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#7A4A00"></div> Perdidas</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#999"></div> Negativo</div>
       </div>
     </div>
 
@@ -291,6 +314,42 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   </div>
 </div>
+
+</div><!-- /view-saldos -->
+
+<!-- VIEW: PAGAMENTOS -->
+<div id="view-pagamentos" style="display:none">
+  <div class="pag-content">
+    <div class="chart-block">
+      <div class="chart-title">Pagamentos por Ano</div>
+      <div class="bar-list" id="pag-bar-ano"></div>
+    </div>
+    <div class="chart-block">
+      <div class="chart-title">Pagamentos por Unidade</div>
+      <div class="bar-list" id="pag-bar-unidade"></div>
+    </div>
+    <div class="chart-block">
+      <div class="chart-title">Pagamentos por Departamento</div>
+      <div class="bar-list" id="pag-bar-depto"></div>
+    </div>
+    <div class="chart-block">
+      <div class="chart-title">Lista de Pagamentos</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Colaborador</th>
+              <th style="text-align:right">Horas</th>
+              <th style="text-align:right">Montante</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-pagamentos"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div><!-- /view-pagamentos -->
 
 <!-- FOOTER -->
 <footer class="footer">
@@ -343,6 +402,7 @@ function parseCSV(csv) {
     var cols = parseCSVLine(line);
     if (cols.length < 4) continue;
     var saldo   = parseFloat((cols[COL.SALDO]||'0').replace(',','.')) || 0;
+    var mt      = parseFloat((cols[COL.MT]||'0').replace(',','.')) || 0;
     var dataStr = (cols[COL.DATA]||'').trim();
     ALL_ROWS.push({
       rowIndex: i,
@@ -350,6 +410,7 @@ function parseCSV(csv) {
       semKey:   toSemKey(dataStr),
       nome:     (cols[COL.COLABORADOR]||'').trim(),
       saldo:    saldo,
+      mt:       mt,
       status:   (cols[COL.STATUS]||'').trim(),
       depto:    (cols[COL.DEPARTAMENTO]||'').trim(),
       unidade:  (cols[COL.UNIDADE]||'').trim(),
@@ -479,52 +540,124 @@ function renderBarsEl(elId, data, groupFn) {
     '<div class="empty-state"><p>Sem dados</p></div>';
 }
 
+// ─── FERIADOS ────────────────────────────────────────────────────────────────
+var FERIADOS = {
+  // 2024 — nacionais
+  '2024-01-01':1,'2024-01-25':1,'2024-02-12':1,'2024-02-13':1,'2024-03-29':1,
+  '2024-04-21':1,'2024-05-01':1,'2024-05-30':1,'2024-07-09':1,'2024-09-07':1,
+  '2024-10-12':1,'2024-11-02':1,'2024-11-15':1,'2024-11-20':1,'2024-12-25':1,
+  // 2025 — nacionais
+  '2025-01-01':1,'2025-01-25':1,'2025-03-03':1,'2025-03-04':1,'2025-04-18':1,
+  '2025-04-21':1,'2025-05-01':1,'2025-06-19':1,'2025-07-09':1,'2025-09-07':1,
+  '2025-10-12':1,'2025-11-02':1,'2025-11-15':1,'2025-11-20':1,'2025-12-25':1,
+  // 2026 — nacionais
+  '2026-01-01':1,'2026-01-25':1,'2026-02-16':1,'2026-02-17':1,'2026-04-03':1,
+  '2026-04-21':1,'2026-05-01':1,'2026-06-04':1,'2026-07-09':1,'2026-09-07':1,
+  '2026-10-12':1,'2026-11-02':1,'2026-11-15':1,'2026-11-20':1,'2026-12-25':1
+};
+
+function hasHoliday(semKey) {
+  if (!semKey) return false;
+  var p = semKey.split('-');
+  if (p.length !== 3) return false;
+  var d = new Date(+p[0], +p[1]-1, +p[2]);
+  var day = d.getDay();
+  var diffToMon = (day === 0) ? -6 : 1 - day;
+  var mon = new Date(d.getTime());
+  mon.setDate(d.getDate() + diffToMon);
+  for (var i = 0; i < 7; i++) {
+    var c = new Date(mon.getTime());
+    c.setDate(mon.getDate() + i);
+    var k = c.getFullYear() + '-' + String(c.getMonth()+1).padStart(2,'0') + '-' + String(c.getDate()).padStart(2,'0');
+    if (FERIADOS[k]) return true;
+  }
+  return false;
+}
+
+function getWeekSeries(semKey) {
+  var snap = (SNAPSHOTS[semKey] || []).filter(function(r) {
+    var t = r.tipo.toLowerCase();
+    return t.indexOf('pago') === -1 && t.indexOf('perdido') === -1;
+  });
+  var weekRows = ALL_ROWS.filter(function(r) { return r.semKey === semKey; });
+  var pos = snap.reduce(function(a,r) { return r.saldo > 0 ? a + r.saldo : a; }, 0);
+  var neg = snap.reduce(function(a,r) { return r.saldo < 0 ? a + r.saldo : a; }, 0);
+  var pagas = weekRows.reduce(function(a,r) {
+    return r.tipo.toLowerCase().indexOf('pago') !== -1 ? a + Math.abs(r.saldo) : a;
+  }, 0);
+  var perdidas = weekRows.reduce(function(a,r) {
+    return r.tipo.toLowerCase().indexOf('perdido') !== -1 ? a + Math.abs(r.saldo) : a;
+  }, 0);
+  return { semKey: semKey, label: semKeyToLabel(semKey), pos: pos, neg: neg, pagas: pagas, perdidas: perdidas };
+}
+
 // ─── EVOLUÇÃO SEMANAL ────────────────────────────────────────────────────────
 function renderWeek() {
-  var pontos = SEMANAS.map(function(s) {
-    var rows = SNAPSHOTS[s] || [];
-    var pos  = rows.reduce(function(a,r) { return r.saldo > 0 ? a + r.saldo : a; }, 0);
-    var neg  = rows.reduce(function(a,r) { return r.saldo < 0 ? a + r.saldo : a; }, 0);
-    return { label: semKeyToLabel(s), pos: pos, neg: neg };
-  });
+  var pontos = SEMANAS.map(function(s) { return getWeekSeries(s); });
 
   var svg = document.getElementById('week-svg');
-  var W = 700, H = 140, pad = 40;
+  var W = 700, H = 160, pad = 28;
   var n = pontos.length;
   if (n < 2) { svg.innerHTML = ''; return; }
 
   var allV = [];
-  pontos.forEach(function(p) { allV.push(p.pos); allV.push(p.neg); });
+  pontos.forEach(function(p) {
+    allV.push(p.pos);
+    allV.push(p.neg);
+    if (p.pagas > 0) allV.push(p.pagas);
+    if (p.perdidas > 0) allV.push(-p.perdidas);
+  });
   var minV = Math.min.apply(null, allV);
   var maxV = Math.max.apply(null, allV);
+  if (minV > 0) minV = 0;
+  if (maxV < 0) maxV = 0;
   var range = maxV - minV || 1;
 
+  var chartBot = H - 14; // reserva 14px para labels do eixo X
   function sx(i) { return pad + i * ((W - pad*2) / (n-1)); }
-  function sy(v) { return pad + (1 - (v - minV) / range) * (H - pad*2); }
+  function sy(v) { return pad + (1 - (v - minV) / range) * (chartBot - pad); }
   var zy = sy(0);
 
   var c = '<line x1="' + pad + '" y1="' + zy + '" x2="' + (W-pad) + '" y2="' + zy + '" stroke="#E2E2E2" stroke-width="1"/>';
 
-  var pathPos = 'M ' + sx(0) + ' ' + zy;
-  pontos.forEach(function(p,i) { pathPos += ' L ' + sx(i) + ' ' + sy(p.pos); });
-  pathPos += ' L ' + sx(n-1) + ' ' + zy + ' Z';
-  c += '<path d="' + pathPos + '" fill="#35383F" opacity="0.15"/>';
-  c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i) + ' ' + sy(p.pos); }).join(' ') + '" fill="none" stroke="#35383F" stroke-width="2"/>';
+  // ── Positivas (carbon, sólido) ──
+  var dPos = pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i) + ' ' + sy(p.pos); }).join(' ');
+  c += '<path d="' + dPos + ' L ' + sx(n-1) + ' ' + zy + ' L ' + sx(0) + ' ' + zy + ' Z" fill="#35383F" opacity="0.12"/>';
+  c += '<path d="' + dPos + '" fill="none" stroke="#35383F" stroke-width="2"/>';
   pontos.forEach(function(p,i) {
-    c += '<text x="' + sx(i) + '" y="' + (sy(p.pos)-6) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F">' + Math.round(p.pos) + '</text>';
+    if (p.pos !== 0) c += '<text x="' + sx(i) + '" y="' + (sy(p.pos)-5) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#35383F">' + Math.round(p.pos) + '</text>';
   });
 
-  var pathNeg = 'M ' + sx(0) + ' ' + zy;
-  pontos.forEach(function(p,i) { pathNeg += ' L ' + sx(i) + ' ' + sy(p.neg); });
-  pathNeg += ' L ' + sx(n-1) + ' ' + zy + ' Z';
-  c += '<path d="' + pathNeg + '" fill="#CCC" opacity="0.3"/>';
-  c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i) + ' ' + sy(p.neg); }).join(' ') + '" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="4,2"/>';
+  // ── Pagas (green, sólido) ──
+  var anyPagas = pontos.some(function(p) { return p.pagas > 0; });
+  if (anyPagas) {
+    c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i) + ' ' + sy(p.pagas); }).join(' ') + '" fill="none" stroke="#1A5C2A" stroke-width="2"/>';
+    pontos.forEach(function(p,i) {
+      if (p.pagas > 0) c += '<circle cx="' + sx(i) + '" cy="' + sy(p.pagas) + '" r="3" fill="#1A5C2A"/>';
+    });
+  }
+
+  // ── Perdidas (amber, tracejado — mostradas abaixo do zero como perda) ──
+  var anyPerdidas = pontos.some(function(p) { return p.perdidas > 0; });
+  if (anyPerdidas) {
+    c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i) + ' ' + sy(-p.perdidas); }).join(' ') + '" fill="none" stroke="#7A4A00" stroke-width="1.5" stroke-dasharray="4,2"/>';
+    pontos.forEach(function(p,i) {
+      if (p.perdidas > 0) c += '<circle cx="' + sx(i) + '" cy="' + sy(-p.perdidas) + '" r="3" fill="#7A4A00"/>';
+    });
+  }
+
+  // ── Negativas (gray, tracejado) ──
+  var dNeg = pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i) + ' ' + sy(p.neg); }).join(' ');
+  c += '<path d="' + dNeg + ' L ' + sx(n-1) + ' ' + zy + ' L ' + sx(0) + ' ' + zy + ' Z" fill="#CCC" opacity="0.2"/>';
+  c += '<path d="' + dNeg + '" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="4,2"/>';
   pontos.forEach(function(p,i) {
-    c += '<text x="' + sx(i) + '" y="' + (sy(p.neg)+14) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#999">' + Math.round(p.neg) + '</text>';
+    if (p.neg !== 0) c += '<text x="' + sx(i) + '" y="' + (sy(p.neg)+12) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#999">' + Math.round(p.neg) + '</text>';
   });
 
+  // ── Labels eixo X (amber se semana tem feriado) ──
   pontos.forEach(function(p,i) {
-    c += '<text x="' + sx(i) + '" y="' + (H-4) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#999">' + p.label + '</text>';
+    var fill = hasHoliday(p.semKey) ? '#7A4A00' : '#999';
+    c += '<text x="' + sx(i) + '" y="' + (H-3) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="' + fill + '">' + p.label + '</text>';
   });
 
   svg.innerHTML = c;
@@ -532,7 +665,8 @@ function renderWeek() {
 
 // ─── % NEGATIVOS ─────────────────────────────────────────────────────────────
 function renderNegPct() {
-  var pontos = SEMANAS.map(function(s) {
+  var semanasCom = SEMANAS.filter(function(s) { return (SNAPSHOTS[s] || []).length > 0; });
+  var pontos = semanasCom.map(function(s) {
     var rows  = SNAPSHOTS[s] || [];
     var total = rows.length;
     var negs  = rows.filter(function(r) { return r.saldo < 0; }).length;
@@ -542,7 +676,7 @@ function renderNegPct() {
   var svg = document.getElementById('neg-svg');
   var W = 700, H = 120, pad = 30;
   var n = pontos.length;
-  if (n < 2) { svg.innerHTML = ''; return; }
+  if (n < 2) { svg.innerHTML = ''; document.getElementById('neg-axis').innerHTML = ''; return; }
 
   var vals = pontos.map(function(p) { return p.pct; });
   var minV = Math.max(0, Math.min.apply(null, vals) - 3);
@@ -601,6 +735,76 @@ function renderTable(data) {
     '— ' + data.length + ' resultado' + (data.length !== 1 ? 's' : '');
 }
 
+// ─── ABAS ────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  if (tab === 'pagamentos') {
+    var sess = window.__lideresSession;
+    if (!sess || (sess.perfil || '').toLowerCase() !== 'adm') return;
+    renderPagamentos();
+  }
+  document.getElementById('view-saldos').style.display     = tab === 'saldos'     ? '' : 'none';
+  document.getElementById('view-pagamentos').style.display = tab === 'pagamentos' ? '' : 'none';
+  document.getElementById('tab-btn-saldos').classList.toggle('active',     tab === 'saldos');
+  document.getElementById('tab-btn-pagamentos').classList.toggle('active', tab === 'pagamentos');
+}
+
+// ─── PAGAMENTOS ───────────────────────────────────────────────────────────────
+function getPagamentos() {
+  return ALL_ROWS.filter(function(r) {
+    var s = r.status.toLowerCase();
+    return s.indexOf('pago') !== -1 || s.indexOf('paga') !== -1;
+  });
+}
+
+function renderBarsMontante(elId, data, keyFn) {
+  var map = {};
+  data.forEach(function(r) {
+    var key = keyFn(r);
+    if (!key) return;
+    map[key] = (map[key] || 0) + r.mt;
+  });
+  var items = Object.keys(map).map(function(k) { return { nome: k, mt: map[k] }; });
+  items.sort(function(a,b) { return b.mt - a.mt; });
+  var maxMT = items.length > 0 ? items[0].mt : 0;
+  var html = items.map(function(a) {
+    var pct = maxMT > 0 ? (a.mt / maxMT * 100).toFixed(1) : 0;
+    var fmt = 'R$ ' + a.mt.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return '<div class="bar-row" style="grid-template-columns:100px 1fr 100px">' +
+      '<div class="bar-name">' + escH(a.nome) + '</div>' +
+      '<div class="bar-track"><div class="bar-fill-pos" style="width:' + pct + '%"></div></div>' +
+      '<div class="bar-val pos">' + escH(fmt) + '</div>' +
+      '</div>';
+  }).join('');
+  document.getElementById(elId).innerHTML = html || '<div class="empty-state"><p>Sem dados</p></div>';
+}
+
+function renderTabelaPagamentos(rows) {
+  var sorted = rows.slice().sort(function(a,b) { return b.mt - a.mt; });
+  var html = sorted.map(function(r) {
+    var fmtMt = 'R$ ' + r.mt.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var fmtH  = (r.saldo > 0 ? '+' : '') + r.saldo.toFixed(2) + 'h';
+    return '<tr>' +
+      '<td>' + escH(r.nome || '—') + '</td>' +
+      '<td style="text-align:right;font-family:\'DM Mono\',monospace;font-size:12px">' + escH(fmtH) + '</td>' +
+      '<td style="text-align:right" class="pag-mt">' + escH(fmtMt) + '</td>' +
+      '<td><span class="pag-status">' + escH(r.status) + '</span></td>' +
+      '</tr>';
+  }).join('');
+  document.getElementById('tbody-pagamentos').innerHTML = html ||
+    '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Nenhum pagamento encontrado</td></tr>';
+}
+
+var _pagRendered = false;
+function renderPagamentos() {
+  if (_pagRendered) return;
+  _pagRendered = true;
+  var rows = getPagamentos();
+  renderBarsMontante('pag-bar-ano',     rows, function(r) { return r.dataStr ? r.dataStr.substring(6, 10) : ''; });
+  renderBarsMontante('pag-bar-unidade', rows, function(r) { return r.unidade; });
+  renderBarsMontante('pag-bar-depto',   rows, function(r) { return r.depto; });
+  renderTabelaPagamentos(rows);
+}
+
 // ─── RENDER ALL ──────────────────────────────────────────────────────────────
 function renderAll() {
   var data = getFiltered();
@@ -644,6 +848,11 @@ loadData();
 (function(){
   var s = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'))}catch(e){return null}})();
   if (s && s.displayName) { var hu = document.getElementById('header-user'); if (hu) hu.textContent = s.displayName; }
+  var isAdm = s && (s.perfil || '').toLowerCase() === 'adm';
+  if (!isAdm) {
+    var btn = document.getElementById('tab-btn-pagamentos');
+    if (btn) btn.style.display = 'none';
+  }
 })();
 </script>
 </body>
