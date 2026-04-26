@@ -77,9 +77,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .bar-fill-neg { height: 100%; background: #CCC; border-radius: 4px; transition: width 0.4s ease; }
 .bar-val { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--carbon); }
 
-/* SVG charts */
-.week-chart { width: 100%; overflow: hidden; }
-.week-svg { width: 100%; height: 180px; display: block; }
 
 /* ── Tabs ── */
 .tabs-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 16px; display: flex; }
@@ -110,7 +107,7 @@ tbody tr:hover { background: #FAFAFA; }
 .saldo-zero { color: var(--carbon); font-family: 'DM Mono', monospace; font-size: 12px; }
 
 /* Legend */
-.legend { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+.legend { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
 .legend-item { display: flex; align-items: center; gap: 6px; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--mid); }
 .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
 
@@ -296,17 +293,23 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="bar-list" id="bar-unidade"></div>
     </div>
 
-    <!-- Evolução Semanal -->
+    <!-- Saldo Acumulado: Positivos vs Negativos -->
     <div class="chart-block">
-      <div class="chart-title">Evolução Semanal — Saldo Acumulado</div>
-      <div class="week-chart">
-        <svg id="week-svg" class="week-svg" viewBox="0 0 700 180" preserveAspectRatio="none"></svg>
-      </div>
+      <div class="chart-title">Saldo Acumulado — Positivos vs Negativos</div>
+      <svg id="week-pn-svg" viewBox="0 0 700 145" style="width:100%;height:145px;display:block;"></svg>
       <div class="legend">
         <div class="legend-item"><div class="legend-dot" style="background:#35383F"></div> Positivo</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#1A5C2A"></div> Pagas</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#7A4A00"></div> Perdidas</div>
         <div class="legend-item"><div class="legend-dot" style="background:#999"></div> Negativo</div>
+      </div>
+    </div>
+
+    <!-- Horas Pagas vs Perdidas -->
+    <div class="chart-block">
+      <div class="chart-title">Horas Pagas vs Perdidas</div>
+      <svg id="week-pp-svg" viewBox="0 0 700 145" style="width:100%;height:145px;display:block;"></svg>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#35383F"></div> Pagas</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#999"></div> Perdidas</div>
       </div>
     </div>
 
@@ -696,85 +699,82 @@ function niceStep(range, target) {
   return steps[steps.length-1] * mag;
 }
 
-function renderWeek() {
-  var rf = buildSvgRowFilter();
-  var pontos = SEMANAS.map(function(s) { return getWeekSeries(s, rf); });
-
-  var svg = document.getElementById('week-svg');
-  var W = 700, H = 180, padL = 46, padR = 18, padT = 18, padB = 32;
+// Helper: desenha um chart de 2 linhas (sólida + tracejada) no estilo do "% Negativos".
+// pontos = array com {label, semKey?}; val1Fn/val2Fn = extratores de valor numérico.
+function drawTwoLineChart(svgId, pontos, val1Fn, val2Fn) {
+  var svg = document.getElementById(svgId);
+  if (!svg) return;
+  var W = 700, H = 145, H_PLOT = 105, pad = 30;
   var n = pontos.length;
   if (n < 2) { svg.innerHTML = ''; return; }
 
   var allV = [];
-  pontos.forEach(function(p) {
-    allV.push(p.pos); allV.push(p.neg);
-    if (p.pagas > 0) allV.push(p.pagas);
-    if (p.perdidas > 0) allV.push(-p.perdidas);
-  });
+  pontos.forEach(function(p) { allV.push(val1Fn(p)); allV.push(val2Fn(p)); });
   var minV = Math.min.apply(null, allV);
   var maxV = Math.max.apply(null, allV);
   if (minV > 0) minV = 0;
   if (maxV < 0) maxV = 0;
-  var step = niceStep(maxV - minV || 1, 4);
-  var yMin = Math.floor(minV / step) * step;
-  var yMax = Math.ceil(maxV / step) * step || step;
-  var range = yMax - yMin;
+  if (minV === maxV) maxV = minV + 1;
+  // padding vertical de 18% pra valores não colarem nas bordas do plot
+  var pad18 = (maxV - minV) * 0.18;
+  minV -= pad18; maxV += pad18;
+  var range = maxV - minV;
 
-  var cW = W - padL - padR;
-  var cH = H - padT - padB;
-  function sx(i) { return padL + i * (cW / (n-1)); }
-  function sy(v) { return padT + (1 - (v - yMin) / range) * cH; }
+  function sx(i) { return pad + i * ((W - pad*2) / (n-1)); }
+  function sy(v) { return pad + (1 - (v - minV) / range) * (H_PLOT - pad); }
 
   var c = '';
 
-  // ── Grid Y ──
-  for (var yv = yMin; yv <= yMax; yv += step) {
-    var yy = sy(yv);
-    c += '<line x1="' + padL + '" y1="' + yy.toFixed(1) + '" x2="' + (W-padR) + '" y2="' + yy.toFixed(1) + '" stroke="#EEEEEE" stroke-width="1"/>';
-    var lbl = Math.abs(yv) >= 1000 ? (yv/1000).toFixed(0) + 'k' : String(yv);
-    c += '<text x="' + (padL-5) + '" y="' + (yy+3.5).toFixed(1) + '" text-anchor="end" font-family="DM Mono,monospace" font-size="9" fill="#BBBBBB">' + lbl + '</text>';
+  // Linha 0 (zero) sutil para referência
+  if (minV < 0 && maxV > 0) {
+    c += '<line x1="' + pad + '" y1="' + sy(0).toFixed(1) + '" x2="' + (W-pad) + '" y2="' + sy(0).toFixed(1) + '" stroke="#EEEEEE" stroke-width="1"/>';
   }
 
-  // ── Positivas (carbon, sólido) ──
-  var dPos = pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i).toFixed(1) + ' ' + sy(p.pos).toFixed(1); }).join(' ');
-  c += '<path d="' + dPos + ' L ' + (W-padR) + ' ' + sy(yMin).toFixed(1) + ' L ' + padL + ' ' + sy(yMin).toFixed(1) + ' Z" fill="#35383F" opacity="0.1"/>';
-  c += '<path d="' + dPos + '" fill="none" stroke="#35383F" stroke-width="2"/>';
-  pontos.forEach(function(p,i) { c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(p.pos).toFixed(1) + '" r="3" fill="#35383F"/>'; });
-  // label primeiro e último ponto
-  c += '<text x="' + sx(0).toFixed(1) + '" y="' + (sy(pontos[0].pos)-7).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F">' + Math.round(pontos[0].pos) + '</text>';
-  c += '<text x="' + sx(n-1).toFixed(1) + '" y="' + (sy(pontos[n-1].pos)-7).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">' + Math.round(pontos[n-1].pos) + '</text>';
-
-  // ── Pagas (green, sólido) ──
-  var anyPagas = pontos.some(function(p) { return p.pagas > 0; });
-  if (anyPagas) {
-    c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i).toFixed(1) + ' ' + sy(p.pagas).toFixed(1); }).join(' ') + '" fill="none" stroke="#1A5C2A" stroke-width="2"/>';
-    pontos.forEach(function(p,i) { if (p.pagas > 0) c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(p.pagas).toFixed(1) + '" r="3" fill="#1A5C2A"/>'; });
-  }
-
-  // ── Perdidas (amber, tracejado) ──
-  var anyPerdidas = pontos.some(function(p) { return p.perdidas > 0; });
-  if (anyPerdidas) {
-    c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i).toFixed(1) + ' ' + sy(-p.perdidas).toFixed(1); }).join(' ') + '" fill="none" stroke="#7A4A00" stroke-width="1.5" stroke-dasharray="4,2"/>';
-    pontos.forEach(function(p,i) { if (p.perdidas > 0) c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(-p.perdidas).toFixed(1) + '" r="3" fill="#7A4A00"/>'; });
-  }
-
-  // ── Negativas (gray, tracejado) ──
-  var anyNeg = pontos.some(function(p) { return p.neg < 0; });
-  if (anyNeg) {
-    var dNeg = pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i).toFixed(1) + ' ' + sy(p.neg).toFixed(1); }).join(' ');
-    c += '<path d="' + dNeg + ' L ' + (W-padR) + ' ' + sy(yMin).toFixed(1) + ' L ' + padL + ' ' + sy(yMin).toFixed(1) + ' Z" fill="#CCC" opacity="0.15"/>';
-    c += '<path d="' + dNeg + '" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="4,2"/>';
-    pontos.forEach(function(p,i) { if (p.neg < 0) c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(p.neg).toFixed(1) + '" r="3" fill="#999"/>'; });
-  }
-
-  // ── Labels eixo X (rotação 90°, lê de baixo para cima: DD/MM) ──
+  // ── Linha 1 (carbon sólido) ──
+  c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i).toFixed(1) + ' ' + sy(val1Fn(p)).toFixed(1); }).join(' ') + '" fill="none" stroke="#35383F" stroke-width="2"/>';
   pontos.forEach(function(p,i) {
-    var fill = hasHoliday(p.semKey) ? '#35383F' : '#AAAAAA';
-    var lx = sx(i).toFixed(1), ly = (H - 16).toString();
-    c += '<text x="' + lx + '" y="' + ly + '" text-anchor="middle" transform="rotate(-90 ' + lx + ' ' + ly + ')" font-family="DM Mono,monospace" font-size="9" fill="' + fill + '">' + p.label + '</text>';
+    var v = val1Fn(p);
+    c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(v).toFixed(1) + '" r="3" fill="#35383F"/>';
+    if (v !== 0) {
+      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (sy(v) - 8).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">' + Math.round(v) + '</text>';
+    }
+  });
+
+  // ── Linha 2 (cinza tracejada) ──
+  c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i).toFixed(1) + ' ' + sy(val2Fn(p)).toFixed(1); }).join(' ') + '" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="4,2"/>';
+  pontos.forEach(function(p,i) {
+    var v = val2Fn(p);
+    c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(v).toFixed(1) + '" r="3" fill="#999"/>';
+    if (v !== 0) {
+      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (sy(v) + 14).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">' + Math.round(v) + '</text>';
+    }
+  });
+
+  // Labels eixo X (horizontais, centralizadas sob o tick)
+  pontos.forEach(function(p,i) {
+    var lx = sx(i).toFixed(1), ly = (H - 5).toString();
+    c += '<text x="' + lx + '" y="' + ly + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">' + escH(p.label) + '</text>';
   });
 
   svg.innerHTML = c;
+}
+
+function renderSaldoPosNeg() {
+  var rf = buildSvgRowFilter();
+  var pontos = SEMANAS.map(function(s) { return getWeekSeries(s, rf); });
+  drawTwoLineChart('week-pn-svg', pontos,
+    function(p) { return p.pos; },
+    function(p) { return p.neg; }
+  );
+}
+
+function renderHorasPagPerd() {
+  var rf = buildSvgRowFilter();
+  var pontos = SEMANAS.map(function(s) { return getWeekSeries(s, rf); });
+  drawTwoLineChart('week-pp-svg', pontos,
+    function(p) { return p.pagas; },
+    function(p) { return p.perdidas; }
+  );
 }
 
 // ─── % NEGATIVOS ─────────────────────────────────────────────────────────────
@@ -793,8 +793,7 @@ function renderNegPct() {
   });
 
   var svg = document.getElementById('neg-svg');
-  // H_PLOT é a altura útil do gráfico; H total inclui espaço pros labels rotacionados.
-  var W = 700, H_PLOT = 120, H = 145, pad = 30;
+  var W = 700, H_PLOT = 105, H = 145, pad = 30;
   var n = pontos.length;
   if (n < 2) { svg.innerHTML = ''; return; }
 
@@ -817,10 +816,10 @@ function renderNegPct() {
     c += '<circle cx="' + sx(i) + '" cy="' + sy(p.pct) + '" r="4" fill="#35383F"/>';
     c += '<text x="' + sx(i) + '" y="' + (sy(p.pct)-9) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">' + p.pct + '%</text>';
   });
-  // Labels eixo X (rotação 90°, mesmo padrão do renderWeek)
+  // Labels eixo X (horizontais, centralizadas sob o tick)
   pontos.forEach(function(p,i) {
-    var lx = sx(i).toFixed(1), ly = (H - 16).toString();
-    c += '<text x="' + lx + '" y="' + ly + '" text-anchor="middle" transform="rotate(-90 ' + lx + ' ' + ly + ')" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">' + escH(p.label) + '</text>';
+    var lx = sx(i).toFixed(1), ly = (H - 5).toString();
+    c += '<text x="' + lx + '" y="' + ly + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">' + escH(p.label) + '</text>';
   });
   svg.innerHTML = c;
 }
@@ -1017,7 +1016,8 @@ function renderAll() {
   var data = getFiltered();
   renderBarsEl('bar-depto',   data, function(r) { return r.depto; },   'depto');
   renderBarsEl('bar-unidade', data, function(r) { return r.unidade; }, 'unidade');
-  renderWeek();
+  renderSaldoPosNeg();
+  renderHorasPagPerd();
   renderNegPct();
   renderTable(data);
 }
