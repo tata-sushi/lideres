@@ -13,19 +13,32 @@ O drawer é o menu lateral direito que aparece ao clicar no botão `+` (header-p
 | `compliance/index.html` | — |
 | `compliance/menucompliance.html` | — |
 | `compliance/areas/index.html` | — |
-| `compliance/areas/rh/index.html` | — |
-| `compliance/areas/rh/sancoes.html` | Ferramentas |
 | `compliance/areas/institucional/index.html` | — |
+| `compliance/areas/institucional/cartao.html` | — |
 | `compliance/areas/institucional/idconceitual.html` | — |
-| `compliance/kpis/index.html` | — |
-| `compliance/kpis/rh/index.html` | — |
+| `compliance/areas/institucional/idvisual.html` | — |
+| `compliance/areas/institucional/papelaria.html` | Sam |
+| `compliance/areas/rh/index.html` | — |
 | `compliance/areas/rh/ouvidoria.html` | — |
-| `compliance/ferramentas/index.html` | — |
+| `compliance/areas/rh/papeis.html` | — |
+| `compliance/areas/rh/sancoes.html` | Ferramentas |
+| `compliance/ferramentas/index.html` | Sugerir ferramenta |
+| `compliance/kpis/index.html` | — |
+| `compliance/kpis/caixa/index.html` | — |
+| `compliance/kpis/manutencao/index.html` | Nova Solicitação |
+| `compliance/kpis/rh/index.html` | — |
+| `compliance/kpis/rh/armarios.html` | Registrar Movimentação |
+| `compliance/kpis/rh/bancodehoras.html` | Nova Entrada |
+| `compliance/kpis/rh/beneficios.html` | — |
+| `compliance/kpis/rh/desligamentos.html` | Nova Rescisão |
+| `compliance/kpis/rh/estoqueadm.html` | Nova Solicitação |
+| `compliance/kpis/rh/experiencias.html` | — |
+| `compliance/kpis/rh/gorjeta.html` | — |
+| `compliance/kpis/rh/ouvidoria.html` | — |
+| `compliance/kpis/rh/recrutamento.html` | — |
+| `compliance/kpis/rh/solicitacoes.html` | Nova Solicitação |
 
-**Páginas SEM drawer:**
-- `compliance/areas/rh/estoqueadm.html`
-- `compliance/areas/institucional/idvisual.html` (tem CSS do drawer mas não tem o HTML)
-- `compliance/areas/institucional/institucional-identidade-da-marca-v2.0j-1.html`
+**Todas as 27 páginas de compliance possuem drawer.**
 
 ## 3. Estrutura do drawer
 
