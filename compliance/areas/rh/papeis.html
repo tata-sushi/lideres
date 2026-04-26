@@ -373,6 +373,42 @@ function apiPost(body, cb) {
     .catch(function(err) { cb(err); });
 }
 
+// ── ADMISSÕES ────────────────────────────────────────────────
+var admissoesCache = null; // cache por sessão de modal
+
+function loadAdmissoes(cb) {
+  if (admissoesCache) { cb(null, admissoesCache); return; }
+  fetch(SCRIPT_URL + '?action=get_admissoes&dept=' + encodeURIComponent(currentDept))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) admissoesCache = data.colaboradores;
+      cb(null, data.colaboradores || []);
+    })
+    .catch(function(err) { cb(err); });
+}
+
+function onSelectAdmissao(select) {
+  var idx = select.value;
+  if (idx === '') {
+    document.getElementById('f-cargo').value        = '';
+    document.getElementById('f-unidade').value      = '';
+    document.getElementById('f-depto').value        = '';
+    document.getElementById('f-collabid').value     = '';
+    document.getElementById('f-disp-cargo').value   = '';
+    document.getElementById('f-disp-unidade').value = '';
+    document.getElementById('f-disp-depto').value   = '';
+    return;
+  }
+  var pessoa = admissoesCache[parseInt(idx)];
+  document.getElementById('f-cargo').value        = pessoa.cargo;
+  document.getElementById('f-unidade').value      = pessoa.unidade;
+  document.getElementById('f-depto').value        = pessoa.depto;
+  document.getElementById('f-collabid').value     = pessoa.collabId;
+  document.getElementById('f-disp-cargo').value   = pessoa.cargo;
+  document.getElementById('f-disp-unidade').value = pessoa.unidade;
+  document.getElementById('f-disp-depto').value   = pessoa.depto;
+}
+
 // ── LOAD ────────────────────────────────────────────────────
 function loadData() {
   document.getElementById('cards-container').innerHTML = '<div class="loading-state">Carregando...</div>';
@@ -501,8 +537,27 @@ function openModal(type, collabId, grupoIdx, demandaIdx) {
 
   } else if (type === 'new-member') {
     title.textContent = 'Novo Colaborador'; badge.textContent = DEPT_LABEL[currentDept] || currentDept;
-    body.innerHTML = fieldText('f-nome', 'Nome completo', '') + fieldText('f-cargo', 'Cargo', '');
+    admissoesCache = null;
+    body.innerHTML = '<div class="field"><label>Colaborador</label>'
+      + '<select id="f-select-admissao" onchange="onSelectAdmissao(this)">'
+      + '<option value="">Carregando...</option></select></div>'
+      + '<div class="field"><label>Cargo</label><input type="text" id="f-disp-cargo" disabled></div>'
+      + '<div class="field"><label>Unidade</label><input type="text" id="f-disp-unidade" disabled></div>'
+      + '<div class="field"><label>Departamento</label><input type="text" id="f-disp-depto" disabled></div>'
+      + '<input type="hidden" id="f-cargo"><input type="hidden" id="f-unidade"><input type="hidden" id="f-depto"><input type="hidden" id="f-collabid">';
     footer.innerHTML = btnCancel() + btnSave('saveMember()', 'Adicionar');
+    loadAdmissoes(function(err, lista) {
+      var sel = document.getElementById('f-select-admissao');
+      if (!sel) return;
+      if (err || !lista || !lista.length) {
+        sel.innerHTML = '<option value="">Nenhum colaborador disponível</option>';
+        return;
+      }
+      sel.innerHTML = '<option value="">Selecione um colaborador...</option>'
+        + lista.map(function(p, i) {
+            return '<option value="' + i + '">' + escHtml(p.nome) + '</option>';
+          }).join('');
+    });
 
   } else if (type === 'edit-member') {
     title.textContent = 'Editar Colaborador'; badge.textContent = collab.nome;
@@ -620,14 +675,19 @@ function saveGroup() {
 }
 
 function saveMember() {
-  var nome  = document.getElementById('f-nome').value.trim();
-  var cargo = document.getElementById('f-cargo').value.trim();
-  if (!nome || !cargo) { alert('Preencha nome e cargo.'); return; }
-  var id = nome.toLowerCase().replace(/\s+/g, '-').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  var sel      = document.getElementById('f-select-admissao');
+  var collabId = document.getElementById('f-collabid').value.trim();
+  var cargo    = document.getElementById('f-cargo').value.trim();
+  var unidade  = document.getElementById('f-unidade').value.trim();
+  var depto    = document.getElementById('f-depto').value.trim();
+  if (!sel || !sel.value) { alert('Selecione um colaborador.'); return; }
+  if (!collabId) { alert('Colaborador inválido.'); return; }
+  var nome = admissoesCache[parseInt(sel.value)].nome;
   setSaving(true);
-  apiPost({ action: 'add_member', dept: currentDept, collabId: id, nome: nome, cargo: cargo }, function(err, res) {
+  apiPost({ action: 'add_member', dept: currentDept, collabId: collabId, nome: nome, cargo: cargo, unidade: unidade, depto: depto }, function(err, res) {
     setSaving(false);
     if (err || !res.ok) { showToast('Erro ao adicionar', true); return; }
+    admissoesCache = null; // invalida cache após adicionar
     closeModal();
     loadData();
     showToast('Colaborador adicionado');
