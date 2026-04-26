@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Download, RotateCcw, Copy, Trash2, Plus, X, UserPlus, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Download, RotateCcw, Copy, Trash2, Plus, X, UserPlus, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, Printer, Save } from 'lucide-react';
 import { carregarEscala, salvarEscala, carregarColaboradores, carregarFerias, salvarFerias } from './api.js';
 
 
@@ -72,6 +72,7 @@ const turnoSlots = (t) => {
   };
   if (t.t1Ini&&t.t1Fim) add(t.t1Ini,t.t1Fim);
   if (t.t2Ini&&t.t2Fim) add(t.t2Ini,t.t2Fim);
+  if (t.t3Ini&&t.t3Fim) add(t.t3Ini,t.t3Fim);
   return s;
 };
 
@@ -134,13 +135,13 @@ const escalaVaziaColabs = (colabs) => {
   const e={};
   DIAS_SEMANA.forEach(d=>{
     e[d]={};
-    colabs.forEach(c=>{ e[d][c.id]={t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',folga:false}; });
+    colabs.forEach(c=>{ e[d][c.id]={t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:false}; });
   });
   return e;
 };
 const escalaComColab = (esc,nc) => {
   const e={...esc};
-  DIAS_SEMANA.forEach(d=>{ e[d]={...e[d],[nc.id]:{t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',folga:false}}; });
+  DIAS_SEMANA.forEach(d=>{ e[d]={...e[d],[nc.id]:{t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:false}}; });
   return e;
 };
 const escalaSemColab = (esc,cid) => {
@@ -169,6 +170,7 @@ export default function EscalaPainel() {
   const [novoUnidade,setNovoUnidade]= useState('Itaim');
   const [novoDepto,  setNovoDepto]  = useState('Salão');
   const [expandidos, setExpandidos] = useState({});
+  const [expandidosT3, setExpandidosT3] = useState({});
   const [turnosAbertos, setTurnosAbertos] = useState({});
   const [listaColabsAberta, setListaColabsAberta] = useState(true);
   const [ferias, setFerias] = useState([]); // [{id, colabId, dataIni, dataFim, obs}]
@@ -176,8 +178,8 @@ export default function EscalaPainel() {
   const [novaFeriaIni, setNovaFeriaIni] = useState({});
   const [novaFeriaFim, setNovaFeriaFim] = useState({});
   const [novaFeriaObs, setNovaFeriaObs] = useState({});
-  const [filtroUnidade, setFiltroUnidade] = useState('Itaim');
-  const [filtroDepto,   setFiltroDepto]   = useState('Bar');
+  const [filtroUnidade, setFiltroUnidade] = useState(()=>localStorage.getItem('esc_fUnidade')||'Todos');
+  const [filtroDepto,   setFiltroDepto]   = useState(()=>localStorage.getItem('esc_fDepto')  ||'Todos');
 
   // Navegação de semanas: { semanaKey: { config, escala } }
   const [semanaAtual, setSemanaAtual] = useState(() => getSegunda(new Date()));
@@ -187,54 +189,35 @@ export default function EscalaPainel() {
   });
   const [syncStatus, setSyncStatus] = useState('idle');
 
+  useEffect(()=>{ localStorage.setItem('esc_fUnidade', filtroUnidade); },[filtroUnidade]);
+  useEffect(()=>{ localStorage.setItem('esc_fDepto',   filtroDepto);   },[filtroDepto]);
+
   useEffect(()=>{
     const fn=()=>setMobile(window.innerWidth<1100);
     fn(); window.addEventListener('resize',fn);
     return ()=>window.removeEventListener('resize',fn);
   },[]);
 
-  const isInitialMount = useRef(true);
-
   useEffect(()=>{
-    setSyncStatus('loading');
-    const k = semanaKey(getSegunda(new Date()));
-    let resolvedColabs = COLABS0;
     carregarColaboradores()
       .then(({ colabs: loaded }) => {
-        if (loaded && loaded.length > 0) {
-          resolvedColabs = loaded;
-          setColabs(loaded);
-        }
-        return Promise.all([carregarEscala(k), carregarFerias()]);
+        if (loaded && loaded.length > 0) setColabs(loaded);
+        return carregarFerias();
       })
-      .then(([{ escala: escLoaded, config: cfgLoaded }, ferData]) => {
-        const base = escalaVaziaColabs(resolvedColabs);
-        Object.entries(escLoaded || {}).forEach(([dia, diaData]) => {
-          Object.entries(diaData || {}).forEach(([cid, t]) => {
-            if (base[dia]) base[dia][cid] = t;
-          });
-        });
-        setDados(p => ({ ...p, [k]: { config: cfgLoaded || CFG0, escala: base } }));
-        if (ferData?.ferias) setFerias(ferData.ferias);
-        setSyncStatus('idle');
-      })
-      .catch(() => setSyncStatus('idle'));
+      .then(data => { if (data && data.ferias) setFerias(data.ferias); })
+      .catch(() => {});
   },[]);
 
   const key = semanaKey(semanaAtual);
 
   useEffect(()=>{
-    if (isInitialMount.current) { isInitialMount.current = false; return; }
     setPendente(false);
     setSyncStatus('loading');
-    const snapColabs = colabs;
     carregarEscala(key)
       .then(({ escala: escLoaded, config: cfgLoaded }) => {
-        const base = escalaVaziaColabs(snapColabs);
-        Object.entries(escLoaded || {}).forEach(([dia, diaData]) => {
-          Object.entries(diaData || {}).forEach(([cid, t]) => {
-            if (base[dia]) base[dia][cid] = t;
-          });
+        const base = {};
+        DIAS_SEMANA.forEach(dia => {
+          base[dia] = { ...(escLoaded?.[dia] || {}) };
         });
         setDados(p => ({ ...p, [key]: { config: cfgLoaded || CFG0, escala: base } }));
         setSyncStatus('idle');
@@ -242,7 +225,9 @@ export default function EscalaPainel() {
       .catch(() => {
         setDados(p => {
           if (p[key]) return p;
-          return { ...p, [key]: { config: { ...CFG0 }, escala: escalaVaziaColabs(snapColabs) } };
+          const base = {};
+          DIAS_SEMANA.forEach(dia => { base[dia] = {}; });
+          return { ...p, [key]: { config: {...CFG0}, escala: base } };
         });
         setSyncStatus('idle');
       });
@@ -336,8 +321,8 @@ export default function EscalaPainel() {
       [dia.id]: {
         ...escala[dia.id],
         [cid]: cur.folga
-          ? {t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',folga:false}
-          : {t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',folga:true}
+          ? {t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:false}
+          : {t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:true}
       }
     };
     setEscala(novaEscala);
@@ -352,7 +337,7 @@ export default function EscalaPainel() {
 
   const limparDia=()=>{
     const nd={...escala,[dia.id]:{}};
-    colabs.forEach(c=>{nd[dia.id][c.id]={t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',folga:false};});
+    colabs.forEach(c=>{nd[dia.id][c.id]={t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:false};});
     setEscala(nd);
   };
 
@@ -441,11 +426,11 @@ export default function EscalaPainel() {
   const okCount=Object.values(stats).filter(s=>s.horas>0&&s.horas<=META_HORAS&&s.folgas>=2).length;
 
   const exportCSV=()=>{
-    const L=[['Semana','Dia','Colaborador','Função','Unidade','Depto','T1 Entrada','T1 Saída','T2 Entrada','T2 Saída','Horas','Folga'].join(';')];
+    const L=[['Semana','Dia','Colaborador','Função','Unidade','Depto','T1 Entrada','T1 Saída','T2 Entrada','T2 Saída','T3 Entrada','T3 Saída','Horas','Folga'].join(';')];
     const sw=semanaLabel(semanaAtual);
     DIAS_META.forEach(d=>colabs.forEach(c=>{
       const t=escala[d.id]?.[c.id]||{};
-      L.push([sw,d.nome,c.nome,c.funcao,c.unidade,c.depto,t.t1Ini||'',t.t1Fim||'',t.t2Ini||'',t.t2Fim||'',horasTurno(t).toFixed(1),t.folga?'FOLGA':''].join(';'));
+      L.push([sw,d.nome,c.nome,c.funcao,c.unidade,c.depto,t.t1Ini||'',t.t1Fim||'',t.t2Ini||'',t.t2Fim||'',t.t3Ini||'',t.t3Fim||'',horasTurno(t).toFixed(1),t.folga?'FOLGA':''].join(';'));
     }));
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([L.join('\n')],{type:'text/csv;charset=utf-8'}));
@@ -453,8 +438,71 @@ export default function EscalaPainel() {
     a.click();
   };
 
+  const gerarPDF=()=>{
+    const semLabel=semanaLabel(semanaAtual);
+    const dataHoje=new Date().toLocaleString('pt-BR');
+    const thDias=DIAS_META.map((d,i)=>{
+      const dataD=addDays(semanaAtual,i);
+      return `<th>${d.curto}<br><span class="epdf-th-data">${fmtDate(dataD)}</span></th>`;
+    }).join('');
+    const rows=colabsFiltrados.map((c,idx)=>{
+      const tdDias=DIAS_META.map((d,i)=>{
+        const t=escala[d.id]?.[c.id]||{};
+        const dataD=addDays(semanaAtual,i);
+        const deFerias=estaDeFerias(c.id,dataD);
+        if(deFerias) return `<td class="epdf-ferias">FÉRIAS</td>`;
+        if(t.folga)  return `<td class="epdf-folga">FOLGA</td>`;
+        if(!t.t1Ini) return `<td class="epdf-livre">—</td>`;
+        let txt=`${t.t1Ini}–${t.t1Fim}`;
+        if(t.t2Ini&&t.t2Fim) txt+=`<br><span class="epdf-t2">${t.t2Ini}–${t.t2Fim}</span>`;
+        if(t.t3Ini&&t.t3Fim) txt+=`<br><span class="epdf-t2">${t.t3Ini}–${t.t3Fim}</span>`;
+        return `<td class="epdf-turno">${txt}</td>`;
+      }).join('');
+      const s=stats[c.id]||{horas:0,folgas:0};
+      const par=idx%2===0?'':' class="epdf-row-alt"';
+      return `<tr${par}><td class="epdf-nome">${c.nome}</td><td class="epdf-fn">${c.funcao}</td>${tdDias}<td class="epdf-total">${s.horas.toFixed(1)}h</td></tr>`;
+    }).join('');
+    const filtroInfo=[
+      filtroUnidade!=='Todas'?`Unidade: <strong>${filtroUnidade}</strong>`:'',
+      filtroDepto!=='Todos'?`Depto: <strong>${filtroDepto}</strong>`:'',
+    ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+    // Cria div diretamente no body (fora do #root do React) para que
+    // "body > *:not(#escala-pdf-print)" funcione corretamente no @media print
+    let printDiv=document.getElementById('escala-pdf-print');
+    if(!printDiv){ printDiv=document.createElement('div'); printDiv.id='escala-pdf-print'; document.body.appendChild(printDiv); }
+    printDiv.innerHTML=`
+      <div class="epdf-header">
+        <img id="epdf-logo" class="epdf-logo" alt="TATÁ Sushi">
+        <div class="epdf-header-center">
+          <div class="epdf-title">Escala Semanal</div>
+          <div class="epdf-sub">${semLabel}${filtroInfo?' &nbsp;·&nbsp; '+filtroInfo:''}</div>
+        </div>
+        <div class="epdf-header-right">Emitido em: ${dataHoje}</div>
+      </div>
+      <table class="epdf-table">
+        <thead><tr>
+          <th class="epdf-th-nome">Colaborador</th>
+          <th class="epdf-th-fn">Função</th>
+          ${thDias}
+          <th>Total</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr>
+          <td colspan="2" class="epdf-tf-label">TOTAL GERAL</td>
+          <td colspan="7"></td>
+          <td class="epdf-tf-val">${totalSemana.toFixed(1)}h</td>
+        </tr></tfoot>
+      </table>
+      <div class="epdf-rodape">${colabsFiltrados.length} colaboradores &nbsp;·&nbsp; Meta: ${META_HORAS}h / semana</div>
+    `;
+    const logoEl=document.getElementById('epdf-logo');
+    logoEl.onload=()=>window.print();
+    logoEl.onerror=()=>window.print();
+    logoEl.src=LOGO_SRC;
+  };
+
   const colW=ehMobile?72:108;
-  const rowH=22;
+  const rowH=12;
   const hoje=new Date().toLocaleString('pt-BR');
 
   const FiltroSelect=({label,val,set,opts})=>(
@@ -510,36 +558,52 @@ export default function EscalaPainel() {
         .status-crit{background:${T.redBg};color:${T.red};padding:3px 8px;border-radius:100px;
           font-family:'DM Mono',monospace;font-size:9px;font-weight:500;white-space:nowrap;}
         .hora-cell{height:${rowH}px;display:flex;align-items:center;justify-content:center;
-          font-family:'DM Mono',monospace;font-size:9px;padding:0 4px;
+          font-family:'DM Mono',monospace;font-size:9px;line-height:1;padding:0 4px;
           position:sticky;left:0;z-index:5;border-right:1px solid ${T.border};background:${T.surface};overflow:hidden;}
         input[type=time]::-webkit-calendar-picker-indicator{opacity:.5;cursor:pointer;}
         .resumo-card{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid ${T.border};border-radius:6px;background:${T.bg};}
+        #escala-pdf-print{display:none;}
+        @media print{
+          body>*:not(#escala-pdf-print){display:none!important;}
+          #escala-pdf-print{display:block!important;font-family:'DM Sans','Helvetica Neue',Arial,sans-serif;color:#000;padding:24px 28px;max-width:960px;margin:0 auto;font-size:11px;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+          .epdf-header{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111;}
+          .epdf-logo{width:48px;height:48px;object-fit:contain;flex-shrink:0;}
+          .epdf-header-center{flex:1;}
+          .epdf-title{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+          .epdf-sub{font-size:10px;color:#555;margin-top:3px;}
+          .epdf-header-right{font-size:9px;color:#555;text-align:right;flex-shrink:0;align-self:center;}
+          .epdf-table{width:100%;border-collapse:collapse;font-size:9.5px;margin-bottom:10px;}
+          .epdf-table thead tr{background:#35383F!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+          .epdf-table th{padding:6px 5px;color:#fff!important;font-size:9px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;text-align:center;}
+          .epdf-th-nome{text-align:left;width:130px;}
+          .epdf-th-fn{text-align:left;width:90px;}
+          .epdf-th-data{font-weight:400;font-size:8px;opacity:.85;}
+          .epdf-table td{padding:5px 5px;border-bottom:1px solid #eee;text-align:center;vertical-align:middle;}
+          .epdf-nome,.epdf-fn{text-align:left;}
+          .epdf-row-alt{background:#f9f9f9!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+          .epdf-folga{color:#b26200;font-weight:600;font-size:8.5px;}
+          .epdf-ferias{color:#1A3A5C;font-weight:600;font-size:8.5px;}
+          .epdf-livre{color:#bbb;}
+          .epdf-turno{font-family:'DM Mono',monospace;font-size:8.5px;}
+          .epdf-t2{font-size:7.5px;color:#666;}
+          .epdf-total{font-family:'DM Mono',monospace;font-weight:700;font-size:9px;}
+          .epdf-table tfoot td{border-top:2px solid #111;font-weight:700;padding:6px 5px;}
+          .epdf-tf-label{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.04em;}
+          .epdf-tf-val{font-family:'DM Mono',monospace;font-size:11px;text-align:center;}
+          .epdf-rodape{font-size:9px;color:#666;text-align:right;margin-top:6px;}
+        }
       `}</style>
 
       {/* ── HEADER ── */}
       <header style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px',display:'flex',alignItems:'center',gap:14,position:'sticky',top:0,zIndex:100}}>
         <img src={LOGO_SRC} alt="TATÁ Sushi" style={{width:40,height:40,objectFit:'contain',flexShrink:0}}/>
         <div style={{flex:1}}>
-          <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Controle de Escalas</div>
-          <div style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted,letterSpacing:'.5px',textTransform:'uppercase',marginTop:1}}>TATÁ Sushi · Operação</div>
+          <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Escalas</div>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
           {syncStatus==='loading'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.muted,letterSpacing:'.3px'}}>⟳ Carregando...</span>}
           {syncStatus==='error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red,letterSpacing:'.3px'}}>✗ Erro ao salvar</span>}
           {syncStatus==='saved'&&!pendente&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.green,letterSpacing:'.3px'}}>✓ Salvo</span>}
-          <button
-            onClick={salvarManual}
-            disabled={!pendente || syncStatus==='saving' || syncStatus==='loading'}
-            style={{
-              fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:700,letterSpacing:'.5px',
-              textTransform:'uppercase',padding:'7px 16px',cursor: (!pendente||syncStatus==='saving')?'not-allowed':'pointer',
-              background: syncStatus==='saving' ? T.border : pendente ? T.carbon : T.border,
-              color: syncStatus==='saving' ? T.muted : pendente ? T.citric : T.muted,
-              border:'none',borderRadius:100,transition:'all .15s',flexShrink:0,
-              opacity: (!pendente && syncStatus!=='saving') ? 0.5 : 1,
-            }}>
-            {syncStatus==='saving' ? '● Salvando...' : '💾 Salvar'}
-          </button>
         </div>
       </header>
 
@@ -597,6 +661,12 @@ export default function EscalaPainel() {
           {painelAberto?<PanelLeftClose size={15}/>:<PanelLeftOpen size={15}/>}
         </button>
         <button className="btn-outline" onClick={limparDia}><RotateCcw size={11}/>Limpar dia</button>
+        <button className="btn-outline" onClick={gerarPDF}><Printer size={11}/>Imprimir</button>
+        <button className="btn-outline" onClick={salvarManual}
+          disabled={!pendente||syncStatus==='saving'||syncStatus==='loading'}
+          style={{opacity:(!pendente&&syncStatus!=='saving')?0.5:1,cursor:(!pendente||syncStatus==='saving')?'not-allowed':'pointer'}}>
+          <Save size={11}/>{syncStatus==='saving'?'Salvando...':'Salvar'}
+        </button>
       </div>
 
       {/* ── CORPO PRINCIPAL ── */}
@@ -661,6 +731,7 @@ export default function EscalaPainel() {
             const hd=horasTurno(t);
             const sw=stats[c.id];
             const temT2=(t.t2Ini&&t.t2Fim)||expandidos[c.id];
+            const temT3=(t.t3Ini&&t.t3Fim)||expandidosT3[c.id];
             const alertaC=sw&&(sw.horas>META_HORAS||(sw.folgas<2&&sw.dias>0));
             const turnoAberto = turnosAbertos[c.id] !== false; // default aberto
             return (
@@ -772,7 +843,7 @@ export default function EscalaPainel() {
                         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:7,alignItems:'center'}}>
                           <input className="ts-input" type="time" value={t.t2Ini||''} onChange={e=>setTurno(c.id,'t2Ini',e.target.value)}/>
                           <input className="ts-input" type="time" value={t.t2Fim||''} onChange={e=>setTurno(c.id,'t2Fim',e.target.value)}/>
-                          <button onClick={()=>{setTurno(c.id,'t2Ini','');setTurno(c.id,'t2Fim','');setExpandidos(p=>({...p,[c.id]:false}));}}
+                          <button onClick={()=>{setTurno(c.id,'t2Ini','');setTurno(c.id,'t2Fim','');setTurno(c.id,'t3Ini','');setTurno(c.id,'t3Fim','');setExpandidos(p=>({...p,[c.id]:false}));setExpandidosT3(p=>({...p,[c.id]:false}));}}
                             style={{width:28,height:36,border:`1px solid ${T.border}`,background:'transparent',color:T.muted,cursor:'pointer',borderRadius:T.radius,display:'flex',alignItems:'center',justifyContent:'center'}}>
                             <X size={11}/>
                           </button>
@@ -786,6 +857,26 @@ export default function EscalaPainel() {
                         color:T.muted,cursor:'pointer',width:'100%',borderRadius:T.radius,
                       }}>+ Dobra</button>
                     )}
+                    {temT2&&(temT3?(
+                      <div>
+                        <label className="field-label">Turno 3</label>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:7,alignItems:'center'}}>
+                          <input className="ts-input" type="time" value={t.t3Ini||''} onChange={e=>setTurno(c.id,'t3Ini',e.target.value)}/>
+                          <input className="ts-input" type="time" value={t.t3Fim||''} onChange={e=>setTurno(c.id,'t3Fim',e.target.value)}/>
+                          <button onClick={()=>{setTurno(c.id,'t3Ini','');setTurno(c.id,'t3Fim','');setExpandidosT3(p=>({...p,[c.id]:false}));}}
+                            style={{width:28,height:36,border:`1px solid ${T.border}`,background:'transparent',color:T.muted,cursor:'pointer',borderRadius:T.radius,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                            <X size={11}/>
+                          </button>
+                        </div>
+                      </div>
+                    ):(
+                      <button onClick={()=>setExpandidosT3(p=>({...p,[c.id]:true}))} style={{
+                        fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:500,letterSpacing:'.5px',
+                        textTransform:'uppercase',padding:'7px 10px',
+                        border:`1px dashed ${T.border}`,background:'transparent',
+                        color:T.muted,cursor:'pointer',width:'100%',borderRadius:T.radius,
+                      }}>+ Terceiro turno</button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -809,7 +900,7 @@ export default function EscalaPainel() {
               <div style={{display:'grid',gridTemplateColumns:`48px repeat(${colabsFiltrados.length},${colW}px)`,minWidth:48+colabsFiltrados.length*colW,width:'max-content'}}>
                 <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:54,width:48,minWidth:48,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px'}}>HORA</div>
                 {colabsFiltrados.map(c=>(
-                  <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'5px 7px',borderLeft:'1px solid #2E3038',borderBottom:`3px solid ${T.citric}`,minHeight:54,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center'}}>
+                  <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'5px 7px',borderLeft:'1px solid #2E3038',minHeight:54,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center'}}>
                     <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?10:11.5,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.2px',width:'100%',textAlign:'center'}}>{c.nome}</div>
                     <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?9:10.5,fontWeight:400,color:'#FFFFFF',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.1px',opacity:.85,width:'100%',textAlign:'center'}}>
                       {estaDeFerias(c.id,dataDoDia(dia.id)) ? '🏖 Férias' : `${c.funcao} · ${horasTurno(escala[dia.id]?.[c.id]||{}).toFixed(1)}h`}

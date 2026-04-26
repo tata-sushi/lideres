@@ -38,6 +38,15 @@ var CORES = [
 
 // ── Helpers ──────────────────────────────────────────────────
 
+// Google Sheets auto-converte strings 'YYYY-MM-DD' para Date ao ler de volta.
+// Esta função normaliza o valor da célula para string 'YYYY-MM-DD' em ambos os casos.
+function semanaStr(v) {
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return String(v || '').trim();
+}
+
 function ssEscala() { return SpreadsheetApp.openById(ESCALA_SHEET_ID); }
 
 function aba(nome, cabecalho) {
@@ -126,25 +135,46 @@ function getColaboradores() {
 }
 
 // ── ESCALA ────────────────────────────────────────────────────
-// Aba "Escalas": semana | dia | colabId | t1Ini | t1Fim | t2Ini | t2Fim | folga
+// Aba "Escalas": semana | dia | colabId | t1Ini | t1Fim | t2Ini | t2Fim | t3Ini | t3Fim | folga
+
+var ESCALA_HEADER = ['semana','dia','colabId','t1Ini','t1Fim','t2Ini','t2Fim','t3Ini','t3Fim','folga'];
+
+// Migra a planilha do schema antigo (8 cols, sem t3) para o novo (10 cols).
+// Insere t3Ini/t3Fim antes de folga — dados existentes deslocam automaticamente.
+function migrarEscalaSchema(sh) {
+  var lastCol = sh.getLastColumn();
+  if (lastCol >= 10) return; // já está no novo
+  var header = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  var folgaCol = header.indexOf('folga');
+  if (folgaCol === 7) {
+    // old format: folga está em col 8 (idx 7 na 1-index: col 8)
+    sh.insertColumns(folgaCol + 1, 2); // insere 2 colunas antes de folga
+    sh.getRange(1, folgaCol + 1, 1, 2).setValues([['t3Ini', 't3Fim']]);
+  } else {
+    // sheet vazio ou cabeçalho desconhecido — reescreve header
+    sh.getRange(1, 1, 1, ESCALA_HEADER.length).setValues([ESCALA_HEADER]);
+  }
+}
 
 function getEscala(semana) {
   if (!semana) return { error: 'semana obrigatória' };
 
-  var sh   = aba('Escalas', ['semana','dia','colabId','t1Ini','t1Fim','t2Ini','t2Fim','folga']);
+  var sh   = aba('Escalas', ESCALA_HEADER);
+  migrarEscalaSchema(sh);
   var rows = todasLinhas(sh);
 
   var escala = {};
   DIAS.forEach(function(d) { escala[d] = {}; });
 
   rows.forEach(function(r) {
-    if (String(r[0]) !== semana) return;
+    if (semanaStr(r[0]) !== semana) return;
     var dia = r[1], colabId = r[2];
     if (!dia || !colabId) return;
     escala[dia][colabId] = {
       t1Ini: r[3]||'', t1Fim: r[4]||'',
       t2Ini: r[5]||'', t2Fim: r[6]||'',
-      folga: r[7] === true || r[7] === 'TRUE',
+      t3Ini: r[7]||'', t3Fim: r[8]||'',
+      folga: r[9] === true || r[9] === 'TRUE',
     };
   });
 
@@ -167,11 +197,12 @@ function saveEscala(semana, escala, config) {
   if (!semana) return { error: 'semana obrigatória' };
 
   // ── Escalas
-  var sh   = aba('Escalas', ['semana','dia','colabId','t1Ini','t1Fim','t2Ini','t2Fim','folga']);
+  var sh   = aba('Escalas', ESCALA_HEADER);
+  migrarEscalaSchema(sh);
   var rows = todasLinhas(sh);
 
   // Mantém outras semanas, substitui a atual
-  var outras = rows.filter(function(r) { return String(r[0]) !== semana; });
+  var outras = rows.filter(function(r) { return semanaStr(r[0]) !== semana; });
   var novas  = [];
 
   DIAS.forEach(function(dia) {
@@ -181,13 +212,18 @@ function saveEscala(semana, escala, config) {
       novas.push([semana, dia, colabId,
         t.t1Ini||'', t.t1Fim||'',
         t.t2Ini||'', t.t2Fim||'',
+        t.t3Ini||'', t.t3Fim||'',
         t.folga ? 'TRUE' : 'FALSE']);
     });
   });
 
-  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow()-1, 8).clearContent();
+  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow()-1, 10).clearContent();
   var tudo = outras.concat(novas);
-  if (tudo.length > 0) sh.getRange(2, 1, tudo.length, 8).setValues(tudo);
+  if (tudo.length > 0) {
+    sh.getRange(2, 1, tudo.length, 10).setValues(tudo);
+    // Força coluna A (semana) como texto simples para evitar auto-conversão de datas
+    sh.getRange(2, 1, tudo.length, 1).setNumberFormat('@');
+  }
 
   // ── Configs
   var shC   = aba('Configuracoes', ['semana','dia','campo','valor']);
