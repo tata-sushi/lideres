@@ -99,6 +99,14 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 table td:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Tabela de Pagamentos: permite o nome quebrar em 2 linhas em vez de truncar */
+table.pag-table td:first-child { white-space: normal; word-break: break-word; overflow: visible; text-overflow: clip; }
+table.pag-table { table-layout: fixed; }
+table.pag-table th:nth-child(1), table.pag-table td:nth-child(1) { width: 38%; }
+table.pag-table th:nth-child(2), table.pag-table td:nth-child(2) { width: 18%; }
+table.pag-table th:nth-child(3), table.pag-table td:nth-child(3) { width: 24%; }
+table.pag-table th:nth-child(4), table.pag-table td:nth-child(4) { width: 20%; }
+table.pag-table th, table.pag-table td { padding-left: 6px; padding-right: 6px; }
 thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); cursor: pointer; user-select: none; }
 thead th:hover { color: var(--carbon); }
 tbody td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid var(--border); }
@@ -376,7 +384,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-block">
       <div class="chart-title">Lista de Pagamentos <span id="pag-count-label" style="color:var(--muted);font-size:10px;margin-left:8px;"></span></div>
       <div class="table-wrap">
-        <table>
+        <table class="pag-table">
           <thead>
             <tr>
               <th>Colaborador</th>
@@ -675,10 +683,14 @@ function hasHoliday(semKey) {
   return false;
 }
 
+// "pag" cobre paga/pagas/pago/pagos/pagamento; "perd" cobre perda/perdas/perdido/perdida/perdidos
+function isTipoPag(t)   { return t.indexOf('pag') !== -1; }
+function isTipoPerd(t)  { return t.indexOf('perd') !== -1; }
+
 function getWeekSeries(semKey, rowFilter) {
   var snap = (SNAPSHOTS[semKey] || []).filter(function(r) {
     var t = r.tipo.toLowerCase();
-    if (t === 'pagas' || t === 'perdidas' || t.indexOf('pago') !== -1 || t.indexOf('perdido') !== -1) return false;
+    if (isTipoPag(t) || isTipoPerd(t)) return false;
     return rowFilter ? rowFilter(r) : true;
   });
   var weekRows = ALL_ROWS.filter(function(r) {
@@ -688,12 +700,10 @@ function getWeekSeries(semKey, rowFilter) {
   var pos = snap.reduce(function(a,r) { return r.saldo > 0 ? a + r.saldo : a; }, 0);
   var neg = snap.reduce(function(a,r) { return r.saldo < 0 ? a + r.saldo : a; }, 0);
   var pagas = weekRows.reduce(function(a,r) {
-    var t = r.tipo.toLowerCase();
-    return (t === 'pagas' || t.indexOf('paga') !== -1) ? a + Math.abs(r.saldo) : a;
+    return isTipoPag(r.tipo.toLowerCase()) ? a + Math.abs(r.saldo) : a;
   }, 0);
   var perdidas = weekRows.reduce(function(a,r) {
-    var t = r.tipo.toLowerCase();
-    return (t === 'perdidas' || t.indexOf('perdido') !== -1) ? a + Math.abs(r.saldo) : a;
+    return isTipoPerd(r.tipo.toLowerCase()) ? a + Math.abs(r.saldo) : a;
   }, 0);
   return { semKey: semKey, label: semKeyToLabel(semKey), pos: pos, neg: neg, pagas: pagas, perdidas: perdidas };
 }
@@ -915,8 +925,7 @@ function switchTab(tab) {
 
 // ─── PAGAMENTOS ───────────────────────────────────────────────────────────────
 function isPagamento(r) {
-  var t = r.tipo.toLowerCase();
-  return t === 'pagas' || t.indexOf('paga') !== -1;
+  return isTipoPag(r.tipo.toLowerCase());
 }
 
 function getPagamentos() {
