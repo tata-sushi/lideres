@@ -156,14 +156,13 @@ function migrarEscalaSchema(sh) {
   }
 }
 
-// Sheets pode devolver hora como Date (ex.: 1899-12-30T22:06:28Z).
-// Normaliza para string "HH:mm".
+// Sheets pode devolver hora como Date (ex.: 1899-12-30T17:06:28Z, com offset
+// histórico de São Paulo -3:06:28). Usa Utilities.formatDate com o timezone do
+// Script para converter corretamente de volta para "HH:mm".
 function _hhmm(v) {
   if (v == null || v === '') return '';
   if (Object.prototype.toString.call(v) === '[object Date]') {
-    var hh = ('0' + v.getUTCHours()).slice(-2);
-    var mm = ('0' + v.getUTCMinutes()).slice(-2);
-    return hh + ':' + mm;
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'HH:mm');
   }
   var s = String(v);
   var m = s.match(/T(\d{2}):(\d{2})/);
