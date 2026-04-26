@@ -114,6 +114,32 @@ tbody tr:hover { background: #FAFAFA; }
 .empty-state { text-align: center; padding: 40px 20px; }
 .empty-state p { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
+/* ── Cross-filter ── */
+.cf-banner {
+  background: var(--carbon); color: var(--citric);
+  padding: 8px 16px; display: flex; align-items: center; gap: 12px;
+  font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+.cf-banner-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cf-banner-clear {
+  background: var(--citric); color: var(--carbon); border: none;
+  padding: 4px 12px; border-radius: 4px; font-family: inherit; font-size: 10px;
+  font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+.cf-active .bar-row:not(.cf-selected) { opacity: 0.35; }
+.cf-active tbody tr[onclick]:not(.cf-selected) { opacity: 0.35; }
+.cf-active .bar-row.cf-selected,
+.cf-active tbody tr.cf-selected { opacity: 1; }
+.bar-row.cf-selected {
+  outline: 2px solid var(--carbon); outline-offset: 2px; border-radius: 6px;
+}
+tbody tr.cf-selected { background: #FFFCE0 !important; }
+.bar-row { cursor: pointer; }
+.bar-row:hover { background: #FAFAFA; border-radius: 4px; }
+tbody tr { cursor: pointer; }
+
 /* ── Footer fixo carbon ── */
 .footer { background: var(--carbon); padding: 12px 20px; display: flex; flex-direction: column; align-items: center; gap: 3px; position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; }
 .footer-module { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--citric); letter-spacing: 1.5px; text-transform: uppercase; font-weight: 500; }
@@ -246,6 +272,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<!-- CROSS-FILTER BANNER -->
+<div id="cf-banner" class="cf-banner" style="display:none">
+  <span class="cf-banner-text"></span>
+  <button class="cf-banner-clear" onclick="clearCrossFilter()">Limpar</button>
+</div>
+
 <!-- LOADING -->
 <div id="loading-state" class="loading-state">
   <div class="loading-spinner"></div>
@@ -370,6 +402,7 @@ var SNAPSHOTS = {};
 var state     = { unidade:'Todos', depto:'Todos' };
 var sortCol   = 'saldo';
 var sortDir   = -1;
+var crossFilter = { dim: null, value: null }; // dim ∈ 'depto'|'unidade'|'colaborador'|'ano'
 
 // ─── FETCH ───────────────────────────────────────────────────────────────────
 async function loadData() {
@@ -497,6 +530,9 @@ function getFiltered() {
   return rows.filter(function(r) {
     if (state.unidade !== 'Todos' && r.unidade !== state.unidade) return false;
     if (state.depto   !== 'Todos' && r.depto   !== state.depto)   return false;
+    if (crossFilter.dim === 'depto'       && r.depto   !== crossFilter.value) return false;
+    if (crossFilter.dim === 'unidade'     && r.unidade !== crossFilter.value) return false;
+    if (crossFilter.dim === 'colaborador' && r.nome    !== crossFilter.value) return false;
     return true;
   });
 }
@@ -510,12 +546,62 @@ function applyFilters() {
 function clearFilters() {
   ['filtro-unidade','filtro-depto'].forEach(function(id) { document.getElementById(id).value = 'Todos'; });
   state = { unidade:'Todos', depto:'Todos' };
+  crossFilter = { dim: null, value: null };
+  document.body.classList.remove('cf-active');
+  updateCrossFilterBanner();
   renderAll();
+  if (_pagRendered) renderPagamentos(true);
+}
+
+// ─── CROSS-FILTER ────────────────────────────────────────────────────────────
+function setCrossFilter(dim, value) {
+  if (crossFilter.dim === dim && crossFilter.value === value) {
+    crossFilter = { dim: null, value: null };
+  } else {
+    crossFilter = { dim: dim, value: value };
+  }
+  document.body.classList.toggle('cf-active', !!crossFilter.dim);
+  updateCrossFilterBanner();
+  renderAll();
+  if (_pagRendered) renderPagamentos(true);
+}
+
+function clearCrossFilter() {
+  crossFilter = { dim: null, value: null };
+  document.body.classList.remove('cf-active');
+  updateCrossFilterBanner();
+  renderAll();
+  if (_pagRendered) renderPagamentos(true);
+}
+
+function updateCrossFilterBanner() {
+  var b = document.getElementById('cf-banner');
+  if (!b) return;
+  if (!crossFilter.dim) { b.style.display = 'none'; return; }
+  var rotulos = { depto:'Departamento', unidade:'Unidade', colaborador:'Colaborador', ano:'Ano' };
+  b.querySelector('.cf-banner-text').textContent =
+    'Filtro ativo: ' + rotulos[crossFilter.dim] + ' = ' + crossFilter.value;
+  b.style.display = 'flex';
+}
+
+// Devolve um predicate sobre rows respeitando filtros (state + crossFilter), exceto 'ano'
+// que só faz sentido em pagamentos. Usado nos charts SVG para refletir o contexto.
+function buildCrossFilterRowFilter() {
+  var s = state, cf = crossFilter;
+  if (s.unidade === 'Todos' && s.depto === 'Todos' && !cf.dim) return null;
+  return function(r) {
+    if (s.unidade !== 'Todos' && r.unidade !== s.unidade) return false;
+    if (s.depto   !== 'Todos' && r.depto   !== s.depto)   return false;
+    if (cf.dim === 'depto'       && r.depto   !== cf.value) return false;
+    if (cf.dim === 'unidade'     && r.unidade !== cf.value) return false;
+    if (cf.dim === 'colaborador' && r.nome    !== cf.value) return false;
+    return true;
+  };
 }
 
 
 // ─── BARRAS ──────────────────────────────────────────────────────────────────
-function renderBarsEl(elId, data, groupFn) {
+function renderBarsEl(elId, data, groupFn, dim) {
   var map = {};
   data.forEach(function(r) {
     var key = groupFn(r);
@@ -531,7 +617,9 @@ function renderBarsEl(elId, data, groupFn) {
     var pct  = maxAbs > 0 ? (Math.abs(a.saldo) / maxAbs * 100).toFixed(1) : 0;
     var cls  = a.saldo >= 0 ? 'bar-fill-pos' : 'bar-fill-neg';
     var vcls = a.saldo > 0 ? 'pos' : (a.saldo < 0 ? 'neg' : '');
-    return '<div class="bar-row">' +
+    var sel  = (dim && crossFilter.dim === dim && crossFilter.value === a.nome) ? ' cf-selected' : '';
+    var click = dim ? ' onclick="setCrossFilter(\'' + dim + '\', \'' + escAttr(a.nome) + '\')"' : '';
+    return '<div class="bar-row' + sel + '"' + click + '>' +
       '<div class="bar-name">' + escH(a.nome) + '</div>' +
       '<div class="bar-track"><div class="' + cls + '" style="width:' + pct + '%"></div></div>' +
       '<div class="bar-val ' + vcls + '">' + (a.saldo > 0 ? '+' : '') + a.saldo.toFixed(0) + '</div>' +
@@ -575,12 +663,16 @@ function hasHoliday(semKey) {
   return false;
 }
 
-function getWeekSeries(semKey) {
+function getWeekSeries(semKey, rowFilter) {
   var snap = (SNAPSHOTS[semKey] || []).filter(function(r) {
     var t = r.tipo.toLowerCase();
-    return t !== 'pagas' && t !== 'perdidas' && t.indexOf('pago') === -1 && t.indexOf('perdido') === -1;
+    if (t === 'pagas' || t === 'perdidas' || t.indexOf('pago') !== -1 || t.indexOf('perdido') !== -1) return false;
+    return rowFilter ? rowFilter(r) : true;
   });
-  var weekRows = ALL_ROWS.filter(function(r) { return r.semKey === semKey; });
+  var weekRows = ALL_ROWS.filter(function(r) {
+    if (r.semKey !== semKey) return false;
+    return rowFilter ? rowFilter(r) : true;
+  });
   var pos = snap.reduce(function(a,r) { return r.saldo > 0 ? a + r.saldo : a; }, 0);
   var neg = snap.reduce(function(a,r) { return r.saldo < 0 ? a + r.saldo : a; }, 0);
   var pagas = weekRows.reduce(function(a,r) {
@@ -607,7 +699,8 @@ function niceStep(range, target) {
 }
 
 function renderWeek() {
-  var pontos = SEMANAS.map(function(s) { return getWeekSeries(s); });
+  var rf = buildCrossFilterRowFilter();
+  var pontos = SEMANAS.map(function(s) { return getWeekSeries(s, rf); });
 
   var svg = document.getElementById('week-svg');
   var W = 700, H = 160, padL = 46, padR = 18, padT = 18, padB = 18;
@@ -687,9 +780,14 @@ function renderWeek() {
 
 // ─── % NEGATIVOS ─────────────────────────────────────────────────────────────
 function renderNegPct() {
-  var semanasCom = SEMANAS.filter(function(s) { return (SNAPSHOTS[s] || []).length > 0; });
+  var rf = buildCrossFilterRowFilter();
+  var semanasCom = SEMANAS.filter(function(s) {
+    var rs = (SNAPSHOTS[s] || []);
+    return (rf ? rs.filter(rf) : rs).length > 0;
+  });
   var pontos = semanasCom.map(function(s) {
     var rows  = SNAPSHOTS[s] || [];
+    if (rf) rows = rows.filter(rf);
     var total = rows.length;
     var negs  = rows.filter(function(r) { return r.saldo < 0; }).length;
     return { label: semKeyToLabel(s), pct: total > 0 ? Math.round((negs/total)*100) : 0 };
@@ -757,7 +855,9 @@ function renderTableRows() {
   var html = display.map(function(c) {
     var cls    = c.saldo > 0 ? 'saldo-pos' : (c.saldo < 0 ? 'saldo-neg' : 'saldo-zero');
     var prefix = c.saldo > 0 ? '+' : '';
-    return '<tr>' +
+    var sel    = (crossFilter.dim === 'colaborador' && crossFilter.value === c.nome) ? ' class="cf-selected"' : '';
+    var click  = ' onclick="setCrossFilter(\'colaborador\', \'' + escAttr(c.nome) + '\')"';
+    return '<tr' + sel + click + '>' +
       '<td>' + escH(c.nome || '—') + '</td>' +
       '<td style="text-align:right"><span class="' + cls + '">' + prefix + c.saldo.toFixed(2) + '</span></td>' +
       '</tr>';
@@ -796,10 +896,22 @@ function isPagamento(r) {
 }
 
 function getPagamentos() {
-  return ALL_ROWS.filter(isPagamento);
+  return ALL_ROWS.filter(function(r) {
+    if (!isPagamento(r)) return false;
+    if (state.unidade !== 'Todos' && r.unidade !== state.unidade) return false;
+    if (state.depto   !== 'Todos' && r.depto   !== state.depto)   return false;
+    if (crossFilter.dim === 'depto'       && r.depto   !== crossFilter.value) return false;
+    if (crossFilter.dim === 'unidade'     && r.unidade !== crossFilter.value) return false;
+    if (crossFilter.dim === 'colaborador' && r.nome    !== crossFilter.value) return false;
+    if (crossFilter.dim === 'ano') {
+      var ano = r.dataStr ? r.dataStr.substring(6, 10) : '';
+      if (ano !== crossFilter.value) return false;
+    }
+    return true;
+  });
 }
 
-function renderBarsMontante(elId, data, keyFn) {
+function renderBarsMontante(elId, data, keyFn, dim) {
   var map = {};
   data.forEach(function(r) {
     var key = keyFn(r);
@@ -812,7 +924,9 @@ function renderBarsMontante(elId, data, keyFn) {
   var html = items.map(function(a) {
     var pct = maxMT > 0 ? (a.mt / maxMT * 100).toFixed(1) : 0;
     var fmt = 'R$ ' + a.mt.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return '<div class="bar-row" style="grid-template-columns:100px 1fr 100px">' +
+    var sel = (dim && crossFilter.dim === dim && crossFilter.value === a.nome) ? ' cf-selected' : '';
+    var click = dim ? ' onclick="setCrossFilter(\'' + dim + '\', \'' + escAttr(a.nome) + '\')"' : '';
+    return '<div class="bar-row' + sel + '" style="grid-template-columns:100px 1fr 100px"' + click + '>' +
       '<div class="bar-name">' + escH(a.nome) + '</div>' +
       '<div class="bar-track"><div class="bar-fill-pos" style="width:' + pct + '%"></div></div>' +
       '<div class="bar-val pos">' + escH(fmt) + '</div>' +
@@ -826,7 +940,9 @@ function renderTabelaPagamentos(rows) {
   var html = sorted.map(function(r) {
     var fmtMt = 'R$ ' + r.custo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     var fmtH  = (r.saldo > 0 ? '+' : '') + r.saldo.toFixed(2) + 'h';
-    return '<tr>' +
+    var sel   = (crossFilter.dim === 'colaborador' && crossFilter.value === r.nome) ? ' class="cf-selected"' : '';
+    var click = ' onclick="setCrossFilter(\'colaborador\', \'' + escAttr(r.nome) + '\')"';
+    return '<tr' + sel + click + '>' +
       '<td>' + escH(r.nome || '—') + '</td>' +
       '<td style="text-align:right;font-family:\'DM Mono\',monospace;font-size:12px">' + escH(fmtH) + '</td>' +
       '<td style="text-align:right" class="pag-mt">' + escH(fmtMt) + '</td>' +
@@ -842,17 +958,17 @@ function renderPagamentos(force) {
   if (_pagRendered && !force) return;
   _pagRendered = true;
   var rows = getPagamentos();
-  renderBarsMontante('pag-bar-ano',     rows, function(r) { return r.dataStr ? r.dataStr.substring(6, 10) : ''; });
-  renderBarsMontante('pag-bar-unidade', rows, function(r) { return r.unidade; });
-  renderBarsMontante('pag-bar-depto',   rows, function(r) { return r.depto; });
+  renderBarsMontante('pag-bar-ano',     rows, function(r) { return r.dataStr ? r.dataStr.substring(6, 10) : ''; }, 'ano');
+  renderBarsMontante('pag-bar-unidade', rows, function(r) { return r.unidade; },                                    'unidade');
+  renderBarsMontante('pag-bar-depto',   rows, function(r) { return r.depto; },                                      'depto');
   renderTabelaPagamentos(rows);
 }
 
 // ─── RENDER ALL ──────────────────────────────────────────────────────────────
 function renderAll() {
   var data = getFiltered();
-  renderBarsEl('bar-depto',   data, function(r) { return r.depto; });
-  renderBarsEl('bar-unidade', data, function(r) { return r.unidade; });
+  renderBarsEl('bar-depto',   data, function(r) { return r.depto; },   'depto');
+  renderBarsEl('bar-unidade', data, function(r) { return r.unidade; }, 'unidade');
   renderWeek();
   renderNegPct();
   renderTable(data);
@@ -884,6 +1000,17 @@ function renderFooterDate() {
 // ─── UTIL ────────────────────────────────────────────────────────────────────
 function escH(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// Escape para uso seguro dentro de atributo HTML que vira string JS de aspas simples
+// (ex.: onclick="setCrossFilter('dim','VALOR')"). Cobre &, <, >, " e ' (escape JS).
+function escAttr(s) {
+  return String(s||'')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/\\/g,'\\\\')
+    .replace(/'/g,"\\'");
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
