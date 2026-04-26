@@ -79,7 +79,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
 /* SVG charts */
 .week-chart { width: 100%; overflow: hidden; }
-.week-svg { width: 100%; height: 160px; display: block; }
+.week-svg { width: 100%; height: 175px; display: block; }
 
 /* ── Tabs ── */
 .tabs-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 16px; display: flex; }
@@ -119,7 +119,7 @@ tbody tr:hover { background: #FAFAFA; }
 .cf-active .bar-row.cf-related,
 .cf-active tbody tr.cf-selected { opacity: 1; }
 .bar-row.cf-selected {
-  outline: 2px solid var(--carbon); outline-offset: 2px; border-radius: 6px;
+  outline: 2px solid var(--carbon); outline-offset: 2px; border-radius: 4px;
 }
 tbody tr.cf-selected { background: #FAFAFA !important; box-shadow: inset 4px 0 0 0 var(--carbon); }
 tbody tr.cf-selected td { color: var(--carbon); font-weight: 600; }
@@ -293,7 +293,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-block">
       <div class="chart-title">Evolução Semanal — Saldo Acumulado</div>
       <div class="week-chart">
-        <svg id="week-svg" class="week-svg" viewBox="0 0 700 160" preserveAspectRatio="none"></svg>
+        <svg id="week-svg" class="week-svg" viewBox="0 0 700 175" preserveAspectRatio="none"></svg>
       </div>
       <div class="legend">
         <div class="legend-item"><div class="legend-dot" style="background:#35383F"></div> Positivo</div>
@@ -306,8 +306,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <!-- % Negativos por Semana -->
     <div class="chart-block">
       <div class="chart-title">Colaboradores com Saldo Negativo — % por Semana</div>
-      <svg id="neg-svg" viewBox="0 0 700 120" style="width:100%;height:110px;display:block;"></svg>
-      <div id="neg-axis" style="display:flex;justify-content:space-between;margin-top:4px;padding:0 30px;"></div>
+      <svg id="neg-svg" viewBox="0 0 700 145" style="width:100%;height:135px;display:block;"></svg>
     </div>
 
     <!-- Tabela Colaboradores -->
@@ -574,23 +573,24 @@ function buildSvgRowFilter() {
 
 // ─── BARRAS ──────────────────────────────────────────────────────────────────
 function renderBarsEl(elId, data, groupFn, dim) {
+  // Em charts com dim diferente do cross-filter ativo, agrega só o subset filtrado
+  // — os números das barras refletem a interseção (ex.: clicar Itaim filtra os
+  // saldos por depto para mostrar só os de Itaim).
+  var src = data;
+  var related = {};
+  if (crossFilter.dim && crossFilter.dim !== dim) {
+    src = data.filter(rowMatchesCrossFilter);
+    src.forEach(function(r) {
+      var k = groupFn(r);
+      if (k) related[k] = true;
+    });
+  }
   var map = {};
-  data.forEach(function(r) {
+  src.forEach(function(r) {
     var key = groupFn(r);
     if (!key) return;
     map[key] = (map[key] || 0) + r.saldo;
   });
-  // Keys cujo grupo contém ao menos uma linha que casa com o cross-filter
-  // (só em charts com dim diferente do filtro ativo).
-  var related = {};
-  if (crossFilter.dim && crossFilter.dim !== dim) {
-    data.forEach(function(r) {
-      if (rowMatchesCrossFilter(r)) {
-        var k = groupFn(r);
-        if (k) related[k] = true;
-      }
-    });
-  }
   var items = Object.keys(map).map(function(k) { return { nome:k, saldo:map[k] }; });
   items.sort(function(a,b) { return b.saldo - a.saldo; });
   var maxAbs = 0;
@@ -687,7 +687,7 @@ function renderWeek() {
   var pontos = SEMANAS.map(function(s) { return getWeekSeries(s, rf); });
 
   var svg = document.getElementById('week-svg');
-  var W = 700, H = 160, padL = 46, padR = 18, padT = 18, padB = 18;
+  var W = 700, H = 175, padL = 46, padR = 18, padT = 18, padB = 28;
   var n = pontos.length;
   if (n < 2) { svg.innerHTML = ''; return; }
 
@@ -756,7 +756,8 @@ function renderWeek() {
   // ── Labels eixo X ──
   pontos.forEach(function(p,i) {
     var fill = hasHoliday(p.semKey) ? '#35383F' : '#AAAAAA';
-    c += '<text x="' + sx(i).toFixed(1) + '" y="' + (H-3) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="' + fill + '">' + p.label + '</text>';
+    var lx = sx(i).toFixed(1), ly = (H - 4).toString();
+    c += '<text x="' + lx + '" y="' + ly + '" text-anchor="end" transform="rotate(-30 ' + lx + ' ' + ly + ')" font-family="DM Mono,monospace" font-size="9" fill="' + fill + '">' + p.label + '</text>';
   });
 
   svg.innerHTML = c;
@@ -778,9 +779,10 @@ function renderNegPct() {
   });
 
   var svg = document.getElementById('neg-svg');
-  var W = 700, H = 120, pad = 30;
+  // H_PLOT é a altura útil do gráfico; H total inclui espaço pros labels rotacionados.
+  var W = 700, H_PLOT = 120, H = 145, pad = 30;
   var n = pontos.length;
-  if (n < 2) { svg.innerHTML = ''; document.getElementById('neg-axis').innerHTML = ''; return; }
+  if (n < 2) { svg.innerHTML = ''; return; }
 
   var vals = pontos.map(function(p) { return p.pct; });
   var minV = Math.max(0, Math.min.apply(null, vals) - 3);
@@ -788,24 +790,25 @@ function renderNegPct() {
   var range = maxV - minV || 1;
 
   function sx(i) { return pad + i * ((W - pad*2) / (n-1)); }
-  function sy(v) { return pad + (1 - (v - minV) / range) * (H - pad*2); }
+  function sy(v) { return pad + (1 - (v - minV) / range) * (H_PLOT - pad*2); }
 
-  var area = 'M ' + sx(0) + ' ' + (H-pad);
+  var area = 'M ' + sx(0) + ' ' + (H_PLOT-pad);
   pontos.forEach(function(p,i) { area += ' L ' + sx(i) + ' ' + sy(p.pct); });
-  area += ' L ' + sx(n-1) + ' ' + (H-pad) + ' Z';
+  area += ' L ' + sx(n-1) + ' ' + (H_PLOT-pad) + ' Z';
   var line = pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i) + ' ' + sy(p.pct); }).join(' ');
 
   var c = '<path d="' + area + '" fill="#35383F" opacity="0.08"/>';
   c += '<path d="' + line + '" fill="none" stroke="#35383F" stroke-width="2"/>';
   pontos.forEach(function(p,i) {
     c += '<circle cx="' + sx(i) + '" cy="' + sy(p.pct) + '" r="4" fill="#35383F"/>';
-    c += '<text x="' + sx(i) + '" y="' + (sy(p.pct)-9) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="10" fill="#35383F" font-weight="600">' + p.pct + '%</text>';
+    c += '<text x="' + sx(i) + '" y="' + (sy(p.pct)-9) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">' + p.pct + '%</text>';
+  });
+  // Labels eixo X rotacionados, mesmo tamanho do renderWeek
+  pontos.forEach(function(p,i) {
+    var lx = sx(i).toFixed(1), ly = (H - 4).toString();
+    c += '<text x="' + lx + '" y="' + ly + '" text-anchor="end" transform="rotate(-30 ' + lx + ' ' + ly + ')" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">' + escH(p.label) + '</text>';
   });
   svg.innerHTML = c;
-
-  document.getElementById('neg-axis').innerHTML = pontos.map(function(p) {
-    return '<span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted)">' + escH(p.label) + '</span>';
-  }).join('');
 }
 
 // ─── TABELA ───────────────────────────────────────────────────────────────────
@@ -893,21 +896,21 @@ function getPagamentos() {
 }
 
 function renderBarsMontante(elId, data, keyFn, dim) {
+  var src = data;
+  var related = {};
+  if (crossFilter.dim && crossFilter.dim !== dim) {
+    src = data.filter(rowMatchesCrossFilter);
+    src.forEach(function(r) {
+      var k = keyFn(r);
+      if (k) related[k] = true;
+    });
+  }
   var map = {};
-  data.forEach(function(r) {
+  src.forEach(function(r) {
     var key = keyFn(r);
     if (!key) return;
     map[key] = (map[key] || 0) + r.custo;
   });
-  var related = {};
-  if (crossFilter.dim && crossFilter.dim !== dim) {
-    data.forEach(function(r) {
-      if (rowMatchesCrossFilter(r)) {
-        var k = keyFn(r);
-        if (k) related[k] = true;
-      }
-    });
-  }
   var items = Object.keys(map).map(function(k) { return { nome: k, mt: map[k] }; });
   items.sort(function(a,b) { return b.mt - a.mt; });
   var maxMT = items.length > 0 ? items[0].mt : 0;
