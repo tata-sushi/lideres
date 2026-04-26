@@ -223,13 +223,8 @@ export default function EscalaPainel() {
         setSyncStatus('idle');
       })
       .catch(() => {
-        setDados(p => {
-          if (p[key]) return p;
-          const base = {};
-          DIAS_SEMANA.forEach(dia => { base[dia] = {}; });
-          return { ...p, [key]: { config: {...CFG0}, escala: base } };
-        });
-        setSyncStatus('idle');
+        setSyncStatus('load-error');
+        setTimeout(() => setSyncStatus('idle'), 4000);
       });
   },[key]);
 
@@ -603,6 +598,7 @@ export default function EscalaPainel() {
         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
           {syncStatus==='loading'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.muted,letterSpacing:'.3px'}}>⟳ Carregando...</span>}
           {syncStatus==='error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red,letterSpacing:'.3px'}}>✗ Erro ao salvar</span>}
+          {syncStatus==='load-error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red,letterSpacing:'.3px'}}>✗ Erro ao carregar</span>}
           {syncStatus==='saved'&&!pendente&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.green,letterSpacing:'.3px'}}>✓ Salvo</span>}
         </div>
       </header>
