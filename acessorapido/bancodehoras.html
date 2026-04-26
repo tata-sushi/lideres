@@ -102,10 +102,10 @@ table td:first-child { white-space: nowrap; overflow: hidden; text-overflow: ell
 /* Tabela de Pagamentos: permite o nome quebrar em 2 linhas em vez de truncar */
 table.pag-table td:first-child { white-space: normal; word-break: break-word; overflow: visible; text-overflow: clip; }
 table.pag-table { table-layout: fixed; }
-table.pag-table th:nth-child(1), table.pag-table td:nth-child(1) { width: 38%; }
+table.pag-table th:nth-child(1), table.pag-table td:nth-child(1) { width: 33%; }
 table.pag-table th:nth-child(2), table.pag-table td:nth-child(2) { width: 18%; }
-table.pag-table th:nth-child(3), table.pag-table td:nth-child(3) { width: 24%; }
-table.pag-table th:nth-child(4), table.pag-table td:nth-child(4) { width: 20%; }
+table.pag-table th:nth-child(3), table.pag-table td:nth-child(3) { width: 25%; }
+table.pag-table th:nth-child(4), table.pag-table td:nth-child(4) { width: 24%; }
 table.pag-table th, table.pag-table td { padding-left: 6px; padding-right: 6px; }
 thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); cursor: pointer; user-select: none; }
 thead th:hover { color: var(--carbon); }
@@ -387,10 +387,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <table class="pag-table">
           <thead>
             <tr>
-              <th>Colaborador</th>
-              <th style="text-align:right">Horas</th>
-              <th style="text-align:right">Montante</th>
-              <th>Status</th>
+              <th onclick="togglePagSort('nome')">Colaborador <span id="pag-icon-nome">↕</span></th>
+              <th onclick="togglePagSort('horas')" style="text-align:right">Horas <span id="pag-icon-horas">↕</span></th>
+              <th onclick="togglePagSort('mt')" style="text-align:right">Montante <span id="pag-icon-mt">↓</span></th>
+              <th onclick="togglePagSort('status')">Status <span id="pag-icon-status">↕</span></th>
             </tr>
           </thead>
           <tbody id="tbody-pagamentos"></tbody>
@@ -973,14 +973,33 @@ function renderBarsMontante(elId, data, keyFn, dim) {
 
 var _pagTableRows = [];
 var _pagTableShown = 10;
+var _pagInputRows = [];
+var pagSortCol = 'mt';
+var pagSortDir = -1;
+
+function togglePagSort(col) {
+  if (pagSortCol === col) { pagSortDir = -pagSortDir; }
+  else { pagSortCol = col; pagSortDir = (col === 'nome' || col === 'status') ? 1 : -1; }
+  var icons = { nome:'↕', horas:'↕', mt:'↕', status:'↕' };
+  icons[pagSortCol] = pagSortDir === -1 ? '↓' : '↑';
+  ['nome','horas','mt','status'].forEach(function(k) {
+    var el = document.getElementById('pag-icon-' + k);
+    if (el) el.textContent = icons[k];
+  });
+  renderTabelaPagamentos(_pagInputRows);
+}
 
 function renderTabelaPagamentos(rows) {
+  _pagInputRows = rows;
   _pagTableRows = rows.slice().sort(function(a,b) {
     if (crossFilter.dim) {
       var am = rowMatchesCrossFilter(a), bm = rowMatchesCrossFilter(b);
       if (am !== bm) return am ? -1 : 1;
     }
-    return (b.custo || 0) - (a.custo || 0);
+    if (pagSortCol === 'nome')   return pagSortDir * (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+    if (pagSortCol === 'horas')  return pagSortDir * (Math.abs(b.saldo || 0) - Math.abs(a.saldo || 0));
+    if (pagSortCol === 'status') return pagSortDir * (a.status || '').localeCompare(b.status || '', 'pt-BR');
+    return pagSortDir * ((b.custo || 0) - (a.custo || 0));
   });
   _pagTableShown = TABLE_PAGE;
   renderPagTableRows();
