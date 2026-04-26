@@ -699,8 +699,9 @@ function niceStep(range, target) {
   return steps[steps.length-1] * mag;
 }
 
-// Helper: desenha um chart de 2 linhas (sólida + tracejada) no estilo do "% Negativos".
-// pontos = array com {label, semKey?}; val1Fn/val2Fn = extratores de valor numérico.
+// Helper: desenha um chart de 2 linhas espelhadas (positiva acima do zero,
+// negativa abaixo). Mesmo estilo visual do "% Negativos": área preenchida
+// sutil, valores em cada ponto, datas horizontais.
 function drawTwoLineChart(svgId, pontos, val1Fn, val2Fn) {
   var svg = document.getElementById(svgId);
   if (!svg) return;
@@ -723,37 +724,49 @@ function drawTwoLineChart(svgId, pontos, val1Fn, val2Fn) {
   function sx(i) { return pad + i * ((W - pad*2) / (n-1)); }
   function sy(v) { return pad + (1 - (v - minV) / range) * (H_PLOT - pad); }
 
+  // Baseline: linha do zero se ela aparece no range, senão fundo do plot
+  var hasZero = (minV <= 0 && maxV >= 0);
+  var baseY = hasZero ? sy(0) : (H_PLOT);
+
   var c = '';
 
-  // Linha 0 (zero) sutil para referência
-  if (minV < 0 && maxV > 0) {
-    c += '<line x1="' + pad + '" y1="' + sy(0).toFixed(1) + '" x2="' + (W-pad) + '" y2="' + sy(0).toFixed(1) + '" stroke="#EEEEEE" stroke-width="1"/>';
+  // Linha do zero (referência sutil, só quando há valores positivos e negativos)
+  if (hasZero) {
+    c += '<line x1="' + pad + '" y1="' + baseY.toFixed(1) + '" x2="' + (W-pad) + '" y2="' + baseY.toFixed(1) + '" stroke="#CCCCCC" stroke-width="1"/>';
   }
 
-  // ── Linha 1 (carbon sólido) ──
+  // ── Linha 1 (carbon sólido) com área preenchida ──
+  var area1 = 'M ' + sx(0).toFixed(1) + ' ' + baseY.toFixed(1);
+  pontos.forEach(function(p,i) { area1 += ' L ' + sx(i).toFixed(1) + ' ' + sy(val1Fn(p)).toFixed(1); });
+  area1 += ' L ' + sx(n-1).toFixed(1) + ' ' + baseY.toFixed(1) + ' Z';
+  c += '<path d="' + area1 + '" fill="#35383F" opacity="0.08"/>';
   c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i).toFixed(1) + ' ' + sy(val1Fn(p)).toFixed(1); }).join(' ') + '" fill="none" stroke="#35383F" stroke-width="2"/>';
   pontos.forEach(function(p,i) {
     var v = val1Fn(p);
     c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(v).toFixed(1) + '" r="3" fill="#35383F"/>';
     if (v !== 0) {
-      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (sy(v) - 8).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">' + Math.round(v) + '</text>';
+      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (sy(v) - 8).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">' + Math.round(Math.abs(v)) + '</text>';
     }
   });
 
-  // ── Linha 2 (cinza tracejada) ──
+  // ── Linha 2 (cinza tracejada) com área preenchida ──
+  var area2 = 'M ' + sx(0).toFixed(1) + ' ' + baseY.toFixed(1);
+  pontos.forEach(function(p,i) { area2 += ' L ' + sx(i).toFixed(1) + ' ' + sy(val2Fn(p)).toFixed(1); });
+  area2 += ' L ' + sx(n-1).toFixed(1) + ' ' + baseY.toFixed(1) + ' Z';
+  c += '<path d="' + area2 + '" fill="#35383F" opacity="0.06"/>';
   c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ') + sx(i).toFixed(1) + ' ' + sy(val2Fn(p)).toFixed(1); }).join(' ') + '" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="4,2"/>';
   pontos.forEach(function(p,i) {
     var v = val2Fn(p);
     c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(v).toFixed(1) + '" r="3" fill="#999"/>';
     if (v !== 0) {
-      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (sy(v) + 14).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">' + Math.round(v) + '</text>';
+      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (sy(v) + 14).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">' + Math.round(Math.abs(v)) + '</text>';
     }
   });
 
-  // Labels eixo X (horizontais, centralizadas sob o tick)
+  // Labels eixo X (horizontais, centralizadas sob o tick, fonte 11px)
   pontos.forEach(function(p,i) {
     var lx = sx(i).toFixed(1), ly = (H - 5).toString();
-    c += '<text x="' + lx + '" y="' + ly + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">' + escH(p.label) + '</text>';
+    c += '<text x="' + lx + '" y="' + ly + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#AAAAAA">' + escH(p.label) + '</text>';
   });
 
   svg.innerHTML = c;
@@ -772,8 +785,8 @@ function renderHorasPagPerd() {
   var rf = buildSvgRowFilter();
   var pontos = SEMANAS.map(function(s) { return getWeekSeries(s, rf); });
   drawTwoLineChart('week-pp-svg', pontos,
-    function(p) { return p.pagas; },
-    function(p) { return p.perdidas; }
+    function(p) { return p.pagas; },         // acima do zero
+    function(p) { return -p.perdidas; }      // abaixo do zero (espelhado)
   );
 }
 
@@ -816,10 +829,10 @@ function renderNegPct() {
     c += '<circle cx="' + sx(i) + '" cy="' + sy(p.pct) + '" r="4" fill="#35383F"/>';
     c += '<text x="' + sx(i) + '" y="' + (sy(p.pct)-9) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">' + p.pct + '%</text>';
   });
-  // Labels eixo X (horizontais, centralizadas sob o tick)
+  // Labels eixo X (horizontais, centralizadas sob o tick, fonte 11px)
   pontos.forEach(function(p,i) {
     var lx = sx(i).toFixed(1), ly = (H - 5).toString();
-    c += '<text x="' + lx + '" y="' + ly + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">' + escH(p.label) + '</text>';
+    c += '<text x="' + lx + '" y="' + ly + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#AAAAAA">' + escH(p.label) + '</text>';
   });
   svg.innerHTML = c;
 }
