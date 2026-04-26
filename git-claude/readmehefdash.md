@@ -2,6 +2,10 @@
 
 Especificações completas de layout para **headers, rodapés e seção de filtros** das páginas de dashboard do Portal Líderes TATÁ. Referência: `compliance/menucompliance.html` (altura padrão), `compliance/kpis/rh/recrutamento.html` e `compliance/kpis/rh/bancodehoras.html`.
 
+## 📋 ESCOPO
+
+⚠️ **Essas especificações aplicam-se APENAS a páginas classificadas como "Dashboard" no mapa de lideranças (coluna E, "tipo de página")**. Páginas de tipo diferente (Menu, Institucional, etc.) seguem padrões específicos documentados em `CLAUDE.md`.
+
 ---
 
 ## HEADER — LAYOUT PADRÃO
