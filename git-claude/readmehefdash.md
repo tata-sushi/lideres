@@ -1,6 +1,6 @@
-# README: Header & Footer — Dashboards Portal Líderes
+# README: Header, Footer & Filtros — Dashboards Portal Líderes
 
-Especificações completas de layout para **headers e rodapés** das páginas de dashboard do Portal Líderes TATÁ. Referência: `acessorapido/recrutamento` e `acessorapido/manutencao`.
+Especificações completas de layout para **headers, rodapés e seção de filtros** das páginas de dashboard do Portal Líderes TATÁ. Referência: `compliance/kpis/rh/recrutamento.html` e `acessorapido/bancodehoras.html`.
 
 ---
 
@@ -167,15 +167,218 @@ Especificações completas de layout para **headers e rodapés** das páginas de
 
 ---
 
+## FILTROS — LAYOUT PADRÃO
+
+A seção de filtros aparece logo abaixo do header (ou abaixo das tabs, se houver). É composta por **3 elementos hierárquicos**: `.filters-wrap` (container) > `.filters-row` (grid de selects) + `.filters-actions` (botão Limpar + contador).
+
+### Container Externo (.filters-wrap)
+```css
+.filters-wrap {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+```
+- **Display CRÍTICO**: `flex; flex-direction: column; gap: 10px` — sem isso, `.filters-row` e `.filters-actions` colapsam juntos
+- **Padding**: `14px 20px` (mesmo do header, alinhamento visual)
+- **Border-bottom**: separa visualmente do conteúdo abaixo
+
+### Linha de Filtros (.filters-row)
+```css
+.filters-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+```
+- **Display**: `grid` (NÃO flex — para igualar largura das colunas)
+- **Grid mobile**: `1fr 1fr` (2 colunas iguais)
+- **Grid desktop (≥768px)**: `1fr 1fr 1fr` (3 colunas) — definido em media query
+- **Gap**: `10px` entre colunas
+
+### Grupo de Filtro (.filter-group)
+```css
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+```
+- **Sem `min-width`** — deixar o grid controlar largura
+- **Label em cima, select embaixo** (flex-direction column)
+
+### Label do Filtro (.filter-label)
+```css
+.filter-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--mid);
+}
+```
+
+### Select do Filtro (.filter-select)
+```css
+.filter-select {
+  appearance: none;
+  background: var(--bg) url("data:image/svg+xml,...chevron...") no-repeat right 12px center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 36px 9px 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  width: 100%;
+}
+```
+- **SVG chevron embutido**: ícone customizado de seta para baixo (12×8px, stroke #555)
+- **Padding-right 36px**: espaço para o chevron
+- **Width 100%**: ocupa toda a coluna do grid
+
+### Linha de Ações (.filters-actions)
+```css
+.filters-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 2px;
+  width: 100%;
+}
+```
+- **CRÍTICO**: `justify-content: space-between` — Limpar à esquerda, contador à direita
+- **`width: 100%`**: garante que o flex preenche toda a largura
+- **`padding-top: 2px`**: pequeno respiro visual (gap principal vem do `.filters-wrap`)
+
+### Botão Limpar (.btn-clear)
+```css
+.btn-clear {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.btn-clear:hover { color: var(--carbon); }
+```
+
+### Contador de Resultados (.results-count)
+```css
+.results-count {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+.results-count span {
+  color: var(--carbon);
+  font-weight: 500;
+}
+```
+- **Texto** "resultado(s)" em `var(--muted)` (cinza claro)
+- **Número** (dentro de `<span>`) em `var(--carbon)` (preto, peso 500)
+
+### HTML Padrão dos Filtros
+```html
+<div class="filters-wrap">
+  <div class="filters-row">
+    <div class="filter-group">
+      <span class="filter-label">Unidade</span>
+      <select class="filter-select" id="filtro-unidade" onchange="applyFilters()">
+        <option>Todos</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Departamento</span>
+      <select class="filter-select" id="filtro-depto" onchange="applyFilters()">
+        <option>Todos</option>
+      </select>
+    </div>
+  </div>
+  <div class="filters-actions">
+    <button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>
+    <span class="results-count"><span id="results-count">0</span> resultado(s)</span>
+  </div>
+</div>
+```
+
+### Media Query Desktop
+```css
+@media (min-width: 768px) {
+  .filters-wrap { max-width: 960px; margin-left: auto; margin-right: auto; padding: 14px 20px; }
+  .filters-row { grid-template-columns: 1fr 1fr 1fr; }  /* só se houver 3+ filtros */
+}
+```
+
+### Regras Obrigatórias dos Filtros
+✅ **DEVE**:
+- `.filters-wrap` com `display: flex; flex-direction: column; gap: 10px;`
+- `.filters-row` é GRID, NÃO flex
+- `.filters-actions` é SIBLING de `.filters-row` (NÃO filho)
+- `justify-content: space-between` em `.filters-actions`
+- Label DM Mono 10px uppercase, select DM Sans 13px
+- JavaScript atualiza `#results-count` em cada `applyFilters()`
+
+❌ **NÃO**:
+- `.filter-group` com `min-width` (quebra o grid)
+- "Limpar filtros" como terceiro `.filter-group` inline (deve estar no `.filters-actions`)
+- `flex-wrap: nowrap` em `.filters-row` (não funciona em grid)
+- Duplicar `<span class="results-count">` (HTML inválido)
+
+---
+
 ## RODAPÉ (Footer)
 
 **Nota**: As dashboards analisadas não têm rodapé fixo na página. O espaçamento inferior é controlado pelo `.content { padding: 16px 20px 80px; }` — ou seja, espaço para não ficar sob botões FAB flutuantes.
 
-Se houver rodapé, seguir padrão similar ao header:
-- **Padding**: `14px 20px`
-- **Border-top**: `1px solid var(--border)`
-- **Position**: `sticky; bottom: 0; z-index: 100`
-- **Background**: `var(--surface)`
+Se houver rodapé fixo (padrão "carbon"):
+```css
+.footer {
+  background: var(--carbon);
+  padding: 8px 24px;
+  text-align: center;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 100;
+}
+.footer-line1 {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--citric);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.footer-line2 {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  margin-top: 1px;
+}
+```
+
+**HTML do footer**:
+```html
+<footer class="footer">
+  <div class="footer-line1">TATÁ SUSHI | TATÁ POKE | 2016 – 2026</div>
+  <div class="footer-line2" id="footer-date">Atualizado em —</div>
+</footer>
+```
+
+**JavaScript** (atualizar data/hora dinâmica):
+```javascript
+document.getElementById('footer-date').textContent =
+  'Atualizado em ' + new Date().toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' });
+```
 
 ---
 
@@ -244,7 +447,8 @@ Se houver rodapé, seguir padrão similar ao header:
 
 ---
 
-**Data**: 2026-04-21  
+**Data**: 2026-04-26  
 **Páginas Referência**: 
-- `acessorapido/recrutamento.html`
-- `acessorapido/manutencao.html`
+- `compliance/kpis/rh/recrutamento.html` (header + filtros + footer carbon)
+- `acessorapido/bancodehoras.html` (header + tabs + filtros + footer carbon)
+- `compliance/kpis/manutencao/index.html` (header simples)
