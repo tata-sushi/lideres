@@ -1,6 +1,6 @@
 # README: Header, Footer & Filtros — Dashboards Portal Líderes
 
-Especificações completas de layout para **headers, rodapés e seção de filtros** das páginas de dashboard do Portal Líderes TATÁ. Referência: `compliance/kpis/rh/recrutamento.html` e `acessorapido/bancodehoras.html`.
+Especificações completas de layout para **headers, rodapés e seção de filtros** das páginas de dashboard do Portal Líderes TATÁ. Referência: `compliance/menucompliance.html` (altura padrão), `compliance/kpis/rh/recrutamento.html` e `compliance/kpis/rh/bancodehoras.html`.
 
 ---
 
@@ -10,7 +10,7 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 - **Altura total**: `14px (padding-top) + conteúdo + 14px (padding-bottom)` = ~56–60px
   - Logo: 40px
   - Título: 20px line-height
-  - User/Plus: ~30px
+  - User/Plus: **28px** (mesma altura, alinhamento visual perfeito — padrão `menucompliance.html`)
 - **Padding**: `14px 20px` (vertical 14px, horizontal 20px)
 - **Display**: `flex`, `align-items: center`, `gap: 14px`
 - **Position**: `sticky; top: 0; z-index: 100` (fica fixo ao scroll)
@@ -52,9 +52,13 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 ---
 
 ## HEADER-USER (Identificação do Líder)
+
+> 🎯 **Alinhamento visual obrigatório**: `.header-user` e `.header-plus` DEVEM ter **mesma altura (28px)** — padrão `compliance/menucompliance.html`. Isso cria alinhamento perfeito entre os dois elementos do topo direito.
+
 ### Dimensões & Spacing
-- **Padding**: `5px 10px` (compacto, tipo badge)
-- **Height**: ~24px (confortável para single-line text)
+- **Padding**: `0 10px` (vertical zero — `height` controla a altura, não o padding)
+- **Height**: `28px` (explícito, **MESMA altura do `.header-plus`**)
+- **Display**: `inline-flex; align-items: center` (necessário para `height` funcionar com texto centralizado verticalmente)
 - **Whitespace**: `white-space: nowrap` (não quebra nome)
 - **Margin**: `margin-left: auto` (empurra para a direita)
 
@@ -80,9 +84,12 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 
 ---
 
-## HEADER-PLUS (Botão "+", quando houver)
+## HEADER-PLUS (Botão "+")
+
+> ⚠️ **OBRIGATÓRIO em TODA página dashboard**: o botão `.header-plus` (`+`) **NÃO é opcional**. Toda dashboard deve ter o botão "+" no topo direito (depois do `.header-user`), responsável por abrir o formulário/drawer de NOVA ENTRADA da página (ex.: nova rescisão, nova ouvidoria, novo registro de banco de horas). Se a funcionalidade ainda não existir, usar `onclick="alert('Em desenvolvimento')"` como placeholder.
+
 ### Dimensões
-- **Tamanho**: `30px × 30px` (quadrado, menor que logo)
+- **Tamanho**: `28px × 28px` (quadrado, **MESMA altura do `.header-user`** — alinhamento visual perfeito, padrão `menucompliance.html`)
 - **Position**: Depois do `#header-user`
 - **Flex**: `flex-shrink: 0` (não encolhe)
 
@@ -115,12 +122,13 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
     <div class="header-title">TITULO_CURTO</div>
   </div>
   <span class="header-user" id="header-user">—</span>
-  <!-- Opcionalmente: botão "+" -->
   <button class="header-plus" onclick="openFab()">
     <svg>...</svg>
   </button>
 </header>
 ```
+
+⚠️ **Botão `+` é obrigatório em TODA dashboard** — se ainda não há funcionalidade, usar `onclick="alert('Em desenvolvimento')"`.
 
 ---
 
@@ -129,8 +137,9 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 ### ✅ DEVE
 - Logo: 40×40px, base64 canônico, flex-shrink 0
 - Título: 20px, 700 weight, max ~12 chars, **sem media query override**
-- Header-user: monospace 10px, border-radius **4px hardcoded**, margin-left auto
-- Header-plus: 30×30px, border-radius **4px hardcoded**, SVG 14×14px, stroke-width 2.5px
+- Header-user: monospace 10px, border-radius **4px hardcoded**, **`padding: 0 10px; height: 28px; display: inline-flex; align-items: center;`**, margin-left auto
+- Header-plus: **28×28px** (MESMA altura do `.header-user`), border-radius **4px hardcoded**, SVG 14×14px, stroke-width 2.5px
+- **Toda dashboard tem `.header-plus` (botão "+") OBRIGATÓRIO** — nunca opcional, mesmo que abra apenas `alert('Em desenvolvimento')`
 - Position: sticky top 0 z-index 100
 - Padding: 14px 20px (ambos lados)
 - **Sem overflow:hidden** no header — corta nome em telas pequenas
@@ -142,6 +151,10 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 - Variações de CSS em media queries para `.header`, `.logo-img`, `.header-title`
 - Redondo (`100px border-radius`) no header-user — mantém quadrado
 - Usar `var(--radius)` no `.header-user` ou `.header-plus` — sempre **4px hardcoded** para manter curvatura sutil consistente
+- **Header-user e header-plus com alturas diferentes** — ambos DEVEM ter `28px` (alinhamento visual obrigatório)
+- **`padding: 5px 10px` no `.header-user`** — usar `padding: 0 10px` + `height: 28px` (padrão `menucompliance.html`)
+- **`width/height: 30px` no `.header-plus`** — sempre `28px` para alinhar com `.header-user`
+- **Página dashboard sem botão `+`** — sempre incluir, mesmo que abra `alert('Em desenvolvimento')`
 - `overflow:hidden` no header
 - Logo truncado ou reimplementado — sempre copiar tag inteira
 - Header-user com nome hardcoded — usar script final com `session.displayName`
@@ -386,8 +399,8 @@ document.getElementById('footer-date').textContent =
 
 ```
 ┌─────────────────────────────────────────────────┐
-│ [LOGO 40×40]  Recrutamento        [USER 10px] + │ ← header (56–60px)
-│                                    [30×30px]    │
+│ [LOGO 40×40]  Recrutamento        [USER 28px] + │ ← header (56–60px)
+│                                    [28×28px]    │
 ├─────────────────────────────────────────────────┤
 │                                                 │
 │          [CONTEÚDO DA PÁGINA]                   │ ← content (flex)
@@ -422,8 +435,9 @@ document.getElementById('footer-date').textContent =
     .header-title { font-size: 20px; font-weight: 700; color: var(--carbon); letter-spacing: -0.3px; }
     .header-user { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; 
       color: var(--carbon); background: var(--bg); border: 1px solid var(--border); 
-      border-radius: 4px; padding: 5px 10px; white-space: nowrap; margin-left: auto; }
-    .header-plus { width: 30px; height: 30px; background: var(--carbon); border: none; 
+      border-radius: 4px; padding: 0 10px; height: 28px; display: inline-flex; align-items: center;
+      white-space: nowrap; margin-left: auto; }
+    .header-plus { width: 28px; height: 28px; background: var(--carbon); border: none; 
       border-radius: 4px; display: flex; align-items: center; justify-content: center; 
       cursor: pointer; flex-shrink: 0; }
     .header-plus svg { width: 14px; height: 14px; stroke: var(--citric); fill: none; stroke-width: 2.5; stroke-linecap: round; }
@@ -436,6 +450,9 @@ document.getElementById('footer-date').textContent =
       <div class="header-title">BCH</div>
     </div>
     <span class="header-user" id="header-user">—</span>
+    <button class="header-plus" onclick="alert('Em desenvolvimento')">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
   </header>
 
   <div class="content">
@@ -449,6 +466,7 @@ document.getElementById('footer-date').textContent =
 
 **Data**: 2026-04-26  
 **Páginas Referência**: 
+- `compliance/menucompliance.html` (**padrão de altura header-user/header-plus = 28px**)
 - `compliance/kpis/rh/recrutamento.html` (header + filtros + footer carbon)
-- `acessorapido/bancodehoras.html` (header + tabs + filtros + footer carbon)
+- `compliance/kpis/rh/bancodehoras.html` (header + tabs + filtros + footer carbon)
 - `compliance/kpis/manutencao/index.html` (header simples)
