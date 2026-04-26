@@ -156,6 +156,21 @@ function migrarEscalaSchema(sh) {
   }
 }
 
+// Sheets pode devolver hora como Date (ex.: 1899-12-30T22:06:28Z).
+// Normaliza para string "HH:mm".
+function _hhmm(v) {
+  if (v == null || v === '') return '';
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    var hh = ('0' + v.getUTCHours()).slice(-2);
+    var mm = ('0' + v.getUTCMinutes()).slice(-2);
+    return hh + ':' + mm;
+  }
+  var s = String(v);
+  var m = s.match(/T(\d{2}):(\d{2})/);
+  if (m) return m[1] + ':' + m[2];
+  return s;
+}
+
 function getEscala(semana) {
   if (!semana) return { error: 'semana obrigatória' };
 
@@ -171,9 +186,9 @@ function getEscala(semana) {
     var dia = r[1], colabId = r[2];
     if (!dia || !colabId) return;
     escala[dia][colabId] = {
-      t1Ini: r[3]||'', t1Fim: r[4]||'',
-      t2Ini: r[5]||'', t2Fim: r[6]||'',
-      t3Ini: r[7]||'', t3Fim: r[8]||'',
+      t1Ini: _hhmm(r[3]), t1Fim: _hhmm(r[4]),
+      t2Ini: _hhmm(r[5]), t2Fim: _hhmm(r[6]),
+      t3Ini: _hhmm(r[7]), t3Fim: _hhmm(r[8]),
       folga: r[9] === true || r[9] === 'TRUE',
     };
   });
