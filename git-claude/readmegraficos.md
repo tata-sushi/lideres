@@ -15,6 +15,7 @@ Exemplos canônicos (estado atual):
 | `acessorapido/bancodehoras.html` | KPIs · 2 bar charts · 2 line charts · tabela · cross-filter |
 | `acessorapido/recrutamento.html` | KPIs · bar chart · tabela |
 | `acessorapido/gorjeta.html` | KPIs · line chart · tabela |
+| `compliance/kpis/rh/beneficios.html` | KPIs · Chart.js bar chart com valores acima das barras · tabela com sort indicators · cross-filter mês+ano |
 
 ## 2. Dependências
 
@@ -51,11 +52,11 @@ Hierarquia fixa — **não inventar tamanhos**:
 | `kpi-label`           | DM Mono  | 10px    | 500  | `--muted` |
 | `kpi-number`          | DM Sans  | 28px    | 700  | `--carbon`|
 | `kpi-sub`             | DM Mono  | 10px    | 400  | `--muted` |
-| `chart-title`         | DM Sans  | 11px    | 600  | `--carbon`|
-| Valores em chart      | DM Mono  | 11px    | 500  | `--carbon`|
-| Datas (eixo X)        | DM Mono  | 11px    | 400  | `--muted` |
-| Header de tabela      | DM Mono  | 11px    | 600  | `--carbon`|
-| Célula de tabela      | DM Sans  | 12px    | 400  | `--carbon`|
+| `chart-title`         | DM Mono  | 10px    | 500  | `--muted` (chart card) ou 11px 600 carbon (table card) |
+| Valores acima barras   | DM Mono  | 11px    | 600  | `--carbon`|
+| Datas (eixo X)        | DM Mono  | 10px    | 400  | `--carbon` (não muted) |
+| Header de tabela      | DM Mono  | 9px     | 500  | `--muted`; sort indicators `↕↑↓` em `::after` |
+| Célula de tabela      | DM Sans  | 13px    | 400  | `--carbon`|
 | Footer (timestamp)    | DM Mono  | 11px    | 400  | `--muted` |
 
 **Regra**: todo número usa DM Mono. Toda label/legenda técnica usa DM Mono. Texto descritivo usa DM Sans.
@@ -294,7 +295,141 @@ function renderBarsEl(containerId, data, dim) {
 - Click na linha inteira (não só na barra) → cross-filter.
 - Truncar nomes com `text-overflow: ellipsis`.
 
-## 8. Charts SVG de linha
+## 8. Bar charts Chart.js com valores acima das barras
+
+Padrão novo em `compliance/kpis/rh/beneficios.html` — usar para gráficos de distribuição por períodos.
+
+### HTML/CSS
+
+```html
+<div class="chart-card" id="chartCard">
+  <div class="chart-title">Aniversariantes por Mês</div>
+  <div class="chart-wrap"><canvas id="cAniv"></canvas></div>
+</div>
+```
+
+```css
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+}
+.chart-card .chart-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 14px;
+  text-align: center;
+  font-weight: 500;
+}
+.chart-wrap { position: relative; height: 260px; }
+```
+
+### Plugin para valores acima das barras
+
+```js
+var barValueLabelsPlugin = {
+  id: 'barValueLabels',
+  afterDatasetsDraw: function(chart) {
+    var meta = chart.getDatasetMeta(0);
+    if (!meta.data) return;
+    var ctx = chart.ctx;
+    var data = chart.data.datasets[0].data;
+    ctx.save();
+    ctx.fillStyle = '#35383F';
+    ctx.font = '600 11px "DM Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    for (var i = 0; i < meta.data.length; i++) {
+      var v = data[i];
+      if (!v) continue;
+      var bar = meta.data[i];
+      ctx.fillText(v, bar.x, bar.y - 6);
+    }
+    ctx.restore();
+  }
+};
+```
+
+### Chart.js config
+
+```js
+var chart = new Chart(document.getElementById('cAniv'), {
+  type: 'bar',
+  data: {
+    labels: labels,  // MM/AAAA format
+    datasets: [{
+      label: 'Label',
+      data: counts,
+      backgroundColor: bgColors,  // var(--carbon) normal, rgba(53,56,63,0.45) desmarcado
+      borderWidth: 0,
+      borderRadius: 5,
+      barPercentage: 0.6,
+    }]
+  },
+  plugins: [cfOutlinePlugin, barValueLabelsPlugin],  // outline + valores acima
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,  // sem animação ao mudar cores no cross-filter
+    layout: { padding: { top: 18 } },  // espaço para valores não cliparem
+    onClick: function(e, els) {
+      if (els.length) { setCF(indexes[els[0].index]); }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: { enabled: false },
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(53,56,63,0.06)' },
+        ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 } },
+        border: { color: 'rgba(53,56,63,0.1)' }
+      },
+      y: {
+        grid: { color: 'rgba(53,56,63,0.06)' },
+        ticks: { color: '#9CA3AF', font: { family: 'DM Mono', size: 10 }, stepSize: 1 },
+        border: { color: 'rgba(53,56,63,0.1)' },
+        beginAtZero: true
+      }
+    }
+  }
+});
+```
+
+### Cross-filter com mês+ano
+
+⚠️ **Crítico**: se os dados têm datas com anos futuros, o cross-filter **DEVE** comparar mês+ano exato, não só mês (número 0–11). Padrão `beneficios.html`:
+
+```js
+// No data fetch, adicionar mesAnivMY = 'MM/AAAA' baseado na data real do próximo evento
+mesAnivMY: String(proxAniv.getMonth()+1).padStart(2,'0') + '/' + proxAniv.getFullYear()
+
+// No cross-filter, comparar strings:
+if (activeCfMes !== null) {
+  var am = a.mesAnivMY === activeCfMes;  // string compare
+  var bm = b.mesAnivMY === activeCfMes;
+  if (am !== bm) return am ? -1 : 1;
+}
+```
+
+### Regras
+
+- Barras sempre `var(--carbon)`.
+- Valores acima (DM Mono 11px 600 carbon) renderizados por plugin.
+- Padding-top de 18px no layout para labels não serem clipped.
+- Labels X axis em **carbon** (não muted) — melhor legibilidade.
+- Sem animação (`animation: false`) ao mudar cores no cross-filter.
+- Datas X axis em **MM/AAAA** format (ex.: `01/2026`, `02/2026`).
+- Cross-filter usa strings "MM/AAAA", não números de mês.
+
+## 9. Charts SVG de linha
 
 Padrão **viewBox 900×240, `preserveAspectRatio="none"`**, scroll horizontal via wrapper.
 
@@ -441,122 +576,228 @@ Em qualquer chart de linha:
 
 Usar campo `holiday: true` no data point para acionar.
 
-## 9. Tabelas
+## 10. Tabelas
 
-Layout fixo, sort clicável, paginação "Ver mais", contador, alinhamento centralizado em colunas numéricas.
+Layout fixo, sort clicável com indicadores `↕/↑/↓`, paginação "Ver mais", contador, alinhamento centralizado em colunas numéricas.
 
-### CSS
+### CSS (padrão beneficios.html)
 
 ```css
-.tbl-wrap { overflow-x: auto; }
-.tbl {
+.table-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card .chart-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--carbon);
+  margin-bottom: 16px;
+  text-align: center;  /* centralizado */
+}
+.table-count {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: 8px;
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.table-wrap { overflow-x: auto; }
+table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
-.tbl th {
+thead th {
   font-family: 'DM Mono', monospace;
-  font-size: 11px; font-weight: 600;
-  color: var(--carbon);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  color: var(--muted);
+  padding: 8px 10px;
   text-align: left;
-  padding: 10px 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--carbon);
+  background: var(--surface);
   cursor: pointer;
   user-select: none;
+  transition: color 0.15s;
 }
-.tbl th .arrow { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-left: 4px; }
-.tbl td {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 12px;
-  color: var(--carbon);
-  padding: 10px 8px;
+thead th:not(:first-child) { text-align: center; }
+thead th:hover { color: var(--carbon); }
+thead th::after { content: ' ↕'; color: var(--muted); }
+thead th.sa::after { content: ' ↑'; color: var(--carbon); }
+thead th.sd::after { content: ' ↓'; color: var(--carbon); }
+tbody tr {
+  transition: background 0.1s;
+  cursor: pointer;
+}
+tbody tr:hover { background: #FAFAFA; }
+tbody tr:last-child td { border-bottom: none; }
+tbody td {
+  padding: 8px 10px;
+  font-size: 13px;
   border-bottom: 1px solid var(--border);
+  color: var(--carbon);
+  font-family: 'DM Sans', sans-serif;
 }
-.tbl td.num, .tbl th.num { text-align: center; font-family: 'DM Mono', monospace; }
-.tbl td.name { word-break: break-word; }
-.tbl tbody tr { cursor: pointer; }
-.tbl-meta {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-top: 12px;
-  font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted);
+tbody td:first-child {
+  word-break: break-word;
+  font-weight: 500;
 }
+tbody td:not(:first-child) {
+  text-align: center;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+}
+
+/* Cross-filter highlight */
+body.cf-active tbody tr[onclick]:not(.cf-selected) { opacity: 0.45; }
+body.cf-active tbody tr.cf-selected { opacity: 1; }
+tbody tr.cf-selected {
+  background: #FAFAFA !important;
+  box-shadow: inset 4px 0 0 0 var(--carbon);
+}
+tbody tr.cf-selected td {
+  color: var(--carbon);
+  font-weight: 600;
+}
+tbody tr.cf-selected td:first-child {
+  padding-left: 14px;
+}
+
+/* Botão Ver Mais */
 .btn-more {
+  display: block;
+  margin: 14px auto 0;
   background: transparent;
   border: 1px solid var(--border);
   padding: 8px 14px;
-  font-family: 'DM Mono', monospace; font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
   color: var(--carbon);
   cursor: pointer;
+  border-radius: 6px;
 }
 .btn-more:hover { border-color: var(--carbon); }
 ```
 
-### Sort + paginação
+### HTML (padrão beneficios.html)
+
+```html
+<div class="table-card" id="tableCard">
+  <div class="chart-title">Relação de Colaboradores <span class="table-count" id="tCount"></span></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th onclick="doSort('nome')">Colaborador</th>
+          <th onclick="doSort('proxAniv')">Próx. Aniversário</th>
+          <th onclick="doSort('idade')">Idade</th>
+          <th onclick="doSort('pct')">Progresso</th>
+        </tr>
+      </thead>
+      <tbody id="tBody"></tbody>
+    </table>
+  </div>
+  <button class="btn-more" id="btnMore" hidden onclick="loadMore()"></button>
+</div>
+```
+
+### JavaScript (padrão beneficios.html)
 
 ```js
-let tableState = { sortBy: 'data', sortDir: 'desc', page: 1, pageSize: 10 };
+var sKey = 'diasFaltando', sDir = 'asc';
+var PAGE_SIZE = 10;
+var tRows = [];
 
-function arrowFor(col) {
-  if (tableState.sortBy !== col) return '↕';
-  return tableState.sortDir === 'asc' ? '↑' : '↓';
-}
-
-function togglePagSort(col) {
-  if (tableState.sortBy === col) {
-    tableState.sortDir = tableState.sortDir === 'asc' ? 'desc' : 'asc';
-  } else {
-    tableState.sortBy = col;
-    tableState.sortDir = 'desc';
-  }
-  tableState.page = 1;
-  renderTable();
-}
-
-function renderTable() {
-  const data = getFiltered().sort((a, b) => {
-    const av = a[tableState.sortBy], bv = b[tableState.sortBy];
-    const dir = tableState.sortDir === 'asc' ? 1 : -1;
-    if (av < bv) return -1 * dir;
-    if (av > bv) return 1 * dir;
-    return 0;
+function doSort(key) {
+  if (sKey === key) sDir = sDir === 'asc' ? 'desc' : 'asc';
+  else { sKey = key; sDir = 'asc'; }
+  // Atualizar classes sa/sd nos headers
+  document.querySelectorAll('thead th').forEach(function(th) {
+    th.classList.remove('sa', 'sd');
+    if (th.getAttribute('onclick') === 'doSort(\'' + key + '\')') {
+      th.classList.add(sDir === 'asc' ? 'sa' : 'sd');
+    }
   });
+  renderTable(getFilt());
+}
 
-  const visible = data.slice(0, tableState.page * tableState.pageSize);
-  const remaining = data.length - visible.length;
+function loadMore() {
+  var shown = document.getElementById('tBody').querySelectorAll('tr').length;
+  var next = tRows.slice(shown, shown + PAGE_SIZE);
+  next.forEach(function(d) {
+    document.getElementById('tBody').insertAdjacentHTML('beforeend', rowHtml(d));
+  });
+  var remaining = tRows.length - (shown + next.length);
+  var btn = document.getElementById('btnMore');
+  if (remaining > 0) {
+    btn.hidden = false;
+    btn.textContent = 'Ver mais (' + remaining + ')';
+  } else {
+    btn.hidden = true;
+  }
+}
 
-  document.getElementById('tblBody').innerHTML = visible.map(r => {
-    const sel = crossFilter && r[crossFilter.dim] === crossFilter.value;
-    return `
-      <tr class="${sel ? 'cf-selected' : ''}" data-key="${r.colaborador}">
-        <td class="name">${r.nome}</td>
-        <td>${r.data}</td>
-        <td class="num">${r.horas}</td>
-        <td class="num">${r.tipo}</td>
-      </tr>`;
-  }).join('');
+function renderTable(filt) {
+  var activeCfMes = getActiveCfMes();
+  var sorted = filt.slice().sort(function(a, b) {
+    // Se há cross-filter ativo, prioriza matching rows no topo
+    if (activeCfMes !== null) {
+      var am = a.mesAnivMY === activeCfMes;  // mês+ano, string
+      var bm = b.mesAnivMY === activeCfMes;
+      if (am !== bm) return am ? -1 : 1;
+    }
+    var va = a[sKey], vb = b[sKey];
+    if (typeof va === 'string') return sDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    return sDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+  });
+  document.getElementById('tCount').textContent = '— ' + filt.length + ' colaborador' + (filt.length !== 1 ? 'es' : '');
+  document.getElementById('tBody').innerHTML = '';
+  document.getElementById('btnMore').hidden = true;
+  if (!filt.length) {
+    document.getElementById('tBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Nenhum colaborador encontrado</td></tr>';
+    return;
+  }
+  tRows = sorted;
+  loadMore();
+}
 
-  document.getElementById('tblCount').textContent =
-    `${visible.length} de ${data.length}`;
-  document.getElementById('btnMore').style.display =
-    remaining > 0 ? 'inline-block' : 'none';
-  document.getElementById('btnMore').textContent =
-    `Ver mais (${Math.min(remaining, tableState.pageSize)})`;
+function rowHtml(d) {
+  var activeCfMes = getActiveCfMes();
+  var rowClass = activeCfMes !== null && d.mesAnivMY === activeCfMes ? 'cf-selected' : '';
+  return '<tr class="' + rowClass + '" onclick="setCF(\'' + d.mesAnivMY + '\')">' +
+    '<td>' + d.nome + '</td>' +
+    '<td>' + d.proxFormatado + '</td>' +
+    '<td>' + d.idade + '</td>' +
+    '<td>' + progBar(d.pct) + '</td>' +
+    '</tr>';
 }
 ```
 
 ### Regras
 
-- `table-layout: fixed` — colunas com largura previsível, evita reflow.
-- Setas: `↕` (não ordenado), `↓` (desc), `↑` (asc).
-- Paginação **incremental** de 10 em 10. Não usar páginas numeradas.
-- Contador `"X de Y"` sempre visível.
-- Colunas numéricas: classe `.num` → centralizado + DM Mono.
-- Nomes longos: `word-break: break-word` em coluna `.name`.
-- `cf-selected` na linha clicada (destaque pelo cross-filter).
+- `table-layout: fixed` — colunas com largura previsível.
+- Sort indicators: `::after` pseudo-element com `↕` (padrão muted), `↑` (asc, carbon), `↓` (desc, carbon).
+- Paginação **incremental** de 10 em 10. Botão "Ver mais (N)" no final.
+- Contador `"— X colaboradores"` no título da tabela.
+- Título centralizado com `text-align: center`.
+- `cf-selected` na linha clicada: background #FAFAFA + carbon left border 4px + text bold.
+- Dimming com `opacity: 0.45` em linhas não-match quando cross-filter ativo.
+- **Crítico para cross-filter com períodos**: comparar mês+ano (string "MM/AAAA"), não só mês (0–11).
 
-## 10. Datas & formatação
+## 11. Datas & formatação
 
 Formato compacto sempre — espaço é caro.
 
@@ -591,7 +832,7 @@ function fmtTimestamp(d) {
 }
 ```
 
-## 11. Match de tipos no CSV
+## 12. Match de tipos no CSV
 
 Strings vindas de planilha/CSV variam (singular/plural, masculino/feminino, particípios). Usar **substring match**, não match exato.
 
@@ -616,7 +857,7 @@ Mapear todas as variações conhecidas para o **menor radical comum**:
 | Compensação    | `compens` | compensar, compensação, compensado       |
 | Acréscimo      | `acresc`  | acréscimo, acrescimo, acrescentar        |
 
-## 12. Mobile & layout responsivo
+## 13. Mobile & layout responsivo
 
 ### Desktop (`@media (min-width: 768px)`)
 
@@ -644,7 +885,7 @@ Mapear todas as variações conhecidas para o **menor radical comum**:
 }
 ```
 
-## 13. Snippets prontos — exemplos canônicos
+## 14. Snippets prontos — exemplos canônicos
 
 ### KPI card completo
 
@@ -702,7 +943,7 @@ function togglePagSort(col) {
 </thead>
 ```
 
-## 14. Checklist ao criar/editar uma dashboard
+## 15. Checklist ao criar/editar uma dashboard
 
 - [ ] Variáveis CSS no `:root` (cores + fontes carregadas).
 - [ ] Tipografia segue tabela do §3 (DM Mono em números/labels, DM Sans em texto).
@@ -710,20 +951,25 @@ function togglePagSort(col) {
 - [ ] Texto **nunca** em verde/vermelho/amber.
 - [ ] `--citric` apenas como acento, nunca em fundos grandes.
 - [ ] Estado vazio: `—` em `--muted`, nunca zero ou vermelho.
+- [ ] **Chart.js bar chart** (se usado): valores acima das barras via `barValueLabelsPlugin`, sem animação, eixo X em carbon.
+- [ ] **Chart.js config**: `animation: false`, `layout: { padding: { top: 18 } }`, datas em `MM/AAAA`.
 - [ ] Charts SVG com `viewBox 900 240`, `preserveAspectRatio="none"`, wrapper `.chart-scroll`.
 - [ ] Linhas espelhadas usam `Math.abs` no valor exibido.
 - [ ] Feriado destaca com circle r=4 fill citric stroke carbon.
-- [ ] Tabela com `table-layout: fixed`, sort `↕↓↑`, paginação "Ver mais (N)" 10 em 10.
+- [ ] Tabela com `table-layout: fixed`, sort `↕↓↑` (via `::after` pseudo-element), paginação "Ver mais (N)" 10 em 10.
+- [ ] Título da tabela centralizado (`text-align: center`).
 - [ ] Colunas numéricas com `.num` (centralizado + DM Mono).
 - [ ] Datas em `DD/MM` ou `DD/MM HH:MM`. Nunca data completa.
+- [ ] Datas com período (mês+ano): usar `MM/AAAA` em labels e cross-filter (string compare, não número de mês).
 - [ ] R$ inteiros, horas inteiras sem unidade.
 - [ ] Match de tipos por substring (`includes`), nunca `===`.
-- [ ] Cross-filter é highlight (classes `cf-active` no body, `cf-selected` / `cf-related`), não filtra dados.
+- [ ] Cross-filter é highlight (classes `cf-active` no body, `cf-selected`), não filtra dados.
 - [ ] Click no mesmo item faz toggle off do cross-filter.
+- [ ] Cross-filter com períodos: comparar `mesAnivMY` (string "MM/AAAA"), não `mesAniv` (0–11).
 - [ ] Mobile: `.kpis-wrap` edge-to-edge, charts com scroll horizontal, tabela com `word-break`.
 - [ ] Desktop: container pai com `max-width: 960px` centralizado.
 
-## 15. Sintomas comuns
+## 16. Sintomas comuns
 
 | Sintoma                                          | Causa provável                                                  |
 |--------------------------------------------------|------------------------------------------------------------------|
@@ -738,7 +984,7 @@ function togglePagSort(col) {
 | Nome de colaborador estoura layout no mobile     | Falta `word-break: break-word` na coluna `.name`                |
 | Sort não inverte na 2ª clicada                   | Lógica do `togglePagSort` resetando `sortDir` em todo click     |
 
-## 16. Fluxo de publicação
+## 17. Fluxo de publicação
 
 1. Editar arquivo HTML do dashboard.
 2. `git add` específico.
