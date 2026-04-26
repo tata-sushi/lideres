@@ -365,28 +365,32 @@ function fetchColaboradores() {
     }
 
     DATA = COLABORADORES.map(function(c) {
+      var px = proxAniversario(c.dia, c.mes);
       return Object.assign({}, c, {
-        proxAniv: proxAniversario(c.dia, c.mes),
+        proxAniv: px,
         diasFaltando: diasFaltando(c.dia, c.mes),
         pct: pctAniversario(c.dia, c.mes),
         idade: idadeCalc(c.anoNasc),
         nascFormatado: (String(c.dia).padStart(2,'0')+'/'+String(c.mes).padStart(2,'0')+'/'+c.anoNasc),
-        proxFormatado: proxAniversario(c.dia, c.mes).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}),
-        mesAniv: proxAniversario(c.dia, c.mes).getMonth(),
-        mesNome: proxAniversario(c.dia, c.mes).toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase(),
+        proxFormatado: px.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}),
+        mesAniv: px.getMonth(),
+        mesAnivMY: String(px.getMonth()+1).padStart(2,'0') + '/' + px.getFullYear(),
+        mesNome: px.toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase(),
       });
     }).sort(function(a,b){ return a.proxAniv - b.proxAniv; });
 
     DATA_EMP = COLABORADORES.filter(function(c){ return c.admissao; }).map(function(c) {
       var a = c.admissao;
+      var px = proxAniversario(a.dia, a.mes);
       return Object.assign({}, c, {
-        proxAniv: proxAniversario(a.dia, a.mes),
+        proxAniv: px,
         diasFaltando: diasFaltando(a.dia, a.mes),
         pct: pctAniversario(a.dia, a.mes),
         anosEmpresa: idadeCalc(a.ano),
-        proxFormatado: proxAniversario(a.dia, a.mes).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}),
-        mesAniv: proxAniversario(a.dia, a.mes).getMonth(),
-        mesNome: proxAniversario(a.dia, a.mes).toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase(),
+        proxFormatado: px.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}),
+        mesAniv: px.getMonth(),
+        mesAnivMY: String(px.getMonth()+1).padStart(2,'0') + '/' + px.getFullYear(),
+        mesNome: px.toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase(),
       });
     }).sort(function(a,b){ return a.proxAniv - b.proxAniv; });
   });
@@ -449,9 +453,9 @@ function getFilt() {
   });
 }
 
-function setCF(mesIdx) {
-  if (getActiveCfMes()===mesIdx) { clearCF(); return; }
-  setActiveCfMes(mesIdx);
+function setCF(my) {
+  if (getActiveCfMes()===my) { clearCF(); return; }
+  setActiveCfMes(my);
   document.body.classList.add('cf-active');
   updateAll();
 }
@@ -467,18 +471,19 @@ function getMonthData(filt) {
   for (var i = 0; i < 12; i++) {
     var m = (hoje.getMonth() + i) % 12;
     var y = hoje.getFullYear() + (hoje.getMonth() + i >= 12 ? 1 : 0);
-    var label = String(m + 1).padStart(2, '0') + '/' + y;
-    labels.push(label);
-    counts.push(filt.filter(function(d){ return d.mesAniv===m; }).length);
-    indexes.push(m);
+    var my = String(m + 1).padStart(2, '0') + '/' + y;
+    labels.push(my);
+    counts.push(filt.filter(function(d){ return d.mesAnivMY===my; }).length);
+    indexes.push(my);
   }
   return {labels:labels, counts:counts, indexes:indexes};
 }
 
 function updateKPIs(filt) {
   var activeCfMes = getActiveCfMes();
-  var mesRef = activeCfMes !== null ? activeCfMes : hoje.getMonth();
-  var cfFilt = filt.filter(function(d){ return d.mesAniv === mesRef; });
+  var defaultMY = String(hoje.getMonth()+1).padStart(2,'0') + '/' + hoje.getFullYear();
+  var mesRef = activeCfMes !== null ? activeCfMes : defaultMY;
+  var cfFilt = filt.filter(function(d){ return d.mesAnivMY === mesRef; });
   var total = cfFilt.length;
   var hoje_aniv = cfFilt.filter(function(d){ return d.diasFaltando===0; }).length;
   var semana = cfFilt.filter(function(d){ return d.diasFaltando > 0 && d.proxAniv <= weekEnd; }).length;
@@ -518,9 +523,9 @@ function progBar(pct) {
 
 function rowHtml(d) {
   var activeCfMes = getActiveCfMes();
-  var rowClass = activeCfMes !== null && d.mesAniv === activeCfMes ? 'cf-selected' : '';
+  var rowClass = activeCfMes !== null && d.mesAnivMY === activeCfMes ? 'cf-selected' : '';
   var terceiro = activeTab === 'aniv' ? d.idade : d.anosEmpresa + ' ano(s)';
-  return '<tr class="' + rowClass + '" onclick="setCF(' + d.mesAniv + ')">' +
+  return '<tr class="' + rowClass + '" onclick="setCF(\'' + d.mesAnivMY + '\')">' +
     '<td>' + d.nome + ' ' + statusBadge(d) + '</td>' +
     '<td>' + d.proxFormatado + '</td>' +
     '<td>' + terceiro + '</td>' +
@@ -548,8 +553,8 @@ function renderTable(filt) {
   var activeCfMes = getActiveCfMes();
   var sorted = filt.slice().sort(function(a,b) {
     if (activeCfMes !== null) {
-      var am = a.mesAniv === activeCfMes;
-      var bm = b.mesAniv === activeCfMes;
+      var am = a.mesAnivMY === activeCfMes;
+      var bm = b.mesAnivMY === activeCfMes;
       if (am !== bm) return am ? -1 : 1;
     }
     var va=a[sKey], vb=b[sKey];
@@ -605,8 +610,8 @@ function renderChart(filt) {
   var activeCfMes = getActiveCfMes();
   var md = getMonthData(filt);
   var labels=md.labels, counts=md.counts, indexes=md.indexes;
-  var bgColors = indexes.map(function(m) {
-    return activeCfMes!==null ? (m===activeCfMes?'#35383F':'rgba(53,56,63,0.45)') : '#35383F';
+  var bgColors = indexes.map(function(my) {
+    return activeCfMes!==null ? (my===activeCfMes?'#35383F':'rgba(53,56,63,0.45)') : '#35383F';
   });
   _cfSelectedBarIdx = -1;
   if (activeCfMes !== null) {
