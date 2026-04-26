@@ -18,7 +18,7 @@ Essencial:
 
 ### 2.1 Páginas dashboard (filtros, gráficos, tabelas, formulários operacionais)
 
-Exemplos canônicos: `acessorapido/*`, `compliance/kpis/rh/ouvidoria.html`, `compliance/areas/rh/estoqueadm.html`, `testes/abastecimento.html`.
+Exemplos canônicos: `compliance/kpis/rh/ouvidoria.html`, `compliance/kpis/rh/recrutamento.html`, `compliance/kpis/rh/bancodehoras.html`.
 
 **CSS obrigatório** (copiar/cole, não inventar variações):
 

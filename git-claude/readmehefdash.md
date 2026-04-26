@@ -6,6 +6,8 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 
 ⚠️ **Essas especificações aplicam-se APENAS a páginas classificadas como "Dashboard" no mapa de lideranças (coluna E, "tipo de página")**. Páginas de tipo diferente (Menu, Institucional, etc.) seguem padrões específicos documentados em `CLAUDE.md`.
 
+**Nota sobre referência visual**: As medidas de altura (28px para `.header-user` e `.header-plus`) foram definidas consultando `compliance/menucompliance.html`, que é uma página de tipo **Menu** — não Dashboard. Essa página serve como **padrão visual de referência**, mas as especificações deste documento aplicam-se apenas a páginas Dashboard.
+
 ---
 
 ## HEADER — LAYOUT PADRÃO
