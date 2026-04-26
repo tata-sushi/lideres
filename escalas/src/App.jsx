@@ -193,60 +193,57 @@ export default function EscalaPainel() {
     return ()=>window.removeEventListener('resize',fn);
   },[]);
 
+  const isInitialMount = useRef(true);
+
   useEffect(()=>{
     setSyncStatus('loading');
+    const k = semanaKey(getSegunda(new Date()));
+    let resolvedColabs = COLABS0;
     carregarColaboradores()
       .then(({ colabs: loaded }) => {
         if (loaded && loaded.length > 0) {
+          resolvedColabs = loaded;
           setColabs(loaded);
-          const k = semanaKey(getSegunda(new Date()));
-          setDados(p => {
-            const base = escalaVaziaColabs(loaded);
-            const existing = p[k] || {};
-            if (existing.escala) {
-              Object.keys(existing.escala).forEach(d => {
-                if (base[d]) Object.assign(base[d], existing.escala[d]);
-              });
-            }
-            return { ...p, [k]: { config: existing.config || CFG0, escala: base } };
-          });
         }
-        setSyncStatus('idle');
-        // Carregar férias junto
-        return carregarFerias();
+        return Promise.all([carregarEscala(k), carregarFerias()]);
       })
-      .then(data => { if (data && data.ferias) setFerias(data.ferias); })
+      .then(([{ escala: escLoaded, config: cfgLoaded }, ferData]) => {
+        const base = escalaVaziaColabs(resolvedColabs);
+        Object.entries(escLoaded || {}).forEach(([dia, diaData]) => {
+          Object.entries(diaData || {}).forEach(([cid, t]) => {
+            if (base[dia]) base[dia][cid] = t;
+          });
+        });
+        setDados(p => ({ ...p, [k]: { config: cfgLoaded || CFG0, escala: base } }));
+        if (ferData?.ferias) setFerias(ferData.ferias);
+        setSyncStatus('idle');
+      })
       .catch(() => setSyncStatus('idle'));
   },[]);
 
   const key = semanaKey(semanaAtual);
 
   useEffect(()=>{
+    if (isInitialMount.current) { isInitialMount.current = false; return; }
     setPendente(false);
     setSyncStatus('loading');
+    const snapColabs = colabs;
     carregarEscala(key)
       .then(({ escala: escLoaded, config: cfgLoaded }) => {
-        setDados(p => ({
-          ...p,
-          [key]: {
-            config: cfgLoaded || CFG0,
-            escala: (() => {
-              const base = escalaVaziaColabs(colabs);
-              Object.entries(escLoaded || {}).forEach(([dia, diaData]) => {
-                Object.entries(diaData || {}).forEach(([cid, t]) => {
-                  if (base[dia]) base[dia][cid] = t;
-                });
-              });
-              return base;
-            })(),
-          },
-        }));
+        const base = escalaVaziaColabs(snapColabs);
+        Object.entries(escLoaded || {}).forEach(([dia, diaData]) => {
+          Object.entries(diaData || {}).forEach(([cid, t]) => {
+            if (base[dia]) base[dia][cid] = t;
+          });
+        });
+        setDados(p => ({ ...p, [key]: { config: cfgLoaded || CFG0, escala: base } }));
         setSyncStatus('idle');
       })
       .catch(() => {
-        if (!dados[key]) {
-          setDados(p=>({...p,[key]:{config:{...CFG0},escala:escalaVaziaColabs(colabs)}}));
-        }
+        setDados(p => {
+          if (p[key]) return p;
+          return { ...p, [key]: { config: { ...CFG0 }, escala: escalaVaziaColabs(snapColabs) } };
+        });
         setSyncStatus('idle');
       });
   },[key]);
