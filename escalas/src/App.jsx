@@ -62,6 +62,17 @@ const horaSlot = (hhmm) => {
   return (s<0||s>TOTAL_SLOTS)?null:s;
 };
 
+// Sheets pode devolver hora como Date ISO ("1899-12-30T22:06:28.000Z").
+// Normaliza para "HH:mm".
+const toHHMM = (v) => {
+  if (v == null || v === '') return '';
+  const s = String(v);
+  if (/^\d{1,2}:\d{2}$/.test(s)) return s;
+  const m = s.match(/T(\d{2}):(\d{2})/);
+  if (m) return `${m[1]}:${m[2]}`;
+  return s;
+};
+
 const turnoSlots = (t) => {
   const s = new Set();
   if (!t||t.folga) return s;
@@ -217,7 +228,19 @@ export default function EscalaPainel() {
       .then(({ escala: escLoaded, config: cfgLoaded }) => {
         const base = {};
         DIAS_SEMANA.forEach(dia => {
-          base[dia] = { ...(escLoaded?.[dia] || {}) };
+          const diaData = escLoaded?.[dia] || {};
+          base[dia] = {};
+          Object.entries(diaData).forEach(([cid, t]) => {
+            base[dia][cid] = {
+              t1Ini: toHHMM(t?.t1Ini),
+              t1Fim: toHHMM(t?.t1Fim),
+              t2Ini: toHHMM(t?.t2Ini),
+              t2Fim: toHHMM(t?.t2Fim),
+              t3Ini: toHHMM(t?.t3Ini),
+              t3Fim: toHHMM(t?.t3Fim),
+              folga: !!t?.folga,
+            };
+          });
         });
         setDados(p => ({ ...p, [key]: { config: cfgLoaded || CFG0, escala: base } }));
         setSyncStatus('idle');
