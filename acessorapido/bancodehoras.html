@@ -97,7 +97,8 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
 /* Tabela */
 .table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table td:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); cursor: pointer; user-select: none; }
 thead th:hover { color: var(--carbon); }
 tbody td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid var(--border); }
@@ -362,7 +363,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="pag-content">
     <div class="chart-block">
       <div class="chart-title">Pagamentos por Ano</div>
-      <div class="bar-list" id="pag-bar-ano"></div>
+      <svg id="pag-bar-ano-svg" viewBox="0 0 700 240" preserveAspectRatio="none" style="width:100%;height:240px;display:block;"></svg>
     </div>
     <div class="chart-block">
       <div class="chart-title">Pagamentos por Unidade</div>
@@ -1014,10 +1015,54 @@ function renderPagamentos(force) {
   _pagRendered = true;
   var rows = getPagamentos();
   renderKpiTotalPago(rows);
-  renderBarsMontante('pag-bar-ano',     rows, function(r) { return r.dataStr ? r.dataStr.substring(6, 10) : ''; }, 'ano');
-  renderBarsMontante('pag-bar-unidade', rows, function(r) { return r.unidade; },                                    'unidade');
-  renderBarsMontante('pag-bar-depto',   rows, function(r) { return r.depto; },                                      'depto');
+  renderVerticalBars('pag-bar-ano-svg', rows, function(r) { return r.dataStr ? r.dataStr.substring(6, 10) : ''; }, 'ano');
+  renderBarsMontante('pag-bar-unidade', rows, function(r) { return r.unidade; },                                      'unidade');
+  renderBarsMontante('pag-bar-depto',   rows, function(r) { return r.depto; },                                        'depto');
   renderTabelaPagamentos(rows);
+}
+
+// Barras verticais (SVG) — usado no "Pagamentos por Ano".
+function renderVerticalBars(svgId, data, keyFn, dim) {
+  var svg = document.getElementById(svgId);
+  if (!svg) return;
+  // Se cross-filter ativo em outra dim, agrega só o subset filtrado
+  var src = data;
+  if (crossFilter.dim && crossFilter.dim !== dim) {
+    src = data.filter(rowMatchesCrossFilter);
+  }
+  var map = {};
+  src.forEach(function(r) {
+    var k = keyFn(r);
+    if (!k) return;
+    map[k] = (map[k] || 0) + (r.custo || 0);
+  });
+  var items = Object.keys(map).sort().map(function(k) { return { nome: k, mt: map[k] }; });
+  if (items.length === 0) {
+    svg.innerHTML = '';
+    return;
+  }
+  var W = 700, H = 240, padX = 30, padTop = 30, padBottom = 36;
+  var maxV = items.reduce(function(m, a) { return Math.max(m, a.mt); }, 0) || 1;
+  var n = items.length;
+  var slot = (W - padX * 2) / n;
+  var barW = Math.min(slot * 0.55, 120);
+  var plotH = H - padTop - padBottom;
+
+  var c = '';
+  items.forEach(function(a, i) {
+    var cx = padX + slot * i + slot / 2;
+    var x = cx - barW / 2;
+    var h = (a.mt / maxV) * plotH;
+    var y = H - padBottom - h;
+    var isSel = (crossFilter.dim === dim && crossFilter.value === a.nome);
+    var op = (crossFilter.dim === dim && !isSel) ? '0.45' : '1';
+    c += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + h.toFixed(1) + '" fill="#35383F" opacity="' + op + '" rx="4" style="cursor:pointer" onclick="setCrossFilter(\'' + dim + '\',\'' + escAttr(a.nome) + '\')"/>';
+    var fmt = 'R$ ' + Math.round(a.mt).toLocaleString('pt-BR');
+    c += '<text x="' + cx.toFixed(1) + '" y="' + (y - 8).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="13" fill="#35383F" font-weight="600">' + escH(fmt) + '</text>';
+    c += '<text x="' + cx.toFixed(1) + '" y="' + (H - 12).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="14" fill="#35383F" font-weight="600">' + escH(a.nome) + '</text>';
+  });
+
+  svg.innerHTML = c;
 }
 
 function renderKpiTotalPago(rows) {
