@@ -66,7 +66,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
 /* ── Chart Block ── */
 .chart-block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 16px; overflow: hidden; }
-.chart-title { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); margin-bottom: 16px; }
+.chart-title { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 16px; text-align: center; }
 
 /* Barras */
 .bar-list { display: flex; flex-direction: column; gap: 6px; }
@@ -347,7 +347,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="bar-list" id="pag-bar-depto"></div>
     </div>
     <div class="chart-block">
-      <div class="chart-title">Lista de Pagamentos</div>
+      <div class="chart-title">Lista de Pagamentos <span id="pag-count-label" style="color:var(--muted);font-size:10px;margin-left:8px;"></span></div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -459,7 +459,7 @@ function toSemKey(dateStr) {
 function semKeyToLabel(key) {
   if (!key) return key;
   var p = key.split('-');
-  if (p.length === 3) return p[2] + '/' + p[1] + '/' + p[0].substring(2);
+  if (p.length === 3) return p[2] + '/' + p[1];
   return key;
 }
 
@@ -718,7 +718,7 @@ function renderWeek() {
     var yy = sy(yv);
     c += '<line x1="' + padL + '" y1="' + yy.toFixed(1) + '" x2="' + (W-padR) + '" y2="' + yy.toFixed(1) + '" stroke="#EEEEEE" stroke-width="1"/>';
     var lbl = Math.abs(yv) >= 1000 ? (yv/1000).toFixed(0) + 'k' : String(yv);
-    c += '<text x="' + (padL-5) + '" y="' + (yy+3.5).toFixed(1) + '" text-anchor="end" font-family="DM Mono,monospace" font-size="8" fill="#BBBBBB">' + lbl + '</text>';
+    c += '<text x="' + (padL-5) + '" y="' + (yy+3.5).toFixed(1) + '" text-anchor="end" font-family="DM Mono,monospace" font-size="9" fill="#BBBBBB">' + lbl + '</text>';
   }
 
   // ── Positivas (carbon, sólido) ──
@@ -727,7 +727,7 @@ function renderWeek() {
   c += '<path d="' + dPos + '" fill="none" stroke="#35383F" stroke-width="2"/>';
   pontos.forEach(function(p,i) { c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(p.pos).toFixed(1) + '" r="3" fill="#35383F"/>'; });
   // label primeiro e último ponto
-  c += '<text x="' + sx(0).toFixed(1) + '" y="' + (sy(pontos[0].pos)-7).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#35383F">' + Math.round(pontos[0].pos) + '</text>';
+  c += '<text x="' + sx(0).toFixed(1) + '" y="' + (sy(pontos[0].pos)-7).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F">' + Math.round(pontos[0].pos) + '</text>';
   c += '<text x="' + sx(n-1).toFixed(1) + '" y="' + (sy(pontos[n-1].pos)-7).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">' + Math.round(pontos[n-1].pos) + '</text>';
 
   // ── Pagas (green, sólido) ──
@@ -756,7 +756,7 @@ function renderWeek() {
   // ── Labels eixo X ──
   pontos.forEach(function(p,i) {
     var fill = hasHoliday(p.semKey) ? '#35383F' : '#AAAAAA';
-    c += '<text x="' + sx(i).toFixed(1) + '" y="' + (H-3) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="' + fill + '">' + p.label + '</text>';
+    c += '<text x="' + sx(i).toFixed(1) + '" y="' + (H-3) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="' + fill + '">' + p.label + '</text>';
   });
 
   svg.innerHTML = c;
@@ -926,15 +926,26 @@ function renderBarsMontante(elId, data, keyFn, dim) {
   document.getElementById(elId).innerHTML = html || '<div class="empty-state"><p>Sem dados</p></div>';
 }
 
+var _pagTableRows = [];
+var _pagTableShown = 10;
+
 function renderTabelaPagamentos(rows) {
-  var sorted = rows.slice().sort(function(a,b) {
+  _pagTableRows = rows.slice().sort(function(a,b) {
     if (crossFilter.dim) {
       var am = rowMatchesCrossFilter(a), bm = rowMatchesCrossFilter(b);
       if (am !== bm) return am ? -1 : 1;
     }
-    return b.mt - a.mt;
+    return (b.custo || 0) - (a.custo || 0);
   });
-  var html = sorted.map(function(r) {
+  _pagTableShown = TABLE_PAGE;
+  renderPagTableRows();
+  var lbl = document.getElementById('pag-count-label');
+  if (lbl) lbl.textContent = '— ' + _pagTableRows.length + ' resultado' + (_pagTableRows.length !== 1 ? 's' : '');
+}
+
+function renderPagTableRows() {
+  var display = _pagTableRows.slice(0, _pagTableShown);
+  var html = display.map(function(r) {
     var fmtMt = 'R$ ' + r.custo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     var fmtH  = (r.saldo > 0 ? '+' : '') + r.saldo.toFixed(2) + 'h';
     var sel   = rowMatchesCrossFilter(r) ? ' class="cf-selected"' : '';
@@ -946,8 +957,20 @@ function renderTabelaPagamentos(rows) {
       '<td><span class="pag-status">' + escH(r.status) + '</span></td>' +
       '</tr>';
   }).join('');
+  var resto = _pagTableRows.length - _pagTableShown;
+  if (resto > 0) {
+    var proximo = Math.min(TABLE_PAGE, resto);
+    html += '<tr><td colspan="4" style="text-align:center;padding:10px">' +
+      '<button onclick="showMorePagTable()" style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer">Ver mais (' + proximo + ')</button>' +
+      '</td></tr>';
+  }
   document.getElementById('tbody-pagamentos').innerHTML = html ||
     '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Nenhum pagamento encontrado</td></tr>';
+}
+
+function showMorePagTable() {
+  _pagTableShown += TABLE_PAGE;
+  renderPagTableRows();
 }
 
 var _pagRendered = false;
@@ -990,7 +1013,7 @@ function renderFooterDate() {
   var now = new Date();
   var p = function(n) { return String(n).padStart(2,'0'); };
   document.getElementById('footer-date').textContent =
-    'Atualizado em ' + p(now.getDate()) + '/' + p(now.getMonth()+1) + '/' + now.getFullYear() +
+    'Atualizado em ' + p(now.getDate()) + '/' + p(now.getMonth()+1) +
     ' ' + p(now.getHours()) + ':' + p(now.getMinutes());
 }
 
