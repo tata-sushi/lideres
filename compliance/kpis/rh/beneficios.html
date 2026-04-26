@@ -46,13 +46,6 @@
   .filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: 8px; padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text, #111); cursor: pointer; transition: border-color 0.15s; width: 100%; }
   .filter-select:focus { outline: none; border-color: var(--carbon); }
 
-  /* CF BANNER */
-  .cf-banner { display: none; background: rgba(207,255,0,0.08); border-bottom: 1px solid rgba(207,255,0,0.25); padding: 8px 28px; align-items: center; gap: 12px; }
-  .cf-banner.on { display: flex; }
-  .cf-text { font-family: 'DM Mono', monospace; font-size: 11px; color: #4a6600; font-weight: 500; }
-  .cf-clear { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); background: transparent; border: 1px solid var(--border); border-radius: 100px; padding: 3px 12px; cursor: pointer; transition: all 0.15s; }
-  .cf-clear:hover { border-color: var(--carbon); color: var(--carbon); }
-
   /* MAIN */
   .main { padding: 24px 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
@@ -66,16 +59,18 @@
   .kpi-sub strong { color: var(--carbon); font-weight: 600; }
 
   /* CHART CARD (padrão ouvidoria) */
-  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; box-shadow: 0 1px 4px rgba(0,0,0,0.07); align-self: start; }
   .chart-card.cf-on { border-color: rgba(207,255,0,0.4); }
   .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; text-align: center; font-weight: 500; }
-  .chart-wrap { flex: 1; position: relative; min-height: 260px; }
+  .chart-wrap { position: relative; height: 260px; }
 
   /* TABLE CARD (padrão bancodehoras) */
   .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); padding: 16px; display: flex; flex-direction: column; overflow: hidden; }
   .table-card.cf-on { border-color: rgba(207,255,0,0.4); }
   .table-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 16px; text-align: left; }
   .table-count { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-left: 8px; font-weight: normal; text-transform: none; letter-spacing: 0; }
+  .btn-more { display: block; margin: 14px auto 0; background: transparent; border: 1px solid var(--border); padding: 8px 14px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--carbon); cursor: pointer; border-radius: 6px; }
+  .btn-more:hover { border-color: var(--carbon); }
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); cursor: pointer; user-select: none; transition: color 0.15s; }
@@ -116,7 +111,7 @@
 
   @media (max-width: 900px) {
     .main { grid-template-columns: 1fr; padding: 16px; }
-    .header, .filter-bar, .cf-banner, .nav-tabs { padding-left: 16px; padding-right: 16px; }
+    .header, .filter-bar, .nav-tabs { padding-left: 16px; padding-right: 16px; }
   }
 </style>
 </head>
@@ -234,12 +229,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
-<!-- CF BANNER -->
-<div class="cf-banner" id="cfBanner">
-  <span class="cf-text" id="cfText">Filtrando por: —</span>
-  <button class="cf-clear" onclick="clearCF()">✕ Limpar</button>
-</div>
-
 <!-- KPIs -->
 <div class="kpi-wrap" id="kpiRow"></div>
 
@@ -266,6 +255,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <tbody id="tBody"></tbody>
       </table>
     </div>
+    <button class="btn-more" id="btnMore" hidden onclick="loadMore()">Ver mais (—)</button>
   </div>
 </div>
 
@@ -422,6 +412,8 @@ var selUni = 'Todos', selDepto = 'Todos', cfMes = null, cfMesEmp = null;
 var activeTab = 'aniv';
 var sKey = 'diasFaltando', sDir = 'asc';
 var chartInst = null;
+var PAGE_SIZE = 10;
+var tRows = [];
 
 function getActiveData() { return activeTab === 'aniv' ? DATA : DATA_EMP; }
 function getActiveCfMes() { return activeTab === 'aniv' ? cfMes : cfMesEmp; }
@@ -435,12 +427,7 @@ function setTab(tab) {
     btn.classList.toggle('active', (tab === 'aniv' && i === 2) || (tab === 'empresa' && i === 1));
   });
   var acm = getActiveCfMes();
-  if (acm !== null) {
-    document.getElementById('cfBanner').classList.add('on');
-    document.getElementById('cfText').textContent = 'Filtrando por: ' + MESES_PT[acm];
-  } else {
-    document.getElementById('cfBanner').classList.remove('on');
-  }
+  document.body.classList.toggle('cf-active', acm !== null);
   updateAll();
 }
 
@@ -466,14 +453,11 @@ function setCF(mesIdx) {
   if (getActiveCfMes()===mesIdx) { clearCF(); return; }
   setActiveCfMes(mesIdx);
   document.body.classList.add('cf-active');
-  document.getElementById('cfBanner').classList.add('on');
-  document.getElementById('cfText').textContent = 'Filtrando por: ' + MESES_PT[mesIdx];
   updateAll();
 }
 function clearCF() {
   setActiveCfMes(null);
   document.body.classList.remove('cf-active');
-  document.getElementById('cfBanner').classList.remove('on');
   updateAll();
 }
 
@@ -530,33 +514,54 @@ function progBar(pct) {
     '</div>';
 }
 
+function rowHtml(d) {
+  var activeCfMes = getActiveCfMes();
+  var isCF = activeCfMes !== null;
+  var isMatch = d.mesAniv === activeCfMes;
+  var rowClass = isCF && isMatch ? 'cf-selected' : '';
+  var terceiro = activeTab === 'aniv' ? d.idade : d.anosEmpresa + ' ano(s)';
+  return '<tr class="' + rowClass + '" onclick="setCF(' + d.mesAniv + ')">' +
+    '<td>' + d.nome + ' ' + statusBadge(d) + '</td>' +
+    '<td>' + d.proxFormatado + '</td>' +
+    '<td>' + terceiro + '</td>' +
+    '<td>' + progBar(d.pct) + '</td>' +
+    '</tr>';
+}
+
+function loadMore() {
+  var shown = document.getElementById('tBody').querySelectorAll('tr').length;
+  var next = tRows.slice(shown, shown + PAGE_SIZE);
+  next.forEach(function(d) {
+    document.getElementById('tBody').insertAdjacentHTML('beforeend', rowHtml(d));
+  });
+  var remaining = tRows.length - (shown + next.length);
+  var btn = document.getElementById('btnMore');
+  if (remaining > 0) {
+    btn.hidden = false;
+    btn.textContent = 'Ver mais (' + remaining + ')';
+  } else {
+    btn.hidden = true;
+  }
+}
+
 function renderTable(filt) {
   var activeCfMes = getActiveCfMes();
-  var tableFilt = activeCfMes!==null ? filt.filter(function(d){ return d.mesAniv===activeCfMes; }) : filt;
   var sorted = filt.slice().sort(function(a,b) {
     var va=a[sKey], vb=b[sKey];
     if (typeof va==='string') return sDir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
     return sDir==='asc'?(va>vb?1:-1):(va<vb?1:-1);
   });
-  var totalCount = activeCfMes !== null ? tableFilt.length : filt.length;
+  var totalCount = filt.length;
   document.getElementById('tCount').textContent = '— ' + totalCount + ' colaborador' + (totalCount !== 1 ? 'es' : '');
   document.getElementById('tableCard').classList.toggle('cf-on', activeCfMes!==null);
+  document.getElementById('tBody').innerHTML = '';
+  document.getElementById('btnMore').hidden = true;
   if (!filt.length) {
     document.getElementById('tBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Nenhum colaborador encontrado</td></tr>';
     return;
   }
-  document.getElementById('tBody').innerHTML = sorted.map(function(d) {
-    var isCF = activeCfMes!==null;
-    var isMatch = d.mesAniv===activeCfMes;
-    var rowClass = isCF && isMatch ? 'cf-selected' : '';
-    var terceiro = activeTab === 'aniv' ? d.idade : d.anosEmpresa + ' ano(s)';
-    return '<tr class="'+rowClass+'" onclick="setCF('+d.mesAniv+')">' +
-      '<td>'+d.nome+' '+statusBadge(d)+'</td>' +
-      '<td>'+d.proxFormatado+'</td>' +
-      '<td>'+terceiro+'</td>' +
-      '<td>'+progBar(d.pct)+'</td>' +
-      '</tr>';
-  }).join('');
+  tRows = sorted;
+  loadMore();
 }
 
 function renderChart(filt) {
