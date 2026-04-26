@@ -64,9 +64,10 @@
   .chart-title, .card-title { font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600; color: var(--carbon); text-transform: uppercase; letter-spacing: 0.5px; }
   .card-hint { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 4px; letter-spacing: 0.04em; text-transform: none; }
   .card-tag { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--carbon); background: var(--citric); padding: 3px 10px; white-space: nowrap; }
-  .chart-scroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
-  .chart-scroll svg { display: block; }
-  .chart-scroll svg .pt-hit { cursor: pointer; }
+  .chart-wrap { width: 100%; min-width: 0; }
+  .chart-wrap svg .bar-hit { cursor: pointer; }
+  .chart-card, .table-card { min-width: 0; }
+  .main { min-width: 0; }
 
   /* TABELA (padrão readmegraficos §9) */
   .table-card { background: var(--bg-soft); padding: 14px; display: flex; flex-direction: column; }
@@ -171,13 +172,13 @@
     <div class="card-header">
       <div>
         <div class="chart-title">Aniversariantes por Mês</div>
-        <div class="card-hint">Clique num ponto para filtrar a tabela</div>
+        <div class="card-hint">Clique numa barra para filtrar a tabela</div>
       </div>
       <div class="card-tag" id="chartTag">Próximos 12 meses</div>
     </div>
-    <div class="chart-scroll">
-      <svg id="chartAniv" viewBox="0 0 900 240" preserveAspectRatio="none"
-           style="width:100%; min-width:900px; height:200px;"></svg>
+    <div class="chart-wrap">
+      <svg id="chartAniv" viewBox="0 0 600 260" preserveAspectRatio="none"
+           style="width:100%; height:220px; display:block;"></svg>
     </div>
   </div>
 
@@ -481,51 +482,37 @@ function renderTable() {
   }
 }
 
-// Chart SVG (padrão readmegraficos §8.1) — linha simples + área + click por mês
-function drawAnivLine(svgEl, points) {
-  var W = 900, padX = 24, plotH = 200, baseY = 220;
+// Chart SVG — barras verticais responsivas (sem scroll horizontal)
+function drawAnivBars(svgEl, points) {
+  var W = 600, padX = 20, baseY = 230, topPad = 30;
+  var plotH = baseY - topPad;
+  var slot = (W - 2 * padX) / points.length;
+  var barW = Math.max(12, slot * 0.6);
   var max = Math.max.apply(null, points.map(function(p){ return p.value; }).concat([1]));
-  var stepX = (W - 2 * padX) / Math.max(points.length - 1, 1);
+  var cf = crossFilter && crossFilter.dim === 'mes';
 
-  var pts = points.map(function(p, i) {
-    return {
-      x: padX + i * stepX,
-      y: baseY - (p.value / max) * plotH,
-      value: p.value,
-      label: p.label,
-      mesIdx: p.mesIdx,
-      isCurrentMonth: i === 0
-    };
-  });
-
-  var path = pts.map(function(p, i) { return (i === 0 ? 'M' : 'L') + p.x + ',' + p.y; }).join(' ');
-  var area = path + ' L' + pts[pts.length-1].x + ',' + baseY + ' L' + pts[0].x + ',' + baseY + ' Z';
-
-  var svgNs = 'http://www.w3.org/2000/svg';
-  // baseline
-  var html = '<path d="' + area + '" fill="var(--carbon)" fill-opacity="0.08"/>' +
-             '<path d="' + path + '" fill="none" stroke="var(--carbon)" stroke-width="1.5"/>';
-
-  // pontos clicáveis (círculo + valor + label, agrupados em <g class="pt-hit">)
-  pts.forEach(function(p) {
-    var sel = crossFilter && crossFilter.dim === 'mes' && crossFilter.value === p.mesIdx;
-    var fill = sel ? 'var(--citric)' : (p.isCurrentMonth ? 'var(--citric)' : 'var(--carbon)');
-    var stroke = sel || p.isCurrentMonth ? 'var(--carbon)' : 'none';
-    var r = sel || p.isCurrentMonth ? 4 : 3;
+  var html = '';
+  points.forEach(function(p, i) {
+    var cx = padX + (i + 0.5) * slot;
+    var h = (p.value / max) * plotH;
+    var y = baseY - h;
+    var sel = cf && crossFilter.value === p.mesIdx;
+    var dim = cf && !sel;
+    var fill = sel ? 'var(--citric)' : 'var(--carbon)';
+    var fillOp = dim ? '0.18' : '1';
+    var stroke = sel ? 'var(--carbon)' : 'none';
     html +=
-      '<g class="pt-hit" data-mes="' + p.mesIdx + '">' +
-        // hit area maior para click confortável
-        '<rect x="' + (p.x - 22) + '" y="0" width="44" height="240" fill="transparent"/>' +
-        '<circle cx="' + p.x + '" cy="' + p.y + '" r="' + r + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.5"/>' +
-        '<text x="' + p.x + '" y="' + (p.y - 8) + '" text-anchor="middle" font-family="DM Mono" font-size="11" fill="var(--carbon)">' + p.value + '</text>' +
-        '<text x="' + p.x + '" y="' + (baseY + 16) + '" text-anchor="middle" font-family="DM Mono" font-size="11" fill="var(--muted)">' + p.label + '</text>' +
+      '<g class="bar-hit" data-mes="' + p.mesIdx + '">' +
+        '<rect x="' + (cx - slot/2) + '" y="0" width="' + slot + '" height="260" fill="transparent"/>' +
+        '<rect x="' + (cx - barW/2) + '" y="' + y + '" width="' + barW + '" height="' + h + '" fill="' + fill + '" fill-opacity="' + fillOp + '" stroke="' + stroke + '" stroke-width="1.5"/>' +
+        (p.value > 0 ? '<text x="' + cx + '" y="' + (y - 6) + '" text-anchor="middle" font-family="DM Mono" font-size="11" fill="var(--carbon)" fill-opacity="' + fillOp + '">' + p.value + '</text>' : '') +
+        '<text x="' + cx + '" y="' + (baseY + 18) + '" text-anchor="middle" font-family="DM Mono" font-size="11" fill="var(--muted)">' + p.label + '</text>' +
       '</g>';
   });
 
   svgEl.innerHTML = html;
 
-  // ligar clicks
-  Array.prototype.forEach.call(svgEl.querySelectorAll('.pt-hit'), function(g) {
+  Array.prototype.forEach.call(svgEl.querySelectorAll('.bar-hit'), function(g) {
     g.addEventListener('click', function() {
       var idx = parseInt(g.getAttribute('data-mes'), 10);
       setCrossFilter('mes', idx);
@@ -536,7 +523,7 @@ function drawAnivLine(svgEl, points) {
 function renderChart() {
   var filt = getFiltered();
   var pts = getMonthSeries(filt);
-  drawAnivLine(document.getElementById('chartAniv'), pts);
+  drawAnivBars(document.getElementById('chartAniv'), pts);
   document.getElementById('chartTag').textContent = crossFilter ? MESES_PT[crossFilter.value] : 'Próximos 12 meses';
 }
 
