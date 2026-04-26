@@ -201,12 +201,11 @@ export default function EscalaPainel() {
   useEffect(()=>{
     carregarColaboradores()
       .then(({ colabs: loaded }) => {
-        console.log('[ESC] colabs carregados:', loaded?.length, loaded?.map(c=>c.id));
         if (loaded && loaded.length > 0) setColabs(loaded);
         return carregarFerias();
       })
       .then(data => { if (data && data.ferias) setFerias(data.ferias); })
-      .catch(err => console.error('[ESC] erro colabs:', err?.message));
+      .catch(() => {});
   },[]);
 
   const key = semanaKey(semanaAtual);
@@ -214,10 +213,8 @@ export default function EscalaPainel() {
   useEffect(()=>{
     setPendente(false);
     setSyncStatus('loading');
-    console.log('[ESC] carregando semana:', key);
     carregarEscala(key)
       .then(({ escala: escLoaded, config: cfgLoaded }) => {
-        console.log('[ESC] escala recebida:', JSON.stringify(escLoaded));
         const base = {};
         DIAS_SEMANA.forEach(dia => {
           base[dia] = { ...(escLoaded?.[dia] || {}) };
@@ -225,8 +222,7 @@ export default function EscalaPainel() {
         setDados(p => ({ ...p, [key]: { config: cfgLoaded || CFG0, escala: base } }));
         setSyncStatus('idle');
       })
-      .catch(err => {
-        console.error('[ESC] erro escala:', err?.message);
+      .catch(() => {
         setDados(p => {
           if (p[key]) return p;
           const base = {};
