@@ -139,8 +139,8 @@
 <!-- TABS -->
 <div class="nav-tabs">
   <button class="nav-tab">Vale Transporte</button>
-  <button class="nav-tab">Aniversariantes de Empresa</button>
-  <button class="nav-tab active">Aniversariantes do Mês</button>
+  <button class="nav-tab" onclick="setTab('empresa')">Aniversariantes de Empresa</button>
+  <button class="nav-tab active" onclick="setTab('aniv')">Aniversariantes do Mês</button>
   <button class="nav-tab">Assistência Médica</button>
 </div>
 
@@ -196,7 +196,7 @@
           <tr>
             <th onclick="doSort('nome')">Colaborador</th>
             <th onclick="doSort('proxAniv')">Próx. Aniversário</th>
-            <th onclick="doSort('idade')">Idade</th>
+            <th id="thTerceiro" onclick="doSort('idade')">Idade</th>
             <th onclick="doSort('pct')">Progresso</th>
           </tr>
         </thead>
@@ -214,6 +214,8 @@
 
 <script>
 var hoje = new Date();
+var _dow = hoje.getDay();
+var weekEnd = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + (_dow === 0 ? 0 : 7 - _dow), 23, 59, 59, 999);
 
 // Footer date
 (function() {
@@ -278,6 +280,7 @@ function fetchColaboradores() {
     var iUnidade = 4; // E - Unidade
     var iDepto = 5;   // F - Departamento
     var iNasc = 13;   // N - Data de Nascimento
+    var iAdmissao = 8; // I - Data de Admissão
 
     COLABORADORES = [];
     for (var r = 1; r < json.values.length; r++) {
@@ -287,6 +290,7 @@ function fetchColaboradores() {
       var unidade = (row[iUnidade]||'').trim();
       var depto = (row[iDepto]||'').trim();
       var nascStr = (row[iNasc]||'').trim();
+      var admStr = (row[iAdmissao]||'').trim();
 
       // Filtrar: apenas Ativo, com nome e data de nascimento válida
       if (!nome) continue;
@@ -302,7 +306,8 @@ function fetchColaboradores() {
         dia: nasc.dia,
         mes: nasc.mes,
         anoNasc: nasc.ano,
-        unidade: unidade || 'Sem unidade'
+        unidade: unidade || 'Sem unidade',
+        admissao: parseDateBR(admStr)
       });
     }
 
@@ -318,12 +323,26 @@ function fetchColaboradores() {
         mesNome: proxAniversario(c.dia, c.mes).toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase(),
       });
     }).sort(function(a,b){ return a.proxAniv - b.proxAniv; });
+
+    DATA_EMP = COLABORADORES.filter(function(c){ return c.admissao; }).map(function(c) {
+      var a = c.admissao;
+      return Object.assign({}, c, {
+        proxAniv: proxAniversario(a.dia, a.mes),
+        diasFaltando: diasFaltando(a.dia, a.mes),
+        pct: pctAniversario(a.dia, a.mes),
+        anosEmpresa: idadeCalc(a.ano),
+        proxFormatado: proxAniversario(a.dia, a.mes).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}),
+        mesAniv: proxAniversario(a.dia, a.mes).getMonth(),
+        mesNome: proxAniversario(a.dia, a.mes).toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase(),
+      });
+    }).sort(function(a,b){ return a.proxAniv - b.proxAniv; });
   });
 }
 
 var MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 var UNIDADES = ['Todos'];
 var DEPTOS   = ['Todos'];
+var DATA_EMP = [];
 
 var TT = {
   backgroundColor: '#fff',
@@ -336,9 +355,31 @@ var TT = {
   padding: 12,
 };
 
-var selUni = 'Todos', selDepto = 'Todos', cfMes = null;
+var selUni = 'Todos', selDepto = 'Todos', cfMes = null, cfMesEmp = null;
+var activeTab = 'aniv';
 var sKey = 'diasFaltando', sDir = 'asc';
 var chartInst = null;
+
+function getActiveData() { return activeTab === 'aniv' ? DATA : DATA_EMP; }
+function getActiveCfMes() { return activeTab === 'aniv' ? cfMes : cfMesEmp; }
+function setActiveCfMes(v) { if (activeTab === 'aniv') cfMes = v; else cfMesEmp = v; }
+
+function setTab(tab) {
+  if (activeTab === tab) return;
+  activeTab = tab;
+  sKey = 'diasFaltando'; sDir = 'asc';
+  document.querySelectorAll('.nav-tab').forEach(function(btn, i) {
+    btn.classList.toggle('active', (tab === 'aniv' && i === 2) || (tab === 'empresa' && i === 1));
+  });
+  var acm = getActiveCfMes();
+  if (acm !== null) {
+    document.getElementById('cfBanner').classList.add('on');
+    document.getElementById('cfText').textContent = 'Filtrando por: ' + MESES_PT[acm];
+  } else {
+    document.getElementById('cfBanner').classList.remove('on');
+  }
+  updateAll();
+}
 
 function buildFilters() {
   var fd = document.getElementById('fDepto');
@@ -351,7 +392,7 @@ function buildFilters() {
 }
 
 function getFilt() {
-  return DATA.filter(function(d) {
+  return getActiveData().filter(function(d) {
     if (selUni!=='Todos' && d.unidade!==selUni) return false;
     if (selDepto!=='Todos' && d.depto!==selDepto) return false;
     return true;
@@ -359,14 +400,14 @@ function getFilt() {
 }
 
 function setCF(mesIdx) {
-  if (cfMes===mesIdx) { clearCF(); return; }
-  cfMes = mesIdx;
+  if (getActiveCfMes()===mesIdx) { clearCF(); return; }
+  setActiveCfMes(mesIdx);
   document.getElementById('cfBanner').classList.add('on');
   document.getElementById('cfText').textContent = 'Filtrando por: ' + MESES_PT[mesIdx];
   updateAll();
 }
 function clearCF() {
-  cfMes = null;
+  setActiveCfMes(null);
   document.getElementById('cfBanner').classList.remove('on');
   updateAll();
 }
@@ -384,16 +425,18 @@ function getMonthData(filt) {
 }
 
 function updateKPIs(filt) {
-  var mesRef = cfMes !== null ? cfMes : hoje.getMonth();
+  var activeCfMes = getActiveCfMes();
+  var mesRef = activeCfMes !== null ? activeCfMes : hoje.getMonth();
   var cfFilt = filt.filter(function(d){ return d.mesAniv === mesRef; });
   var total = cfFilt.length;
   var hoje_aniv = cfFilt.filter(function(d){ return d.diasFaltando===0; }).length;
-  var semana = cfFilt.filter(function(d){ return d.diasFaltando<=7 && d.diasFaltando>0; }).length;
-  var cf = cfMes!==null;
+  var semana = cfFilt.filter(function(d){ return d.diasFaltando > 0 && d.proxAniv <= weekEnd; }).length;
+  var cf = activeCfMes !== null;
+  var label = activeTab === 'aniv' ? 'Aniversariantes no mês' : 'Aniversários de empresa no mês';
 
   document.getElementById('kpiRow').innerHTML =
     '<div class="kpi-card' + (cf?' cf-on':'') + '">' +
-      '<div class="kpi-label">' + MESES_PT[mesRef] + ' · Aniversariantes no mês</div>' +
+      '<div class="kpi-label">' + label + '</div>' +
       '<div class="kpi-value">' + total + '</div>' +
       '<div class="kpi-sub"><strong>' + hoje_aniv + '</strong> hoje / <strong>' + semana + '</strong> na semana</div>' +
     '</div>';
@@ -410,7 +453,7 @@ function doSort(key) {
 
 function statusBadge(d) {
   if (d.diasFaltando===0) return '<span class="badge badge-hoje">Hoje</span>';
-  if (d.diasFaltando<=7)  return '<span class="badge badge-semana">Esta semana</span>';
+  if (d.diasFaltando > 0 && d.proxAniv <= weekEnd) return '<span class="badge badge-semana">Esta semana</span>';
   return '';
 }
 
@@ -423,45 +466,48 @@ function progBar(pct) {
 }
 
 function renderTable(filt) {
-  var tableFilt = cfMes!==null ? filt.filter(function(d){ return d.mesAniv===cfMes; }) : filt;
+  var activeCfMes = getActiveCfMes();
+  var tableFilt = activeCfMes!==null ? filt.filter(function(d){ return d.mesAniv===activeCfMes; }) : filt;
   var sorted = filt.slice().sort(function(a,b) {
     var va=a[sKey], vb=b[sKey];
     if (typeof va==='string') return sDir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
     return sDir==='asc'?(va>vb?1:-1):(va<vb?1:-1);
   });
-  document.getElementById('tCount').textContent = (cfMes!==null?tableFilt.length:filt.length) + ' colaborador(es)';
-  document.getElementById('tableCard').classList.toggle('cf-on', cfMes!==null);
+  document.getElementById('tCount').textContent = (activeCfMes!==null?tableFilt.length:filt.length) + ' colaborador(es)';
+  document.getElementById('tableCard').classList.toggle('cf-on', activeCfMes!==null);
   if (!filt.length) {
     document.getElementById('tBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Nenhum colaborador encontrado</td></tr>';
     return;
   }
   document.getElementById('tBody').innerHTML = sorted.map(function(d) {
-    var isCF = cfMes!==null;
-    var isMatch = d.mesAniv===cfMes;
+    var isCF = activeCfMes!==null;
+    var isMatch = d.mesAniv===activeCfMes;
     var rowClass = isCF?(isMatch?'cf-hl':'cf-dim'):'';
+    var terceiro = activeTab === 'aniv' ? d.idade : d.anosEmpresa + ' ano(s)';
     return '<tr class="'+rowClass+'">' +
       '<td>'+d.nome+' '+statusBadge(d)+'</td>' +
       '<td>'+d.proxFormatado+'</td>' +
-      '<td>'+d.idade+'</td>' +
+      '<td>'+terceiro+'</td>' +
       '<td>'+progBar(d.pct)+'</td>' +
       '</tr>';
   }).join('');
 }
 
 function renderChart(filt) {
+  var activeCfMes = getActiveCfMes();
   var md = getMonthData(filt);
   var labels=md.labels, counts=md.counts, indexes=md.indexes;
   var bgColors = indexes.map(function(m) {
-    return cfMes!==null ? (m===cfMes?'#35383F':'rgba(53,56,63,0.12)') : '#35383F';
+    return activeCfMes!==null ? (m===activeCfMes?'#35383F':'rgba(53,56,63,0.12)') : '#35383F';
   });
   var borderColors = indexes.map(function(m) {
-    return (cfMes!==null && m===cfMes)?'#CFFF00':'transparent';
+    return (activeCfMes!==null && m===activeCfMes)?'#CFFF00':'transparent';
   });
   if (chartInst) chartInst.destroy();
   chartInst = new Chart(document.getElementById('cAniv'), {
     type: 'bar',
     data: { labels:labels, datasets:[{
-      label: 'Aniversariantes',
+      label: activeTab === 'aniv' ? 'Aniversariantes' : 'Aniversários de empresa',
       data: counts,
       backgroundColor: bgColors,
       borderColor: borderColors,
@@ -497,11 +543,19 @@ function renderChart(filt) {
 }
 
 function updateAll() {
+  var activeCfMes = getActiveCfMes();
   var filt = getFilt();
   updateKPIs(filt);
   renderChart(filt);
   renderTable(filt);
-  document.getElementById('chartTag').textContent = cfMes!==null ? MESES_PT[cfMes] : 'Próximos 12 meses';
+  document.getElementById('chartTag').textContent = activeCfMes!==null ? MESES_PT[activeCfMes] : 'Próximos 12 meses';
+  document.querySelector('.card-title').textContent = activeTab === 'aniv' ? 'Aniversariantes por Mês' : 'Aniversários de Empresa por Mês';
+  var th = document.getElementById('thTerceiro');
+  if (th) {
+    var terceiroKey = activeTab === 'aniv' ? 'idade' : 'anosEmpresa';
+    th.innerHTML = (activeTab === 'aniv' ? 'Idade' : 'Anos emp.');
+    th.setAttribute('onclick', 'doSort(\'' + terceiroKey + '\')');
+  }
 }
 
 function updateTs() {
