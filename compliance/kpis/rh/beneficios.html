@@ -542,7 +542,13 @@ function loadMore() {
 }
 
 function renderTable(filt) {
+  var activeCfMes = getActiveCfMes();
   var sorted = filt.slice().sort(function(a,b) {
+    if (activeCfMes !== null) {
+      var am = a.mesAniv === activeCfMes;
+      var bm = b.mesAniv === activeCfMes;
+      if (am !== bm) return am ? -1 : 1;
+    }
     var va=a[sKey], vb=b[sKey];
     if (typeof va==='string') return sDir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
     return sDir==='asc'?(va>vb?1:-1):(va<vb?1:-1);
@@ -558,6 +564,40 @@ function renderTable(filt) {
   loadMore();
 }
 
+var _cfSelectedBarIdx = -1;
+var cfOutlinePlugin = {
+  id: 'cfOutline',
+  afterDatasetsDraw: function(chart) {
+    var sel = _cfSelectedBarIdx;
+    if (sel < 0) return;
+    var meta = chart.getDatasetMeta(0);
+    if (!meta.data || sel >= meta.data.length) return;
+    var bar = meta.data[sel];
+    var ctx = chart.ctx;
+    var x = bar.x - bar.width/2 - 4;
+    var y = bar.y - 4;
+    var w = bar.width + 8;
+    var h = bar.base - bar.y + 8;
+    ctx.save();
+    ctx.strokeStyle = '#35383F';
+    ctx.lineWidth = 2;
+    var r = 4;
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.lineTo(x+w-r, y);
+    ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+    ctx.lineTo(x+w, y+h-r);
+    ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+    ctx.lineTo(x+r, y+h);
+    ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+    ctx.lineTo(x, y+r);
+    ctx.quadraticCurveTo(x, y, x+r, y);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
 function renderChart(filt) {
   var activeCfMes = getActiveCfMes();
   var md = getMonthData(filt);
@@ -565,6 +605,12 @@ function renderChart(filt) {
   var bgColors = indexes.map(function(m) {
     return activeCfMes!==null ? (m===activeCfMes?'#35383F':'rgba(53,56,63,0.45)') : '#35383F';
   });
+  _cfSelectedBarIdx = -1;
+  if (activeCfMes !== null) {
+    for (var i = 0; i < indexes.length; i++) {
+      if (indexes[i] === activeCfMes) { _cfSelectedBarIdx = i; break; }
+    }
+  }
   if (chartInst) chartInst.destroy();
   chartInst = new Chart(document.getElementById('cAniv'), {
     type: 'bar',
@@ -576,6 +622,7 @@ function renderChart(filt) {
       borderRadius: 5,
       barPercentage: 0.6,
     }]},
+    plugins: [cfOutlinePlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
