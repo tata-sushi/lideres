@@ -128,9 +128,10 @@ tbody tr:hover { background: #FAFAFA; }
   font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;
   flex-shrink: 0;
 }
-.cf-active .bar-row:not(.cf-selected) { opacity: 0.45; }
+.cf-active .bar-row:not(.cf-selected):not(.cf-related) { opacity: 0.45; }
 .cf-active tbody tr[onclick]:not(.cf-selected) { opacity: 0.45; }
 .cf-active .bar-row.cf-selected,
+.cf-active .bar-row.cf-related,
 .cf-active tbody tr.cf-selected { opacity: 1; }
 .bar-row.cf-selected {
   outline: 2px solid var(--carbon); outline-offset: 2px; border-radius: 6px;
@@ -594,6 +595,21 @@ function rowMatchesCrossFilter(r) {
   return false;
 }
 
+// Filtro de linhas para os charts SVG (Evolução Semanal, % Negativos).
+// Aplica state + crossFilter (exceto 'ano', que é só de pagamentos).
+function buildSvgRowFilter() {
+  var s = state, cf = crossFilter;
+  if (s.unidade === 'Todos' && s.depto === 'Todos' && (!cf.dim || cf.dim === 'ano')) return null;
+  return function(r) {
+    if (s.unidade !== 'Todos' && r.unidade !== s.unidade) return false;
+    if (s.depto   !== 'Todos' && r.depto   !== s.depto)   return false;
+    if (cf.dim === 'depto'       && r.depto   !== cf.value) return false;
+    if (cf.dim === 'unidade'     && r.unidade !== cf.value) return false;
+    if (cf.dim === 'colaborador' && r.nome    !== cf.value) return false;
+    return true;
+  };
+}
+
 
 // ─── BARRAS ──────────────────────────────────────────────────────────────────
 function renderBarsEl(elId, data, groupFn, dim) {
@@ -603,6 +619,17 @@ function renderBarsEl(elId, data, groupFn, dim) {
     if (!key) return;
     map[key] = (map[key] || 0) + r.saldo;
   });
+  // Keys cujo grupo contém ao menos uma linha que casa com o cross-filter
+  // (só em charts com dim diferente do filtro ativo).
+  var related = {};
+  if (crossFilter.dim && crossFilter.dim !== dim) {
+    data.forEach(function(r) {
+      if (rowMatchesCrossFilter(r)) {
+        var k = groupFn(r);
+        if (k) related[k] = true;
+      }
+    });
+  }
   var items = Object.keys(map).map(function(k) { return { nome:k, saldo:map[k] }; });
   items.sort(function(a,b) { return b.saldo - a.saldo; });
   var maxAbs = 0;
@@ -612,9 +639,10 @@ function renderBarsEl(elId, data, groupFn, dim) {
     var pct  = maxAbs > 0 ? (Math.abs(a.saldo) / maxAbs * 100).toFixed(1) : 0;
     var cls  = a.saldo >= 0 ? 'bar-fill-pos' : 'bar-fill-neg';
     var vcls = a.saldo > 0 ? 'pos' : (a.saldo < 0 ? 'neg' : '');
-    var sel  = (dim && crossFilter.dim === dim && crossFilter.value === a.nome) ? ' cf-selected' : '';
+    var isSel = (dim && crossFilter.dim === dim && crossFilter.value === a.nome);
+    var extra = isSel ? ' cf-selected' : (related[a.nome] ? ' cf-related' : '');
     var click = dim ? ' onclick="setCrossFilter(\'' + dim + '\', \'' + escAttr(a.nome) + '\')"' : '';
-    return '<div class="bar-row' + sel + '"' + click + '>' +
+    return '<div class="bar-row' + extra + '"' + click + '>' +
       '<div class="bar-name">' + escH(a.nome) + '</div>' +
       '<div class="bar-track"><div class="' + cls + '" style="width:' + pct + '%"></div></div>' +
       '<div class="bar-val ' + vcls + '">' + (a.saldo > 0 ? '+' : '') + a.saldo.toFixed(0) + '</div>' +
@@ -658,12 +686,16 @@ function hasHoliday(semKey) {
   return false;
 }
 
-function getWeekSeries(semKey) {
+function getWeekSeries(semKey, rowFilter) {
   var snap = (SNAPSHOTS[semKey] || []).filter(function(r) {
     var t = r.tipo.toLowerCase();
-    return t !== 'pagas' && t !== 'perdidas' && t.indexOf('pago') === -1 && t.indexOf('perdido') === -1;
+    if (t === 'pagas' || t === 'perdidas' || t.indexOf('pago') !== -1 || t.indexOf('perdido') !== -1) return false;
+    return rowFilter ? rowFilter(r) : true;
   });
-  var weekRows = ALL_ROWS.filter(function(r) { return r.semKey === semKey; });
+  var weekRows = ALL_ROWS.filter(function(r) {
+    if (r.semKey !== semKey) return false;
+    return rowFilter ? rowFilter(r) : true;
+  });
   var pos = snap.reduce(function(a,r) { return r.saldo > 0 ? a + r.saldo : a; }, 0);
   var neg = snap.reduce(function(a,r) { return r.saldo < 0 ? a + r.saldo : a; }, 0);
   var pagas = weekRows.reduce(function(a,r) {
@@ -690,7 +722,8 @@ function niceStep(range, target) {
 }
 
 function renderWeek() {
-  var pontos = SEMANAS.map(function(s) { return getWeekSeries(s); });
+  var rf = buildSvgRowFilter();
+  var pontos = SEMANAS.map(function(s) { return getWeekSeries(s, rf); });
 
   var svg = document.getElementById('week-svg');
   var W = 700, H = 160, padL = 46, padR = 18, padT = 18, padB = 18;
@@ -770,9 +803,14 @@ function renderWeek() {
 
 // ─── % NEGATIVOS ─────────────────────────────────────────────────────────────
 function renderNegPct() {
-  var semanasCom = SEMANAS.filter(function(s) { return (SNAPSHOTS[s] || []).length > 0; });
+  var rf = buildSvgRowFilter();
+  var semanasCom = SEMANAS.filter(function(s) {
+    var rs = (SNAPSHOTS[s] || []);
+    return (rf ? rs.filter(rf) : rs).length > 0;
+  });
   var pontos = semanasCom.map(function(s) {
     var rows  = SNAPSHOTS[s] || [];
+    if (rf) rows = rows.filter(rf);
     var total = rows.length;
     var negs  = rows.filter(function(r) { return r.saldo < 0; }).length;
     return { label: semKeyToLabel(s), pct: total > 0 ? Math.round((negs/total)*100) : 0 };
@@ -900,15 +938,25 @@ function renderBarsMontante(elId, data, keyFn, dim) {
     if (!key) return;
     map[key] = (map[key] || 0) + r.custo;
   });
+  var related = {};
+  if (crossFilter.dim && crossFilter.dim !== dim) {
+    data.forEach(function(r) {
+      if (rowMatchesCrossFilter(r)) {
+        var k = keyFn(r);
+        if (k) related[k] = true;
+      }
+    });
+  }
   var items = Object.keys(map).map(function(k) { return { nome: k, mt: map[k] }; });
   items.sort(function(a,b) { return b.mt - a.mt; });
   var maxMT = items.length > 0 ? items[0].mt : 0;
   var html = items.map(function(a) {
     var pct = maxMT > 0 ? (a.mt / maxMT * 100).toFixed(1) : 0;
     var fmt = 'R$ ' + a.mt.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    var sel = (dim && crossFilter.dim === dim && crossFilter.value === a.nome) ? ' cf-selected' : '';
+    var isSel = (dim && crossFilter.dim === dim && crossFilter.value === a.nome);
+    var extra = isSel ? ' cf-selected' : (related[a.nome] ? ' cf-related' : '');
     var click = dim ? ' onclick="setCrossFilter(\'' + dim + '\', \'' + escAttr(a.nome) + '\')"' : '';
-    return '<div class="bar-row' + sel + '" style="grid-template-columns:100px 1fr 100px"' + click + '>' +
+    return '<div class="bar-row' + extra + '" style="grid-template-columns:100px 1fr 100px"' + click + '>' +
       '<div class="bar-name">' + escH(a.nome) + '</div>' +
       '<div class="bar-track"><div class="bar-fill-pos" style="width:' + pct + '%"></div></div>' +
       '<div class="bar-val pos">' + escH(fmt) + '</div>' +
