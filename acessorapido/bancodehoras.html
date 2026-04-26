@@ -128,8 +128,8 @@ tbody tr:hover { background: #FAFAFA; }
   font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;
   flex-shrink: 0;
 }
-.cf-active .bar-row:not(.cf-selected) { opacity: 0.35; }
-.cf-active tbody tr[onclick]:not(.cf-selected) { opacity: 0.35; }
+.cf-active .bar-row:not(.cf-selected) { opacity: 0.45; }
+.cf-active tbody tr[onclick]:not(.cf-selected) { opacity: 0.45; }
 .cf-active .bar-row.cf-selected,
 .cf-active tbody tr.cf-selected { opacity: 1; }
 .bar-row.cf-selected {
@@ -530,9 +530,6 @@ function getFiltered() {
   return rows.filter(function(r) {
     if (state.unidade !== 'Todos' && r.unidade !== state.unidade) return false;
     if (state.depto   !== 'Todos' && r.depto   !== state.depto)   return false;
-    if (crossFilter.dim === 'depto'       && r.depto   !== crossFilter.value) return false;
-    if (crossFilter.dim === 'unidade'     && r.unidade !== crossFilter.value) return false;
-    if (crossFilter.dim === 'colaborador' && r.nome    !== crossFilter.value) return false;
     return true;
   });
 }
@@ -584,19 +581,17 @@ function updateCrossFilterBanner() {
   b.style.display = 'flex';
 }
 
-// Devolve um predicate sobre rows respeitando filtros (state + crossFilter), exceto 'ano'
-// que só faz sentido em pagamentos. Usado nos charts SVG para refletir o contexto.
-function buildCrossFilterRowFilter() {
-  var s = state, cf = crossFilter;
-  if (s.unidade === 'Todos' && s.depto === 'Todos' && !cf.dim) return null;
-  return function(r) {
-    if (s.unidade !== 'Todos' && r.unidade !== s.unidade) return false;
-    if (s.depto   !== 'Todos' && r.depto   !== s.depto)   return false;
-    if (cf.dim === 'depto'       && r.depto   !== cf.value) return false;
-    if (cf.dim === 'unidade'     && r.unidade !== cf.value) return false;
-    if (cf.dim === 'colaborador' && r.nome    !== cf.value) return false;
-    return true;
-  };
+// Verdadeiro quando a linha (snapshot ou pagamento) casa com o cross-filter ativo.
+function rowMatchesCrossFilter(r) {
+  if (!crossFilter.dim) return false;
+  if (crossFilter.dim === 'colaborador') return r.nome    === crossFilter.value;
+  if (crossFilter.dim === 'depto')       return r.depto   === crossFilter.value;
+  if (crossFilter.dim === 'unidade')     return r.unidade === crossFilter.value;
+  if (crossFilter.dim === 'ano') {
+    var ano = r.dataStr ? r.dataStr.substring(6, 10) : '';
+    return ano === crossFilter.value;
+  }
+  return false;
 }
 
 
@@ -663,16 +658,12 @@ function hasHoliday(semKey) {
   return false;
 }
 
-function getWeekSeries(semKey, rowFilter) {
+function getWeekSeries(semKey) {
   var snap = (SNAPSHOTS[semKey] || []).filter(function(r) {
     var t = r.tipo.toLowerCase();
-    if (t === 'pagas' || t === 'perdidas' || t.indexOf('pago') !== -1 || t.indexOf('perdido') !== -1) return false;
-    return rowFilter ? rowFilter(r) : true;
+    return t !== 'pagas' && t !== 'perdidas' && t.indexOf('pago') === -1 && t.indexOf('perdido') === -1;
   });
-  var weekRows = ALL_ROWS.filter(function(r) {
-    if (r.semKey !== semKey) return false;
-    return rowFilter ? rowFilter(r) : true;
-  });
+  var weekRows = ALL_ROWS.filter(function(r) { return r.semKey === semKey; });
   var pos = snap.reduce(function(a,r) { return r.saldo > 0 ? a + r.saldo : a; }, 0);
   var neg = snap.reduce(function(a,r) { return r.saldo < 0 ? a + r.saldo : a; }, 0);
   var pagas = weekRows.reduce(function(a,r) {
@@ -699,8 +690,7 @@ function niceStep(range, target) {
 }
 
 function renderWeek() {
-  var rf = buildCrossFilterRowFilter();
-  var pontos = SEMANAS.map(function(s) { return getWeekSeries(s, rf); });
+  var pontos = SEMANAS.map(function(s) { return getWeekSeries(s); });
 
   var svg = document.getElementById('week-svg');
   var W = 700, H = 160, padL = 46, padR = 18, padT = 18, padB = 18;
@@ -780,14 +770,9 @@ function renderWeek() {
 
 // ─── % NEGATIVOS ─────────────────────────────────────────────────────────────
 function renderNegPct() {
-  var rf = buildCrossFilterRowFilter();
-  var semanasCom = SEMANAS.filter(function(s) {
-    var rs = (SNAPSHOTS[s] || []);
-    return (rf ? rs.filter(rf) : rs).length > 0;
-  });
+  var semanasCom = SEMANAS.filter(function(s) { return (SNAPSHOTS[s] || []).length > 0; });
   var pontos = semanasCom.map(function(s) {
     var rows  = SNAPSHOTS[s] || [];
-    if (rf) rows = rows.filter(rf);
     var total = rows.length;
     var negs  = rows.filter(function(r) { return r.saldo < 0; }).length;
     return { label: semKeyToLabel(s), pct: total > 0 ? Math.round((negs/total)*100) : 0 };
@@ -841,6 +826,10 @@ var _tableShown = 10;
 
 function renderTable(data) {
   _tableRows = data.slice().sort(function(a,b) {
+    if (crossFilter.dim) {
+      var am = rowMatchesCrossFilter(a), bm = rowMatchesCrossFilter(b);
+      if (am !== bm) return am ? -1 : 1;
+    }
     if (sortCol === 'nome') return sortDir * a.nome.localeCompare(b.nome, 'pt-BR');
     return sortDir * (b.saldo - a.saldo);
   });
@@ -855,7 +844,7 @@ function renderTableRows() {
   var html = display.map(function(c) {
     var cls    = c.saldo > 0 ? 'saldo-pos' : (c.saldo < 0 ? 'saldo-neg' : 'saldo-zero');
     var prefix = c.saldo > 0 ? '+' : '';
-    var sel    = (crossFilter.dim === 'colaborador' && crossFilter.value === c.nome) ? ' class="cf-selected"' : '';
+    var sel    = rowMatchesCrossFilter(c) ? ' class="cf-selected"' : '';
     var click  = ' onclick="setCrossFilter(\'colaborador\', \'' + escAttr(c.nome) + '\')"';
     return '<tr' + sel + click + '>' +
       '<td>' + escH(c.nome || '—') + '</td>' +
@@ -900,13 +889,6 @@ function getPagamentos() {
     if (!isPagamento(r)) return false;
     if (state.unidade !== 'Todos' && r.unidade !== state.unidade) return false;
     if (state.depto   !== 'Todos' && r.depto   !== state.depto)   return false;
-    if (crossFilter.dim === 'depto'       && r.depto   !== crossFilter.value) return false;
-    if (crossFilter.dim === 'unidade'     && r.unidade !== crossFilter.value) return false;
-    if (crossFilter.dim === 'colaborador' && r.nome    !== crossFilter.value) return false;
-    if (crossFilter.dim === 'ano') {
-      var ano = r.dataStr ? r.dataStr.substring(6, 10) : '';
-      if (ano !== crossFilter.value) return false;
-    }
     return true;
   });
 }
@@ -936,11 +918,17 @@ function renderBarsMontante(elId, data, keyFn, dim) {
 }
 
 function renderTabelaPagamentos(rows) {
-  var sorted = rows.slice().sort(function(a,b) { return b.mt - a.mt; });
+  var sorted = rows.slice().sort(function(a,b) {
+    if (crossFilter.dim) {
+      var am = rowMatchesCrossFilter(a), bm = rowMatchesCrossFilter(b);
+      if (am !== bm) return am ? -1 : 1;
+    }
+    return b.mt - a.mt;
+  });
   var html = sorted.map(function(r) {
     var fmtMt = 'R$ ' + r.custo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     var fmtH  = (r.saldo > 0 ? '+' : '') + r.saldo.toFixed(2) + 'h';
-    var sel   = (crossFilter.dim === 'colaborador' && crossFilter.value === r.nome) ? ' class="cf-selected"' : '';
+    var sel   = rowMatchesCrossFilter(r) ? ' class="cf-selected"' : '';
     var click = ' onclick="setCrossFilter(\'colaborador\', \'' + escAttr(r.nome) + '\')"';
     return '<tr' + sel + click + '>' +
       '<td>' + escH(r.nome || '—') + '</td>' +
