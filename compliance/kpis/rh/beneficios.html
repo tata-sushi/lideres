@@ -52,7 +52,6 @@
   /* KPI */
   .kpi-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; }
   .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
-  .kpi-card.cf-on { border-color: var(--citric); background: rgba(207,255,0,0.15); }
   .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
   .kpi-value { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
   .kpi-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
@@ -60,13 +59,11 @@
 
   /* CHART CARD (padrão ouvidoria) */
   .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; box-shadow: 0 1px 4px rgba(0,0,0,0.07); align-self: start; }
-  .chart-card.cf-on { border-color: rgba(207,255,0,0.4); }
   .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; text-align: center; font-weight: 500; }
   .chart-wrap { position: relative; height: 260px; }
 
   /* TABLE CARD (padrão bancodehoras) */
   .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); padding: 16px; display: flex; flex-direction: column; overflow: hidden; }
-  .table-card.cf-on { border-color: rgba(207,255,0,0.4); }
   .table-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 16px; text-align: left; }
   .table-count { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-left: 8px; font-weight: normal; text-transform: none; letter-spacing: 0; }
   .btn-more { display: block; margin: 14px auto 0; background: transparent; border: 1px solid var(--border); padding: 8px 14px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--carbon); cursor: pointer; border-radius: 6px; }
@@ -85,10 +82,12 @@
   tbody td:first-child { word-break: break-word; font-weight: 500; }
   tbody td:not(:first-child) { text-align: center; font-family: 'DM Mono', monospace; font-size: 12px; }
 
-  /* CROSS-FILTER (padrão readmegraficos §6) */
-  body.cf-active tbody tr:not(.cf-selected):not(.cf-related) { opacity: 0.35; }
-  tbody tr.cf-selected { background: rgba(207,255,0,0.18); }
-  tbody tr.cf-related { background: rgba(207,255,0,0.08); }
+  /* CROSS-FILTER (padrão bancodehoras) */
+  body.cf-active tbody tr[onclick]:not(.cf-selected) { opacity: 0.45; }
+  body.cf-active tbody tr.cf-selected { opacity: 1; }
+  tbody tr.cf-selected { background: #FAFAFA !important; box-shadow: inset 4px 0 0 0 var(--carbon); }
+  tbody tr.cf-selected td { color: var(--carbon); font-weight: 600; }
+  tbody tr.cf-selected td:first-child { padding-left: 14px; }
 
   /* BADGES */
   .badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 600; padding: 2px 8px; border-radius: 100px; letter-spacing: 0.04em; }
@@ -484,7 +483,7 @@ function updateKPIs(filt) {
   var label = activeTab === 'aniv' ? 'Aniversariantes no mês' : 'Aniversários de empresa no mês';
 
   document.getElementById('kpiRow').innerHTML =
-    '<div class="kpi-card' + (cf?' cf-on':'') + '">' +
+    '<div class="kpi-card">' +
       '<div class="kpi-label">' + label + '</div>' +
       '<div class="kpi-value">' + total + '</div>' +
       '<div class="kpi-sub"><strong>' + hoje_aniv + '</strong> hoje / <strong>' + semana + '</strong> na semana</div>' +
@@ -516,8 +515,7 @@ function progBar(pct) {
 
 function rowHtml(d) {
   var activeCfMes = getActiveCfMes();
-  var isCF = activeCfMes !== null;
-  var rowClass = isCF ? 'cf-selected' : '';
+  var rowClass = activeCfMes !== null && d.mesAniv === activeCfMes ? 'cf-selected' : '';
   var terceiro = activeTab === 'aniv' ? d.idade : d.anosEmpresa + ' ano(s)';
   return '<tr class="' + rowClass + '" onclick="setCF(' + d.mesAniv + ')">' +
     '<td>' + d.nome + ' ' + statusBadge(d) + '</td>' +
@@ -544,19 +542,15 @@ function loadMore() {
 }
 
 function renderTable(filt) {
-  var activeCfMes = getActiveCfMes();
-  var displayFilt = activeCfMes !== null ? filt.filter(function(d){ return d.mesAniv === activeCfMes; }) : filt;
-  var sorted = displayFilt.slice().sort(function(a,b) {
+  var sorted = filt.slice().sort(function(a,b) {
     var va=a[sKey], vb=b[sKey];
     if (typeof va==='string') return sDir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
     return sDir==='asc'?(va>vb?1:-1):(va<vb?1:-1);
   });
-  var displayCount = displayFilt.length;
-  document.getElementById('tCount').textContent = '— ' + displayCount + ' colaborador' + (displayCount !== 1 ? 'es' : '');
-  document.getElementById('tableCard').classList.toggle('cf-on', activeCfMes!==null);
+  document.getElementById('tCount').textContent = '— ' + filt.length + ' colaborador' + (filt.length !== 1 ? 'es' : '');
   document.getElementById('tBody').innerHTML = '';
   document.getElementById('btnMore').hidden = true;
-  if (!displayFilt.length) {
+  if (!filt.length) {
     document.getElementById('tBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Nenhum colaborador encontrado</td></tr>';
     return;
   }
@@ -569,7 +563,7 @@ function renderChart(filt) {
   var md = getMonthData(filt);
   var labels=md.labels, counts=md.counts, indexes=md.indexes;
   var bgColors = indexes.map(function(m) {
-    return activeCfMes!==null ? (m===activeCfMes?'#CFFF00':'rgba(53,56,63,0.12)') : '#35383F';
+    return activeCfMes!==null ? (m===activeCfMes?'#35383F':'rgba(53,56,63,0.45)') : '#35383F';
   });
   if (chartInst) chartInst.destroy();
   chartInst = new Chart(document.getElementById('cAniv'), {
@@ -586,7 +580,7 @@ function renderChart(filt) {
       responsive: true,
       maintainAspectRatio: false,
       onClick: function(e, els) {
-        if (els.length) { var idx=els[0].index; setCF(indexes[idx]); document.getElementById('chartCard').classList.add('cf-on'); }
+        if (els.length) { setCF(indexes[els[0].index]); }
       },
       plugins: {
         legend: {display:false},
