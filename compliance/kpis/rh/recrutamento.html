@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Recrutamento & Seleção — TATÁ Sushi</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   --bg: #F4F4F4; --surface: #FFFFFF; --carbon: #35383F; --citric: #CFFF00;
@@ -26,6 +27,13 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .kpi-number { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
 .kpi-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
 .kpi-sub strong { color: var(--carbon); font-weight: 600; }
+
+.chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin: 14px 20px 0; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+.chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; text-align: center; font-weight: 500; }
+.chart-wrap { position: relative; height: 240px; }
+.chart-clear { display: none; margin-top: 10px; align-self: center; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px 8px; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
+.chart-clear:hover { color: var(--carbon); }
+body.cf-active .chart-clear { display: inline-block; }
 
 .tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border-bottom: 2px solid var(--border); }
 .tab-btn { padding: 16px 24px; border: none; background: transparent; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); cursor: pointer; transition: all 0.18s; border-bottom: 2px solid transparent; margin-bottom: -2px; }
@@ -130,6 +138,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   .content { max-width: 800px; margin: 0 auto; padding: 24px 32px 80px; }
   .filters-wrap { max-width: 800px; margin: 0 auto; }
   .kpis-wrap { max-width: 800px; margin: 0 auto; }
+  .chart-card { max-width: 800px; margin: 14px auto 0; }
   .filters-row { grid-template-columns: 1fr 1fr 1fr; }
   .card-body { grid-template-columns: repeat(3, 1fr); }
 }
@@ -268,6 +277,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <span class="kpi-number" id="kpi-teste-semana">—</span>
     <span class="kpi-sub"><strong id="kpi-teste-hoje">0</strong> hoje / <strong id="kpi-teste-mes">0</strong> mês</span>
   </div>
+</div>
+<div class="chart-card" id="chartCard">
+  <div class="chart-title" id="chartTitle">Entrevistas por Mês</div>
+  <div class="chart-wrap"><canvas id="cRecrut"></canvas></div>
+  <button class="chart-clear" type="button" onclick="clearCF()">Limpar mês selecionado</button>
 </div>
 <div class="filters-wrap" id="filters-wrap"></div>
 <main class="content" id="content"></main>
@@ -460,6 +474,10 @@ var state = {
   loading: true,
   error: null
 };
+
+var chartInst = null;
+var _cfMes = null;
+var _cfSelectedBarIdx = -1;
 
 // ─── Fetch Sheets ─────────────────────────────────────────────────────────────
 function sheetURL(sheetName) {
@@ -674,7 +692,9 @@ function getFiltered() {
   var dMax=new Date(hoje); dMax.setDate(dMax.getDate()+10);
   return src.filter(function(r) {
     var d=parseDateBR(r.data);
-    if (d && (d<dMin||d>dMax)) return false;
+    if (_cfMes) {
+      if (dataToMY(r.data) !== _cfMes) return false;
+    } else if (d && (d<dMin||d>dMax)) return false;
     if (state.tab==='entrevistas' && isHorarioZero(r.horario)) return false;
     if (state.tab==='testes' && isValorZero(r.pretensao)) return false;
     if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
@@ -840,15 +860,154 @@ function renderKPIs() {
   document.getElementById('kpi-teste-mes').textContent = t.mes;
 }
 
+// ─── Gráfico (Chart.js) ───────────────────────────────────────────────────────
+function dataToMY(s) {
+  if (!s) return '';
+  var d = parseDateBR(s);
+  if (!d) return '';
+  return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+}
+
+// Fonte do gráfico: respeita aba e filtros estruturais (unidade, depto, entrevistador, status),
+// mas ignora a janela de ±10 dias e o filtro de data específica usados na lista de cards.
+function getFilteredForChart() {
+  var src=getSrc(), f=state.filters;
+  return src.filter(function(r) {
+    if (state.tab==='entrevistas' && isHorarioZero(r.horario)) return false;
+    if (state.tab==='testes' && isValorZero(r.pretensao)) return false;
+    if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
+    if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
+    if (f.entrevistador!=='Todos' && r.entrevistador!==f.entrevistador) return false;
+    if (f.status!=='Todos') {
+      var cmp = state.tab==='entrevistas' ? r.status_entrevista : r.status_final;
+      if (cmp!==f.status) return false;
+    }
+    return true;
+  });
+}
+
+function getMonthDataRecrut(filt) {
+  var hoje = new Date();
+  var labels=[], counts=[], indexes=[];
+  for (var i=11; i>=0; i--) {
+    var d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    var my = String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+    labels.push(my);
+    indexes.push(my);
+    counts.push(filt.filter(function(r){ return dataToMY(r.data)===my; }).length);
+  }
+  return {labels:labels, counts:counts, indexes:indexes};
+}
+
+var cfOutlinePlugin = {
+  id: 'cfOutline',
+  afterDatasetsDraw: function(chart) {
+    var sel = _cfSelectedBarIdx;
+    if (sel < 0) return;
+    var meta = chart.getDatasetMeta(0);
+    if (!meta.data || sel >= meta.data.length) return;
+    var bar = meta.data[sel];
+    var ctx = chart.ctx;
+    var x = bar.x - bar.width/2 - 4;
+    var y = bar.y - 4;
+    var w = bar.width + 8;
+    var h = bar.base - bar.y + 8;
+    ctx.save();
+    ctx.strokeStyle = '#35383F';
+    ctx.lineWidth = 2;
+    var r = 4;
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.lineTo(x+w-r, y);
+    ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+    ctx.lineTo(x+w, y+h-r);
+    ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+    ctx.lineTo(x+r, y+h);
+    ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+    ctx.lineTo(x, y+r);
+    ctx.quadraticCurveTo(x, y, x+r, y);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+var barValueLabelsPlugin = {
+  id: 'barValueLabels',
+  afterDatasetsDraw: function(chart) {
+    var meta = chart.getDatasetMeta(0);
+    if (!meta.data) return;
+    var ctx = chart.ctx;
+    var data = chart.data.datasets[0].data;
+    ctx.save();
+    ctx.fillStyle = '#35383F';
+    ctx.font = '600 11px "DM Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    for (var i = 0; i < meta.data.length; i++) {
+      var v = data[i];
+      if (!v) continue;
+      var bar = meta.data[i];
+      ctx.fillText(v, bar.x, bar.y - 6);
+    }
+    ctx.restore();
+  }
+};
+
+function renderChartRecrut() {
+  var canvas = document.getElementById('cRecrut');
+  if (!canvas || typeof Chart === 'undefined') return;
+  var md = getMonthDataRecrut(getFilteredForChart());
+  var labels=md.labels, counts=md.counts, indexes=md.indexes;
+  var bgColors = indexes.map(function(my){
+    return _cfMes!==null ? (my===_cfMes?'#35383F':'rgba(53,56,63,0.45)') : '#35383F';
+  });
+  _cfSelectedBarIdx = _cfMes ? indexes.indexOf(_cfMes) : -1;
+
+  if (chartInst) chartInst.destroy();
+  chartInst = new Chart(canvas, {
+    type:'bar',
+    data:{ labels:labels, datasets:[{
+      label: state.tab==='entrevistas' ? 'Entrevistas' : 'Testes',
+      data:counts, backgroundColor:bgColors, borderWidth:0, borderRadius:5, barPercentage:0.6
+    }]},
+    plugins:[cfOutlinePlugin, barValueLabelsPlugin],
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:false,
+      layout:{padding:{top:18}},
+      onClick:function(e,els){ if(els.length){ setCF(indexes[els[0].index]); } },
+      plugins:{ legend:{display:false}, tooltip:{enabled:false} },
+      scales:{
+        x:{grid:{color:'rgba(53,56,63,0.06)'}, ticks:{color:'#35383F', font:{family:'DM Mono', size:10}}, border:{color:'rgba(53,56,63,0.1)'}},
+        y:{grid:{color:'rgba(53,56,63,0.06)'}, ticks:{color:'#9CA3AF', font:{family:'DM Mono', size:10}, stepSize:1}, border:{color:'rgba(53,56,63,0.1)'}, beginAtZero:true}
+      }
+    }
+  });
+  document.getElementById('chartTitle').textContent = state.tab==='entrevistas' ? 'Entrevistas por Mês' : 'Testes por Mês';
+}
+
+function setCF(my) {
+  if (_cfMes===my) { clearCF(); return; }
+  _cfMes = my;
+  document.body.classList.add('cf-active');
+  render();
+}
+function clearCF() {
+  _cfMes = null;
+  document.body.classList.remove('cf-active');
+  render();
+}
+
 // ─── Render ───────────────────────────────────────────────────────────────────
 function render() {
   if (state.loading) { showLoading(); return; }
   if (state.error)   { showError(state.error); return; }
   renderKPIs();
+  renderChartRecrut();
   var filtered=getFiltered();
   renderFilters();
   var c=document.getElementById('content');
-  if (!filtered.length) { c.innerHTML=emptyState(); return; }
+  if (!filtered.length) { c.innerHTML=emptyState(); document.getElementById('footer-date').textContent='Atualizado: '+new Date().toLocaleString('pt-BR'); return; }
   _testeCache=[];_entrevistaCache=[];
   c.innerHTML=filtered.map(function(r){ return state.tab==='entrevistas'?cardEntrevista(r):cardTeste(r); }).join('');
   document.getElementById('footer-date').textContent='Atualizado: '+new Date().toLocaleString('pt-BR');
@@ -857,6 +1016,7 @@ function render() {
 function setTab(tab) {
   state.tab=tab;
   state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos'};
+  _cfMes=null; document.body.classList.remove('cf-active');
   document.getElementById('tab-entrevistas').classList.toggle('active',tab==='entrevistas');
   document.getElementById('tab-testes').classList.toggle('active',tab==='testes');
   render();
