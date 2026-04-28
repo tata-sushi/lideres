@@ -236,6 +236,12 @@ body {
 
 .bar-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
 
+.bar-row.clickable { cursor: pointer; border-radius: 4px; transition: background 0.15s; }
+.bar-row.clickable:hover { background: var(--bg); }
+.bar-row.active { background: rgba(53,56,63,0.08); }
+.bar-row.active .bar-name,
+.bar-row.active .bar-qty { color: var(--carbon); }
+
 .bar-name {
   font-size: 11px; color: var(--mid);
   flex: 0 0 40%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -1233,13 +1239,25 @@ function toggleAlertBody() {
 
 /* ══ UNIT FILTER ══ */
 var activeUnitFilter = 'all';
+var activeItemFilter = null;
 
 function setUnitFilter(unit, btn) {
   activeUnitFilter = unit;
+  activeItemFilter = null;
   document.querySelectorAll('#unit-tabs .tab-btn').forEach(function(b){b.classList.remove('active');});
   if (btn) btn.classList.add('active');
   renderDash();
   recalcSizes();
+}
+
+function setItemFilter(itemName) {
+  activeItemFilter = (activeItemFilter === itemName) ? null : itemName;
+  renderDash();
+  recalcSizes();
+}
+
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 }
 
 /* ══ RENDER DASH ══ */
@@ -1276,14 +1294,23 @@ function bars(id, items) {
   var el = document.getElementById(id);
   if (!el) return;
   if (!items || !items.length) { el.innerHTML = ''; return; }
+  var clickable = (id === 'b-u' || id === 'b-c' || id === 'b-e');
   var max = Math.max.apply(null, items.map(function(i){return i.q;}));
   el.innerHTML = items.map(function(it,i){
-    return '<div class="bar-row">' +
+    var isActive = clickable && activeItemFilter === it.n;
+    var rowCls = 'bar-row' + (clickable ? ' clickable' : '') + (isActive ? ' active' : '');
+    var dataAttr = clickable ? ' data-item="'+escAttr(it.n)+'"' : '';
+    return '<div class="'+rowCls+'"'+dataAttr+'>' +
       '<div class="bar-name'+(i===0?' top':'')+'">'+it.n+'</div>' +
       '<div class="bar-track"><div class="bar-fill '+(i===0?'r1':i<2?'r2':i<4?'r3':'')+'" style="width:0" data-w="'+(it.q/max*100).toFixed(1)+'%"></div></div>' +
       '<div class="bar-qty'+(i===0?' top':'')+'">'+it.q+'</div>' +
       '</div>';
   }).join('');
+  if (clickable) {
+    el.querySelectorAll('.bar-row.clickable').forEach(function(row){
+      row.addEventListener('click', function(){ setItemFilter(row.dataset.item); });
+    });
+  }
   requestAnimationFrame(function(){requestAnimationFrame(function(){
     el.querySelectorAll('.bar-fill').forEach(function(b){b.style.width=b.dataset.w;});
   });});
@@ -2007,6 +2034,8 @@ function recalcSizes() {
 
     // Filtrar por unidade ativa
     if (activeUnitFilter !== 'all' && r.unidade !== activeUnitFilter) return;
+    // Filtrar por item ativo (cross-filter ao clicar em um item nos cards)
+    if (activeItemFilter && r.item !== activeItemFilter) return;
 
     var qtd = r.quantidade || 0;
 
