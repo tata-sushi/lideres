@@ -33,7 +33,17 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .chart-wrap { position: relative; height: 220px; }
 .chart-wrap-status { height: 240px; }
 
-.tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border-bottom: 2px solid var(--border); }
+.dash-subtabs { display: flex; gap: 8px; padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.dash-subtab { padding: 7px 14px; border: 1px solid var(--border); background: var(--bg); border-radius: 999px; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; color: var(--mid); cursor: pointer; transition: all 0.18s; }
+.dash-subtab:hover { color: var(--carbon); }
+.dash-subtab.active { background: var(--carbon); color: var(--citric); border-color: var(--carbon); }
+
+body[data-view="dashboard"] .kpis-wrap,
+body[data-view="dashboard"] .filters-wrap,
+body[data-view="dashboard"] .content { display: none; }
+body:not([data-view="dashboard"]) #dashboard { display: none; }
+
+.tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; background: var(--surface); border-bottom: 2px solid var(--border); }
 .tab-btn { padding: 16px 24px; border: none; background: transparent; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); cursor: pointer; transition: all 0.18s; border-bottom: 2px solid transparent; margin-bottom: -2px; }
 .tab-btn:hover { color: var(--carbon); background: var(--bg); }
 .tab-btn.active { background: var(--carbon); color: var(--citric); border-bottom-color: var(--carbon); }
@@ -174,7 +184,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .header-plus svg{width:14px;height:14px;stroke:var(--citric);fill:none;stroke-width:2.5;stroke-linecap:round}
 </style>
 </head>
-<body>
+<body data-view="entrevistas">
 
 <!-- ══ AUTH GATE — session guard (lideres) ══════════════════════ -->
 <style>
@@ -263,6 +273,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="tabs">
   <button class="tab-btn active" id="tab-entrevistas" onclick="setTab('entrevistas')">Entrevistas</button>
   <button class="tab-btn" id="tab-testes" onclick="setTab('testes')">Testes</button>
+  <button class="tab-btn" id="tab-dashboard" onclick="setTab('dashboard')">Dashboard</button>
 </div>
 <div class="kpis-wrap" id="kpis-wrap">
   <div class="kpi-card">
@@ -276,13 +287,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <span class="kpi-sub"><strong id="kpi-teste-hoje">0</strong> hoje / <strong id="kpi-teste-mes">0</strong> mês</span>
   </div>
 </div>
-<div class="chart-card" id="chartCard">
-  <div class="chart-title" id="chartTitle">Entrevistas por Mês</div>
-  <div class="chart-wrap"><canvas id="cRecrut"></canvas></div>
-</div>
-<div class="chart-card" id="chartCardStatus">
-  <div class="chart-title" id="chartTitleStatus">Status das Entrevistas</div>
-  <div class="chart-wrap chart-wrap-status"><canvas id="cRecrutStatus"></canvas></div>
+<div class="dashboard" id="dashboard">
+  <div class="dash-subtabs">
+    <button class="dash-subtab active" id="dash-sub-entrevistas" type="button" onclick="setDashSrc('entrevistas')">Entrevistas</button>
+    <button class="dash-subtab" id="dash-sub-testes" type="button" onclick="setDashSrc('testes')">Testes</button>
+  </div>
+  <div class="chart-card" id="chartCard">
+    <div class="chart-title" id="chartTitle">Entrevistas por Mês</div>
+    <div class="chart-wrap"><canvas id="cRecrut"></canvas></div>
+  </div>
+  <div class="chart-card" id="chartCardStatus">
+    <div class="chart-title" id="chartTitleStatus">Status das Entrevistas</div>
+    <div class="chart-wrap chart-wrap-status"><canvas id="cRecrutStatus"></canvas></div>
+  </div>
 </div>
 <div class="filters-wrap" id="filters-wrap"></div>
 <main class="content" id="content"></main>
@@ -471,6 +488,7 @@ var _testeCache = [];
 var _entrevistaCache = [];
 var state = {
   tab: 'entrevistas',
+  dashSrc: 'entrevistas',
   filters: { unidade: 'Todos', departamento: 'Todos', data: 'Todos', entrevistador: 'Todos', status: 'Todos' },
   loading: true,
   error: null
@@ -694,9 +712,7 @@ function getFiltered() {
   var dMax=new Date(hoje); dMax.setDate(dMax.getDate()+10);
   return src.filter(function(r) {
     var d=parseDateBR(r.data);
-    if (_cfMes) {
-      if (dataToMY(r.data) !== _cfMes) return false;
-    } else if (d && (d<dMin||d>dMax)) return false;
+    if (d && (d<dMin||d>dMax)) return false;
     if (state.tab==='entrevistas' && isHorarioZero(r.horario)) return false;
     if (state.tab==='testes' && isValorZero(r.pretensao)) return false;
     if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
@@ -870,20 +886,14 @@ function dataToMY(s) {
   return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
 }
 
-// Fonte do gráfico: respeita aba e filtros estruturais (unidade, depto, entrevistador, status),
-// mas ignora a janela de ±10 dias e o filtro de data específica usados na lista de cards.
+// Fonte do Dashboard: usa state.dashSrc (independente da aba ativa), aplica
+// apenas a exclusão de registros sem horário/valor; ignora filtros da lista
+// (que pertencem à aba Entrevistas/Testes).
 function getFilteredForChart() {
-  var src=getSrc(), f=state.filters;
+  var src = state.dashSrc==='entrevistas' ? entrevistas : testes;
   return src.filter(function(r) {
-    if (state.tab==='entrevistas' && isHorarioZero(r.horario)) return false;
-    if (state.tab==='testes' && isValorZero(r.pretensao)) return false;
-    if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
-    if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
-    if (f.entrevistador!=='Todos' && r.entrevistador!==f.entrevistador) return false;
-    if (f.status!=='Todos') {
-      var cmp = state.tab==='entrevistas' ? r.status_entrevista : r.status_final;
-      if (cmp!==f.status) return false;
-    }
+    if (state.dashSrc==='entrevistas' && isHorarioZero(r.horario)) return false;
+    if (state.dashSrc==='testes' && isValorZero(r.pretensao)) return false;
     return true;
   });
 }
@@ -992,7 +1002,7 @@ function renderChartRecrut() {
   chartInst = new Chart(canvas, {
     type:'bar',
     data:{ labels:labels, datasets:[{
-      label: state.tab==='entrevistas' ? 'Entrevistas' : 'Testes',
+      label: state.dashSrc==='entrevistas' ? 'Entrevistas' : 'Testes',
       data:counts, backgroundColor:bgColors, borderWidth:0, borderRadius:5, barPercentage:0.6
     }]},
     plugins:[cfOutlinePlugin, barValueLabelsPlugin],
@@ -1008,11 +1018,11 @@ function renderChartRecrut() {
       }
     }
   });
-  document.getElementById('chartTitle').textContent = state.tab==='entrevistas' ? 'Entrevistas por Mês' : 'Testes por Mês';
+  document.getElementById('chartTitle').textContent = state.dashSrc==='entrevistas' ? 'Entrevistas por Mês' : 'Testes por Mês';
 }
 
 function statusFieldFor(r) {
-  return state.tab === 'entrevistas' ? r.status_entrevista : r.status_final;
+  return state.dashSrc === 'entrevistas' ? r.status_entrevista : r.status_final;
 }
 
 function getStatusData(filt) {
@@ -1040,7 +1050,7 @@ function renderChartStatus() {
   chartInstStatus = new Chart(canvas, {
     type:'bar',
     data:{ labels:sd.labels, datasets:[{
-      label: state.tab==='entrevistas' ? 'Entrevistas' : 'Testes',
+      label: state.dashSrc==='entrevistas' ? 'Entrevistas' : 'Testes',
       data:sd.counts, backgroundColor:'#35383F', borderWidth:0, borderRadius:5, barPercentage:0.7
     }]},
     plugins:[barValueLabelsHorizontalPlugin],
@@ -1056,44 +1066,59 @@ function renderChartStatus() {
     }
   });
 
-  var base = state.tab==='entrevistas' ? 'Status das Entrevistas' : 'Status dos Testes';
+  var base = state.dashSrc==='entrevistas' ? 'Status das Entrevistas' : 'Status dos Testes';
   document.getElementById('chartTitleStatus').textContent = _cfMes ? (base + ' — ' + _cfMes) : base;
 }
 
 function setCF(my) {
   if (_cfMes===my) { clearCF(); return; }
   _cfMes = my;
-  document.body.classList.add('cf-active');
-  render();
+  renderChartRecrut();
+  renderChartStatus();
 }
 function clearCF() {
   _cfMes = null;
-  document.body.classList.remove('cf-active');
-  render();
+  renderChartRecrut();
+  renderChartStatus();
+}
+
+function setDashSrc(src) {
+  if (state.dashSrc===src) return;
+  state.dashSrc = src;
+  _cfMes = null;
+  document.getElementById('dash-sub-entrevistas').classList.toggle('active', src==='entrevistas');
+  document.getElementById('dash-sub-testes').classList.toggle('active', src==='testes');
+  renderChartRecrut();
+  renderChartStatus();
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 function render() {
   if (state.loading) { showLoading(); return; }
   if (state.error)   { showError(state.error); return; }
+  document.getElementById('footer-date').textContent='Atualizado: '+new Date().toLocaleString('pt-BR');
+  if (state.tab === 'dashboard') {
+    renderChartRecrut();
+    renderChartStatus();
+    return;
+  }
   renderKPIs();
-  renderChartRecrut();
-  renderChartStatus();
   var filtered=getFiltered();
   renderFilters();
   var c=document.getElementById('content');
-  if (!filtered.length) { c.innerHTML=emptyState(); document.getElementById('footer-date').textContent='Atualizado: '+new Date().toLocaleString('pt-BR'); return; }
+  if (!filtered.length) { c.innerHTML=emptyState(); return; }
   _testeCache=[];_entrevistaCache=[];
   c.innerHTML=filtered.map(function(r){ return state.tab==='entrevistas'?cardEntrevista(r):cardTeste(r); }).join('');
-  document.getElementById('footer-date').textContent='Atualizado: '+new Date().toLocaleString('pt-BR');
 }
 
 function setTab(tab) {
   state.tab=tab;
   state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos'};
-  _cfMes=null; document.body.classList.remove('cf-active');
+  _cfMes=null;
+  document.body.dataset.view = tab;
   document.getElementById('tab-entrevistas').classList.toggle('active',tab==='entrevistas');
   document.getElementById('tab-testes').classList.toggle('active',tab==='testes');
+  document.getElementById('tab-dashboard').classList.toggle('active',tab==='dashboard');
   render();
 }
 function setFilter(key,val) {
