@@ -31,9 +31,15 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .chart-card { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px 16px; display: flex; flex-direction: column; }
 .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; text-align: center; font-weight: 500; }
 .chart-wrap { position: relative; height: 220px; }
-.chart-wrap-status { height: 240px; }
 
-.dash-subtabs { display: flex; gap: 8px; padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.status-table { padding: 4px 0; }
+.status-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+.status-row:last-child { border-bottom: none; }
+.status-name { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); }
+.status-count { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 600; color: var(--carbon); font-variant-numeric: tabular-nums; }
+.status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+
+.dash-subtabs { display: flex; justify-content: center; gap: 8px; padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .dash-subtab { padding: 7px 14px; border: 1px solid var(--border); background: var(--bg); border-radius: 999px; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; color: var(--mid); cursor: pointer; transition: all 0.18s; }
 .dash-subtab:hover { color: var(--carbon); }
 .dash-subtab.active { background: var(--carbon); color: var(--citric); border-color: var(--carbon); }
@@ -43,8 +49,9 @@ body[data-view="dashboard"] .filters-wrap,
 body[data-view="dashboard"] .content { display: none; }
 body:not([data-view="dashboard"]) #dashboard { display: none; }
 
-.tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; background: var(--surface); border-bottom: 2px solid var(--border); }
-.tab-btn { padding: 16px 24px; border: none; background: transparent; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); cursor: pointer; transition: all 0.18s; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+.tabs { display: flex; overflow-x: auto; background: var(--surface); border-bottom: 2px solid var(--border); scrollbar-width: none; -ms-overflow-style: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab-btn { flex: 1 0 auto; min-width: max-content; white-space: nowrap; padding: 16px 24px; border: none; background: transparent; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); cursor: pointer; transition: all 0.18s; border-bottom: 2px solid transparent; margin-bottom: -2px; }
 .tab-btn:hover { color: var(--carbon); background: var(--bg); }
 .tab-btn.active { background: var(--carbon); color: var(--citric); border-bottom-color: var(--carbon); }
 
@@ -298,7 +305,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
   <div class="chart-card" id="chartCardStatus">
     <div class="chart-title" id="chartTitleStatus">Status das Entrevistas</div>
-    <div class="chart-wrap chart-wrap-status"><canvas id="cRecrutStatus"></canvas></div>
+    <div class="status-table" id="statusTable"></div>
   </div>
 </div>
 <div class="filters-wrap" id="filters-wrap"></div>
@@ -495,7 +502,6 @@ var state = {
 };
 
 var chartInst = null;
-var chartInstStatus = null;
 var _cfMes = null;
 var _cfSelectedBarIdx = -1;
 
@@ -966,27 +972,6 @@ var barValueLabelsPlugin = {
   }
 };
 
-var barValueLabelsHorizontalPlugin = {
-  id: 'barValueLabelsH',
-  afterDatasetsDraw: function(chart) {
-    var meta = chart.getDatasetMeta(0);
-    if (!meta.data) return;
-    var ctx = chart.ctx;
-    var data = chart.data.datasets[0].data;
-    ctx.save();
-    ctx.fillStyle = '#35383F';
-    ctx.font = '600 11px "DM Mono", monospace';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    for (var i = 0; i < meta.data.length; i++) {
-      var v = data[i];
-      if (!v) continue;
-      var bar = meta.data[i];
-      ctx.fillText(v, bar.x + 6, bar.y);
-    }
-    ctx.restore();
-  }
-};
 
 function renderChartRecrut() {
   var canvas = document.getElementById('cRecrut');
@@ -1041,31 +1026,17 @@ function getStatusData(filt) {
   };
 }
 
-function renderChartStatus() {
-  var canvas = document.getElementById('cRecrutStatus');
-  if (!canvas || typeof Chart === 'undefined') return;
+function renderStatusTable() {
+  var el = document.getElementById('statusTable');
+  if (!el) return;
   var sd = getStatusData(getFilteredForChart());
-
-  if (chartInstStatus) chartInstStatus.destroy();
-  chartInstStatus = new Chart(canvas, {
-    type:'bar',
-    data:{ labels:sd.labels, datasets:[{
-      label: state.dashSrc==='entrevistas' ? 'Entrevistas' : 'Testes',
-      data:sd.counts, backgroundColor:'#35383F', borderWidth:0, borderRadius:5, barPercentage:0.7
-    }]},
-    plugins:[barValueLabelsHorizontalPlugin],
-    options:{
-      indexAxis:'y',
-      responsive:true, maintainAspectRatio:false, animation:false,
-      layout:{ padding:{ right: 28 } },
-      plugins:{ legend:{display:false}, tooltip:{enabled:false} },
-      scales:{
-        x:{grid:{color:'rgba(53,56,63,0.06)'}, ticks:{color:'#9CA3AF', font:{family:'DM Mono', size:10}, stepSize:1, precision:0}, border:{color:'rgba(53,56,63,0.1)'}, beginAtZero:true},
-        y:{grid:{display:false}, ticks:{color:'#35383F', font:{family:'DM Mono', size:10}}, border:{color:'rgba(53,56,63,0.1)'}}
-      }
-    }
-  });
-
+  if (!sd.labels.length) {
+    el.innerHTML = '<div class="status-empty">Sem dados</div>';
+  } else {
+    el.innerHTML = sd.labels.map(function(label, i){
+      return '<div class="status-row"><span class="status-name">'+escH(label)+'</span><span class="status-count">'+sd.counts[i]+'</span></div>';
+    }).join('');
+  }
   var base = state.dashSrc==='entrevistas' ? 'Status das Entrevistas' : 'Status dos Testes';
   document.getElementById('chartTitleStatus').textContent = _cfMes ? (base + ' — ' + _cfMes) : base;
 }
@@ -1074,12 +1045,12 @@ function setCF(my) {
   if (_cfMes===my) { clearCF(); return; }
   _cfMes = my;
   renderChartRecrut();
-  renderChartStatus();
+  renderStatusTable();
 }
 function clearCF() {
   _cfMes = null;
   renderChartRecrut();
-  renderChartStatus();
+  renderStatusTable();
 }
 
 function setDashSrc(src) {
@@ -1089,7 +1060,7 @@ function setDashSrc(src) {
   document.getElementById('dash-sub-entrevistas').classList.toggle('active', src==='entrevistas');
   document.getElementById('dash-sub-testes').classList.toggle('active', src==='testes');
   renderChartRecrut();
-  renderChartStatus();
+  renderStatusTable();
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
@@ -1099,7 +1070,7 @@ function render() {
   document.getElementById('footer-date').textContent='Atualizado: '+new Date().toLocaleString('pt-BR');
   if (state.tab === 'dashboard') {
     renderChartRecrut();
-    renderChartStatus();
+    renderStatusTable();
     return;
   }
   renderKPIs();
