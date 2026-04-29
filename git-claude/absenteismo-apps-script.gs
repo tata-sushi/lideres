@@ -44,8 +44,9 @@ function doGet(e) {
 /*  SALVAR DEVOLUTIVA                                  */
 /* ────────────────────────────────────────────────── */
 function salvarDevolutiva(p) {
-  var linha      = parseInt(p.linha, 10);
-  var devolutiva = String(p.devolutiva || '').trim();
+  var linha       = parseInt(p.linha, 10);
+  var devolutiva  = String(p.devolutiva  || '').trim();
+  var responsavel = String(p.responsavel || '').trim();
 
   if (!linha || linha < 2) {
     return { success: false, message: 'Número de linha inválido: ' + p.linha };
@@ -64,36 +65,39 @@ function salvarDevolutiva(p) {
     return { success: false, message: 'Aba "' + SHEET_NAME + '" não encontrada na planilha.' };
   }
 
-  // Localiza a coluna "Devolutiva" dinamicamente a partir do cabeçalho (linha 1)
-  var lastCol   = sh.getLastColumn();
-  var headers   = sh.getRange(1, 1, 1, lastCol).getValues()[0];
-  var colDev    = -1;
-  var devAliases = ['devolutiva', 'justificativa', 'obs'];
+  // Localiza colunas pelo cabeçalho (linha 1)
+  var lastCol  = sh.getLastColumn();
+  var headers  = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  var colDev   = -1;
+  var colResp  = -1;
+  var devAliases  = ['devolutiva', 'justificativa', 'obs'];
+  var respAliases = ['responsavel', 'responsável', 'registrado por', 'registradopor', 'gestor'];
 
   for (var i = 0; i < headers.length; i++) {
     var h = String(headers[i] || '').normalize('NFD')
               .replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-    if (devAliases.indexOf(h) >= 0) {
-      colDev = i + 1; // 1-indexed
-      break;
-    }
+    if (colDev  === -1 && devAliases.indexOf(h)  >= 0) colDev  = i + 1;
+    if (colResp === -1 && respAliases.indexOf(h) >= 0) colResp = i + 1;
   }
 
-  if (colDev === -1) {
-    // Fallback: assume coluna H (índice 8) se cabeçalho não encontrado
-    colDev = 8;
-  }
+  // Fallbacks se cabeçalho não encontrado
+  if (colDev  === -1) colDev  = 8;  // coluna H
+  if (colResp === -1) colResp = 9;  // coluna I
 
-  // Verifica se a linha existe na planilha
   var lastRow = sh.getLastRow();
   if (linha > lastRow) {
-    return { success: false, message: 'Linha ' + linha + ' não existe na planilha (total: ' + lastRow + ').' };
+    return { success: false, message: 'Linha ' + linha + ' não existe (total: ' + lastRow + ').' };
   }
 
+  var tz      = ss.getSpreadsheetTimeZone() || 'America/Sao_Paulo';
+  var dataHoje = Utilities.formatDate(new Date(), tz, 'dd/MM/yyyy');
+  var registro = responsavel ? responsavel + ' · ' + dataHoje : dataHoje;
+
   sh.getRange(linha, colDev).setValue(devolutiva);
+  sh.getRange(linha, colResp).setValue(registro);
   SpreadsheetApp.flush();
 
-  return { success: true, linha: linha, coluna: colDev, devolutiva: devolutiva };
+  return { success: true, linha: linha, devolutiva: devolutiva, registro: registro };
 }
 
 /* ────────────────────────────────────────────────── */
