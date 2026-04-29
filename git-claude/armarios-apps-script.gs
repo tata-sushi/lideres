@@ -32,7 +32,8 @@ var UNIT_IN  = {
   'Poke - Pinheiros': 'Poke - Pinheiros',
   'TATÁ House': 'TATÁ House',
   'Tatá House': 'TATÁ House',
-  'TATA House': 'TATÁ House'
+  'TATA House': 'TATÁ House',
+  'Administrativo': 'Administrativo'
 };
 
 // Mapeia o nome do portal → nome curto preferido p/ gravação na planilha
@@ -40,7 +41,8 @@ var UNIT_OUT = {
   'Itaim Bibi': 'Itaim',
   'Pinheiros': 'Pinheiros',
   'Poke - Pinheiros': 'Poke',
-  'TATÁ House': 'TATÁ House'
+  'TATÁ House': 'TATÁ House',
+  'Administrativo': 'Administrativo'
 };
 
 function normIn(u)  { return UNIT_IN[String(u||'').trim()]  || String(u||'').trim(); }
