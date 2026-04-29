@@ -308,6 +308,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-title" id="chartTitleStatus">Status das Entrevistas</div>
     <div class="status-table" id="statusTable"></div>
   </div>
+  <div class="chart-card" id="chartCardFunil">
+    <div class="chart-title">Funil de Recrutamento</div>
+    <div id="funil-rows" style="padding:4px 0 8px;"></div>
+  </div>
 </div>
 <div class="filters-wrap" id="filters-wrap"></div>
 <main class="content" id="content"></main>
@@ -552,6 +556,7 @@ function normEntrevista(obj) {
     entrevistador:     v('entrevistador','entrevistadora'),
     observacoes:       v('observacoes','observacao','obs','feedback'),
     status_final:      v('status_final','resultado_final','contratado'),
+    referencia:        v('tipo_de_referencia','tipo_referencia','referencia'),
     id:                v('id'),
     link:              v('link_feedback','link','url')
   };
@@ -1065,6 +1070,130 @@ function setDashSrc(src) {
   renderStatusTable();
 }
 
+// ─── Funil de Recrutamento ────────────────────────────────────────────────────
+function buildFunnelData() {
+  var contatados = entrevistas.filter(function(r){
+    return r.nome && r.nome.trim();
+  });
+
+  var responderam = contatados.filter(function(r){
+    return norm((r.selecionado||'').toLowerCase()) !== 'nao respondeu';
+  });
+
+  var agendadas = contatados.filter(function(r){
+    return !isHorarioZero(r.horario);
+  });
+
+  var realizadas = contatados.filter(function(r){
+    var s = norm((r.status_entrevista||'').toLowerCase());
+    return s && s !== 'nao entrou' && s !== 'nao realizada';
+  });
+
+  var aprovados = contatados.filter(function(r){
+    return norm((r.status_entrevista||'').toLowerCase()) === 'aprovado para teste';
+  });
+
+  var testesAgendados = testes.filter(function(r){
+    return r.nome && r.nome.trim();
+  });
+
+  var testesRealizados = testesAgendados.filter(function(r){
+    var s = norm((r.status_final||'').toLowerCase());
+    return s !== 'nao compareceu' && s !== 'cancelado' && s !== 'aguardando teste';
+  });
+
+  var refs = contatados.filter(function(r){
+    var u = norm((r.referencia||'').toLowerCase().trim());
+    return u && u !== 'ruim' && u !== 'nao fornecida' && u !== 'nao realizada';
+  });
+
+  var contratados = testesAgendados.filter(function(r){
+    return norm((r.status_final||'').toLowerCase()) === 'contratado';
+  });
+
+  return [
+    { label: 'Candidatos contatados',      count: contatados.length       },
+    { label: 'Candidatos que responderam', count: responderam.length      },
+    { label: 'Entrevistas agendadas',      count: agendadas.length        },
+    { label: 'Entrevistas realizadas',     count: realizadas.length       },
+    { label: 'Aprovados na entrevista',    count: aprovados.length        },
+    { label: 'Testes agendados',           count: testesAgendados.length  },
+    { label: 'Testes realizados',          count: testesRealizados.length },
+    { label: 'Referências aprovadas',      count: refs.length             },
+    { label: 'Contratações',               count: contratados.length      }
+  ];
+}
+
+function renderFunil() {
+  var el = document.getElementById('funil-rows');
+  if (!el) return;
+
+  var etapas = buildFunnelData();
+  var base   = etapas[0].count || 1;
+
+  el.innerHTML = '';
+
+  etapas.forEach(function(e, i) {
+    var pctBase = e.count / base;
+    var pctPrev = i === 0
+      ? null
+      : (etapas[i-1].count > 0 ? Math.round(e.count / etapas[i-1].count * 100) : 0);
+    var isLast  = i === etapas.length - 1;
+    var alpha   = isLast ? 1 : (0.22 + 0.78 * pctBase);
+    var bg      = isLast ? '#CFFF00' : 'rgba(53,56,63,' + alpha.toFixed(2) + ')';
+    var color   = isLast ? '#35383F' : '#fff';
+
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;margin-bottom:8px;';
+
+    var lbl = document.createElement('div');
+    lbl.style.cssText = [
+      'width:178px',
+      'flex-shrink:0',
+      'font-family:"DM Mono",monospace',
+      'font-size:9px',
+      'letter-spacing:.6px',
+      'text-transform:uppercase',
+      'color:#999',
+      'text-align:right',
+      'padding-right:14px',
+      'line-height:1.4'
+    ].join(';');
+    lbl.textContent = e.label;
+
+    var track = document.createElement('div');
+    track.style.cssText = 'flex:1;display:flex;justify-content:center;';
+
+    var barW = Math.max(6, Math.round(pctBase * 100));
+    var bar  = document.createElement('div');
+    bar.style.cssText = [
+      'width:' + barW + '%',
+      'background:' + bg,
+      'border-radius:6px',
+      'height:50px',
+      'display:flex',
+      'align-items:center',
+      'justify-content:center'
+    ].join(';');
+
+    var num = document.createElement('span');
+    num.style.cssText = 'font-family:"DM Mono",monospace;font-size:16px;font-weight:700;color:' + color + ';';
+    num.textContent = e.count;
+
+    bar.appendChild(num);
+    track.appendChild(bar);
+
+    var pctEl = document.createElement('div');
+    pctEl.style.cssText = 'width:44px;flex-shrink:0;font-family:"DM Mono",monospace;font-size:11px;color:#bbb;text-align:left;padding-left:12px;';
+    pctEl.textContent = pctPrev !== null ? pctPrev + '%' : '';
+
+    row.appendChild(lbl);
+    row.appendChild(track);
+    row.appendChild(pctEl);
+    el.appendChild(row);
+  });
+}
+
 // ─── Render ───────────────────────────────────────────────────────────────────
 function render() {
   if (state.loading) { showLoading(); return; }
@@ -1073,6 +1202,7 @@ function render() {
   if (state.tab === 'dashboard') {
     renderChartRecrut();
     renderStatusTable();
+    renderFunil();
     return;
   }
   renderKPIs();
