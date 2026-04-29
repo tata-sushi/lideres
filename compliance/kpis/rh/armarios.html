@@ -554,8 +554,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="m-meta" id="row-colab" style="padding-top:10px">
       <div class="field">
         <label>Colaborador</label>
-        <input type="text" id="f-colab" list="f-colab-list" autocomplete="off" placeholder="Digite ou selecione…" oninput="onColabInput()">
-        <datalist id="f-colab-list"></datalist>
+        <select id="f-colab" onchange="onColabInput()">
+          <option value="">Selecione o colaborador…</option>
+        </select>
       </div>
       <div class="field">
         <label>Matrícula</label>
@@ -1035,17 +1036,16 @@ function onTipoChange() {
     if (isLider) { unidSel.value = currentUser.unit; unidSel.disabled = true; }
     else         { unidSel.value = ''; unidSel.disabled = false; }
   } else if (tipo === 'trocar') {
-    // Unidade vem do colab (base RH) — não editável
     rowColab.style.display = 'grid';
     rowNovo.style.display  = 'grid';
     unidSel.value = isLider ? currentUser.unit : '';
-    unidSel.disabled = true;
+    unidSel.disabled = !!isLider;
   } else {
-    // atribuir/recolher: unidade do colab, não editável
+    // atribuir/recolher
     rowColab.style.display = 'grid';
     rowNovo.style.display  = 'none';
     unidSel.value = isLider ? currentUser.unit : '';
-    unidSel.disabled = true;
+    unidSel.disabled = !!isLider;
   }
 
   refreshArmarioList();
@@ -1205,6 +1205,13 @@ async function carregarColaboradores() {
   return __colabCache;
 }
 
+var __UNIT_NORM = {
+  'Itaim': 'Itaim Bibi', 'Itaim Bibi': 'Itaim Bibi',
+  'Pinheiros': 'Pinheiros',
+  'Poke': 'Poke - Pinheiros', 'Poke - Pinheiros': 'Poke - Pinheiros',
+  'TATÁ House': 'TATÁ House', 'Tatá House': 'TATÁ House', 'TATA House': 'TATÁ House'
+};
+
 function onColabInput() {
   if (!__colabCache) return;
   var v     = document.getElementById('f-colab').value;
@@ -1213,9 +1220,9 @@ function onColabInput() {
   var isLider = currentUser && currentUser.type === 'lider' && currentUser.unit;
   if (match) {
     document.getElementById('f-matricula').value = match.matricula || '';
-    // Só sobrescreve unidade se o colab tem unidade cadastrada (mantém seleção manual caso contrário)
     if (!isLider && match.unidade) {
-      unidSel.value = match.unidade;
+      var unidNorm = __UNIT_NORM[match.unidade.trim()] || match.unidade.trim();
+      unidSel.value = unidNorm;
     }
   } else {
     document.getElementById('f-matricula').value = '';
@@ -1243,12 +1250,13 @@ function openModal() {
   onTipoChange();
 
   carregarColaboradores().then(function(colabs) {
-    var dl = document.getElementById('f-colab-list');
-    dl.innerHTML = '';
+    var sel = document.getElementById('f-colab');
+    sel.innerHTML = '<option value="">Selecione o colaborador…</option>';
     colabs.forEach(function(c) {
       var opt = document.createElement('option');
       opt.value = c.nome;
-      dl.appendChild(opt);
+      opt.textContent = c.nome;
+      sel.appendChild(opt);
     });
   });
 }
