@@ -510,6 +510,7 @@ var state = {
 var chartInst = null;
 var _cfMes = null;
 var _cfSelectedBarIdx = -1;
+var _cfFunilIdx = null;
 
 // ─── Fetch Sheets ─────────────────────────────────────────────────────────────
 function sheetURL(sheetName) {
@@ -904,11 +905,12 @@ function dataToMY(s) {
 // (que pertencem à aba Entrevistas/Testes).
 function getFilteredForChart() {
   var src = state.dashSrc==='entrevistas' ? entrevistas : testes;
-  return src.filter(function(r) {
+  var base = src.filter(function(r) {
     if (state.dashSrc==='entrevistas' && isHorarioZero(r.horario)) return false;
     if (state.dashSrc==='testes' && isValorZero(r.pretensao)) return false;
     return true;
   });
+  return _applyFunilFilter(base);
 }
 
 function getMonthDataRecrut(filt) {
@@ -1064,10 +1066,12 @@ function setDashSrc(src) {
   if (state.dashSrc===src) return;
   state.dashSrc = src;
   _cfMes = null;
+  _cfFunilIdx = null;
   document.getElementById('dash-sub-entrevistas').classList.toggle('active', src==='entrevistas');
   document.getElementById('dash-sub-testes').classList.toggle('active', src==='testes');
   renderChartRecrut();
   renderStatusTable();
+  renderFunil();
 }
 
 // ─── Funil de Recrutamento ────────────────────────────────────────────────────
@@ -1156,12 +1160,98 @@ function buildFunnelData() {
   ];
 }
 
+// Predicados por etapa do funil — usados para filtrar o gráfico mensal e a tabela
+// de status quando o usuário clica numa etapa.
+var _funilStagePredicates = [
+  { src: 'entrevistas', fn: function(r){ return !!(r.nome && r.nome.trim()); } },
+  { src: 'entrevistas', fn: function(r){
+      var s = norm((r.selecionado||'').toLowerCase());
+      return s === 'sim' || s === 'nao' || s === 'nao aceitou a proposta';
+    } },
+  { src: 'entrevistas', fn: function(r){ return norm((r.selecionado||'').toLowerCase()) === 'sim'; } },
+  { src: 'entrevistas', fn: function(r){
+      var s = norm((r.status_entrevista||'').toLowerCase());
+      return s === 'aprovado para teste' || s === 'nao selecionado';
+    } },
+  { src: 'entrevistas', fn: function(r){ return norm((r.status_entrevista||'').toLowerCase()) === 'aprovado para teste'; } },
+  { src: 'testes', fn: function(r){ return !!(r.nome && r.nome.trim()); }, dedupe: true },
+  { src: 'testes', fn: function(r){
+      var s = norm((r.status_final||'').toLowerCase());
+      return s === 'contratado' || s === 'nao contratado';
+    }, dedupe: true },
+  { src: 'testes', special: 'refs' },
+  { src: 'testes', fn: function(r){ return norm((r.status_final||'').toLowerCase()) === 'contratado'; }, dedupe: true }
+];
+
+function _applyFunilFilter(rows) {
+  if (_cfFunilIdx === null) return rows;
+  var stage = _funilStagePredicates[_cfFunilIdx];
+  if (!stage) return rows;
+  if (stage.src !== state.dashSrc) return rows;
+
+  var out;
+  if (stage.special === 'refs') {
+    var refMap = {};
+    entrevistas.filter(_funilDentroPeriodo).forEach(function(r){
+      var k = norm((r.nome||'').toLowerCase().trim());
+      if (!k || refMap[k]) return;
+      refMap[k] = norm((r.referencia||'').toLowerCase().trim());
+    });
+    var realizados = rows.filter(function(r){
+      if (!_funilDentroPeriodo(r)) return false;
+      var s = norm((r.status_final||'').toLowerCase());
+      return s === 'contratado' || s === 'nao contratado';
+    });
+    var seen = {};
+    out = realizados.filter(function(r){
+      var k = norm((r.nome||'').toLowerCase().trim());
+      if (!k || seen[k]) return false;
+      if (refMap[k] === 'ruim') return false;
+      seen[k] = true;
+      return true;
+    });
+  } else {
+    out = rows.filter(function(r){ return _funilDentroPeriodo(r) && stage.fn(r); });
+    if (stage.dedupe) {
+      var seen2 = {};
+      out = out.filter(function(r){
+        var k = norm((r.nome||'').toLowerCase().trim());
+        if (!k || seen2[k]) return false;
+        seen2[k] = true;
+        return true;
+      });
+    }
+  }
+  return out;
+}
+
+function setCFFunil(idx) {
+  if (_cfFunilIdx === idx) {
+    _cfFunilIdx = null;
+  } else {
+    _cfFunilIdx = idx;
+    _cfMes = null;
+    var stage = _funilStagePredicates[idx];
+    if (stage && stage.src !== state.dashSrc) {
+      state.dashSrc = stage.src;
+      var subEnt = document.getElementById('dash-sub-entrevistas');
+      var subTes = document.getElementById('dash-sub-testes');
+      if (subEnt) subEnt.classList.toggle('active', stage.src==='entrevistas');
+      if (subTes) subTes.classList.toggle('active', stage.src==='testes');
+    }
+  }
+  renderFunil();
+  renderChartRecrut();
+  renderStatusTable();
+}
+
 function renderFunil() {
   var el = document.getElementById('funil-rows');
   if (!el) return;
 
   var etapas = buildFunnelData();
   var base   = etapas[0].count || 1;
+  var hasSel = _cfFunilIdx !== null;
 
   el.innerHTML = '';
 
@@ -1170,9 +1260,12 @@ function renderFunil() {
     var pctPrev = i === 0
       ? null
       : (etapas[i-1].count > 0 ? Math.round(e.count / etapas[i-1].count * 100) : 0);
+    var faded = hasSel && _cfFunilIdx !== i;
+    var barColor = faded ? 'rgba(53,56,63,0.45)' : '#35383F';
 
     var row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;margin-bottom:8px;';
+    row.style.cssText = 'display:flex;align-items:center;margin-bottom:8px;cursor:pointer;';
+    row.onclick = function(){ setCFFunil(i); };
 
     var lbl = document.createElement('div');
     lbl.style.cssText = [
@@ -1182,7 +1275,7 @@ function renderFunil() {
       'font-size:10px',
       'letter-spacing:.6px',
       'text-transform:uppercase',
-      'color:#35383F',
+      'color:' + (faded ? 'rgba(53,56,63,0.55)' : '#35383F'),
       'text-align:right',
       'padding-right:14px',
       'line-height:1.4'
@@ -1196,7 +1289,7 @@ function renderFunil() {
     var bar  = document.createElement('div');
     bar.style.cssText = [
       'width:' + barW + '%',
-      'background:#35383F',
+      'background:' + barColor,
       'border-radius:5px',
       'height:34px',
       'display:flex',
@@ -1212,7 +1305,7 @@ function renderFunil() {
     track.appendChild(bar);
 
     var pctEl = document.createElement('div');
-    pctEl.style.cssText = 'width:48px;flex-shrink:0;font-family:"DM Mono",monospace;font-size:11px;font-weight:700;color:#35383F;text-align:left;padding-left:12px;';
+    pctEl.style.cssText = 'width:48px;flex-shrink:0;font-family:"DM Mono",monospace;font-size:11px;font-weight:700;color:' + (faded ? 'rgba(53,56,63,0.55)' : '#35383F') + ';text-align:left;padding-left:12px;';
     pctEl.textContent = pctPrev !== null ? pctPrev + '%' : '';
 
     row.appendChild(lbl);
@@ -1246,6 +1339,7 @@ function setTab(tab) {
   state.tab=tab;
   state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos'};
   _cfMes=null;
+  _cfFunilIdx=null;
   document.body.dataset.view = tab;
   document.getElementById('tab-entrevistas').classList.toggle('active',tab==='entrevistas');
   document.getElementById('tab-testes').classList.toggle('active',tab==='testes');
