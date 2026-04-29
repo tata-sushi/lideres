@@ -1104,45 +1104,55 @@ function buildFunnelData() {
     return norm((r.status_entrevista||'').toLowerCase()) === 'aprovado para teste';
   });
 
-  var testesAgendados = testesBase.filter(function(r){
-    return r.nome && r.nome.trim();
-  });
-
-  // Dedupe por nome (mesmo candidato pode aparecer em múltiplas sessões de teste)
-  var testesAgendadosUnicos = (function(){
+  function _dedupeByNome(arr) {
     var seen = {};
-    return testesAgendados.filter(function(r){
-      var k = norm(r.nome.toLowerCase().trim());
-      if (seen[k]) return false;
+    return arr.filter(function(r){
+      var k = norm((r.nome||'').toLowerCase().trim());
+      if (!k || seen[k]) return false;
       seen[k] = true;
       return true;
     });
-  })();
+  }
+
+  var testesAgendados = testesBase.filter(function(r){
+    return r.nome && r.nome.trim();
+  });
+  var testesAgendadosUnicos = _dedupeByNome(testesAgendados);
 
   var testesRealizados = testesAgendados.filter(function(r){
     var s = norm((r.status_final||'').toLowerCase());
-    return s !== 'nao compareceu' && s !== 'cancelado' && s !== 'aguardando teste';
+    return s === 'contratado' || s === 'nao contratado';
+  });
+  var testesRealizadosUnicos = _dedupeByNome(testesRealizados);
+
+  // Mapa nome → referencia (vem da aba entrevistas)
+  var refMap = {};
+  entrevistasBase.forEach(function(r){
+    var k = norm((r.nome||'').toLowerCase().trim());
+    if (!k || refMap[k]) return;
+    refMap[k] = norm((r.referencia||'').toLowerCase().trim());
+  });
+  // Referências aprovadas = testes realizados (únicos) - referências ruins
+  var refs = testesRealizadosUnicos.filter(function(r){
+    var k = norm((r.nome||'').toLowerCase().trim());
+    return refMap[k] !== 'ruim';
   });
 
-  var refs = contatados.filter(function(r){
-    var u = norm((r.referencia||'').toLowerCase().trim());
-    return u && u !== 'ruim' && u !== 'nao fornecida' && u !== 'nao realizada';
-  });
-
-  var contratados = testesAgendados.filter(function(r){
+  var contratadosFiltrados = testesAgendados.filter(function(r){
     return norm((r.status_final||'').toLowerCase()) === 'contratado';
   });
+  var contratadosUnicos = _dedupeByNome(contratadosFiltrados);
 
   return [
-    { label: 'Candidatos contatados',      count: contatados.length       },
-    { label: 'Candidatos que responderam', count: responderam.length      },
-    { label: 'Entrevistas agendadas',      count: agendadas.length        },
-    { label: 'Entrevistas realizadas',     count: realizadas.length       },
-    { label: 'Aprovados na entrevista',    count: aprovados.length        },
-    { label: 'Testes agendados',           count: testesAgendadosUnicos.length },
-    { label: 'Testes realizados',          count: testesRealizados.length },
-    { label: 'Referências aprovadas',      count: refs.length             },
-    { label: 'Contratações',               count: contratados.length      }
+    { label: 'Candidatos contatados',      count: contatados.length             },
+    { label: 'Candidatos que responderam', count: responderam.length            },
+    { label: 'Entrevistas agendadas',      count: agendadas.length              },
+    { label: 'Entrevistas realizadas',     count: realizadas.length             },
+    { label: 'Aprovados na entrevista',    count: aprovados.length              },
+    { label: 'Testes agendados',           count: testesAgendadosUnicos.length  },
+    { label: 'Testes realizados',          count: testesRealizadosUnicos.length },
+    { label: 'Referências aprovadas',      count: refs.length                   },
+    { label: 'Contratações',               count: contratadosUnicos.length      }
   ];
 }
 
