@@ -29,7 +29,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .kpi-sub strong { color: var(--carbon); font-weight: 600; }
 
 .chart-card { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px 16px; display: flex; flex-direction: column; }
-.chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; text-align: center; font-weight: 500; }
+.chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: left; font-weight: 700; }
 .chart-wrap { position: relative; height: 220px; }
 
 .status-table { padding: 4px 0; }
@@ -302,7 +302,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
   <div class="chart-card" id="chartCardFunil">
     <div class="chart-title">Funil de Recrutamento</div>
-    <div id="funil-rows" style="padding:4px 0 8px;"></div>
+    <div class="chart-wrap" style="height:340px"><canvas id="cFunil"></canvas></div>
   </div>
   <div class="chart-card" id="chartCard">
     <div class="chart-title" id="chartTitle">Entrevistas por Mês</div>
@@ -508,6 +508,7 @@ var state = {
 };
 
 var chartInst = null;
+var funnelInst = null;
 var _cfMes = null;
 var _cfSelectedBarIdx = -1;
 
@@ -1005,8 +1006,8 @@ function renderChartRecrut() {
       onHover:function(e,els){ if(e.native&&e.native.target){ e.native.target.style.cursor = els.length ? 'pointer' : 'default'; } },
       plugins:{ legend:{display:false}, tooltip:{enabled:false} },
       scales:{
-        x:{grid:{color:'rgba(53,56,63,0.06)'}, ticks:{color:'#35383F', font:{family:'DM Mono', size:10}}, border:{color:'rgba(53,56,63,0.1)'}},
-        y:{grid:{color:'rgba(53,56,63,0.06)'}, ticks:{color:'#9CA3AF', font:{family:'DM Mono', size:10}, stepSize:1}, border:{color:'rgba(53,56,63,0.1)'}, beginAtZero:true}
+        x:{grid:{display:false}, border:{display:false}, ticks:{color:'#35383F', font:{family:'DM Mono', size:10}}},
+        y:{grid:{display:false}, border:{display:false}, ticks:{display:false}, beginAtZero:true}
       }
     }
   });
@@ -1156,69 +1157,82 @@ function buildFunnelData() {
   ];
 }
 
+var funnelValueLabelsPlugin = {
+  id: 'funnelValueLabels',
+  afterDatasetsDraw: function(chart) {
+    var meta = chart.getDatasetMeta(0);
+    if (!meta.data) return;
+    var ctx = chart.ctx;
+    var data = chart.data.datasets[0].data;
+    ctx.save();
+    ctx.font = '600 11px "DM Mono", monospace';
+    ctx.textBaseline = 'middle';
+    for (var i = 0; i < meta.data.length; i++) {
+      var v = data[i];
+      if (!v) continue;
+      var bar = meta.data[i];
+      var w = bar.x - bar.base;
+      if (w >= 30) {
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'right';
+        ctx.fillText(v, bar.x - 8, bar.y);
+      } else {
+        ctx.fillStyle = '#35383F';
+        ctx.textAlign = 'left';
+        ctx.fillText(v, bar.x + 6, bar.y);
+      }
+    }
+    ctx.restore();
+  }
+};
+
 function renderFunil() {
-  var el = document.getElementById('funil-rows');
-  if (!el) return;
+  var canvas = document.getElementById('cFunil');
+  if (!canvas || typeof Chart === 'undefined') return;
 
   var etapas = buildFunnelData();
-  var base   = etapas[0].count || 1;
 
-  el.innerHTML = '';
+  var labels = etapas.map(function(e, i) {
+    if (i === 0) return e.label;
+    var prev = etapas[i-1].count;
+    var pct = prev > 0 ? Math.round(e.count / prev * 100) : 0;
+    return [e.label, pct + '%'];
+  });
+  var counts = etapas.map(function(e){ return e.count; });
 
-  etapas.forEach(function(e, i) {
-    var pctBase = e.count / base;
-    var pctPrev = i === 0
-      ? null
-      : (etapas[i-1].count > 0 ? Math.round(e.count / etapas[i-1].count * 100) : 0);
-
-    var row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;margin-bottom:8px;';
-
-    var lbl = document.createElement('div');
-    lbl.style.cssText = [
-      'width:178px',
-      'flex-shrink:0',
-      'font-family:"DM Mono",monospace',
-      'font-size:10px',
-      'letter-spacing:.6px',
-      'text-transform:uppercase',
-      'color:#9CA3AF',
-      'text-align:right',
-      'padding-right:14px',
-      'line-height:1.4'
-    ].join(';');
-    lbl.textContent = e.label;
-
-    var track = document.createElement('div');
-    track.style.cssText = 'flex:1;display:flex;justify-content:center;';
-
-    var barW = Math.max(6, Math.round(pctBase * 100));
-    var bar  = document.createElement('div');
-    bar.style.cssText = [
-      'width:' + barW + '%',
-      'background:#35383F',
-      'border-radius:5px',
-      'height:34px',
-      'display:flex',
-      'align-items:center',
-      'justify-content:center'
-    ].join(';');
-
-    var num = document.createElement('span');
-    num.style.cssText = 'font-family:"DM Mono",monospace;font-size:11px;font-weight:600;color:#fff;';
-    num.textContent = e.count;
-
-    bar.appendChild(num);
-    track.appendChild(bar);
-
-    var pctEl = document.createElement('div');
-    pctEl.style.cssText = 'width:44px;flex-shrink:0;font-family:"DM Mono",monospace;font-size:10px;color:#9CA3AF;text-align:left;padding-left:12px;';
-    pctEl.textContent = pctPrev !== null ? pctPrev + '%' : '';
-
-    row.appendChild(lbl);
-    row.appendChild(track);
-    row.appendChild(pctEl);
-    el.appendChild(row);
+  if (funnelInst) funnelInst.destroy();
+  funnelInst = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: counts,
+        backgroundColor: '#35383F',
+        borderWidth: 0,
+        borderRadius: 5,
+        barPercentage: 0.7
+      }]
+    },
+    plugins: [funnelValueLabelsPlugin],
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      layout: { padding: { right: 28 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { display: false, beginAtZero: true, grid: { display: false }, border: { display: false } },
+        y: {
+          grid: { display: false },
+          border: { display: false },
+          ticks: {
+            color: '#35383F',
+            font: { family: 'DM Mono', size: 10, weight: '500' }
+          }
+        }
+      }
+    }
   });
 }
 
