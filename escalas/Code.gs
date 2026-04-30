@@ -95,6 +95,7 @@ function doPost(e) {
     var a = body.action;
     if (a === 'saveEscala')  return jsonOk(saveEscala(body.semana, body.escala, body.config));
     if (a === 'saveFerias')  return jsonOk(saveFerias(body.ferias));
+    if (a === 'saveExtras')  return jsonOk(saveExtras(body.extras));
     return jsonErr('action inválida');
   } catch(err) { return jsonErr(err.message); }
 }
@@ -131,7 +132,57 @@ function getColaboradores() {
     idx++;
   });
 
+  // Mescla colaboradores extras (cadastrados no app, fora da planilha de RH)
+  var extras = getExtras();
+  extras.forEach(function(e) {
+    colabs.push({
+      id:      e.id,
+      nome:    e.nome,
+      funcao:  e.funcao,
+      unidade: e.unidade || 'Tatá',
+      depto:   e.depto   || 'Salão',
+      cor:     CORES[idx % CORES.length],
+      extra:   true,
+    });
+    idx++;
+  });
+
   return { colabs: colabs };
+}
+
+// ── EXTRAS ────────────────────────────────────────────────────
+// Aba "Extras": id | nome | funcao | unidade | depto
+// Colaboradores adicionados manualmente, fora da planilha de RH
+// (freelancers, temporários, diaristas, etc.)
+
+var EXTRAS_HEADER = ['id','nome','funcao','unidade','depto'];
+
+function getExtras() {
+  var sh = aba('Extras', EXTRAS_HEADER);
+  var rows = todasLinhas(sh);
+  return rows
+    .filter(function(r) { return r[0] && r[1]; })
+    .map(function(r) {
+      return {
+        id:      String(r[0]),
+        nome:    String(r[1]),
+        funcao:  String(r[2] || ''),
+        unidade: String(r[3] || ''),
+        depto:   String(r[4] || ''),
+      };
+    });
+}
+
+function saveExtras(extras) {
+  var sh = aba('Extras', EXTRAS_HEADER);
+  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow()-1, EXTRAS_HEADER.length).clearContent();
+  if (extras && extras.length > 0) {
+    sh.getRange(2, 1, extras.length, EXTRAS_HEADER.length)
+      .setValues(extras.map(function(e) {
+        return [e.id, e.nome, e.funcao||'', e.unidade||'', e.depto||''];
+      }));
+  }
+  return {};
 }
 
 // ── ESCALA ────────────────────────────────────────────────────

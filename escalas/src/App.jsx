@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Download, RotateCcw, Copy, Trash2, Plus, X, UserPlus, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, Printer, Save } from 'lucide-react';
-import { carregarEscala, salvarEscala, carregarColaboradores, carregarFerias, salvarFerias } from './api.js';
+import { carregarEscala, salvarEscala, carregarColaboradores, carregarFerias, salvarFerias, salvarExtras } from './api.js';
 
 
 // ============================================================
@@ -365,8 +365,12 @@ export default function EscalaPainel() {
     if (!novoNome.trim()) return;
     const usadas=colabs.map(c=>c.cor);
     const cor=CORES_POOL.find(c=>!usadas.includes(c))||CORES_POOL[colabs.length%CORES_POOL.length];
-    const nc={id:novoId(),nome:novoNome.trim(),funcao:novoFunc,unidade:novoUnidade,depto:novoDepto,cor};
-    setColabs(p=>[...p,nc]);
+    const nc={id:`extra_${Date.now()}`,nome:novoNome.trim(),funcao:novoFunc,unidade:novoUnidade,depto:novoDepto,cor,extra:true};
+    const novosColabs=[...colabs,nc];
+    setColabs(novosColabs);
+    // Persiste lista de extras no backend
+    const extras=novosColabs.filter(c=>c.extra).map(c=>({id:c.id,nome:c.nome,funcao:c.funcao,unidade:c.unidade,depto:c.depto}));
+    salvarExtras(extras).catch(()=>{});
     // Adicionar a todas as semanas existentes
     setDados(p=>{
       const novo={...p};
@@ -379,7 +383,12 @@ export default function EscalaPainel() {
   };
 
   const removerColab=(cid)=>{
-    if (!confirm('Remover este colaborador de toda a escala?')) return;
+    const alvo=colabs.find(c=>c.id===cid);
+    const ehExtra=alvo&&alvo.extra;
+    const msg=ehExtra
+      ? 'Remover este colaborador EXTRA de toda a escala?'
+      : 'Remover este colaborador de toda a escala?';
+    if (!confirm(msg)) return;
     // Batch: atualiza colabs e dados juntos para evitar estado inconsistente
     const novosColabs = colabs.filter(c=>c.id!==cid);
     setColabs(novosColabs);
@@ -390,6 +399,11 @@ export default function EscalaPainel() {
       });
       return novo;
     });
+    // Para extras: persiste remoção no backend (sem isso, voltariam após refresh)
+    if (ehExtra) {
+      const extras=novosColabs.filter(c=>c.extra).map(c=>({id:c.id,nome:c.nome,funcao:c.funcao,unidade:c.unidade,depto:c.depto}));
+      salvarExtras(extras).catch(()=>{});
+    }
   };
 
   // Filtro
@@ -680,6 +694,9 @@ export default function EscalaPainel() {
           {painelAberto?<PanelLeftClose size={15}/>:<PanelLeftOpen size={15}/>}
         </button>
         <button className="btn-outline" onClick={limparDia}><RotateCcw size={11}/>Limpar dia</button>
+        <button className="btn-outline" onClick={()=>setMostrarAdd(p=>!p)} title="Adicionar colaborador extra (fora da lista de RH)">
+          <UserPlus size={11}/>+ Extra
+        </button>
         <button className="btn-outline" onClick={gerarPDF}><Printer size={11}/>Imprimir</button>
         <button className="btn-outline" onClick={salvarManual}
           disabled={!pendente||syncStatus==='saving'||syncStatus==='loading'}
@@ -687,6 +704,52 @@ export default function EscalaPainel() {
           <Save size={11}/>{syncStatus==='saving'?'Salvando...':'Salvar'}
         </button>
       </div>
+
+      {/* ── FORMULÁRIO: ADICIONAR COLABORADOR EXTRA ── */}
+      {mostrarAdd && (
+        <div style={{padding:'14px 20px',background:'#FFF8EC',borderBottom:`1px solid ${T.border}`}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+            <span className="cat-pill" style={{background:T.amberBg,color:T.amber}}>+ Colaborador Extra</span>
+            <button onClick={()=>{setMostrarAdd(false);setNovoNome('');}} style={{
+              width:24,height:24,display:'flex',alignItems:'center',justifyContent:'center',
+              border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',
+              color:T.muted,borderRadius:100,
+            }}><X size={11}/></button>
+          </div>
+          <div style={{fontFamily:'DM Mono,monospace',fontSize:9.5,color:T.mid,letterSpacing:'.3px',marginBottom:10}}>
+            Para colaboradores que não estão na lista de RH (freelancers, temporários, diaristas).
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:ehMobile?'1fr':'2fr 1fr 1fr 1fr auto',gap:8,alignItems:'end'}}>
+            <div>
+              <label className="field-label">Nome</label>
+              <input className="ts-input" type="text" placeholder="Ex.: João Freelancer"
+                value={novoNome} onChange={e=>setNovoNome(e.target.value)}
+                onKeyDown={e=>{if(e.key==='Enter') adicionarColab();}} autoFocus/>
+            </div>
+            <div>
+              <label className="field-label">Função</label>
+              <select className="ts-select-sm" value={novoFunc} onChange={e=>setNovoFunc(e.target.value)}>
+                {FUNCOES.map(f=><option key={f}>{f}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="field-label">Unidade</label>
+              <input className="ts-input" type="text" value={novoUnidade}
+                onChange={e=>setNovoUnidade(e.target.value)}/>
+            </div>
+            <div>
+              <label className="field-label">Depto</label>
+              <input className="ts-input" type="text" value={novoDepto}
+                onChange={e=>setNovoDepto(e.target.value)}/>
+            </div>
+            <button className="btn-dev" onClick={adicionarColab}
+              disabled={!novoNome.trim()}
+              style={{justifyContent:'center',opacity:novoNome.trim()?1:.5,cursor:novoNome.trim()?'pointer':'not-allowed'}}>
+              <Plus size={11}/>Adicionar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── CORPO PRINCIPAL ── */}
       <div style={{
@@ -758,9 +821,12 @@ export default function EscalaPainel() {
                 <div style={{padding:'10px 14px',borderBottom:(turnoAberto&&!t.folga)?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',gap:10,justifyContent:'space-between'}}>
                   <div onClick={()=>setTurnosAbertos(p=>({...p,[c.id]:!turnoAberto}))}
                     style={{display:'flex',alignItems:'center',gap:10,flex:1,minWidth:0,cursor:'pointer',userSelect:'none'}}>
-                    <div style={{width:4,height:34,background:T.carbon,borderRadius:2,flexShrink:0}}/>
+                    <div style={{width:4,height:34,background:c.extra?T.amber:T.carbon,borderRadius:2,flexShrink:0}}/>
                     <div style={{minWidth:0,flex:1}}>
-                      <div style={{fontSize:14,fontWeight:700,color:T.carbon,letterSpacing:'-0.2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.nome}</div>
+                      <div style={{display:'flex',alignItems:'center',gap:6,minWidth:0}}>
+                        <span style={{fontSize:14,fontWeight:700,color:T.carbon,letterSpacing:'-0.2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.nome}</span>
+                        {c.extra&&<span style={{fontFamily:'DM Mono,monospace',fontSize:8,fontWeight:600,letterSpacing:'.5px',background:T.amberBg,color:T.amber,padding:'2px 6px',borderRadius:100,flexShrink:0}}>EXTRA</span>}
+                      </div>
                       <div style={{fontFamily:'DM Mono,monospace',fontSize:9,letterSpacing:'.5px',textTransform:'uppercase',color:T.muted,marginTop:2}}>
                         {c.funcao}
                         {hd>0&&<> · <span style={{color:T.carbon}}>{hd.toFixed(1)}h</span></>}
