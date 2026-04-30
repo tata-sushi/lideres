@@ -1079,68 +1079,61 @@ function renderChartRecrutador() {
   var palette = ['#35383F','#1A3A5C','#4A7FB5','#6B7280','#9CA3AF','#2D5A8E','#4A4E5A','#7AA3CC','#C9CDD6','#E2E5EA'];
   var bgColors = labels.map(function(_,i){ return palette[i % palette.length]; });
 
-  var pieLabelsPlugin = {
-    id: 'pieLabels',
+  var outsideLabelsPlugin = {
+    id: 'outsideLabels',
     afterDatasetsDraw: function(chart) {
-      var meta = chart.getDatasetMeta(0);
       var ctx  = chart.ctx;
+      var meta = chart.getDatasetMeta(0);
       var ds   = chart.data.datasets[0].data;
+      var lbls = chart.data.labels;
+      var bg   = chart.data.datasets[0].backgroundColor;
       var tot  = ds.reduce(function(a,b){ return a+b; }, 0);
       ctx.save();
       meta.data.forEach(function(arc, i) {
         var pct = tot ? Math.round(ds[i] / tot * 100) : 0;
-        if (pct < 5) return;
-        var angle  = (arc.startAngle + arc.endAngle) / 2;
-        var radius = (arc.innerRadius + arc.outerRadius) / 2;
-        var x = arc.x + Math.cos(angle) * radius;
-        var y = arc.y + Math.sin(angle) * radius;
-        ctx.fillStyle = '#fff';
-        ctx.font = '700 11px "DM Mono", monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(ds[i], x, y - 7);
-        ctx.font = '500 10px "DM Mono", monospace';
-        ctx.fillText(pct + '%', x, y + 7);
+        var midAngle = (arc.startAngle + arc.endAngle) / 2;
+        var cx = arc.x, cy = arc.y;
+        var outerR = arc.outerRadius;
+        var x1 = cx + Math.cos(midAngle) * (outerR + 5);
+        var y1 = cy + Math.sin(midAngle) * (outerR + 5);
+        var x2 = cx + Math.cos(midAngle) * (outerR + 22);
+        var y2 = cy + Math.sin(midAngle) * (outerR + 22);
+        var isRight = Math.cos(midAngle) >= 0;
+        var x3 = x2 + (isRight ? 14 : -14);
+        var y3 = y2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.lineTo(x3, y3);
+        ctx.strokeStyle = bg[i] || '#666';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        var tx = x3 + (isRight ? 4 : -4);
+        ctx.textAlign = isRight ? 'left' : 'right';
+        ctx.fillStyle = '#35383F';
+        ctx.font = '700 10px "DM Mono", monospace';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(lbls[i], tx, y3 - 1);
+        ctx.font = '500 9px "DM Mono", monospace';
+        ctx.textBaseline = 'top';
+        ctx.fillText(ds[i] + ' (' + pct + '%)', tx, y3 + 1);
       });
       ctx.restore();
     }
   };
 
   var wrap = document.getElementById('recrutadorWrap');
-  if (wrap) wrap.style.height = '300px';
+  if (wrap) wrap.style.height = '320px';
   if (chartRecrutadorInst) chartRecrutadorInst.destroy();
   chartRecrutadorInst = new Chart(canvas, {
     type: 'pie',
     data: { labels: labels, datasets: [{ data: data, backgroundColor: bgColors, borderWidth: 2, borderColor: '#fff' }] },
-    plugins: [pieLabelsPlugin],
+    plugins: [outsideLabelsPlugin],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
-      layout: { padding: 8 },
+      layout: { padding: { left: 90, right: 90, top: 30, bottom: 30 } },
       plugins: {
-        legend: {
-          display: true,
-          position: 'bottom',
-          labels: {
-            color: '#35383F',
-            font: { family: 'DM Mono', size: 10 },
-            padding: 10,
-            boxWidth: 10,
-            generateLabels: function(chart) {
-              var ds = chart.data.datasets[0];
-              return chart.data.labels.map(function(lbl, i) {
-                var val = ds.data[i];
-                var pct = total ? Math.round(val / total * 100) : 0;
-                return {
-                  text: lbl + '  ' + val + ' (' + pct + '%)',
-                  fillStyle: ds.backgroundColor[i],
-                  strokeStyle: '#fff',
-                  lineWidth: 1,
-                  index: i
-                };
-              });
-            }
-          }
-        },
+        legend: { display: false },
         tooltip: { enabled: false }
       }
     }
