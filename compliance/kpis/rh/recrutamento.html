@@ -1080,7 +1080,27 @@ function renderChartRecrutador() {
   entries.sort(function(a,b){ return b[1] - a[1]; });
   var labels = entries.map(function(e){ return e[0]; });
   var data   = entries.map(function(e){ return e[1]; });
-  var total  = data.reduce(function(a,b){ return a+b; }, 0);
+
+  // Contratados por recrutador: cruza testes (status_final=contratado) com entrevistas pelo nome
+  var recrutadorMap = {};
+  entrevistas.filter(_funilDentroPeriodo).forEach(function(r) {
+    var k = norm((r.nome||'').toLowerCase().trim());
+    if (k && !recrutadorMap[k]) recrutadorMap[k] = (r.recrutador||'').trim();
+  });
+  var contratadosPorRec = {};
+  var contratadoSeen = {};
+  testes.filter(function(r) {
+    if (!_funilDentroPeriodo(r)) return false;
+    if (_cfMes && dataToMY(r.data) !== _cfMes) return false;
+    return norm((r.status_final||'').toLowerCase()) === 'contratado';
+  }).forEach(function(r) {
+    var k = norm((r.nome||'').toLowerCase().trim());
+    if (!k || contratadoSeen[k]) return;
+    contratadoSeen[k] = true;
+    var rec = recrutadorMap[k];
+    if (!rec) return;
+    contratadosPorRec[rec] = (contratadosPorRec[rec] || 0) + 1;
+  });
   var palette = ['#1A1A1A','#363636','#525252','#6E6E6E','#8A8A8A','#A0A0A0','#B6B6B6','#C8C8C8','#D8D8D8','#E5E5E5'];
   var bgColors = labels.map(function(lbl, i) {
     var base = palette[i % palette.length];
@@ -1103,7 +1123,6 @@ function renderChartRecrutador() {
       ctx.save();
       meta.data.forEach(function(arc, i) {
         var isFaded = _cfRecrutador && lbls[i] !== _cfRecrutador;
-        var pct = tot ? Math.round(ds[i] / tot * 100) : 0;
         var midAngle = (arc.startAngle + arc.endAngle) / 2;
         var cx = arc.x, cy = arc.y;
         var outerR = arc.outerRadius;
@@ -1123,13 +1142,15 @@ function renderChartRecrutador() {
         ctx.stroke();
         var tx = x3 + (isRight ? 4 : -4);
         ctx.textAlign = isRight ? 'left' : 'right';
-        ctx.fillStyle = isFaded ? 'rgba(53,56,63,0.3)' : '#35383F';
+        var textColor = isFaded ? 'rgba(53,56,63,0.3)' : '#35383F';
+        var contratados = contratadosPorRec[lbls[i]] || 0;
+        ctx.fillStyle = textColor;
         ctx.font = '700 10px "DM Mono", monospace';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(lbls[i], tx, y3 - 1);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(lbls[i], tx, y3 - 11);
         ctx.font = '500 9px "DM Mono", monospace';
-        ctx.textBaseline = 'top';
-        ctx.fillText(ds[i] + ' (' + pct + '%)', tx, y3 + 1);
+        ctx.fillText(ds[i] + ' contatados', tx, y3);
+        ctx.fillText(contratados + ' contratados', tx, y3 + 11);
       });
       ctx.restore();
     }
