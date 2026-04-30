@@ -1075,14 +1075,44 @@ function renderChartRecrutador() {
   entries.sort(function(a,b){ return b[1] - a[1]; });
   var labels = entries.map(function(e){ return e[0]; });
   var data   = entries.map(function(e){ return e[1]; });
-  var palette = ['#35383F','#4A4E5A','#6B7280','#9CA3AF','#C9CDD6','#E2E5EA','#1A3A5C','#2D5A8E','#4A7FB5','#7AA3CC'];
+  var total  = data.reduce(function(a,b){ return a+b; }, 0);
+  var palette = ['#35383F','#1A3A5C','#4A7FB5','#6B7280','#9CA3AF','#2D5A8E','#4A4E5A','#7AA3CC','#C9CDD6','#E2E5EA'];
   var bgColors = labels.map(function(_,i){ return palette[i % palette.length]; });
+
+  var pieLabelsPlugin = {
+    id: 'pieLabels',
+    afterDatasetsDraw: function(chart) {
+      var meta = chart.getDatasetMeta(0);
+      var ctx  = chart.ctx;
+      var ds   = chart.data.datasets[0].data;
+      var tot  = ds.reduce(function(a,b){ return a+b; }, 0);
+      ctx.save();
+      meta.data.forEach(function(arc, i) {
+        var pct = tot ? Math.round(ds[i] / tot * 100) : 0;
+        if (pct < 5) return;
+        var angle  = (arc.startAngle + arc.endAngle) / 2;
+        var radius = (arc.innerRadius + arc.outerRadius) / 2;
+        var x = arc.x + Math.cos(angle) * radius;
+        var y = arc.y + Math.sin(angle) * radius;
+        ctx.fillStyle = '#fff';
+        ctx.font = '700 11px "DM Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(ds[i], x, y - 7);
+        ctx.font = '500 10px "DM Mono", monospace';
+        ctx.fillText(pct + '%', x, y + 7);
+      });
+      ctx.restore();
+    }
+  };
+
   var wrap = document.getElementById('recrutadorWrap');
-  if (wrap) wrap.style.height = '280px';
+  if (wrap) wrap.style.height = '300px';
   if (chartRecrutadorInst) chartRecrutadorInst.destroy();
   chartRecrutadorInst = new Chart(canvas, {
     type: 'pie',
     data: { labels: labels, datasets: [{ data: data, backgroundColor: bgColors, borderWidth: 2, borderColor: '#fff' }] },
+    plugins: [pieLabelsPlugin],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       layout: { padding: 8 },
@@ -1090,17 +1120,28 @@ function renderChartRecrutador() {
         legend: {
           display: true,
           position: 'bottom',
-          labels: { color: '#35383F', font: { family: 'DM Mono', size: 10 }, padding: 12, boxWidth: 12 }
-        },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              var total = ctx.dataset.data.reduce(function(a,b){ return a+b; }, 0);
-              var pct = total ? Math.round(ctx.parsed / total * 100) : 0;
-              return ' ' + ctx.label + ': ' + ctx.parsed + ' (' + pct + '%)';
+          labels: {
+            color: '#35383F',
+            font: { family: 'DM Mono', size: 10 },
+            padding: 10,
+            boxWidth: 10,
+            generateLabels: function(chart) {
+              var ds = chart.data.datasets[0];
+              return chart.data.labels.map(function(lbl, i) {
+                var val = ds.data[i];
+                var pct = total ? Math.round(val / total * 100) : 0;
+                return {
+                  text: lbl + '  ' + val + ' (' + pct + '%)',
+                  fillStyle: ds.backgroundColor[i],
+                  strokeStyle: '#fff',
+                  lineWidth: 1,
+                  index: i
+                };
+              });
             }
           }
-        }
+        },
+        tooltip: { enabled: false }
       }
     }
   });
