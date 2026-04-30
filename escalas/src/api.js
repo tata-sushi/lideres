@@ -37,3 +37,8 @@ export const carregarFerias = () =>
 
 export const salvarFerias = (ferias) =>
   post({ action: 'saveFerias', ferias });
+
+// Extras — colaboradores adicionados manualmente (fora da planilha de RH)
+// Lidos junto com getColaboradores; salvos separadamente
+export const salvarExtras = (extras) =>
+  post({ action: 'saveExtras', extras });
