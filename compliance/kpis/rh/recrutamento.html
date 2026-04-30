@@ -29,7 +29,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .kpi-sub strong { color: var(--carbon); font-weight: 600; }
 
 .chart-card { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px 16px; display: flex; flex-direction: column; }
-.chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: left; font-weight: 700; }
+.chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
 .chart-wrap { position: relative; height: 220px; }
 
 .status-table { padding: 4px 0; }
@@ -39,10 +39,11 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .status-count { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 600; color: var(--carbon); font-variant-numeric: tabular-nums; }
 .status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
 
-.dash-subtabs { display: flex; justify-content: center; gap: 24px; padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
-.dash-subtab { padding: 4px 0; border: none; background: transparent; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); cursor: pointer; transition: color 0.18s; }
-.dash-subtab:hover { color: var(--carbon); }
-.dash-subtab.active { color: var(--carbon); font-weight: 600; }
+.dash-subtabs { display: flex; justify-content: center; gap: 8px; padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.dash-subtab { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; background: #FDEAEA; color: #7A1A1A; border: none; cursor: pointer; transition: opacity 0.18s; }
+.dash-subtab:hover { opacity: 0.8; }
+.dash-subtab.active { background: #35383F; color: #CFFF00; }
+.dashboard { padding-top: 14px; padding-bottom: 80px; }
 
 body[data-view="dashboard"] .kpis-wrap,
 body[data-view="dashboard"] .filters-wrap,
@@ -154,6 +155,7 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
   .filters-wrap { max-width: 800px; margin: 0 auto; }
   .kpis-wrap { max-width: 800px; margin: 0 auto; }
   .chart-card { max-width: 800px; margin: 0 auto; }
+  .dash-subtabs { max-width: 800px; margin: 0 auto; }
   .filters-row { grid-template-columns: 1fr 1fr 1fr; }
   .card-body { grid-template-columns: repeat(3, 1fr); }
 }
@@ -296,13 +298,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 <div class="dashboard" id="dashboard">
-  <div class="dash-subtabs">
-    <button class="dash-subtab active" id="dash-sub-entrevistas" type="button" onclick="setDashSrc('entrevistas')">Entrevistas</button>
-    <button class="dash-subtab" id="dash-sub-testes" type="button" onclick="setDashSrc('testes')">Testes</button>
-  </div>
   <div class="chart-card" id="chartCardFunil">
     <div class="chart-title">Funil de Recrutamento 2026</div>
     <div id="funil-rows" style="padding:4px 0 8px;"></div>
+  </div>
+  <div class="dash-subtabs">
+    <button class="dash-subtab active" id="dash-sub-entrevistas" type="button" onclick="setDashSrc('entrevistas')">Entrevistas</button>
+    <button class="dash-subtab" id="dash-sub-testes" type="button" onclick="setDashSrc('testes')">Testes</button>
   </div>
   <div class="chart-card" id="chartCard">
     <div class="chart-title" id="chartTitle">Entrevistas por Mês</div>
@@ -311,6 +313,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="chart-card" id="chartCardStatus">
     <div class="chart-title" id="chartTitleStatus">Status das Entrevistas</div>
     <div class="status-table" id="statusTable"></div>
+  </div>
+  <div class="chart-card" id="chartCardRecrutador">
+    <div class="chart-title">Agendamentos por Responsável</div>
+    <div id="recrutadorWrap"><canvas id="cRecrutador"></canvas></div>
   </div>
 </div>
 <div class="filters-wrap" id="filters-wrap"></div>
@@ -508,6 +514,7 @@ var state = {
 };
 
 var chartInst = null;
+var chartRecrutadorInst = null;
 var _cfMes = null;
 var _cfSelectedBarIdx = -1;
 var _cfFunilIdx = null;
@@ -543,7 +550,7 @@ function normEntrevista(obj) {
     return '';
   }
   return {
-    recrutador:        v('f1670','recrutador','nome_do_recrutador'),
+    recrutador:        v('responsavel','f1670','recrutador','nome_do_recrutador'),
     nome:              v('nome','candidato','nome_candidato'),
     contato:           v('contato','telefone','whatsapp','celular'),
     pretensao:         v('etensao_salari','extensao_salarial','pretensao','pretensao_salarial','valor'),
@@ -905,6 +912,9 @@ function dataToMY(s) {
 // (que pertencem à aba Entrevistas/Testes).
 function getFilteredForChart() {
   var src = state.dashSrc==='entrevistas' ? entrevistas : testes;
+  if (_cfFunilIdx !== null) {
+    return _applyFunilFilter(src);
+  }
   var base = src.filter(function(r) {
     if (state.dashSrc==='entrevistas' && isHorarioZero(r.horario)) return false;
     if (state.dashSrc==='testes' && isValorZero(r.pretensao)) return false;
@@ -1050,16 +1060,107 @@ function renderStatusTable() {
   document.getElementById('chartTitleStatus').textContent = _cfMes ? (base + ' — ' + _cfMes) : base;
 }
 
+function renderChartRecrutador() {
+  var canvas = document.getElementById('cRecrutador');
+  if (!canvas || typeof Chart === 'undefined') return;
+  var src = entrevistas.filter(_funilDentroPeriodo);
+  if (_cfMes) src = src.filter(function(r){ return dataToMY(r.data) === _cfMes; });
+  var counts = {};
+  src.forEach(function(r) {
+    var nome = (r.recrutador || '').trim();
+    if (!nome) return;
+    counts[nome] = (counts[nome] || 0) + 1;
+  });
+  var entries = Object.keys(counts).map(function(k){ return [k, counts[k]]; });
+  entries.sort(function(a,b){ return b[1] - a[1]; });
+  var labels = entries.map(function(e){ return e[0]; });
+  var data   = entries.map(function(e){ return e[1]; });
+  var total  = data.reduce(function(a,b){ return a+b; }, 0);
+  var palette = ['#35383F','#1A3A5C','#4A7FB5','#6B7280','#9CA3AF','#2D5A8E','#4A4E5A','#7AA3CC','#C9CDD6','#E2E5EA'];
+  var bgColors = labels.map(function(_,i){ return palette[i % palette.length]; });
+
+  var pieLabelsPlugin = {
+    id: 'pieLabels',
+    afterDatasetsDraw: function(chart) {
+      var meta = chart.getDatasetMeta(0);
+      var ctx  = chart.ctx;
+      var ds   = chart.data.datasets[0].data;
+      var tot  = ds.reduce(function(a,b){ return a+b; }, 0);
+      ctx.save();
+      meta.data.forEach(function(arc, i) {
+        var pct = tot ? Math.round(ds[i] / tot * 100) : 0;
+        if (pct < 5) return;
+        var angle  = (arc.startAngle + arc.endAngle) / 2;
+        var radius = (arc.innerRadius + arc.outerRadius) / 2;
+        var x = arc.x + Math.cos(angle) * radius;
+        var y = arc.y + Math.sin(angle) * radius;
+        ctx.fillStyle = '#fff';
+        ctx.font = '700 11px "DM Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(ds[i], x, y - 7);
+        ctx.font = '500 10px "DM Mono", monospace';
+        ctx.fillText(pct + '%', x, y + 7);
+      });
+      ctx.restore();
+    }
+  };
+
+  var wrap = document.getElementById('recrutadorWrap');
+  if (wrap) wrap.style.height = '300px';
+  if (chartRecrutadorInst) chartRecrutadorInst.destroy();
+  chartRecrutadorInst = new Chart(canvas, {
+    type: 'pie',
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: bgColors, borderWidth: 2, borderColor: '#fff' }] },
+    plugins: [pieLabelsPlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: 8 },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: {
+            color: '#35383F',
+            font: { family: 'DM Mono', size: 10 },
+            padding: 10,
+            boxWidth: 10,
+            generateLabels: function(chart) {
+              var ds = chart.data.datasets[0];
+              return chart.data.labels.map(function(lbl, i) {
+                var val = ds.data[i];
+                var pct = total ? Math.round(val / total * 100) : 0;
+                return {
+                  text: lbl + '  ' + val + ' (' + pct + '%)',
+                  fillStyle: ds.backgroundColor[i],
+                  strokeStyle: '#fff',
+                  lineWidth: 1,
+                  index: i
+                };
+              });
+            }
+          }
+        },
+        tooltip: { enabled: false }
+      }
+    }
+  });
+}
+
 function setCF(my) {
   if (_cfMes===my) { clearCF(); return; }
   _cfMes = my;
+  renderFunil();
   renderChartRecrut();
   renderStatusTable();
+  renderChartRecrutador();
 }
 function clearCF() {
   _cfMes = null;
+  renderFunil();
   renderChartRecrut();
   renderStatusTable();
+  renderChartRecrutador();
 }
 
 function setDashSrc(src) {
@@ -1072,6 +1173,7 @@ function setDashSrc(src) {
   renderChartRecrut();
   renderStatusTable();
   renderFunil();
+  renderChartRecrutador();
 }
 
 // ─── Funil de Recrutamento ────────────────────────────────────────────────────
@@ -1085,6 +1187,10 @@ function _funilDentroPeriodo(r) {
 function buildFunnelData() {
   var entrevistasBase = entrevistas.filter(_funilDentroPeriodo);
   var testesBase      = testes.filter(_funilDentroPeriodo);
+  if (_cfMes) {
+    entrevistasBase = entrevistasBase.filter(function(r){ return dataToMY(r.data) === _cfMes; });
+    testesBase      = testesBase.filter(function(r){ return dataToMY(r.data) === _cfMes; });
+  }
 
   var contatados = entrevistasBase.filter(function(r){
     return r.nome && r.nome.trim();
@@ -1243,6 +1349,7 @@ function setCFFunil(idx) {
   renderFunil();
   renderChartRecrut();
   renderStatusTable();
+  renderChartRecrutador();
 }
 
 function renderFunil() {
@@ -1252,6 +1359,9 @@ function renderFunil() {
   var etapas = buildFunnelData();
   var base   = etapas[0].count || 1;
   var hasSel = _cfFunilIdx !== null;
+
+  var containerW = el.clientWidth || (window.innerWidth - 40);
+  var trackPx    = Math.max(40, containerW - 178 - 48);
 
   el.innerHTML = '';
 
@@ -1272,6 +1382,7 @@ function renderFunil() {
     var lbl = document.createElement('div');
     lbl.style.cssText = [
       'width:178px',
+      'box-sizing:border-box',
       'flex-shrink:0',
       'font-family:"DM Mono",monospace',
       'font-size:10px',
@@ -1287,10 +1398,11 @@ function renderFunil() {
     var track = document.createElement('div');
     track.style.cssText = 'flex:1;display:flex;justify-content:center;';
 
-    var barW = Math.max(6, Math.round(pctBase * 100));
-    var bar  = document.createElement('div');
+    var barPx = Math.max(4, Math.round(pctBase * trackPx));
+    var bar   = document.createElement('div');
     bar.style.cssText = [
-      'width:' + barW + '%',
+      'width:' + barPx + 'px',
+      'flex-shrink:0',
       'background:' + barColor,
       'border-radius:5px',
       'height:34px',
@@ -1300,14 +1412,14 @@ function renderFunil() {
     ].join(';');
 
     var num = document.createElement('span');
-    num.style.cssText = 'font-family:"DM Mono",monospace;font-size:11px;font-weight:600;color:#fff;';
+    num.style.cssText = 'font-family:"DM Mono",monospace;font-size:11px;font-weight:600;color:#fff;text-shadow:0 0 4px rgba(0,0,0,0.85),0 0 8px rgba(0,0,0,0.5);';
     num.textContent = e.count;
 
     bar.appendChild(num);
     track.appendChild(bar);
 
     var pctEl = document.createElement('div');
-    pctEl.style.cssText = 'width:48px;flex-shrink:0;font-family:"DM Mono",monospace;font-size:11px;font-weight:700;color:' + (faded ? 'rgba(53,56,63,0.55)' : '#35383F') + ';text-align:left;padding-left:12px;';
+    pctEl.style.cssText = 'width:48px;box-sizing:border-box;flex-shrink:0;font-family:"DM Mono",monospace;font-size:11px;font-weight:700;color:' + (faded ? 'rgba(53,56,63,0.55)' : '#35383F') + ';text-align:left;padding-left:12px;';
     pctEl.textContent = pctPrev !== null ? pctPrev + '%' : '';
 
     row.appendChild(lbl);
@@ -1326,6 +1438,7 @@ function render() {
     renderChartRecrut();
     renderStatusTable();
     renderFunil();
+    renderChartRecrutador();
     return;
   }
   renderKPIs();
