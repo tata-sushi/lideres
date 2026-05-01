@@ -736,14 +736,14 @@ export default function EscalaPainel() {
 
         /* Tabela principal */
         .esc-table{width:100%;border-collapse:collapse;font-size:12px;}
-        .esc-table th{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.5px;color:${T.muted};text-transform:uppercase;padding:8px 4px;border-bottom:1px solid ${T.border};text-align:center;vertical-align:bottom;white-space:nowrap;}
-        .esc-table th:first-child{text-align:left;width:110px;min-width:110px;max-width:110px;}
+        .esc-table th{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.5px;color:${T.carbon};text-transform:uppercase;padding:8px 4px;border-bottom:1px solid ${T.border};text-align:center;vertical-align:bottom;white-space:nowrap;}
+        .esc-table th:first-child{text-align:left;width:143px;min-width:143px;max-width:143px;}
         .esc-table th:not(:first-child):not(:last-child){width:auto;}
         .esc-table th:last-child{width:54px;min-width:54px;}
         .esc-table td{padding:5px 3px;border-bottom:1px solid ${T.border};vertical-align:top;text-align:center;}
-        .esc-table td:first-child{text-align:left;vertical-align:top;padding-top:7px;width:110px;min-width:110px;max-width:110px;}
+        .esc-table td:first-child{text-align:left;vertical-align:top;padding-top:7px;width:143px;min-width:143px;max-width:143px;}
         .esc-table tbody tr:hover>td{background:rgba(0,0,0,.015);}
-        .esc-th-date{font-size:9px;font-weight:400;color:${T.muted};display:block;margin-top:1px;}
+        .esc-th-date{font-size:9px;font-weight:400;color:${T.carbon};display:block;margin-top:1px;opacity:.7;}
 
         .esc-nome-wrap{display:flex;align-items:center;gap:4px;}
         .esc-chevron{width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${T.muted};font-size:11px;flex-shrink:0;border:none;background:none;font-family:'DM Mono',monospace;}
@@ -769,8 +769,8 @@ export default function EscalaPainel() {
         .esc-tog-pm:hover{background:${T.bg};border-color:${T.mid};}
         .esc-tog-hidden{flex:0 0 22px;visibility:hidden;}
 
-        .esc-inputs-row{display:flex;gap:2px;align-items:center;}
-        .esc-inputs-row input[type=time]{width:58px;font-size:10px;font-family:'DM Mono',monospace;padding:3px 2px;border:1px solid ${T.border};border-radius:4px;background:${T.surface};color:${T.carbon};outline:none;}
+        .esc-inputs-row{display:flex;gap:2px;align-items:center;width:100%;}
+        .esc-inputs-row input[type=time]{flex:1;min-width:0;font-size:10px;font-family:'DM Mono',monospace;padding:3px 2px;border:1px solid ${T.border};border-radius:4px;background:${T.surface};color:${T.carbon};outline:none;}
         .esc-inputs-row input[type=time]:focus{border-color:${T.carbon};}
         .esc-sep{font-size:9px;color:${T.muted};flex-shrink:0;}
 
