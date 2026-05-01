@@ -1072,14 +1072,14 @@ export default function EscalaPainel() {
                     const naFuncAlm = emFaixa(slot,cfgGrade.funcAlmocoIni,cfgGrade.funcAlmocoFim);
                     const naPrepJan = emFaixa(slot,cfgGrade.prepJantarIni,cfgGrade.prepJantarFim);
                     const naFuncJan = emFaixa(slot,cfgGrade.funcJantarIni,cfgGrade.funcJantarFim);
-                    const borda = full ? `1px solid ${T.border}` : `1px solid transparent`;
+                    const borda = full ? `1px solid ${T.carbon}` : `1px solid transparent`;
                     return (
                       <React.Fragment key={slot}>
                         <div className="hora-cell" style={{
                           fontWeight: full?600:400,
                           color: full ? T.carbon : 'transparent',
                           fontSize: full ? 9.5 : 0,
-                          borderBottom: full ? `1px solid ${T.border}` : `1px solid transparent`,
+                          borderBottom: full ? `1px solid ${T.carbon}` : `1px solid transparent`,
                           width: 48, maxWidth: 48, minWidth: 48,
                         }}>{full ? lbl : ''}</div>
                         {colabsFiltrados.map(c=>{
@@ -1088,15 +1088,15 @@ export default function EscalaPainel() {
                           const deFerias=estaDeFerias(c.id, dataDoDia(diaGrade.id));
                           let bg='transparent';
                           let opacity=1;
-                          if (deFerias) { bg='rgba(26,58,92,.18)'; opacity=.7; }
-                          else if (t.folga) { bg=`repeating-linear-gradient(45deg,transparent,transparent 4px,${T.border} 4px,${T.border} 5px)`; opacity=.5; }
+                          if (deFerias) { bg='#E8F0FA'; }
+                          else if (t.folga) { bg='transparent'; }
                           else if (ativo) bg=T.carbon;
-                          else if (naFuncJan) bg='rgba(122,26,26,.18)';
-                          else if (naPrepJan) bg='rgba(122,74,0,.18)';
-                          else if (naFuncAlm) bg='rgba(26,92,42,.18)';
-                          else if (naPrepAlm) bg='rgba(122,74,0,.18)';
+                          else if (naFuncJan) bg='#FFF4DC';
+                          else if (naPrepJan) bg='#FFF4DC';
+                          else if (naFuncAlm) bg='#FFF4DC';
+                          else if (naPrepAlm) bg='#FFF4DC';
                           return (
-                            <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,opacity,borderRight:`1px solid ${T.border}`,borderBottom:borda,overflow:'hidden'}}/>
+                            <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,opacity,borderRight:`1px solid ${T.carbon}`,borderBottom:borda,overflow:'hidden'}}/>
                           );
                         })}
                       </React.Fragment>
@@ -1106,10 +1106,11 @@ export default function EscalaPainel() {
               </div>
               <div style={{padding:'10px 16px',borderTop:`1px solid ${T.border}`,display:'flex',gap:12,flexWrap:'wrap',fontFamily:'DM Mono,monospace',fontSize:10,color:T.mid,justifyContent:'center'}}>
                 {[
-                  {label:'Prep Almoço', bg:'rgba(122,74,0,.18)',  border:'1px solid rgba(122,74,0,.4)'},
-                  {label:'Func Almoço', bg:'rgba(26,92,42,.18)',  border:'1px solid rgba(26,92,42,.4)'},
-                  {label:'Prep Jantar', bg:'rgba(122,74,0,.18)',  border:'1px dashed rgba(122,74,0,.5)'},
-                  {label:'Func Jantar', bg:'rgba(122,26,26,.18)', border:'1px solid rgba(122,26,26,.4)'},
+                  {label:'Férias',       bg:'#E8F0FA', border:`1px solid ${T.carbon}`},
+                  {label:'Prep Almoço',  bg:'#FFF4DC', border:`1px solid ${T.carbon}`},
+                  {label:'Func Almoço',  bg:'#FFF4DC', border:`1px solid ${T.carbon}`},
+                  {label:'Prep Jantar',  bg:'#FFF4DC', border:`1px solid ${T.carbon}`},
+                  {label:'Func Jantar',  bg:'#FFF4DC', border:`1px solid ${T.carbon}`},
                 ].map(l=>(
                   <span key={l.label} style={{display:'flex',alignItems:'center',gap:5}}>
                     <span style={{width:10,height:10,background:l.bg,borderRadius:2,border:l.border,flexShrink:0}}/>
