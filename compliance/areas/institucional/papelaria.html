@@ -178,7 +178,10 @@ body {
   transition: border-color 0.15s;
 }
 .f-input:focus, .f-select:focus, .f-textarea:focus { border-color: var(--carbon); }
+.f-input[readonly], .f-select:disabled { background: #f5f5f5; color: #555; cursor: not-allowed; opacity: 1; }
 .f-textarea { resize: vertical; line-height: 1.65; min-height: 100px; }
+.f-checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--carbon); padding: 2px 0; }
+.f-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--carbon); margin: 0; }
 .f-select {
   background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 9px center;
@@ -525,7 +528,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="modal-tabs">
       <button class="modal-tab active" id="tab-timb" onclick="setDocType('timbrado')">
         <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
-        Timbrado
+        Documento Oficial
       </button>
       <button class="modal-tab" id="tab-cartao" onclick="setDocType('cartao')">
         <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h4M6 14h2"/></svg>
@@ -546,8 +549,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="f-section">Cabeçalho</div>
       <div class="f-row c2">
         <div class="f-group">
-          <label class="f-label">Unidade</label>
-          <select class="f-select" id="tb-unidade">
+          <label class="f-label">Unidade <span class="f-note">· da sua conta</span></label>
+          <select class="f-select" id="tb-unidade" disabled>
             <option value="Itaim Bibi">Itaim Bibi</option>
             <option value="Pinheiros">Pinheiros</option>
             <option value="Poke Pinheiros">Poke Pinheiros</option>
@@ -568,10 +571,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <label class="f-label">Corpo <span class="f-note">use **texto** para negrito</span></label>
         <textarea class="f-textarea" id="tb-corpo" style="min-height:140px" placeholder="Ex: Informamos que a partir do dia **01/06**, o horário de funcionamento será alterado para **11h às 23h**."></textarea>
       </div>
-      <div class="f-section">Assinatura <span class="f-note">· opcional</span></div>
+      <div class="f-section">Assinatura</div>
       <div class="f-group">
-        <label class="f-label">Nome do assinante</label>
-        <input class="f-input" id="tb-assina" type="text" placeholder="Ex: Victor Augusto di Sessa Carvalho">
+        <label class="f-checkbox">
+          <input type="checkbox" id="tb-incluir-assina" checked>
+          <span>Incluir assinatura no PDF</span>
+        </label>
+      </div>
+      <div class="f-group" id="tb-assina-row">
+        <label class="f-label">Nome do assinante <span class="f-note">· da sua conta</span></label>
+        <input class="f-input" id="tb-assina" type="text" readonly placeholder="Ex: Victor Augusto di Sessa Carvalho">
       </div>
       <div class="cv-hint" id="tb-hint"></div>
     </div>
@@ -1034,7 +1043,6 @@ function tbLazyInit() {
   if (!session) return;
 
   var u = document.getElementById('tb-unidade');
-  var d = document.getElementById('tb-depto');
   var a = document.getElementById('tb-assina');
 
   if (session.unidade && u) {
@@ -1051,7 +1059,6 @@ function tbLazyInit() {
     u.value = session.unidade;
   }
 
-  if (d && !d.value && session.cargo) d.value = session.cargo;
   if (a && !a.value && session.displayName) a.value = session.displayName;
 }
 
@@ -1060,7 +1067,15 @@ function gerarTimbrado() {
   var depto   = document.getElementById('tb-depto').value.trim();
   var titulo  = document.getElementById('tb-titulo').value.trim();
   var corpo   = document.getElementById('tb-corpo').value.trim();
-  var assina  = document.getElementById('tb-assina').value.trim();
+  var incluirAssina = document.getElementById('tb-incluir-assina').checked;
+  var assina = '';
+  var cargo  = '';
+  if (incluirAssina) {
+    assina = document.getElementById('tb-assina').value.trim();
+    var session = window.__lideresSession;
+    if (!session) { try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {} }
+    if (session) cargo = session.cargo || '';
+  }
 
   if (!titulo || !corpo) { showError('Preencha o Título e o Corpo antes de gerar.'); return; }
 
@@ -1080,16 +1095,16 @@ function gerarTimbrado() {
     cv.height = logoImg.naturalHeight;
     cv.getContext('2d').drawImage(logoImg, 0, 0);
     timbradoLogoData = cv.toDataURL('image/png');
-    gerarTimbradoPDF(unidade, depto, titulo, corpo, assina);
+    gerarTimbradoPDF(unidade, depto, titulo, corpo, assina, cargo);
   };
   logoImg.onerror = function() {
     timbradoLogoData = null;
-    gerarTimbradoPDF(unidade, depto, titulo, corpo, assina);
+    gerarTimbradoPDF(unidade, depto, titulo, corpo, assina, cargo);
   };
   logoImg.src = 'logos/logo_simples_branco_preto.png';
 }
 
-function gerarTimbradoPDF(unidade, depto, titulo, corpo, assina) {
+function gerarTimbradoPDF(unidade, depto, titulo, corpo, assina, cargo) {
   var hint = document.getElementById('tb-hint');
   var lbl  = document.getElementById('btn-label');
 
@@ -1264,7 +1279,7 @@ function gerarTimbradoPDF(unidade, depto, titulo, corpo, assina) {
     /* Assinatura (opcional) */
     if (assina) {
       curY += 22;
-      if (curY + 15 > maxY) {
+      if (curY + 22 > maxY) {
         doc.addPage(); renderPage(); curY = 45;
       }
       var lineW = 70;
@@ -1274,10 +1289,20 @@ function gerarTimbradoPDF(unidade, depto, titulo, corpo, assina) {
       doc.line(lineCX - lineW/2, curY, lineCX + lineW/2, curY);
 
       curY += 7;
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
+      doc.setTextColor(30, 30, 30);
       var assinaW = doc.getTextWidth(assina);
       doc.text(assina, (W - assinaW) / 2, curY);
+
+      if (cargo) {
+        curY += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        var cargoW = doc.getTextWidth(cargo);
+        doc.text(cargo, (W - cargoW) / 2, curY);
+      }
     }
 
     /* Salvar */
