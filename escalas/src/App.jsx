@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Download, Plus, X, UserPlus, ChevronLeft, ChevronRight, Printer, Save, ClipboardList, LayoutGrid, BarChart2 } from 'lucide-react';
+import { Download, Plus, X, UserPlus, ChevronLeft, ChevronRight, Printer, Save, ClipboardList, LayoutGrid, BarChart2, Clock } from 'lucide-react';
 import { carregarEscala, salvarEscala, carregarColaboradores, carregarFerias, salvarFerias, salvarExtras } from './api.js';
 
 // ============================================================
@@ -451,6 +451,8 @@ export default function EscalaPainel() {
   const [novoDepto, setNovoDepto] = useState('Salão');
   const [filtroUnidade, setFiltroUnidade] = useState(()=>localStorage.getItem('esc_fUnidade')||'Todos');
   const [filtroDepto, setFiltroDepto] = useState(()=>localStorage.getItem('esc_fDepto')||'Todos');
+  const [horarioAberto, setHorarioAberto] = useState(true);
+  const [diaHorIdx, setDiaHorIdx] = useState(0);
   const [gradeAberta, setGradeAberta] = useState(false);
   const [tabelaAberta, setTabelaAberta] = useState(true);
   const [resumoAberto, setResumoAberto] = useState(true);
@@ -980,8 +982,49 @@ export default function EscalaPainel() {
         </div>
       )}
 
-      {/* TABELA PRINCIPAL */}
+      {/* HORÁRIO DE FUNCIONAMENTO */}
       <div style={{padding:'16px 20px 0'}}>
+        <section className="card">
+          <div onClick={()=>setHorarioAberto(p=>!p)} style={{padding:'10px 16px',borderBottom:horarioAberto?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
+            <span className="cat-pill"><Clock size={13}/>Horário de Funcionamento</span>
+            <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{horarioAberto?'▲':'▼'}</span>
+          </div>
+          {horarioAberto && (
+            <>
+              <div className="grade-tabs">
+                {DIAS_META.map((d,i)=>(
+                  <button key={d.id} className={`grade-tab ${i===diaHorIdx?'on':''}`} onClick={()=>setDiaHorIdx(i)}>
+                    <span>{d.curto}</span>
+                    <span style={{fontSize:9,fontWeight:500,color:T.carbon,letterSpacing:'.3px'}}>{fmtDate(addDays(semanaAtual,i))}</span>
+                  </button>
+                ))}
+              </div>
+              <div style={{padding:'12px 16px',display:'flex',gap:10,flexWrap:'wrap',alignItems:'center'}}>
+                {[
+                  {label:'Prep Almoço', ini:'prepAlmocoIni', fim:'prepAlmocoFim'},
+                  {label:'Func Almoço', ini:'funcAlmocoIni', fim:'funcAlmocoFim'},
+                  {label:'Prep Jantar', ini:'prepJantarIni', fim:'prepJantarFim'},
+                  {label:'Func Jantar', ini:'funcJantarIni', fim:'funcJantarFim'},
+                ].map(({label,ini,fim})=>{
+                  const diaHor = DIAS_META[diaHorIdx];
+                  const cfgHor = config[diaHor.id] || CFG0_DIA;
+                  return (
+                    <div key={label} style={{display:'flex',alignItems:'center',gap:4,background:'#FFF4DC',border:`1px solid ${T.gridLine}`,borderRadius:6,padding:'4px 8px'}}>
+                      <span style={{fontFamily:'DM Mono,monospace',fontSize:8.5,color:T.carbon,fontWeight:600,letterSpacing:'.3px',textTransform:'uppercase',whiteSpace:'nowrap'}}>{label}</span>
+                      <input type="time" value={cfgHor[ini]} onChange={e=>updateCfg(diaHor.id,ini,e.target.value)} style={{fontFamily:'DM Mono,monospace',fontSize:11,border:'none',background:'transparent',color:T.carbon,outline:'none',width:72,cursor:'pointer'}}/>
+                      <span style={{color:T.muted,fontSize:10}}>→</span>
+                      <input type="time" value={cfgHor[fim]} onChange={e=>updateCfg(diaHor.id,fim,e.target.value)} style={{fontFamily:'DM Mono,monospace',fontSize:11,border:'none',background:'transparent',color:T.carbon,outline:'none',width:72,cursor:'pointer'}}/>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+
+      {/* TABELA PRINCIPAL */}
+      <div style={{padding:'12px 20px 0'}}>
         <section className="card">
           <div onClick={()=>setTabelaAberta(p=>!p)} style={{padding:'10px 16px',borderBottom:tabelaAberta?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
             <span className="cat-pill"><ClipboardList size={13}/>Escala da Semana</span>
@@ -1083,23 +1126,6 @@ export default function EscalaPainel() {
                   </button>
                 ))}
               </div>
-              {/* CONFIG HORÁRIOS DE FUNCIONAMENTO */}
-              <div style={{padding:'8px 16px',borderBottom:`1px solid ${T.border}`,display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',background:T.bg}}>
-                {[
-                  {label:'Prep Almoço', ini:'prepAlmocoIni', fim:'prepAlmocoFim'},
-                  {label:'Func Almoço', ini:'funcAlmocoIni', fim:'funcAlmocoFim'},
-                  {label:'Prep Jantar', ini:'prepJantarIni', fim:'prepJantarFim'},
-                  {label:'Func Jantar', ini:'funcJantarIni', fim:'funcJantarFim'},
-                ].map(({label,ini,fim})=>(
-                  <div key={label} style={{display:'flex',alignItems:'center',gap:4,background:'#FFF4DC',border:`1px solid ${T.gridLine}`,borderRadius:6,padding:'4px 8px'}}>
-                    <span style={{fontFamily:'DM Mono,monospace',fontSize:8.5,color:T.carbon,fontWeight:600,letterSpacing:'.3px',textTransform:'uppercase',whiteSpace:'nowrap'}}>{label}</span>
-                    <input type="time" value={cfgGrade[ini]} onChange={e=>updateCfg(diaGrade.id,ini,e.target.value)} style={{fontFamily:'DM Mono,monospace',fontSize:11,border:'none',background:'transparent',color:T.carbon,outline:'none',width:72,cursor:'pointer'}}/>
-                    <span style={{color:T.muted,fontSize:10}}>→</span>
-                    <input type="time" value={cfgGrade[fim]} onChange={e=>updateCfg(diaGrade.id,fim,e.target.value)} style={{fontFamily:'DM Mono,monospace',fontSize:11,border:'none',background:'transparent',color:T.carbon,outline:'none',width:72,cursor:'pointer'}}/>
-                  </div>
-                ))}
-              </div>
-
               <div style={{overflow:'auto',maxHeight:'60vh',WebkitOverflowScrolling:'touch'}}>
                 <div style={{display:'grid',gridTemplateColumns:`48px repeat(${colabsFiltrados.length},${colW}px)`,minWidth:48+colabsFiltrados.length*colW,width:'max-content'}}>
                   <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:54,width:48,minWidth:48,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px'}}>HORA</div>
