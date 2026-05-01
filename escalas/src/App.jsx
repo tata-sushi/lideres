@@ -927,9 +927,14 @@ export default function EscalaPainel() {
 
       {/* AÇÕES */}
       <div style={{padding:'10px 20px',display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',borderBottom:`1px solid ${T.border}`,background:T.bg}}>
-        <button className="btn-outline" onClick={()=>setMostrarAdd(p=>!p)}><UserPlus size={11}/>+ Extra</button>
+        <button className="btn-outline" onClick={()=>{
+          if(!mostrarAdd){
+            setNovoUnidade(filtroUnidade!=='Todos'?filtroUnidade:'Itaim');
+            setNovoDepto(filtroDepto!=='Todos'?filtroDepto:'Salão');
+          }
+          setMostrarAdd(p=>!p);
+        }}><UserPlus size={11}/>+ Extra</button>
         <button className="btn-outline" onClick={gerarPDF}><Printer size={11}/>Imprimir</button>
-        <button className="btn-outline" onClick={exportCSV}><Download size={11}/>CSV</button>
         <button className="btn-outline" onClick={salvarManual}
           disabled={!pendente||syncStatus==='saving'||syncStatus==='loading'}
           style={{opacity:(!pendente&&syncStatus!=='saving')?0.5:1,cursor:(!pendente||syncStatus==='saving')?'not-allowed':'pointer'}}>
@@ -939,16 +944,14 @@ export default function EscalaPainel() {
 
       {/* FORMULÁRIO ADICIONAR COLABORADOR */}
       {mostrarAdd && (
-        <div style={{padding:'14px 20px',background:'#FFF8EC',borderBottom:`1px solid ${T.border}`}}>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-            <span className="cat-pill-action" style={{background:T.amberBg,color:T.amber}}>+ Colaborador Extra</span>
+        <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+            <span className="cat-pill"><UserPlus size={13}/>Colaborador Extra</span>
             <button onClick={()=>{setMostrarAdd(false);setNovoNome('');}} style={{width:24,height:24,display:'flex',alignItems:'center',justifyContent:'center',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:100}}><X size={11}/></button>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr auto',gap:8,alignItems:'end'}}>
+          <div style={{display:'grid',gridTemplateColumns:'2fr 1fr auto',gap:8,alignItems:'end'}}>
             <div><label className="esc-field-label">Nome</label><input className="esc-input" type="text" placeholder="Ex.: João Freelancer" value={novoNome} onChange={e=>setNovoNome(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')adicionarColab();}} autoFocus/></div>
-            <div><label className="esc-field-label">Função</label><select className="esc-select-sm" value={novoFunc} onChange={e=>setNovoFunc(e.target.value)}>{FUNCOES.map(f=><option key={f}>{f}</option>)}</select></div>
-            <div><label className="esc-field-label">Unidade</label><input className="esc-input" type="text" value={novoUnidade} onChange={e=>setNovoUnidade(e.target.value)}/></div>
-            <div><label className="esc-field-label">Depto</label><input className="esc-input" type="text" value={novoDepto} onChange={e=>setNovoDepto(e.target.value)}/></div>
+            <div><label className="esc-field-label">Função</label><input className="esc-input" type="text" placeholder="Ex.: Garçom" value={novoFunc} onChange={e=>setNovoFunc(e.target.value)}/></div>
             <button className="btn-dev" onClick={adicionarColab} disabled={!novoNome.trim()} style={{justifyContent:'center',opacity:novoNome.trim()?1:.5,cursor:novoNome.trim()?'pointer':'not-allowed'}}><Plus size={11}/>Adicionar</button>
           </div>
         </div>
