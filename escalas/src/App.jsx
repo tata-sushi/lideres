@@ -84,6 +84,14 @@ const PRESETS_BASE = [
   { label:'Domingo',       turnos:[['12:00','16:00'],['18:00','00:00']] },
 ];
 
+// Formata horas decimais → "Xh" ou "XhYY"
+const fmtHoras = (h) => {
+  const totalMin = Math.round(h * 60);
+  const hrs = Math.floor(totalMin / 60);
+  const mins = totalMin % 60;
+  return mins === 0 ? `${hrs}h` : `${hrs}h${String(mins).padStart(2,'0')}`;
+};
+
 // ============================================================
 // HELPERS DE SLOT (Grade Visual)
 // ============================================================
@@ -343,7 +351,7 @@ function CelulaColapsada({ turno, deFerias }) {
   if (turno.folga) return <div className="esc-collapsed"><span className="esc-c-folga">Folga</span></div>;
   const h = calcHoras(turno);
   if (h === 0) return <div className="esc-collapsed"><span className="esc-c-muted">—</span></div>;
-  return <div className="esc-collapsed"><span className="esc-c-horas">{h.toFixed(0)}h</span></div>;
+  return <div className="esc-collapsed"><span className="esc-c-horas">{fmtHoras(h)}</span></div>;
 }
 
 // ============================================================
@@ -692,7 +700,7 @@ export default function EscalaPainel() {
       }).join('');
       const s=stats[c.id]||{horas:0};
       const par=idx%2===0?'':' class="epdf-row-alt"';
-      return `<tr${par}><td class="epdf-nome">${c.nome}</td><td class="epdf-fn">${c.funcao}</td>${tdDias}<td class="epdf-total">${s.horas.toFixed(1)}h</td></tr>`;
+      return `<tr${par}><td class="epdf-nome">${c.nome}</td><td class="epdf-fn">${c.funcao}</td>${tdDias}<td class="epdf-total">${fmtHoras(s.horas)}</td></tr>`;
     }).join('');
     let printDiv=document.getElementById('escala-pdf-print');
     if(!printDiv){ printDiv=document.createElement('div'); printDiv.id='escala-pdf-print'; document.body.appendChild(printDiv); }
@@ -708,7 +716,7 @@ export default function EscalaPainel() {
       <table class="epdf-table">
         <thead><tr><th class="epdf-th-nome">Colaborador</th><th class="epdf-th-fn">Função</th>${thDias}<th>Total</th></tr></thead>
         <tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="2" class="epdf-tf-label">TOTAL GERAL</td><td colspan="7"></td><td class="epdf-tf-val">${totalSemana.toFixed(1)}h</td></tr></tfoot>
+        <tfoot><tr><td colspan="2" class="epdf-tf-label">TOTAL GERAL</td><td colspan="7"></td><td class="epdf-tf-val">${fmtHoras(totalSemana)}</td></tr></tfoot>
       </table>
       <div class="epdf-rodape">${colabsFiltrados.length} colaboradores · Meta: ${META_HORAS}h / semana</div>`;
     const logoEl=document.getElementById('epdf-logo');
@@ -1014,7 +1022,7 @@ export default function EscalaPainel() {
                       </td>
                     );
                   })}
-                  <td className={`esc-total ${totalCls}`}>{s.horas.toFixed(1)}h</td>
+                  <td className={`esc-total ${totalCls}`}>{fmtHoras(s.horas)}</td>
                 </tr>
               );
             })}
@@ -1036,7 +1044,7 @@ export default function EscalaPainel() {
                   </td>
                 );
               })}
-              <td style={{fontWeight:600,color:T.carbon,fontSize:10}}>{totalSemana.toFixed(1)}h</td>
+              <td style={{fontWeight:600,color:T.carbon,fontSize:10}}>{fmtHoras(totalSemana)}</td>
             </tr>
           </tfoot>
         </table>
@@ -1068,7 +1076,7 @@ export default function EscalaPainel() {
                     <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'5px 7px',borderLeft:'1px solid #2E3038',minHeight:54,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center'}}>
                       <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?10:11.5,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.2px',width:'100%',textAlign:'center'}}>{c.nome}</div>
                       <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?9:10.5,fontWeight:400,color:'#FFFFFF',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.1px',opacity:.85,width:'100%',textAlign:'center'}}>
-                        {estaDeFerias(c.id,dataDoDia(diaGrade.id)) ? '🏖 Férias' : `${c.funcao} · ${horasTurno(escala[diaGrade.id]?.[c.id]||{}).toFixed(1)}h`}
+                        {estaDeFerias(c.id,dataDoDia(diaGrade.id)) ? '🏖 Férias' : `${c.funcao} · ${fmtHoras(horasTurno(escala[diaGrade.id]?.[c.id]||{}))}`}
                       </div>
                     </div>
                   ))}
@@ -1163,7 +1171,7 @@ export default function EscalaPainel() {
                       <div style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
                         {alerta==='crit'&&<span className="status-crit">⚠</span>}
                         {alerta==='ok'&&<span className="status-ok">✓</span>}
-                        <span style={{fontFamily:'DM Mono,monospace',fontSize:11,fontWeight:600,color:T.carbon}}>{s.horas.toFixed(1)}h</span>
+                        <span style={{fontFamily:'DM Mono,monospace',fontSize:11,fontWeight:600,color:T.carbon}}>{fmtHoras(s.horas)}</span>
                       </div>
                     </div>
                     <div style={{fontFamily:'DM Mono,monospace',fontSize:8,color:T.muted,letterSpacing:'.4px',textTransform:'uppercase',marginBottom:5}}>
@@ -1179,7 +1187,7 @@ export default function EscalaPainel() {
                         const bord = deFerias2 ? '1px solid #1A3A5C' : td.folga ? `1px solid ${T.amber}` : th===0 ? `1px dashed ${T.border}` : 'none';
                         const txtC = deFerias2 ? '#1A3A5C' : td.folga ? T.amber : th>0 ? '#fff' : T.muted;
                         return (
-                          <span key={d.id} title={`${d.nome}${deFerias2?' · Férias':td.folga?' · Folga':th>0?' · '+th.toFixed(1)+'h':' · Livre'}`} style={{
+                          <span key={d.id} title={`${d.nome}${deFerias2?' · Férias':td.folga?' · Folga':th>0?' · '+fmtHoras(th):' · Livre'}`} style={{
                             display:'inline-flex',alignItems:'center',justifyContent:'center',
                             flex:1,padding:'2px 2px',borderRadius:100,
                             background:bg,border:bord,
@@ -1191,7 +1199,7 @@ export default function EscalaPainel() {
                     </div>
                     <div style={{display:'flex',alignItems:'center',gap:5}}>
                       <div style={{flex:1,height:3,background:T.border,borderRadius:2,overflow:'hidden'}}>
-                        <div style={{width:`${Math.min(pct,100)}%`,height:'100%',background:s.horas>META_HORAS?T.red:s.horas>0?T.green:T.border,transition:'width .2s'}}/>
+                        <div style={{width:`${Math.min(pct,100)}%`,height:'100%',background:s.horas>META_HORAS?T.red:pct>=80?T.citric:s.horas>0?T.carbon:T.border,transition:'width .2s'}}/>
                       </div>
                       <span style={{fontFamily:'DM Mono,monospace',fontSize:8,color:T.muted,minWidth:26,textAlign:'right'}}>{pct}%</span>
                     </div>
@@ -1201,7 +1209,7 @@ export default function EscalaPainel() {
             })}
           </div>}
           {resumoAberto && <div style={{padding:'10px 16px',borderTop:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between',fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:600,letterSpacing:'.5px',color:T.carbon}}>
-            <span>TOTAL: {totalSemana.toFixed(1)}h</span>
+            <span>TOTAL: {fmtHoras(totalSemana)}</span>
             <span style={{color:T.muted,fontWeight:400}}>META: {META_HORAS}h · 2 folgas / semana</span>
           </div>}
         </section>
