@@ -24,6 +24,7 @@ const T = {
   azulBg:   '#E8F0FA',
   orange:   '#E8A020',
   orangeBg: '#FFF8EC',
+  gridLine: 'rgba(53,56,63,0.6)',
   radius:   '8px',
   shadow:   '0 1px 4px rgba(0,0,0,0.07)',
 };
@@ -837,10 +838,10 @@ export default function EscalaPainel() {
         .esc-modal-row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 
         /* Grade visual */
-        .grade-tabs{display:flex;gap:2px;padding:6px 16px;border-bottom:1px solid ${T.border};overflow-x:auto;}
+        .grade-tabs{display:flex;gap:2px;padding:6px 16px;border-bottom:1px solid ${T.border};overflow-x:auto;justify-content:center;}
         .grade-tab{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:1px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:${T.carbon};white-space:nowrap;text-transform:uppercase;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px;}
         .grade-tab.on{color:${T.carbon};border-bottom-color:${T.carbon};}
-        .hora-cell{height:${rowH}px;display:flex;align-items:flex-end;justify-content:center;font-family:'DM Mono',monospace;font-size:9px;line-height:1;padding:0 4px 1px;position:sticky;left:0;z-index:5;border-right:1px solid ${T.border};background:${T.surface};overflow:hidden;}
+        .hora-cell{height:${rowH}px;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:9px;line-height:1;padding:0 4px;position:sticky;left:0;z-index:5;border-right:1px solid ${T.gridLine};background:${T.surface};overflow:hidden;}
 
         input[type=time]::-webkit-calendar-picker-indicator{opacity:.5;cursor:pointer;}
 
@@ -1078,14 +1079,14 @@ export default function EscalaPainel() {
                     const naFuncAlm = emFaixa(slot,cfgGrade.funcAlmocoIni,cfgGrade.funcAlmocoFim);
                     const naPrepJan = emFaixa(slot,cfgGrade.prepJantarIni,cfgGrade.prepJantarFim);
                     const naFuncJan = emFaixa(slot,cfgGrade.funcJantarIni,cfgGrade.funcJantarFim);
-                    const borda = full ? `1px solid ${T.carbon}` : `1px solid transparent`;
+                    const borda = full ? `1px solid ${T.gridLine}` : `1px solid transparent`;
                     return (
                       <React.Fragment key={slot}>
                         <div className="hora-cell" style={{
                           fontWeight: full?600:400,
                           color: full ? T.carbon : 'transparent',
                           fontSize: full ? 9.5 : 0,
-                          borderBottom: full ? `1px solid ${T.carbon}` : `1px solid transparent`,
+                          borderBottom: full ? `1px solid ${T.gridLine}` : `1px solid transparent`,
                           width: 48, maxWidth: 48, minWidth: 48,
                         }}>{full ? lbl : ''}</div>
                         {colabsFiltrados.map(c=>{
@@ -1101,7 +1102,7 @@ export default function EscalaPainel() {
                           else if (naFuncAlm) bg='#FFF4DC';
                           else if (naPrepAlm) bg='#FFF4DC';
                           return (
-                            <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,opacity,borderRight:`1px solid ${T.carbon}`,borderBottom:borda,overflow:'hidden'}}/>
+                            <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,opacity,borderRight:`1px solid ${T.gridLine}`,borderBottom:borda,overflow:'hidden'}}/>
                           );
                         })}
                       </React.Fragment>
