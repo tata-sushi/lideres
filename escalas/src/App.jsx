@@ -520,6 +520,20 @@ export default function EscalaPainel() {
     setEscala({...escala, [dia]: {...escala[dia], [cid]: novoTurno}});
   };
 
+  const updateCfg = (diaId, field, value) => {
+    setDados(p => ({
+      ...p,
+      [key]: {
+        ...p[key],
+        config: {
+          ...(p[key]?.config || CFG0),
+          [diaId]: { ...(p[key]?.config?.[diaId] || CFG0_DIA), [field]: value },
+        }
+      }
+    }));
+    setPendente(true);
+  };
+
   // Férias
   const estaDeFerias = useCallback((colabId, data) => {
     const d = data.getTime();
@@ -1069,6 +1083,23 @@ export default function EscalaPainel() {
                   </button>
                 ))}
               </div>
+              {/* CONFIG HORÁRIOS DE FUNCIONAMENTO */}
+              <div style={{padding:'8px 16px',borderBottom:`1px solid ${T.border}`,display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',background:T.bg}}>
+                {[
+                  {label:'Prep Almoço', ini:'prepAlmocoIni', fim:'prepAlmocoFim'},
+                  {label:'Func Almoço', ini:'funcAlmocoIni', fim:'funcAlmocoFim'},
+                  {label:'Prep Jantar', ini:'prepJantarIni', fim:'prepJantarFim'},
+                  {label:'Func Jantar', ini:'funcJantarIni', fim:'funcJantarFim'},
+                ].map(({label,ini,fim})=>(
+                  <div key={label} style={{display:'flex',alignItems:'center',gap:4,background:'#FFF4DC',border:`1px solid ${T.gridLine}`,borderRadius:6,padding:'4px 8px'}}>
+                    <span style={{fontFamily:'DM Mono,monospace',fontSize:8.5,color:T.carbon,fontWeight:600,letterSpacing:'.3px',textTransform:'uppercase',whiteSpace:'nowrap'}}>{label}</span>
+                    <input type="time" value={cfgGrade[ini]} onChange={e=>updateCfg(diaGrade.id,ini,e.target.value)} style={{fontFamily:'DM Mono,monospace',fontSize:11,border:'none',background:'transparent',color:T.carbon,outline:'none',width:72,cursor:'pointer'}}/>
+                    <span style={{color:T.muted,fontSize:10}}>→</span>
+                    <input type="time" value={cfgGrade[fim]} onChange={e=>updateCfg(diaGrade.id,fim,e.target.value)} style={{fontFamily:'DM Mono,monospace',fontSize:11,border:'none',background:'transparent',color:T.carbon,outline:'none',width:72,cursor:'pointer'}}/>
+                  </div>
+                ))}
+              </div>
+
               <div style={{overflow:'auto',maxHeight:'60vh',WebkitOverflowScrolling:'touch'}}>
                 <div style={{display:'grid',gridTemplateColumns:`48px repeat(${colabsFiltrados.length},${colW}px)`,minWidth:48+colabsFiltrados.length*colW,width:'max-content'}}>
                   <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:54,width:48,minWidth:48,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px'}}>HORA</div>
