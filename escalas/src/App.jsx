@@ -436,6 +436,8 @@ export default function EscalaPainel() {
   const [filtroUnidade, setFiltroUnidade] = useState(()=>localStorage.getItem('esc_fUnidade')||'Todos');
   const [filtroDepto, setFiltroDepto] = useState(()=>localStorage.getItem('esc_fDepto')||'Todos');
   const [gradeAberta, setGradeAberta] = useState(false);
+  const [tabelaAberta, setTabelaAberta] = useState(true);
+  const [resumoAberto, setResumoAberto] = useState(true);
   const [diaGradeIdx, setDiaGradeIdx] = useState(0);
   const [ehMobile, setEhMobile] = useState(false);
 
@@ -735,9 +737,11 @@ export default function EscalaPainel() {
         /* Tabela principal */
         .esc-table{width:100%;border-collapse:collapse;font-size:12px;}
         .esc-table th{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.5px;color:${T.muted};text-transform:uppercase;padding:8px 4px;border-bottom:1px solid ${T.border};text-align:center;vertical-align:bottom;white-space:nowrap;}
-        .esc-table th:first-child{text-align:left;min-width:150px;}
+        .esc-table th:first-child{text-align:left;width:110px;min-width:110px;max-width:110px;}
+        .esc-table th:not(:first-child):not(:last-child){width:auto;}
+        .esc-table th:last-child{width:54px;min-width:54px;}
         .esc-table td{padding:5px 3px;border-bottom:1px solid ${T.border};vertical-align:top;text-align:center;}
-        .esc-table td:first-child{text-align:left;vertical-align:top;padding-top:7px;}
+        .esc-table td:first-child{text-align:left;vertical-align:top;padding-top:7px;width:110px;min-width:110px;max-width:110px;}
         .esc-table tbody tr:hover>td{background:rgba(0,0,0,.015);}
         .esc-th-date{font-size:9px;font-weight:400;color:${T.muted};display:block;margin-top:1px;}
 
@@ -751,7 +755,7 @@ export default function EscalaPainel() {
         .esc-del-btn:hover{color:${T.red};border-color:${T.border};}
 
         /* Célula de turno */
-        .esc-cell{display:flex;flex-direction:column;gap:3px;align-items:stretch;min-width:142px;position:relative;}
+        .esc-cell{display:flex;flex-direction:column;gap:3px;align-items:stretch;min-width:128px;position:relative;}
         .esc-top-row{display:flex;gap:1px;align-items:center;}
         .esc-tog{flex:1;font-size:9px;font-family:'DM Mono',monospace;padding:3px 0;border-radius:4px;border:1px solid transparent;background:transparent;color:${T.muted};cursor:pointer;text-align:center;}
         .esc-tog:hover{background:${T.bg};}
@@ -794,6 +798,11 @@ export default function EscalaPainel() {
         .esc-total-muted{color:${T.muted};}
 
         .esc-footer td{border-bottom:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:${T.mid};padding-top:8px!important;vertical-align:top;}
+
+        /* Resumo Semanal */
+        .resumo-card{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid ${T.border};border-radius:6px;background:${T.bg};}
+        .status-ok{background:${T.greenBg};color:${T.green};padding:3px 8px;border-radius:100px;font-family:'DM Mono',monospace;font-size:9px;font-weight:500;white-space:nowrap;}
+        .status-crit{background:${T.redBg};color:${T.red};padding:3px 8px;border-radius:100px;font-family:'DM Mono',monospace;font-size:9px;font-weight:500;white-space:nowrap;}
 
         /* Modal */
         .esc-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;}
@@ -933,7 +942,13 @@ export default function EscalaPainel() {
       )}
 
       {/* TABELA PRINCIPAL */}
-      <div style={{padding:'16px 20px 20px',overflowX:'auto'}}>
+      <div style={{padding:'16px 20px 0'}}>
+        <section className="card">
+          <div onClick={()=>setTabelaAberta(p=>!p)} style={{padding:'10px 16px',borderBottom:tabelaAberta?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
+            <span className="cat-pill">📋 Escala da Semana</span>
+            <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{tabelaAberta?'▲':'▼'}</span>
+          </div>
+          {tabelaAberta && <div style={{overflowX:'auto',padding:'10px 12px 12px'}}>
         <table className="esc-table">
           <thead>
             <tr>
@@ -941,7 +956,7 @@ export default function EscalaPainel() {
               {DIAS_META.map((d,i)=>(
                 <th key={d.id}>{d.curto}<span className="esc-th-date">{fmtDate(addDays(semanaAtual,i))}</span></th>
               ))}
-              <th style={{minWidth:50}}>Total</th>
+              <th>Total</th>
             </tr>
           </thead>
           <tbody>
@@ -997,10 +1012,12 @@ export default function EscalaPainel() {
             </tr>
           </tfoot>
         </table>
+          </div>}
+        </section>
       </div>
 
       {/* GRADE VISUAL */}
-      <div style={{padding:'0 20px 40px'}}>
+      <div style={{padding:'12px 20px 0'}}>
         <section className="card">
           <div onClick={()=>setGradeAberta(p=>!p)} style={{padding:'10px 16px',borderBottom:gradeAberta?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
             <span className="cat-pill">📅 Grade Visual</span>
@@ -1080,6 +1097,84 @@ export default function EscalaPainel() {
               </div>
             </>
           )}
+        </section>
+      </div>
+
+      {/* RESUMO SEMANAL */}
+      <div style={{padding:'12px 20px 40px'}}>
+        <section className="card">
+          <div onClick={()=>setResumoAberto(p=>!p)} style={{padding:'10px 16px',borderBottom:resumoAberto?`1px solid ${T.border}`:'none',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer',userSelect:'none'}}>
+            <span className="cat-pill">📊 Resumo Semanal</span>
+            <span style={{display:'flex',alignItems:'center',gap:10}}>
+              <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.mid}}>
+                Meta: <b style={{color:T.carbon}}>{META_HORAS}h</b> · 2 folgas
+              </span>
+              <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{resumoAberto?'▲':'▼'}</span>
+            </span>
+          </div>
+          {resumoAberto && <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:8,padding:'12px 16px'}}>
+            {colabsFiltrados.map(c=>{
+              const s=stats[c.id];
+              if (!s) return null;
+              const pct=Math.min(Math.round((s.horas/META_HORAS)*100),999);
+              const alerta=s.horas>META_HORAS?'crit':(s.folgas<2&&s.dias>0)?'warn':s.horas>0?'ok':'zero';
+              const mesAtual = semanaAtual.getMonth();
+              const anoAtual = semanaAtual.getFullYear();
+              const domingoIdx = DIAS_META.findIndex(d=>d.id==='dom');
+              const dataDomingo = addDays(semanaAtual, domingoIdx);
+              const folgaDomingo = escala['dom']?.[c.id]?.folga && dataDomingo.getMonth()===mesAtual && dataDomingo.getFullYear()===anoAtual;
+              return (
+                <div key={c.id} className="resumo-card">
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:6,marginBottom:3}}>
+                      <div style={{display:'flex',alignItems:'center',gap:5,minWidth:0,flex:1}}>
+                        <span style={{fontSize:12,fontWeight:700,color:T.carbon,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.nome}</span>
+                        {folgaDomingo&&<span title="Folga no Domingo do mês" style={{fontSize:9,background:'#E8F0FA',color:'#1A3A5C',padding:'1px 6px',borderRadius:100,fontFamily:'DM Mono,monospace',letterSpacing:'.3px',whiteSpace:'nowrap',flexShrink:0}}>🗓 Dom/Mês</span>}
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
+                        {alerta==='crit'&&<span className="status-crit">⚠</span>}
+                        {alerta==='ok'&&<span className="status-ok">✓</span>}
+                        <span style={{fontFamily:'DM Mono,monospace',fontSize:11,fontWeight:600,color:T.carbon}}>{s.horas.toFixed(1)}h</span>
+                      </div>
+                    </div>
+                    <div style={{fontFamily:'DM Mono,monospace',fontSize:8,color:T.muted,letterSpacing:'.4px',textTransform:'uppercase',marginBottom:5}}>
+                      {c.funcao} · {s.dias}d trab · {s.folgas}d folga
+                    </div>
+                    <div style={{display:'flex',gap:2,flexWrap:'nowrap',marginBottom:5}}>
+                      {DIAS_META.map(d=>{
+                        const td=escala[d.id]?.[c.id]||{};
+                        const th=calcHoras(td);
+                        const dataD2 = addDays(semanaAtual, DIAS_META.findIndex(dm=>dm.id===d.id));
+                        const deFerias2 = estaDeFerias(c.id, dataD2);
+                        const bg   = deFerias2 ? '#C8DFF0' : td.folga ? T.amberBg : th>0 ? T.carbon : 'transparent';
+                        const bord = deFerias2 ? '1px solid #1A3A5C' : td.folga ? `1px solid ${T.amber}` : th===0 ? `1px dashed ${T.border}` : 'none';
+                        const txtC = deFerias2 ? '#1A3A5C' : td.folga ? T.amber : th>0 ? '#fff' : T.muted;
+                        return (
+                          <span key={d.id} title={`${d.nome}${deFerias2?' · Férias':td.folga?' · Folga':th>0?' · '+th.toFixed(1)+'h':' · Livre'}`} style={{
+                            display:'inline-flex',alignItems:'center',justifyContent:'center',
+                            flex:1,padding:'2px 2px',borderRadius:100,
+                            background:bg,border:bord,
+                            fontFamily:'DM Mono,monospace',fontSize:8,fontWeight:700,
+                            color:txtC,letterSpacing:'0',minWidth:0,
+                          }}>{d.mini}</span>
+                        );
+                      })}
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:5}}>
+                      <div style={{flex:1,height:3,background:T.border,borderRadius:2,overflow:'hidden'}}>
+                        <div style={{width:`${Math.min(pct,100)}%`,height:'100%',background:s.horas>META_HORAS?T.red:s.horas>0?T.green:T.border,transition:'width .2s'}}/>
+                      </div>
+                      <span style={{fontFamily:'DM Mono,monospace',fontSize:8,color:T.muted,minWidth:26,textAlign:'right'}}>{pct}%</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>}
+          {resumoAberto && <div style={{padding:'10px 16px',borderTop:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between',fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:600,letterSpacing:'.5px',color:T.carbon}}>
+            <span>TOTAL: {totalSemana.toFixed(1)}h</span>
+            <span style={{color:T.muted,fontWeight:400}}>META: {META_HORAS}h · 2 folgas / semana</span>
+          </div>}
         </section>
       </div>
 
