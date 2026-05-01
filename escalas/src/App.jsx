@@ -1092,8 +1092,7 @@ export default function EscalaPainel() {
                           let bg='transparent';
                           let opacity=1;
                           if (deFerias) { bg='#E8F0FA'; }
-                          else if (t.folga) { bg='transparent'; }
-                          else if (ativo) bg=T.carbon;
+                          else if (ativo && !t.folga) bg=T.carbon;
                           else if (naFuncJan) bg='#FFF4DC';
                           else if (naPrepJan) bg='#FFF4DC';
                           else if (naFuncAlm) bg='#FFF4DC';
