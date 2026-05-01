@@ -196,12 +196,23 @@ const escalaSemColab = (esc, cid) => {
 // ============================================================
 function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
   const [dropOpen, setDropOpen] = useState(false);
+  const [showT2, setShowT2] = useState(!!(turno?.t2Ini || turno?.t2Fim));
+  const [showT3, setShowT3] = useState(!!(turno?.t3Ini || turno?.t3Fim));
 
   const t = turno || turnoVazio();
   const estado = deFerias ? 'ferias' : t.folga ? 'folga' : 'turno';
 
-  const numTurnos = (t.t3Ini && t.t3Fim) ? 3 : (t.t2Ini && t.t2Fim) ? 2 : (t.t1Ini && t.t1Fim) ? 1 : 0;
-  const noMax = numTurnos >= 3;
+  // Sincroniza visibilidade de T2/T3 quando preset é aplicado ou turno é limpo externamente
+  useEffect(() => {
+    if (t.t2Ini || t.t2Fim) setShowT2(true);
+    else if (!t.t2Ini && !t.t2Fim && !t.t3Ini && !t.t3Fim) setShowT2(false);
+    if (t.t3Ini || t.t3Fim) setShowT3(true);
+    else if (!t.t3Ini && !t.t3Fim) setShowT3(false);
+  }, [t.t2Ini, t.t2Fim, t.t3Ini, t.t3Fim]);
+
+  const temT2 = showT2;
+  const temT3 = showT3 && showT2;
+  const noMax = temT3;
 
   const setEstado = (e) => {
     if (e === 'folga') onChange({...turnoVazio(), folga: true});
@@ -211,14 +222,13 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
   const setField = (campo, val) => onChange({...t, [campo]: val, folga: false});
 
   const addTurno = () => {
-    if (!t.t1Ini) onChange({...t, t1Ini:'', t1Fim:'', folga:false});
-    else if (!t.t2Ini || !t.t2Fim) onChange({...t, t2Ini:'', t2Fim:'', folga:false});
-    else if (!t.t3Ini || !t.t3Fim) onChange({...t, t3Ini:'', t3Fim:'', folga:false});
+    if (!showT2) setShowT2(true);
+    else if (!showT3) setShowT3(true);
   };
 
   const rmTurno = () => {
-    if (t.t3Ini || t.t3Fim) onChange({...t, t3Ini:'', t3Fim:''});
-    else if (t.t2Ini || t.t2Fim) onChange({...t, t2Ini:'', t2Fim:''});
+    if (showT3) { setShowT3(false); onChange({...t, t3Ini:'', t3Fim:''}); }
+    else if (showT2) { setShowT2(false); onChange({...t, t2Ini:'', t2Fim:'', t3Ini:'', t3Fim:''}); }
   };
 
   const aplicarPreset = (preset) => {
@@ -239,10 +249,10 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
       <div className="esc-cell">
         <div className="esc-top-row">
           <button className="esc-tog" onClick={()=>setEstado('turno')}>T</button>
-          <button className="esc-tog esc-tog-hidden">▾</button>
+          <button className="esc-tog" onClick={()=>{setEstado('turno');setDropOpen(true);}}>▾</button>
           <button className="esc-tog" onClick={()=>setEstado('folga')}>F</button>
           <button className="esc-tog" onClick={onVacationClick} title="Gerenciar férias">V</button>
-          <button className="esc-tog esc-tog-hidden">+</button>
+          <button className="esc-tog" onClick={()=>setEstado('turno')}>+</button>
         </div>
         <div className="esc-badge-v">Férias</div>
       </div>
@@ -254,19 +264,15 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
       <div className="esc-cell">
         <div className="esc-top-row">
           <button className="esc-tog" onClick={()=>setEstado('turno')}>T</button>
-          <button className="esc-tog esc-tog-hidden">▾</button>
+          <button className="esc-tog" onClick={()=>{setEstado('turno');setDropOpen(true);}}>▾</button>
           <button className="esc-tog" onClick={()=>setEstado('folga')}>F</button>
           <button className="esc-tog" onClick={onVacationClick} title="Gerenciar férias">V</button>
-          <button className="esc-tog esc-tog-hidden">+</button>
+          <button className="esc-tog" onClick={()=>setEstado('turno')}>+</button>
         </div>
         <div className="esc-badge-f">Folga</div>
       </div>
     );
   }
-
-  // estado === 'turno'
-  const temT2 = !!(t.t2Ini || t.t2Fim);
-  const temT3 = !!(t.t3Ini || t.t3Fim);
 
   return (
     <div className="esc-cell" style={{position:'relative'}}>
@@ -748,11 +754,11 @@ export default function EscalaPainel() {
         /* Tabela principal */
         .esc-table{width:100%;border-collapse:collapse;font-size:12px;}
         .esc-table th{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.5px;color:${T.carbon};text-transform:uppercase;padding:8px 4px;border-bottom:1px solid ${T.border};text-align:center;vertical-align:bottom;white-space:nowrap;}
-        .esc-table th:first-child{text-align:left;width:172px;min-width:172px;max-width:172px;}
+        .esc-table th:first-child{text-align:left;width:206px;min-width:206px;max-width:206px;}
         .esc-table th:not(:first-child):not(:last-child){width:auto;}
         .esc-table th:last-child{width:54px;min-width:54px;}
         .esc-table td{padding:5px 3px;border-bottom:1px solid ${T.border};vertical-align:top;text-align:center;}
-        .esc-table td:first-child{text-align:left;vertical-align:top;padding-top:7px;width:172px;min-width:172px;max-width:172px;}
+        .esc-table td:first-child{text-align:left;vertical-align:top;padding-top:7px;width:206px;min-width:206px;max-width:206px;}
         .esc-table tbody tr:hover>td{background:rgba(0,0,0,.015);}
         .esc-th-date{font-size:9px;font-weight:400;color:${T.carbon};display:block;margin-top:1px;opacity:.7;}
 
@@ -829,9 +835,9 @@ export default function EscalaPainel() {
 
         /* Grade visual */
         .grade-tabs{display:flex;gap:2px;padding:6px 16px;border-bottom:1px solid ${T.border};overflow-x:auto;}
-        .grade-tab{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:${T.muted};white-space:nowrap;text-transform:uppercase;}
+        .grade-tab{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:${T.muted};white-space:nowrap;text-transform:uppercase;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px;}
         .grade-tab.on{color:${T.text};border-bottom-color:${T.carbon};}
-        .hora-cell{height:${rowH}px;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:9px;line-height:1;padding:0 4px;position:sticky;left:0;z-index:5;border-right:1px solid ${T.border};background:${T.surface};overflow:hidden;}
+        .hora-cell{height:${rowH}px;display:flex;align-items:flex-end;justify-content:center;font-family:'DM Mono',monospace;font-size:9px;line-height:1;padding:0 4px 1px;position:sticky;left:0;z-index:5;border-right:1px solid ${T.border};background:${T.surface};overflow:hidden;}
 
         input[type=time]::-webkit-calendar-picker-indicator{opacity:.5;cursor:pointer;}
 
@@ -1040,7 +1046,8 @@ export default function EscalaPainel() {
               <div className="grade-tabs">
                 {DIAS_META.map((d,i)=>(
                   <button key={d.id} className={`grade-tab ${i===diaGradeIdx?'on':''}`} onClick={()=>setDiaGradeIdx(i)}>
-                    {d.curto} {fmtDate(addDays(semanaAtual,i))}
+                    <span>{d.curto}</span>
+                    <span style={{fontSize:9,fontWeight:400,opacity:.7,letterSpacing:'.3px'}}>{fmtDate(addDays(semanaAtual,i))}</span>
                   </button>
                 ))}
               </div>
