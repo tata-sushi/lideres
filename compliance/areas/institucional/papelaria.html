@@ -1050,13 +1050,28 @@ function tbParseCsvLine(line) {
   return out;
 }
 
+function tbNormName(s) {
+  return (s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function tbFirstLast(s) {
+  var parts = tbNormName(s).split(' ').filter(Boolean);
+  if (parts.length < 2) return parts[0] || '';
+  return parts[0] + ' ' + parts[parts.length - 1];
+}
+
 function tbFetchDeptMap() {
   if (tbDeptMapPromise) return tbDeptMapPromise;
   tbDeptMapPromise = fetch(TB_SHEET_URL)
     .then(function(r) { return r.ok ? r.text() : ''; })
     .then(function(csv) {
-      var map = {};
-      if (!csv) return map;
+      var byFull = {}, byFL = {};
+      if (!csv) return { full: byFull, fl: byFL };
       var lines = csv.split(/\r?\n/);
       /* Colunas: Nome | Matrícula | Cargo | Status | Unidade | Departamento */
       for (var i = 1; i < lines.length; i++) {
@@ -1065,11 +1080,15 @@ function tbFetchDeptMap() {
         if (cols.length < 6) continue;
         var nome = (cols[0] || '').trim();
         var depto = (cols[5] || '').trim();
-        if (nome && depto) map[nome.toLowerCase()] = depto;
+        if (nome && depto) {
+          byFull[tbNormName(nome)] = depto;
+          var fl = tbFirstLast(nome);
+          if (fl) byFL[fl] = depto;
+        }
       }
-      return map;
+      return { full: byFull, fl: byFL };
     })
-    .catch(function() { return {}; });
+    .catch(function() { return { full: {}, fl: {} }; });
   return tbDeptMapPromise;
 }
 
@@ -1102,11 +1121,12 @@ function tbLazyInit() {
   if (a && !a.value && session.displayName) a.value = session.displayName;
 
   if (d && !d.value && session.displayName) {
-    tbFetchDeptMap().then(function(map) {
+    tbFetchDeptMap().then(function(maps) {
       if (d.value) return;
-      var key = session.displayName.toLowerCase().trim();
-      if (map[key]) {
-        d.value = map[key];
+      var name = session.displayName;
+      var depto = maps.full[tbNormName(name)] || maps.fl[tbFirstLast(name)];
+      if (depto) {
+        d.value = depto;
         d.readOnly = true;
       }
     });
