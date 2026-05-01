@@ -760,20 +760,20 @@ export default function EscalaPainel() {
         .esc-table td{padding:5px 3px;border-bottom:1px solid ${T.border};vertical-align:top;text-align:center;}
         .esc-table td:first-child{text-align:left;vertical-align:top;padding-top:7px;width:206px;min-width:206px;max-width:206px;}
         .esc-table tbody tr:hover>td{background:rgba(0,0,0,.015);}
-        .esc-th-date{font-size:9px;font-weight:400;color:${T.carbon};display:block;margin-top:1px;opacity:.7;}
+        .esc-th-date{font-size:9px;font-weight:500;color:${T.carbon};display:block;margin-top:1px;}
 
         .esc-nome-wrap{display:flex;align-items:center;gap:4px;}
         .esc-chevron{width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${T.muted};font-size:11px;flex-shrink:0;border:none;background:none;font-family:'DM Mono',monospace;}
         .esc-chevron:hover{color:${T.mid};}
         .esc-nome-info{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;}
-        .esc-nome-c{font-size:12px;font-weight:700;color:${T.carbon};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.2px;}
+        .esc-nome-c{font-size:12px;font-weight:700;color:${T.carbon};white-space:normal;word-break:break-word;letter-spacing:-.2px;line-height:1.2;}
         .esc-cargo-c{font-family:'DM Mono',monospace;font-size:9px;color:${T.muted};letter-spacing:.5px;text-transform:uppercase;}
         .esc-del-btn{width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${T.muted};font-size:12px;flex-shrink:0;border:1px solid transparent;background:none;border-radius:${T.radius};font-family:'DM Mono',monospace;}
         .esc-del-btn:hover{color:${T.red};border-color:${T.border};}
 
         /* Célula de turno */
         .esc-cell{display:inline-flex;flex-direction:column;gap:3px;align-items:stretch;min-width:128px;position:relative;}
-        .esc-table td:not(:first-child){vertical-align:middle;}
+        .esc-table td:not(:first-child){vertical-align:top;}
         .esc-top-row{display:flex;gap:1px;align-items:center;}
         .esc-tog{flex:1;font-size:9px;font-family:'DM Mono',monospace;padding:3px 0;border-radius:4px;border:1px solid ${T.border};background:${T.surface};color:${T.mid};cursor:pointer;text-align:center;}
         .esc-tog:hover{background:${T.bg};}
@@ -835,8 +835,8 @@ export default function EscalaPainel() {
 
         /* Grade visual */
         .grade-tabs{display:flex;gap:2px;padding:6px 16px;border-bottom:1px solid ${T.border};overflow-x:auto;}
-        .grade-tab{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:${T.muted};white-space:nowrap;text-transform:uppercase;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px;}
-        .grade-tab.on{color:${T.text};border-bottom-color:${T.carbon};}
+        .grade-tab{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:1px;padding:8px 12px;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;color:${T.carbon};white-space:nowrap;text-transform:uppercase;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px;}
+        .grade-tab.on{color:${T.carbon};border-bottom-color:${T.carbon};}
         .hora-cell{height:${rowH}px;display:flex;align-items:flex-end;justify-content:center;font-family:'DM Mono',monospace;font-size:9px;line-height:1;padding:0 4px 1px;position:sticky;left:0;z-index:5;border-right:1px solid ${T.border};background:${T.surface};overflow:hidden;}
 
         input[type=time]::-webkit-calendar-picker-indicator{opacity:.5;cursor:pointer;}
@@ -1014,15 +1014,18 @@ export default function EscalaPainel() {
           </tbody>
           <tfoot>
             <tr className="esc-footer">
-              <td style={{fontWeight:600}}>Equipe</td>
+              <td style={{fontWeight:600}}>Totais</td>
               {DIAS_META.map((d,i)=>{
                 const {trab,folga,ferias} = countsDia(d.id, i);
+                const partes = [];
+                if (trab>0) partes.push(<span key="t" style={{color:T.green}}>{trab} trabalhando</span>);
+                if (folga>0) partes.push(<span key="f" style={{color:T.amber}}>{folga} folgas</span>);
+                if (ferias>0) partes.push(<span key="v" style={{color:'#1A3A5C'}}>{ferias} férias</span>);
                 return (
-                  <td key={d.id} style={{fontSize:9,lineHeight:1.6}}>
-                    {trab>0&&<div style={{color:T.green}}>▲{trab} trab</div>}
-                    {folga>0&&<div style={{color:T.amber}}>◆{folga} folga</div>}
-                    {ferias>0&&<div style={{color:'#1A3A5C'}}>🏖{ferias} fér</div>}
-                    {trab===0&&folga===0&&ferias===0&&<div style={{color:T.muted}}>—</div>}
+                  <td key={d.id} style={{fontSize:9,whiteSpace:'nowrap'}}>
+                    {partes.length===0
+                      ? <span style={{color:T.muted}}>—</span>
+                      : partes.reduce((acc,el,i)=>i===0?[el]:[...acc,<span key={`s${i}`} style={{color:T.muted}}> / </span>,el],[])}
                   </td>
                 );
               })}
@@ -1047,7 +1050,7 @@ export default function EscalaPainel() {
                 {DIAS_META.map((d,i)=>(
                   <button key={d.id} className={`grade-tab ${i===diaGradeIdx?'on':''}`} onClick={()=>setDiaGradeIdx(i)}>
                     <span>{d.curto}</span>
-                    <span style={{fontSize:9,fontWeight:400,opacity:.7,letterSpacing:'.3px'}}>{fmtDate(addDays(semanaAtual,i))}</span>
+                    <span style={{fontSize:9,fontWeight:500,color:T.carbon,letterSpacing:'.3px'}}>{fmtDate(addDays(semanaAtual,i))}</span>
                   </button>
                 ))}
               </div>
