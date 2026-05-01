@@ -241,7 +241,7 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
           <button className="esc-tog" onClick={()=>setEstado('turno')}>T</button>
           <button className="esc-tog esc-tog-hidden">▾</button>
           <button className="esc-tog" onClick={()=>setEstado('folga')}>F</button>
-          <button className="esc-tog esc-tog-on-v" onClick={onVacationClick} title="Gerenciar férias">V</button>
+          <button className="esc-tog" onClick={onVacationClick} title="Gerenciar férias">V</button>
           <button className="esc-tog esc-tog-hidden">+</button>
         </div>
         <div className="esc-badge-v">Férias</div>
@@ -255,7 +255,7 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
         <div className="esc-top-row">
           <button className="esc-tog" onClick={()=>setEstado('turno')}>T</button>
           <button className="esc-tog esc-tog-hidden">▾</button>
-          <button className="esc-tog esc-tog-on-f">F</button>
+          <button className="esc-tog" onClick={()=>setEstado('folga')}>F</button>
           <button className="esc-tog" onClick={onVacationClick} title="Gerenciar férias">V</button>
           <button className="esc-tog esc-tog-hidden">+</button>
         </div>
@@ -271,14 +271,13 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
   return (
     <div className="esc-cell" style={{position:'relative'}}>
       <div className="esc-top-row">
-        <button className="esc-tog esc-tog-on-t">T</button>
-        <button className={`esc-tog esc-tog-arrow ${dropOpen?'esc-tog-arrow-open':''}`}
-          onClick={()=>setDropOpen(p=>!p)} title="Presets de horário">
+        <button className="esc-tog" onClick={()=>setEstado('turno')}>T</button>
+        <button className="esc-tog" onClick={()=>setDropOpen(p=>!p)} title="Presets de horário">
           {dropOpen ? '▴' : '▾'}
         </button>
         <button className="esc-tog" onClick={()=>setEstado('folga')}>F</button>
         <button className="esc-tog" onClick={onVacationClick} title="Gerenciar férias">V</button>
-        <button className="esc-tog esc-tog-pm"
+        <button className="esc-tog"
           onClick={noMax ? rmTurno : addTurno}
           title={noMax ? 'Remover último turno' : 'Adicionar turno'}>
           {noMax ? '−' : '+'}
@@ -625,6 +624,18 @@ export default function EscalaPainel() {
     return colabsFiltrados.reduce((a,c) => a + calcHoras(escala[diaId]?.[c.id]||{}), 0);
   };
 
+  const countsDia = (diaId, idx) => {
+    let trab=0, folga=0, ferias=0;
+    colabsFiltrados.forEach(c => {
+      const dataD = addDays(semanaAtual, idx);
+      if (estaDeFerias(c.id, dataD)) { ferias++; return; }
+      const t = escala[diaId]?.[c.id];
+      if (t?.folga) folga++;
+      else if (calcHoras(t||{}) > 0) trab++;
+    });
+    return { trab, folga, ferias };
+  };
+
   // Grade visual
   const diaGrade = DIAS_META[diaGradeIdx];
   const cfgGrade = config[diaGrade.id] || CFG0_DIA;
@@ -737,11 +748,11 @@ export default function EscalaPainel() {
         /* Tabela principal */
         .esc-table{width:100%;border-collapse:collapse;font-size:12px;}
         .esc-table th{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.5px;color:${T.carbon};text-transform:uppercase;padding:8px 4px;border-bottom:1px solid ${T.border};text-align:center;vertical-align:bottom;white-space:nowrap;}
-        .esc-table th:first-child{text-align:left;width:143px;min-width:143px;max-width:143px;}
+        .esc-table th:first-child{text-align:left;width:172px;min-width:172px;max-width:172px;}
         .esc-table th:not(:first-child):not(:last-child){width:auto;}
         .esc-table th:last-child{width:54px;min-width:54px;}
         .esc-table td{padding:5px 3px;border-bottom:1px solid ${T.border};vertical-align:top;text-align:center;}
-        .esc-table td:first-child{text-align:left;vertical-align:top;padding-top:7px;width:143px;min-width:143px;max-width:143px;}
+        .esc-table td:first-child{text-align:left;vertical-align:top;padding-top:7px;width:172px;min-width:172px;max-width:172px;}
         .esc-table tbody tr:hover>td{background:rgba(0,0,0,.015);}
         .esc-th-date{font-size:9px;font-weight:400;color:${T.carbon};display:block;margin-top:1px;opacity:.7;}
 
@@ -755,19 +766,12 @@ export default function EscalaPainel() {
         .esc-del-btn:hover{color:${T.red};border-color:${T.border};}
 
         /* Célula de turno */
-        .esc-cell{display:flex;flex-direction:column;gap:3px;align-items:stretch;min-width:128px;position:relative;}
+        .esc-cell{display:inline-flex;flex-direction:column;gap:3px;align-items:stretch;min-width:128px;position:relative;}
+        .esc-table td:not(:first-child){vertical-align:middle;}
         .esc-top-row{display:flex;gap:1px;align-items:center;}
-        .esc-tog{flex:1;font-size:9px;font-family:'DM Mono',monospace;padding:3px 0;border-radius:4px;border:1px solid transparent;background:transparent;color:${T.muted};cursor:pointer;text-align:center;}
+        .esc-tog{flex:1;font-size:9px;font-family:'DM Mono',monospace;padding:3px 0;border-radius:4px;border:1px solid ${T.border};background:${T.surface};color:${T.mid};cursor:pointer;text-align:center;}
         .esc-tog:hover{background:${T.bg};}
-        .esc-tog-on-t{border-color:${T.border};background:${T.bg};color:${T.carbon};font-weight:600;}
-        .esc-tog-on-f{border-color:${T.amber};background:${T.amberBg};color:${T.amber};font-weight:600;}
-        .esc-tog-on-v{border-color:#1A3A5C;background:#EBF3FA;color:#1A3A5C;font-weight:600;}
-        .esc-tog-arrow{flex:0 0 22px;font-size:8px;border:1px solid ${T.border};background:${T.surface};color:${T.mid};}
-        .esc-tog-arrow:hover{background:${T.bg};border-color:${T.mid};}
-        .esc-tog-arrow-open{background:${T.bg};border-color:${T.mid};}
-        .esc-tog-pm{flex:0 0 22px;font-size:9px;font-weight:600;border:1px solid ${T.border};background:${T.surface};color:${T.mid};}
-        .esc-tog-pm:hover{background:${T.bg};border-color:${T.mid};}
-        .esc-tog-hidden{flex:0 0 22px;visibility:hidden;}
+        .esc-tog-hidden{flex:1;visibility:hidden;border:1px solid transparent;background:transparent;cursor:default;}
 
         .esc-inputs-row{display:flex;gap:2px;align-items:center;width:100%;}
         .esc-inputs-row input[type=time]{flex:1;min-width:0;font-size:10px;font-family:'DM Mono',monospace;padding:3px 2px;border:1px solid ${T.border};border-radius:4px;background:${T.surface};color:${T.carbon};outline:none;}
@@ -1004,11 +1008,19 @@ export default function EscalaPainel() {
           </tbody>
           <tfoot>
             <tr className="esc-footer">
-              <td style={{fontWeight:600}}>Total equipe</td>
-              {DIAS_META.map(d=>(
-                <td key={d.id}>{totalDia(d.id).toFixed(0)}h</td>
-              ))}
-              <td style={{fontWeight:600,color:T.carbon}}>{totalSemana.toFixed(1)}h</td>
+              <td style={{fontWeight:600}}>Equipe</td>
+              {DIAS_META.map((d,i)=>{
+                const {trab,folga,ferias} = countsDia(d.id, i);
+                return (
+                  <td key={d.id} style={{fontSize:9,lineHeight:1.6}}>
+                    {trab>0&&<div style={{color:T.green}}>▲{trab} trab</div>}
+                    {folga>0&&<div style={{color:T.amber}}>◆{folga} folga</div>}
+                    {ferias>0&&<div style={{color:'#1A3A5C'}}>🏖{ferias} fér</div>}
+                    {trab===0&&folga===0&&ferias===0&&<div style={{color:T.muted}}>—</div>}
+                  </td>
+                );
+              })}
+              <td style={{fontWeight:600,color:T.carbon,fontSize:10}}>{totalSemana.toFixed(1)}h</td>
             </tr>
           </tfoot>
         </table>
