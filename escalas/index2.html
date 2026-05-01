@@ -1,0 +1,848 @@
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Download, RotateCcw, Plus, X, UserPlus, ChevronLeft, ChevronRight, Printer, Save } from 'lucide-react';
+import { carregarEscala, salvarEscala, carregarColaboradores, carregarFerias, salvarFerias, salvarExtras } from './api.js';
+
+// ============================================================
+// DESIGN TOKENS — tata-manutencao-v2.html
+// ============================================================
+const T = {
+  bg:       '#F4F4F4',
+  surface:  '#FFFFFF',
+  carbon:   '#35383F',
+  citric:   '#CFFF00',
+  text:     '#111111',
+  mid:      '#555555',
+  muted:    '#999999',
+  border:   '#E2E2E2',
+  green:    '#1A5C2A',
+  greenBg:  '#EAF4ED',
+  amber:    '#7A4A00',
+  amberBg:  '#FFF4DC',
+  red:      '#7A1A1A',
+  redBg:    '#FDEAEA',
+  orange:   '#E8A020',
+  orangeBg: '#FFF8EC',
+  radius:   '8px',
+  shadow:   '0 1px 4px rgba(0,0,0,0.07)',
+};
+
+const LOGO_SRC = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAAQABAAD/wAARCAL0AvQDACIAAREBAhEB/9sAQwAIBgYHBgUIBwcHCQkICgwUDQwLCwwZEhMPFB0aHx4dGhwcICQuJyAiLCMcHCg3KSwwMTQ0NB8nOT04MjwuMzQy/9sAQwEJCQkMCwwYDQ0YMiEcITIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIy/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMAAAERAhEAPwD36iiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAWiiigBKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigBaKKKAEooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAFooooASiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKa7pGhd2CqBkknAFcRqnxe8FaVcNBJrCzSqcMLaNpQPxUY/WgDuaK4rSPix4M1q4Fvb6zHFMxwq3CNFuPsWABrtFYMoZSCD0IoAWiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAWiiigBKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAoorD8S+LtF8J2RudWvUhz9yIcu59AvU0Ablcb4v8AiZ4e8Ho0dzcC5vsfLaQEM/49lH1rxfxp8bdZ14yWmi7tMsTwXU/vnHuf4fw/OvLXdpHZ3YszHJZjkk+5oA7Txl8T9e8YSPFLMbTT8/LaQMQCP9o9W/lXE0uaSkMMV3Xgz4qeIPCMkcPnNfacODazsTtH+w3UfTpXC0UAfYPhH4jeH/GMIFldCK7A+e0nIWRfoO49xXW18JxSyQyrLE7RyIcq6HBU+xFes+DfjnqukeXZ6+jajZjAEw4mQe/Zv50xH0nRWP4e8U6N4oshdaTfR3CfxKDhkPoy9RWxQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAtFFFACUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUyWWOCJpZXVI1GWZjgAUAPqlqmsadolm93qV5DawL1eVgB/wDXry/xn8c9K0jzLPw+i6jeDIM2cQofr/F+H514Hr/iXV/E1+bzV72S4kz8qk4RPZV6CgD1/wAafHlpBJZ+FYio6G9mXn/gCn+Z/KvFdQ1G81W8e7v7qW5uH+9JKxYmqtFIYUUUlIQtABPSui8L+B9f8XXATS7F2hzh7mT5Yk+rd/oK+gvBfwa0Pw0I7vUQNT1Fed8i/u4z/sr/AFNMD5bpK+ofGvwX0TxH5l5pe3TNRbLEov7qQ/7S9vqPyrwDxR4H17wjcGPVbF0iJwlwnzRv9G/oaBnO0UUUAXNN1S+0e8S8067mtbhekkTbT9D6j2Ne2eC/jyB5dl4qix2F9Cv/AKGo/mK8IooA+49O1Sx1ezS70+6iubdxlZImDA1br4p8PeKtZ8LXoutIvZIDnLx5yj/7y9DX0D4M+N+ja6I7TWgNMvjgbmP7lz7N2+hp3Eeq0U1JElQOjBlYZBByDTqACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigBaKKKAEooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACgkAZNc14p8eaB4QgLareqJyMpbx/NI/0H9TXz941+MOu+J2ktrJ203Tjx5cTfvHH+039BQB7T4y+Lnh7wnvtkl+36iOPs8BB2n/aboP518++L/iP4g8YyMl7c+TZZ+W0gJVPx7t+Ncj1JJ6milcAooooGLSVLbW095cJb20LzTOcLHGpZmPsBXsPgn4EXt+Y73xPI1nb9RaRn96/+8f4f50AeXaF4c1fxJei00mxlupe+wfKo9WPQfjXufgv4EWdiY7zxNIt5OORaxn92p/2j/F/KvWNI0XTdBsEstLs4raBeixrjPuT3P1q/RERW9tBaQJBbQxwwoMKkahVUewFS0UUAFRXNrb3lu9vdQRzQuMPHIoZWHuDUtFAHi3jX4EWt60l74YkW1mPJs5D+7Y/7J/h/HivC9a0HVPD181nqtlNazDoJF4YeoPQj6V9u1nazoOl+ILJrTVbKK6hPQOvK+4PUH6UgPiGlr2fxr8CLyyMl74YkN3b9TaSH94v+6ejfzrx66tLiyuHt7qGSGZDho5FKsD9DQMgooooA7Lwh8S/EPhCRY7a5NzYjraTsWXH+yeq/hxX0J4N+Kfh/xcEtxN9i1Ejm2nIBY/7J6NTEd3RR1ooAKKKKACiig9KAPjv4m/8lL8Qf8AX238hXKV1nxO/wCSl+IP+vs/yFcmKQwr6a+AH/JP7j/sIS/yWvmavpj9n/8A5EC4/wCwhL/6CtCEerUUUUwCiiigAooooAKKKKACiiigAooooAWiiigBKKKKACiiigAooooAKKKKACiiigDyj4//APIi23/X4n8jXzRX0r+0B/yI9r/1+L/ACNfNVJgFdF4A/5H7Q/+vtf5Gucro/AH/I/6H/19r/I0AfZlFFFUIKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAFooooASiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigBaKKKAEooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAFooooASiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigD/2Q==";
+
+// ============================================================
+// CONSTANTES / HELPERS
+// ============================================================
+const DIAS_SEMANA = ['seg','ter','qua','qui','sex','sab','dom'];
+const DIAS_META = [
+  { id:'seg', nome:'Segunda', curto:'SEG', mini:'S' },
+  { id:'ter', nome:'Terça',   curto:'TER', mini:'T' },
+  { id:'qua', nome:'Quarta',  curto:'QUA', mini:'Q' },
+  { id:'qui', nome:'Quinta',  curto:'QUI', mini:'Q' },
+  { id:'sex', nome:'Sexta',   curto:'SEX', mini:'S' },
+  { id:'sab', nome:'Sábado',  curto:'SAB', mini:'S' },
+  { id:'dom', nome:'Domingo', curto:'DOM', mini:'D' },
+];
+
+const FUNCOES = ['Maître','Chefe de Fila','Garçom','Cumim','Aprendiz','Sommelier','Host','Barman','Auxiliar','Outro'];
+
+const CORES_POOL = [
+  '#35383F','#2A6B35','#2A4A7A','#8B2A1A','#6B2E5F',
+  '#2C5F6B','#8B4A1A','#4A6B2A','#6B2A3C','#4A3A6B',
+];
+
+const COLABS0 = [
+  {id:'c1', nome:'Maître',          funcao:'Maître',        unidade:'Itaim', depto:'Salão', cor:CORES_POOL[0]},
+  {id:'c2', nome:'Chefe de Fila A', funcao:'Chefe de Fila', unidade:'Itaim', depto:'Salão', cor:CORES_POOL[1]},
+  {id:'c3', nome:'Chefe de Fila B', funcao:'Chefe de Fila', unidade:'Itaim', depto:'Salão', cor:CORES_POOL[2]},
+  {id:'c4', nome:'Garçom 1',        funcao:'Garçom',        unidade:'Itaim', depto:'Salão', cor:CORES_POOL[3]},
+  {id:'c5', nome:'Garçom 2',        funcao:'Garçom',        unidade:'Itaim', depto:'Salão', cor:CORES_POOL[4]},
+  {id:'c6', nome:'Garçom 3',        funcao:'Garçom',        unidade:'Itaim', depto:'Salão', cor:CORES_POOL[5]},
+  {id:'c7', nome:'Garçom 4',        funcao:'Garçom',        unidade:'Itaim', depto:'Salão', cor:CORES_POOL[6]},
+  {id:'c8', nome:'Cumim 1',         funcao:'Cumim',         unidade:'Itaim', depto:'Salão', cor:CORES_POOL[7]},
+  {id:'c9', nome:'Cumim 2',         funcao:'Cumim',         unidade:'Itaim', depto:'Salão', cor:CORES_POOL[8]},
+  {id:'c10',nome:'Aprendiz',        funcao:'Aprendiz',      unidade:'Itaim', depto:'Salão', cor:CORES_POOL[9]},
+];
+
+// ── Config padrão ──
+const CFG0_DIA = {
+  prepAlmocoIni:'10:00', prepAlmocoFim:'12:00',
+  funcAlmocoIni:'12:00', funcAlmocoFim:'15:00',
+  prepJantarIni:'17:00', prepJantarFim:'19:00',
+  funcJantarIni:'19:00', funcJantarFim:'00:00',
+};
+const CFG0 = Object.fromEntries(DIAS_SEMANA.map(d=>[d,{...CFG0_DIA}]));
+
+const META_HORAS = 40;
+
+// ── Presets de horário ──
+const PRESETS_BASE = [
+  { label:'Dobra',         turnos:[['10:00','15:00'],['18:00','00:00']] },
+  { label:'Almoço',        turnos:[['10:00','15:00']] },
+  { label:'Jantar',        turnos:[['18:00','00:00']] },
+  { label:'Jantar Sex/Sáb',turnos:[['18:00','01:00']] },
+  { label:'Dobra Sábado',  turnos:[['12:00','16:00'],['18:00','01:00']] },
+  { label:'Domingo',       turnos:[['12:00','16:00'],['18:00','00:00']] },
+];
+
+// ── Helpers de data ──
+const getSegunda = (date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day===0 ? -6 : 1-day;
+  d.setDate(d.getDate()+diff);
+  d.setHours(0,0,0,0);
+  return d;
+};
+const addDays = (date,n) => { const d=new Date(date); d.setDate(d.getDate()+n); return d; };
+const fmtDate = (date) => date.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+const semanaLabel = (segunda) => `${fmtDate(segunda)} – ${fmtDate(addDays(segunda,6))}`;
+const semanaKey = (segunda) => segunda.toISOString().slice(0,10);
+
+// ── Helpers de turno ──
+const toHHMM = (v) => {
+  if (v == null || v === '') return '';
+  const s = String(v);
+  if (/^\d{1,2}:\d{2}$/.test(s)) return s;
+  const m = s.match(/T(\d{2}):(\d{2})/);
+  if (m) return `${m[1]}:${m[2]}`;
+  return s;
+};
+
+const calcHoras = (t) => {
+  if (!t || t.folga) return 0;
+  let total = 0;
+  const calc = (ini, fim) => {
+    if (!ini || !fim) return 0;
+    const [h1,m1] = ini.split(':').map(Number);
+    const [h2,m2] = fim.split(':').map(Number);
+    let ha = h2 < h1 ? h2+24 : h2;
+    return (ha + m2/60) - (h1 + m1/60);
+  };
+  if (t.t1Ini && t.t1Fim) total += calc(t.t1Ini, t.t1Fim);
+  if (t.t2Ini && t.t2Fim) total += calc(t.t2Ini, t.t2Fim);
+  if (t.t3Ini && t.t3Fim) total += calc(t.t3Ini, t.t3Fim);
+  return total;
+};
+
+const turnoVazio = () => ({t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:false});
+
+const escalaVaziaColabs = (colabs) => {
+  const e = {};
+  DIAS_SEMANA.forEach(d => {
+    e[d] = {};
+    colabs.forEach(c => { e[d][c.id] = turnoVazio(); });
+  });
+  return e;
+};
+
+const escalaComColab = (esc, nc) => {
+  const e = {...esc};
+  DIAS_SEMANA.forEach(d => { e[d] = {...e[d], [nc.id]: turnoVazio()}; });
+  return e;
+};
+
+const escalaSemColab = (esc, cid) => {
+  const e = {};
+  DIAS_SEMANA.forEach(d => { e[d] = {...esc[d]}; delete e[d][cid]; });
+  return e;
+};
+
+// ============================================================
+// COMPONENTE: Célula de turno
+// ============================================================
+function CelulaTurno({ turno, onChange, deFerias }) {
+  const [dropOpen, setDropOpen] = useState(false);
+
+  const t = turno || turnoVazio();
+  const estado = deFerias ? 'ferias' : t.folga ? 'folga' : 'turno';
+
+  const numTurnos = (t.t3Ini && t.t3Fim) ? 3 : (t.t2Ini && t.t2Fim) ? 2 : (t.t1Ini && t.t1Fim) ? 1 : 0;
+  const noMax = numTurnos >= 3;
+
+  const setEstado = (e) => {
+    if (e === 'folga') onChange({...turnoVazio(), folga: true});
+    else if (e === 'turno') onChange(turnoVazio());
+    // férias é controlado externamente
+  };
+
+  const setField = (campo, val) => onChange({...t, [campo]: val, folga: false});
+
+  const addTurno = () => {
+    if (!t.t1Ini) onChange({...t, t1Ini:'', t1Fim:'', folga:false});
+    else if (!t.t2Ini || !t.t2Fim) onChange({...t, t2Ini:'', t2Fim:'', folga:false});
+    else if (!t.t3Ini || !t.t3Fim) onChange({...t, t3Ini:'', t3Fim:'', folga:false});
+  };
+
+  const rmTurno = () => {
+    if (t.t3Ini || t.t3Fim) onChange({...t, t3Ini:'', t3Fim:''});
+    else if (t.t2Ini || t.t2Fim) onChange({...t, t2Ini:'', t2Fim:''});
+  };
+
+  const aplicarPreset = (preset) => {
+    const novo = turnoVazio();
+    preset.turnos.forEach(([ini,fim], i) => {
+      if (i===0) { novo.t1Ini=ini; novo.t1Fim=fim; }
+      if (i===1) { novo.t2Ini=ini; novo.t2Fim=fim; }
+      if (i===2) { novo.t3Ini=ini; novo.t3Fim=fim; }
+    });
+    onChange(novo);
+    setDropOpen(false);
+  };
+
+  const limpar = () => { onChange(turnoVazio()); setDropOpen(false); };
+
+  if (estado === 'ferias') {
+    return (
+      <div className="esc-cell">
+        <div className="esc-top-row">
+          <button className="esc-tog" onClick={()=>setEstado('turno')}>T</button>
+          <button className="esc-tog esc-tog-hidden">▾</button>
+          <button className="esc-tog" onClick={()=>setEstado('folga')}>F</button>
+          <button className="esc-tog esc-tog-on-v">V</button>
+          <button className="esc-tog esc-tog-hidden">+</button>
+        </div>
+        <div className="esc-badge-v">Férias</div>
+      </div>
+    );
+  }
+
+  if (estado === 'folga') {
+    return (
+      <div className="esc-cell">
+        <div className="esc-top-row">
+          <button className="esc-tog" onClick={()=>setEstado('turno')}>T</button>
+          <button className="esc-tog esc-tog-hidden">▾</button>
+          <button className="esc-tog esc-tog-on-f">F</button>
+          <button className="esc-tog" onClick={()=>{}}>V</button>
+          <button className="esc-tog esc-tog-hidden">+</button>
+        </div>
+        <div className="esc-badge-f">Folga</div>
+      </div>
+    );
+  }
+
+  // estado === 'turno'
+  const temT2 = !!(t.t2Ini || t.t2Fim);
+  const temT3 = !!(t.t3Ini || t.t3Fim);
+
+  return (
+    <div className="esc-cell" style={{position:'relative'}}>
+      <div className="esc-top-row">
+        <button className="esc-tog esc-tog-on-t">T</button>
+        <button className={`esc-tog esc-tog-arrow ${dropOpen?'esc-tog-arrow-open':''}`}
+          onClick={()=>setDropOpen(p=>!p)}>
+          {dropOpen ? '▴' : '▾'}
+        </button>
+        <button className="esc-tog" onClick={()=>setEstado('folga')}>F</button>
+        <button className="esc-tog" onClick={()=>{}}>V</button>
+        <button className="esc-tog esc-tog-pm"
+          onClick={noMax ? rmTurno : addTurno}
+          title={noMax ? 'Remover último turno' : 'Adicionar turno'}>
+          {noMax ? '−' : '+'}
+        </button>
+      </div>
+
+      {/* Turno 1 — sempre visível em modo turno */}
+      <div className="esc-inputs-row">
+        <input type="time" value={t.t1Ini||''} onChange={e=>setField('t1Ini',e.target.value)}/>
+        <span className="esc-sep">–</span>
+        <input type="time" value={t.t1Fim||''} onChange={e=>setField('t1Fim',e.target.value)}/>
+      </div>
+
+      {/* Turno 2 */}
+      {temT2 && (
+        <div className="esc-inputs-row">
+          <input type="time" value={t.t2Ini||''} onChange={e=>setField('t2Ini',e.target.value)}/>
+          <span className="esc-sep">–</span>
+          <input type="time" value={t.t2Fim||''} onChange={e=>setField('t2Fim',e.target.value)}/>
+        </div>
+      )}
+
+      {/* Turno 3 */}
+      {temT3 && (
+        <div className="esc-inputs-row">
+          <input type="time" value={t.t3Ini||''} onChange={e=>setField('t3Ini',e.target.value)}/>
+          <span className="esc-sep">–</span>
+          <input type="time" value={t.t3Fim||''} onChange={e=>setField('t3Fim',e.target.value)}/>
+        </div>
+      )}
+
+      {/* Dropdown de presets */}
+      {dropOpen && (
+        <div className="esc-dropdown">
+          {PRESETS_BASE.map((p,i) => (
+            <div key={i} className="esc-dd-item" onClick={()=>aplicarPreset(p)}>
+              <span className="esc-dd-label">{p.label}</span>
+              <span className="esc-dd-hours">{p.turnos.map(([a,b])=>`${a.replace(':00','')}–${b.replace(':00','')}`).join(' + ')}</span>
+            </div>
+          ))}
+          <div className="esc-dd-sep"/>
+          <div className="esc-dd-item" onClick={limpar}>
+            <span className="esc-dd-label">Limpar</span>
+            <span className="esc-dd-hours">remover tudo</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// COMPONENTE: Célula colapsada (resumo)
+// ============================================================
+function CelulaColapsada({ turno, deFerias }) {
+  if (deFerias) return <div className="esc-collapsed"><span className="esc-c-ferias">Férias</span></div>;
+  if (!turno) return <div className="esc-collapsed"><span className="esc-c-muted">—</span></div>;
+  if (turno.folga) return <div className="esc-collapsed"><span className="esc-c-folga">Folga</span></div>;
+  const h = calcHoras(turno);
+  if (h === 0) return <div className="esc-collapsed"><span className="esc-c-muted">—</span></div>;
+  return <div className="esc-collapsed"><span className="esc-c-horas">{h.toFixed(0)}h</span></div>;
+}
+
+// ============================================================
+// COMPONENTE PRINCIPAL
+// ============================================================
+export default function EscalaPainel() {
+  const [colabs, setColabs] = useState(COLABS0);
+  const [semanaAtual, setSemanaAtual] = useState(() => getSegunda(new Date()));
+  const [dados, setDados] = useState(() => {
+    const key = semanaKey(getSegunda(new Date()));
+    return { [key]: { config: CFG0, escala: escalaVaziaColabs(COLABS0) } };
+  });
+  const [syncStatus, setSyncStatus] = useState('idle');
+  const [pendente, setPendente] = useState(false);
+  const [expandidos, setExpandidos] = useState({});
+  const [ferias, setFerias] = useState([]);
+  const [mostrarAdd, setMostrarAdd] = useState(false);
+  const [novoNome, setNovoNome] = useState('');
+  const [novoFunc, setNovoFunc] = useState('Garçom');
+  const [novoUnidade, setNovoUnidade] = useState('Itaim');
+  const [novoDepto, setNovoDepto] = useState('Salão');
+  const [filtroUnidade, setFiltroUnidade] = useState(()=>localStorage.getItem('esc_fUnidade')||'Todos');
+  const [filtroDepto, setFiltroDepto] = useState(()=>localStorage.getItem('esc_fDepto')||'Todos');
+  const [configAberta, setConfigAberta] = useState(false);
+
+  const key = semanaKey(semanaAtual);
+
+  useEffect(()=>{ localStorage.setItem('esc_fUnidade', filtroUnidade); },[filtroUnidade]);
+  useEffect(()=>{ localStorage.setItem('esc_fDepto', filtroDepto); },[filtroDepto]);
+
+  // Carregar colaboradores + férias
+  useEffect(()=>{
+    carregarColaboradores()
+      .then(({ colabs: loaded }) => {
+        if (loaded && loaded.length > 0) setColabs(loaded);
+        return carregarFerias();
+      })
+      .then(data => { if (data && data.ferias) setFerias(data.ferias); })
+      .catch(() => {});
+  },[]);
+
+  // Carregar escala da semana
+  useEffect(()=>{
+    setPendente(false);
+    setSyncStatus('loading');
+    carregarEscala(key)
+      .then(({ escala: escLoaded, config: cfgLoaded }) => {
+        const base = {};
+        DIAS_SEMANA.forEach(dia => {
+          const diaData = escLoaded?.[dia] || {};
+          base[dia] = {};
+          Object.entries(diaData).forEach(([cid, t]) => {
+            base[dia][cid] = {
+              t1Ini: toHHMM(t?.t1Ini), t1Fim: toHHMM(t?.t1Fim),
+              t2Ini: toHHMM(t?.t2Ini), t2Fim: toHHMM(t?.t2Fim),
+              t3Ini: toHHMM(t?.t3Ini), t3Fim: toHHMM(t?.t3Fim),
+              folga: !!t?.folga,
+            };
+          });
+        });
+        setDados(p => ({ ...p, [key]: { config: cfgLoaded || CFG0, escala: base } }));
+        setSyncStatus('idle');
+      })
+      .catch(() => {
+        setSyncStatus('load-error');
+        setTimeout(() => setSyncStatus('idle'), 4000);
+      });
+  },[key]);
+
+  const semDados = dados[key] || {config:CFG0, escala:escalaVaziaColabs(colabs)};
+  const config = semDados.config;
+  const escala = semDados.escala;
+
+  const setEscala = (novaEscala) => {
+    setDados(p=>({...p,[key]:{...p[key],escala:novaEscala}}));
+    setPendente(true);
+  };
+
+  const setConfig = (novoConfig) => {
+    setDados(p=>({...p,[key]:{...p[key],config:novoConfig}}));
+    setPendente(true);
+  };
+
+  const setTurnoCell = (dia, cid, novoTurno) => {
+    setEscala({...escala, [dia]: {...escala[dia], [cid]: novoTurno}});
+  };
+
+  // Férias
+  const estaDeFerias = useCallback((colabId, data) => {
+    const d = data.getTime();
+    return ferias.some(f => {
+      if (f.colabId !== colabId) return false;
+      const ini = new Date(f.dataIni + 'T00:00:00').getTime();
+      const fim = new Date(f.dataFim + 'T23:59:59').getTime();
+      return d >= ini && d <= fim;
+    });
+  }, [ferias]);
+
+  const dataDoDia = useCallback((diaId) => {
+    const idx = DIAS_META.findIndex(d => d.id === diaId);
+    return addDays(semanaAtual, idx);
+  }, [semanaAtual]);
+
+  // Salvar
+  const salvarManual = useCallback(async () => {
+    const semD = dados[key] || {config:CFG0, escala:escalaVaziaColabs(colabs)};
+    setSyncStatus('saving');
+    try {
+      await salvarEscala(key, { escala: semD.escala, config: semD.config });
+      setSyncStatus('saved');
+      setPendente(false);
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch {
+      setSyncStatus('error');
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    }
+  }, [key, dados, colabs]);
+
+  // Navegação
+  const navSemana = (delta) => setSemanaAtual(p=>addDays(p,delta*7));
+
+  // Adicionar/remover colaborador
+  const adicionarColab = () => {
+    if (!novoNome.trim()) return;
+    const usadas = colabs.map(c=>c.cor);
+    const cor = CORES_POOL.find(c=>!usadas.includes(c))||CORES_POOL[colabs.length%CORES_POOL.length];
+    const nc = {id:`extra_${Date.now()}`,nome:novoNome.trim(),funcao:novoFunc,unidade:novoUnidade,depto:novoDepto,cor,extra:true};
+    const novosColabs = [...colabs,nc];
+    setColabs(novosColabs);
+    const extras = novosColabs.filter(c=>c.extra).map(c=>({id:c.id,nome:c.nome,funcao:c.funcao,unidade:c.unidade,depto:c.depto}));
+    salvarExtras(extras).catch(()=>{});
+    setDados(p=>{
+      const novo={...p};
+      Object.keys(novo).forEach(k=>{ novo[k]={...novo[k],escala:escalaComColab(novo[k].escala,nc)}; });
+      return novo;
+    });
+    setNovoNome(''); setMostrarAdd(false);
+  };
+
+  const removerColab = (cid) => {
+    const alvo = colabs.find(c=>c.id===cid);
+    if (!confirm(`Remover ${alvo?.nome || 'colaborador'} de toda a escala?`)) return;
+    const novosColabs = colabs.filter(c=>c.id!==cid);
+    setColabs(novosColabs);
+    setDados(p=>{
+      const novo={};
+      Object.keys(p).forEach(k=>{ novo[k]={...p[k],escala:escalaSemColab(p[k].escala,cid)}; });
+      return novo;
+    });
+    if (alvo?.extra) {
+      const extras = novosColabs.filter(c=>c.extra).map(c=>({id:c.id,nome:c.nome,funcao:c.funcao,unidade:c.unidade,depto:c.depto}));
+      salvarExtras(extras).catch(()=>{});
+    }
+  };
+
+  // Filtro
+  const unidadesOpts = useMemo(()=>{
+    const vals = [...new Set(colabs.map(c=>c.unidade).filter(Boolean))].sort();
+    return ['Todos', ...vals];
+  }, [colabs]);
+
+  const deptosOpts = useMemo(()=>{
+    const fonte = filtroUnidade==='Todos' ? colabs : colabs.filter(c=>c.unidade===filtroUnidade);
+    const vals = [...new Set(fonte.map(c=>c.depto).filter(Boolean))].sort();
+    return ['Todos', ...vals];
+  }, [colabs, filtroUnidade]);
+
+  const colabsFiltrados = useMemo(()=>colabs.filter(c=>{
+    if (filtroUnidade!=='Todos'&&c.unidade!==filtroUnidade) return false;
+    if (filtroDepto!=='Todos'&&c.depto!==filtroDepto) return false;
+    return true;
+  }),[colabs,filtroUnidade,filtroDepto]);
+
+  // Stats
+  const stats = useMemo(()=>{
+    const s = {};
+    colabs.forEach(c => {
+      let h=0, td=0, fd=0;
+      DIAS_META.forEach(d => {
+        const t = escala[d.id]?.[c.id];
+        if (!t) return;
+        if (t.folga) fd++;
+        else { const ht = calcHoras(t); if(ht>0){h+=ht;td++;} }
+      });
+      s[c.id] = {horas:h, dias:td, folgas:fd};
+    });
+    return s;
+  },[escala,colabs]);
+
+  const totalSemana = Object.values(stats).reduce((a,b)=>a+b.horas,0);
+
+  const totalDia = (diaId) => {
+    return colabsFiltrados.reduce((a,c) => a + calcHoras(escala[diaId]?.[c.id]||{}), 0);
+  };
+
+  // Toggle expandir/recolher
+  const toggleExpand = (cid) => setExpandidos(p=>({...p,[cid]:!p[cid]}));
+  const isExpanded = (cid) => expandidos[cid] !== false; // default expandido
+
+  // Export CSV
+  const exportCSV = () => {
+    const L=[['Semana','Dia','Colaborador','Função','Unidade','Depto','T1 Entrada','T1 Saída','T2 Entrada','T2 Saída','T3 Entrada','T3 Saída','Horas','Folga'].join(';')];
+    const sw = semanaLabel(semanaAtual);
+    DIAS_META.forEach(d=>colabs.forEach(c=>{
+      const t = escala[d.id]?.[c.id]||{};
+      L.push([sw,d.nome,c.nome,c.funcao,c.unidade,c.depto,t.t1Ini||'',t.t1Fim||'',t.t2Ini||'',t.t2Fim||'',t.t3Ini||'',t.t3Fim||'',calcHoras(t).toFixed(1),t.folga?'FOLGA':''].join(';'));
+    }));
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([L.join('\n')],{type:'text/csv;charset=utf-8'}));
+    a.download=`escala_5x2_${key}.csv`;
+    a.click();
+  };
+
+  // Print
+  const gerarPDF = () => {
+    const semLabel=semanaLabel(semanaAtual);
+    const dataHoje=new Date().toLocaleString('pt-BR');
+    const thDias=DIAS_META.map((d,i)=>{
+      const dataD=addDays(semanaAtual,i);
+      return `<th>${d.curto}<br><span class="epdf-th-data">${fmtDate(dataD)}</span></th>`;
+    }).join('');
+    const rows=colabsFiltrados.map((c,idx)=>{
+      const tdDias=DIAS_META.map((d,i)=>{
+        const t=escala[d.id]?.[c.id]||{};
+        const dataD=addDays(semanaAtual,i);
+        const df=estaDeFerias(c.id,dataD);
+        if(df) return `<td class="epdf-ferias">FÉRIAS</td>`;
+        if(t.folga) return `<td class="epdf-folga">FOLGA</td>`;
+        if(!t.t1Ini) return `<td class="epdf-livre">—</td>`;
+        let txt=`${t.t1Ini}–${t.t1Fim}`;
+        if(t.t2Ini&&t.t2Fim) txt+=`<br><span class="epdf-t2">${t.t2Ini}–${t.t2Fim}</span>`;
+        if(t.t3Ini&&t.t3Fim) txt+=`<br><span class="epdf-t2">${t.t3Ini}–${t.t3Fim}</span>`;
+        return `<td class="epdf-turno">${txt}</td>`;
+      }).join('');
+      const s=stats[c.id]||{horas:0};
+      const par=idx%2===0?'':' class="epdf-row-alt"';
+      return `<tr${par}><td class="epdf-nome">${c.nome}</td><td class="epdf-fn">${c.funcao}</td>${tdDias}<td class="epdf-total">${s.horas.toFixed(1)}h</td></tr>`;
+    }).join('');
+    let printDiv=document.getElementById('escala-pdf-print');
+    if(!printDiv){ printDiv=document.createElement('div'); printDiv.id='escala-pdf-print'; document.body.appendChild(printDiv); }
+    printDiv.innerHTML=`
+      <div class="epdf-header">
+        <img id="epdf-logo" class="epdf-logo" alt="TATÁ Sushi">
+        <div class="epdf-header-center">
+          <div class="epdf-title">Escala Semanal</div>
+          <div class="epdf-sub">${semLabel}</div>
+        </div>
+        <div class="epdf-header-right">Emitido em: ${dataHoje}</div>
+      </div>
+      <table class="epdf-table">
+        <thead><tr><th class="epdf-th-nome">Colaborador</th><th class="epdf-th-fn">Função</th>${thDias}<th>Total</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td colspan="2" class="epdf-tf-label">TOTAL GERAL</td><td colspan="7"></td><td class="epdf-tf-val">${totalSemana.toFixed(1)}h</td></tr></tfoot>
+      </table>
+      <div class="epdf-rodape">${colabsFiltrados.length} colaboradores · Meta: ${META_HORAS}h / semana</div>`;
+    const logoEl=document.getElementById('epdf-logo');
+    logoEl.onload=()=>window.print();
+    logoEl.onerror=()=>window.print();
+    logoEl.src=LOGO_SRC;
+  };
+
+  const hoje = new Date().toLocaleString('pt-BR');
+
+  const FiltroSelect=({label,val,set,opts})=>(
+    <div style={{display:'flex',flexDirection:'column',gap:4}}>
+      <label className="esc-field-label">{label}</label>
+      <select value={val} onChange={e=>set(e.target.value)} className="esc-select-filtro">
+        {opts.map(o=><option key={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+
+  return (
+    <div className="esc-root">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0;}
+
+        .esc-root{font-family:'DM Sans',sans-serif;background:${T.bg};min-height:100vh;color:${T.text};font-size:14px;padding-bottom:60px;}
+
+        /* ── Botões ── */
+        .btn-dev{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;padding:8px 14px;background:${T.carbon};color:${T.citric};border:none;border-radius:${T.radius};cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+        .btn-dev:hover{opacity:.87;}
+        .btn-outline{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;padding:8px 14px;background:${T.surface};color:${T.mid};border:1px solid ${T.border};border-radius:${T.radius};cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+        .btn-outline:hover{background:${T.bg};}
+        .btn-icon{background:${T.surface};border:1px solid ${T.border};border-radius:${T.radius};width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${T.mid};}
+        .btn-icon:hover{background:${T.bg};}
+
+        /* ── Field ── */
+        .esc-field-label{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.8px;text-transform:uppercase;color:${T.mid};}
+        .esc-select-filtro{appearance:none;background:${T.bg} url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;border:1px solid ${T.border};border-radius:${T.radius};padding:10px 36px 10px 14px;font-family:'DM Sans',sans-serif;font-size:14px;color:${T.text};cursor:pointer;width:100%;outline:none;}
+        .esc-input{font-family:'DM Mono',monospace;font-size:13px;padding:8px 10px;border:1px solid ${T.border};background:${T.bg};color:${T.carbon};width:100%;border-radius:${T.radius};outline:none;}
+        .esc-input:focus{border-color:${T.carbon};}
+        .esc-select-sm{font-family:'DM Sans',sans-serif;font-size:13px;padding:8px 10px;border:1px solid ${T.border};background:${T.bg};color:${T.carbon};width:100%;border-radius:${T.radius};outline:none;appearance:none;}
+
+        /* ── Tabela principal ── */
+        .esc-table{width:100%;border-collapse:collapse;font-size:12px;}
+        .esc-table th{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.5px;color:${T.muted};text-transform:uppercase;padding:8px 4px;border-bottom:1px solid ${T.border};text-align:center;vertical-align:bottom;white-space:nowrap;}
+        .esc-table th:first-child{text-align:left;min-width:150px;}
+        .esc-table td{padding:5px 3px;border-bottom:1px solid ${T.border};vertical-align:top;text-align:center;}
+        .esc-table td:first-child{text-align:left;vertical-align:top;padding-top:7px;}
+        .esc-table tbody tr:hover>td{background:rgba(0,0,0,.015);}
+        .esc-th-date{font-size:9px;font-weight:400;color:${T.muted};display:block;margin-top:1px;}
+
+        /* ── Nome cell ── */
+        .esc-nome-wrap{display:flex;align-items:center;gap:4px;}
+        .esc-chevron{width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${T.muted};font-size:11px;flex-shrink:0;border:none;background:none;font-family:'DM Mono',monospace;}
+        .esc-chevron:hover{color:${T.mid};}
+        .esc-nome-info{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;}
+        .esc-nome-c{font-size:12px;font-weight:700;color:${T.carbon};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.2px;}
+        .esc-cargo-c{font-family:'DM Mono',monospace;font-size:9px;color:${T.muted};letter-spacing:.5px;text-transform:uppercase;}
+        .esc-del-btn{width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${T.muted};font-size:12px;flex-shrink:0;border:1px solid transparent;background:none;border-radius:${T.radius};font-family:'DM Mono',monospace;}
+        .esc-del-btn:hover{color:${T.red};border-color:${T.border};}
+
+        /* ── Célula de turno ── */
+        .esc-cell{display:flex;flex-direction:column;gap:3px;align-items:stretch;min-width:142px;position:relative;}
+        .esc-top-row{display:flex;gap:1px;align-items:center;}
+        .esc-tog{flex:1;font-size:9px;font-family:'DM Mono',monospace;padding:3px 0;border-radius:4px;border:1px solid transparent;background:transparent;color:${T.muted};cursor:pointer;text-align:center;}
+        .esc-tog:hover{background:${T.bg};}
+        .esc-tog-on-t{border-color:${T.border};background:${T.bg};color:${T.carbon};font-weight:600;}
+        .esc-tog-on-f{border-color:${T.amber};background:${T.amberBg};color:${T.amber};font-weight:600;}
+        .esc-tog-on-v{border-color:#1A3A5C;background:#EBF3FA;color:#1A3A5C;font-weight:600;}
+        .esc-tog-arrow{flex:0 0 22px;font-size:8px;border:1px solid ${T.border};background:${T.surface};color:${T.mid};}
+        .esc-tog-arrow:hover{background:${T.bg};border-color:${T.mid};}
+        .esc-tog-arrow-open{background:${T.bg};border-color:${T.mid};}
+        .esc-tog-pm{flex:0 0 22px;font-size:9px;font-weight:600;border:1px solid ${T.border};background:${T.surface};color:${T.mid};}
+        .esc-tog-pm:hover{background:${T.bg};border-color:${T.mid};}
+        .esc-tog-hidden{flex:0 0 22px;visibility:hidden;}
+
+        .esc-inputs-row{display:flex;gap:2px;align-items:center;}
+        .esc-inputs-row input[type=time]{width:58px;font-size:10px;font-family:'DM Mono',monospace;padding:3px 2px;border:1px solid ${T.border};border-radius:4px;background:${T.surface};color:${T.carbon};outline:none;}
+        .esc-inputs-row input[type=time]:focus{border-color:${T.carbon};}
+        .esc-sep{font-size:9px;color:${T.muted};flex-shrink:0;}
+
+        .esc-badge-f{display:flex;align-items:center;justify-content:center;padding:6px 8px;border-radius:6px;background:${T.amberBg};color:${T.amber};font-family:'DM Mono',monospace;font-size:10px;font-weight:600;}
+        .esc-badge-v{display:flex;align-items:center;justify-content:center;padding:6px 8px;border-radius:6px;background:#EBF3FA;color:#1A3A5C;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;}
+
+        /* ── Dropdown presets ── */
+        .esc-dropdown{position:absolute;top:26px;left:0;z-index:50;background:${T.surface};border:1px solid ${T.border};border-radius:${T.radius};padding:4px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.1);}
+        .esc-dd-item{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:4px;cursor:pointer;font-size:11px;color:${T.text};gap:8px;}
+        .esc-dd-item:hover{background:${T.bg};}
+        .esc-dd-label{font-weight:600;}
+        .esc-dd-hours{font-family:'DM Mono',monospace;font-size:9px;color:${T.muted};white-space:nowrap;}
+        .esc-dd-sep{height:1px;background:${T.border};margin:3px 4px;}
+
+        /* ── Colapsado ── */
+        .esc-collapsed{font-family:'DM Mono',monospace;font-size:10px;padding:4px 0;}
+        .esc-c-folga{color:${T.amber};font-weight:600;}
+        .esc-c-ferias{color:#1A3A5C;font-weight:600;}
+        .esc-c-horas{color:${T.carbon};font-weight:500;}
+        .esc-c-muted{color:${T.muted};}
+
+        /* ── Total ── */
+        .esc-total{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;padding-top:7px!important;}
+        .esc-total-ok{color:${T.green};}
+        .esc-total-warn{color:${T.red};}
+        .esc-total-muted{color:${T.muted};}
+
+        /* ── Footer row ── */
+        .esc-footer td{border-bottom:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:${T.mid};padding-top:8px!important;vertical-align:top;}
+
+        /* ── Cat pill ── */
+        .cat-pill{display:inline-flex;align-items:center;padding:3px 10px;background:#F0F0F0;border-radius:100px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:${T.mid};}
+
+        /* ── Print ── */
+        #escala-pdf-print{display:none;}
+        @media print{
+          body>*:not(#escala-pdf-print){display:none!important;}
+          #escala-pdf-print{display:block!important;font-family:'DM Sans','Helvetica Neue',Arial,sans-serif;color:#000;padding:24px 28px;max-width:960px;margin:0 auto;font-size:11px;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+          .epdf-header{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111;}
+          .epdf-logo{width:48px;height:48px;object-fit:contain;flex-shrink:0;}
+          .epdf-header-center{flex:1;}
+          .epdf-title{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+          .epdf-sub{font-size:10px;color:#555;margin-top:3px;}
+          .epdf-header-right{font-size:9px;color:#555;text-align:right;flex-shrink:0;align-self:center;}
+          .epdf-table{width:100%;border-collapse:collapse;font-size:9.5px;margin-bottom:10px;}
+          .epdf-table thead tr{background:#35383F!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+          .epdf-table th{padding:6px 5px;color:#fff!important;font-size:9px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;text-align:center;}
+          .epdf-th-nome{text-align:left;width:130px;}
+          .epdf-th-fn{text-align:left;width:90px;}
+          .epdf-th-data{font-weight:400;font-size:8px;opacity:.85;}
+          .epdf-table td{padding:5px 5px;border-bottom:1px solid #eee;text-align:center;vertical-align:middle;}
+          .epdf-nome,.epdf-fn{text-align:left;}
+          .epdf-row-alt{background:#f9f9f9!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+          .epdf-folga{color:#b26200;font-weight:600;font-size:8.5px;}
+          .epdf-ferias{color:#1A3A5C;font-weight:600;font-size:8.5px;}
+          .epdf-livre{color:#bbb;}
+          .epdf-turno{font-family:'DM Mono',monospace;font-size:8.5px;}
+          .epdf-t2{font-size:7.5px;color:#666;}
+          .epdf-total{font-family:'DM Mono',monospace;font-weight:700;font-size:9px;}
+          .epdf-table tfoot td{border-top:2px solid #111;font-weight:700;padding:6px 5px;}
+          .epdf-tf-label{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.04em;}
+          .epdf-tf-val{font-family:'DM Mono',monospace;font-size:11px;text-align:center;}
+          .epdf-rodape{font-size:9px;color:#666;text-align:right;margin-top:6px;}
+        }
+
+        input[type=time]::-webkit-calendar-picker-indicator{opacity:.5;cursor:pointer;}
+      `}</style>
+
+      {/* ── HEADER ── */}
+      <header style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px',display:'flex',alignItems:'center',gap:14,position:'sticky',top:0,zIndex:100}}>
+        <img src={LOGO_SRC} alt="TATÁ Sushi" style={{width:40,height:40,objectFit:'contain',flexShrink:0}}/>
+        <div style={{flex:1}}>
+          <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Escalas</div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+          {syncStatus==='loading'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.muted}}>⟳ Carregando...</span>}
+          {syncStatus==='error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red}}>✗ Erro ao salvar</span>}
+          {syncStatus==='load-error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red}}>✗ Erro ao carregar</span>}
+          {syncStatus==='saved'&&!pendente&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.green}}>✓ Salvo</span>}
+        </div>
+      </header>
+
+      {/* ── FILTROS ── */}
+      <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <FiltroSelect label="Unidade" val={filtroUnidade} set={setFiltroUnidade} opts={unidadesOpts}/>
+          <FiltroSelect label="Departamento" val={filtroDepto} set={setFiltroDepto} opts={deptosOpts}/>
+        </div>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:10}}>
+          <button onClick={()=>{setFiltroUnidade('Todos');setFiltroDepto('Todos');}} style={{fontFamily:'DM Mono,monospace',fontSize:10,letterSpacing:'.5px',color:T.muted,background:'none',border:'none',cursor:'pointer',textTransform:'uppercase',textDecoration:'underline',textUnderlineOffset:2}}>Limpar filtros</button>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:12,color:T.text}}><b>{colabsFiltrados.length}</b> colaboradores</span>
+        </div>
+      </div>
+
+      {/* ── NAVEGADOR DE SEMANA ── */}
+      <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'10px 20px',display:'flex',alignItems:'center',gap:10}}>
+        <button className="btn-icon" onClick={()=>navSemana(-1)}><ChevronLeft size={14}/></button>
+        <div style={{flex:1,textAlign:'center'}}>
+          <div style={{fontFamily:'DM Mono,monospace',fontSize:11,fontWeight:600,color:T.carbon,letterSpacing:'.5px'}}>
+            {semanaLabel(semanaAtual)}
+          </div>
+          <div style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.muted,letterSpacing:'.5px',textTransform:'uppercase',marginTop:2}}>
+            {(()=>{
+              const h=new Date();h.setHours(0,0,0,0);
+              const s=new Date(semanaAtual);s.setHours(0,0,0,0);
+              const dom=addDays(s,6);dom.setHours(0,0,0,0);
+              if(h>=s&&h<=dom) return '● Semana atual';
+              if(s>h) return `→ ${Math.round((s-h)/86400000/7)} sem. à frente`;
+              return `← ${Math.round((h-dom)/86400000/7)+1} sem. atrás`;
+            })()}
+          </div>
+        </div>
+        <button className="btn-icon" onClick={()=>navSemana(1)}><ChevronRight size={14}/></button>
+        <button className="btn-outline" style={{padding:'6px 11px',fontSize:9.5}} onClick={()=>setSemanaAtual(getSegunda(new Date()))}>Hoje</button>
+      </div>
+
+      {/* ── AÇÕES ── */}
+      <div style={{padding:'10px 20px',display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',borderBottom:`1px solid ${T.border}`,background:T.bg}}>
+        <button className="btn-outline" onClick={()=>setMostrarAdd(p=>!p)}><UserPlus size={11}/>+ Extra</button>
+        <button className="btn-outline" onClick={gerarPDF}><Printer size={11}/>Imprimir</button>
+        <button className="btn-outline" onClick={exportCSV}><Download size={11}/>CSV</button>
+        <button className="btn-outline" onClick={salvarManual}
+          disabled={!pendente||syncStatus==='saving'||syncStatus==='loading'}
+          style={{opacity:(!pendente&&syncStatus!=='saving')?0.5:1,cursor:(!pendente||syncStatus==='saving')?'not-allowed':'pointer'}}>
+          <Save size={11}/>{syncStatus==='saving'?'Salvando...':'Salvar'}
+        </button>
+      </div>
+
+      {/* ── FORMULÁRIO ADICIONAR COLABORADOR ── */}
+      {mostrarAdd && (
+        <div style={{padding:'14px 20px',background:'#FFF8EC',borderBottom:`1px solid ${T.border}`}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+            <span className="cat-pill" style={{background:T.amberBg,color:T.amber}}>+ Colaborador Extra</span>
+            <button onClick={()=>{setMostrarAdd(false);setNovoNome('');}} style={{width:24,height:24,display:'flex',alignItems:'center',justifyContent:'center',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:100}}><X size={11}/></button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr auto',gap:8,alignItems:'end'}}>
+            <div><label className="esc-field-label">Nome</label><input className="esc-input" type="text" placeholder="Ex.: João Freelancer" value={novoNome} onChange={e=>setNovoNome(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')adicionarColab();}} autoFocus/></div>
+            <div><label className="esc-field-label">Função</label><select className="esc-select-sm" value={novoFunc} onChange={e=>setNovoFunc(e.target.value)}>{FUNCOES.map(f=><option key={f}>{f}</option>)}</select></div>
+            <div><label className="esc-field-label">Unidade</label><input className="esc-input" type="text" value={novoUnidade} onChange={e=>setNovoUnidade(e.target.value)}/></div>
+            <div><label className="esc-field-label">Depto</label><input className="esc-input" type="text" value={novoDepto} onChange={e=>setNovoDepto(e.target.value)}/></div>
+            <button className="btn-dev" onClick={adicionarColab} disabled={!novoNome.trim()} style={{justifyContent:'center',opacity:novoNome.trim()?1:.5,cursor:novoNome.trim()?'pointer':'not-allowed'}}><Plus size={11}/>Adicionar</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── TABELA PRINCIPAL ── */}
+      <div style={{padding:'16px 20px 40px',overflowX:'auto'}}>
+        <table className="esc-table">
+          <thead>
+            <tr>
+              <th>Colaborador</th>
+              {DIAS_META.map((d,i)=>(
+                <th key={d.id}>{d.curto}<span className="esc-th-date">{fmtDate(addDays(semanaAtual,i))}</span></th>
+              ))}
+              <th style={{minWidth:50}}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {colabsFiltrados.map(c=>{
+              const expanded = isExpanded(c.id);
+              const s = stats[c.id]||{horas:0,folgas:0};
+              const totalCls = s.horas > META_HORAS ? 'esc-total-warn' : s.horas > 0 ? 'esc-total-ok' : 'esc-total-muted';
+              return (
+                <tr key={c.id}>
+                  <td>
+                    <div className="esc-nome-wrap">
+                      <button className="esc-chevron" onClick={()=>toggleExpand(c.id)} title={expanded?'Recolher':'Expandir'}>
+                        {expanded ? '▾' : '▸'}
+                      </button>
+                      <div className="esc-nome-info">
+                        <span className="esc-nome-c">{c.nome}</span>
+                        <span className="esc-cargo-c">{c.funcao}</span>
+                      </div>
+                      <button className="esc-del-btn" onClick={()=>removerColab(c.id)} title="Remover">×</button>
+                    </div>
+                  </td>
+                  {DIAS_META.map((d,i)=>{
+                    const t = escala[d.id]?.[c.id] || turnoVazio();
+                    const dataD = addDays(semanaAtual, i);
+                    const df = estaDeFerias(c.id, dataD);
+                    return (
+                      <td key={d.id}>
+                        {expanded ? (
+                          <CelulaTurno
+                            turno={t}
+                            deFerias={df}
+                            onChange={(novo)=>setTurnoCell(d.id, c.id, novo)}
+                          />
+                        ) : (
+                          <CelulaColapsada turno={t} deFerias={df}/>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td className={`esc-total ${totalCls}`}>{s.horas.toFixed(1)}h</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="esc-footer">
+              <td style={{fontWeight:600}}>Total equipe</td>
+              {DIAS_META.map(d=>(
+                <td key={d.id}>{totalDia(d.id).toFixed(0)}h</td>
+              ))}
+              <td style={{fontWeight:600,color:T.carbon}}>{totalSemana.toFixed(1)}h</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* ── FOOTER ── */}
+      <footer style={{background:T.carbon,padding:'10px 20px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,position:'fixed',bottom:0,left:0,right:0,zIndex:50}}>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:T.citric,letterSpacing:'1px',textTransform:'uppercase',textAlign:'center'}}>TATÁ SUSHI &nbsp;|&nbsp; TATÁ POKE &nbsp;|&nbsp; 2016 – 2026</span>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:'rgba(255,255,255,.4)',textAlign:'center'}}>Atualizado em {hoje}</span>
+      </footer>
+    </div>
+  );
+}
