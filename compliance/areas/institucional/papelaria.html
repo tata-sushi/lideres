@@ -1032,6 +1032,46 @@ function drawCenteredRichLine(ctx, cx, y, words, fontSize) {
 /* ══ PAPEL TIMBRADO — PDF via jsPDF ══ */
 var timbradoLogoData = null;
 var tbInitialized = false;
+var TB_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRCEO28JMnU0VBla15RpHUlNxGssNjdzJVSd2ZbalnSQDlDmunBkr8khcXqD1nczfxWcZUJ4Q6EJ8y2/pub?gid=175063295&single=true&output=csv';
+var tbDeptMapPromise = null;
+
+function tbParseCsvLine(line) {
+  var out = [], cur = '', inQ = false;
+  for (var i = 0; i < line.length; i++) {
+    var c = line[i];
+    if (c === '"') {
+      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === ',' && !inQ) {
+      out.push(cur); cur = '';
+    } else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
+function tbFetchDeptMap() {
+  if (tbDeptMapPromise) return tbDeptMapPromise;
+  tbDeptMapPromise = fetch(TB_SHEET_URL)
+    .then(function(r) { return r.ok ? r.text() : ''; })
+    .then(function(csv) {
+      var map = {};
+      if (!csv) return map;
+      var lines = csv.split(/\r?\n/);
+      /* Colunas: Nome | Matrícula | Cargo | Status | Unidade | Departamento */
+      for (var i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        var cols = tbParseCsvLine(lines[i]);
+        if (cols.length < 6) continue;
+        var nome = (cols[0] || '').trim();
+        var depto = (cols[5] || '').trim();
+        if (nome && depto) map[nome.toLowerCase()] = depto;
+      }
+      return map;
+    })
+    .catch(function() { return {}; });
+  return tbDeptMapPromise;
+}
 
 function tbLazyInit() {
   if (tbInitialized) return;
@@ -1043,6 +1083,7 @@ function tbLazyInit() {
   if (!session) return;
 
   var u = document.getElementById('tb-unidade');
+  var d = document.getElementById('tb-depto');
   var a = document.getElementById('tb-assina');
 
   if (session.unidade && u) {
@@ -1060,6 +1101,17 @@ function tbLazyInit() {
   }
 
   if (a && !a.value && session.displayName) a.value = session.displayName;
+
+  if (d && !d.value && session.displayName) {
+    tbFetchDeptMap().then(function(map) {
+      if (d.value) return;
+      var key = session.displayName.toLowerCase().trim();
+      if (map[key]) {
+        d.value = map[key];
+        d.readOnly = true;
+      }
+    });
+  }
 }
 
 function gerarTimbrado() {
