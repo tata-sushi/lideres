@@ -24,7 +24,7 @@ const T = {
   azulBg:   '#E8F0FA',
   orange:   '#E8A020',
   orangeBg: '#FFF8EC',
-  gridLine: 'rgba(53,56,63,0.6)',
+  gridLine: 'rgba(53,56,63,0.45)',
   radius:   '8px',
   shadow:   '0 1px 4px rgba(0,0,0,0.07)',
 };
@@ -828,9 +828,9 @@ export default function EscalaPainel() {
         .esc-c-horas{color:${T.carbon};font-weight:500;}
         .esc-c-muted{color:${T.muted};}
 
-        .esc-total{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;padding-top:7px!important;}
-        .esc-total-ok{color:${T.green};}
-        .esc-total-warn{color:${T.red};}
+        .esc-total{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;padding-top:7px!important;color:${T.carbon};}
+        .esc-total-ok{color:${T.carbon};}
+        .esc-total-warn{color:${T.carbon};}
         .esc-total-muted{color:${T.muted};}
 
         .esc-footer td{border-bottom:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:${T.mid};padding-top:8px!important;vertical-align:top;}
@@ -1047,9 +1047,9 @@ export default function EscalaPainel() {
               {DIAS_META.map((d,i)=>{
                 const {trab,folga,ferias} = countsDia(d.id, i);
                 const partes = [];
-                if (trab>0) partes.push(<span key="t" style={{color:T.green}}>{trab} trabalhando</span>);
-                if (folga>0) partes.push(<span key="f" style={{color:T.amber}}>{folga} folgas</span>);
-                if (ferias>0) partes.push(<span key="v" style={{color:'#1A3A5C'}}>{ferias} férias</span>);
+                if (trab>0) partes.push(<span key="t" style={{color:T.carbon}}>{trab} trabalhando</span>);
+                if (folga>0) partes.push(<span key="f" style={{color:T.carbon}}>{folga} folgas</span>);
+                if (ferias>0) partes.push(<span key="v" style={{color:T.carbon}}>{ferias} férias</span>);
                 return (
                   <td key={d.id} style={{fontSize:9,whiteSpace:'nowrap'}}>
                     {partes.length===0
@@ -1230,7 +1230,7 @@ export default function EscalaPainel() {
                     </div>
                     <div style={{display:'flex',alignItems:'center',gap:5}}>
                       <div style={{flex:1,height:3,background:T.border,borderRadius:2,overflow:'hidden'}}>
-                        <div style={{width:`${Math.min(pct,100)}%`,height:'100%',background:s.horas>META_HORAS?T.red:pct>=80?T.citric:s.horas>0?T.carbon:T.border,transition:'width .2s'}}/>
+                        <div style={{width:`${Math.min(pct,100)}%`,height:'100%',background:s.horas>0?T.carbon:T.border,transition:'width .2s'}}/>
                       </div>
                       <span style={{fontFamily:'DM Mono,monospace',fontSize:8,color:T.muted,minWidth:26,textAlign:'right'}}>{pct}%</span>
                     </div>
