@@ -539,6 +539,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
         Comunicado
       </button>
+      <button class="modal-tab" id="tab-timb" onclick="setDocType('timbrado')">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+        PDF
+      </button>
     </div>
 
     <!-- FORM PAPEL TIMBRADO -->
@@ -650,6 +654,41 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <input class="f-input" id="cv-badge" type="text" maxlength="40" placeholder="Ex: 29/08 às 16h no salão do TATÁ Itaim">
       </div>
       <div class="cv-hint" id="cv-vis-hint"></div>
+    </div>
+
+    <!-- FORM PAPEL TIMBRADO PDF -->
+    <div class="modal-form hidden" id="form-timbrado">
+      <div class="f-section">Cabeçalho</div>
+      <div class="f-row c2">
+        <div class="f-group">
+          <label class="f-label">Unidade</label>
+          <select class="f-select" id="tb-unidade">
+            <option value="Itaim Bibi">Itaim Bibi</option>
+            <option value="Pinheiros">Pinheiros</option>
+            <option value="Poke Pinheiros">Poke Pinheiros</option>
+            <option value="Administrativo">Administrativo</option>
+          </select>
+        </div>
+        <div class="f-group">
+          <label class="f-label">Departamento</label>
+          <input class="f-input" id="tb-depto" type="text" placeholder="Ex: Cozinha">
+        </div>
+      </div>
+      <div class="f-section">Conteúdo</div>
+      <div class="f-group">
+        <label class="f-label">Título</label>
+        <input class="f-input" id="tb-titulo" type="text" placeholder="Ex: Comunicado Importante">
+      </div>
+      <div class="f-group">
+        <label class="f-label">Corpo <span class="f-note">use **texto** para negrito</span></label>
+        <textarea class="f-textarea" id="tb-corpo" style="min-height:140px" placeholder="Ex: Informamos que a partir do dia **01/06**, o horário de funcionamento será alterado para **11h às 23h**."></textarea>
+      </div>
+      <div class="f-section">Assinatura <span class="f-note">· opcional</span></div>
+      <div class="f-group">
+        <label class="f-label">Nome do assinante</label>
+        <input class="f-input" id="tb-assina" type="text" placeholder="Ex: Victor Augusto di Sessa Carvalho">
+      </div>
+      <div class="cv-hint" id="tb-hint"></div>
     </div>
 
     <!-- DOCUMENT PREVIEW -->
@@ -798,16 +837,19 @@ function setDocType(type) {
   document.getElementById('tab-cartao').classList.toggle('active',     type==='cartao');
   document.getElementById('tab-assin').classList.toggle('active',      type==='assinatura');
   document.getElementById('tab-comvis').classList.toggle('active',     type==='comvisual');
+  document.getElementById('tab-timb').classList.toggle('active',       type==='timbrado');
   document.getElementById('form-papel').classList.toggle('hidden',         type!=='papel');
   document.getElementById('form-cartao').classList.toggle('hidden',        type!=='cartao');
   document.getElementById('form-assinatura').classList.toggle('hidden',    type!=='assinatura');
   document.getElementById('form-comvisual').classList.toggle('hidden',     type!=='comvisual');
+  document.getElementById('form-timbrado').classList.toggle('hidden',      type!=='timbrado');
   document.getElementById('doc-preview').style.display = 'none';
   hideError();
   var lbl = document.getElementById('btn-label');
   if (type === 'cartao')            { if (lbl) lbl.textContent = 'Gerar PDF';         cvLazyInit(); }
   else if (type === 'assinatura')   { if (lbl) lbl.textContent = 'Gerar Assinatura'; }
   else if (type === 'comvisual')    { if (lbl) lbl.textContent = 'Gerar Comunicado'; }
+  else if (type === 'timbrado')     { if (lbl) lbl.textContent = 'Gerar PDF'; }
   else                              { if (lbl) lbl.textContent = 'Gerar com Sam'; }
 }
 
@@ -834,6 +876,7 @@ function gerarDocumento() {
   if (currentDocType === 'cartao')     return cvGerarPDF();
   if (currentDocType === 'assinatura') return gerarAssinatura();
   if (currentDocType === 'comvisual') return gerarComunicadoVisual();
+  if (currentDocType === 'timbrado') return gerarTimbrado();
 }
 
 function gerarPapel() {
@@ -1106,6 +1149,239 @@ function drawCenteredRichLine(ctx, cx, y, words, fontSize) {
   }
 }
 
+/* ══ PAPEL TIMBRADO — PDF via jsPDF ══ */
+var timbradoLogoData = null;
+
+function gerarTimbrado() {
+  var unidade = document.getElementById('tb-unidade').value;
+  var depto   = document.getElementById('tb-depto').value.trim();
+  var titulo  = document.getElementById('tb-titulo').value.trim();
+  var corpo   = document.getElementById('tb-corpo').value.trim();
+  var assina  = document.getElementById('tb-assina').value.trim();
+
+  if (!titulo || !corpo) { showError('Preencha o Título e o Corpo antes de gerar.'); return; }
+
+  var hint = document.getElementById('tb-hint');
+  hint.textContent = 'Preparando PDF…';
+  var lbl = document.getElementById('btn-label');
+  if (lbl) lbl.textContent = 'Gerando…';
+  document.getElementById('btn-gerar').disabled = true;
+  document.getElementById('spin').style.display = 'block';
+
+  /* Carregar logo, depois gerar PDF */
+  var logoImg = new Image();
+  logoImg.crossOrigin = 'anonymous';
+  logoImg.onload = function() {
+    var cv = document.createElement('canvas');
+    cv.width = logoImg.naturalWidth;
+    cv.height = logoImg.naturalHeight;
+    cv.getContext('2d').drawImage(logoImg, 0, 0);
+    timbradoLogoData = cv.toDataURL('image/png');
+    gerarTimbradoPDF(unidade, depto, titulo, corpo, assina);
+  };
+  logoImg.onerror = function() {
+    timbradoLogoData = null;
+    gerarTimbradoPDF(unidade, depto, titulo, corpo, assina);
+  };
+  logoImg.src = 'logos/logo_simples_branco_preto.png';
+}
+
+function gerarTimbradoPDF(unidade, depto, titulo, corpo, assina) {
+  var hint = document.getElementById('tb-hint');
+  var lbl  = document.getElementById('btn-label');
+
+  try {
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({ unit: 'mm', format: 'a4' });
+
+    var W = 210, H = 297;
+    var ML = 13, MR = 13;
+    var bodyW = W - ML - MR;
+    var today = new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric'});
+
+    function renderPage() {
+      /* Logo */
+      if (timbradoLogoData) {
+        try { doc.addImage(timbradoLogoData, 'PNG', ML, 14, 25, 17); } catch(e) {}
+      }
+
+      /* Labels canto superior direito */
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Unidade:', 154, 18);
+      doc.text('Depto:', 154, 24);
+      doc.text('Emitido em:', 154, 30);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 30, 30);
+      doc.text(unidade || '', 175, 18);
+      doc.text(depto || '', 175, 24);
+      doc.text(today, 175, 30);
+
+      /* Linha horizontal */
+      doc.setDrawColor(30, 30, 30);
+      doc.setLineWidth(0.7);
+      doc.line(ML, 35, W - MR, 35);
+
+      /* Rodapé */
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(180, 180, 180);
+      var footerText = 'TATÁ SUSHI  |  TATÁ POKE  |  2016 - 2026';
+      var footW = doc.getTextWidth(footerText);
+      doc.text(footerText, (W - footW) / 2, 289);
+    }
+
+    /* Parse **bold** */
+    function parseBoldSegments(text) {
+      var parts = [];
+      while (text.indexOf('**') !== -1) {
+        var idx = text.indexOf('**');
+        if (idx > 0) parts.push({t: text.substring(0, idx), b: false});
+        text = text.substring(idx + 2);
+        var idx2 = text.indexOf('**');
+        if (idx2 === -1) { parts.push({t: text, b: true}); text = ''; }
+        else { parts.push({t: text.substring(0, idx2), b: true}); text = text.substring(idx2 + 2); }
+      }
+      if (text) parts.push({t: text, b: false});
+      return parts;
+    }
+
+    /* Word-wrap com bold tracking */
+    function wrapWithBold(segments, maxW, fontSize) {
+      var words = [];
+      for (var s = 0; s < segments.length; s++) {
+        var ws = segments[s].t.split(/\s+/);
+        for (var w = 0; w < ws.length; w++) {
+          if (ws[w]) words.push({t: ws[w], b: segments[s].b});
+        }
+      }
+      doc.setFontSize(fontSize);
+      var spaceW = doc.getTextWidth(' ');
+      var lines = [], cur = [], curW = 0;
+      for (var i = 0; i < words.length; i++) {
+        doc.setFont('helvetica', words[i].b ? 'bold' : 'normal');
+        var ww = doc.getTextWidth(words[i].t);
+        var testW = curW + (cur.length > 0 ? spaceW : 0) + ww;
+        if (testW > maxW && cur.length > 0) {
+          lines.push(cur.slice()); cur = [words[i]]; curW = ww;
+        } else {
+          cur.push(words[i]); curW = testW;
+        }
+      }
+      if (cur.length > 0) lines.push(cur);
+      return lines;
+    }
+
+    /* Desenhar linha com mixed bold (justificado) */
+    function drawMixedLine(x, y, words, fontSize, maxW, justify) {
+      doc.setFontSize(fontSize);
+      doc.setTextColor(30, 30, 30);
+
+      if (justify && words.length > 1) {
+        var totalWordsW = 0;
+        for (var i = 0; i < words.length; i++) {
+          doc.setFont('helvetica', words[i].b ? 'bold' : 'normal');
+          totalWordsW += doc.getTextWidth(words[i].t);
+        }
+        var totalSpaceW = maxW - totalWordsW;
+        var spaceW = totalSpaceW / (words.length - 1);
+        var cx = x;
+        for (var i = 0; i < words.length; i++) {
+          doc.setFont('helvetica', words[i].b ? 'bold' : 'normal');
+          doc.text(words[i].t, cx, y);
+          cx += doc.getTextWidth(words[i].t);
+          if (i < words.length - 1) cx += spaceW;
+        }
+      } else {
+        var cx = x;
+        doc.setFont('helvetica', 'normal');
+        var spaceW = doc.getTextWidth(' ');
+        for (var i = 0; i < words.length; i++) {
+          doc.setFont('helvetica', words[i].b ? 'bold' : 'normal');
+          doc.text(words[i].t, cx, y);
+          cx += doc.getTextWidth(words[i].t);
+          if (i < words.length - 1) cx += spaceW;
+        }
+      }
+    }
+
+    /* ── RENDER ── */
+    renderPage();
+
+    /* Título centralizado */
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(25);
+    doc.setTextColor(30, 30, 30);
+    var tituloW = doc.getTextWidth(titulo);
+    doc.text(titulo, (W - tituloW) / 2, 55);
+
+    /* Corpo justificado com bold */
+    var bodySegments = parseBoldSegments(corpo);
+    var bodyLines = wrapWithBold(bodySegments, bodyW, 13);
+    var lineH = 6.5;
+    var curY = 70;
+    var maxY = 265;
+
+    for (var li = 0; li < bodyLines.length; li++) {
+      if (curY + lineH > maxY) {
+        doc.addPage();
+        renderPage();
+        curY = 45;
+      }
+      var isLastLine = (li === bodyLines.length - 1);
+      drawMixedLine(ML, curY, bodyLines[li], 13, bodyW, !isLastLine);
+      curY += lineH;
+    }
+
+    /* Data — alinhado à direita */
+    curY += 8;
+    if (curY + 20 > maxY) {
+      doc.addPage(); renderPage(); curY = 45;
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(13);
+    doc.setTextColor(30, 30, 30);
+    var dataText = 'São Paulo, ' + today;
+    var dataW = doc.getTextWidth(dataText);
+    doc.text(dataText, W - MR - dataW, curY);
+
+    /* Assinatura (opcional) */
+    if (assina) {
+      curY += 22;
+      if (curY + 15 > maxY) {
+        doc.addPage(); renderPage(); curY = 45;
+      }
+      var lineW = 70;
+      var lineCX = W / 2;
+      doc.setDrawColor(30, 30, 30);
+      doc.setLineWidth(0.3);
+      doc.line(lineCX - lineW/2, curY, lineCX + lineW/2, curY);
+
+      curY += 7;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(13);
+      var assinaW = doc.getTextWidth(assina);
+      doc.text(assina, (W - assinaW) / 2, curY);
+    }
+
+    /* Salvar */
+    var slug = titulo.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').substring(0, 30);
+    doc.save('timbrado-tata-' + slug + '.pdf');
+    hint.textContent = 'PDF gerado ✓';
+    showToast('PDF gerado ✓');
+
+  } catch(e) {
+    showError('Erro ao gerar PDF: ' + e.message);
+    hint.textContent = '';
+  }
+
+  document.getElementById('btn-gerar').disabled = false;
+  document.getElementById('spin').style.display = 'none';
+  if (lbl) lbl.textContent = 'Gerar PDF';
+}
+
 /* ── API ── */
 function callSam(prompt, onSuccess) {
   setLoad(true);
@@ -1180,7 +1456,7 @@ function setLoad(on) {
   document.getElementById('btn-gerar').disabled    = on;
   document.getElementById('spin').style.display    = on ? 'block':'none';
   var lbl = document.getElementById('btn-label');
-  if (lbl) lbl.textContent = on ? 'Gerando…' : (currentDocType==='cartao' ? 'Gerar PDF' : currentDocType==='assinatura' ? 'Gerar Assinatura' : currentDocType==='comvisual' ? 'Gerar Comunicado' : 'Gerar com Sam');
+  if (lbl) lbl.textContent = on ? 'Gerando…' : (currentDocType==='cartao' ? 'Gerar PDF' : currentDocType==='assinatura' ? 'Gerar Assinatura' : currentDocType==='comvisual' ? 'Gerar Comunicado' : currentDocType==='timbrado' ? 'Gerar PDF' : 'Gerar com Sam');
 }
 function showError(msg) {
   var el=document.getElementById('sam-error');
