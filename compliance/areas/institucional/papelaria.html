@@ -568,8 +568,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <input class="f-input" id="tb-titulo" type="text" placeholder="Ex: Comunicado Importante">
       </div>
       <div class="f-group">
-        <label class="f-label">Corpo <span class="f-note">use **texto** para negrito</span></label>
-        <textarea class="f-textarea" id="tb-corpo" style="min-height:140px" placeholder="Ex: Informamos que a partir do dia **01/06**, o horário de funcionamento será alterado para **11h às 23h**."></textarea>
+        <label class="f-label">Corpo <span class="f-note">**negrito** · use - no início da linha para tópico</span></label>
+        <textarea class="f-textarea" id="tb-corpo" style="min-height:140px" placeholder="Ex: Informamos que a partir do dia **01/06**, o horário será:&#10;- Almoço: 11h às 15h&#10;- Jantar: 18h às 23h"></textarea>
       </div>
       <div class="f-section">Assinatura</div>
       <div class="f-group">
@@ -1317,22 +1317,57 @@ function gerarTimbradoPDF(unidade, depto, titulo, corpo, assina, cargo) {
     }
     var bodyStartY = titleY + titleLines.length * titleLineH + 8;
 
-    /* Corpo justificado com bold */
-    var bodySegments = parseBoldSegments(corpo);
-    var bodyLines = wrapWithBold(bodySegments, bodyW, 11);
+    /* Corpo: parágrafos + tópicos (- ou •) + numerados (1. / 1)) */
+    function buildBlocks(text) {
+      var rawLines = text.split(/\r?\n/);
+      var blocks = [];
+      for (var i = 0; i < rawLines.length; i++) {
+        var line = rawLines[i];
+        var trimmed = line.trim();
+        if (!trimmed) { blocks.push({ kind: 'spacer' }); continue; }
+        var m = trimmed.match(/^[-*•]\s+(.+)$/);
+        if (m) { blocks.push({ kind: 'bullet', marker: '•', text: m[1] }); continue; }
+        m = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
+        if (m) { blocks.push({ kind: 'bullet', marker: m[1] + '.', text: m[2] }); continue; }
+        blocks.push({ kind: 'para', text: line });
+      }
+      return blocks;
+    }
+
+    var blocks = buildBlocks(corpo);
     var lineH = 6;
+    var bulletIndent = 5;
     var curY = bodyStartY;
     var maxY = 265;
 
-    for (var li = 0; li < bodyLines.length; li++) {
-      if (curY + lineH > maxY) {
-        doc.addPage();
-        renderPage();
-        curY = 45;
+    for (var bi = 0; bi < blocks.length; bi++) {
+      var block = blocks[bi];
+      if (block.kind === 'spacer') { curY += lineH * 0.5; continue; }
+
+      var isBullet = (block.kind === 'bullet');
+      var blockX = isBullet ? ML + bulletIndent : ML;
+      var blockW = isBullet ? bodyW - bulletIndent : bodyW;
+
+      var segs = parseBoldSegments(block.text);
+      var lines = wrapWithBold(segs, blockW, 11);
+
+      for (var li = 0; li < lines.length; li++) {
+        if (curY + lineH > maxY) {
+          doc.addPage(); renderPage(); curY = 45;
+        }
+
+        if (isBullet && li === 0) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(11);
+          doc.setTextColor(30, 30, 30);
+          doc.text(block.marker, ML + 1, curY);
+        }
+
+        var isLastLine = (li === lines.length - 1);
+        var justify = !isLastLine && !isBullet;
+        drawMixedLine(blockX, curY, lines[li], 11, blockW, justify);
+        curY += lineH;
       }
-      var isLastLine = (li === bodyLines.length - 1);
-      drawMixedLine(ML, curY, bodyLines[li], 11, bodyW, !isLastLine);
-      curY += lineH;
     }
 
     /* Data — alinhado à direita */
