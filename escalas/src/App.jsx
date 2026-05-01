@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Download, Plus, X, UserPlus, ChevronLeft, ChevronRight, Printer, Save } from 'lucide-react';
+import { Download, Plus, X, UserPlus, ChevronLeft, ChevronRight, Printer, Save, ClipboardList, LayoutGrid, BarChart2 } from 'lucide-react';
 import { carregarEscala, salvarEscala, carregarColaboradores, carregarFerias, salvarFerias, salvarExtras } from './api.js';
 
 // ============================================================
@@ -20,6 +20,8 @@ const T = {
   amberBg:  '#FFF4DC',
   red:      '#7A1A1A',
   redBg:    '#FDEAEA',
+  azul:     '#1A3A5C',
+  azulBg:   '#E8F0FA',
   orange:   '#E8A020',
   orangeBg: '#FFF8EC',
   radius:   '8px',
@@ -749,7 +751,8 @@ export default function EscalaPainel() {
         .esc-select-sm{font-family:'DM Sans',sans-serif;font-size:13px;padding:8px 10px;border:1px solid ${T.border};background:${T.bg};color:${T.carbon};width:100%;border-radius:${T.radius};outline:none;appearance:none;}
 
         .card{background:${T.surface};border:1px solid ${T.border};border-radius:${T.radius};box-shadow:${T.shadow};overflow:hidden;}
-        .cat-pill{display:inline-flex;align-items:center;padding:3px 10px;background:#F0F0F0;border-radius:100px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:${T.mid};}
+        .cat-pill{display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:${T.carbon};}
+        .cat-pill-action{display:inline-flex;align-items:center;padding:3px 10px;border-radius:100px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;}
 
         /* Tabela principal */
         .esc-table{width:100%;border-collapse:collapse;font-size:12px;}
@@ -784,8 +787,8 @@ export default function EscalaPainel() {
         .esc-inputs-row input[type=time]:focus{border-color:${T.carbon};}
         .esc-sep{font-size:9px;color:${T.muted};flex-shrink:0;}
 
-        .esc-badge-f{display:flex;align-items:center;justify-content:center;padding:6px 8px;border-radius:6px;background:${T.amberBg};color:${T.amber};font-family:'DM Mono',monospace;font-size:10px;font-weight:600;}
-        .esc-badge-v{display:flex;align-items:center;justify-content:center;padding:6px 8px;border-radius:6px;background:#EBF3FA;color:#1A3A5C;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;}
+        .esc-badge-f{display:flex;align-items:center;justify-content:center;padding:6px 8px;border-radius:6px;background:${T.azulBg};color:${T.azul};font-family:'DM Mono',monospace;font-size:10px;font-weight:600;}
+        .esc-badge-v{display:flex;align-items:center;justify-content:center;padding:6px 8px;border-radius:6px;background:${T.azulBg};color:${T.azul};font-family:'DM Mono',monospace;font-size:10px;font-weight:600;}
 
         /* Dropdown presets */
         .esc-dropdown{position:absolute;top:26px;left:0;z-index:50;background:${T.surface};border:1px solid ${T.border};border-radius:${T.radius};padding:4px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.1);}
@@ -797,8 +800,8 @@ export default function EscalaPainel() {
 
         /* Colapsado */
         .esc-collapsed{font-family:'DM Mono',monospace;font-size:10px;padding:4px 0;}
-        .esc-c-folga{color:${T.amber};font-weight:600;}
-        .esc-c-ferias{color:#1A3A5C;font-weight:600;}
+        .esc-c-folga{color:${T.azul};font-weight:600;}
+        .esc-c-ferias{color:${T.azul};font-weight:600;}
         .esc-c-horas{color:${T.carbon};font-weight:500;}
         .esc-c-muted{color:${T.muted};}
 
@@ -938,7 +941,7 @@ export default function EscalaPainel() {
       {mostrarAdd && (
         <div style={{padding:'14px 20px',background:'#FFF8EC',borderBottom:`1px solid ${T.border}`}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-            <span className="cat-pill" style={{background:T.amberBg,color:T.amber}}>+ Colaborador Extra</span>
+            <span className="cat-pill-action" style={{background:T.amberBg,color:T.amber}}>+ Colaborador Extra</span>
             <button onClick={()=>{setMostrarAdd(false);setNovoNome('');}} style={{width:24,height:24,display:'flex',alignItems:'center',justifyContent:'center',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:100}}><X size={11}/></button>
           </div>
           <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr auto',gap:8,alignItems:'end'}}>
@@ -955,7 +958,7 @@ export default function EscalaPainel() {
       <div style={{padding:'16px 20px 0'}}>
         <section className="card">
           <div onClick={()=>setTabelaAberta(p=>!p)} style={{padding:'10px 16px',borderBottom:tabelaAberta?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
-            <span className="cat-pill">📋 Escala da Semana</span>
+            <span className="cat-pill"><ClipboardList size={13}/>Escala da Semana</span>
             <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{tabelaAberta?'▲':'▼'}</span>
           </div>
           {tabelaAberta && <div style={{overflowX:'auto',padding:'10px 12px 12px'}}>
@@ -1041,7 +1044,7 @@ export default function EscalaPainel() {
       <div style={{padding:'12px 20px 0'}}>
         <section className="card">
           <div onClick={()=>setGradeAberta(p=>!p)} style={{padding:'10px 16px',borderBottom:gradeAberta?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
-            <span className="cat-pill">📅 Grade Visual</span>
+            <span className="cat-pill"><LayoutGrid size={13}/>Grade Visual</span>
             <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{gradeAberta?'▲':'▼'}</span>
           </div>
           {gradeAberta && (
@@ -1127,7 +1130,7 @@ export default function EscalaPainel() {
       <div style={{padding:'12px 20px 40px'}}>
         <section className="card">
           <div onClick={()=>setResumoAberto(p=>!p)} style={{padding:'10px 16px',borderBottom:resumoAberto?`1px solid ${T.border}`:'none',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer',userSelect:'none'}}>
-            <span className="cat-pill">📊 Resumo Semanal</span>
+            <span className="cat-pill"><BarChart2 size={13}/>Resumo Semanal</span>
             <span style={{display:'flex',alignItems:'center',gap:10}}>
               <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.mid}}>
                 Meta: <b style={{color:T.carbon}}>{META_HORAS}h</b> · 2 folgas
