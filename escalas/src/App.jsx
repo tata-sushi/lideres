@@ -84,7 +84,7 @@ const PRESETS_BASE = [
   { label:'Domingo',       turnos:[['12:00','16:00'],['18:00','00:00']] },
 ];
 
-// Formata horas decimais → "Xh" ou "XhYY" (ex: 8.5 → "8h30")
+// Formata horas decimais → "Xh" ou "XhYY" (ex: 8.5 → "8h30") v2
 const fmtHoras = (h) => {
   const totalMin = Math.round((h || 0) * 60);
   const hrs = Math.floor(totalMin / 60);
