@@ -1,37 +1,41 @@
 /**
  * ══════════════════════════════════════════════════════════════════════════
- *  APPS SCRIPT — Ferramentas & Sistemas · Governança de Processos
+ *  APPS SCRIPT — Ferramentas & Sistemas + Fornecedores & Parceiros
  *  ─────────────────────────────────────────────────────────────────────────
- *  Deploy: https://script.google.com/macros/s/SEU_ID_AQUI/exec
  *  Planilha: https://docs.google.com/spreadsheets/d/1LcMOMqvpHcKmhpXvzkWz8-bwDvPNUvJCYWeCndGENgQ
- *  Consumido por: lideres.tatasushi.tech/compliance/ferramentas/
+ *  Consumido por:
+ *    - lideres.tatasushi.tech/compliance/ferramentas/   → sheet=Ferramentas
+ *    - lideres.tatasushi.tech/compliance/fornecedores/  → sheet=Parceiros
  *  ─────────────────────────────────────────────────────────────────────────
  *
- *  ABA "Ferramentas" — catálogo de ferramentas:
- *    Col A  Timestamp
- *    Col B  Nome
- *    Col C  Categoria
- *    Col D  Descrição
- *    Col E  Departamentos   (separados por vírgula)
- *    Col F  Enviado Por
+ *  ABA "Ferramentas":
+ *    Col A  Timestamp | B Nome | C Categoria | D Descrição
+ *    Col E  Departamentos | F Enviado Por
  *
- *  AÇÕES suportadas:
- *    GET  ?action=get   — retorna todas as ferramentas cadastradas
- *    POST body JSON     — { action:"add", nome, categoria, descricao, departamentos, enviado_por }
+ *  ABA "Parceiros":
+ *    Col A  Timestamp | B Nome | C Categoria | D Descrição
+ *    Col E  Departamentos | F Email | G WhatsApp | H Enviado Por
+ *
+ *  AÇÕES:
+ *    GET  ?action=get                        → retorna aba Ferramentas (retrocompat.)
+ *    GET  ?action=get&sheet=Parceiros        → retorna aba Parceiros
+ *    POST { action:"add", nome, categoria, descricao, departamentos, enviado_por }
+ *    POST { action:"add", sheet:"Parceiros", nome, categoria, descricao,
+ *           departamentos, email, whatsapp, enviado_por }
  * ══════════════════════════════════════════════════════════════════════════
  */
 
-var SHEET_ID   = '1LcMOMqvpHcKmhpXvzkWz8-bwDvPNUvJCYWeCndGENgQ';
-var SHEET_NAME = 'Ferramentas';
+var SHEET_ID = '1LcMOMqvpHcKmhpXvzkWz8-bwDvPNUvJCYWeCndGENgQ';
 
 /* ────────────────────────────────────────────────── */
 /*  GET                                                */
 /* ────────────────────────────────────────────────── */
 function doGet(e) {
   var p = (e && e.parameter) ? e.parameter : {};
+  var sheetName = p.sheet || 'Ferramentas';
   try {
     if (!p.action || p.action === 'get') {
-      return _json({ ok: true, data: lerFerramentas() });
+      return _json({ ok: true, data: lerRegistros(sheetName) });
     }
     return _json({ ok: false, message: 'acao_desconhecida: ' + p.action });
   } catch (err) {
@@ -46,7 +50,7 @@ function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
     if (body.action === 'add') {
-      return _json(adicionarFerramenta(body));
+      return _json(adicionarRegistro(body));
     }
     return _json({ ok: false, message: 'acao_desconhecida: ' + body.action });
   } catch (err) {
@@ -55,55 +59,73 @@ function doPost(e) {
 }
 
 /* ────────────────────────────────────────────────── */
-/*  LER FERRAMENTAS                                    */
+/*  LER REGISTROS                                      */
 /* ────────────────────────────────────────────────── */
-function lerFerramentas() {
+function lerRegistros(sheetName) {
   var ss    = SpreadsheetApp.openById(SHEET_ID);
-  var sheet = ss.getSheetByName(SHEET_NAME);
+  var sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
 
   var last = sheet.getLastRow();
   if (last < 2) return [];
 
-  var rows   = sheet.getRange(2, 1, last - 1, 6).getValues();
-  var result = [];
+  var isParceiros = (sheetName === 'Parceiros');
+  var numCols     = isParceiros ? 8 : 6;
+  var rows        = sheet.getRange(2, 1, last - 1, numCols).getValues();
+  var result      = [];
 
   rows.forEach(function(r) {
     var nome = String(r[1] || '').trim();
     if (!nome) return;
-    result.push({
+    var obj = {
       nome:          nome,
       categoria:     String(r[2] || '').trim(),
       descricao:     String(r[3] || '').trim(),
       departamentos: String(r[4] || '').trim(),
-    });
+    };
+    if (isParceiros) {
+      obj.email    = String(r[5] || '').trim();
+      obj.whatsapp = String(r[6] || '').trim();
+    }
+    result.push(obj);
   });
 
   return result;
 }
 
 /* ────────────────────────────────────────────────── */
-/*  ADICIONAR FERRAMENTA                               */
+/*  ADICIONAR REGISTRO                                 */
 /* ────────────────────────────────────────────────── */
-function adicionarFerramenta(p) {
-  var nome        = String(p.nome        || '').trim();
-  var categoria   = String(p.categoria   || '').trim();
-  var descricao   = String(p.descricao   || '').trim();
-  var departamentos = String(p.departamentos || '').trim();
-  var enviado_por = String(p.enviado_por || '').trim();
+function adicionarRegistro(p) {
+  var sheetName = p.sheet || 'Ferramentas';
+  var nome      = String(p.nome        || '').trim();
+  var categoria = String(p.categoria   || '').trim();
+  var descricao = String(p.descricao   || '').trim();
+  var depto     = String(p.departamentos || '').trim();
+  var enviado   = String(p.enviado_por || '').trim();
 
   if (!nome || !categoria || !descricao) {
     return { ok: false, message: 'Campos obrigatórios não preenchidos.' };
   }
 
   var ss    = SpreadsheetApp.openById(SHEET_ID);
-  var sheet = ss.getSheetByName(SHEET_NAME);
-  if (!sheet) return { ok: false, message: 'Aba "' + SHEET_NAME + '" não encontrada.' };
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return { ok: false, message: 'Aba "' + sheetName + '" não encontrada.' };
 
-  var ts = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm:ss');
-  sheet.appendRow([ts, nome, categoria, descricao, departamentos, enviado_por]);
+  var ts  = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm:ss');
+  var row;
 
-  return { ok: true, message: 'Ferramenta adicionada com sucesso.' };
+  if (sheetName === 'Parceiros') {
+    row = [ts, nome, categoria, descricao, depto,
+           String(p.email    || '').trim(),
+           String(p.whatsapp || '').trim(),
+           enviado];
+  } else {
+    row = [ts, nome, categoria, descricao, depto, enviado];
+  }
+
+  sheet.appendRow(row);
+  return { ok: true, message: 'Registro adicionado com sucesso.' };
 }
 
 /* ────────────────────────────────────────────────── */
