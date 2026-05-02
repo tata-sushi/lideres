@@ -452,7 +452,6 @@ export default function EscalaPainel() {
   const [filtroUnidade, setFiltroUnidade] = useState(()=>localStorage.getItem('esc_fUnidade')||'Todos');
   const [filtroDepto, setFiltroDepto] = useState(()=>localStorage.getItem('esc_fDepto')||'Todos');
   const [horarioAberto, setHorarioAberto] = useState(true);
-  const [diaHorIdx, setDiaHorIdx] = useState(0);
   const [gradeAberta, setGradeAberta] = useState(false);
   const [tabelaAberta, setTabelaAberta] = useState(true);
   const [resumoAberto, setResumoAberto] = useState(true);
@@ -983,42 +982,49 @@ export default function EscalaPainel() {
       )}
 
       {/* HORÁRIO DE FUNCIONAMENTO */}
-      <div style={{padding:'16px 20px 0'}}>
+      <div style={{padding:'12px 20px 0'}}>
         <section className="card">
           <div onClick={()=>setHorarioAberto(p=>!p)} style={{padding:'10px 16px',borderBottom:horarioAberto?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
             <span className="cat-pill"><Clock size={13}/>Horário de Funcionamento</span>
             <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{horarioAberto?'▲':'▼'}</span>
           </div>
           {horarioAberto && (
-            <>
-              <div className="grade-tabs">
-                {DIAS_META.map((d,i)=>(
-                  <button key={d.id} className={`grade-tab ${i===diaHorIdx?'on':''}`} onClick={()=>setDiaHorIdx(i)}>
-                    <span>{d.curto}</span>
-                    <span style={{fontSize:9,fontWeight:500,color:T.carbon,letterSpacing:'.3px'}}>{fmtDate(addDays(semanaAtual,i))}</span>
-                  </button>
-                ))}
-              </div>
-              <div style={{padding:'12px 16px',display:'flex',gap:10,flexWrap:'wrap',alignItems:'center'}}>
-                {[
-                  {label:'Prep Almoço', ini:'prepAlmocoIni', fim:'prepAlmocoFim'},
-                  {label:'Func Almoço', ini:'funcAlmocoIni', fim:'funcAlmocoFim'},
-                  {label:'Prep Jantar', ini:'prepJantarIni', fim:'prepJantarFim'},
-                  {label:'Func Jantar', ini:'funcJantarIni', fim:'funcJantarFim'},
-                ].map(({label,ini,fim})=>{
-                  const diaHor = DIAS_META[diaHorIdx];
-                  const cfgHor = config[diaHor.id] || CFG0_DIA;
-                  return (
-                    <div key={label} style={{display:'flex',alignItems:'center',gap:4,background:'#FFF4DC',border:`1px solid ${T.gridLine}`,borderRadius:6,padding:'4px 8px'}}>
-                      <span style={{fontFamily:'DM Mono,monospace',fontSize:8.5,color:T.carbon,fontWeight:600,letterSpacing:'.3px',textTransform:'uppercase',whiteSpace:'nowrap'}}>{label}</span>
-                      <input type="time" value={cfgHor[ini]} onChange={e=>updateCfg(diaHor.id,ini,e.target.value)} style={{fontFamily:'DM Mono,monospace',fontSize:11,border:'none',background:'transparent',color:T.carbon,outline:'none',width:72,cursor:'pointer'}}/>
-                      <span style={{color:T.muted,fontSize:10}}>→</span>
-                      <input type="time" value={cfgHor[fim]} onChange={e=>updateCfg(diaHor.id,fim,e.target.value)} style={{fontFamily:'DM Mono,monospace',fontSize:11,border:'none',background:'transparent',color:T.carbon,outline:'none',width:72,cursor:'pointer'}}/>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
+            <div style={{overflowX:'auto',padding:'10px 12px 12px'}}>
+              <table className="esc-table">
+                <thead>
+                  <tr>
+                    <th>Período</th>
+                    {DIAS_META.map((d,i)=>(
+                      <th key={d.id}>{d.curto}<span className="esc-th-date">{fmtDate(addDays(semanaAtual,i))}</span></th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    {label:'Prep Almoço', ini:'prepAlmocoIni', fim:'prepAlmocoFim'},
+                    {label:'Func Almoço', ini:'funcAlmocoIni', fim:'funcAlmocoFim'},
+                    {label:'Prep Jantar', ini:'prepJantarIni', fim:'prepJantarFim'},
+                    {label:'Func Jantar', ini:'funcJantarIni', fim:'funcJantarFim'},
+                  ].map(({label,ini,fim})=>(
+                    <tr key={label}>
+                      <td><span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.carbon,fontWeight:600,letterSpacing:'.3px',textTransform:'uppercase',whiteSpace:'nowrap'}}>{label}</span></td>
+                      {DIAS_META.map((d,i)=>{
+                        const cfgHor = config[d.id] || CFG0_DIA;
+                        return (
+                          <td key={d.id}>
+                            <div style={{display:'flex',alignItems:'center',gap:3}}>
+                              <input type="time" value={cfgHor[ini]} onChange={e=>updateCfg(d.id,ini,e.target.value)} style={{fontFamily:'DM Mono,monospace',fontSize:11,border:'none',background:'transparent',color:T.carbon,outline:'none',width:72,cursor:'pointer'}}/>
+                              <span style={{color:T.muted,fontSize:10}}>→</span>
+                              <input type="time" value={cfgHor[fim]} onChange={e=>updateCfg(d.id,fim,e.target.value)} style={{fontFamily:'DM Mono,monospace',fontSize:11,border:'none',background:'transparent',color:T.carbon,outline:'none',width:72,cursor:'pointer'}}/>
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       </div>
