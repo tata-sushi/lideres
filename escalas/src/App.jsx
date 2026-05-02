@@ -1084,7 +1084,6 @@ export default function EscalaPainel() {
           </div>
         </div>
         <button className="btn-icon" onClick={()=>navSemana(1)}><ChevronRight size={14}/></button>
-        <button className="btn-outline" style={{padding:'6px 11px',fontSize:9.5}} onClick={()=>setSemanaAtual(getSegunda(new Date()))}>Hoje</button>
       </div>
 
       {/* AÇÕES */}
@@ -1381,12 +1380,7 @@ export default function EscalaPainel() {
         <section className="card">
           <div onClick={()=>setResumoAberto(p=>!p)} style={{padding:'10px 16px',borderBottom:resumoAberto?`1px solid ${T.border}`:'none',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer',userSelect:'none'}}>
             <span className="cat-pill"><BarChart2 size={13}/>Resumo Semanal</span>
-            <span style={{display:'flex',alignItems:'center',gap:10}}>
-              <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.mid}}>
-                Meta: <b style={{color:T.carbon}}>{META_HORAS}h</b> · 2 folgas
-              </span>
-              <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{resumoAberto?'▲':'▼'}</span>
-            </span>
+            <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{resumoAberto?'▲':'▼'}</span>
           </div>
           {resumoAberto && <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:8,padding:'12px 16px'}}>
             {colabsFiltrados.map(c=>{
@@ -1446,10 +1440,6 @@ export default function EscalaPainel() {
                 </div>
               );
             })}
-          </div>}
-          {resumoAberto && <div style={{padding:'10px 16px',borderTop:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between',fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:600,letterSpacing:'.5px',color:T.carbon}}>
-            <span>TOTAL: {fmtHoras(totalSemana)}</span>
-            <span style={{color:T.muted,fontWeight:400}}>META: {META_HORAS}h · 2 folgas / semana</span>
           </div>}
         </section>
       </div>
