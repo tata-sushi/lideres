@@ -862,8 +862,7 @@ export default function EscalaPainel() {
       const par=idx%2===0?'':' class="epdf-row-alt"';
       return `<tr${par}><td class="epdf-nome">${c.nome}</td><td class="epdf-fn">${c.funcao}</td>${tdDias}<td class="epdf-total">${fmtHoras(s.horas)}</td></tr>`;
     }).join('');
-    let totalTrab=0,totalFolg=0;
-    totaisDia.forEach(t=>{totalTrab+=t.trab;totalFolg+=t.folg;});
+    const tfDias=totaisDia.map(t=>`<td class="epdf-tf-cnt"><span class="epdf-tf-trab">${t.trab} trabalhando</span><br><span class="epdf-tf-folg">${t.folg} folgas</span></td>`).join('');
     let printDiv=document.getElementById('escala-pdf-print');
     if(!printDiv){ printDiv=document.createElement('div'); printDiv.id='escala-pdf-print'; document.body.appendChild(printDiv); }
     printDiv.innerHTML=`
@@ -882,9 +881,8 @@ export default function EscalaPainel() {
       <table class="epdf-table">
         <thead><tr><th class="epdf-th-nome">Colaborador</th><th class="epdf-th-fn">Função</th>${thDias}<th>Total</th></tr></thead>
         <tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="2" class="epdf-tf-label">TOTAL GERAL</td><td colspan="5"></td><td class="epdf-tf-val">${fmtHoras(totalSemana)}</td></tr></tfoot>
-      </table>
-      <div class="epdf-rodape">${totalTrab} trabalhando / ${totalFolg} folgas</div>`;
+        <tfoot><tr><td colspan="2"></td>${tfDias}<td></td></tr></tfoot>
+      </table>`;
     const logoEl=document.getElementById('epdf-logo');
     logoEl.onload=()=>window.print();
     logoEl.onerror=()=>window.print();
@@ -1050,10 +1048,10 @@ export default function EscalaPainel() {
           .epdf-livre{color:#bbb;}
           .epdf-turno{font-family:'DM Mono',monospace;font-size:8.5px;font-weight:600;color:#111;}
           .epdf-total{font-family:'DM Mono',monospace;font-weight:700;font-size:9px;}
-          .epdf-table tfoot td{border-top:2px solid #111;font-weight:700;padding:6px 5px;}
-          .epdf-tf-label{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.04em;}
-          .epdf-tf-val{font-family:'DM Mono',monospace;font-size:11px;text-align:center;}
-          .epdf-rodape{font-size:9px;color:#666;text-align:right;margin-top:6px;}
+          .epdf-table tfoot td{border-top:2px solid #111;padding:6px 4px;text-align:center;vertical-align:top;}
+          .epdf-tf-cnt{font-family:'DM Mono',monospace;font-size:8px;line-height:1.5;letter-spacing:.02em;}
+          .epdf-tf-trab{color:#111;font-weight:700;}
+          .epdf-tf-folg{color:#b26200;font-weight:600;}
         }
       `}</style>
 
