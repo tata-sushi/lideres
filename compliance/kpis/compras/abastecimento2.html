@@ -614,6 +614,35 @@ tr.row-editing td { background:#FAFFF0; }
 <div class="toasts" id="toasts"></div>
 
 <script>
+// ── CONFIG GAS / SHEET ────────────────────────────────────────────────────────
+// Web App do Apps Script publicado a partir de Code.gs (planilha de abastecimento).
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbze41DuQ9r3M9933ILYc99VC3BtvkFhdjtRYU1xPO147r6U25bbNb7y_pgKT5kveunoUA/exec';
+
+// Unidade desta instância — altere conforme o local (pinheiros, consolacao, etc.)
+var UNIDADE = 'poke';
+
+async function gasGet(params) {
+  if (!GAS_URL) return null;
+  var qs  = new URLSearchParams(Object.assign({ t: Date.now() }, params)).toString();
+  var res = await fetch(GAS_URL + '?' + qs);
+  var data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'Erro desconhecido');
+  return data;
+}
+
+async function gasPost(body) {
+  if (!GAS_URL) return null;
+  var res  = await fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(body)
+  });
+  var data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'Erro desconhecido');
+  return data;
+}
+
+// Fallback local — substituído por carregarCatalogo() quando GAS_URL responde
 var CATALOGO = {
   peixes:       { label:'Peixes e frutos do mar', produtos:[
     {nome:'Salmão fresco',un:'kg',min:5},{nome:'Atum bluefin',un:'kg',min:2},{nome:'Polvo fresco',un:'kg',min:2},
@@ -679,6 +708,135 @@ var activeCats = [];
 var procOrderId = null;
 var currentUser = null;
 
+// ── SHEET LOADERS ─────────────────────────────────────────────────────────────
+async function carregarCatalogo() {
+  if (!GAS_URL) { popularSelectCategorias(); return; }
+  try {
+    var data = await gasGet({ action: 'getCatalogo' });
+    if (data && data.catalogo && Object.keys(data.catalogo).length > 0) {
+      var convertido = {};
+      Object.keys(data.catalogo).forEach(function(key) {
+        var c = data.catalogo[key];
+        convertido[key] = {
+          label: c.label,
+          produtos: (c.produtos || []).map(function(p) {
+            return { nome: p.nome, un: p.un, min: p.qtdMinima || 0 };
+          })
+        };
+      });
+      CATALOGO = convertido;
+    }
+  } catch(e) { console.warn('Catálogo: usando fallback local.', e.message); }
+  popularSelectCategorias();
+}
+
+function popularSelectCategorias() {
+  var sel = document.getElementById('sel-cat');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Selecione uma categoria…</option>';
+  Object.keys(CATALOGO).forEach(function(key) {
+    var opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = CATALOGO[key].label;
+    sel.appendChild(opt);
+  });
+}
+
+function categoriaLabelParaKey(label) {
+  if (!label) return '';
+  for (var k in CATALOGO) {
+    if (CATALOGO[k].label === label) return k;
+    if (CATALOGO[k].label && CATALOGO[k].label.split(' ')[0] === label) return k;
+  }
+  return String(label).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '').slice(0, 20);
+}
+
+function statusBackendParaUI(p) {
+  var map = {
+    solicitado: { cls:'b-enviado',    lbl:'Enviado',            aba:'processamento' },
+    comprado:   { cls:'b-aguardando', lbl:'Aguardando entrega', aba:'entregas' },
+    recebido:   { cls:'b-concluido',  lbl:'Concluído',          aba:'pedidos' },
+    parcial:    { cls:'b-parcial',    lbl:'Entrega parcial',    aba:'pedidos' },
+    cancelado:  { cls:'b-rascunho',   lbl:'Cancelado',          aba:'pedidos' }
+  };
+  return map[p.status] || { cls:'b-enviado', lbl:p.status || 'Enviado', aba:'processamento' };
+}
+
+async function carregarPedidos() {
+  if (!GAS_URL) { renderAll(); updateKPIs(); return; }
+  try {
+    var data = await gasGet({ action: 'getPedidos', unidade: UNIDADE, perfil: 'lider' });
+    if (data && data.pedidos) {
+      var pedidosUI = await Promise.all(data.pedidos.map(pedidoParaUI));
+      ORDERS = pedidosUI;
+    }
+  } catch(e) {
+    toast('Erro ao carregar pedidos: ' + e.message);
+  }
+  renderAll(); updateKPIs();
+}
+
+async function pedidoParaUI(p) {
+  var s = statusBackendParaUI(p);
+  var data    = p.dataSolicitacao     ? new Date(p.dataSolicitacao + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  var entrega = p.dataEntregaDesejada ? new Date(p.dataEntregaDesejada + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+
+  // Busca itens do pedido para reconstruir itensList
+  var itensList = [];
+  try {
+    var det = await gasGet({ action: 'getPedido', id: p.id });
+    if (det && det.itens) {
+      itensList = det.itens.map(function(it) {
+        var catLabel = (CATALOGO[it.categoriaKey] && CATALOGO[it.categoriaKey].label) || it.categoriaKey;
+        var qty = (s.aba === 'entregas' && it.qtdComprada) ? Number(it.qtdComprada) : Number(it.qtdSolicitada) || 0;
+        return {
+          cat:      catLabel,
+          nome:     it.produtoNome,
+          un:       it.unidade,
+          qty:      qty,
+          vlPedido: 0,
+          qtdComprada: Number(it.qtdComprada) || 0,
+          qtdRecebida: Number(it.qtdRecebida) || 0
+        };
+      });
+    }
+  } catch(e) { console.warn('getPedido falhou para ' + p.id, e.message); }
+
+  var catsSet = {};
+  itensList.forEach(function(it) {
+    var first = String(it.cat || '').split(' ')[0];
+    if (first) catsSet[first] = 1;
+  });
+
+  // Se já passou pela etapa Compras, monta um fornecedor agregando os itens
+  var fornecedores = null;
+  if ((p.status === 'comprado' || p.status === 'parcial' || p.status === 'recebido') && p.fornecedor) {
+    fornecedores = [{
+      nome: p.fornecedor,
+      status: p.status === 'comprado' ? 'b-aguardando' : 'b-concluido',
+      label:  p.status === 'comprado' ? 'Aguardando'  : 'Recebido',
+      itens: itensList.map(function(it) {
+        return { nome: it.nome, un: it.un, qty: it.qtdComprada || it.qty, vlPedido: it.vlPedido || 0 };
+      })
+    }];
+  }
+
+  return {
+    id:        p.id,
+    idDisplay: p.idDisplay || ('#' + p.id),
+    status:    s.cls,
+    label:     s.lbl,
+    cats:      Object.keys(catsSet),
+    data:      data,
+    entrega:   entrega,
+    obs:       p.obsSolicitante || '',
+    aba:       s.aba,
+    itensList: itensList,
+    fornecedores: fornecedores,
+    raw:       p
+  };
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
   var session; try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
@@ -692,6 +850,8 @@ document.addEventListener('DOMContentLoaded', function() {
     new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
   document.getElementById('modal-data-entrega').value = new Date().toISOString().split('T')[0];
   renderAll(); updateKPIs();
+  carregarCatalogo();
+  carregarPedidos();
 });
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
@@ -782,30 +942,67 @@ function recalcResumo() {
 
 function fecharModalProc() { document.getElementById('modal-proc').classList.remove('active'); document.body.style.overflow=''; procOrderId=null; }
 
-function confirmarPedido() {
+// ── CONFIRMAR PROCESSAMENTO (Estágio 2 — Compras) ────────────────────────────
+async function confirmarPedido() {
   var dadosProc = {};
-  for(var i=0;i<ORDERS.length;i++){
-    if(ORDERS[i].id===procOrderId){
-      var order=ORDERS[i];
-      order.itensList.forEach(function(item,idx){
-        var conf=parseFloat((document.getElementById('proc-conf-'+idx)||{}).value)||0;
-        var vl=parseFloat((document.getElementById('proc-vl-'+idx)||{}).value)||0;
-        var forn=((document.getElementById('proc-forn-'+idx)||{}).value||'').trim();
-        var entregaInp=document.getElementById('proc-date-'+idx);
-        var entrega='—';
-        if(entregaInp&&entregaInp.value){var p=entregaInp.value.split('-');entrega=p[2]+'/'+p[1]+'/'+p[0];}
-        item.vlPedido=vl;
-        dadosProc[idx]={conf:conf, vl:vl, forn:forn||'—', entrega:entrega};
-      });
-      dadosProc.obs=document.getElementById('proc-obs').value.trim();
-      order.status='b-concluido'; order.label='Concluído'; order.aba='pedidos';
-      var savedId=procOrderId, savedOrder=order;
-      toast('Pedido '+procOrderId+' confirmado!'); fecharModalProc(); renderAll(); updateKPIs();
-      setTimeout(function(){gerarPDFProcessamento(savedOrder, dadosProc);},400);
-      return;
+  var order = null;
+  for(var i=0;i<ORDERS.length;i++){ if(ORDERS[i].id===procOrderId){ order=ORDERS[i]; break; } }
+  if(!order){ toast('Erro ao confirmar pedido.'); fecharModalProc(); return; }
+
+  // Coleta dados por item + agrupa fornecedores
+  var fornGroups = {};   // forn → [{nome, un, qty, vlPedido}]
+  var totalGeral = 0;
+  var itensApi = [];     // payload para updateCompras
+  order.itensList.forEach(function(item,idx){
+    var conf=parseFloat((document.getElementById('proc-conf-'+idx)||{}).value)||0;
+    var vl=parseFloat((document.getElementById('proc-vl-'+idx)||{}).value)||0;
+    var forn=((document.getElementById('proc-forn-'+idx)||{}).value||'').trim();
+    var entregaInp=document.getElementById('proc-date-'+idx);
+    var entrega='—';
+    if(entregaInp&&entregaInp.value){var p=entregaInp.value.split('-');entrega=p[2]+'/'+p[1]+'/'+p[0];}
+    item.vlPedido=vl;
+    dadosProc[idx]={conf:conf, vl:vl, forn:forn||'—', entrega:entrega};
+    totalGeral += conf*vl;
+    if(conf>0){
+      itensApi.push({ produtoNome: item.nome, qtdComprada: conf });
+      var key = forn || '—';
+      if(!fornGroups[key]) fornGroups[key] = [];
+      fornGroups[key].push({ nome:item.nome, un:item.un, qty:conf, vlPedido:vl });
     }
+  });
+  dadosProc.obs=document.getElementById('proc-obs').value.trim();
+
+  // Atualiza estado local: pedido vai para a aba "entregas" com fornecedores agrupados
+  order.fornecedores = Object.keys(fornGroups).map(function(forn){
+    return { nome: forn, status:'b-aguardando', label:'Aguardando', itens: fornGroups[forn] };
+  });
+  order.status='b-aguardando'; order.label='Aguardando entrega'; order.aba='entregas';
+
+  // Sincroniza com a planilha
+  if (GAS_URL) {
+    try {
+      var fornecedorAgg = Object.keys(fornGroups).join(', ') || '—';
+      var res = await gasPost({
+        action:     'updateCompras',
+        id:         order.id,
+        fornecedor: fornecedorAgg,
+        valorTotal: totalGeral,
+        notaFiscal: '',
+        obsCompras: dadosProc.obs,
+        itens:      itensApi
+      });
+      if (res && res.idDisplay) order.idDisplay = res.idDisplay;
+      toast('Pedido '+order.id+' enviado para entregas.');
+    } catch(e) {
+      toast('Erro ao atualizar Compras: ' + e.message);
+    }
+  } else {
+    toast('Pedido '+order.id+' confirmado!');
   }
-  toast('Erro ao confirmar pedido.'); fecharModalProc();
+
+  var savedOrder = order;
+  fecharModalProc(); renderAll(); updateKPIs();
+  setTimeout(function(){gerarPDFProcessamento(savedOrder, dadosProc);},400);
 }
 
 // ── CATEGORIAS ────────────────────────────────────────────────────────────────
@@ -843,21 +1040,53 @@ function removeCategoria(key) {
   var el=document.getElementById('cat-sec-'+key); if(el)el.remove();
 }
 
-// ── ENVIAR ────────────────────────────────────────────────────────────────────
-function enviarPedido() {
+// ── ENVIAR (Estágio 1 — Solicitante) ─────────────────────────────────────────
+async function enviarPedido() {
   if(activeCats.length===0){toast('Adicione ao menos uma categoria.');return;}
   var itensList=[];
-  activeCats.forEach(function(key){CATALOGO[key].produtos.forEach(function(p,i){var inp=document.getElementById('qty-'+key+'-'+i);var qty=inp?parseFloat(inp.value):0;if(qty>0)itensList.push({cat:CATALOGO[key].label,nome:p.nome,un:p.un,qty:qty});});});
+  var itensApi=[];
+  activeCats.forEach(function(key){
+    CATALOGO[key].produtos.forEach(function(p,i){
+      var inp=document.getElementById('qty-'+key+'-'+i);
+      var qty=inp?parseFloat(inp.value):0;
+      if(qty>0){
+        itensList.push({cat:CATALOGO[key].label,nome:p.nome,un:p.un,qty:qty});
+        itensApi.push({categoriaKey:key, produtoNome:p.nome, unidade:p.un, qtdSolicitada:qty});
+      }
+    });
+  });
   if(itensList.length===0){toast('Informe ao menos uma quantidade.');return;}
   var now=new Date(); var dataStr=now.toLocaleDateString('pt-BR');
   var entregaVal=document.getElementById('modal-data-entrega').value;
   var entregaStr=entregaVal?new Date(entregaVal+'T12:00:00').toLocaleDateString('pt-BR'):'—';
   var obsVal=document.getElementById('modal-obs').value.trim();
   var newId='P-'+(100+ORDERS.length);
+  var newDisplay='#'+newId;
   var cats=activeCats.map(function(k){return CATALOGO[k].label.split(' ')[0];});
-  var newOrder={id:newId,status:'b-enviado',label:'Enviado',cats:cats,data:dataStr,entrega:entregaStr,obs:obsVal,aba:'pedidos',itensList:itensList};
+  var newOrder={id:newId,idDisplay:newDisplay,status:'b-enviado',label:'Enviado',cats:cats,data:dataStr,entrega:entregaStr,obs:obsVal,aba:'processamento',itensList:itensList};
+
+  if (GAS_URL) {
+    try {
+      var res = await gasPost({
+        action:              'savePedido',
+        unidade:             UNIDADE,
+        solicitante:         (currentUser && currentUser.name) || 'Líder',
+        dataEntregaDesejada: entregaVal,
+        obs:                 obsVal,
+        itens:               itensApi
+      });
+      newOrder.id        = res.id        || newId;
+      newOrder.idDisplay = res.idDisplay || newDisplay;
+      toast('Pedido ' + newOrder.idDisplay + ' enviado para a planilha.');
+    } catch(e) {
+      toast('Erro ao salvar na planilha: ' + e.message);
+    }
+  } else {
+    toast('Pedido '+newId+' gerado! '+itensList.length+' itens.');
+  }
+
   ORDERS.unshift(newOrder);
-  toast('Pedido '+newId+' gerado! '+itensList.length+' itens.'); fecharModalPedido();
+  fecharModalPedido();
   activeCats=[]; document.getElementById('cat-sections').innerHTML=''; document.getElementById('modal-obs').value='';
   document.getElementById('modal-data-entrega').value=new Date().toISOString().split('T')[0];
   renderAll(); updateKPIs(); setTab('pedidos');
@@ -1198,14 +1427,16 @@ function removeFoto(e,idx) {
 
 function fecharModalNF() { document.getElementById('modal-nf').classList.remove('active'); document.body.style.overflow=''; nfOrderId=null; nfFornIdx=null; }
 
-function confirmarBaixaNF() {
+// ── CONFIRMAR BAIXA NF (Estágio 3 — Estoque) ─────────────────────────────────
+async function confirmarBaixaNF() {
   if(!document.getElementById('nf-numero').value.trim()){toast('Informe o número da NF.');return;}
   if(!document.getElementById('nf-quem').value.trim()){toast('Informe quem recebeu.');return;}
   var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===nfOrderId){order=ORDERS[i];break;}}
   var forn = (order && order.fornecedores) ? order.fornecedores[nfFornIdx] : null;
 
-  // Coleta dados do modal NF para o PDF
+  // Coleta dados do modal NF para o PDF e para a planilha
   var itensPdf = [];
+  var itensApi = [];
   if(forn){
     forn.itens.forEach(function(item,idx){
       var rowId='item-'+idx;
@@ -1214,6 +1445,7 @@ function confirmarBaixaNF() {
       var rec=parseFloat(inpRec&&inpRec.value)||(item.qty||0);
       var vlRec=parseFloat(inpVl&&inpVl.value)||(item.vlPedido||0);
       itensPdf.push({nome:item.nome,un:item.un,qtdPedido:item.qty||0,vlPedido:item.vlPedido||0,rec:rec,vlRec:vlRec});
+      itensApi.push({produtoNome:item.nome, qtdRecebida:rec});
     });
   }
   // Bonificações
@@ -1251,8 +1483,26 @@ function confirmarBaixaNF() {
   if(forn){
     forn.status='b-concluido'; forn.label='Recebido';
     var allDone=order.fornecedores.every(function(f){return f.status==='b-concluido';});
-    if(allDone){order.status='b-concluido';order.label='Concluído';}
+    if(allDone){order.status='b-concluido';order.label='Concluído';order.aba='pedidos';}
   }
+
+  // Sincroniza com a planilha
+  if (GAS_URL && order) {
+    try {
+      var res = await gasPost({
+        action:      'updateEstoque',
+        id:          order.id,
+        recebidoPor: dadosNF.quem,
+        obsEstoque:  dadosNF.obs + (dadosNF.numero ? ' [NF '+dadosNF.numero+']' : ''),
+        itens:       itensApi
+      });
+      if (res && res.idDisplay) order.idDisplay = res.idDisplay;
+      if (res && res.status === 'parcial') { order.status='b-parcial'; order.label='Entrega parcial'; order.aba='pedidos'; }
+    } catch(e) {
+      toast('Erro ao atualizar Estoque: ' + e.message);
+    }
+  }
+
   var savedOrder=order, savedForn=forn;
   toast('Baixa de NF registrada — '+nfOrderId+' · '+(forn?forn.nome:''));
   fecharModalNF(); renderAll(); updateKPIs();
