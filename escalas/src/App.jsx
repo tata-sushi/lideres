@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Download, Plus, X, UserPlus, ChevronLeft, ChevronRight, Printer, Save, ClipboardList, LayoutGrid, BarChart2, Clock } from 'lucide-react';
-import { carregarEscala, salvarEscala, carregarColaboradores, carregarFerias, salvarFerias, salvarExtras } from './api.js';
+import { carregarEscala, salvarEscala, carregarColaboradores, carregarFerias, salvarFerias, salvarExtras, carregarHorarios, salvarHorarios } from './api.js';
 
 // ============================================================
 // DESIGN TOKENS
@@ -228,7 +228,7 @@ const escalaSemColab = (esc, cid) => {
 // ============================================================
 // COMPONENTE: Célula de turno editável
 // ============================================================
-function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
+function CelulaTurno({ turno, onChange, deFerias, onVacationClick, horariosExtras }) {
   const [dropOpen, setDropOpen] = useState(false);
   const [showT2, setShowT2] = useState(!!(turno?.t2Ini || turno?.t2Fim));
   const [showT3, setShowT3] = useState(!!(turno?.t3Ini || turno?.t3Fim));
@@ -349,9 +349,15 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
       {dropOpen && (
         <div className="esc-dropdown">
           {PRESETS_BASE.map((p,i) => (
-            <div key={i} className="esc-dd-item" onClick={()=>aplicarPreset(p)}>
+            <div key={`b${i}`} className="esc-dd-item" onClick={()=>aplicarPreset(p)}>
               <span className="esc-dd-label">{p.label}</span>
               <span className="esc-dd-hours">{p.turnos.map(([a,b])=>`${a.replace(':00','')}–${b.replace(':00','')}`).join(' + ')}</span>
+            </div>
+          ))}
+          {(horariosExtras||[]).map((h,i) => (
+            <div key={`e${i}`} className="esc-dd-item" onClick={()=>aplicarPreset({label:h.nome,turnos:[[h.entrada,h.saida]]})}>
+              <span className="esc-dd-label">{h.nome}</span>
+              <span className="esc-dd-hours">{h.entrada.replace(':00','')}–{h.saida.replace(':00','')}</span>
             </div>
           ))}
           <div className="esc-dd-sep"/>
@@ -368,11 +374,12 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
 // ============================================================
 // COMPONENTE: Célula de horário de funcionamento
 // ============================================================
-function CelulaHorario({ diaId, label, iniKey, fimKey, fechadoKey, cfgHor, onUpdate }) {
+function CelulaHorario({ diaId, label, iniKey, fimKey, fechadoKey, cfgHor, onUpdate, horariosExtras }) {
   const [dropOpen, setDropOpen] = useState(false);
 
   const fechado = !!cfgHor[fechadoKey];
   const presets = PRESETS_HOR[label] || [];
+  const extras = (horariosExtras||[]).map(h=>({label:h.nome,ini:h.entrada,fim:h.saida}));
 
   const setFechado = (v) => { onUpdate(fechadoKey, v); setDropOpen(false); };
   const setField = (k, v) => { onUpdate(k, v); if (fechado) onUpdate(fechadoKey, false); };
@@ -399,7 +406,13 @@ function CelulaHorario({ diaId, label, iniKey, fimKey, fechadoKey, cfgHor, onUpd
       {dropOpen && (
         <div className="esc-dropdown">
           {presets.map((p,i) => (
-            <div key={i} className="esc-dd-item" onClick={()=>aplicar(p)}>
+            <div key={`p${i}`} className="esc-dd-item" onClick={()=>aplicar(p)}>
+              <span className="esc-dd-label">{p.label}</span>
+              <span className="esc-dd-hours">{p.ini.replace(':00','')}–{p.fim.replace(':00','')}</span>
+            </div>
+          ))}
+          {extras.map((p,i) => (
+            <div key={`e${i}`} className="esc-dd-item" onClick={()=>aplicar(p)}>
               <span className="esc-dd-label">{p.label}</span>
               <span className="esc-dd-hours">{p.ini.replace(':00','')}–{p.fim.replace(':00','')}</span>
             </div>
@@ -519,6 +532,12 @@ export default function EscalaPainel() {
   const [feriasModalColab, setFeriasModalColab] = useState(null);
   const [mostrarAdd, setMostrarAdd] = useState(false);
   const [novoNome, setNovoNome] = useState('');
+  const [horariosCadastrados, setHorariosCadastrados] = useState([]);
+  const [mostrarAddHorario, setMostrarAddHorario] = useState(false);
+  const [novoHorarioNome, setNovoHorarioNome] = useState('');
+  const [novoHorarioEntrada, setNovoHorarioEntrada] = useState('');
+  const [novoHorarioSaida, setNovoHorarioSaida] = useState('');
+  const [novoHorarioTipo, setNovoHorarioTipo] = useState('escala');
   const [novoFunc, setNovoFunc] = useState('Garçom');
   const [novoUnidade, setNovoUnidade] = useState('Itaim');
   const [novoDepto, setNovoDepto] = useState('Salão');
@@ -550,6 +569,13 @@ export default function EscalaPainel() {
         return carregarFerias();
       })
       .then(data => { if (data && data.ferias) setFerias(data.ferias); })
+      .catch(() => {});
+  },[]);
+
+  // Carregar horários cadastrados
+  useEffect(()=>{
+    carregarHorarios()
+      .then(data => { if (data && data.horarios) setHorariosCadastrados(data.horarios); })
       .catch(() => {});
   },[]);
 
@@ -671,6 +697,22 @@ export default function EscalaPainel() {
       return novo;
     });
     setNovoNome(''); setMostrarAdd(false);
+  };
+
+  const adicionarHorario = () => {
+    if (!novoHorarioNome.trim() || !novoHorarioEntrada || !novoHorarioSaida) return;
+    const novo = {
+      id: `h_${Date.now()}`,
+      nome: novoHorarioNome.trim(),
+      entrada: novoHorarioEntrada,
+      saida: novoHorarioSaida,
+      tipo: novoHorarioTipo,
+    };
+    const lista = [...horariosCadastrados, novo];
+    setHorariosCadastrados(lista);
+    salvarHorarios(lista).catch(()=>{});
+    setNovoHorarioNome(''); setNovoHorarioEntrada(''); setNovoHorarioSaida('');
+    setMostrarAddHorario(false);
   };
 
   const removerColab = (cid) => {
@@ -1024,10 +1066,7 @@ export default function EscalaPainel() {
 
       {/* AÇÕES */}
       <div style={{padding:'10px 20px',display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',borderBottom:`1px solid ${T.border}`,background:T.bg}}>
-        <button className="btn-outline" onClick={()=>{
-          setHorarioAberto(true);
-          setTimeout(()=>document.getElementById('secao-horario')?.scrollIntoView({behavior:'smooth',block:'start'}),50);
-        }} title="Configurar horários de funcionamento"><Clock size={11}/>+ Horários</button>
+        <button className="btn-outline" onClick={()=>setMostrarAddHorario(p=>!p)} title="Cadastrar novo horário"><Clock size={11}/>+ Horários</button>
         <button className="btn-outline" onClick={()=>{
           if(!mostrarAdd){
             setNovoUnidade(filtroUnidade!=='Todos'?filtroUnidade:'Itaim');
@@ -1054,6 +1093,29 @@ export default function EscalaPainel() {
             <div><label className="esc-field-label">Nome</label><input className="esc-input" type="text" placeholder="Ex.: João Freelancer" value={novoNome} onChange={e=>setNovoNome(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')adicionarColab();}} autoFocus/></div>
             <div><label className="esc-field-label">Função</label><input className="esc-input" type="text" placeholder="Ex.: Garçom" value={novoFunc} onChange={e=>setNovoFunc(e.target.value)}/></div>
             <button className="btn-dev" onClick={adicionarColab} disabled={!novoNome.trim()} style={{justifyContent:'center',opacity:novoNome.trim()?1:.5,cursor:novoNome.trim()?'pointer':'not-allowed'}}><Plus size={11}/>Adicionar</button>
+          </div>
+        </div>
+      )}
+
+      {/* FORMULÁRIO ADICIONAR HORÁRIO */}
+      {mostrarAddHorario && (
+        <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+            <span className="cat-pill"><Clock size={13}/>Cadastrar Horário</span>
+            <button onClick={()=>{setMostrarAddHorario(false);setNovoHorarioNome('');setNovoHorarioEntrada('');setNovoHorarioSaida('');}} style={{width:24,height:24,display:'flex',alignItems:'center',justifyContent:'center',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:100}}><X size={11}/></button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1.4fr auto',gap:8,alignItems:'end'}}>
+            <div><label className="esc-field-label">Nome</label><input className="esc-input" type="text" placeholder="Ex.: Almoço Padrão" value={novoHorarioNome} onChange={e=>setNovoHorarioNome(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')adicionarHorario();}} autoFocus/></div>
+            <div><label className="esc-field-label">Entrada</label><input className="esc-input" type="time" value={novoHorarioEntrada} onChange={e=>setNovoHorarioEntrada(e.target.value)}/></div>
+            <div><label className="esc-field-label">Saída</label><input className="esc-input" type="time" value={novoHorarioSaida} onChange={e=>setNovoHorarioSaida(e.target.value)}/></div>
+            <div>
+              <label className="esc-field-label">Tipo</label>
+              <select className="esc-select-sm" value={novoHorarioTipo} onChange={e=>setNovoHorarioTipo(e.target.value)}>
+                <option value="escala">Escala (colaborador)</option>
+                <option value="funcionamento">Funcionamento</option>
+              </select>
+            </div>
+            <button className="btn-dev" onClick={adicionarHorario} disabled={!novoHorarioNome.trim()||!novoHorarioEntrada||!novoHorarioSaida} style={{justifyContent:'center',opacity:(novoHorarioNome.trim()&&novoHorarioEntrada&&novoHorarioSaida)?1:.5,cursor:(novoHorarioNome.trim()&&novoHorarioEntrada&&novoHorarioSaida)?'pointer':'not-allowed'}}><Plus size={11}/>Adicionar</button>
           </div>
         </div>
       )}
@@ -1097,6 +1159,7 @@ export default function EscalaPainel() {
                               fechadoKey={fec}
                               cfgHor={cfgHor}
                               onUpdate={(field, value) => updateCfg(d.id, field, value)}
+                              horariosExtras={horariosCadastrados.filter(h=>h.tipo==='funcionamento')}
                             />
                           </td>
                         );
@@ -1159,6 +1222,7 @@ export default function EscalaPainel() {
                             deFerias={df}
                             onChange={(novo)=>setTurnoCell(d.id, c.id, novo)}
                             onVacationClick={()=>setFeriasModalColab(c.id)}
+                            horariosExtras={horariosCadastrados.filter(h=>h.tipo==='escala')}
                           />
                         ) : (
                           <CelulaColapsada turno={t} deFerias={df}/>

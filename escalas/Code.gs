@@ -82,9 +82,10 @@ function jsonErr(msg) {
 function doGet(e) {
   try {
     var a = e.parameter.action;
-    if (a === 'getColaboradores') return jsonOk(getColaboradores());
-    if (a === 'getEscala')        return jsonOk(getEscala(e.parameter.semana));
-    if (a === 'getFerias')        return jsonOk(getFerias());
+    if (a === 'getColaboradores')      return jsonOk(getColaboradores());
+    if (a === 'getEscala')             return jsonOk(getEscala(e.parameter.semana));
+    if (a === 'getFerias')             return jsonOk(getFerias());
+    if (a === 'getHorariosCadastrados') return jsonOk(getHorariosCadastrados());
     return jsonErr('action inválida');
   } catch(err) { return jsonErr(err.message); }
 }
@@ -93,9 +94,10 @@ function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
     var a = body.action;
-    if (a === 'saveEscala')  return jsonOk(saveEscala(body.semana, body.escala, body.config));
-    if (a === 'saveFerias')  return jsonOk(saveFerias(body.ferias));
-    if (a === 'saveExtras')  return jsonOk(saveExtras(body.extras));
+    if (a === 'saveEscala')              return jsonOk(saveEscala(body.semana, body.escala, body.config));
+    if (a === 'saveFerias')              return jsonOk(saveFerias(body.ferias));
+    if (a === 'saveExtras')              return jsonOk(saveExtras(body.extras));
+    if (a === 'saveHorariosCadastrados') return jsonOk(saveHorariosCadastrados(body.horarios));
     return jsonErr('action inválida');
   } catch(err) { return jsonErr(err.message); }
 }
@@ -331,6 +333,42 @@ function saveFerias(ferias) {
     sh.getRange(2, 1, ferias.length, 5)
       .setValues(ferias.map(function(f) {
         return [f.id, f.colabId, f.dataIni, f.dataFim, f.obs||''];
+      }));
+  }
+  return {};
+}
+
+// ── HORÁRIOS CADASTRADOS ──────────────────────────────────────
+// Aba "HorariosCadastrados": id | nome | entrada | saida | tipo
+// Presets de horários salvos pelo usuário (tipo: 'funcionamento' ou 'escala')
+
+var HORARIOS_HEADER = ['id','nome','entrada','saida','tipo'];
+
+function getHorariosCadastrados() {
+  var sh = aba('HorariosCadastrados', HORARIOS_HEADER);
+  var rows = todasLinhas(sh);
+  return {
+    horarios: rows
+      .filter(function(r) { return r[0] && r[1]; })
+      .map(function(r) {
+        return {
+          id:      String(r[0]),
+          nome:    String(r[1]),
+          entrada: _hhmm(r[2]),
+          saida:   _hhmm(r[3]),
+          tipo:    String(r[4] || 'escala'),
+        };
+      })
+  };
+}
+
+function saveHorariosCadastrados(horarios) {
+  var sh = aba('HorariosCadastrados', HORARIOS_HEADER);
+  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow()-1, HORARIOS_HEADER.length).clearContent();
+  if (horarios && horarios.length > 0) {
+    sh.getRange(2, 1, horarios.length, HORARIOS_HEADER.length)
+      .setValues(horarios.map(function(h) {
+        return [h.id, h.nome, h.entrada||'', h.saida||'', h.tipo||'escala'];
       }));
   }
   return {};
