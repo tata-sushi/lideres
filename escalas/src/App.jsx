@@ -1301,8 +1301,8 @@ export default function EscalaPainel() {
                 ))}
               </div>
               <div style={{overflow:'auto',maxHeight:'60vh',WebkitOverflowScrolling:'touch'}}>
-                <div style={{display:'grid',gridTemplateColumns:`48px repeat(${colabsFiltrados.length},${colW}px)`,minWidth:48+colabsFiltrados.length*colW,width:'max-content'}}>
-                  <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:54,width:48,minWidth:48,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px'}}>HORA</div>
+                <div style={{display:'grid',gridTemplateColumns:`repeat(${colabsFiltrados.length+2},${colW}px)`,minWidth:colW*(colabsFiltrados.length+2),width:'max-content'}}>
+                  <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:54,width:colW,minWidth:colW,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px'}}>HORA</div>
                   {colabsFiltrados.map(c=>{
                     const hTurno = horasTurno(escala[diaGrade.id]?.[c.id]||{});
                     const deF = estaDeFerias(c.id,dataDoDia(diaGrade.id));
@@ -1310,12 +1310,13 @@ export default function EscalaPainel() {
                       <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'6px 7px',borderLeft:'1px solid #2E3038',display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center',gap:1}}>
                         <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?10:11,fontWeight:700,letterSpacing:'-0.2px',width:'100%',textAlign:'center',lineHeight:1.2,wordBreak:'break-word',whiteSpace:'normal'}}>{c.nome}</div>
                         <div style={{fontFamily:'DM Mono,sans-serif',fontSize:ehMobile?8:9,fontWeight:400,color:'rgba(255,255,255,.7)',letterSpacing:'.2px',width:'100%',textAlign:'center',whiteSpace:'normal',wordBreak:'break-word',lineHeight:1.2,marginTop:2}}>{c.funcao}</div>
-                        <div style={{fontFamily:'DM Mono,monospace',fontSize:ehMobile?8:9,fontWeight:600,color:T.citric,letterSpacing:'.3px',marginTop:2}}>
-                          {deF ? '🏖 Férias' : hTurno > 0 ? fmtHoras(hTurno) : '—'}
+                        <div style={{fontFamily:'DM Mono,monospace',fontSize:ehMobile?8:9,fontWeight:400,color:'#FFFFFF',letterSpacing:'.3px',marginTop:2}}>
+                          {deF ? 'Férias' : hTurno > 0 ? fmtHoras(hTurno) : '—'}
                         </div>
                       </div>
                     );
                   })}
+                  <div style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:T.citric,height:54,minWidth:colW,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',borderLeft:'1px solid #2E3038'}}>TOTAL</div>
                   {Array.from({length:TOTAL_SLOTS}).map((_,slot)=>{
                     const lbl=slotLabel(slot);
                     const full=slot%2===0;
@@ -1324,6 +1325,11 @@ export default function EscalaPainel() {
                     const naPrepJan = emFaixa(slot,cfgGrade.prepJantarIni,cfgGrade.prepJantarFim);
                     const naFuncJan = emFaixa(slot,cfgGrade.funcJantarIni,cfgGrade.funcJantarFim);
                     const borda = full ? `1px solid ${T.gridLine}` : `1px solid transparent`;
+                    let totalSlot = 0;
+                    colabsFiltrados.forEach(c=>{
+                      const t=escala[diaGrade.id]?.[c.id]||{};
+                      if (turnoSlots(t).has(slot) && !t.folga) totalSlot++;
+                    });
                     return (
                       <React.Fragment key={slot}>
                         <div className="hora-cell" style={{
@@ -1331,16 +1337,14 @@ export default function EscalaPainel() {
                           color: full ? T.carbon : 'transparent',
                           fontSize: full ? 9.5 : 0,
                           borderBottom: full ? `1px solid ${T.gridLine}` : `1px solid transparent`,
-                          width: 48, maxWidth: 48, minWidth: 48,
+                          width: colW, maxWidth: colW, minWidth: colW,
                         }}>{full ? lbl : ''}</div>
                         {colabsFiltrados.map(c=>{
                           const t=escala[diaGrade.id]?.[c.id]||{};
                           const ativo=turnoSlots(t).has(slot);
-                          const deFerias=estaDeFerias(c.id, dataDoDia(diaGrade.id));
                           let bg='transparent';
                           let opacity=1;
-                          if (deFerias) { bg='#E8F0FA'; }
-                          else if (ativo && !t.folga) bg=T.carbon;
+                          if (ativo && !t.folga) bg=T.carbon;
                           else if (naFuncJan) bg='#FFF4DC';
                           else if (naPrepJan) bg='#FFF4DC';
                           else if (naFuncAlm) bg='#FFF4DC';
@@ -1349,6 +1353,7 @@ export default function EscalaPainel() {
                             <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,opacity,borderRight:`1px solid ${T.gridLine}`,borderBottom:borda,overflow:'hidden'}}/>
                           );
                         })}
+                        <div style={{height:rowH,background:totalSlot>0?T.bg:'transparent',borderLeft:`1px solid ${T.gridLine}`,borderBottom:borda,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:full?10:9,fontWeight:totalSlot>0?700:400,color:totalSlot>0?T.carbon:T.muted,minWidth:colW}}>{totalSlot>0?totalSlot:''}</div>
                       </React.Fragment>
                     );
                   })}
@@ -1356,11 +1361,11 @@ export default function EscalaPainel() {
               </div>
               <div style={{padding:'10px 16px',borderTop:`1px solid ${T.border}`,display:'flex',gap:12,flexWrap:'wrap',fontFamily:'DM Mono,monospace',fontSize:10,color:T.mid,justifyContent:'center'}}>
                 {[
-                  {label:'Férias',       bg:'#E8F0FA', border:`1px solid ${T.carbon}`},
                   {label:'Prep Almoço',  bg:'#FFF4DC', border:`1px solid ${T.carbon}`},
                   {label:'Func Almoço',  bg:'#FFF4DC', border:`1px solid ${T.carbon}`},
                   {label:'Prep Jantar',  bg:'#FFF4DC', border:`1px solid ${T.carbon}`},
                   {label:'Func Jantar',  bg:'#FFF4DC', border:`1px solid ${T.carbon}`},
+                  {label:'Trabalhando',  bg:T.carbon,  border:`1px solid ${T.carbon}`},
                 ].map(l=>(
                   <span key={l.label} style={{display:'flex',alignItems:'center',gap:5}}>
                     <span style={{width:10,height:10,background:l.bg,borderRadius:2,border:l.border,flexShrink:0}}/>
