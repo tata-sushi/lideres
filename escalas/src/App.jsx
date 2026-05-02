@@ -1301,8 +1301,8 @@ export default function EscalaPainel() {
                 ))}
               </div>
               <div style={{overflow:'auto',maxHeight:'60vh',WebkitOverflowScrolling:'touch'}}>
-                <div style={{display:'grid',gridTemplateColumns:`repeat(${colabsFiltrados.length+2},${colW}px)`,minWidth:colW*(colabsFiltrados.length+2),width:'max-content'}}>
-                  <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:54,width:colW,minWidth:colW,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px'}}>HORA</div>
+                <div style={{display:'grid',gridTemplateColumns:`repeat(${colabsFiltrados.length+1},${colW}px)`,minWidth:colW*(colabsFiltrados.length+1),width:'max-content'}}>
+                  <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,minHeight:54,width:colW,minWidth:colW,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',alignSelf:'stretch'}}>HORA</div>
                   {colabsFiltrados.map(c=>{
                     const hTurno = horasTurno(escala[diaGrade.id]?.[c.id]||{});
                     const deF = estaDeFerias(c.id,dataDoDia(diaGrade.id));
@@ -1316,7 +1316,6 @@ export default function EscalaPainel() {
                       </div>
                     );
                   })}
-                  <div style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:T.citric,height:54,minWidth:colW,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',borderLeft:'1px solid #2E3038'}}>TOTAL</div>
                   {Array.from({length:TOTAL_SLOTS}).map((_,slot)=>{
                     const lbl=slotLabel(slot);
                     const full=slot%2===0;
@@ -1338,7 +1337,7 @@ export default function EscalaPainel() {
                           fontSize: full ? 9.5 : 0,
                           borderBottom: full ? `1px solid ${T.gridLine}` : `1px solid transparent`,
                           width: colW, maxWidth: colW, minWidth: colW,
-                        }}>{full ? lbl : ''}</div>
+                        }}>{full ? (totalSlot>0 ? `${lbl} (${totalSlot})` : lbl) : ''}</div>
                         {colabsFiltrados.map(c=>{
                           const t=escala[diaGrade.id]?.[c.id]||{};
                           const ativo=turnoSlots(t).has(slot);
@@ -1353,7 +1352,6 @@ export default function EscalaPainel() {
                             <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,opacity,borderRight:`1px solid ${T.gridLine}`,borderBottom:borda,overflow:'hidden'}}/>
                           );
                         })}
-                        <div style={{height:rowH,background:totalSlot>0?T.bg:'transparent',borderLeft:`1px solid ${T.gridLine}`,borderBottom:borda,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:full?10:9,fontWeight:totalSlot>0?700:400,color:totalSlot>0?T.carbon:T.muted,minWidth:colW}}>{totalSlot>0?totalSlot:''}</div>
                       </React.Fragment>
                     );
                   })}
