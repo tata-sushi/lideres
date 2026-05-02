@@ -5,6 +5,10 @@
 //   Executar como: Eu | Quem tem acesso: Qualquer pessoa
 // ============================================================
 
+// Timezone fixo para evitar chamadas ao serviço Session (causa "issues with
+// creating new sessions" em Apps Script sob carga).
+var TZ = 'America/Sao_Paulo';
+
 // Planilha de ESCALA (onde salvamos turnos e configs)
 // Crie uma planilha nova e cole o ID aqui:
 var ESCALA_SHEET_ID = '1KJKPEH8nfKlPuITwyPpDU0ELZF3wp303iGtJCHnuAMg';
@@ -42,7 +46,7 @@ var CORES = [
 // Esta função normaliza o valor da célula para string 'YYYY-MM-DD' em ambos os casos.
 function semanaStr(v) {
   if (v instanceof Date) {
-    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    return Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
   }
   return String(v || '').trim();
 }
@@ -215,7 +219,7 @@ function migrarEscalaSchema(sh) {
 function _hhmm(v) {
   if (v == null || v === '') return '';
   if (Object.prototype.toString.call(v) === '[object Date]') {
-    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'HH:mm');
+    return Utilities.formatDate(v, TZ, 'HH:mm');
   }
   var s = String(v);
   var m = s.match(/T(\d{2}):(\d{2})/);
