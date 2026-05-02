@@ -6,7 +6,7 @@
 // ============================================================
 
 // ID da planilha dedicada — cole após criar a planilha
-var SHEET_ID = 'COLE_O_ID_DA_PLANILHA_AQUI';
+var SHEET_ID = '122mgRbGeqX1KBkb0TzAlBiWf6buyUDDmDK5lQCCXnhE';
 
 // Timezone fixo (evita Session.getScriptTimeZone())
 var TZ = 'America/Sao_Paulo';
