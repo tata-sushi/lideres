@@ -282,11 +282,11 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
     return (
       <div className="esc-cell">
         <div className="esc-top-row">
-          <button className="esc-tog" onClick={()=>setEstado('turno')}>T</button>
-          <button className="esc-tog" onClick={()=>{setEstado('turno');setDropOpen(true);}}>▾</button>
-          <button className="esc-tog" onClick={()=>setEstado('folga')}>F</button>
-          <button className="esc-tog" onClick={onVacationClick} title="Gerenciar férias">V</button>
-          <button className="esc-tog" onClick={()=>setEstado('turno')}>+</button>
+          <button className="esc-tog" title="Turno" onClick={()=>setEstado('turno')}>T</button>
+          <button className="esc-tog" title="Turnos cadastrados" onClick={()=>{setEstado('turno');setDropOpen(true);}}>▾</button>
+          <button className="esc-tog" title="Folga" onClick={()=>setEstado('folga')}>F</button>
+          <button className="esc-tog" title="Férias" onClick={onVacationClick}>V</button>
+          <button className="esc-tog" title="Adicionar turno" onClick={()=>setEstado('turno')}>+</button>
         </div>
         <div className="esc-badge-v">Férias</div>
       </div>
@@ -297,11 +297,11 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
     return (
       <div className="esc-cell">
         <div className="esc-top-row">
-          <button className="esc-tog" onClick={()=>setEstado('turno')}>T</button>
-          <button className="esc-tog" onClick={()=>{setEstado('turno');setDropOpen(true);}}>▾</button>
-          <button className="esc-tog" onClick={()=>setEstado('folga')}>F</button>
-          <button className="esc-tog" onClick={onVacationClick} title="Gerenciar férias">V</button>
-          <button className="esc-tog" onClick={()=>setEstado('turno')}>+</button>
+          <button className="esc-tog" title="Turno" onClick={()=>setEstado('turno')}>T</button>
+          <button className="esc-tog" title="Turnos cadastrados" onClick={()=>{setEstado('turno');setDropOpen(true);}}>▾</button>
+          <button className="esc-tog" title="Folga" onClick={()=>setEstado('folga')}>F</button>
+          <button className="esc-tog" title="Férias" onClick={onVacationClick}>V</button>
+          <button className="esc-tog" title="Adicionar turno" onClick={()=>setEstado('turno')}>+</button>
         </div>
         <div className="esc-badge-f">Folga</div>
       </div>
@@ -311,12 +311,12 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
   return (
     <div className="esc-cell" style={{position:'relative'}}>
       <div className="esc-top-row">
-        <button className="esc-tog" onClick={()=>setEstado('turno')}>T</button>
-        <button className="esc-tog" onClick={()=>setDropOpen(p=>!p)} title="Presets de horário">
+        <button className="esc-tog" title="Turno" onClick={()=>setEstado('turno')}>T</button>
+        <button className="esc-tog" title="Turnos cadastrados" onClick={()=>setDropOpen(p=>!p)}>
           {dropOpen ? '▴' : '▾'}
         </button>
-        <button className="esc-tog" onClick={()=>setEstado('folga')}>F</button>
-        <button className="esc-tog" onClick={onVacationClick} title="Gerenciar férias">V</button>
+        <button className="esc-tog" title="Folga" onClick={()=>setEstado('folga')}>F</button>
+        <button className="esc-tog" title="Férias" onClick={onVacationClick}>V</button>
         <button className="esc-tog"
           onClick={noMax ? rmTurno : addTurno}
           title={noMax ? 'Remover último turno' : 'Adicionar turno'}>
@@ -1025,6 +1025,10 @@ export default function EscalaPainel() {
       {/* AÇÕES */}
       <div style={{padding:'10px 20px',display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',borderBottom:`1px solid ${T.border}`,background:T.bg}}>
         <button className="btn-outline" onClick={()=>{
+          setHorarioAberto(true);
+          setTimeout(()=>document.getElementById('secao-horario')?.scrollIntoView({behavior:'smooth',block:'start'}),50);
+        }} title="Configurar horários de funcionamento"><Clock size={11}/>+ Horários</button>
+        <button className="btn-outline" onClick={()=>{
           if(!mostrarAdd){
             setNovoUnidade(filtroUnidade!=='Todos'?filtroUnidade:'Itaim');
             setNovoDepto(filtroDepto!=='Todos'?filtroDepto:'Salão');
@@ -1055,7 +1059,7 @@ export default function EscalaPainel() {
       )}
 
       {/* HORÁRIO DE FUNCIONAMENTO */}
-      <div style={{padding:'12px 20px 0'}}>
+      <div id="secao-horario" style={{padding:'12px 20px 0'}}>
         <section className="card">
           <div onClick={()=>setHorarioAberto(p=>!p)} style={{padding:'10px 16px',borderBottom:horarioAberto?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
             <span className="cat-pill"><Clock size={13}/>Horário de Funcionamento</span>
