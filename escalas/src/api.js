@@ -42,3 +42,10 @@ export const salvarFerias = (ferias) =>
 // Lidos junto com getColaboradores; salvos separadamente
 export const salvarExtras = (extras) =>
   post({ action: 'saveExtras', extras });
+
+// Horários cadastrados — presets de horário (funcionamento ou escala)
+export const carregarHorarios = () =>
+  get({ action: 'getHorariosCadastrados' });
+
+export const salvarHorarios = (horarios) =>
+  post({ action: 'saveHorariosCadastrados', horarios });
