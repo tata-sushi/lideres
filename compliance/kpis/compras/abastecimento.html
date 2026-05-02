@@ -307,7 +307,36 @@ textarea.fctrl { resize: vertical; min-height: 70px; font-family: 'DM Sans', san
 <div class="toasts" id="toasts"></div>
 
 <script>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+// Cole a URL do Web App do Apps Script após implantar o Code.gs
+var GAS_URL = '';
+
+// Unidade desta instância — altere conforme o local (pinheiros, consolacao, etc.)
+var UNIDADE = 'poke';
+
+async function gasGet(params) {
+  if (!GAS_URL) return null;
+  var qs  = new URLSearchParams(Object.assign({ t: Date.now() }, params)).toString();
+  var res = await fetch(GAS_URL + '?' + qs);
+  var data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'Erro desconhecido');
+  return data;
+}
+
+async function gasPost(body) {
+  if (!GAS_URL) return null;
+  var res  = await fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(body)
+  });
+  var data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'Erro desconhecido');
+  return data;
+}
+
 // ── CATÁLOGO ──────────────────────────────────────────────────────────────────
+// Fallback local enquanto o sheet não está configurado
 var CATALOGO = {
   peixes:       { label: 'Peixes e frutos do mar', produtos: [
     {nome:'Salmão fresco',un:'kg'},{nome:'Atum bluefin',un:'kg'},{nome:'Polvo fresco',un:'kg'},
@@ -344,26 +373,27 @@ var CATALOGO = {
   ]}
 };
 
-// ── MOCK DATA ─────────────────────────────────────────────────────────────────
-var ORDERS = [
-  { id:'P-024', status:'b-aguardando', label:'Aguardando entrega', cats:['Peixes','Frios'],              itens:8,  data:'30/04/2026', entrega:'02/05/2026' },
-  { id:'P-023', status:'b-proc',       label:'Em processamento',   cats:['Secos','Bebidas'],             itens:12, data:'28/04/2026', entrega:'01/05/2026' },
-  { id:'P-022', status:'b-enviado',    label:'Enviado',            cats:['Hortifruti'],                  itens:5,  data:'27/04/2026', entrega:'30/04/2026' },
-  { id:'P-021', status:'b-concluido',  label:'Concluído',          cats:['Descartáveis','Limpeza'],      itens:14, data:'24/04/2026', entrega:'26/04/2026' },
-  { id:'P-020', status:'b-parcial',    label:'Entrega parcial',    cats:['Peixes','Secos','Frios'],      itens:18, data:'20/04/2026', entrega:'22/04/2026' },
-];
-
 // ── STATE ─────────────────────────────────────────────────────────────────────
 var activeCats = [];
+var ORDERS = [];  // populado do sheet ou do mock abaixo
+
+// Mock local usado enquanto GAS_URL não está configurado
+var ORDERS_MOCK = [
+  { id:'poke0001', idDisplay:'#poke0001',   status:'b-aguardando', label:'Aguardando entrega', cats:['Peixes','Frios'],         itens:8,  data:'30/04/2026', entrega:'02/05/2026' },
+  { id:'poke0002', idDisplay:'#poke0002c',  status:'b-proc',       label:'Em processamento',   cats:['Secos','Bebidas'],        itens:12, data:'28/04/2026', entrega:'01/05/2026' },
+  { id:'poke0003', idDisplay:'#poke0003',   status:'b-enviado',    label:'Enviado',            cats:['Hortifruti'],             itens:5,  data:'27/04/2026', entrega:'30/04/2026' },
+  { id:'poke0004', idDisplay:'#poke0004cr', status:'b-concluido',  label:'Concluído',          cats:['Descartáveis','Limpeza'], itens:14, data:'24/04/2026', entrega:'26/04/2026' },
+  { id:'poke0005', idDisplay:'#poke0005cr', status:'b-parcial',    label:'Entrega parcial',    cats:['Peixes','Secos','Frios'], itens:18, data:'20/04/2026', entrega:'22/04/2026' },
+];
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
   // Identidade do líder via sessão
   var session;
   try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-  var userName = (session && session.displayName) || 'Líder';
-  var initials = userName.split(' ').map(function(p) { return p[0]; }).join('').slice(0, 2).toUpperCase();
-  document.getElementById('drawer-name').textContent = userName;
+  window.__lider = (session && session.displayName) || 'Líder';
+  var initials = window.__lider.split(' ').map(function(p) { return p[0]; }).join('').slice(0, 2).toUpperCase();
+  document.getElementById('drawer-name').textContent = window.__lider;
   document.getElementById('drawer-avatar').textContent = initials;
 
   // Footer date
@@ -373,9 +403,66 @@ document.addEventListener('DOMContentLoaded', function() {
   // Default date
   document.getElementById('modal-data-entrega').value = new Date().toISOString().split('T')[0];
 
-  renderOrders();
-  updateKPIs();
+  carregarCatalogo();
+  carregarPedidos();
 });
+
+async function carregarCatalogo() {
+  if (!GAS_URL) return; // usa CATALOGO hardcoded
+  try {
+    var data = await gasGet({ action: 'getCatalogo' });
+    if (data && data.catalogo) CATALOGO = data.catalogo;
+  } catch(e) { console.warn('Catálogo: usando fallback local.', e.message); }
+}
+
+async function carregarPedidos() {
+  if (!GAS_URL) {
+    ORDERS = ORDERS_MOCK.slice();
+    renderOrders();
+    updateKPIs();
+    return;
+  }
+  try {
+    var data = await gasGet({ action: 'getPedidos', unidade: UNIDADE, perfil: 'lider' });
+    if (data && data.pedidos) {
+      ORDERS = data.pedidos.map(pedidoParaUI);
+      renderOrders();
+      updateKPIs();
+    }
+  } catch(e) {
+    toast('Erro ao carregar pedidos: ' + e.message);
+    ORDERS = ORDERS_MOCK.slice();
+    renderOrders();
+    updateKPIs();
+  }
+}
+
+// Mapeia o formato do backend para o formato de exibição da UI
+function pedidoParaUI(p) {
+  var statusMap = {
+    solicitado: { cls: 'b-enviado',    lbl: 'Enviado'            },
+    comprado:   { cls: 'b-proc',       lbl: 'Em processamento'   },
+    recebido:   { cls: 'b-concluido',  lbl: 'Concluído'          },
+    parcial:    { cls: 'b-parcial',    lbl: 'Entrega parcial'     },
+    cancelado:  { cls: 'b-rascunho',   lbl: 'Cancelado'          }
+  };
+  var s    = statusMap[p.status] || { cls: 'b-enviado', lbl: p.status };
+  var data = p.dataSolicitacao
+    ? new Date(p.dataSolicitacao + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  var entrega = p.dataEntregaDesejada
+    ? new Date(p.dataEntregaDesejada + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  return {
+    id:        p.id,
+    idDisplay: p.idDisplay || ('#' + p.id),
+    status:    s.cls,
+    label:     s.lbl,
+    cats:      [],   // itens não vêm na listagem geral
+    itens:     0,
+    data:      data,
+    entrega:   entrega,
+    raw:       p
+  };
+}
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
 function setTab(t) {
@@ -484,36 +571,62 @@ function removeCategoria(key) {
 }
 
 // ── ENVIAR PEDIDO ─────────────────────────────────────────────────────────────
-function enviarPedido() {
+async function enviarPedido() {
   if (activeCats.length === 0) { toast('Adicione ao menos uma categoria.'); return; }
-  var total = 0;
+
+  // Coleta itens com quantidade > 0
+  var itens = [];
   activeCats.forEach(function(key) {
     CATALOGO[key].produtos.forEach(function(p, i) {
       var inp = document.getElementById('qty-' + key + '-' + i);
-      if (inp && parseFloat(inp.value) > 0) total++;
+      var qty = parseFloat(inp && inp.value) || 0;
+      if (qty > 0) itens.push({ categoriaKey: key, produtoNome: p.nome, unidade: p.un, qtdSolicitada: qty });
     });
   });
-  if (total === 0) { toast('Informe ao menos uma quantidade.'); return; }
+  if (itens.length === 0) { toast('Informe ao menos uma quantidade.'); return; }
 
-  var now = new Date();
-  var dataStr = now.toLocaleDateString('pt-BR');
   var entregaVal = document.getElementById('modal-data-entrega').value;
-  var entregaStr = entregaVal
-    ? new Date(entregaVal + 'T12:00:00').toLocaleDateString('pt-BR')
-    : '—';
-  var newId = 'P-' + String(Date.now()).slice(-3);
+  var obs        = document.getElementById('modal-obs').value;
+
+  var resetForm = function() {
+    activeCats = [];
+    document.getElementById('cat-sections').innerHTML = '';
+    document.getElementById('modal-obs').value = '';
+    document.getElementById('modal-data-entrega').value = new Date().toISOString().split('T')[0];
+  };
+
+  if (GAS_URL) {
+    try {
+      var res = await gasPost({
+        action:               'savePedido',
+        unidade:              UNIDADE,
+        solicitante:          window.__lider || 'Líder',
+        dataEntregaDesejada:  entregaVal,
+        obs:                  obs,
+        itens:                itens
+      });
+      toast('Pedido ' + res.idDisplay + ' enviado! ' + itens.length + ' itens.');
+      fecharModalPedido();
+      resetForm();
+      await carregarPedidos();
+      setTab('pedidos');
+    } catch(e) {
+      toast('Erro: ' + e.message);
+    }
+    return;
+  }
+
+  // Fallback offline
+  var newId  = UNIDADE + ('0000' + (ORDERS.length + 1)).slice(-4);
+  var newDisp = '#' + newId;
+  var dataStr = new Date().toLocaleDateString('pt-BR');
+  var entregaStr = entregaVal ? new Date(entregaVal + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
   var cats = activeCats.map(function(k) { return CATALOGO[k].label.split(' ')[0]; });
+  ORDERS.unshift({ id: newId, idDisplay: newDisp, status: 'b-enviado', label: 'Enviado', cats: cats, itens: itens.length, data: dataStr, entrega: entregaStr });
 
-  ORDERS.unshift({ id: newId, status: 'b-enviado', label: 'Enviado', cats: cats, itens: total, data: dataStr, entrega: entregaStr });
-
-  toast('Pedido ' + newId + ' enviado! ' + total + ' itens.');
+  toast('Pedido ' + newDisp + ' salvo localmente. Configure GAS_URL para persistir.');
   fecharModalPedido();
-
-  // Reset form
-  activeCats = [];
-  document.getElementById('cat-sections').innerHTML = '';
-  document.getElementById('modal-obs').value = '';
-  document.getElementById('modal-data-entrega').value = new Date().toISOString().split('T')[0];
+  resetForm();
 
   renderOrders();
   updateKPIs();
@@ -548,21 +661,24 @@ function renderOrders() {
 }
 
 function orderCardHTML(o) {
+  var disp  = o.idDisplay || ('#' + o.id);
+  var cats  = o.cats && o.cats.length ? o.cats.join(', ') : o.raw && o.raw.unidade ? o.raw.unidade : '—';
+  var itens = o.itens || (o.raw && o.raw.totalItens) || '—';
   return '<div class="card">' +
     '<div class="card-header">' +
       '<div>' +
-        '<div class="order-id">' + o.id + '</div>' +
-        '<div class="order-title">' + o.cats.join(', ') + '</div>' +
+        '<div class="order-id">' + disp + '</div>' +
+        '<div class="order-title">' + cats + '</div>' +
       '</div>' +
       '<span class="badge ' + o.status + '">' + o.label + '</span>' +
     '</div>' +
     '<div class="card-body">' +
       '<div class="card-field"><span class="field-label">Pedido em</span><span class="field-value">' + o.data + '</span></div>' +
       '<div class="card-field"><span class="field-label">Entrega prevista</span><span class="field-value">' + o.entrega + '</span></div>' +
-      '<div class="card-field"><span class="field-label">Itens</span><span class="field-value">' + o.itens + ' produtos</span></div>' +
-      '<div class="card-field"><span class="field-label">Categorias</span><span class="field-value">' + o.cats.length + '</span></div>' +
+      '<div class="card-field"><span class="field-label">Itens</span><span class="field-value">' + itens + (typeof itens === 'number' ? ' produtos' : '') + '</span></div>' +
+      '<div class="card-field"><span class="field-label">Solicitante</span><span class="field-value">' + (o.raw && o.raw.solicitante ? o.raw.solicitante : window.__lider || '—') + '</span></div>' +
     '</div>' +
-    '<div class="card-footer"><span class="meta-pill">' + o.id + '</span></div>' +
+    '<div class="card-footer"><span class="meta-pill">' + disp + '</span></div>' +
   '</div>';
 }
 
