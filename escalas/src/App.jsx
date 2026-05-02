@@ -862,9 +862,8 @@ export default function EscalaPainel() {
       const par=idx%2===0?'':' class="epdf-row-alt"';
       return `<tr${par}><td class="epdf-nome">${c.nome}</td><td class="epdf-fn">${c.funcao}</td>${tdDias}<td class="epdf-total">${fmtHoras(s.horas)}</td></tr>`;
     }).join('');
-    const tfTrab=totaisDia.map(t=>`<td class="epdf-tf-cnt">${t.trab||'—'}</td>`).join('');
-    const tfFolg=totaisDia.map(t=>`<td class="epdf-tf-cnt">${t.folg||'—'}</td>`).join('');
-    const tfFer =totaisDia.map(t=>`<td class="epdf-tf-cnt">${t.fer ||'—'}</td>`).join('');
+    let totalTrab=0,totalFolg=0;
+    totaisDia.forEach(t=>{totalTrab+=t.trab;totalFolg+=t.folg;});
     let printDiv=document.getElementById('escala-pdf-print');
     if(!printDiv){ printDiv=document.createElement('div'); printDiv.id='escala-pdf-print'; document.body.appendChild(printDiv); }
     printDiv.innerHTML=`
@@ -883,12 +882,9 @@ export default function EscalaPainel() {
       <table class="epdf-table">
         <thead><tr><th class="epdf-th-nome">Colaborador</th><th class="epdf-th-fn">Função</th>${thDias}<th>Total</th></tr></thead>
         <tbody>${rows}</tbody>
-        <tfoot>
-          <tr class="epdf-tf-trab"><td colspan="2" class="epdf-tf-label">Trabalhando</td>${tfTrab}<td></td></tr>
-          <tr class="epdf-tf-folg"><td colspan="2" class="epdf-tf-label">Folga</td>${tfFolg}<td></td></tr>
-          <tr class="epdf-tf-fer"><td colspan="2" class="epdf-tf-label">Férias</td>${tfFer}<td></td></tr>
-        </tfoot>
-      </table>`;
+        <tfoot><tr><td colspan="2" class="epdf-tf-label">TOTAL GERAL</td><td colspan="5"></td><td class="epdf-tf-val">${fmtHoras(totalSemana)}</td></tr></tfoot>
+      </table>
+      <div class="epdf-rodape">${totalTrab} trabalhando / ${totalFolg} folgas</div>`;
     const logoEl=document.getElementById('epdf-logo');
     logoEl.onload=()=>window.print();
     logoEl.onerror=()=>window.print();
@@ -1054,13 +1050,10 @@ export default function EscalaPainel() {
           .epdf-livre{color:#bbb;}
           .epdf-turno{font-family:'DM Mono',monospace;font-size:8.5px;font-weight:600;color:#111;}
           .epdf-total{font-family:'DM Mono',monospace;font-weight:700;font-size:9px;}
-          .epdf-table tfoot td{border-top:1px solid #ddd;padding:5px 5px;font-size:9px;}
-          .epdf-table tfoot tr:first-child td{border-top:2px solid #111;}
-          .epdf-tf-label{text-align:left;text-transform:uppercase;letter-spacing:.04em;font-weight:700;color:#111;}
-          .epdf-tf-cnt{font-family:'DM Mono',monospace;font-weight:600;font-size:9px;color:#111;}
-          .epdf-tf-trab .epdf-tf-cnt{color:#111;}
-          .epdf-tf-folg .epdf-tf-label,.epdf-tf-folg .epdf-tf-cnt{color:#b26200;}
-          .epdf-tf-fer  .epdf-tf-label,.epdf-tf-fer  .epdf-tf-cnt{color:#1A3A5C;}
+          .epdf-table tfoot td{border-top:2px solid #111;font-weight:700;padding:6px 5px;}
+          .epdf-tf-label{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.04em;}
+          .epdf-tf-val{font-family:'DM Mono',monospace;font-size:11px;text-align:center;}
+          .epdf-rodape{font-size:9px;color:#666;text-align:right;margin-top:6px;}
         }
       `}</style>
 
