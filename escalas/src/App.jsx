@@ -444,7 +444,6 @@ function CelulaColapsada({ turno, deFerias }) {
 function ModalFerias({ colab, ferias, onClose, onAdd, onRemove }) {
   const [ini, setIni] = useState('');
   const [fim, setFim] = useState('');
-  const [obs, setObs] = useState('');
 
   if (!colab) return null;
 
@@ -452,61 +451,59 @@ function ModalFerias({ colab, ferias, onClose, onAdd, onRemove }) {
 
   const handleAdd = () => {
     if (!ini || !fim) return;
-    onAdd(colab.id, { dataIni: ini, dataFim: fim, obs });
-    setIni(''); setFim(''); setObs('');
+    onAdd(colab.id, { dataIni: ini, dataFim: fim });
+    setIni(''); setFim('');
   };
 
   return (
     <div className="esc-modal-overlay" onClick={onClose}>
       <div className="esc-modal" onClick={e=>e.stopPropagation()}>
+        <div className="esc-modal-handle"/>
         <div className="esc-modal-header">
           <div>
-            <div className="esc-modal-title">🏖 Férias</div>
-            <div className="esc-modal-sub">{colab.nome} · {colab.funcao}</div>
+            <div className="esc-modal-eyebrow">Férias</div>
+            <div className="esc-modal-title">{colab.nome}</div>
+            <div className="esc-modal-sub">{colab.funcao}</div>
           </div>
-          <button className="esc-modal-close" onClick={onClose}><X size={14}/></button>
+          <button className="esc-modal-close" onClick={onClose}><X size={16}/></button>
         </div>
 
         <div className="esc-modal-body">
           <div className="esc-modal-section-label">Períodos cadastrados</div>
           {periodos.length === 0 ? (
-            <div className="esc-modal-empty">Nenhum período de férias cadastrado</div>
+            <div className="esc-modal-empty">Nenhum período cadastrado</div>
           ) : (
             <div className="esc-modal-list">
               {periodos.map(f => (
                 <div key={f.id} className="esc-modal-period">
-                  <div>
-                    <div className="esc-modal-period-dates">
-                      {f.dataIni.split('-').reverse().join('/')} → {f.dataFim.split('-').reverse().join('/')}
-                    </div>
-                    {f.obs && <div className="esc-modal-period-obs">{f.obs}</div>}
+                  <div className="esc-modal-period-dates">
+                    {f.dataIni.split('-').reverse().join('/')}
+                    <span className="esc-modal-period-arrow"> → </span>
+                    {f.dataFim.split('-').reverse().join('/')}
                   </div>
                   <button className="esc-modal-period-del" onClick={()=>onRemove(f.id)}><X size={11}/></button>
                 </div>
               ))}
             </div>
           )}
+        </div>
 
-          <div className="esc-modal-section-label" style={{marginTop:14}}>Novo período</div>
-          <div className="esc-modal-form">
-            <div className="esc-modal-row-2">
-              <div>
-                <label className="esc-field-label">Início</label>
-                <input className="esc-input" type="date" value={ini} onChange={e=>setIni(e.target.value)}/>
-              </div>
-              <div>
-                <label className="esc-field-label">Fim</label>
-                <input className="esc-input" type="date" value={fim} onChange={e=>setFim(e.target.value)}/>
-              </div>
+        <div className="esc-modal-footer">
+          <div className="esc-modal-section-label" style={{marginBottom:10}}>Novo período</div>
+          <div className="esc-modal-row-2" style={{marginBottom:12}}>
+            <div>
+              <label className="esc-field-label">Início</label>
+              <input className="esc-input" type="date" value={ini} onChange={e=>setIni(e.target.value)}/>
             </div>
-            <input className="esc-input" type="text" placeholder="Observação (opcional)"
-              value={obs} onChange={e=>setObs(e.target.value)} style={{marginTop:8}}/>
-            <button className="btn-dev" onClick={handleAdd}
-              disabled={!ini||!fim}
-              style={{width:'100%',justifyContent:'center',marginTop:10,background:'#1A3A5C',color:'#fff',opacity:(!ini||!fim)?.5:1,cursor:(!ini||!fim)?'not-allowed':'pointer'}}>
-              <Plus size={11}/>Adicionar período
-            </button>
+            <div>
+              <label className="esc-field-label">Fim</label>
+              <input className="esc-input" type="date" value={fim} onChange={e=>setFim(e.target.value)}/>
+            </div>
           </div>
+          <button className="esc-modal-btn-add" onClick={handleAdd} disabled={!ini||!fim}
+            style={{opacity:(!ini||!fim)?.4:1,cursor:(!ini||!fim)?'not-allowed':'pointer'}}>
+            <Plus size={12}/>Adicionar período
+          </button>
         </div>
       </div>
     </div>
@@ -648,8 +645,8 @@ export default function EscalaPainel() {
     return addDays(semanaAtual, idx);
   }, [semanaAtual]);
 
-  const adicionarFerias = (colabId, { dataIni, dataFim, obs }) => {
-    const novo = { id: `f_${Date.now()}`, colabId, dataIni, dataFim, obs: obs || '' };
+  const adicionarFerias = (colabId, { dataIni, dataFim }) => {
+    const novo = { id: `f_${Date.now()}`, colabId, dataIni, dataFim, obs: '' };
     const novas = [...ferias, novo];
     setFerias(novas);
     salvarFerias(novas).catch(() => {});
@@ -955,22 +952,28 @@ export default function EscalaPainel() {
         .status-crit{background:${T.redBg};color:${T.red};padding:3px 8px;border-radius:100px;font-family:'DM Mono',monospace;font-size:9px;font-weight:500;white-space:nowrap;}
 
         /* Modal */
-        .esc-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;}
-        .esc-modal{background:${T.surface};border-radius:${T.radius};box-shadow:0 8px 32px rgba(0,0,0,.2);width:100%;max-width:480px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;}
-        .esc-modal-header{padding:16px 20px;border-bottom:1px solid ${T.border};display:flex;align-items:center;justify-content:space-between;}
-        .esc-modal-title{font-size:14px;font-weight:700;color:${T.carbon};letter-spacing:-.2px;}
-        .esc-modal-sub{font-family:'DM Mono',monospace;font-size:10px;color:${T.muted};letter-spacing:.5px;text-transform:uppercase;margin-top:2px;}
-        .esc-modal-close{width:28px;height:28px;border:1px solid ${T.border};background:transparent;border-radius:100px;cursor:pointer;color:${T.mid};display:flex;align-items:center;justify-content:center;}
-        .esc-modal-close:hover{background:${T.bg};}
-        .esc-modal-body{padding:16px 20px;overflow-y:auto;}
-        .esc-modal-section-label{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:${T.mid};margin-bottom:8px;}
-        .esc-modal-empty{font-family:'DM Mono',monospace;font-size:11px;color:${T.muted};padding:8px 0;}
+        .esc-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;}
+        .esc-modal{background:${T.surface};border-radius:12px;box-shadow:0 12px 48px rgba(0,0,0,.18);width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column;animation:modalIn .2s ease;}
+        @keyframes modalIn{from{opacity:0;transform:scale(.97) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
+        .esc-modal-handle{width:36px;height:4px;background:${T.border};border-radius:100px;margin:12px auto 0;flex-shrink:0;}
+        .esc-modal-header{padding:14px 20px 14px;border-bottom:1px solid ${T.border};display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;}
+        .esc-modal-eyebrow{font-family:'DM Mono',monospace;font-size:9px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:${T.muted};margin-bottom:4px;}
+        .esc-modal-title{font-size:18px;font-weight:700;color:${T.carbon};letter-spacing:-.3px;line-height:1.2;}
+        .esc-modal-sub{font-family:'DM Mono',monospace;font-size:10px;color:${T.muted};letter-spacing:.5px;text-transform:uppercase;margin-top:3px;}
+        .esc-modal-close{background:none;border:none;cursor:pointer;color:${T.muted};display:flex;align-items:center;justify-content:center;padding:4px;margin-top:2px;}
+        .esc-modal-close:hover{color:${T.carbon};}
+        .esc-modal-body{padding:16px 20px;overflow-y:auto;flex:1;}
+        .esc-modal-footer{padding:14px 20px 24px;border-top:1px solid ${T.border};flex-shrink:0;background:${T.surface};}
+        .esc-modal-section-label{font-family:'DM Mono',monospace;font-size:9px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:${T.muted};margin-bottom:8px;}
+        .esc-modal-empty{font-family:'DM Mono',monospace;font-size:11px;color:${T.muted};padding:4px 0 8px;}
         .esc-modal-list{display:flex;flex-direction:column;gap:6px;}
-        .esc-modal-period{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#EBF3FA;border:1px solid #C8DFF0;border-radius:6px;}
-        .esc-modal-period-dates{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:#1A3A5C;}
-        .esc-modal-period-obs{font-family:'DM Mono',monospace;font-size:9px;color:${T.muted};margin-top:2px;}
-        .esc-modal-period-del{width:24px;height:24px;border:1px solid ${T.border};background:transparent;border-radius:100px;cursor:pointer;color:${T.mid};display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+        .esc-modal-period{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:${T.bg};border:1px solid ${T.border};border-radius:8px;}
+        .esc-modal-period-dates{font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${T.carbon};}
+        .esc-modal-period-arrow{color:${T.muted};font-weight:400;}
+        .esc-modal-period-del{width:24px;height:24px;border:1px solid ${T.border};background:transparent;border-radius:100px;cursor:pointer;color:${T.muted};display:flex;align-items:center;justify-content:center;flex-shrink:0;}
         .esc-modal-period-del:hover{color:${T.red};border-color:${T.red};}
+        .esc-modal-btn-add{width:100%;height:40px;background:${T.carbon};color:${T.citric};border:none;border-radius:6px;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;}
+        .esc-modal-btn-add:hover:not(:disabled){opacity:.88;}
         .esc-modal-row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 
         /* Grade visual */
