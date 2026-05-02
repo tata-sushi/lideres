@@ -119,7 +119,7 @@ const fmtHoras = (h) => {
 // HELPERS DE SLOT (Grade Visual)
 // ============================================================
 const HORA_INICIO = 7;
-const HORA_FIM    = 26;
+const HORA_FIM    = 24;
 const SLOT_MIN    = 30;
 const TOTAL_SLOTS = ((HORA_FIM - HORA_INICIO) * 60) / SLOT_MIN;
 
@@ -202,7 +202,13 @@ const calcHoras = (t) => {
   return total;
 };
 
-const turnoVazio = () => ({t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:false});
+const turnoVazio = () => ({t1Ini:'',t1Fim:'',t2Ini:'',t2Fim:'',t3Ini:'',t3Fim:'',folga:false,tipoFolga:''});
+const TIPOS_FOLGA = [
+  {id:'folga',       label:'Folga'},
+  {id:'banco',       label:'Banco de horas'},
+  {id:'aniversario', label:'Folga Aniversário'},
+];
+const labelFolga = (tipo) => TIPOS_FOLGA.find(f=>f.id===tipo)?.label || 'Folga';
 
 const escalaVaziaColabs = (colabs) => {
   const e = {};
@@ -230,6 +236,7 @@ const escalaSemColab = (esc, cid) => {
 // ============================================================
 function CelulaTurno({ turno, onChange, deFerias, onVacationClick, horariosExtras }) {
   const [dropOpen, setDropOpen] = useState(false);
+  const [folgaDropOpen, setFolgaDropOpen] = useState(false);
   const [showT2, setShowT2] = useState(!!(turno?.t2Ini || turno?.t2Fim));
   const [showT3, setShowT3] = useState(!!(turno?.t3Ini || turno?.t3Fim));
 
@@ -248,10 +255,12 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick, horariosExtra
   const temT3 = showT3 && showT2;
   const noMax = temT3;
 
-  const setEstado = (e) => {
-    if (e === 'folga') onChange({...turnoVazio(), folga: true});
+  const setEstado = (e, tipo='') => {
+    if (e === 'folga') onChange({...turnoVazio(), folga: true, tipoFolga: tipo});
     else if (e === 'turno') onChange(turnoVazio());
   };
+
+  const toggleFolgaDrop = () => { setFolgaDropOpen(p=>!p); setDropOpen(false); };
 
   const setField = (campo, val) => onChange({...t, [campo]: val, folga: false});
 
@@ -278,16 +287,27 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick, horariosExtra
 
   const limpar = () => { onChange(turnoVazio()); setDropOpen(false); };
 
+  const folgaMenu = (onSelect) => (
+    <div className="esc-dropdown">
+      {TIPOS_FOLGA.map(tf=>(
+        <div key={tf.id} className="esc-dd-item" onClick={()=>{ onSelect(tf.id); setFolgaDropOpen(false); }}>
+          <span className="esc-dd-label">{tf.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+
   if (estado === 'ferias') {
     return (
-      <div className="esc-cell">
+      <div className="esc-cell" style={{position:'relative'}}>
         <div className="esc-top-row">
           <button className="esc-tog" title="Turno" onClick={()=>setEstado('turno')}>T</button>
           <button className="esc-tog" title="Turnos cadastrados" onClick={()=>{setEstado('turno');setDropOpen(true);}}>▾</button>
-          <button className="esc-tog" title="Folga" onClick={()=>setEstado('folga')}>F</button>
+          <button className="esc-tog" title="Tipo de folga" onClick={toggleFolgaDrop}>{folgaDropOpen?'▴':'F'}</button>
           <button className="esc-tog" title="Férias" onClick={onVacationClick}>V</button>
           <button className="esc-tog" title="Adicionar turno" onClick={()=>setEstado('turno')}>+</button>
         </div>
+        {folgaDropOpen && folgaMenu((tipo)=>setEstado('folga',tipo))}
         <div className="esc-badge-v">Férias</div>
       </div>
     );
@@ -295,15 +315,16 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick, horariosExtra
 
   if (estado === 'folga') {
     return (
-      <div className="esc-cell">
+      <div className="esc-cell" style={{position:'relative'}}>
         <div className="esc-top-row">
           <button className="esc-tog" title="Turno" onClick={()=>setEstado('turno')}>T</button>
           <button className="esc-tog" title="Turnos cadastrados" onClick={()=>{setEstado('turno');setDropOpen(true);}}>▾</button>
-          <button className="esc-tog" title="Folga" onClick={()=>setEstado('folga')}>F</button>
+          <button className="esc-tog" title="Tipo de folga" onClick={toggleFolgaDrop}>{folgaDropOpen?'▴':'F'}</button>
           <button className="esc-tog" title="Férias" onClick={onVacationClick}>V</button>
           <button className="esc-tog" title="Adicionar turno" onClick={()=>setEstado('turno')}>+</button>
         </div>
-        <div className="esc-badge-f">Folga</div>
+        {folgaDropOpen && folgaMenu((tipo)=>setEstado('folga',tipo))}
+        <div className="esc-badge-f">{labelFolga(t.tipoFolga)}</div>
       </div>
     );
   }
@@ -312,10 +333,10 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick, horariosExtra
     <div className="esc-cell" style={{position:'relative'}}>
       <div className="esc-top-row">
         <button className="esc-tog" title="Turno" onClick={()=>setEstado('turno')}>T</button>
-        <button className="esc-tog" title="Turnos cadastrados" onClick={()=>setDropOpen(p=>!p)}>
+        <button className="esc-tog" title="Turnos cadastrados" onClick={()=>{ setDropOpen(p=>!p); setFolgaDropOpen(false); }}>
           {dropOpen ? '▴' : '▾'}
         </button>
-        <button className="esc-tog" title="Folga" onClick={()=>setEstado('folga')}>F</button>
+        <button className="esc-tog" title="Tipo de folga" onClick={toggleFolgaDrop}>{folgaDropOpen?'▴':'F'}</button>
         <button className="esc-tog" title="Férias" onClick={onVacationClick}>V</button>
         <button className="esc-tog"
           onClick={noMax ? rmTurno : addTurno}
@@ -323,6 +344,7 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick, horariosExtra
           {noMax ? '−' : '+'}
         </button>
       </div>
+      {folgaDropOpen && folgaMenu((tipo)=>setEstado('folga',tipo))}
 
       <div className="esc-inputs-row">
         <input type="time" value={t.t1Ini||''} onChange={e=>setField('t1Ini',e.target.value)}/>
@@ -432,7 +454,7 @@ function CelulaHorario({ diaId, label, iniKey, fimKey, fechadoKey, cfgHor, onUpd
 function CelulaColapsada({ turno, deFerias }) {
   if (deFerias) return <div className="esc-collapsed"><span className="esc-c-ferias">Férias</span></div>;
   if (!turno) return <div className="esc-collapsed"><span className="esc-c-muted">—</span></div>;
-  if (turno.folga) return <div className="esc-collapsed"><span className="esc-c-folga">Folga</span></div>;
+  if (turno.folga) return <div className="esc-collapsed"><span className="esc-c-folga">{labelFolga(turno.tipoFolga)}</span></div>;
   const h = calcHoras(turno);
   if (h === 0) return <div className="esc-collapsed"><span className="esc-c-muted">—</span></div>;
   return <div className="esc-collapsed"><span className="esc-c-horas">{fmtHoras(h)}</span></div>;
@@ -1281,14 +1303,19 @@ export default function EscalaPainel() {
               <div style={{overflow:'auto',maxHeight:'60vh',WebkitOverflowScrolling:'touch'}}>
                 <div style={{display:'grid',gridTemplateColumns:`48px repeat(${colabsFiltrados.length},${colW}px)`,minWidth:48+colabsFiltrados.length*colW,width:'max-content'}}>
                   <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:54,width:48,minWidth:48,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px'}}>HORA</div>
-                  {colabsFiltrados.map(c=>(
-                    <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'5px 7px',borderLeft:'1px solid #2E3038',minHeight:54,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center'}}>
-                      <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?10:11.5,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.2px',width:'100%',textAlign:'center'}}>{c.nome}</div>
-                      <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?9:10.5,fontWeight:400,color:'#FFFFFF',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.1px',opacity:.85,width:'100%',textAlign:'center'}}>
-                        {estaDeFerias(c.id,dataDoDia(diaGrade.id)) ? '🏖 Férias' : `${c.funcao} · ${fmtHoras(horasTurno(escala[diaGrade.id]?.[c.id]||{}))}`}
+                  {colabsFiltrados.map(c=>{
+                    const hTurno = horasTurno(escala[diaGrade.id]?.[c.id]||{});
+                    const deF = estaDeFerias(c.id,dataDoDia(diaGrade.id));
+                    return (
+                      <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'6px 7px',borderLeft:'1px solid #2E3038',display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center',gap:1}}>
+                        <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?10:11,fontWeight:700,letterSpacing:'-0.2px',width:'100%',textAlign:'center',lineHeight:1.2,wordBreak:'break-word',whiteSpace:'normal'}}>{c.nome}</div>
+                        <div style={{fontFamily:'DM Mono,sans-serif',fontSize:ehMobile?8:9,fontWeight:400,color:'rgba(255,255,255,.7)',letterSpacing:'.2px',width:'100%',textAlign:'center',whiteSpace:'normal',wordBreak:'break-word',lineHeight:1.2,marginTop:2}}>{c.funcao}</div>
+                        <div style={{fontFamily:'DM Mono,monospace',fontSize:ehMobile?8:9,fontWeight:600,color:T.citric,letterSpacing:'.3px',marginTop:2}}>
+                          {deF ? '🏖 Férias' : hTurno > 0 ? fmtHoras(hTurno) : '—'}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {Array.from({length:TOTAL_SLOTS}).map((_,slot)=>{
                     const lbl=slotLabel(slot);
                     const full=slot%2===0;
