@@ -415,10 +415,6 @@ tr.row-editing td { background:#FAFFF0; }
       </button>
     </div>
     <div class="modal-body">
-      <div class="fg">
-        <label class="flbl">Data de entrega desejada</label>
-        <input type="date" class="fctrl" id="modal-data-entrega">
-      </div>
       <div id="cat-sections"></div>
       <div class="fg">
         <label class="flbl">Adicionar categoria</label>
@@ -761,10 +757,24 @@ async function carregarPedidos() {
   renderAll(); updateKPIs();
 }
 
+function fmtDataBR(v) {
+  if (v === undefined || v === null || v === '') return '—';
+  if (v instanceof Date) return isNaN(v.getTime()) ? '—' : v.toLocaleDateString('pt-BR');
+  var s = String(v);
+  // YYYY-MM-DD puro: usa horário fixo para evitar TZ shift
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    var d1 = new Date(s + 'T12:00:00');
+    return isNaN(d1.getTime()) ? '—' : d1.toLocaleDateString('pt-BR');
+  }
+  // ISO completo ou string que Date sabe parsear
+  var d2 = new Date(s);
+  return isNaN(d2.getTime()) ? '—' : d2.toLocaleDateString('pt-BR');
+}
+
 async function pedidoParaUI(p) {
   var s = statusBackendParaUI(p);
-  var data    = p.dataSolicitacao     ? new Date(p.dataSolicitacao + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
-  var entrega = p.dataEntregaDesejada ? new Date(p.dataEntregaDesejada + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  var data    = fmtDataBR(p.dataSolicitacao);
+  var entrega = fmtDataBR(p.dataEntregaDesejada);
 
   // Busca itens do pedido para reconstruir itensList
   var itensList = [];
@@ -833,7 +843,6 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('drawer-avatar').textContent = initials;
   document.getElementById('footer-date').textContent =
     new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
-  document.getElementById('modal-data-entrega').value = new Date().toISOString().split('T')[0];
   renderAll(); updateKPIs();
   carregarCatalogo();
   carregarPedidos();
@@ -1042,8 +1051,8 @@ async function enviarPedido() {
   });
   if(itensList.length===0){toast('Informe ao menos uma quantidade.');return;}
   var now=new Date(); var dataStr=now.toLocaleDateString('pt-BR');
-  var entregaVal=document.getElementById('modal-data-entrega').value;
-  var entregaStr=entregaVal?new Date(entregaVal+'T12:00:00').toLocaleDateString('pt-BR'):'—';
+  var entregaVal='';
+  var entregaStr='—';
   var obsVal=document.getElementById('modal-obs').value.trim();
   var newId='P-'+(100+ORDERS.length);
   var newDisplay='#'+newId;
@@ -1073,7 +1082,6 @@ async function enviarPedido() {
   ORDERS.unshift(newOrder);
   fecharModalPedido();
   activeCats=[]; document.getElementById('cat-sections').innerHTML=''; document.getElementById('modal-obs').value='';
-  document.getElementById('modal-data-entrega').value=new Date().toISOString().split('T')[0];
   renderAll(); updateKPIs(); setTab('pedidos');
   setTimeout(function(){gerarPDFPedido(newOrder);},400);
 }
