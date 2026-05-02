@@ -66,10 +66,33 @@ const COLABS0 = [
 ];
 
 const CFG0_DIA = {
-  prepAlmocoIni:'10:00', prepAlmocoFim:'12:00',
-  funcAlmocoIni:'12:00', funcAlmocoFim:'15:00',
-  prepJantarIni:'17:00', prepJantarFim:'19:00',
-  funcJantarIni:'19:00', funcJantarFim:'00:00',
+  prepAlmocoIni:'10:00', prepAlmocoFim:'12:00', prepAlmocoFechado:false,
+  funcAlmocoIni:'12:00', funcAlmocoFim:'15:00', funcAlmocoFechado:false,
+  prepJantarIni:'17:00', prepJantarFim:'19:00', prepJantarFechado:false,
+  funcJantarIni:'19:00', funcJantarFim:'00:00', funcJantarFechado:false,
+};
+
+const PRESETS_HOR = {
+  'Prep Almoço': [
+    { label:'Padrão',   ini:'10:00', fim:'12:00' },
+    { label:'Cedo',     ini:'09:30', fim:'11:30' },
+    { label:'Estendido',ini:'09:00', fim:'12:00' },
+  ],
+  'Func Almoço': [
+    { label:'Padrão',   ini:'12:00', fim:'15:00' },
+    { label:'Estendido',ini:'12:00', fim:'16:00' },
+    { label:'Curto',    ini:'12:00', fim:'14:30' },
+  ],
+  'Prep Jantar': [
+    { label:'Padrão',   ini:'17:00', fim:'19:00' },
+    { label:'Cedo',     ini:'16:30', fim:'18:30' },
+    { label:'Estendido',ini:'16:00', fim:'19:00' },
+  ],
+  'Func Jantar': [
+    { label:'Padrão',   ini:'19:00', fim:'00:00' },
+    { label:'Sex/Sáb',  ini:'19:00', fim:'01:00' },
+    { label:'Domingo',  ini:'19:00', fim:'23:00' },
+  ],
 };
 const CFG0 = Object.fromEntries(DIAS_SEMANA.map(d=>[d,{...CFG0_DIA}]));
 
@@ -335,6 +358,56 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick }) {
           <div className="esc-dd-item" onClick={limpar}>
             <span className="esc-dd-label">Limpar</span>
             <span className="esc-dd-hours">remover tudo</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// COMPONENTE: Célula de horário de funcionamento
+// ============================================================
+function CelulaHorario({ diaId, label, iniKey, fimKey, fechadoKey, cfgHor, onUpdate }) {
+  const [dropOpen, setDropOpen] = useState(false);
+
+  const fechado = !!cfgHor[fechadoKey];
+  const presets = PRESETS_HOR[label] || [];
+
+  const setFechado = (v) => { onUpdate(fechadoKey, v); setDropOpen(false); };
+  const setField = (k, v) => { onUpdate(k, v); if (fechado) onUpdate(fechadoKey, false); };
+  const aplicar = (p) => { onUpdate(iniKey, p.ini); onUpdate(fimKey, p.fim); onUpdate(fechadoKey, false); setDropOpen(false); };
+
+  return (
+    <div className="esc-cell" style={{position:'relative'}}>
+      <div className="esc-top-row">
+        <button className="esc-tog" onClick={()=>setFechado(false)} title="Horário">H</button>
+        <button className="esc-tog" onClick={()=>setDropOpen(p=>!p)} title="Horários cadastrados">
+          {dropOpen ? '▴' : '▾'}
+        </button>
+        <button className="esc-tog" onClick={()=>setFechado(true)} title="Fechado">F</button>
+      </div>
+      {fechado ? (
+        <div className="esc-badge-f">Fechado</div>
+      ) : (
+        <div className="esc-inputs-row">
+          <input type="time" value={cfgHor[iniKey]||''} onChange={e=>setField(iniKey,e.target.value)}/>
+          <span className="esc-sep">–</span>
+          <input type="time" value={cfgHor[fimKey]||''} onChange={e=>setField(fimKey,e.target.value)}/>
+        </div>
+      )}
+      {dropOpen && (
+        <div className="esc-dropdown">
+          {presets.map((p,i) => (
+            <div key={i} className="esc-dd-item" onClick={()=>aplicar(p)}>
+              <span className="esc-dd-label">{p.label}</span>
+              <span className="esc-dd-hours">{p.ini.replace(':00','')}–{p.fim.replace(':00','')}</span>
+            </div>
+          ))}
+          <div className="esc-dd-sep"/>
+          <div className="esc-dd-item" onClick={()=>setFechado(true)}>
+            <span className="esc-dd-label">Fechado</span>
+            <span className="esc-dd-hours">sem operação</span>
           </div>
         </div>
       )}
@@ -1001,22 +1074,26 @@ export default function EscalaPainel() {
                 </thead>
                 <tbody>
                   {[
-                    {label:'Prep Almoço', ini:'prepAlmocoIni', fim:'prepAlmocoFim'},
-                    {label:'Func Almoço', ini:'funcAlmocoIni', fim:'funcAlmocoFim'},
-                    {label:'Prep Jantar', ini:'prepJantarIni', fim:'prepJantarFim'},
-                    {label:'Func Jantar', ini:'funcJantarIni', fim:'funcJantarFim'},
-                  ].map(({label,ini,fim})=>(
+                    {label:'Prep Almoço', ini:'prepAlmocoIni', fim:'prepAlmocoFim', fec:'prepAlmocoFechado'},
+                    {label:'Func Almoço', ini:'funcAlmocoIni', fim:'funcAlmocoFim', fec:'funcAlmocoFechado'},
+                    {label:'Prep Jantar', ini:'prepJantarIni', fim:'prepJantarFim', fec:'prepJantarFechado'},
+                    {label:'Func Jantar', ini:'funcJantarIni', fim:'funcJantarFim', fec:'funcJantarFechado'},
+                  ].map(({label,ini,fim,fec})=>(
                     <tr key={label}>
                       <td><span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.carbon,fontWeight:600,letterSpacing:'.3px',textTransform:'uppercase',whiteSpace:'nowrap'}}>{label}</span></td>
-                      {DIAS_META.map((d,i)=>{
+                      {DIAS_META.map((d)=>{
                         const cfgHor = config[d.id] || CFG0_DIA;
                         return (
                           <td key={d.id}>
-                            <div style={{display:'flex',alignItems:'center',gap:3}}>
-                              <input type="time" value={cfgHor[ini]} onChange={e=>updateCfg(d.id,ini,e.target.value)} style={{fontFamily:'DM Mono,monospace',fontSize:11,border:'none',background:'transparent',color:T.carbon,outline:'none',width:72,cursor:'pointer'}}/>
-                              <span style={{color:T.muted,fontSize:10}}>→</span>
-                              <input type="time" value={cfgHor[fim]} onChange={e=>updateCfg(d.id,fim,e.target.value)} style={{fontFamily:'DM Mono,monospace',fontSize:11,border:'none',background:'transparent',color:T.carbon,outline:'none',width:72,cursor:'pointer'}}/>
-                            </div>
+                            <CelulaHorario
+                              diaId={d.id}
+                              label={label}
+                              iniKey={ini}
+                              fimKey={fim}
+                              fechadoKey={fec}
+                              cfgHor={cfgHor}
+                              onUpdate={(field, value) => updateCfg(d.id, field, value)}
+                            />
                           </td>
                         );
                       })}
