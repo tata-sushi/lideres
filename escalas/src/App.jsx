@@ -348,14 +348,13 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick, horariosExtra
 
       {dropOpen && (
         <div className="esc-dropdown">
-          {PRESETS_BASE.map((p,i) => (
-            <div key={`b${i}`} className="esc-dd-item" onClick={()=>aplicarPreset(p)}>
-              <span className="esc-dd-label">{p.label}</span>
-              <span className="esc-dd-hours">{p.turnos.map(([a,b])=>`${a.replace(':00','')}–${b.replace(':00','')}`).join(' + ')}</span>
+          {(horariosExtras||[]).length === 0 && (
+            <div className="esc-dd-item" style={{opacity:.5,cursor:'default'}}>
+              <span className="esc-dd-label">Nenhum horário cadastrado</span>
             </div>
-          ))}
+          )}
           {(horariosExtras||[]).map((h,i) => (
-            <div key={`e${i}`} className="esc-dd-item" onClick={()=>aplicarPreset({label:h.nome,turnos:[[h.entrada,h.saida]]})}>
+            <div key={i} className="esc-dd-item" onClick={()=>aplicarPreset({label:h.nome,turnos:[[h.entrada,h.saida]]})}>
               <span className="esc-dd-label">{h.nome}</span>
               <span className="esc-dd-hours">{h.entrada.replace(':00','')}–{h.saida.replace(':00','')}</span>
             </div>
@@ -405,14 +404,13 @@ function CelulaHorario({ diaId, label, iniKey, fimKey, fechadoKey, cfgHor, onUpd
       )}
       {dropOpen && (
         <div className="esc-dropdown">
-          {presets.map((p,i) => (
-            <div key={`p${i}`} className="esc-dd-item" onClick={()=>aplicar(p)}>
-              <span className="esc-dd-label">{p.label}</span>
-              <span className="esc-dd-hours">{p.ini.replace(':00','')}–{p.fim.replace(':00','')}</span>
+          {extras.length === 0 && (
+            <div className="esc-dd-item" style={{opacity:.5,cursor:'default'}}>
+              <span className="esc-dd-label">Nenhum horário cadastrado</span>
             </div>
-          ))}
+          )}
           {extras.map((p,i) => (
-            <div key={`e${i}`} className="esc-dd-item" onClick={()=>aplicar(p)}>
+            <div key={i} className="esc-dd-item" onClick={()=>aplicar(p)}>
               <span className="esc-dd-label">{p.label}</span>
               <span className="esc-dd-hours">{p.ini.replace(':00','')}–{p.fim.replace(':00','')}</span>
             </div>
@@ -1111,8 +1109,8 @@ export default function EscalaPainel() {
             <div>
               <label className="esc-field-label">Tipo</label>
               <select className="esc-select-sm" value={novoHorarioTipo} onChange={e=>setNovoHorarioTipo(e.target.value)}>
-                <option value="escala">Escala (colaborador)</option>
-                <option value="funcionamento">Funcionamento</option>
+                <option value="escala">Escala de equipe</option>
+                <option value="funcionamento">Horário de Funcionamento</option>
               </select>
             </div>
             <button className="btn-dev" onClick={adicionarHorario} disabled={!novoHorarioNome.trim()||!novoHorarioEntrada||!novoHorarioSaida} style={{justifyContent:'center',opacity:(novoHorarioNome.trim()&&novoHorarioEntrada&&novoHorarioSaida)?1:.5,cursor:(novoHorarioNome.trim()&&novoHorarioEntrada&&novoHorarioSaida)?'pointer':'not-allowed'}}><Plus size={11}/>Adicionar</button>
