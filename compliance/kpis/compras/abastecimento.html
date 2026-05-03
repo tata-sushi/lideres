@@ -821,13 +821,13 @@ function categoriaLabelParaKey(label) {
 
 function statusBackendParaUI(p) {
   var map = {
-    solicitado: { cls:'b-enviado',    lbl:'Enviado',            aba:'processamento' },
-    comprado:   { cls:'b-aguardando', lbl:'Aguardando entrega', aba:'entregas' },
-    recebido:   { cls:'b-concluido',  lbl:'Concluído',          aba:'pedidos' },
-    parcial:    { cls:'b-parcial',    lbl:'Entrega parcial',    aba:'pedidos' },
-    cancelado:  { cls:'b-rascunho',   lbl:'Cancelado',          aba:'pedidos' }
+    solicitado: { cls:'b-enviado',    lbl:'Aguardando compra',      aba:'processamento' },
+    comprado:   { cls:'b-aguardando', lbl:'Aguardando recebimento', aba:'entregas' },
+    parcial:    { cls:'b-aguardando', lbl:'Aguardando recebimento', aba:'entregas' },
+    recebido:   { cls:'b-concluido',  lbl:'Recebido',               aba:'pedidos' },
+    cancelado:  { cls:'b-rascunho',   lbl:'Cancelado',              aba:'pedidos' }
   };
-  return map[p.status] || { cls:'b-enviado', lbl:p.status || 'Enviado', aba:'processamento' };
+  return map[p.status] || { cls:'b-enviado', lbl:'Aguardando compra', aba:'processamento' };
 }
 
 var gasErro = null;
@@ -912,8 +912,8 @@ async function pedidoParaUI(p) {
   if ((p.status === 'comprado' || p.status === 'parcial' || p.status === 'recebido') && p.fornecedor) {
     fornecedores = [{
       nome: p.fornecedor,
-      status: p.status === 'comprado' ? 'b-aguardando' : 'b-concluido',
-      label:  p.status === 'comprado' ? 'Aguardando'  : 'Recebido',
+      status: (p.status === 'recebido') ? 'b-concluido' : 'b-aguardando',
+      label:  (p.status === 'recebido') ? 'Recebido'   : 'Aguardando recebimento',
       itens: itensList.map(function(it) {
         return { nome: it.nome, un: it.un, qty: it.qtdComprada || it.qty, vlPedido: it.vlPedido || 0 };
       })
@@ -1124,9 +1124,9 @@ async function confirmarPedido() {
 
   // Atualiza estado local: pedido vai para a aba "entregas" com fornecedores agrupados
   order.fornecedores = Object.keys(fornGroups).map(function(forn){
-    return { nome: forn, status:'b-aguardando', label:'Aguardando', itens: fornGroups[forn] };
+    return { nome: forn, status:'b-aguardando', label:'Aguardando recebimento', itens: fornGroups[forn] };
   });
-  order.status='b-aguardando'; order.label='Aguardando entrega'; order.aba='entregas';
+  order.status='b-aguardando'; order.label='Aguardando recebimento'; order.aba='entregas';
 
   // Sincroniza com a planilha
   if (GAS_URL) {
@@ -1213,7 +1213,7 @@ async function enviarPedido() {
   var newId='P-'+(100+ORDERS.length);
   var newDisplay='#'+newId;
   var cats=activeCats.map(function(k){return CATALOGO[k].label.split(' ')[0];});
-  var newOrder={id:newId,idDisplay:newDisplay,status:'b-enviado',label:'Enviado',cats:cats,data:dataStr,entrega:entregaStr,obs:obsVal,aba:'processamento',itensList:itensList};
+  var newOrder={id:newId,idDisplay:newDisplay,status:'b-enviado',label:'Aguardando compra',cats:cats,data:dataStr,entrega:entregaStr,obs:obsVal,aba:'processamento',itensList:itensList};
 
   if (GAS_URL) {
     try {
@@ -1297,7 +1297,7 @@ function renderAba(aba) {
     html+='<select class="filter-select" id="ped-f-cat" onchange="filtrarPedidos()"><option value="">Categoria</option>';
     Object.keys(catSet).forEach(function(c){html+='<option value="'+c+'">'+c+'</option>';});
     html+='</select>';
-    html+='<select class="filter-select" id="ped-f-status" onchange="filtrarPedidos()"><option value="">Status</option><option value="b-enviado">Enviado</option><option value="b-aguardando">Aguardando</option><option value="b-parcial">Parcial</option><option value="b-concluido">Concluído</option></select>';
+    html+='<select class="filter-select" id="ped-f-status" onchange="filtrarPedidos()"><option value="">Status</option><option value="b-enviado">Aguardando compra</option><option value="b-aguardando">Aguardando recebimento</option><option value="b-concluido">Recebido</option></select>';
     html+='<button class="btn-clear-filters" onclick="limparFiltrosPedidos()">Limpar</button></div>';
     html+='<div class="filter-count" id="ped-count">'+lista.length+' pedido'+(lista.length!==1?'s':'')+'</div>';
     html+='<div id="ped-lista" style="display:flex;flex-direction:column;gap:12px;">'+lista.map(function(o){return cardHTML(o,'pedidos');}).join('')+'</div>';
@@ -1334,7 +1334,7 @@ function renderAba(aba) {
     html+='<select class="filter-select" id="ent-f-cat" onchange="filtrarEntregas()"><option value="">Categoria</option>';
     Object.keys(catSet).forEach(function(c){html+='<option value="'+c+'">'+c+'</option>';});
     html+='</select>';
-    html+='<select class="filter-select" id="ent-f-status" onchange="filtrarEntregas()"><option value="">Status</option><option value="b-concluido">Recebido</option><option value="b-aguardando">Aguardando</option><option value="b-enviado">Enviado</option></select>';
+    html+='<select class="filter-select" id="ent-f-status" onchange="filtrarEntregas()"><option value="">Status</option><option value="b-enviado">Aguardando compra</option><option value="b-aguardando">Aguardando recebimento</option><option value="b-concluido">Recebido</option></select>';
     html+='<button class="btn-clear-filters" onclick="limparFiltrosEntregas()">Limpar</button></div>';
     html+='<div class="filter-count" id="ent-count">'+lista.length+' recebimento'+(lista.length!==1?'s':'')+'</div>';
     html+='<div id="ent-lista" style="display:flex;flex-direction:column;gap:12px;">';
@@ -1684,7 +1684,7 @@ async function confirmarBaixaNF() {
   if(forn){
     forn.status='b-concluido'; forn.label='Recebido';
     var allDone=order.fornecedores.every(function(f){return f.status==='b-concluido';});
-    if(allDone){order.status='b-concluido';order.label='Concluído';order.aba='pedidos';}
+    if(allDone){order.status='b-concluido';order.label='Recebido';order.aba='pedidos';}
   }
 
   // Sincroniza com a planilha
@@ -1698,7 +1698,7 @@ async function confirmarBaixaNF() {
         itens:       itensApi
       });
       if (res && res.idDisplay) order.idDisplay = res.idDisplay;
-      if (res && res.status === 'parcial') { order.status='b-parcial'; order.label='Entrega parcial'; order.aba='pedidos'; }
+      if (res && res.status === 'parcial') { order.status='b-aguardando'; order.label='Aguardando recebimento'; order.aba='entregas'; }
     } catch(e) {
       toast('Erro ao atualizar Estoque: ' + e.message);
     }
