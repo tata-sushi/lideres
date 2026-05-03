@@ -124,8 +124,8 @@ function gerarId(unidade) {
 // recebido | parcial → #pinheiros0001cr
 function formatIdDisplay(id, status) {
   var sufixo = '';
-  if (status === 'comprado')                      sufixo = 'c';
-  if (status === 'recebido' || status === 'parcial') sufixo = 'cr';
+  if (status === 'comprado')                                           sufixo = 'c';
+  if (status === 'recebido' || status === 'parcial' || status === 'parcial_entrega') sufixo = 'cr';
   return '#' + id + sufixo;
 }
 
@@ -391,17 +391,28 @@ function updateEstoque(body) {
     });
   }
 
-  // Verifica divergência entre qtdComprada e qtdRecebida
+  // Verifica divergência e detecta entrega parcial por fornecedor
   var temDivergencia = false;
+  var fornRecebidos  = {};  // fornecedor → { comprada: total, recebida: total }
   iAll.slice(1).forEach(function(r) {
-    if (String(r[0]) === id) {
-      var comprada = Number(r[5]) || 0;
-      var recebida = Number(r[6]) || 0;
-      if (comprada > 0 && recebida < comprada) temDivergencia = true;
-    }
+    if (String(r[0]) !== id) return;
+    var comprada = Number(r[5]) || 0;
+    var recebida = Number(r[6]) || 0;
+    if (comprada > 0 && recebida < comprada) temDivergencia = true;
+    // Agrupa por fornecedor (col I, índice 8)
+    var forn = String(r[8] || '').trim() || '__sem_forn__';
+    if (!fornRecebidos[forn]) fornRecebidos[forn] = { comprada: 0, recebida: 0 };
+    fornRecebidos[forn].comprada += comprada;
+    fornRecebidos[forn].recebida += recebida;
   });
 
-  var novoStatus  = temDivergencia ? 'parcial' : 'recebido';
+  // Se há múltiplos fornecedores e apenas alguns entregaram → parcial_entrega
+  var fornKeys    = Object.keys(fornRecebidos);
+  var algumFeito  = fornKeys.some(function(f) { return fornRecebidos[f].comprada > 0 && fornRecebidos[f].recebida >= fornRecebidos[f].comprada; });
+  var algumPend   = fornKeys.some(function(f) { return fornRecebidos[f].comprada > 0 && fornRecebidos[f].recebida < fornRecebidos[f].comprada; });
+  var isParciaisPorForn = fornKeys.length > 1 && algumFeito && algumPend;
+
+  var novoStatus  = isParciaisPorForn ? 'parcial_entrega' : (temDivergencia ? 'parcial' : 'recebido');
   var novoDisplay = formatIdDisplay(id, novoStatus);
 
   // Atualiza linha do pedido
