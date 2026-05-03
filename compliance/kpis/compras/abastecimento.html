@@ -62,8 +62,9 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .b-enviado   { background: #FFF4DC; color: #7A4A00; }
 .b-proc      { background: #FFF4DC; color: #7A4A00; }
 .b-aguardando{ background: #E8F0FA; color: #1A3A5C; }
-.b-concluido { background: var(--carbon); color: var(--citric); }
-.b-parcial   { background: #FFF4DC; color: #7A4A00; }
+.b-concluido        { background: var(--carbon); color: var(--citric); }
+.b-parcial          { background: #FFF4DC; color: #7A4A00; }
+.b-parcial-entrega  { background: #FFF0E6; color: #8B3A00; }
 
 /* ── KPI GRID ── */
 .kpis-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -842,11 +843,12 @@ function categoriaLabelParaKey(label) {
 
 function statusBackendParaUI(p) {
   var map = {
-    solicitado: { cls:'b-enviado',    lbl:'Aguardando compra',      aba:'processamento' },
-    comprado:   { cls:'b-aguardando', lbl:'Aguardando recebimento', aba:'entregas' },
-    parcial:    { cls:'b-aguardando', lbl:'Aguardando recebimento', aba:'entregas' },
-    recebido:   { cls:'b-concluido',  lbl:'Recebido',               aba:'pedidos' },
-    cancelado:  { cls:'b-rascunho',   lbl:'Cancelado',              aba:'pedidos' }
+    solicitado:       { cls:'b-enviado',         lbl:'Aguardando compra',      aba:'processamento' },
+    comprado:         { cls:'b-aguardando',       lbl:'Aguardando recebimento', aba:'entregas' },
+    parcial:          { cls:'b-aguardando',       lbl:'Aguardando recebimento', aba:'entregas' },
+    parcial_entrega:  { cls:'b-parcial-entrega',  lbl:'Recebimento parcial',    aba:'entregas' },
+    recebido:         { cls:'b-concluido',        lbl:'Recebido',               aba:'pedidos' },
+    cancelado:        { cls:'b-rascunho',         lbl:'Cancelado',              aba:'pedidos' }
   };
   return map[p.status] || { cls:'b-enviado', lbl:'Aguardando compra', aba:'processamento' };
 }
@@ -930,7 +932,7 @@ async function pedidoParaUI(p) {
 
   // Após Compras: agrupa itens por fornecedor (1 card por fornecedor na aba Recebimentos)
   var fornecedores = null;
-  if (p.status === 'comprado' || p.status === 'parcial' || p.status === 'recebido') {
+  if (p.status === 'comprado' || p.status === 'parcial' || p.status === 'recebido' || p.status === 'parcial_entrega') {
     var grupos = {};
     (p.itens || []).forEach(function(it) {
       var f = String(it.fornecedor || '').trim() || String(p.fornecedor || '—');
@@ -970,6 +972,15 @@ async function pedidoParaUI(p) {
           })
         };
       });
+
+      // Se há múltiplos fornecedores e alguns entregaram mas outros não → Recebimento parcial
+      if (fornecedores.length > 1) {
+        var algumFeito  = fornecedores.some(function(f)  { return f.status === 'b-concluido'; });
+        var algumPend   = fornecedores.some(function(f)  { return f.status === 'b-aguardando'; });
+        if (algumFeito && algumPend) {
+          s = { cls: 'b-parcial-entrega', lbl: 'Recebimento parcial', aba: 'entregas' };
+        }
+      }
     }
   }
 
@@ -1376,9 +1387,10 @@ function renderFilters() {
   var catsSet  = {}; base.forEach(function(o) { (o.cats || []).forEach(function(c) { catsSet[c] = 1; }); });
   var cats     = Object.keys(catsSet).sort(function(a, b) { return a.localeCompare(b, 'pt-BR'); });
   var statusOpts = [
-    { value: 'b-enviado',    label: 'Aguardando compra' },
-    { value: 'b-aguardando', label: 'Aguardando recebimento' },
-    { value: 'b-concluido',  label: 'Recebido' }
+    { value: 'b-enviado',        label: 'Aguardando compra' },
+    { value: 'b-aguardando',     label: 'Aguardando recebimento' },
+    { value: 'b-parcial-entrega',label: 'Recebimento parcial' },
+    { value: 'b-concluido',      label: 'Recebido' }
   ];
 
   function sel(label, key, opts, curVal, isObj) {
@@ -1746,8 +1758,14 @@ async function confirmarBaixaNF() {
 
   if(forn){
     forn.status='b-concluido'; forn.label='Recebido';
-    var allDone=order.fornecedores.every(function(f){return f.status==='b-concluido';});
-    if(allDone){order.status='b-concluido';order.label='Recebido';order.aba='pedidos';}
+    var allDone   = order.fornecedores.every(function(f){return f.status==='b-concluido';});
+    var algumFeito = order.fornecedores.some(function(f){return f.status==='b-concluido';});
+    var algumPend  = order.fornecedores.some(function(f){return f.status==='b-aguardando';});
+    if(allDone){
+      order.status='b-concluido'; order.label='Recebido'; order.aba='pedidos';
+    } else if(algumFeito && algumPend && order.fornecedores.length > 1){
+      order.status='b-parcial-entrega'; order.label='Recebimento parcial'; order.aba='entregas';
+    }
   }
 
   // Sincroniza com a planilha
@@ -1761,7 +1779,13 @@ async function confirmarBaixaNF() {
         itens:       itensApi
       });
       if (res && res.idDisplay) order.idDisplay = res.idDisplay;
-      if (res && res.status === 'parcial') { order.status='b-aguardando'; order.label='Aguardando recebimento'; order.aba='entregas'; }
+      if (res) {
+        if (res.status === 'parcial_entrega') {
+          order.status='b-parcial-entrega'; order.label='Recebimento parcial'; order.aba='entregas';
+        } else if (res.status === 'parcial') {
+          order.status='b-aguardando'; order.label='Aguardando recebimento'; order.aba='entregas';
+        }
+      }
     } catch(e) {
       toast('Erro ao atualizar Estoque: ' + e.message);
     }
@@ -1802,7 +1826,7 @@ function updateKPIs() {
 
   var recebidosTotal = lista.filter(function(o) { return o.status === 'b-concluido';  }).length;
   var aguardCompra   = lista.filter(function(o) { return o.status === 'b-enviado';    }).length;
-  var aguardReceb    = lista.filter(function(o) { return o.status === 'b-aguardando'; }).length;
+  var aguardReceb    = lista.filter(function(o) { return o.status === 'b-aguardando' || o.status === 'b-parcial-entrega'; }).length;
 
   function set(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
   set('kpi-pedidos-total',  totalRealizados);
