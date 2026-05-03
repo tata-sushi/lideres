@@ -13,15 +13,50 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 ## HEADER — LAYOUT PADRÃO
 
 ### Altura & Estrutura
-- **Altura total**: `14px (padding-top) + conteúdo + 14px (padding-bottom)` = ~56–60px
+- **Altura total**: `10px (padding-top) + conteúdo + 10px (padding-bottom)` = ~60px
   - Logo: 40px
   - Título: 20px line-height
   - User/Plus: **28px** (mesma altura, alinhamento visual perfeito — padrão `menucompliance.html`)
-- **Padding**: `14px 20px` (vertical 14px, horizontal 20px)
-- **Display**: `flex`, `align-items: center`, `gap: 14px`
+- **Padding**: `10px 16px` (vertical 10px, horizontal 16px)
+- **Display**: `flex`, `align-items: center`, `gap: 10px`
 - **Position**: `sticky; top: 0; z-index: 100` (fica fixo ao scroll)
 - **Background**: `var(--surface)` (fundo levemente contrastado)
 - **Border**: `1px solid var(--border)` (bottom only)
+
+### CSS Canônico
+```css
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.logo-img { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
+.header-title { font-size: 20px; font-weight: 700; color: var(--carbon); letter-spacing: -0.3px; }
+.header-user {
+  font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--carbon); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 0 10px; height: 28px;
+  display: inline-flex; align-items: center;
+  white-space: nowrap; margin-left: auto;
+}
+.header-plus {
+  width: 28px; height: 28px; background: var(--carbon);
+  border: none; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+}
+.header-plus svg { width: 14px; height: 14px; stroke: var(--citric); fill: none; stroke-width: 2.5; stroke-linecap: round; }
+```
+
+⚠️ **Sem media query que altere padding, gap ou tamanho do header** — proporção idêntica em todos os viewports.
 
 ---
 
@@ -32,7 +67,7 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 - **Flex**: `flex-shrink: 0` (não encolhe com viewport pequeno)
 - **Formato**: PNG em base64 (~1807 caracteres)
   - **Cor**: Monocromática (preto/carbon sobre fundo claro)
-  - **Espaçamento**: Margem direita dada pelo gap do flex (`gap: 14px`)
+  - **Espaçamento**: Margem direita dada pelo gap do flex (`gap: 10px`)
 
 ### Regra Crítica
 ⚠️ **Logo truncado quebra renderização.** Sempre copiar o `<img>` inteiro de uma dashboard funcionando — nunca recortar ou reinventar a tag.
@@ -73,7 +108,8 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 - **Font-size**: `10px` (pequeno, tipo rótulo)
 - **Font-weight**: `500` (semibold, não bold)
 - **Color**: `var(--carbon)` (preto #35383F)
-- **Letter-spacing**: nenhum override específico (herança ou default monospace)
+- **Letter-spacing**: `0.5px`
+- **Text-transform**: `uppercase` (nome sempre em maiúsculas)
 
 ### Visual
 - **Background**: `var(--bg)` (fundo neutro)
@@ -90,7 +126,7 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 
 ### Abreviação de Nome (Padrão novo)
 
-⚠️ **Para economizar espaço no header**, o nome do líder pode ser **abreviado para "Primeiro Último"**:
+⚠️ **Padrão obrigatório**: o nome do líder deve ser **abreviado para "Primeiro Último"**:
 - "João Silva Santos" → "João Santos"
 - "Maria de Oliveira Costa" → "Maria Costa"
 
@@ -112,7 +148,7 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 })();
 ```
 
-**Regra**: Aplicar abreviação **apenas se necessário** (ex.: quando nomes muito longos burlam o layout em mobile). Caso a página tenha espaço suficiente, usar o nome completo sem abreviação.
+**Regra**: Aplicar abreviação em **todas as dashboards** — garante consistência visual e evita quebra de layout em mobile.
 
 ---
 
@@ -169,15 +205,18 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 ### ✅ DEVE
 - Logo: 40×40px, base64 canônico, flex-shrink 0
 - Título: 20px, 700 weight, max ~12 chars, **sem media query override**
-- Header-user: monospace 10px, border-radius **4px hardcoded**, **`padding: 0 10px; height: 28px; display: inline-flex; align-items: center;`**, margin-left auto
+- Header-user: monospace 10px 500, `letter-spacing: 0.5px`, `text-transform: uppercase`, border-radius **4px hardcoded**, **`padding: 0 10px; height: 28px; display: inline-flex; align-items: center; white-space: nowrap; margin-left: auto;`**
 - Header-plus: **28×28px** (MESMA altura do `.header-user`), border-radius **4px hardcoded**, SVG 14×14px, stroke-width 2.5px
 - **Toda dashboard tem `.header-plus` (botão "+") OBRIGATÓRIO** — nunca opcional, mesmo que abra apenas `alert('Em desenvolvimento')`
 - Position: sticky top 0 z-index 100
-- Padding: 14px 20px (ambos lados)
+- Padding: **`10px 16px`** (vertical 10px, horizontal 16px)
+- Gap: **`10px`** entre elementos do flex
 - **Sem overflow:hidden** no header — corta nome em telas pequenas
+- **Sem media query** que altere padding, gap ou tamanhos do header
 
 ### ❌ NÃO
 - Título <14px ou >20px
+- `text-transform: uppercase` no `.header-title` — título em Title Case (ex.: "Caixa", não "CAIXA")
 - Subtítulo ou complemento de texto ("de", "do", etc.)
 - `display:none` no header-user em mobile
 - Variações de CSS em media queries para `.header`, `.logo-img`, `.header-title`
