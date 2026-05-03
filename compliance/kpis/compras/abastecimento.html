@@ -730,7 +730,11 @@ async function gasGet(params) {
   if (!GAS_URL) return null;
   var qs  = new URLSearchParams(Object.assign({ t: Date.now() }, params)).toString();
   var res = await fetch(GAS_URL + '?' + qs);
-  var data = await res.json();
+  var text = await res.text();
+  var data;
+  try { data = JSON.parse(text); } catch(_) {
+    throw new Error('Resposta inválida do servidor (HTTP ' + res.status + '). Verifique se o Apps Script está publicado como Web App pública.');
+  }
   if (!data.ok) throw new Error(data.error || 'Erro desconhecido');
   return data;
 }
@@ -845,7 +849,10 @@ function statusBackendParaUI(p) {
   return map[p.status] || { cls:'b-enviado', lbl:p.status || 'Enviado', aba:'processamento' };
 }
 
+var gasErro = null;
+
 async function carregarPedidos() {
+  gasErro = null;
   if (!GAS_URL) { carregando = false; renderAll(); updateKPIs(); return; }
   try {
     var data = await gasGet({ action: 'getPedidos', unidade: UNIDADE, perfil: 'lider' });
@@ -854,13 +861,16 @@ async function carregarPedidos() {
       ORDERS = pedidosUI;
     }
   } catch(e) {
+    gasErro = e.message;
     toast('Erro ao carregar pedidos: ' + e.message);
   }
   carregando = false;
   renderAll(); updateKPIs();
   var agora = new Date();
   var el = document.getElementById('footer-date-updated');
-  if (el) el.textContent = 'Atualizado: ' + agora.toLocaleDateString('pt-BR') + ', ' + agora.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  if (el) el.textContent = gasErro
+    ? 'Erro ao carregar dados — ' + agora.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})
+    : 'Atualizado: ' + agora.toLocaleDateString('pt-BR') + ', ' + agora.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 
 function fmtDataBR(v) {
@@ -1265,7 +1275,11 @@ function renderAba(aba) {
   // Todas as abas listam os pedidos dos últimos 30 dias, ordenados por data desc.
   var lista = ORDERS.filter(dentroDe10Dias).sort(ordenaPorDataDesc);
   if(lista.length===0){
-    container.innerHTML='<div class="loading"><p>Nenhum pedido encontrado nos últimos 30 dias.</p></div>';
+    if (gasErro) {
+      container.innerHTML='<div class="loading"><p>Falha ao carregar dados da planilha.</p><p style="font-size:10px;margin-top:4px;opacity:.6;">' + gasErro + '</p></div>';
+    } else {
+      container.innerHTML='<div class="loading"><p>Nenhum pedido encontrado nos últimos 30 dias.</p></div>';
+    }
     return;
   }
 
