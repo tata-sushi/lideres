@@ -165,16 +165,41 @@ function getCatalogo() {
 
 function getPedidos(unidade, perfil) {
   var sh      = getOrCreateSheet('Pedidos', PED_HEADER);
+  var shI     = getOrCreateSheet('PedidoItens', ITEM_HEADER);
   var rows    = todasLinhas(sh);
+  var iRows   = todasLinhas(shI);
+
+  // Índice de itens por pedidoId para evitar N+1 nas requisições do cliente
+  var itensPorPedido = {};
+  iRows.forEach(function(r) {
+    var pid = String(r[0] || '').trim();
+    if (!pid) return;
+    if (!itensPorPedido[pid]) itensPorPedido[pid] = [];
+    itensPorPedido[pid].push({
+      pedidoId:      pid,
+      categoriaKey:  String(r[1] || ''),
+      produtoNome:   String(r[2] || ''),
+      unidade:       String(r[3] || ''),
+      qtdSolicitada: Number(r[4]) || 0,
+      qtdComprada:   Number(r[5]) || 0,
+      qtdRecebida:   Number(r[6]) || 0,
+      obsItem:       String(r[7] || '')
+    });
+  });
+
   var pedidos = rows
     .filter(function(r) {
       if (!r[0]) return false;
       // perfil 'lider' vê somente pedidos da sua unidade
       if (perfil === 'lider' && unidade)
-        return String(r[2]).toLowerCase() === normUnidade(unidade);
+        return normUnidade(String(r[2])) === normUnidade(unidade);
       return true;
     })
-    .map(rowParaPedido);
+    .map(function(r) {
+      var p = rowParaPedido(r);
+      p.itens = itensPorPedido[p.id] || [];
+      return p;
+    });
   return { pedidos: pedidos };
 }
 

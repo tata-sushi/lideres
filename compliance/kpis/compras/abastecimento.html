@@ -858,6 +858,9 @@ async function carregarPedidos() {
   }
   carregando = false;
   renderAll(); updateKPIs();
+  var agora = new Date();
+  var el = document.getElementById('footer-date-updated');
+  if (el) el.textContent = 'Atualizado: ' + agora.toLocaleDateString('pt-BR') + ', ' + agora.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 
 function fmtDataBR(v) {
@@ -879,26 +882,32 @@ async function pedidoParaUI(p) {
   var data    = fmtDataBR(p.dataSolicitacao);
   var entrega = fmtDataBR(p.dataEntregaDesejada);
 
-  // Busca itens do pedido para reconstruir itensList
+  function mapItens(itens) {
+    return itens.map(function(it) {
+      var catLabel = (CATALOGO[it.categoriaKey] && CATALOGO[it.categoriaKey].label) || it.categoriaKey;
+      var qty = (s.aba === 'entregas' && it.qtdComprada) ? Number(it.qtdComprada) : Number(it.qtdSolicitada) || 0;
+      return {
+        cat:         catLabel,
+        nome:        it.produtoNome,
+        un:          it.unidade,
+        qty:         qty,
+        vlPedido:    0,
+        qtdComprada: Number(it.qtdComprada) || 0,
+        qtdRecebida: Number(it.qtdRecebida) || 0
+      };
+    });
+  }
+
+  // Usa itens inline do getPedidos (sem N+1); faz fallback só se ausentes
   var itensList = [];
-  try {
-    var det = await gasGet({ action: 'getPedido', id: p.id });
-    if (det && det.itens) {
-      itensList = det.itens.map(function(it) {
-        var catLabel = (CATALOGO[it.categoriaKey] && CATALOGO[it.categoriaKey].label) || it.categoriaKey;
-        var qty = (s.aba === 'entregas' && it.qtdComprada) ? Number(it.qtdComprada) : Number(it.qtdSolicitada) || 0;
-        return {
-          cat:      catLabel,
-          nome:     it.produtoNome,
-          un:       it.unidade,
-          qty:      qty,
-          vlPedido: 0,
-          qtdComprada: Number(it.qtdComprada) || 0,
-          qtdRecebida: Number(it.qtdRecebida) || 0
-        };
-      });
-    }
-  } catch(e) { console.warn('getPedido falhou para ' + p.id, e.message); }
+  if (p.itens && p.itens.length > 0) {
+    itensList = mapItens(p.itens);
+  } else {
+    try {
+      var det = await gasGet({ action: 'getPedido', id: p.id });
+      if (det && det.itens) itensList = mapItens(det.itens);
+    } catch(e) { console.warn('getPedido falhou para ' + p.id, e.message); }
+  }
 
   var catsSet = {};
   itensList.forEach(function(it) {
@@ -1232,7 +1241,7 @@ function dentroDe10Dias(o) {
     dt = new Date(p[2] + '-' + p[1] + '-' + p[0] + 'T12:00:00');
   }
   if (!dt || isNaN(dt.getTime())) return true; // sem data legível, mostra mesmo assim
-  return (Date.now() - dt.getTime()) <= 10 * 24 * 60 * 60 * 1000;
+  return (Date.now() - dt.getTime()) <= 30 * 24 * 60 * 60 * 1000;
 }
 
 function ordenaPorDataDesc(a, b) {
@@ -1253,9 +1262,12 @@ function renderAba(aba) {
     container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Carregando pedidos…</p></div>';
     return;
   }
-  // Todas as abas listam os pedidos dos últimos 10 dias, ordenados por data desc.
+  // Todas as abas listam os pedidos dos últimos 30 dias, ordenados por data desc.
   var lista = ORDERS.filter(dentroDe10Dias).sort(ordenaPorDataDesc);
-  if(lista.length===0){ container.innerHTML=''; return; }
+  if(lista.length===0){
+    container.innerHTML='<div class="loading"><p>Nenhum pedido encontrado nos últimos 30 dias.</p></div>';
+    return;
+  }
 
   if(aba==='pedidos'){
     var catSet={};lista.forEach(function(o){o.cats.forEach(function(c){catSet[c]=1;});});
