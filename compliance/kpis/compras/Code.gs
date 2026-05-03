@@ -39,7 +39,9 @@ var PED_HEADER = [
   'recebidoPor',
   'obsEstoque',
   // Status global        (coluna Q, índice 16)
-  'status'                // solicitado | comprado | recebido | parcial | cancelado
+  'status',               // solicitado | comprado | recebido | parcial | cancelado
+  // Identificação extra  (coluna R, índice 17)
+  'departamento'          // departamento do solicitante (ex.: salao, cozinha, gerencia)
 ];
 
 // Aba PedidoItens: uma linha por item, join via pedidoId
@@ -245,19 +247,21 @@ function rowParaPedido(r) {
     dataRecebimento:     String(r[13] || ''),
     recebidoPor:         String(r[14] || ''),
     obsEstoque:          String(r[15] || ''),
-    status:              String(r[16] || 'solicitado')
+    status:              String(r[16] || 'solicitado'),
+    departamento:        String(r[17] || '')
   };
 }
 
 // ── ESTÁGIO 1 — Solicitante ───────────────────────────────────
-// body: { unidade, solicitante, dataEntregaDesejada, obs, itens: [{categoriaKey, produtoNome, unidade, qtdSolicitada}] }
+// body: { unidade, departamento, solicitante, dataEntregaDesejada, obs, itens: [{categoriaKey, produtoNome, unidade, qtdSolicitada}] }
 
 function savePedido(body) {
-  var unidade    = String(body.unidade    || 'unidade');
-  var solicitante= String(body.solicitante|| '');
-  var dataEntrega= String(body.dataEntregaDesejada || '');
-  var obs        = String(body.obs        || '');
-  var itens      = Array.isArray(body.itens) ? body.itens : [];
+  var unidade     = String(body.unidade      || 'unidade');
+  var departamento= String(body.departamento || '');
+  var solicitante = String(body.solicitante  || '');
+  var dataEntrega = String(body.dataEntregaDesejada || '');
+  var obs         = String(body.obs          || '');
+  var itens       = Array.isArray(body.itens) ? body.itens : [];
 
   if (itens.length === 0) throw new Error('Pedido sem itens');
 
@@ -271,7 +275,8 @@ function savePedido(body) {
     hoje(), dataEntrega, obs, 'enviado',
     '', '', '', '', '',       // cols Compras
     '', '', '',               // cols Estoque
-    'solicitado'              // status
+    'solicitado',             // status
+    departamento              // departamento (col R, índice 17)
   ]);
   shP.getRange(shP.getLastRow(), 1).setNumberFormat('@'); // força texto
 
