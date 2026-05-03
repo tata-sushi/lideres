@@ -48,14 +48,18 @@ var PED_HEADER = [
 
 // Aba PedidoItens: uma linha por item, join via pedidoId
 var ITEM_HEADER = [
-  'pedidoId',       // → Pedidos.id
-  'categoriaKey',
-  'produtoNome',
-  'unidade',        // unidade de medida (kg, cx, un…)
-  'qtdSolicitada',  // preenchido pelo Solicitante
-  'qtdComprada',    // preenchido por Compras
-  'qtdRecebida',    // preenchido por Estoque
-  'obsItem'
+  'pedidoId',           // → Pedidos.id (col A, índice 0)
+  'categoriaKey',       // (col B, índice 1)
+  'produtoNome',        // (col C, índice 2)
+  'unidade',            // unidade de medida (kg, cx, un…)  (col D, índice 3)
+  'qtdSolicitada',      // preenchido pelo Solicitante     (col E, índice 4)
+  'qtdComprada',        // preenchido por Compras           (col F, índice 5)
+  'qtdRecebida',        // preenchido por Estoque           (col G, índice 6)
+  'obsItem',            // (col H, índice 7)
+  // ── novos campos por item (para rastreio por fornecedor) ──
+  'fornecedor',         // fornecedor de quem o item foi comprado (col I, índice 8)
+  'dataEntregaPrevista',// data prevista de entrega para esse item/forn (col J, índice 9)
+  'dataRecebimento'     // data em que o item foi recebido (col K, índice 10)
 ];
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -72,6 +76,13 @@ function getOrCreateSheet(nome, cabecalho) {
     sh = s.insertSheet(nome);
     sh.getRange(1, 1, 1, cabecalho.length).setValues([cabecalho]);
     sh.setFrozenRows(1);
+  } else {
+    // Estende o cabeçalho se faltar coluna (sem alterar dados existentes)
+    var lastCol = sh.getLastColumn();
+    if (lastCol < cabecalho.length) {
+      var faltam = cabecalho.slice(lastCol);
+      sh.getRange(1, lastCol + 1, 1, faltam.length).setValues([faltam]);
+    }
   }
   return sh;
 }
@@ -180,14 +191,17 @@ function getPedidos(unidade, perfil) {
     if (!pid) return;
     if (!itensPorPedido[pid]) itensPorPedido[pid] = [];
     itensPorPedido[pid].push({
-      pedidoId:      pid,
-      categoriaKey:  String(r[1] || ''),
-      produtoNome:   String(r[2] || ''),
-      unidade:       String(r[3] || ''),
-      qtdSolicitada: Number(r[4]) || 0,
-      qtdComprada:   Number(r[5]) || 0,
-      qtdRecebida:   Number(r[6]) || 0,
-      obsItem:       String(r[7] || '')
+      pedidoId:            pid,
+      categoriaKey:        String(r[1]  || ''),
+      produtoNome:         String(r[2]  || ''),
+      unidade:             String(r[3]  || ''),
+      qtdSolicitada:       Number(r[4]) || 0,
+      qtdComprada:         Number(r[5]) || 0,
+      qtdRecebida:         Number(r[6]) || 0,
+      obsItem:             String(r[7]  || ''),
+      fornecedor:          String(r[8]  || ''),
+      dataEntregaPrevista: String(r[9]  || ''),
+      dataRecebimento:     String(r[10] || '')
     });
   });
 
@@ -217,14 +231,17 @@ function getPedido(id) {
     .filter(function(r) { return String(r[0]) === id; })
     .map(function(r) {
       return {
-        pedidoId:     String(r[0]),
-        categoriaKey: String(r[1]),
-        produtoNome:  String(r[2]),
-        unidade:      String(r[3]),
-        qtdSolicitada:Number(r[4]) || 0,
-        qtdComprada:  Number(r[5]) || 0,
-        qtdRecebida:  Number(r[6]) || 0,
-        obsItem:      String(r[7] || '')
+        pedidoId:            String(r[0]),
+        categoriaKey:        String(r[1]),
+        produtoNome:         String(r[2]),
+        unidade:             String(r[3]),
+        qtdSolicitada:       Number(r[4]) || 0,
+        qtdComprada:         Number(r[5]) || 0,
+        qtdRecebida:         Number(r[6]) || 0,
+        obsItem:             String(r[7]  || ''),
+        fornecedor:          String(r[8]  || ''),
+        dataEntregaPrevista: String(r[9]  || ''),
+        dataRecebimento:     String(r[10] || '')
       };
     });
 
@@ -293,7 +310,8 @@ function savePedido(body) {
       String(item.produtoNome   || ''),
       String(item.unidade       || ''),
       Number(item.qtdSolicitada) || 0,
-      '', '', ''   // qtdComprada, qtdRecebida, obsItem preenchidos depois
+      '', '', '',  // qtdComprada, qtdRecebida, obsItem preenchidos depois
+      '', '', ''   // fornecedor, dataEntregaPrevista, dataRecebimento (preenchidos por Compras/Estoque)
     ]);
   });
 
@@ -331,6 +349,9 @@ function updateCompras(body) {
         if (String(iAll[i][0]) === id && String(iAll[i][2]) === String(upd.produtoNome)) {
           shI.getRange(i + 1, 6).setValue(Number(upd.qtdComprada) || 0);
           if (upd.obsItem) shI.getRange(i + 1, 8).setValue(upd.obsItem);
+          // Rastreio por fornecedor: grava fornecedor + data prevista no item
+          shI.getRange(i + 1, 9).setValue(String(upd.fornecedor || ''));            // col I
+          shI.getRange(i + 1, 10).setValue(String(upd.dataEntregaPrevista || ''));  // col J
           break;
         }
       }
@@ -353,7 +374,8 @@ function updateEstoque(body) {
   var shI  = getOrCreateSheet('PedidoItens', ITEM_HEADER);
   var iAll = shI.getDataRange().getValues();
 
-  // Aplica qtdRecebida nos itens
+  // Aplica qtdRecebida nos itens + grava dataRecebimento por item
+  var hojeStr = hoje();
   if (Array.isArray(body.itens) && body.itens.length > 0) {
     body.itens.forEach(function(upd) {
       for (var i = 1; i < iAll.length; i++) {
@@ -362,6 +384,7 @@ function updateEstoque(body) {
           shI.getRange(i + 1, 7).setValue(qty);
           iAll[i][6] = qty; // atualiza array local para cálculo de divergência
           if (upd.obsItem) shI.getRange(i + 1, 8).setValue(upd.obsItem);
+          if (qty > 0) shI.getRange(i + 1, 11).setValue(hojeStr); // dataRecebimento (col K)
           break;
         }
       }
