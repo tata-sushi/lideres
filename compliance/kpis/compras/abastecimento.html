@@ -401,7 +401,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   }
   var perfil  = (session.perfil || '').toLowerCase();
   var paginas = Array.isArray(session.paginas) ? session.paginas : [];
-  var hasAccess = paginas.some(function(p) {
+  var hasAccess = perfil === 'lider' || perfil === 'admin' || paginas.some(function(p) {
     var id  = String(p && p.id  || '').toLowerCase();
     var url = String(p && p.url || '').toLowerCase();
     return id === PAGE_ID || url.indexOf(PAGE_URL_FRAG) !== -1;
@@ -527,14 +527,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <label class="flbl">Adicionar categoria</label>
         <div class="cat-add-row">
           <select class="cat-select" id="sel-cat">
-            <option value="">Selecione uma categoria…</option>
-            <option value="peixes">Peixes e frutos do mar</option>
-            <option value="frios">Frios e congelados</option>
-            <option value="secos">Secos e grãos</option>
-            <option value="bebidas">Bebidas</option>
-            <option value="descartaveis">Descartáveis</option>
-            <option value="limpeza">Limpeza e higiene</option>
-            <option value="hortifruti">Hortifruti</option>
+            <option value="">Carregando categorias…</option>
           </select>
           <button class="btn-add-cat" onclick="addCategoria()">+ Add</button>
         </div>
@@ -736,7 +729,11 @@ async function gasGet(params) {
   if (!GAS_URL) return null;
   var qs  = new URLSearchParams(Object.assign({ t: Date.now() }, params)).toString();
   var res = await fetch(GAS_URL + '?' + qs);
-  var data = await res.json();
+  var text = await res.text();
+  var data;
+  try { data = JSON.parse(text); } catch(_) {
+    throw new Error('Resposta inválida do servidor (HTTP ' + res.status + '). Verifique se o Apps Script está publicado como Web App pública.');
+  }
   if (!data.ok) throw new Error(data.error || 'Erro desconhecido');
   return data;
 }
@@ -753,42 +750,8 @@ async function gasPost(body) {
   return data;
 }
 
-// Fallback local — substituído por carregarCatalogo() quando GAS_URL responde
-var CATALOGO = {
-  peixes:       { label:'Peixes e frutos do mar', produtos:[
-    {nome:'Salmão fresco',un:'kg',min:5},{nome:'Atum bluefin',un:'kg',min:2},{nome:'Polvo fresco',un:'kg',min:2},
-    {nome:'Lula limpa',un:'kg',min:2},{nome:'Camarão VG',un:'kg',min:3},{nome:'Vieira',un:'kg',min:1},
-    {nome:'Tilápia filé',un:'kg',min:2},{nome:'Ovas de salmão (ikura)',un:'pote',min:2},{nome:'Ovas de capelin (tobiko)',un:'pote',min:2}
-  ]},
-  frios:        { label:'Frios e congelados', produtos:[
-    {nome:'Cream cheese',un:'kg',min:3},{nome:'Manteiga sem sal',un:'kg',min:1},{nome:'Queijo parmesão',un:'kg',min:1},
-    {nome:'Maionese',un:'kg',min:2},{nome:'Creme de leite',un:'cx',min:1},{nome:'Leite condensado',un:'cx',min:1},{nome:'Edamame congelado',un:'kg',min:3}
-  ]},
-  secos:        { label:'Secos e grãos', produtos:[
-    {nome:'Arroz japonês',un:'kg',min:10},{nome:'Alga nori',un:'cx',min:2},{nome:'Shoyu premium',un:'un',min:5},
-    {nome:'Vinagre de arroz',un:'un',min:2},{nome:'Gergelim branco',un:'kg',min:1},{nome:'Gergelim preto',un:'kg',min:1},
-    {nome:'Farinha de rosca panko',un:'kg',min:2},{nome:'Azeite de sésamo',un:'un',min:2},{nome:'Wasabi pasta',un:'un',min:3},{nome:'Gengibre em conserva',un:'pote',min:4}
-  ]},
-  bebidas:      { label:'Bebidas', produtos:[
-    {nome:'Água mineral 500ml',un:'cx',min:2},{nome:'Refrigerante lata 350ml',un:'cx',min:1},{nome:'Suco integral longa vida',un:'cx',min:1},
-    {nome:'Cerveja artesanal long neck',un:'cx',min:1},{nome:'Sake',un:'un',min:3},{nome:'Vinho branco',un:'un',min:2},{nome:'Energético lata',un:'cx',min:1}
-  ]},
-  descartaveis: { label:'Descartáveis', produtos:[
-    {nome:'Caixa delivery P',un:'cx',min:2},{nome:'Caixa delivery M',un:'cx',min:2},{nome:'Caixa delivery G',un:'cx',min:1},
-    {nome:'Saquinho kraft',un:'cx',min:2},{nome:'Hashi descartável',un:'cx',min:3},{nome:'Guardanapo',un:'pct',min:4},
-    {nome:'Copo descartável 300ml',un:'cx',min:2},{nome:'Luva nitrílica M',un:'cx',min:2},{nome:'Luva nitrílica G',un:'cx',min:1}
-  ]},
-  limpeza:      { label:'Limpeza e higiene', produtos:[
-    {nome:'Detergente líquido',un:'un',min:3},{nome:'Desengordurante',un:'un',min:2},{nome:'Álcool 70% spray',un:'un',min:3},
-    {nome:'Papel toalha',un:'pct',min:4},{nome:'Saco de lixo 100L',un:'rolo',min:2},{nome:'Esponja dupla face',un:'pct',min:2},
-    {nome:'Pano multiuso',un:'pct',min:2},{nome:'Sabonete líquido',un:'un',min:2}
-  ]},
-  hortifruti:   { label:'Hortifruti', produtos:[
-    {nome:'Pepino japonês',un:'kg',min:5},{nome:'Abacate',un:'kg',min:3},{nome:'Limão siciliano',un:'kg',min:2},
-    {nome:'Cebolinha',un:'mç',min:5},{nome:'Coentro',un:'mç',min:3},{nome:'Alho',un:'kg',min:1},
-    {nome:'Cebola',un:'kg',min:2},{nome:'Manga',un:'kg',min:2},{nome:'Morango',un:'kg',min:1}
-  ]}
-};
+// Catálogo é carregado integralmente da planilha via carregarCatalogo()
+var CATALOGO = {};
 
 var ORDERS = [];
 var carregando = true;
@@ -798,8 +761,11 @@ var procOrderId = null;
 var currentUser = null;
 
 // ── SHEET LOADERS ─────────────────────────────────────────────────────────────
+var catalogoErro = null;
+
 async function carregarCatalogo() {
-  if (!GAS_URL) { popularSelectCategorias(); return; }
+  catalogoErro = null;
+  if (!GAS_URL) { catalogoErro = 'GAS_URL não configurado'; popularSelectCategorias(); return; }
   try {
     var data = await gasGet({ action: 'getCatalogo' });
     if (data && data.catalogo && Object.keys(data.catalogo).length > 0) {
@@ -814,16 +780,28 @@ async function carregarCatalogo() {
         };
       });
       CATALOGO = convertido;
+    } else {
+      catalogoErro = 'Catálogo vazio na planilha (aba Catalogo sem itens ativos)';
     }
-  } catch(e) { console.warn('Catálogo: usando fallback local.', e.message); }
+  } catch(e) {
+    catalogoErro = e.message;
+    console.warn('Catálogo: erro ao carregar.', e.message);
+  }
   popularSelectCategorias();
 }
 
 function popularSelectCategorias() {
   var sel = document.getElementById('sel-cat');
   if (!sel) return;
+  var keys = Object.keys(CATALOGO);
+  if (keys.length === 0) {
+    sel.innerHTML = '<option value="">' + (catalogoErro ? 'Erro: ' + catalogoErro : 'Nenhuma categoria cadastrada') + '</option>';
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
   sel.innerHTML = '<option value="">Selecione uma categoria…</option>';
-  Object.keys(CATALOGO).forEach(function(key) {
+  keys.forEach(function(key) {
     var opt = document.createElement('option');
     opt.value = key;
     opt.textContent = CATALOGO[key].label;
@@ -851,7 +829,10 @@ function statusBackendParaUI(p) {
   return map[p.status] || { cls:'b-enviado', lbl:p.status || 'Enviado', aba:'processamento' };
 }
 
+var gasErro = null;
+
 async function carregarPedidos() {
+  gasErro = null;
   if (!GAS_URL) { carregando = false; renderAll(); updateKPIs(); return; }
   try {
     var data = await gasGet({ action: 'getPedidos', unidade: UNIDADE, perfil: 'lider' });
@@ -860,10 +841,16 @@ async function carregarPedidos() {
       ORDERS = pedidosUI;
     }
   } catch(e) {
+    gasErro = e.message;
     toast('Erro ao carregar pedidos: ' + e.message);
   }
   carregando = false;
   renderAll(); updateKPIs();
+  var agora = new Date();
+  var el = document.getElementById('footer-date-updated');
+  if (el) el.textContent = gasErro
+    ? 'Erro ao carregar dados — ' + agora.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})
+    : 'Atualizado: ' + agora.toLocaleDateString('pt-BR') + ', ' + agora.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 
 function fmtDataBR(v) {
@@ -885,26 +872,32 @@ async function pedidoParaUI(p) {
   var data    = fmtDataBR(p.dataSolicitacao);
   var entrega = fmtDataBR(p.dataEntregaDesejada);
 
-  // Busca itens do pedido para reconstruir itensList
+  function mapItens(itens) {
+    return itens.map(function(it) {
+      var catLabel = (CATALOGO[it.categoriaKey] && CATALOGO[it.categoriaKey].label) || it.categoriaKey;
+      var qty = (s.aba === 'entregas' && it.qtdComprada) ? Number(it.qtdComprada) : Number(it.qtdSolicitada) || 0;
+      return {
+        cat:         catLabel,
+        nome:        it.produtoNome,
+        un:          it.unidade,
+        qty:         qty,
+        vlPedido:    0,
+        qtdComprada: Number(it.qtdComprada) || 0,
+        qtdRecebida: Number(it.qtdRecebida) || 0
+      };
+    });
+  }
+
+  // Usa itens inline do getPedidos (sem N+1); faz fallback só se ausentes
   var itensList = [];
-  try {
-    var det = await gasGet({ action: 'getPedido', id: p.id });
-    if (det && det.itens) {
-      itensList = det.itens.map(function(it) {
-        var catLabel = (CATALOGO[it.categoriaKey] && CATALOGO[it.categoriaKey].label) || it.categoriaKey;
-        var qty = (s.aba === 'entregas' && it.qtdComprada) ? Number(it.qtdComprada) : Number(it.qtdSolicitada) || 0;
-        return {
-          cat:      catLabel,
-          nome:     it.produtoNome,
-          un:       it.unidade,
-          qty:      qty,
-          vlPedido: 0,
-          qtdComprada: Number(it.qtdComprada) || 0,
-          qtdRecebida: Number(it.qtdRecebida) || 0
-        };
-      });
-    }
-  } catch(e) { console.warn('getPedido falhou para ' + p.id, e.message); }
+  if (p.itens && p.itens.length > 0) {
+    itensList = mapItens(p.itens);
+  } else {
+    try {
+      var det = await gasGet({ action: 'getPedido', id: p.id });
+      if (det && det.itens) itensList = mapItens(det.itens);
+    } catch(e) { console.warn('getPedido falhou para ' + p.id, e.message); }
+  }
 
   var catsSet = {};
   itensList.forEach(function(it) {
@@ -1238,7 +1231,7 @@ function dentroDe10Dias(o) {
     dt = new Date(p[2] + '-' + p[1] + '-' + p[0] + 'T12:00:00');
   }
   if (!dt || isNaN(dt.getTime())) return true; // sem data legível, mostra mesmo assim
-  return (Date.now() - dt.getTime()) <= 10 * 24 * 60 * 60 * 1000;
+  return (Date.now() - dt.getTime()) <= 30 * 24 * 60 * 60 * 1000;
 }
 
 function ordenaPorDataDesc(a, b) {
@@ -1259,9 +1252,16 @@ function renderAba(aba) {
     container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Carregando pedidos…</p></div>';
     return;
   }
-  // Todas as abas listam os pedidos dos últimos 10 dias, ordenados por data desc.
+  // Todas as abas listam os pedidos dos últimos 30 dias, ordenados por data desc.
   var lista = ORDERS.filter(dentroDe10Dias).sort(ordenaPorDataDesc);
-  if(lista.length===0){ container.innerHTML=''; return; }
+  if(lista.length===0){
+    if (gasErro) {
+      container.innerHTML='<div class="loading"><p>Falha ao carregar dados da planilha.</p><p style="font-size:10px;margin-top:4px;opacity:.6;">' + gasErro + '</p></div>';
+    } else {
+      container.innerHTML='<div class="loading"><p>Nenhum pedido encontrado nos últimos 30 dias.</p></div>';
+    }
+    return;
+  }
 
   if(aba==='pedidos'){
     var catSet={};lista.forEach(function(o){o.cats.forEach(function(c){catSet[c]=1;});});
