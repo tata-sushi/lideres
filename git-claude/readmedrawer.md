@@ -1,7 +1,7 @@
 # Drawer "Sobre" — Portal Líderes TATÁ
 
-**Versão atual:** v1.8a
-**Última atualização:** 2026-05-02
+**Versão atual:** v1.9a
+**Última atualização:** 2026-05-03
 **Aplicação:** Portal Líderes TATÁ — todas as páginas internas
 
 ---
@@ -30,11 +30,11 @@ O Drawer "Sobre" é um painel lateral deslizante que apresenta informações con
 | `compliance/areas/rh/index.html` | — |
 | `compliance/areas/rh/ouvidoria.html` | — |
 | `compliance/areas/rh/papeis.html` | — |
-| `compliance/areas/rh/sancoes.html` | Ferramentas |
+| `compliance/areas/rh/sancoes.html` | Ações |
 | `compliance/conceitos/index.html` | — |
 | `compliance/conceitos/governanca.html` | — |
-| `compliance/ferramentas/index.html` | Sugerir ferramenta |
-| `compliance/fornecedores/index.html` | — |
+| `compliance/ferramentas/index.html` | Acrescentar Ferramenta |
+| `compliance/fornecedores/index.html` | Acrescentar Fornecedor |
 | `compliance/kpis/index.html` | — |
 | `compliance/kpis/caixa/index.html` | — |
 | `compliance/kpis/compras/abastecimento.html` | — |
@@ -42,7 +42,7 @@ O Drawer "Sobre" é um painel lateral deslizante que apresenta informações con
 | `compliance/kpis/rh/index.html` | — |
 | `compliance/kpis/rh/absenteismo.html` | — |
 | `compliance/kpis/rh/armarios.html` | Registrar Movimentação |
-| `compliance/kpis/rh/bancodehoras.html` | Nova Entrada |
+| `compliance/kpis/rh/bancodehoras.html` | — |
 | `compliance/kpis/rh/beneficios.html` | — |
 | `compliance/kpis/rh/desligamentos.html` | Nova Rescisão |
 | `compliance/kpis/rh/estoqueadm.html` | Nova Solicitação |
@@ -74,9 +74,9 @@ O Drawer "Sobre" é um painel lateral deslizante que apresenta informações con
 │                                   │
 │  NÚMEROS ───────────────          │
 │  ┌──────────┐  ┌──────────┐      │
-│  │ SEÇÕES   │  │ DEPARTAM.│      │
-│  │   7      │  │   14     │      │
-│  │ 31p/13d  │  │ 28l/463c │      │
+│  │ SEÇÕES   │  │ UNIDADES │      │
+│  │   7      │  │   (api)  │      │
+│  │ 31p/13d  │  │ Xd / Yc  │      │
 │  └──────────┘  └──────────┘      │
 │                                   │
 │  AÇÕES ────────────── (opcional)  │
@@ -209,11 +209,11 @@ Todo bloco do body segue a mesma estrutura:
 
 ---
 
-## 10. Seção 1 — Versão
+## 10. Seção 1 — Versão atual
 
 ```html
 <div class="drawer-section">
-  <div class="drawer-section-label">Versão</div>
+  <div class="drawer-section-label">Versão atual</div>
   <div class="drawer-version">
     <div>
       <div class="drawer-version-label">Portal</div>
@@ -295,9 +295,9 @@ Todo bloco do body segue a mesma estrutura:
 - `font-variant-numeric: tabular-nums` (alinha dígitos)
 - `<strong>` quebra para DM Sans pra forçar bold real (DM Mono não tem 700)
 
-**Cards atuais (fixos):**
-1. **Seções: 7** — sub: 31 pág / 13 dash
-2. **Departamentos: 14** — sub: 28 líd / 463 colab
+**Cards atuais:**
+1. **Seções: 7** — sub: 31 pág / 13 dash *(fixo)*
+2. **Unidades: —** — sub: — depto / — colab *(dinâmico via API — ver seção 15)*
 
 ---
 
@@ -309,31 +309,28 @@ Todo bloco do body segue a mesma estrutura:
 <!-- Ações (opcional — incluir conforme necessidade da página) -->
 <div class="drawer-section">
   <div class="drawer-section-label">Ações</div>
-  <button class="drawer-action" type="button">
-    <span class="drawer-action-label">Escrever com Sam</span>
-  </button>
+  <button class="drawer-sam-btn" onclick="minhaFuncao()">Nome da Ação</button>
 </div>
 ```
 
-**Botão `.drawer-action`:**
+**Botão `.drawer-sam-btn`:**
 - Background: `--carbon`
 - Color: `#fff`
-- Border-radius: 6px
-- Padding: `14px 16px`
+- Border-radius: `var(--r)` ou `4px`
+- Padding: `10px 14px`
 - Width: 100%
-- Hover: opacity `.92` | Active: `.82`
+- Font: DM Mono 10px peso 500 uppercase, letter-spacing `.12em`
+- Hover: opacity `.85`
+- **Sem ícones SVG**
 
-**Texto `.drawer-action-label`:**
-- DM Mono 12px peso 500 uppercase
-- Letter-spacing: `.08em`
-- Cor: `#fff`
-
-**Para múltiplos botões:** envolver em `<div class="drawer-action-list">` (flex column gap 8px) — pattern já preparado na CSS.
+**Para múltiplos botões:** adicionar `<button class="drawer-sam-btn">` um abaixo do outro com `margin-top: 8px` ou gap via flex no pai.
 
 **Exemplos de uso:**
-- "Escrever com Sam" (página de Papelaria)
-- "Gerar relatório" (Dashboard)
-- "Criar nova entrada" (Estoque)
+- "Criar documentos" (Papelaria)
+- "Nova Rescisão" (Desligamentos)
+- "Registrar Movimentação" (Armários)
+- "Acrescentar Ferramenta" (Ferramentas)
+- "Nova Solicitação" (Estoque ADM, Manutenção)
 
 ---
 
@@ -379,10 +376,29 @@ Todo bloco do body segue a mesma estrutura:
 
 **Funções JS:**
 ```javascript
+var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
+var _drawerKpisLoaded = false;
+function loadDrawerKPIs() {
+  if (_drawerKpisLoaded) return;
+  fetch(COLAB_URL + '?action=listColaboradores')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.ok) return;
+      var colabs = data.colaboradores;
+      var unidades = new Set(colabs.map(function(c) { return c.unidade; }));
+      var deptos   = new Set(colabs.map(function(c) { return c.departamento; }));
+      document.getElementById('drawer-kpi-unidades').textContent = unidades.size;
+      document.getElementById('drawer-kpi-deptos').textContent   = deptos.size;
+      document.getElementById('drawer-kpi-colabs').textContent   = data.total;
+      _drawerKpisLoaded = true;
+    })
+    .catch(function() {});
+}
 function openDrawer() {
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawer-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+  loadDrawerKPIs();
 }
 function closeDrawer() {
   document.getElementById('drawer').classList.remove('open');
@@ -391,6 +407,8 @@ function closeDrawer() {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 ```
+
+> **`loadDrawerKPIs`** busca os dados da planilha de colaboradores via Apps Script ao abrir o drawer. O flag `_drawerKpisLoaded` evita chamadas repetidas na mesma sessão. A API só aceita requisições de domínios autorizados — o fetch roda no browser do usuário, não no servidor.
 
 ---
 
@@ -407,6 +425,8 @@ Para adicionar este drawer numa página nova do Portal Líderes:
   - Se não, remover o bloco `<!-- Ações -->`
 - [ ] Atualizar os números dos KPIs conforme contexto da página (se aplicável)
 - [ ] Incluir o JS de open/close + handler do `Esc`
+- [ ] Incluir `loadDrawerKPIs` e chamar dentro de `openDrawer()`
+- [ ] Garantir que os ids `drawer-kpi-unidades`, `drawer-kpi-deptos`, `drawer-kpi-colabs` estão no HTML do card 2
 
 ---
 
@@ -435,7 +455,8 @@ O workflow `.github/workflows/update-page-count.yml` roda automaticamente a cada
 | v1.5a | 2026-05-02 | SAM virou card complexo (com ícone, descrição, botão Abrir) |
 | v1.6a | 2026-05-02 | SAM simplificado (só título centralizado, DM Sans) |
 | v1.7a | 2026-05-02 | SAM ajustado pro padrão DM Mono uppercase, padding menor |
-| **v1.8a** | **2026-05-02** | **Seção renomeada de "Sam" para "Ações" + documentação completa** |
+| v1.8a | 2026-05-02 | Seção renomeada de "Sam" para "Ações" + documentação completa |
+| **v1.9a** | **2026-05-03** | **Card 2 dinâmico via API (Unidades/Departamentos/Colab); drawer-sam-btn padronizado; seção "Versão" → "Versão atual"; padronização em todos os 31 arquivos** |
 
 ---
 
