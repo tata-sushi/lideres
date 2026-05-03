@@ -88,6 +88,32 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 - **Fallback**: `"—"` (travessão) se dados não carregar
 - **Visibility**: ❌ **NÃO** aplicar `display:none` em mobile — nome some do layout, quebra UX
 
+### Abreviação de Nome (Padrão novo)
+
+⚠️ **Para economizar espaço no header**, o nome do líder pode ser **abreviado para "Primeiro Último"**:
+- "João Silva Santos" → "João Santos"
+- "Maria de Oliveira Costa" → "Maria Costa"
+
+**JavaScript (ao final da página)**:
+```javascript
+(function() {
+  var s = window.__lideresSession ||
+    (function(){ try{ return JSON.parse(localStorage.getItem('lideres_session')); }catch(e){ return null; } })();
+  if (s && s.displayName) {
+    var userName = s.displayName;
+    // Abreviar: apenas primeiro e último nome
+    var parts = userName.trim().split(/\s+/);
+    if (parts.length > 1) {
+      userName = parts[0] + ' ' + parts[parts.length - 1];
+    }
+    var hu = document.getElementById('header-user');
+    if (hu) hu.textContent = userName;
+  }
+})();
+```
+
+**Regra**: Aplicar abreviação **apenas se necessário** (ex.: quando nomes muito longos burlam o layout em mobile). Caso a página tenha espaço suficiente, usar o nome completo sem abreviação.
+
 ---
 
 ## HEADER-PLUS (Botão "+")
@@ -361,43 +387,75 @@ A seção de filtros aparece logo abaixo do header (ou abaixo das tabs, se houve
 **Nota**: As dashboards analisadas não têm rodapé fixo na página. O espaçamento inferior é controlado pelo `.content { padding: 16px 20px 80px; }` — ou seja, espaço para não ficar sob botões FAB flutuantes.
 
 Se houver rodapé fixo (padrão "carbon"):
+
+### CSS
 ```css
 .footer {
   background: var(--carbon);
-  padding: 8px 24px;
-  text-align: center;
+  padding: 12px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
   position: fixed;
   bottom: 0; left: 0; right: 0;
   z-index: 100;
 }
-.footer-line1 {
+.footer-text {
   font-family: 'DM Mono', monospace;
   font-size: 10px;
   color: var(--citric);
   letter-spacing: 1px;
   text-transform: uppercase;
 }
+.footer-date {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+}
 .footer-line2 {
   font-family: 'DM Mono', monospace;
   font-size: 10px;
   color: rgba(255,255,255,0.4);
-  margin-top: 1px;
 }
 ```
 
-**HTML do footer**:
+### HTML do Footer
 ```html
 <footer class="footer">
-  <div class="footer-line1">TATÁ SUSHI | TATÁ POKE | 2016 – 2026</div>
-  <div class="footer-line2" id="footer-date">Atualizado em —</div>
+  <span class="footer-text">TATÁ SUSHI &nbsp;|&nbsp; TATÁ POKE &nbsp;|&nbsp; 2016–2026</span>
+  <span class="footer-date" id="footer-date"></span>
+  <div class="footer-line2" id="footer-date-updated">Atualizado em —</div>
 </footer>
 ```
 
-**JavaScript** (atualizar data/hora dinâmica):
+**Notas do HTML**:
+- `.footer-text`: Branding principal (TATÁ SUSHI | TATÁ POKE | 2016–2026)
+- `.footer-date`: Deixar vazio — preenchido via JS se necessário (compatibilidade com código antigo)
+- `.footer-line2`: Exibe data/hora de atualização em formato "Atualizado: DD/MM/YYYY, HH:MM:SS"
+
+### JavaScript — Preencher Data/Hora de Atualização
 ```javascript
-document.getElementById('footer-date').textContent =
-  'Atualizado em ' + new Date().toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' });
+// Footer date — executar ao final do <script>
+(function() {
+  var hoje = new Date();
+  var d = hoje.toLocaleDateString('pt-BR');
+  var h = hoje.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+  var el = document.getElementById('footer-date-updated');
+  if (el) el.textContent = 'Atualizado: ' + d + ', ' + h;
+})();
 ```
+
+**Formato esperado**: `Atualizado: 03/05/2026, 13:13:17`  
+**Locale**: Sempre `'pt-BR'` (formato brasileiro DD/MM/YYYY, HH:MM:SS)  
+**Horário**: Usa horário local do navegador (JavaScript `new Date()`)
+
+### Padrão Recomendado
+- **Usar `.footer-line2`** para exibir timestamp de atualização
+- **ID obrigatório**: `id="footer-date-updated"`
+- **IIFE ao final do script**: Calcular data/hora e preencher no elemento
+- **Nunca hardcodar a data** — sempre JS dinâmico
+- **Nunca usar `footer-date`** para timestamp — reservado para compatibilidade
 
 ---
 
