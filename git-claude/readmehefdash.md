@@ -423,14 +423,14 @@ Se houver rodapé fixo (padrão "carbon"):
 ### HTML do Footer
 ```html
 <footer class="footer">
-  <span class="footer-text">TATÁ SUSHI &nbsp;|&nbsp; TATÁ POKE &nbsp;|&nbsp; 2016–2026</span>
+  <span class="footer-text">TATÁ SUSHI &nbsp;|&nbsp; TATÁ POKE &nbsp;|&nbsp; 2016 – 2026</span>
   <span class="footer-date" id="footer-date"></span>
   <div class="footer-line2" id="footer-date-updated">Atualizado em —</div>
 </footer>
 ```
 
 **Notas do HTML**:
-- `.footer-text`: Branding principal (TATÁ SUSHI | TATÁ POKE | 2016–2026)
+- `.footer-text`: Branding principal (TATÁ SUSHI | TATÁ POKE | 2016 – 2026)
 - `.footer-date`: Deixar vazio — preenchido via JS se necessário (compatibilidade com código antigo)
 - `.footer-line2`: Exibe data/hora de atualização em formato "Atualizado: DD/MM/YYYY, HH:MM:SS"
 
