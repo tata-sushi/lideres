@@ -65,7 +65,7 @@ O Drawer "Sobre" é um painel lateral deslizante que apresenta informações con
 │                                   │
 │  VERSÃO ────────────────          │
 │  ┌───────────────────────────┐   │
-│  │ PORTAL              v2.0c │   │
+│  │ PORTAL              v3.2r │   │
 │  │ Governança de Processos   │   │
 │  └───────────────────────────┘   │
 │                                   │
@@ -98,13 +98,15 @@ O Drawer "Sobre" é um painel lateral deslizante que apresenta informações con
 | Propriedade | Valor |
 |---|---|
 | Largura | 88% da tela, máx. 340px |
-| Altura | 100% da tela (top:0; bottom:0) |
-| Posição | Fixed, encostado à direita |
+| Altura | `height:100%; height:100dvh` (fallback + viewport dinâmica mobile) |
+| Posição | Fixed, `top:0; right:0` |
 | Z-index drawer | 301 |
 | Z-index overlay | 300 |
 | Sombra | `-4px 0 24px rgba(0,0,0,.12)` |
 
 **Layout interno:** flex column com 3 zonas — header (52px fixo), body (flex:1, scrollável), footer (flex-shrink:0).
+
+> ⚠️ **`100dvh` é obrigatório** — sem ele a barra de endereço do mobile rouba espaço e força scroll desnecessário. O `height:100%` vem antes como fallback para browsers que não suportam `dvh`.
 
 ---
 
@@ -201,9 +203,9 @@ Todo bloco do body segue a mesma estrutura:
 - Linha decorativa horizontal estendendo até a direita via `::after { flex:1; height:1px; background: --border }`
 - `margin-bottom: 10px` separando do conteúdo
 
-**Espaçamento entre seções:** `margin-bottom: 24px`
+**Espaçamento entre seções:** `margin-bottom: 18px` (última seção: `margin-bottom: 0`)
 
-**Padding do body:** `20px 16px`, `overflow-y: auto`
+**Padding do body:** `14px 16px 10px`, `overflow-y: auto`
 
 ---
 
@@ -217,7 +219,7 @@ Todo bloco do body segue a mesma estrutura:
       <div class="drawer-version-label">Portal</div>
       <div class="drawer-version-name">Governança de Processos</div>
     </div>
-    <div class="drawer-version-val">v2.0c</div>
+    <div class="drawer-version-val">v3.2r</div>
   </div>
 </div>
 ```
@@ -233,7 +235,7 @@ Todo bloco do body segue a mesma estrutura:
 - "Governança de Processos" — DM Sans 13px peso 600 cor `#fff`
 
 **Direita:**
-- "v2.0c" — DM Mono 20px peso 300, cor `--citric`
+- "v3.2r" — DM Mono 20px peso 300, cor `--citric`
 
 ---
 
