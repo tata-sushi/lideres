@@ -450,14 +450,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <div class="kpis-wrap" id="kpis-wrap">
   <div class="kpi-card">
-    <span class="kpi-label">Aguardando compra</span>
-    <span class="kpi-number" id="kpi-aguard-compra">—</span>
-    <span class="kpi-sub"><strong id="kpi-mes-total">0</strong> no mês</span>
+    <span class="kpi-label">Pedidos realizados</span>
+    <span class="kpi-number" id="kpi-pedidos-total">—</span>
+    <span class="kpi-sub"><strong id="kpi-pedidos-semana">0</strong> na semana / <strong id="kpi-pedidos-mes">0</strong> no mês</span>
   </div>
   <div class="kpi-card">
-    <span class="kpi-label">Aguardando recebimento</span>
-    <span class="kpi-number" id="kpi-aguard-receb">—</span>
-    <span class="kpi-sub"><strong id="kpi-mes-recebidos">0</strong> recebidos no mês</span>
+    <span class="kpi-label">Recebidos</span>
+    <span class="kpi-number" id="kpi-recebidos-total">—</span>
+    <span class="kpi-sub"><strong id="kpi-aguard-compra">0</strong> aguard. compra / <strong id="kpi-aguard-receb">0</strong> aguard. receb.</span>
   </div>
 </div>
 
@@ -1715,15 +1715,41 @@ async function confirmarBaixaNF() {
 // ── KPIs ──────────────────────────────────────────────────────────────────────
 function updateKPIs() {
   var lista = aplicarFiltros(ORDERS.filter(dentroDe10Dias));
-  var aguardCompra = lista.filter(function(o){return o.status==='b-enviado';}).length;
-  var aguardReceb  = lista.filter(function(o){return o.status==='b-aguardando';}).length;
-  var recebidosMes = lista.filter(function(o){return o.status==='b-concluido';}).length;
-  var totalMes     = lista.length;
+
+  function dataPedido(o) {
+    var raw = o.raw && o.raw.dataSolicitacao;
+    if (raw) {
+      if (raw instanceof Date) return raw;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(raw))) return new Date(String(raw) + 'T12:00:00');
+      var d = new Date(String(raw));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    if (o.data && /\d{2}\/\d{2}\/\d{4}/.test(o.data)) {
+      var p = o.data.split('/');
+      return new Date(p[2] + '-' + p[1] + '-' + p[0] + 'T12:00:00');
+    }
+    return null;
+  }
+
+  var hoje = new Date();
+  var ini7  = new Date(hoje.getTime() - 7  * 24 * 60 * 60 * 1000);
+  var ini30 = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  var totalRealizados = lista.length;
+  var naSemana = lista.filter(function(o) { var d = dataPedido(o); return d && d >= ini7;  }).length;
+  var noMes    = lista.filter(function(o) { var d = dataPedido(o); return d && d >= ini30; }).length;
+
+  var recebidosTotal = lista.filter(function(o) { return o.status === 'b-concluido';  }).length;
+  var aguardCompra   = lista.filter(function(o) { return o.status === 'b-enviado';    }).length;
+  var aguardReceb    = lista.filter(function(o) { return o.status === 'b-aguardando'; }).length;
+
   function set(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
-  set('kpi-aguard-compra', aguardCompra);
-  set('kpi-aguard-receb',  aguardReceb);
-  set('kpi-mes-total',     totalMes);
-  set('kpi-mes-recebidos', recebidosMes);
+  set('kpi-pedidos-total',  totalRealizados);
+  set('kpi-pedidos-semana', naSemana);
+  set('kpi-pedidos-mes',    noMes);
+  set('kpi-recebidos-total', recebidosTotal);
+  set('kpi-aguard-compra',   aguardCompra);
+  set('kpi-aguard-receb',    aguardReceb);
 }
 
 // ── PDF GENERATORS ─────────────────────────────────────────────────────────────
