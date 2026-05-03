@@ -41,7 +41,9 @@ var PED_HEADER = [
   // Status global        (coluna Q, índice 16)
   'status',               // solicitado | comprado | recebido | parcial | cancelado
   // Identificação extra  (coluna R, índice 17)
-  'departamento'          // departamento do solicitante (ex.: salao, cozinha, gerencia)
+  'departamento',         // departamento do solicitante (ex.: salao, cozinha, gerencia)
+  // Compras — previsão   (coluna S, índice 18)
+  'dataEntregaPrevista'   // data prevista de entrega definida por Compras
 ];
 
 // Aba PedidoItens: uma linha por item, join via pedidoId
@@ -248,7 +250,8 @@ function rowParaPedido(r) {
     recebidoPor:         String(r[14] || ''),
     obsEstoque:          String(r[15] || ''),
     status:              String(r[16] || 'solicitado'),
-    departamento:        String(r[17] || '')
+    departamento:        String(r[17] || ''),
+    dataEntregaPrevista: String(r[18] || '')
   };
 }
 
@@ -276,7 +279,8 @@ function savePedido(body) {
     '', '', '', '', '',       // cols Compras
     '', '', '',               // cols Estoque
     'solicitado',             // status
-    departamento              // departamento (col R, índice 17)
+    departamento,             // departamento (col R, índice 17)
+    ''                        // dataEntregaPrevista (col S, índice 18)
   ]);
   shP.getRange(shP.getLastRow(), 1).setNumberFormat('@'); // força texto
 
@@ -297,7 +301,7 @@ function savePedido(body) {
 }
 
 // ── ESTÁGIO 2 — Compras ───────────────────────────────────────
-// body: { id, fornecedor, valorTotal, notaFiscal, obsCompras,
+// body: { id, fornecedor, valorTotal, notaFiscal, obsCompras, dataEntregaPrevista,
 //         itens: [{produtoNome, qtdComprada, obsItem?}] }
 
 function updateCompras(body) {
@@ -316,6 +320,7 @@ function updateCompras(body) {
   shP.getRange(rowIdx, 12).setValue(body.notaFiscal  || '');
   shP.getRange(rowIdx, 13).setValue(body.obsCompras  || '');
   shP.getRange(rowIdx, 17).setValue('comprado');           // status
+  shP.getRange(rowIdx, 19).setValue(body.dataEntregaPrevista || ''); // dataEntregaPrevista (col S)
 
   // Atualiza qtdComprada nos itens (mesma linha de cada item)
   if (Array.isArray(body.itens) && body.itens.length > 0) {

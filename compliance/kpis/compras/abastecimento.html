@@ -1123,13 +1123,19 @@ async function confirmarPedido() {
   var fornGroups = {};   // forn → [{nome, un, qty, vlPedido}]
   var totalGeral = 0;
   var itensApi = [];     // payload para updateCompras
+  var dataPrevistaISO = ''; // data prevista mais tarde (yyyy-mm-dd) p/ enviar ao GAS
   order.itensList.forEach(function(item,idx){
     var conf=parseFloat((document.getElementById('proc-conf-'+idx)||{}).value)||0;
     var vl=parseFloat((document.getElementById('proc-vl-'+idx)||{}).value)||0;
     var forn=((document.getElementById('proc-forn-'+idx)||{}).value||'').trim();
     var entregaInp=document.getElementById('proc-date-'+idx);
     var entrega='—';
-    if(entregaInp&&entregaInp.value){var p=entregaInp.value.split('-');entrega=p[2]+'/'+p[1]+'/'+p[0];}
+    if(entregaInp&&entregaInp.value){
+      var p=entregaInp.value.split('-');
+      entrega=p[2]+'/'+p[1]+'/'+p[0];
+      // Mantém a data MAIS TARDE entre todos os itens
+      if (!dataPrevistaISO || entregaInp.value > dataPrevistaISO) dataPrevistaISO = entregaInp.value;
+    }
     item.vlPedido=vl;
     dadosProc[idx]={conf:conf, vl:vl, forn:forn||'—', entrega:entrega};
     totalGeral += conf*vl;
@@ -1141,6 +1147,8 @@ async function confirmarPedido() {
     }
   });
   dadosProc.obs=document.getElementById('proc-obs').value.trim();
+  // Atualiza dataEntregaPrevista no estado local para refletir nos cards imediatamente
+  if (dataPrevistaISO) { if (!order.raw) order.raw = {}; order.raw.dataEntregaPrevista = dataPrevistaISO; }
 
   // Atualiza estado local: pedido vai para a aba "entregas" com fornecedores agrupados
   order.fornecedores = Object.keys(fornGroups).map(function(forn){
@@ -1153,13 +1161,14 @@ async function confirmarPedido() {
     try {
       var fornecedorAgg = Object.keys(fornGroups).join(', ') || '—';
       var res = await gasPost({
-        action:     'updateCompras',
-        id:         order.id,
-        fornecedor: fornecedorAgg,
-        valorTotal: totalGeral,
-        notaFiscal: '',
-        obsCompras: dadosProc.obs,
-        itens:      itensApi
+        action:              'updateCompras',
+        id:                  order.id,
+        fornecedor:          fornecedorAgg,
+        valorTotal:          totalGeral,
+        notaFiscal:          '',
+        obsCompras:          dadosProc.obs,
+        dataEntregaPrevista: dataPrevistaISO,
+        itens:               itensApi
       });
       if (res && res.idDisplay) order.idDisplay = res.idDisplay;
       toast('Pedido '+order.id+' enviado para entregas.');
@@ -1414,12 +1423,14 @@ function fornCardHTML(order, forn, fi) {
     ? '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
     : '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
   var titulo = 'Pedido ' + (order.idDisplay || ('#' + order.id));
+  var dataPrev  = fmtDataBR(order.raw && order.raw.dataEntregaPrevista);
   var dataReceb = isRecebido ? fmtDataBR(order.raw && order.raw.dataRecebimento) : '—';
   return '<div class="card">'+
     '<div class="card-header"><div><div class="order-title">'+titulo+'</div></div><span class="badge '+forn.status+'">'+forn.label+'</span></div>'+
     '<div class="card-body">'+
       '<div class="card-field"><span class="field-label">Data do pedido</span><span class="field-value">'+(order.data||'—')+'</span></div>'+
-      '<div class="card-field"><span class="field-label">Data de recebimento</span><span class="field-value">'+dataReceb+'</span></div>'+
+      '<div class="card-field"><span class="field-label">Entrega prevista</span><span class="field-value">'+dataPrev+'</span></div>'+
+      '<div class="card-field"><span class="field-label">Recebido em</span><span class="field-value">'+dataReceb+'</span></div>'+
       '<div class="card-field"><span class="field-label">Fornecedor</span><span class="field-value">'+forn.nome+'</span></div>'+
       '<div class="card-field"><span class="field-label">Quantidade de itens</span><span class="field-value">'+forn.itens.length+' produtos</span></div>'+
       '<div class="card-field" style="grid-column:1/-1;"><span class="field-label">Categorias</span><span class="field-value">'+(order.cats.join(', ')||'—')+'</span></div>'+
@@ -1442,13 +1453,15 @@ function cardHTML(o, contexto) {
     ? '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
     : '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
   var titulo = 'Pedido ' + (o.idDisplay || ('#' + id));
+  var dataPrev  = fmtDataBR(o.raw && o.raw.dataEntregaPrevista);
   var dataReceb = fmtDataBR(o.raw && o.raw.dataRecebimento);
   return '<div class="card">'+
     '<div class="card-header"><div><div class="order-title">'+titulo+'</div></div><span class="badge '+o.status+'">'+o.label+'</span></div>'+
     '<div class="card-body">'+
     '<div class="card-field"><span class="field-label">Data do pedido</span><span class="field-value">'+o.data+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Data de recebimento</span><span class="field-value">'+dataReceb+'</span></div>'+
     '<div class="card-field"><span class="field-label">Quantidade de itens</span><span class="field-value">'+o.itensList.length+' produtos</span></div>'+
+    '<div class="card-field"><span class="field-label">Entrega prevista</span><span class="field-value">'+dataPrev+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Recebido em</span><span class="field-value">'+dataReceb+'</span></div>'+
     '<div class="card-field" style="grid-column:1/-1;"><span class="field-label">Categorias</span><span class="field-value">'+(o.cats.join(', ')||'—')+'</span></div>'+
     '</div>'+
     '<div class="card-footer" style="justify-content:flex-end;"><button class="btn-ver" onclick="'+fnBtn+'(\''+id+'\')">'+iconSvg+' '+labelBtn+'</button></div>'+
