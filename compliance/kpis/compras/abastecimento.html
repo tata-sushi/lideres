@@ -928,17 +928,49 @@ async function pedidoParaUI(p) {
     if (first) catsSet[first] = 1;
   });
 
-  // Se já passou pela etapa Compras, monta um fornecedor agregando os itens
+  // Após Compras: agrupa itens por fornecedor (1 card por fornecedor na aba Recebimentos)
   var fornecedores = null;
-  if ((p.status === 'comprado' || p.status === 'parcial' || p.status === 'recebido') && p.fornecedor) {
-    fornecedores = [{
-      nome: p.fornecedor,
-      status: (p.status === 'recebido') ? 'b-concluido' : 'b-aguardando',
-      label:  (p.status === 'recebido') ? 'Recebido'   : 'Aguardando recebimento',
-      itens: itensList.map(function(it) {
-        return { nome: it.nome, un: it.un, qty: it.qtdComprada || it.qty, vlPedido: it.vlPedido || 0 };
-      })
-    }];
+  if (p.status === 'comprado' || p.status === 'parcial' || p.status === 'recebido') {
+    var grupos = {};
+    (p.itens || []).forEach(function(it) {
+      var f = String(it.fornecedor || '').trim() || String(p.fornecedor || '—');
+      if (!grupos[f]) grupos[f] = [];
+      grupos[f].push(it);
+    });
+    if (Object.keys(grupos).length > 0) {
+      fornecedores = Object.keys(grupos).map(function(forn) {
+        var its = grupos[forn];
+        // Pega data prevista mais tarde do grupo
+        var prevs = its.map(function(it) { return it.dataEntregaPrevista; }).filter(Boolean);
+        var dataPrev = prevs.sort().pop() || '';
+        // Pega data de recebimento mais tarde do grupo (apenas itens recebidos)
+        var recs = its.filter(function(it) { return Number(it.qtdRecebida) > 0; })
+                      .map(function(it) { return it.dataRecebimento; }).filter(Boolean);
+        var dataReceb = recs.sort().pop() || '';
+        // Recebido se TODOS os itens com qtdComprada > 0 têm qtdRecebida >= qtdComprada
+        var todosRecebidos = its.every(function(it) {
+          var c = Number(it.qtdComprada) || 0;
+          if (c === 0) return true;
+          return Number(it.qtdRecebida) >= c;
+        });
+        return {
+          nome:      forn,
+          status:    todosRecebidos ? 'b-concluido' : 'b-aguardando',
+          label:     todosRecebidos ? 'Recebido'   : 'Aguardando recebimento',
+          dataPrev:  dataPrev,
+          dataReceb: dataReceb,
+          itens: its.map(function(it) {
+            return {
+              nome:        it.produtoNome,
+              un:          it.unidade,
+              qty:         Number(it.qtdComprada) || 0,
+              vlPedido:    0,
+              qtdRecebida: Number(it.qtdRecebida) || 0
+            };
+          })
+        };
+      });
+    }
   }
 
   return {
@@ -1141,7 +1173,12 @@ async function confirmarPedido() {
     dadosProc[idx]={conf:conf, vl:vl, forn:forn||'—', entrega:entrega};
     totalGeral += conf*vl;
     if(conf>0){
-      itensApi.push({ produtoNome: item.nome, qtdComprada: conf });
+      itensApi.push({
+        produtoNome:         item.nome,
+        qtdComprada:         conf,
+        fornecedor:          forn || '—',
+        dataEntregaPrevista: (entregaInp && entregaInp.value) ? entregaInp.value : ''
+      });
       var key = forn || '—';
       if(!fornGroups[key]) fornGroups[key] = [];
       fornGroups[key].push({ nome:item.nome, un:item.un, qty:conf, vlPedido:vl });
@@ -1424,8 +1461,8 @@ function fornCardHTML(order, forn, fi) {
     ? '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
     : '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
   var titulo = 'Pedido ' + (order.idDisplay || ('#' + order.id));
-  var dataPrev  = fmtDataBR(order.raw && order.raw.dataEntregaPrevista);
-  var dataReceb = isRecebido ? fmtDataBR(order.raw && order.raw.dataRecebimento) : '—';
+  var dataPrev  = fmtDataBR(forn.dataPrev || (order.raw && order.raw.dataEntregaPrevista));
+  var dataReceb = forn.dataReceb ? fmtDataBR(forn.dataReceb) : (isRecebido ? fmtDataBR(order.raw && order.raw.dataRecebimento) : '—');
   return '<div class="card">'+
     '<div class="card-header"><div><div class="order-title">'+titulo+'</div></div><span class="badge '+forn.status+'">'+forn.label+'</span></div>'+
     '<div class="card-body">'+
