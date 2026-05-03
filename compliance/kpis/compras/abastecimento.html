@@ -1089,12 +1089,37 @@ async function enviarPedido() {
 // ── RENDER ────────────────────────────────────────────────────────────────────
 function renderAll() { renderAba('pedidos'); renderAba('processamento'); renderAba('entregas'); }
 
+function dentroDe10Dias(o) {
+  var raw = o.raw && o.raw.dataSolicitacao;
+  var dt;
+  if (raw) {
+    if (raw instanceof Date) dt = raw;
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(String(raw))) dt = new Date(String(raw) + 'T12:00:00');
+    else dt = new Date(String(raw));
+  } else if (o.data && /\d{2}\/\d{2}\/\d{4}/.test(o.data)) {
+    var p = o.data.split('/');
+    dt = new Date(p[2] + '-' + p[1] + '-' + p[0] + 'T12:00:00');
+  }
+  if (!dt || isNaN(dt.getTime())) return true; // sem data legível, mostra mesmo assim
+  return (Date.now() - dt.getTime()) <= 10 * 24 * 60 * 60 * 1000;
+}
+
+function ordenaPorDataDesc(a, b) {
+  function tt(o){
+    var raw = o.raw && o.raw.dataSolicitacao;
+    if (raw) { var d = new Date(raw); if (!isNaN(d.getTime())) return d.getTime(); }
+    if (o.data && /\d{2}\/\d{2}\/\d{4}/.test(o.data)) {
+      var p = o.data.split('/'); return new Date(p[2]+'-'+p[1]+'-'+p[0]).getTime();
+    }
+    return 0;
+  }
+  return tt(b) - tt(a);
+}
+
 function renderAba(aba) {
   var container=document.getElementById('page-'+aba);
-  // A aba "Pedidos" funciona como master list (todos os pedidos, qualquer estágio).
-  var lista = (aba === 'pedidos')
-    ? ORDERS.slice()
-    : ORDERS.filter(function(o){return o.aba===aba;});
+  // Todas as abas listam os pedidos dos últimos 10 dias, ordenados por data desc.
+  var lista = ORDERS.filter(dentroDe10Dias).sort(ordenaPorDataDesc);
   if(lista.length===0){ container.innerHTML=''; return; }
 
   if(aba==='pedidos'){
@@ -1113,15 +1138,17 @@ function renderAba(aba) {
 
   if(aba==='processamento'){
     var catSet={};lista.forEach(function(o){o.cats.forEach(function(c){catSet[c]=1;});});
-    var html='<div class="kpi-grid"><div class="kpi-card"><span class="kpi-label">Em processamento</span><span class="kpi-number">'+lista.length+'</span></div>';
-    html+='<div class="kpi-card"><span class="kpi-label">Itens totais</span><span class="kpi-number">'+lista.reduce(function(a,o){return a+o.itensList.length;},0)+'</span></div></div>';
+    var aProcessar = lista.filter(function(o){return o.status==='b-enviado'||o.status==='b-proc';}).length;
+    var totalItens = lista.reduce(function(a,o){return a+(o.itensList?o.itensList.length:0);},0);
+    var html='<div class="kpi-grid"><div class="kpi-card"><span class="kpi-label">Em processamento</span><span class="kpi-number">'+aProcessar+'</span></div>';
+    html+='<div class="kpi-card"><span class="kpi-label">Itens totais</span><span class="kpi-number">'+totalItens+'</span></div></div>';
     html+='<div class="filters-bar">';
     html+='<input type="date" class="filter-date" id="proc-f-data" onchange="filtrarProcessamento()">';
     html+='<select class="filter-select" id="proc-f-cat" onchange="filtrarProcessamento()"><option value="">Categoria</option>';
     Object.keys(catSet).forEach(function(c){html+='<option value="'+c+'">'+c+'</option>';});
     html+='</select><button class="btn-clear-filters" onclick="limparFiltrosProcessamento()">Limpar</button></div>';
     html+='<div class="filter-count" id="proc-count">'+lista.length+' pedido'+(lista.length!==1?'s':'')+'</div>';
-    html+='<div id="proc-lista" style="display:flex;flex-direction:column;gap:12px;">'+lista.map(function(o){return cardHTML(o);}).join('')+'</div>';
+    html+='<div id="proc-lista" style="display:flex;flex-direction:column;gap:12px;">'+lista.map(function(o){return cardHTML(o,'processamento');}).join('')+'</div>';
     container.innerHTML=html; return;
   }
 
@@ -1129,7 +1156,7 @@ function renderAba(aba) {
     var recebidos=0, aguardando=0;
     lista.forEach(function(o){
       if(o.fornecedores){ o.fornecedores.forEach(function(f){ f.status==='b-concluido'?recebidos++:aguardando++; }); }
-      else { o.status==='b-concluido'?recebidos++:aguardando++; }
+      else { (o.status==='b-concluido'||o.status==='b-parcial')?recebidos++:aguardando++; }
     });
     var catSet={};lista.forEach(function(o){o.cats.forEach(function(c){catSet[c]=1;});});
     var html='<div class="kpi-grid"><div class="kpi-card"><span class="kpi-label">Recebidos</span><span class="kpi-number">'+recebidos+'</span></div>';
@@ -1145,7 +1172,7 @@ function renderAba(aba) {
     html+='<div id="ent-lista" style="display:flex;flex-direction:column;gap:12px;">';
     lista.forEach(function(o,oi){
       if(o.fornecedores){ o.fornecedores.forEach(function(f,fi){ html+=fornCardHTML(o,f,fi); }); }
-      else { html+=cardHTML(o); }
+      else { html+=cardHTML(o,'entregas'); }
     });
     html+='</div>';
     container.innerHTML=html; return;
@@ -1178,9 +1205,14 @@ function fornCardHTML(order, forn, fi) {
 function cardHTML(o, contexto) {
   var id=o.id;
   var ctx = contexto || o.aba;
-  var fnBtn = ctx==='processamento' ? 'abrirModalProc' : ctx==='entregas' ? 'abrirModalNF' : 'abrirModalView';
-  var labelBtn = ctx==='processamento' ? 'Processar' : ctx==='entregas' ? 'Dar baixa de NF' : 'Visualizar';
-  var iconSvg = ctx==='pedidos'
+  var podeProcessar = (o.status==='b-enviado' || o.status==='b-proc');
+  var podeReceber   = (o.status==='b-aguardando');
+  var modoAcao =
+    (ctx==='processamento' && podeProcessar) ? 'proc' :
+    (ctx==='entregas'      && podeReceber)   ? 'nf'   : 'view';
+  var fnBtn    = modoAcao==='proc' ? 'abrirModalProc' : modoAcao==='nf' ? 'abrirModalNF' : 'abrirModalView';
+  var labelBtn = modoAcao==='proc' ? 'Processar'      : modoAcao==='nf' ? 'Dar baixa de NF' : 'Visualizar';
+  var iconSvg = modoAcao==='view'
     ? '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
     : '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
   var titulo = 'Pedido ' + (o.idDisplay || ('#' + id));
@@ -1200,7 +1232,7 @@ function filtrarPedidos() {
   var fData=document.getElementById('ped-f-data'),fCat=document.getElementById('ped-f-cat'),fSt=document.getElementById('ped-f-status'); if(!fData)return;
   var vData=fData.value,vCat=fCat.value,vSt=fSt.value;
   fData.classList.toggle('active-filter',!!vData); fCat.classList.toggle('active-filter',!!vCat); fSt.classList.toggle('active-filter',!!vSt);
-  var lista=ORDERS.slice();
+  var lista=ORDERS.filter(dentroDe10Dias).sort(ordenaPorDataDesc);
   if(vData){lista=lista.filter(function(o){if(!o.data)return false;var p=o.data.split('/');return(p[2]+'-'+p[1]+'-'+p[0])===vData;});}
   if(vCat){lista=lista.filter(function(o){return o.cats.indexOf(vCat)!==-1;});}
   if(vSt){lista=lista.filter(function(o){return o.status===vSt;});}
@@ -1217,12 +1249,12 @@ function filtrarProcessamento() {
   var fData=document.getElementById('proc-f-data'),fCat=document.getElementById('proc-f-cat'); if(!fData)return;
   var vData=fData.value,vCat=fCat.value;
   fData.classList.toggle('active-filter',!!vData); fCat.classList.toggle('active-filter',!!vCat);
-  var lista=ORDERS.filter(function(o){return o.aba==='processamento';});
-  if(vData){lista=lista.filter(function(o){if(!o.entrega)return false;var p=o.entrega.split('/');return(p[2]+'-'+p[1]+'-'+p[0])===vData;});}
+  var lista=ORDERS.filter(dentroDe10Dias).sort(ordenaPorDataDesc);
+  if(vData){lista=lista.filter(function(o){if(!o.data)return false;var p=o.data.split('/');return(p[2]+'-'+p[1]+'-'+p[0])===vData;});}
   if(vCat){lista=lista.filter(function(o){return o.cats.indexOf(vCat)!==-1;});}
   var c=document.getElementById('proc-count'); if(c)c.textContent=lista.length+' pedido'+(lista.length!==1?'s':'');
   var l=document.getElementById('proc-lista'); if(!l)return;
-  l.innerHTML=lista.length===0?'<div class="empty" style="padding:30px 20px;"><p>Nenhum pedido encontrado</p></div>':lista.map(function(o){return cardHTML(o);}).join('');
+  l.innerHTML=lista.length===0?'<div class="empty" style="padding:30px 20px;"><p>Nenhum pedido encontrado</p></div>':lista.map(function(o){return cardHTML(o,'processamento');}).join('');
 }
 function limparFiltrosProcessamento() {
   var fData=document.getElementById('proc-f-data'),fCat=document.getElementById('proc-f-cat'); if(!fData)return;
@@ -1233,13 +1265,18 @@ function filtrarEntregas() {
   var fData=document.getElementById('ent-f-data'),fCat=document.getElementById('ent-f-cat'),fSt=document.getElementById('ent-f-status'); if(!fData)return;
   var vData=fData.value,vCat=fCat.value,vSt=fSt.value;
   fData.classList.toggle('active-filter',!!vData); fCat.classList.toggle('active-filter',!!vCat); fSt.classList.toggle('active-filter',!!vSt);
-  var lista=ORDERS.filter(function(o){return o.aba==='entregas';});
-  if(vData){lista=lista.filter(function(o){if(!o.entrega)return false;var p=o.entrega.split('/');return(p[2]+'-'+p[1]+'-'+p[0])===vData;});}
+  var lista=ORDERS.filter(dentroDe10Dias).sort(ordenaPorDataDesc);
+  if(vData){lista=lista.filter(function(o){if(!o.data)return false;var p=o.data.split('/');return(p[2]+'-'+p[1]+'-'+p[0])===vData;});}
   if(vCat){lista=lista.filter(function(o){return o.cats.indexOf(vCat)!==-1;});}
   if(vSt){lista=lista.filter(function(o){return o.status===vSt;});}
   var c=document.getElementById('ent-count'); if(c)c.textContent=lista.length+' recebimento'+(lista.length!==1?'s':'');
   var l=document.getElementById('ent-lista'); if(!l)return;
-  l.innerHTML=lista.length===0?'<div class="empty" style="padding:30px 20px;"><p>Nenhum recebimento encontrado</p></div>':lista.map(function(o){return cardHTML(o);}).join('');
+  var html='';
+  lista.forEach(function(o,oi){
+    if(o.fornecedores){ o.fornecedores.forEach(function(f,fi){ html+=fornCardHTML(o,f,fi); }); }
+    else { html+=cardHTML(o,'entregas'); }
+  });
+  l.innerHTML = lista.length===0 ? '<div class="empty" style="padding:30px 20px;"><p>Nenhum recebimento encontrado</p></div>' : html;
 }
 function limparFiltrosEntregas() {
   var fData=document.getElementById('ent-f-data'),fCat=document.getElementById('ent-f-cat'),fSt=document.getElementById('ent-f-status'); if(!fData)return;
