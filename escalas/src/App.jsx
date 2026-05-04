@@ -375,12 +375,18 @@ function CelulaTurno({ turno, onChange, deFerias, onVacationClick, horariosExtra
               <span className="esc-dd-label">Nenhum horário cadastrado</span>
             </div>
           )}
-          {(horariosExtras||[]).map((h,i) => (
-            <div key={i} className="esc-dd-item" onClick={()=>aplicarPreset({label:h.nome,turnos:[[h.entrada,h.saida]]})}>
-              <span className="esc-dd-label">{h.nome}</span>
-              <span className="esc-dd-hours">{h.entrada.replace(':00','')}–{h.saida.replace(':00','')}</span>
-            </div>
-          ))}
+          {(horariosExtras||[]).map((h,i) => {
+            const turnos = [[h.entrada,h.saida]];
+            if (h.t2Ini && h.t2Fim) turnos.push([h.t2Ini,h.t2Fim]);
+            if (h.t3Ini && h.t3Fim) turnos.push([h.t3Ini,h.t3Fim]);
+            const hoursLabel = turnos.map(([a,b])=>`${a.replace(':00','')}–${b.replace(':00','')}`).join(' / ');
+            return (
+              <div key={i} className="esc-dd-item" onClick={()=>aplicarPreset({label:h.nome,turnos})}>
+                <span className="esc-dd-label">{h.nome}</span>
+                <span className="esc-dd-hours">{hoursLabel}</span>
+              </div>
+            );
+          })}
           <div className="esc-dd-sep"/>
           <div className="esc-dd-item" onClick={limpar}>
             <span className="esc-dd-label">Limpar</span>
@@ -554,6 +560,11 @@ export default function EscalaPainel() {
   const [novoHorarioNome, setNovoHorarioNome] = useState('');
   const [novoHorarioEntrada, setNovoHorarioEntrada] = useState('');
   const [novoHorarioSaida, setNovoHorarioSaida] = useState('');
+  const [novoHorarioT2Ini, setNovoHorarioT2Ini] = useState('');
+  const [novoHorarioT2Fim, setNovoHorarioT2Fim] = useState('');
+  const [novoHorarioT3Ini, setNovoHorarioT3Ini] = useState('');
+  const [novoHorarioT3Fim, setNovoHorarioT3Fim] = useState('');
+  const [novoHorarioNumTurnos, setNovoHorarioNumTurnos] = useState(1);
   const [novoHorarioTipo, setNovoHorarioTipo] = useState('escala');
   const [novoFunc, setNovoFunc] = useState('Garçom');
   const [novoUnidade, setNovoUnidade] = useState('Itaim');
@@ -716,6 +727,13 @@ export default function EscalaPainel() {
     setNovoNome(''); setMostrarAdd(false);
   };
 
+  const resetFormHorario = () => {
+    setNovoHorarioNome(''); setNovoHorarioEntrada(''); setNovoHorarioSaida('');
+    setNovoHorarioT2Ini(''); setNovoHorarioT2Fim('');
+    setNovoHorarioT3Ini(''); setNovoHorarioT3Fim('');
+    setNovoHorarioNumTurnos(1);
+  };
+
   const adicionarHorario = () => {
     if (!novoHorarioNome.trim() || !novoHorarioEntrada || !novoHorarioSaida) return;
     const novo = {
@@ -723,12 +741,16 @@ export default function EscalaPainel() {
       nome: novoHorarioNome.trim(),
       entrada: novoHorarioEntrada,
       saida: novoHorarioSaida,
+      t2Ini: novoHorarioNumTurnos >= 2 ? novoHorarioT2Ini : '',
+      t2Fim: novoHorarioNumTurnos >= 2 ? novoHorarioT2Fim : '',
+      t3Ini: novoHorarioNumTurnos >= 3 ? novoHorarioT3Ini : '',
+      t3Fim: novoHorarioNumTurnos >= 3 ? novoHorarioT3Fim : '',
       tipo: novoHorarioTipo,
     };
     const lista = [...horariosCadastrados, novo];
     setHorariosCadastrados(lista);
     salvarHorarios(lista).catch(()=>{});
-    setNovoHorarioNome(''); setNovoHorarioEntrada(''); setNovoHorarioSaida('');
+    resetFormHorario();
     setMostrarAddHorario(false);
   };
 
@@ -1140,12 +1162,17 @@ export default function EscalaPainel() {
         <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px'}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
             <span className="cat-pill"><Clock size={13}/>Cadastrar Horário</span>
-            <button onClick={()=>{setMostrarAddHorario(false);setNovoHorarioNome('');setNovoHorarioEntrada('');setNovoHorarioSaida('');}} style={{width:24,height:24,display:'flex',alignItems:'center',justifyContent:'center',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:100}}><X size={11}/></button>
+            <button onClick={()=>{setMostrarAddHorario(false);resetFormHorario();}} style={{width:24,height:24,display:'flex',alignItems:'center',justifyContent:'center',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:100}}><X size={11}/></button>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1.4fr auto',gap:8,alignItems:'end'}}>
+          <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1.4fr auto',gap:8,alignItems:'end',marginBottom:novoHorarioNumTurnos>1?8:0}}>
             <div><label className="esc-field-label">Nome</label><input className="esc-input" type="text" placeholder="Ex.: Almoço Padrão" value={novoHorarioNome} onChange={e=>setNovoHorarioNome(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')adicionarHorario();}} autoFocus/></div>
             <div><label className="esc-field-label">Entrada</label><input className="esc-input" type="time" value={novoHorarioEntrada} onChange={e=>setNovoHorarioEntrada(e.target.value)}/></div>
-            <div><label className="esc-field-label">Saída</label><input className="esc-input" type="time" value={novoHorarioSaida} onChange={e=>setNovoHorarioSaida(e.target.value)}/></div>
+            <div style={{display:'flex',alignItems:'flex-end',gap:4}}>
+              <div style={{flex:1}}><label className="esc-field-label">Saída</label><input className="esc-input" type="time" value={novoHorarioSaida} onChange={e=>setNovoHorarioSaida(e.target.value)}/></div>
+              {novoHorarioNumTurnos < 3 && (
+                <button title="Adicionar turno" onClick={()=>setNovoHorarioNumTurnos(p=>Math.min(p+1,3))} style={{height:32,padding:'0 8px',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:6,fontWeight:700,fontSize:13,flexShrink:0}}>+</button>
+              )}
+            </div>
             <div>
               <label className="esc-field-label">Tipo</label>
               <select className="esc-select-sm" value={novoHorarioTipo} onChange={e=>setNovoHorarioTipo(e.target.value)}>
@@ -1155,6 +1182,38 @@ export default function EscalaPainel() {
             </div>
             <button className="btn-dev" onClick={adicionarHorario} disabled={!novoHorarioNome.trim()||!novoHorarioEntrada||!novoHorarioSaida} style={{justifyContent:'center',opacity:(novoHorarioNome.trim()&&novoHorarioEntrada&&novoHorarioSaida)?1:.5,cursor:(novoHorarioNome.trim()&&novoHorarioEntrada&&novoHorarioSaida)?'pointer':'not-allowed'}}><Plus size={11}/>Adicionar</button>
           </div>
+          {novoHorarioNumTurnos >= 2 && (
+            <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1.4fr auto',gap:8,alignItems:'end',marginBottom:novoHorarioNumTurnos>2?8:0}}>
+              <div style={{display:'flex',alignItems:'center',paddingTop:18}}>
+                <span style={{fontFamily:'DM Mono,monospace',fontSize:9,fontWeight:600,letterSpacing:'.8px',textTransform:'uppercase',color:T.muted}}>2º Turno</span>
+              </div>
+              <div><label className="esc-field-label">Entrada</label><input className="esc-input" type="time" value={novoHorarioT2Ini} onChange={e=>setNovoHorarioT2Ini(e.target.value)}/></div>
+              <div style={{display:'flex',alignItems:'flex-end',gap:4}}>
+                <div style={{flex:1}}><label className="esc-field-label">Saída</label><input className="esc-input" type="time" value={novoHorarioT2Fim} onChange={e=>setNovoHorarioT2Fim(e.target.value)}/></div>
+                {novoHorarioNumTurnos < 3 ? (
+                  <button title="Adicionar turno" onClick={()=>setNovoHorarioNumTurnos(3)} style={{height:32,padding:'0 8px',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:6,fontWeight:700,fontSize:13,flexShrink:0}}>+</button>
+                ) : (
+                  <button title="Remover turno" onClick={()=>{setNovoHorarioNumTurnos(2);setNovoHorarioT3Ini('');setNovoHorarioT3Fim('');}} style={{height:32,padding:'0 8px',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:6,fontWeight:700,fontSize:13,flexShrink:0}}>−</button>
+                )}
+              </div>
+              <div/>
+              <div/>
+            </div>
+          )}
+          {novoHorarioNumTurnos >= 3 && (
+            <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1.4fr auto',gap:8,alignItems:'end'}}>
+              <div style={{display:'flex',alignItems:'center',paddingTop:18}}>
+                <span style={{fontFamily:'DM Mono,monospace',fontSize:9,fontWeight:600,letterSpacing:'.8px',textTransform:'uppercase',color:T.muted}}>3º Turno</span>
+              </div>
+              <div><label className="esc-field-label">Entrada</label><input className="esc-input" type="time" value={novoHorarioT3Ini} onChange={e=>setNovoHorarioT3Ini(e.target.value)}/></div>
+              <div style={{display:'flex',alignItems:'flex-end',gap:4}}>
+                <div style={{flex:1}}><label className="esc-field-label">Saída</label><input className="esc-input" type="time" value={novoHorarioT3Fim} onChange={e=>setNovoHorarioT3Fim(e.target.value)}/></div>
+                <button title="Remover turno" onClick={()=>{setNovoHorarioNumTurnos(2);setNovoHorarioT3Ini('');setNovoHorarioT3Fim('');}} style={{height:32,padding:'0 8px',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:6,fontWeight:700,fontSize:13,flexShrink:0}}>−</button>
+              </div>
+              <div/>
+              <div/>
+            </div>
+          )}
         </div>
       )}
 
