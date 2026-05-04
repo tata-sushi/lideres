@@ -578,10 +578,10 @@ export default function EscalaPainel() {
   const [novoDepto, setNovoDepto] = useState('Salão');
   const [filtroUnidade, setFiltroUnidade] = useState(()=>localStorage.getItem('esc_fUnidade')||'Todos');
   const [filtroDepto, setFiltroDepto] = useState(()=>localStorage.getItem('esc_fDepto')||'Todos');
-  const [horarioAberto, setHorarioAberto] = useState(true);
+  const [horarioAberto, setHorarioAberto] = useState(false);
   const [gradeAberta, setGradeAberta] = useState(false);
-  const [tabelaAberta, setTabelaAberta] = useState(true);
-  const [resumoAberto, setResumoAberto] = useState(true);
+  const [tabelaAberta, setTabelaAberta] = useState(false);
+  const [resumoAberto, setResumoAberto] = useState(false);
   const [diaGradeIdx, setDiaGradeIdx] = useState(0);
   const [ehMobile, setEhMobile] = useState(false);
 
