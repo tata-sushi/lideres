@@ -833,6 +833,7 @@ export default function EscalaPainel() {
   const diaGrade = DIAS_META[diaGradeIdx];
   const cfgGrade = config[diaGrade.id] || CFG0_DIA;
   const colW = ehMobile ? 36 : 44;
+  const horaColW = ehMobile ? 72 : 108;
   const rowH = 12;
 
   // Toggle expandir/recolher
@@ -1384,8 +1385,8 @@ export default function EscalaPainel() {
                 ))}
               </div>
               <div style={{overflow:'auto',maxHeight:'60vh',WebkitOverflowScrolling:'touch'}}>
-                <div style={{display:'grid',gridTemplateColumns:`repeat(${colabsFiltrados.length+1},${colW}px)`,minWidth:colW*(colabsFiltrados.length+1),width:'max-content'}}>
-                  <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:110,width:colW,minWidth:colW,display:'flex',alignItems:'flex-end',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',paddingBottom:8}}>HORA</div>
+                <div style={{display:'grid',gridTemplateColumns:`${horaColW}px repeat(${colabsFiltrados.length},${colW}px)`,minWidth:horaColW+colW*colabsFiltrados.length,width:'max-content'}}>
+                  <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:110,width:horaColW,minWidth:horaColW,display:'flex',alignItems:'flex-end',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',paddingBottom:8}}>HORA</div>
                   {colabsFiltrados.map(c=>(
                     <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',height:110,paddingBottom:8}}>
                       <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?9:10,fontWeight:700,letterSpacing:'-0.1px',whiteSpace:'nowrap',writingMode:'vertical-rl',transform:'rotate(180deg)'}}>{abreviarNome(c.nome)}</div>
