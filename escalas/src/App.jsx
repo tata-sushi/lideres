@@ -171,6 +171,13 @@ const getSegunda = (date) => {
 };
 const addDays = (date,n) => { const d=new Date(date); d.setDate(d.getDate()+n); return d; };
 const fmtDate = (date) => date.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+
+const abreviarNome = (nome) => {
+  const p = nome.trim().split(/\s+/);
+  if (p.length <= 2) return nome;
+  const meio = p.slice(1, -1).map(s => s[0].toUpperCase() + '.').join(' ');
+  return `${p[0]} ${meio} ${p[p.length - 1]}`;
+};
 const semanaLabel = (segunda) => `${fmtDate(segunda)} – ${fmtDate(addDays(segunda,6))}`;
 const semanaKey = (segunda) => segunda.toISOString().slice(0,10);
 
@@ -1379,18 +1386,11 @@ export default function EscalaPainel() {
               <div style={{overflow:'auto',maxHeight:'60vh',WebkitOverflowScrolling:'touch'}}>
                 <div style={{display:'grid',gridTemplateColumns:`repeat(${colabsFiltrados.length+1},${colW}px)`,minWidth:colW*(colabsFiltrados.length+1),width:'max-content'}}>
                   <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,minHeight:54,width:colW,minWidth:colW,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',alignSelf:'stretch'}}>HORA</div>
-                  {colabsFiltrados.map(c=>{
-                    const hTurno = horasTurno(escala[diaGrade.id]?.[c.id]||{});
-                    const deF = estaDeFerias(c.id,dataDoDia(diaGrade.id));
-                    return (
-                      <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'6px 7px',borderLeft:'1px solid #2E3038',display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center',gap:1}}>
-                        <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?10:11,fontWeight:700,letterSpacing:'-0.2px',width:'100%',textAlign:'center',lineHeight:1.2,wordBreak:'break-word',whiteSpace:'normal'}}>{c.nome}</div>
-                        <div style={{fontFamily:'DM Mono,monospace',fontSize:ehMobile?8:9,fontWeight:400,color:'#FFFFFF',letterSpacing:'.3px',marginTop:2}}>
-                          {deF ? 'Férias' : hTurno > 0 ? fmtHoras(hTurno) : '—'}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {colabsFiltrados.map(c=>(
+                    <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'6px 7px',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'center',justifyContent:'center',textAlign:'center'}}>
+                      <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?10:11,fontWeight:700,letterSpacing:'-0.2px',width:'100%',textAlign:'center',lineHeight:1.2,wordBreak:'break-word',whiteSpace:'normal'}}>{abreviarNome(c.nome)}</div>
+                    </div>
+                  ))}
                   {Array.from({length:TOTAL_SLOTS}).map((_,slot)=>{
                     const lbl=slotLabel(slot);
                     const full=slot%2===0;
