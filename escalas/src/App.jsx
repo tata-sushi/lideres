@@ -832,7 +832,7 @@ export default function EscalaPainel() {
   // Grade visual
   const diaGrade = DIAS_META[diaGradeIdx];
   const cfgGrade = config[diaGrade.id] || CFG0_DIA;
-  const colW = ehMobile ? 72 : 108;
+  const colW = ehMobile ? 36 : 44;
   const rowH = 12;
 
   // Toggle expandir/recolher
