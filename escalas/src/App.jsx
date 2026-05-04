@@ -1385,10 +1385,10 @@ export default function EscalaPainel() {
               </div>
               <div style={{overflow:'auto',maxHeight:'60vh',WebkitOverflowScrolling:'touch'}}>
                 <div style={{display:'grid',gridTemplateColumns:`repeat(${colabsFiltrados.length+1},${colW}px)`,minWidth:colW*(colabsFiltrados.length+1),width:'max-content'}}>
-                  <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,minHeight:54,width:colW,minWidth:colW,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',alignSelf:'stretch'}}>HORA</div>
+                  <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:110,width:colW,minWidth:colW,display:'flex',alignItems:'flex-end',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',paddingBottom:8}}>HORA</div>
                   {colabsFiltrados.map(c=>(
-                    <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'6px 7px',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'center',justifyContent:'center',textAlign:'center'}}>
-                      <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?10:11,fontWeight:700,letterSpacing:'-0.2px',width:'100%',textAlign:'center',lineHeight:1.2,wordBreak:'break-word',whiteSpace:'normal'}}>{abreviarNome(c.nome)}</div>
+                    <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',height:110,paddingBottom:8}}>
+                      <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?9:10,fontWeight:700,letterSpacing:'-0.1px',whiteSpace:'nowrap',writingMode:'vertical-rl',transform:'rotate(180deg)'}}>{abreviarNome(c.nome)}</div>
                     </div>
                   ))}
                   {Array.from({length:TOTAL_SLOTS}).map((_,slot)=>{
