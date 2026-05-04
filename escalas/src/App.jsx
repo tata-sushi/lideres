@@ -1385,53 +1385,73 @@ export default function EscalaPainel() {
                 ))}
               </div>
               <div style={{overflow:'auto',maxHeight:'60vh',WebkitOverflowScrolling:'touch'}}>
-                <div style={{display:'grid',gridTemplateColumns:`${horaColW}px repeat(${colabsFiltrados.length},${colW}px)`,minWidth:horaColW+colW*colabsFiltrados.length,width:'max-content'}}>
-                  <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:110,width:horaColW,minWidth:horaColW,display:'flex',alignItems:'flex-end',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',paddingBottom:8}}>HORA</div>
-                  {colabsFiltrados.map(c=>(
-                    <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',height:110,paddingBottom:8}}>
-                      <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?9:10,fontWeight:700,letterSpacing:'-0.1px',whiteSpace:'nowrap',writingMode:'vertical-rl',transform:'rotate(180deg)'}}>{abreviarNome(c.nome)}</div>
-                    </div>
-                  ))}
-                  {Array.from({length:TOTAL_SLOTS}).map((_,slot)=>{
-                    const lbl=slotLabel(slot);
-                    const full=slot%2===0;
-                    const naPrepAlm = emFaixa(slot,cfgGrade.prepAlmocoIni,cfgGrade.prepAlmocoFim);
-                    const naFuncAlm = emFaixa(slot,cfgGrade.funcAlmocoIni,cfgGrade.funcAlmocoFim);
-                    const naPrepJan = emFaixa(slot,cfgGrade.prepJantarIni,cfgGrade.prepJantarFim);
-                    const naFuncJan = emFaixa(slot,cfgGrade.funcJantarIni,cfgGrade.funcJantarFim);
-                    const borda = full ? `1px solid ${T.gridLine}` : `1px solid transparent`;
-                    let totalSlot = 0;
+                {(()=>{
+                  const heatW = colW;
+                  const slotTotals = Array.from({length:TOTAL_SLOTS}).map((_,slot)=>{
+                    let n=0;
                     colabsFiltrados.forEach(c=>{
                       const t=escala[diaGrade.id]?.[c.id]||{};
-                      if (turnoSlots(t).has(slot) && !t.folga) totalSlot++;
+                      if(turnoSlots(t).has(slot)&&!t.folga) n++;
                     });
-                    return (
-                      <React.Fragment key={slot}>
-                        <div className="hora-cell" style={{
-                          fontWeight: full?600:400,
-                          color: full ? T.carbon : 'transparent',
-                          fontSize: full ? 9.5 : 0,
-                          borderBottom: full ? `1px solid ${T.gridLine}` : `1px solid transparent`,
-                          width: horaColW, maxWidth: horaColW, minWidth: horaColW,
-                        }}>{full ? (totalSlot>0 ? `${lbl} (${totalSlot})` : lbl) : ''}</div>
-                        {colabsFiltrados.map(c=>{
-                          const t=escala[diaGrade.id]?.[c.id]||{};
-                          const ativo=turnoSlots(t).has(slot);
-                          let bg='transparent';
-                          let opacity=1;
-                          if (ativo && !t.folga) bg=T.carbon;
-                          else if (naFuncJan) bg='#FFF4DC';
-                          else if (naPrepJan) bg='#FFF4DC';
-                          else if (naFuncAlm) bg='#FFF4DC';
-                          else if (naPrepAlm) bg='#FFF4DC';
-                          return (
-                            <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,opacity,borderRight:`1px solid ${T.gridLine}`,borderBottom:borda,overflow:'hidden'}}/>
-                          );
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
+                    return n;
+                  });
+                  const maxSlot = Math.max(1,...slotTotals);
+                  const heatBg = (n) => {
+                    if(n===0) return 'transparent';
+                    const r = n/maxSlot;
+                    const hue = Math.round(50 - r*50);
+                    const lig = Math.round(88 - r*28);
+                    return `hsl(${hue},90%,${lig}%)`;
+                  };
+                  return (
+                    <div style={{display:'grid',gridTemplateColumns:`${horaColW}px repeat(${colabsFiltrados.length},${colW}px) ${heatW}px`,minWidth:horaColW+colW*colabsFiltrados.length+heatW,width:'max-content'}}>
+                      <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:110,width:horaColW,minWidth:horaColW,display:'flex',alignItems:'flex-end',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',paddingBottom:8}}>HORA</div>
+                      {colabsFiltrados.map(c=>(
+                        <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',height:110,paddingBottom:8}}>
+                          <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?9:10,fontWeight:700,letterSpacing:'-0.1px',whiteSpace:'nowrap',writingMode:'vertical-rl',transform:'rotate(180deg)'}}>{abreviarNome(c.nome)}</div>
+                        </div>
+                      ))}
+                      {/* cabeçalho mapa de calor */}
+                      <div style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',height:110,paddingBottom:8,width:heatW,minWidth:heatW}}>
+                        <div style={{fontFamily:'DM Mono,monospace',fontSize:8,fontWeight:600,letterSpacing:'.5px',whiteSpace:'nowrap',writingMode:'vertical-rl',transform:'rotate(180deg)',textTransform:'uppercase'}}>Calor</div>
+                      </div>
+                      {slotTotals.map((totalSlot,slot)=>{
+                        const lbl=slotLabel(slot);
+                        const full=slot%2===0;
+                        const naPrepAlm = emFaixa(slot,cfgGrade.prepAlmocoIni,cfgGrade.prepAlmocoFim);
+                        const naFuncAlm = emFaixa(slot,cfgGrade.funcAlmocoIni,cfgGrade.funcAlmocoFim);
+                        const naPrepJan = emFaixa(slot,cfgGrade.prepJantarIni,cfgGrade.prepJantarFim);
+                        const naFuncJan = emFaixa(slot,cfgGrade.funcJantarIni,cfgGrade.funcJantarFim);
+                        const borda = full ? `1px solid ${T.gridLine}` : `1px solid transparent`;
+                        return (
+                          <React.Fragment key={slot}>
+                            <div className="hora-cell" style={{
+                              fontWeight: full?600:400,
+                              color: full ? T.carbon : 'transparent',
+                              fontSize: full ? 9.5 : 0,
+                              borderBottom: full ? `1px solid ${T.gridLine}` : `1px solid transparent`,
+                              width: horaColW, maxWidth: horaColW, minWidth: horaColW,
+                            }}>{full ? (totalSlot>0 ? `${lbl} (${totalSlot})` : lbl) : ''}</div>
+                            {colabsFiltrados.map(c=>{
+                              const t=escala[diaGrade.id]?.[c.id]||{};
+                              const ativo=turnoSlots(t).has(slot);
+                              let bg='transparent';
+                              if (ativo && !t.folga) bg=T.carbon;
+                              else if (naFuncJan||naPrepJan||naFuncAlm||naPrepAlm) bg='#FFF4DC';
+                              return (
+                                <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,borderRight:`1px solid ${T.gridLine}`,borderBottom:borda,overflow:'hidden'}}/>
+                              );
+                            })}
+                            {/* célula mapa de calor */}
+                            <div style={{height:rowH,background:heatBg(totalSlot),borderLeft:`1px solid ${T.gridLine}`,borderBottom:borda,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                              {full && totalSlot>0 && <span style={{fontFamily:'DM Mono,monospace',fontSize:7,fontWeight:700,color:totalSlot/maxSlot>0.5?'#5a3a00':'#7a5a00'}}>{totalSlot}</span>}
+                            </div>
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
               <div style={{padding:'10px 16px',borderTop:`1px solid ${T.border}`,display:'flex',gap:12,flexWrap:'wrap',fontFamily:'DM Mono,monospace',fontSize:10,color:T.mid,justifyContent:'center'}}>
                 {[
