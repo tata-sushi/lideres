@@ -1164,56 +1164,59 @@ export default function EscalaPainel() {
             <span className="cat-pill"><Clock size={13}/>Cadastrar Horário</span>
             <button onClick={()=>{setMostrarAddHorario(false);resetFormHorario();}} style={{width:24,height:24,display:'flex',alignItems:'center',justifyContent:'center',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:100}}><X size={11}/></button>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1.4fr auto',gap:8,alignItems:'end',marginBottom:novoHorarioNumTurnos>1?8:0}}>
-            <div><label className="esc-field-label">Nome</label><input className="esc-input" type="text" placeholder="Ex.: Almoço Padrão" value={novoHorarioNome} onChange={e=>setNovoHorarioNome(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')adicionarHorario();}} autoFocus/></div>
-            <div><label className="esc-field-label">Entrada</label><input className="esc-input" type="time" value={novoHorarioEntrada} onChange={e=>setNovoHorarioEntrada(e.target.value)}/></div>
-            <div style={{display:'flex',alignItems:'flex-end',gap:4}}>
-              <div style={{flex:1}}><label className="esc-field-label">Saída</label><input className="esc-input" type="time" value={novoHorarioSaida} onChange={e=>setNovoHorarioSaida(e.target.value)}/></div>
-              {novoHorarioNumTurnos < 3 && (
-                <button title="Adicionar turno" onClick={()=>setNovoHorarioNumTurnos(p=>Math.min(p+1,3))} style={{height:32,padding:'0 8px',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:6,fontWeight:700,fontSize:13,flexShrink:0}}>+</button>
-              )}
+          <div style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap'}}>
+            {/* Nome */}
+            <div style={{flex:'2 1 140px',minWidth:120}}>
+              <label className="esc-field-label">Nome</label>
+              <input className="esc-input" type="text" placeholder="Ex.: Almoço Padrão" value={novoHorarioNome} onChange={e=>setNovoHorarioNome(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')adicionarHorario();}} autoFocus/>
             </div>
-            <div>
+            {/* Turno 1 */}
+            <div style={{display:'flex',alignItems:'flex-end',gap:3}}>
+              <div><label className="esc-field-label">T1 Entrada</label><input className="esc-input" style={{width:96}} type="time" value={novoHorarioEntrada} onChange={e=>setNovoHorarioEntrada(e.target.value)}/></div>
+              <span style={{paddingBottom:9,color:T.muted,fontSize:11}}>–</span>
+              <div><label className="esc-field-label" style={{visibility:'hidden'}}>x</label><input className="esc-input" style={{width:96}} type="time" value={novoHorarioSaida} onChange={e=>setNovoHorarioSaida(e.target.value)}/></div>
+            </div>
+            {/* botão + após T1 */}
+            {novoHorarioNumTurnos < 2 && (
+              <button title="Adicionar 2º turno" onClick={()=>setNovoHorarioNumTurnos(2)} style={{height:32,padding:'0 8px',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:6,fontWeight:700,fontSize:13,flexShrink:0,alignSelf:'flex-end'}}>+</button>
+            )}
+            {/* Turno 2 */}
+            {novoHorarioNumTurnos >= 2 && (
+              <div style={{display:'flex',alignItems:'flex-end',gap:3}}>
+                <div><label className="esc-field-label">T2 Entrada</label><input className="esc-input" style={{width:96}} type="time" value={novoHorarioT2Ini} onChange={e=>setNovoHorarioT2Ini(e.target.value)}/></div>
+                <span style={{paddingBottom:9,color:T.muted,fontSize:11}}>–</span>
+                <div><label className="esc-field-label" style={{visibility:'hidden'}}>x</label><input className="esc-input" style={{width:96}} type="time" value={novoHorarioT2Fim} onChange={e=>setNovoHorarioT2Fim(e.target.value)}/></div>
+              </div>
+            )}
+            {/* botão +/− após T2 */}
+            {novoHorarioNumTurnos === 2 && (
+              <>
+                <button title="Adicionar 3º turno" onClick={()=>setNovoHorarioNumTurnos(3)} style={{height:32,padding:'0 8px',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:6,fontWeight:700,fontSize:13,flexShrink:0,alignSelf:'flex-end'}}>+</button>
+                <button title="Remover 2º turno" onClick={()=>{setNovoHorarioNumTurnos(1);setNovoHorarioT2Ini('');setNovoHorarioT2Fim('');}} style={{height:32,padding:'0 8px',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:6,fontWeight:700,fontSize:13,flexShrink:0,alignSelf:'flex-end'}}>−</button>
+              </>
+            )}
+            {/* Turno 3 */}
+            {novoHorarioNumTurnos >= 3 && (
+              <div style={{display:'flex',alignItems:'flex-end',gap:3}}>
+                <div><label className="esc-field-label">T3 Entrada</label><input className="esc-input" style={{width:96}} type="time" value={novoHorarioT3Ini} onChange={e=>setNovoHorarioT3Ini(e.target.value)}/></div>
+                <span style={{paddingBottom:9,color:T.muted,fontSize:11}}>–</span>
+                <div><label className="esc-field-label" style={{visibility:'hidden'}}>x</label><input className="esc-input" style={{width:96}} type="time" value={novoHorarioT3Fim} onChange={e=>setNovoHorarioT3Fim(e.target.value)}/></div>
+              </div>
+            )}
+            {/* botão − após T3 */}
+            {novoHorarioNumTurnos >= 3 && (
+              <button title="Remover 3º turno" onClick={()=>{setNovoHorarioNumTurnos(2);setNovoHorarioT3Ini('');setNovoHorarioT3Fim('');}} style={{height:32,padding:'0 8px',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:6,fontWeight:700,fontSize:13,flexShrink:0,alignSelf:'flex-end'}}>−</button>
+            )}
+            {/* Tipo */}
+            <div style={{flex:'1 1 130px',minWidth:120}}>
               <label className="esc-field-label">Tipo</label>
               <select className="esc-select-sm" value={novoHorarioTipo} onChange={e=>setNovoHorarioTipo(e.target.value)}>
                 <option value="escala">Escala de equipe</option>
                 <option value="funcionamento">Horário de Funcionamento</option>
               </select>
             </div>
-            <button className="btn-dev" onClick={adicionarHorario} disabled={!novoHorarioNome.trim()||!novoHorarioEntrada||!novoHorarioSaida} style={{justifyContent:'center',opacity:(novoHorarioNome.trim()&&novoHorarioEntrada&&novoHorarioSaida)?1:.5,cursor:(novoHorarioNome.trim()&&novoHorarioEntrada&&novoHorarioSaida)?'pointer':'not-allowed'}}><Plus size={11}/>Adicionar</button>
+            <button className="btn-dev" onClick={adicionarHorario} disabled={!novoHorarioNome.trim()||!novoHorarioEntrada||!novoHorarioSaida} style={{justifyContent:'center',opacity:(novoHorarioNome.trim()&&novoHorarioEntrada&&novoHorarioSaida)?1:.5,cursor:(novoHorarioNome.trim()&&novoHorarioEntrada&&novoHorarioSaida)?'pointer':'not-allowed',alignSelf:'flex-end'}}><Plus size={11}/>Adicionar</button>
           </div>
-          {novoHorarioNumTurnos >= 2 && (
-            <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1.4fr auto',gap:8,alignItems:'end',marginBottom:novoHorarioNumTurnos>2?8:0}}>
-              <div style={{display:'flex',alignItems:'center',paddingTop:18}}>
-                <span style={{fontFamily:'DM Mono,monospace',fontSize:9,fontWeight:600,letterSpacing:'.8px',textTransform:'uppercase',color:T.muted}}>2º Turno</span>
-              </div>
-              <div><label className="esc-field-label">Entrada</label><input className="esc-input" type="time" value={novoHorarioT2Ini} onChange={e=>setNovoHorarioT2Ini(e.target.value)}/></div>
-              <div style={{display:'flex',alignItems:'flex-end',gap:4}}>
-                <div style={{flex:1}}><label className="esc-field-label">Saída</label><input className="esc-input" type="time" value={novoHorarioT2Fim} onChange={e=>setNovoHorarioT2Fim(e.target.value)}/></div>
-                {novoHorarioNumTurnos < 3 ? (
-                  <button title="Adicionar turno" onClick={()=>setNovoHorarioNumTurnos(3)} style={{height:32,padding:'0 8px',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:6,fontWeight:700,fontSize:13,flexShrink:0}}>+</button>
-                ) : (
-                  <button title="Remover turno" onClick={()=>{setNovoHorarioNumTurnos(2);setNovoHorarioT3Ini('');setNovoHorarioT3Fim('');}} style={{height:32,padding:'0 8px',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:6,fontWeight:700,fontSize:13,flexShrink:0}}>−</button>
-                )}
-              </div>
-              <div/>
-              <div/>
-            </div>
-          )}
-          {novoHorarioNumTurnos >= 3 && (
-            <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1.4fr auto',gap:8,alignItems:'end'}}>
-              <div style={{display:'flex',alignItems:'center',paddingTop:18}}>
-                <span style={{fontFamily:'DM Mono,monospace',fontSize:9,fontWeight:600,letterSpacing:'.8px',textTransform:'uppercase',color:T.muted}}>3º Turno</span>
-              </div>
-              <div><label className="esc-field-label">Entrada</label><input className="esc-input" type="time" value={novoHorarioT3Ini} onChange={e=>setNovoHorarioT3Ini(e.target.value)}/></div>
-              <div style={{display:'flex',alignItems:'flex-end',gap:4}}>
-                <div style={{flex:1}}><label className="esc-field-label">Saída</label><input className="esc-input" type="time" value={novoHorarioT3Fim} onChange={e=>setNovoHorarioT3Fim(e.target.value)}/></div>
-                <button title="Remover turno" onClick={()=>{setNovoHorarioNumTurnos(2);setNovoHorarioT3Ini('');setNovoHorarioT3Fim('');}} style={{height:32,padding:'0 8px',border:`1px solid ${T.border}`,background:'transparent',cursor:'pointer',color:T.muted,borderRadius:6,fontWeight:700,fontSize:13,flexShrink:0}}>−</button>
-              </div>
-              <div/>
-              <div/>
-            </div>
-          )}
         </div>
       )}
 
@@ -1302,7 +1305,6 @@ export default function EscalaPainel() {
                       </button>
                       <div className="esc-nome-info">
                         <span className="esc-nome-c">{c.nome}</span>
-                        <span className="esc-cargo-c">{c.funcao}</span>
                       </div>
                       <button className="esc-del-btn" onClick={()=>removerColab(c.id)} title="Remover">×</button>
                     </div>
@@ -1383,7 +1385,6 @@ export default function EscalaPainel() {
                     return (
                       <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',padding:'6px 7px',borderLeft:'1px solid #2E3038',display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center',textAlign:'center',gap:1}}>
                         <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?10:11,fontWeight:700,letterSpacing:'-0.2px',width:'100%',textAlign:'center',lineHeight:1.2,wordBreak:'break-word',whiteSpace:'normal'}}>{c.nome}</div>
-                        <div style={{fontFamily:'DM Mono,sans-serif',fontSize:ehMobile?8:9,fontWeight:400,color:'rgba(255,255,255,.7)',letterSpacing:'.2px',width:'100%',textAlign:'center',whiteSpace:'normal',wordBreak:'break-word',lineHeight:1.2,marginTop:2}}>{c.funcao}</div>
                         <div style={{fontFamily:'DM Mono,monospace',fontSize:ehMobile?8:9,fontWeight:400,color:'#FFFFFF',letterSpacing:'.3px',marginTop:2}}>
                           {deF ? 'Férias' : hTurno > 0 ? fmtHoras(hTurno) : '—'}
                         </div>
