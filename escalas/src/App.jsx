@@ -118,8 +118,8 @@ const fmtHoras = (h) => {
 // ============================================================
 // HELPERS DE SLOT (Grade Visual)
 // ============================================================
-const HORA_INICIO = 7;
-const HORA_FIM    = 24;
+const HORA_INICIO = 6;
+const HORA_FIM    = 25;
 const SLOT_MIN    = 30;
 const TOTAL_SLOTS = ((HORA_FIM - HORA_INICIO) * 60) / SLOT_MIN;
 
@@ -1396,7 +1396,12 @@ export default function EscalaPainel() {
                     });
                     return n;
                   });
-                  const maxSlot = Math.max(1,...slotTotals);
+                  // Picos por hora: usa o max dos 2 slots do mesmo par
+                  const horaTotals = Array.from({length:TOTAL_SLOTS}).map((_,slot)=>{
+                    const base = slot%2===0 ? slot : slot-1;
+                    return Math.max(slotTotals[base]||0, slotTotals[base+1]||0);
+                  });
+                  const maxSlot = Math.max(1,...horaTotals);
                   const heatBg = (n) => {
                     if(n===0) return 'transparent';
                     const opacity = 0.12 + (n/maxSlot)*0.78;
@@ -1404,14 +1409,14 @@ export default function EscalaPainel() {
                   };
                   return (
                     <div style={{display:'grid',gridTemplateColumns:`${horaColW}px repeat(${colabsFiltrados.length},${colW}px) ${heatW}px`,minWidth:horaColW+colW*colabsFiltrados.length+heatW,width:'max-content'}}>
-                      <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:110,width:horaColW,minWidth:horaColW,display:'flex',alignItems:'flex-end',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',paddingBottom:8}}>HORA</div>
+                      <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:140,width:horaColW,minWidth:horaColW,display:'flex',alignItems:'flex-end',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',paddingBottom:8}}>HORÁRIOS</div>
                       {colabsFiltrados.map(c=>(
-                        <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',height:110,paddingBottom:8}}>
+                        <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',height:140,paddingBottom:8}}>
                           <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?9:10,fontWeight:700,letterSpacing:'-0.1px',whiteSpace:'nowrap',writingMode:'vertical-rl',transform:'rotate(180deg)'}}>{abreviarNome(c.nome)}</div>
                         </div>
                       ))}
                       {/* cabeçalho mapa de calor */}
-                      <div style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',height:110,paddingBottom:8,width:heatW,minWidth:heatW}}>
+                      <div style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',height:140,paddingBottom:8,width:heatW,minWidth:heatW}}>
                         <div style={{fontFamily:'DM Mono,monospace',fontSize:8,fontWeight:600,letterSpacing:'.5px',whiteSpace:'nowrap',writingMode:'vertical-rl',transform:'rotate(180deg)',textTransform:'uppercase'}}>Picos</div>
                       </div>
                       {slotTotals.map((totalSlot,slot)=>{
@@ -1453,7 +1458,7 @@ export default function EscalaPainel() {
                               );
                             })}
                             {/* célula mapa de calor */}
-                            <div style={{height:rowH,background:heatBg(totalSlot),borderLeft:`1px solid ${T.gridLine}`,borderBottom:bordaBot,borderTop:bordaTop}}/>
+                            <div style={{height:rowH,background:heatBg(horaTotals[slot]),borderLeft:`1px solid ${T.gridLine}`,borderBottom:bordaBot,borderTop:bordaTop}}/>
                           </React.Fragment>
                         );
                       })}
