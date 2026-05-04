@@ -1412,7 +1412,7 @@ export default function EscalaPainel() {
                           color: full ? T.carbon : 'transparent',
                           fontSize: full ? 9.5 : 0,
                           borderBottom: full ? `1px solid ${T.gridLine}` : `1px solid transparent`,
-                          width: colW, maxWidth: colW, minWidth: colW,
+                          width: horaColW, maxWidth: horaColW, minWidth: horaColW,
                         }}>{full ? (totalSlot>0 ? `${lbl} (${totalSlot})` : lbl) : ''}</div>
                         {colabsFiltrados.map(c=>{
                           const t=escala[diaGrade.id]?.[c.id]||{};
