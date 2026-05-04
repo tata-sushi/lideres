@@ -1417,24 +1417,29 @@ export default function EscalaPainel() {
                       {slotTotals.map((totalSlot,slot)=>{
                         const lbl=slotLabel(slot);
                         const full=slot%2===0;
-                        const dest=slotDestacado===slot;
+                        // destaque cobre hora cheia: slot par (início) + slot ímpar seguinte
+                        const horaBase = full ? slot : slot-1;
+                        const dest = slotDestacado!==null && (slot===slotDestacado||slot===slotDestacado+1);
+                        const isTop = slotDestacado!==null && slot===slotDestacado;
+                        const isBot = slotDestacado!==null && slot===slotDestacado+1;
                         const naPrepAlm = emFaixa(slot,cfgGrade.prepAlmocoIni,cfgGrade.prepAlmocoFim);
                         const naFuncAlm = emFaixa(slot,cfgGrade.funcAlmocoIni,cfgGrade.funcAlmocoFim);
                         const naPrepJan = emFaixa(slot,cfgGrade.prepJantarIni,cfgGrade.prepJantarFim);
                         const naFuncJan = emFaixa(slot,cfgGrade.funcJantarIni,cfgGrade.funcJantarFim);
                         const borda = full ? `1px solid ${T.gridLine}` : `1px solid transparent`;
-                        const destBorder = dest ? `1px solid ${T.citric}` : borda;
+                        const bordaBot = isBot ? `1px solid ${T.carbon}` : borda;
+                        const bordaTop = isTop ? `1px solid ${T.carbon}` : undefined;
                         return (
                           <React.Fragment key={slot}>
-                            <div className="hora-cell" onClick={()=>setSlotDestacado(p=>p===slot?null:slot)} style={{
+                            <div className="hora-cell" onClick={full ? ()=>setSlotDestacado(p=>p===slot?null:slot) : undefined} style={{
                               fontWeight: full?600:400,
                               color: full ? T.carbon : 'transparent',
                               fontSize: full ? 9.5 : 0,
-                              borderBottom: destBorder,
-                              borderTop: dest ? `1px solid ${T.citric}` : undefined,
-                              background: dest ? 'rgba(207,255,0,0.1)' : undefined,
+                              borderBottom: bordaBot,
+                              borderTop: bordaTop,
+                              background: dest ? 'rgba(53,56,63,0.06)' : undefined,
                               width: horaColW, maxWidth: horaColW, minWidth: horaColW,
-                              cursor:'pointer',
+                              cursor: full ? 'pointer' : 'default',
                             }}>{full ? (totalSlot>0 ? `${lbl} (${totalSlot})` : lbl) : ''}</div>
                             {colabsFiltrados.map(c=>{
                               const t=escala[diaGrade.id]?.[c.id]||{};
@@ -1442,15 +1447,13 @@ export default function EscalaPainel() {
                               let bg='transparent';
                               if (ativo && !t.folga) bg=T.carbon;
                               else if (naFuncJan||naPrepJan||naFuncAlm||naPrepAlm) bg='#FFF4DC';
-                              if (dest && bg==='transparent') bg='rgba(207,255,0,0.08)';
+                              if (dest && bg==='transparent') bg='rgba(53,56,63,0.06)';
                               return (
-                                <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,borderRight:`1px solid ${T.gridLine}`,borderBottom:destBorder,borderTop:dest?`1px solid ${T.citric}`:undefined,overflow:'hidden'}}/>
+                                <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,borderRight:`1px solid ${T.gridLine}`,borderBottom:bordaBot,borderTop:bordaTop,overflow:'hidden'}}/>
                               );
                             })}
                             {/* célula mapa de calor */}
-                            <div style={{height:rowH,background:heatBg(totalSlot),borderLeft:`1px solid ${T.gridLine}`,borderBottom:destBorder,borderTop:dest?`1px solid ${T.citric}`:undefined,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                              {full && totalSlot>0 && <span style={{fontFamily:'DM Mono,monospace',fontSize:7,fontWeight:700,color:totalSlot/maxSlot>0.6?'#fff':'#35383F'}}>{totalSlot}</span>}
-                            </div>
+                            <div style={{height:rowH,background:heatBg(totalSlot),borderLeft:`1px solid ${T.gridLine}`,borderBottom:bordaBot,borderTop:bordaTop}}/>
                           </React.Fragment>
                         );
                       })}
