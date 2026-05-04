@@ -343,13 +343,14 @@ function saveFerias(ferias) {
 }
 
 // ── HORÁRIOS CADASTRADOS ──────────────────────────────────────
-// Aba "HorariosCadastrados": id | nome | entrada | saida | tipo
+// Aba "HorariosCadastrados": id | nome | entrada | saida | t2Ini | t2Fim | t3Ini | t3Fim | tipo
 // Presets de horários salvos pelo usuário (tipo: 'funcionamento' ou 'escala')
 
-var HORARIOS_HEADER = ['id','nome','entrada','saida','tipo'];
+var HORARIOS_HEADER = ['id','nome','entrada','saida','t2Ini','t2Fim','t3Ini','t3Fim','tipo'];
 
 function getHorariosCadastrados() {
   var sh = aba('HorariosCadastrados', HORARIOS_HEADER);
+  migrarHorariosSchema(sh);
   var rows = todasLinhas(sh);
   return {
     horarios: rows
@@ -360,7 +361,11 @@ function getHorariosCadastrados() {
           nome:    String(r[1]),
           entrada: _hhmm(r[2]),
           saida:   _hhmm(r[3]),
-          tipo:    String(r[4] || 'escala'),
+          t2Ini:   _hhmm(r[4]),
+          t2Fim:   _hhmm(r[5]),
+          t3Ini:   _hhmm(r[6]),
+          t3Fim:   _hhmm(r[7]),
+          tipo:    String(r[8] || 'escala'),
         };
       })
   };
@@ -368,12 +373,24 @@ function getHorariosCadastrados() {
 
 function saveHorariosCadastrados(horarios) {
   var sh = aba('HorariosCadastrados', HORARIOS_HEADER);
+  migrarHorariosSchema(sh);
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow()-1, HORARIOS_HEADER.length).clearContent();
   if (horarios && horarios.length > 0) {
     sh.getRange(2, 1, horarios.length, HORARIOS_HEADER.length)
       .setValues(horarios.map(function(h) {
-        return [h.id, h.nome, h.entrada||'', h.saida||'', h.tipo||'escala'];
+        return [h.id, h.nome, h.entrada||'', h.saida||'', h.t2Ini||'', h.t2Fim||'', h.t3Ini||'', h.t3Fim||'', h.tipo||'escala'];
       }));
   }
   return {};
+}
+
+// Migra schema antigo (5 colunas: id,nome,entrada,saida,tipo) para 9 colunas com t2/t3
+function migrarHorariosSchema(sh) {
+  var lastCol = sh.getLastColumn();
+  if (lastCol >= 9) return;
+  if (lastCol === 5) {
+    // inserir 4 colunas antes de "tipo" (coluna 5)
+    sh.insertColumns(5, 4);
+    sh.getRange(1, 5, 1, 4).setValues([['t2Ini','t2Fim','t3Ini','t3Fim']]);
+  }
 }
