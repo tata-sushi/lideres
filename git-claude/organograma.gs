@@ -40,6 +40,11 @@ const CONFIG = {
     demissao:      'Data de Demissão'
   },
 
+  // Colunas opcionais — sem erro se ausentes na planilha
+  COLUNAS_OPCIONAIS: {
+    dataNascimento: 'Data de Nascimento'
+  },
+
   CACHE_FOTOS_MIN: 30,
 
   // ID Pessoa do CEO (raiz). Deixe vazio para detecção automática.
@@ -103,6 +108,11 @@ function lerPlanilha() {
     idx[key] = i;
   });
 
+  const idxOpt = {};
+  Object.keys(CONFIG.COLUNAS_OPCIONAIS || {}).forEach(key => {
+    idxOpt[key] = headers.indexOf(CONFIG.COLUNAS_OPCIONAIS[key]);
+  });
+
   const resultado = [];
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
@@ -132,7 +142,9 @@ function lerPlanilha() {
       unidade: unidade,
       departamento: departamento,
       nivel: detectarNivel(cargo),
-      unitClass: classeUnidade(unidade)
+      unitClass: classeUnidade(unidade),
+      admissao: isoDate(row[idx.admissao]),
+      dataNascimento: idxOpt.dataNascimento >= 0 ? isoDate(row[idxOpt.dataNascimento]) : null
     });
   }
 
@@ -155,6 +167,17 @@ function detectarNivel(cargo) {
   if (/^(sup|lider|líder|encarregado|chefe|maitre|maître)/.test(c)) return 'supervisor';
 
   return 'operacional';
+}
+
+function isoDate(val) {
+  if (!val) return null;
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    var y = val.getFullYear();
+    var m = String(val.getMonth() + 1).padStart(2, '0');
+    var d = String(val.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
+  }
+  return null;
 }
 
 function normalizar(str) {
