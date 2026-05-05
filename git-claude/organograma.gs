@@ -187,7 +187,7 @@ function normalizar(str) {
 
 function classeUnidade(unidade) {
   const u = normalizar(unidade);
-  if (u.indexOf('puc') !== -1) return 'puc';
+  if (u.indexOf('puc') !== -1 || u.indexOf('poke') !== -1) return 'puc';
   if (u.indexOf('itaim') !== -1) return 'itaim';
   if (u.indexOf('pinheiros') !== -1) return 'pinheiros';
   return null;
