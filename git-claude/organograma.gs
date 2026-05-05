@@ -45,7 +45,7 @@ const CONFIG = {
     dataNascimento: 'Data de Nascimento'
   },
 
-  CACHE_FOTOS_MIN: 30,
+  CACHE_FOTOS_MIN: 5,
 
   // ID Pessoa do CEO (raiz). Deixe vazio para detecção automática.
   CEO_ID: ''
@@ -56,6 +56,10 @@ const CONFIG = {
 // ============================================
 function doGet(e) {
   try {
+    // ?refresh=1 força bypass do cache de fotos (útil ao adicionar fotos novas)
+    if (e && e.parameter && e.parameter.refresh === '1') {
+      CacheService.getScriptCache().remove('fotos_map');
+    }
     const dados = montarOrganograma();
     return ContentService
       .createTextOutput(JSON.stringify(dados))
