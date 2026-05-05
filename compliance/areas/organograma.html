@@ -883,22 +883,51 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   // ============================================
   var NODE_W = 160;
   var NODE_H = 48;
-  var H_GAP = 14;
+  var H_GAP = 20;
   var V_GAP_LEVEL = 90;
-  var V_GAP_OP = 8;
-  var X_OP_OFFSET = 30;
+  var V_GAP_OP = 10;
   var AVATAR_SIZE = 28;
+
+  // Horizontal layout: 2+ kids where at least one has its own children (multi-dept)
+  function needsHorizontal(kids) {
+    return kids.length >= 2 && kids.some(function(c) { return c.children && c.children.length > 0; });
+  }
 
   function calcWidth(n) {
     var kids = visibleChildren(n);
-    if (kids.length === 0) { n.subWidth = NODE_W; return NODE_W; }
-    var todosOps = kids.every(isOperacional);
-    if (todosOps) { n.subWidth = NODE_W + X_OP_OFFSET + NODE_W; return n.subWidth; }
-    var total = 0;
-    kids.forEach(function(c) { total += calcWidth(c) + H_GAP; });
-    total -= H_GAP;
-    n.subWidth = Math.max(NODE_W, total);
+    if (kids.length === 0) { n.subWidth = NODE_W; n._layout = 'leaf'; return NODE_W; }
+    if (needsHorizontal(kids)) {
+      n._layout = 'horizontal';
+      var total = 0;
+      kids.forEach(function(c) { total += calcWidth(c) + H_GAP; });
+      total -= H_GAP;
+      n.subWidth = Math.max(NODE_W, total);
+    } else {
+      n._layout = 'vertical';
+      var maxW = NODE_W;
+      kids.forEach(function(c) { var w = calcWidth(c); if (w > maxW) maxW = w; });
+      n.subWidth = maxW;
+    }
     return n.subWidth;
+  }
+
+  function calcSubHeight(n) {
+    var nh = isOperacional(n) ? 36 : NODE_H;
+    var kids = visibleChildren(n);
+    if (kids.length === 0) { n.subHeight = nh; return nh; }
+    if (n._layout === 'vertical') {
+      var total = V_GAP_LEVEL;
+      kids.forEach(function(c, i) {
+        total += calcSubHeight(c);
+        if (i < kids.length - 1) total += V_GAP_OP;
+      });
+      n.subHeight = total;
+    } else {
+      var maxKidH = 0;
+      kids.forEach(function(c) { var h = calcSubHeight(c); if (h > maxKidH) maxKidH = h; });
+      n.subHeight = nh + V_GAP_LEVEL + maxKidH;
+    }
+    return n.subHeight;
   }
 
   function position(n, x, y) {
@@ -906,18 +935,20 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     n.y = y;
     var kids = visibleChildren(n);
     if (kids.length === 0) return;
-    var todosOps = kids.every(isOperacional);
-    if (todosOps) {
-      var opX = n.x + X_OP_OFFSET;
-      var opY = y + V_GAP_LEVEL;
-      kids.forEach(function(c) { c.x = opX; c.y = opY; c.subWidth = NODE_W; opY += 36 + V_GAP_OP; });
-      return;
+    if (n._layout === 'vertical') {
+      var parentCX = n.x + NODE_W / 2;
+      var stackY = n.y + V_GAP_LEVEL;
+      kids.forEach(function(c) {
+        position(c, parentCX - c.subWidth / 2, stackY);
+        stackY += c.subHeight + V_GAP_OP;
+      });
+    } else {
+      var totalKids = 0;
+      kids.forEach(function(c) { totalKids += c.subWidth + H_GAP; });
+      totalKids -= H_GAP;
+      var cursor = x + (n.subWidth - totalKids) / 2;
+      kids.forEach(function(c) { position(c, cursor, y + V_GAP_LEVEL); cursor += c.subWidth + H_GAP; });
     }
-    var totalKids = 0;
-    kids.forEach(function(c) { totalKids += c.subWidth + H_GAP; });
-    totalKids -= H_GAP;
-    var cursor = x + (n.subWidth - totalKids) / 2;
-    kids.forEach(function(c) { position(c, cursor, y + V_GAP_LEVEL); cursor += c.subWidth + H_GAP; });
   }
 
   var container = document.getElementById('svgContainer');
@@ -928,6 +959,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   function renderSvg() {
     if (!container || !arvore) return;
     calcWidth(arvore);
+    calcSubHeight(arvore);
     position(arvore, 30, 30);
 
     var maxX = 0, maxY = 0;
@@ -955,20 +987,20 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     function drawConn(n) {
       var kids = visibleChildren(n);
       if (kids.length === 0) return;
-      var todosOps = kids.every(isOperacional);
-      kids.forEach(function(c) {
-        if (todosOps) {
-          var x1 = n.x + NODE_W / 2, y1 = n.y + NODE_H;
-          var x2 = c.x, y2 = c.y + 18;
-          parts.push('<path d="M ' + x1 + ' ' + y1 + ' L ' + x1 + ' ' + y2 + ' L ' + x2 + ' ' + y2 + '"/>');
-        } else {
-          var x1 = n.x + NODE_W / 2, y1 = n.y + NODE_H;
+      var nh = isOperacional(n) ? 36 : NODE_H;
+      var x1 = n.x + NODE_W / 2, y1 = n.y + nh;
+      if (n._layout === 'vertical') {
+        // single trunk from parent bottom to last child top
+        var y2 = kids[kids.length - 1].y;
+        parts.push('<path d="M ' + x1 + ' ' + y1 + ' L ' + x1 + ' ' + y2 + '"/>');
+      } else {
+        kids.forEach(function(c) {
           var x2 = c.x + NODE_W / 2, y2 = c.y;
           var midY = y1 + (y2 - y1) / 2;
           parts.push('<path d="M ' + x1 + ' ' + y1 + ' C ' + x1 + ' ' + midY + ', ' + x2 + ' ' + midY + ', ' + x2 + ' ' + y2 + '"/>');
-        }
-        drawConn(c);
-      });
+        });
+      }
+      kids.forEach(drawConn);
     }
     drawConn(arvore);
     parts.push('</g>');
@@ -995,7 +1027,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       var nodeH = isOp ? 36 : NODE_H;
       var dispName = abreviarNome(n.nome);
       if (dispName.length > 15) dispName = dispName.slice(0, 14) + '…';
-      var dispRole = n.cargo.length > 26 ? n.cargo.slice(0, 25) + '…' : n.cargo;
+      var dispRole = n.cargo.length > 18 ? n.cargo.slice(0, 17) + '…' : n.cargo;
 
       parts.push('<g class="org-node" data-id="' + escapeHtml(n.id) + '">');
       parts.push('<rect class="card-rect" x="' + n.x + '" y="' + n.y + '" width="' + NODE_W + '" height="' + nodeH +
