@@ -33,7 +33,8 @@ const CONFIG = {
     status:        'Status',           // Ativo / Inativo
     unidade:       'Unidade',          // Itaim / Pinheiros / PUC
     departamento:  'Departamento',     // Sushibar, Salão, Cozinha, RH, etc
-    supervisor:    'ID Superior',      // Matrícula do supervisor
+    idPessoa:      'ID Pessoa',        // ID interno usado para vincular hierarquia
+    supervisor:    'ID Superior',      // ID Pessoa do supervisor
     nomeSuperior:  'Nome do Superior', // Apenas para validação visual
     admissao:      'Data de Admissão',
     demissao:      'Data de Demissão'
@@ -41,8 +42,8 @@ const CONFIG = {
 
   CACHE_FOTOS_MIN: 30,
 
-  // Matrícula do CEO (raiz). Deixe vazio para detecção automática.
-  CEO_MATRICULA: ''
+  // ID Pessoa do CEO (raiz). Deixe vazio para detecção automática.
+  CEO_ID: ''
 };
 
 // ============================================
@@ -110,10 +111,11 @@ function lerPlanilha() {
     const status = String(row[idx.status]).trim().toLowerCase();
     if (status !== 'ativo') continue;
 
-    // Matrícula obrigatória
-    const matricula = String(row[idx.matricula]).trim();
-    if (!matricula) continue;
+    // ID Pessoa obrigatório (chave da hierarquia)
+    const idPessoa = String(row[idx.idPessoa]).trim();
+    if (!idPessoa) continue;
 
+    const matricula = String(row[idx.matricula]).trim();
     const nome = String(row[idx.nome]).trim();
     const cargo = String(row[idx.cargo]).trim();
     const unidade = String(row[idx.unidade]).trim();
@@ -121,7 +123,8 @@ function lerPlanilha() {
     const supervisor = String(row[idx.supervisor]).trim();
 
     resultado.push({
-      id: matricula,
+      id: idPessoa,
+      idPessoa: idPessoa,
       matricula: matricula,
       nome: nome,
       cargo: cargo,
@@ -193,8 +196,8 @@ function construirHierarquia(colaboradores, fotos) {
   });
 
   // Definir raiz
-  if (CONFIG.CEO_MATRICULA && mapa[CONFIG.CEO_MATRICULA]) {
-    raiz = mapa[CONFIG.CEO_MATRICULA];
+  if (CONFIG.CEO_ID && mapa[CONFIG.CEO_ID]) {
+    raiz = mapa[CONFIG.CEO_ID];
     semSupervisor.forEach(n => {
       if (n.id !== raiz.id) raiz.children.push(n);
     });
@@ -284,6 +287,7 @@ function detectarOrfaos(colaboradores) {
     if (c.supervisorId && !ids[c.supervisorId]) {
       orfaos.push({
         matricula: c.matricula,
+        idPessoa: c.idPessoa,
         nome: c.nome,
         supervisorIdInexistente: c.supervisorId
       });
@@ -316,12 +320,12 @@ function testar() {
   Logger.log('========================================');
   Logger.log('Total ativos: ' + dados.total);
   Logger.log('Stats: ' + JSON.stringify(dados.stats));
-  Logger.log('Raiz: ' + dados.arvore.nome + ' (matrícula ' + dados.arvore.matricula + ', cargo "' + dados.arvore.cargo + '", nível ' + dados.arvore.nivel + ')');
+  Logger.log('Raiz: ' + dados.arvore.nome + ' (ID Pessoa ' + dados.arvore.idPessoa + ', cargo "' + dados.arvore.cargo + '", nível ' + dados.arvore.nivel + ')');
   Logger.log('Filhos diretos da raiz: ' + dados.arvore.children.length);
   if (dados.avisos && dados.avisos.orfaos.length > 0) {
     Logger.log('⚠ ATENÇÃO: ' + dados.avisos.orfaos.length + ' colaboradores com supervisor inexistente:');
     dados.avisos.orfaos.slice(0, 10).forEach(o => {
-      Logger.log('  - ' + o.matricula + ' ' + o.nome + ' → supervisor ' + o.supervisorIdInexistente + ' não encontrado');
+      Logger.log('  - ID Pessoa ' + o.idPessoa + ' (' + o.nome + ') → supervisor ' + o.supervisorIdInexistente + ' não encontrado');
     });
   }
   Logger.log('========================================');
