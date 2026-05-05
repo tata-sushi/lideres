@@ -20,7 +20,7 @@ const CONFIG = {
   // ID da pasta do Drive com as fotos (extrair do URL da pasta)
   // URL exemplo: https://drive.google.com/drive/folders/1ABC123XYZ
   // O ID é o "1ABC123XYZ"
-  PASTA_FOTOS_ID: https://drive.google.com/drive/u/0/folders/1s_GnNwAK83LEgGHDAQwBcNU-5CTD2Z7m,
+  PASTA_FOTOS_ID: '1s_GnNwAK83LEgGHDAQwBcNU-5CTD2Z7m',
 
   // Nomes EXATOS das colunas na planilha (case-sensitive, conforme cabeçalho real)
   COLUNAS: {
@@ -153,7 +153,7 @@ function detectarNivel(cargo) {
 
 function normalizar(str) {
   return String(str).toLowerCase().trim()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
 function classeUnidade(unidade) {
