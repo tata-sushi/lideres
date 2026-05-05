@@ -212,7 +212,10 @@ function construirHierarquia(colaboradores, fotos) {
 
   colaboradores.forEach(c => {
     const node = mapa[c.id];
-    if (c.supervisorId && mapa[c.supervisorId]) {
+    // Self-reference: trata como órfão (evita loop infinito)
+    if (c.supervisorId === c.id) {
+      orfaos.push(node);
+    } else if (c.supervisorId && mapa[c.supervisorId]) {
       mapa[c.supervisorId].children.push(node);
     } else if (c.supervisorId) {
       orfaos.push(node);
