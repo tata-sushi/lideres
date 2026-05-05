@@ -190,6 +190,7 @@ function classeUnidade(unidade) {
   if (u.indexOf('puc') !== -1 || u.indexOf('poke') !== -1) return 'puc';
   if (u.indexOf('itaim') !== -1) return 'itaim';
   if (u.indexOf('pinheiros') !== -1) return 'pinheiros';
+  if (u.indexOf('tata house') !== -1 || u.indexOf('house') !== -1) return 'tatahouse';
   return null;
 }
 
