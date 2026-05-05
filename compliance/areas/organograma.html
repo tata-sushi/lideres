@@ -678,6 +678,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="modal-role" id="mRole">—</div>
     <div class="modal-row"><span>Matrícula</span><span id="mId">—</span></div>
     <div class="modal-row"><span>Unidade</span><span id="mUnit">—</span></div>
+    <div class="modal-row"><span>Departamento</span><span id="mDepto">—</span></div>
     <div class="modal-row"><span>Líder</span><span id="mLider">—</span></div>
     <div class="modal-row"><span>Tempo de casa</span><span id="mTempoCasa">—</span></div>
     <div class="modal-row"><span>Aniversário</span><span id="mAniversario">—</span></div>
@@ -931,65 +932,91 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   var AVATAR_SIZE = 28;
 
   // Horizontal layout: 2+ kids where at least one has its own children (multi-dept)
-  function needsHorizontal(kids) {
-    return kids.length >= 2 && kids.some(function(c) { return c.children && c.children.length > 0; });
+  // Leaf kids are grouped by departamento into shared columns
+  function buildGroups(kids) {
+    var groups = [];
+    var leafMap = {};
+    var leafOrder = [];
+    kids.forEach(function(c) {
+      if (c.children && c.children.length > 0) {
+        groups.push({ type: 'node', node: c, subWidth: 0, subHeight: 0 });
+      } else {
+        var key = c.departamento || '__';
+        if (!leafMap[key]) { leafMap[key] = { type: 'leafGroup', nodes: [], subWidth: NODE_W, subHeight: 0 }; leafOrder.push(key); }
+        leafMap[key].nodes.push(c);
+      }
+    });
+    leafOrder.forEach(function(k) { groups.push(leafMap[k]); });
+    return groups;
   }
 
   function calcWidth(n) {
     var kids = visibleChildren(n);
-    if (kids.length === 0) { n.subWidth = NODE_W; n._layout = 'leaf'; return NODE_W; }
-    if (needsHorizontal(kids)) {
+    if (kids.length === 0) { n.subWidth = NODE_W; n._layout = 'leaf'; n._groups = []; return NODE_W; }
+    n._groups = buildGroups(kids);
+    if (n._groups.length === 1) {
+      n._layout = 'vertical';
+      var g = n._groups[0];
+      g.subWidth = (g.type === 'node') ? calcWidth(g.node) : NODE_W;
+      n.subWidth = Math.max(NODE_W, g.subWidth);
+    } else {
       n._layout = 'horizontal';
       var total = 0;
-      kids.forEach(function(c) { total += calcWidth(c) + H_GAP; });
-      total -= H_GAP;
-      n.subWidth = Math.max(NODE_W, total);
-    } else {
-      n._layout = 'vertical';
-      var maxW = NODE_W;
-      kids.forEach(function(c) { var w = calcWidth(c); if (w > maxW) maxW = w; });
-      n.subWidth = maxW;
+      n._groups.forEach(function(g) {
+        g.subWidth = (g.type === 'node') ? calcWidth(g.node) : NODE_W;
+        total += g.subWidth + H_GAP;
+      });
+      n.subWidth = Math.max(NODE_W, total - H_GAP);
     }
     return n.subWidth;
   }
 
   function calcSubHeight(n) {
     var nh = isOperacional(n) ? 36 : NODE_H;
-    var kids = visibleChildren(n);
-    if (kids.length === 0) { n.subHeight = nh; return nh; }
+    if (n._layout === 'leaf') { n.subHeight = nh; return nh; }
+    n._groups.forEach(function(g) {
+      if (g.type === 'node') {
+        g.subHeight = calcSubHeight(g.node);
+      } else {
+        var h = 0;
+        g.nodes.forEach(function(c, i) { h += (isOperacional(c) ? 36 : NODE_H) + (i < g.nodes.length - 1 ? V_GAP_OP : 0); });
+        g.subHeight = h;
+      }
+    });
     if (n._layout === 'vertical') {
-      var total = V_GAP_LEVEL;
-      kids.forEach(function(c, i) {
-        total += calcSubHeight(c);
-        if (i < kids.length - 1) total += V_GAP_OP;
-      });
-      n.subHeight = total;
+      n.subHeight = V_GAP_LEVEL + n._groups[0].subHeight;
     } else {
-      var maxKidH = 0;
-      kids.forEach(function(c) { var h = calcSubHeight(c); if (h > maxKidH) maxKidH = h; });
-      n.subHeight = nh + V_GAP_LEVEL + maxKidH;
+      var maxH = 0;
+      n._groups.forEach(function(g) { if (g.subHeight > maxH) maxH = g.subHeight; });
+      n.subHeight = nh + V_GAP_LEVEL + maxH;
     }
     return n.subHeight;
+  }
+
+  function positionGroup(g, x, y) {
+    if (g.type === 'node') {
+      position(g.node, x, y);
+    } else {
+      var cx = x + (g.subWidth - NODE_W) / 2;
+      var stackY = y;
+      g.nodes.forEach(function(c) {
+        c.x = cx; c.y = stackY;
+        stackY += (isOperacional(c) ? 36 : NODE_H) + V_GAP_OP;
+      });
+    }
   }
 
   function position(n, x, y) {
     n.x = x + (n.subWidth - NODE_W) / 2;
     n.y = y;
-    var kids = visibleChildren(n);
-    if (kids.length === 0) return;
+    if (n._layout === 'leaf') return;
     if (n._layout === 'vertical') {
-      var parentCX = n.x + NODE_W / 2;
-      var stackY = n.y + V_GAP_LEVEL;
-      kids.forEach(function(c) {
-        position(c, parentCX - c.subWidth / 2, stackY);
-        stackY += c.subHeight + V_GAP_OP;
-      });
+      positionGroup(n._groups[0], n.x + NODE_W / 2 - n._groups[0].subWidth / 2, n.y + V_GAP_LEVEL);
     } else {
-      var totalKids = 0;
-      kids.forEach(function(c) { totalKids += c.subWidth + H_GAP; });
-      totalKids -= H_GAP;
-      var cursor = x + (n.subWidth - totalKids) / 2;
-      kids.forEach(function(c) { position(c, cursor, y + V_GAP_LEVEL); cursor += c.subWidth + H_GAP; });
+      var totalW = 0;
+      n._groups.forEach(function(g) { totalW += g.subWidth + H_GAP; });
+      var cursor = x + (n.subWidth - (totalW - H_GAP)) / 2;
+      n._groups.forEach(function(g) { positionGroup(g, cursor, y + V_GAP_LEVEL); cursor += g.subWidth + H_GAP; });
     }
   }
 
@@ -1027,22 +1054,33 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
     parts.push('<g class="connectors" stroke="rgba(53,56,63,0.25)" stroke-width="1.2" fill="none">');
     function drawConn(n) {
-      var kids = visibleChildren(n);
-      if (kids.length === 0) return;
+      if (!n._groups || n._groups.length === 0) return;
       var nh = isOperacional(n) ? 36 : NODE_H;
       var x1 = n.x + NODE_W / 2, y1 = n.y + nh;
       if (n._layout === 'vertical') {
-        // single trunk from parent bottom to last child top
-        var y2 = kids[kids.length - 1].y;
-        parts.push('<path d="M ' + x1 + ' ' + y1 + ' L ' + x1 + ' ' + y2 + '"/>');
+        var g = n._groups[0];
+        if (g.type === 'node') {
+          var x2 = g.node.x + NODE_W / 2, y2 = g.node.y;
+          parts.push('<path d="M ' + x1 + ' ' + y1 + ' L ' + x2 + ' ' + y2 + '"/>');
+          drawConn(g.node);
+        } else {
+          var fn = g.nodes[0], ln = g.nodes[g.nodes.length - 1];
+          parts.push('<path d="M ' + x1 + ' ' + y1 + ' L ' + (fn.x + NODE_W/2) + ' ' + ln.y + '"/>');
+        }
       } else {
-        kids.forEach(function(c) {
-          var x2 = c.x + NODE_W / 2, y2 = c.y;
+        n._groups.forEach(function(g) {
+          var fn = g.type === 'node' ? g.node : g.nodes[0];
+          var x2 = fn.x + NODE_W / 2, y2 = fn.y;
           var midY = y1 + (y2 - y1) / 2;
           parts.push('<path d="M ' + x1 + ' ' + y1 + ' C ' + x1 + ' ' + midY + ', ' + x2 + ' ' + midY + ', ' + x2 + ' ' + y2 + '"/>');
+          if (g.type === 'leafGroup' && g.nodes.length > 1) {
+            var ln = g.nodes[g.nodes.length - 1];
+            var fnh = isOperacional(fn) ? 36 : NODE_H;
+            parts.push('<path d="M ' + x2 + ' ' + (y2 + fnh) + ' L ' + x2 + ' ' + ln.y + '"/>');
+          }
+          if (g.type === 'node') drawConn(g.node);
         });
       }
-      kids.forEach(drawConn);
     }
     drawConn(arvore);
     parts.push('</g>');
@@ -1284,6 +1322,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.getElementById('mRole').textContent = n.cargo;
     document.getElementById('mId').textContent = n.matricula || n.id;
     document.getElementById('mUnit').textContent = n.unidade || 'Administrativo';
+    document.getElementById('mDepto').textContent = n.departamento || '—';
     document.getElementById('mLider').textContent = n._parent ? n._parent.nome : '—';
     document.getElementById('mTempoCasa').textContent = tempoDeCasa(n.admissao);
     document.getElementById('mAniversario').textContent = formatarAniversario(n.dataNascimento);
