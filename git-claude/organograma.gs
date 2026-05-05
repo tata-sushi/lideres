@@ -17,6 +17,9 @@
 const CONFIG = {
   ABA: 'Colaboradores',
 
+  // ID da planilha de colaboradores (trecho da URL entre /d/ e /edit)
+  PLANILHA_ID: '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw',
+
   // ID da pasta do Drive com as fotos (extrair do URL da pasta)
   // URL exemplo: https://drive.google.com/drive/folders/1ABC123XYZ
   // O ID é o "1ABC123XYZ"
@@ -81,7 +84,7 @@ function montarOrganograma() {
 // LEITURA DA PLANILHA
 // ============================================
 function lerPlanilha() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.openById(CONFIG.PLANILHA_ID);
   const aba = ss.getSheetByName(CONFIG.ABA);
   if (!aba) throw new Error('Aba "' + CONFIG.ABA + '" não encontrada');
 
