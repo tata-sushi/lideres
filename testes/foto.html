@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RHiD — Teste Foto MT07</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --border: #2a2a2a;
+    --citric: #d4f028;
+    --text: #e8e8e8;
+    --muted: #666;
+    --error: #ff4d4d;
+    --success: #4dff91;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    gap: 24px;
+  }
+
+  #status {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  #status.error { color: var(--error); }
+  #status.ok    { color: var(--success); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    width: 240px;
+    display: none;
+    flex-direction: column;
+    animation: fadeIn 0.4s ease both;
+  }
+
+  .card.visible { display: flex; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .card img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    display: block;
+  }
+
+  .card-info {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .card-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .card-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .card-badge {
+    margin-top: 8px;
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(212, 240, 40, 0.1);
+    color: var(--citric);
+    align-self: flex-start;
+  }
+
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--citric);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="status"><span class="spinner"></span> Autenticando...</div>
+<div class="card" id="card">
+  <img id="foto" src="" alt="">
+  <div class="card-info">
+    <div class="card-name" id="nome"></div>
+    <div class="card-meta" id="meta"></div>
+    <span class="card-badge" id="badge"></span>
+  </div>
+</div>
+
+<script>
+const BASE_URL = "https://rhid.com.br/v2/api.svc";
+const EMAIL    = "victor.carvalho@tatasushi.com.br";
+const PASSWORD = "Tata@123";
+const ID       = 521; // matrícula 07 — Victor Augusto
+
+function toTitleCase(str) {
+  if (!str) return "";
+  return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function setStatus(msg, tipo = "") {
+  const el = document.getElementById("status");
+  el.innerHTML = msg;
+  el.className = tipo;
+}
+
+async function run() {
+  try {
+    // 1. Login
+    const loginRes = await fetch(BASE_URL + "/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: EMAIL, password: PASSWORD })
+    });
+    const loginData = await loginRes.json();
+    if (!loginData.accessToken) throw new Error("Falha na autenticação");
+    const token = loginData.accessToken;
+
+    setStatus('<span class="spinner"></span> Buscando pessoa id=' + ID + '...', '');
+
+    // 2. Busca direto no /person/{id}
+    const personRes = await fetch(BASE_URL + "/person/" + ID, {
+      headers: { "Authorization": "Bearer " + token }
+    });
+    if (!personRes.ok) throw new Error("HTTP " + personRes.status + " ao buscar pessoa");
+    const person = await personRes.json();
+
+    const nome = toTitleCase(person.name || "");
+    const foto = person.foto || null;
+    const mt   = person.registration || ID;
+
+    // 3. Renderiza
+    document.getElementById("nome").textContent = nome;
+    document.getElementById("meta").textContent = "MT " + mt + " · id " + ID;
+
+    if (foto) {
+      document.getElementById("foto").src = "data:image/jpeg;base64," + foto;
+      document.getElementById("badge").textContent = "foto OK ✓";
+      setStatus("✓ Foto carregada com sucesso", "ok");
+    } else {
+      document.getElementById("foto").style.display = "none";
+      document.getElementById("badge").textContent = "sem foto";
+      document.getElementById("badge").style.background = "rgba(102,102,102,0.1)";
+      document.getElementById("badge").style.color = "#666";
+      setStatus("✓ Pessoa encontrada — campo foto está vazio", "ok");
+    }
+
+    document.getElementById("card").classList.add("visible");
+
+  } catch(e) {
+    setStatus("✕ " + e.message, "error");
+  }
+}
+
+run();
+</script>
+</body>
+</html>
