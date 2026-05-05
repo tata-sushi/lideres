@@ -160,11 +160,11 @@ function detectarNivel(cargo) {
   // Diretoria
   if (/^(diretor|ceo|socio|presidente|coo|cfo|chro|cco)/.test(c)) return 'diretoria';
 
-  // Gerência
-  if (/^(gerente|coord)/.test(c)) return 'gerencia';
+  // Gerência (inclui "Chef Executivo" como cargo de gerência)
+  if (/^(gerente|coord|chef executivo)/.test(c)) return 'gerencia';
 
-  // Supervisor (Sup, Sup., Sup PI, Supervisor, Lider, Encarregado, Chefe, Maitre)
-  if (/^(sup|lider|líder|encarregado|chefe|maitre|maître)/.test(c)) return 'supervisor';
+  // Supervisor (Sup, Sup., Sup PI, Supervisor, Lider, Encarregado, Chef/Chefe, Maitre)
+  if (/^(sup|lider|líder|encarregado|chef|maitre|maître)/.test(c)) return 'supervisor';
 
   return 'operacional';
 }
