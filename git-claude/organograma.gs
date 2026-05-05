@@ -1,0 +1,342 @@
+/**
+ * TATÁ — Organograma · Apps Script Web App
+ * Versão ajustada para a estrutura real da planilha "Colaboradores"
+ *
+ * Setup:
+ * 1. Cole este código no Apps Script da planilha
+ * 2. Ajuste PASTA_FOTOS_ID abaixo
+ * 3. Implantar > Nova implantação > Tipo: App da Web
+ *    - Executar como: Eu
+ *    - Quem tem acesso: Qualquer pessoa
+ * 4. Copiar URL e usar no HTML
+ */
+
+// ============================================
+// CONFIGURAÇÃO
+// ============================================
+const CONFIG = {
+  ABA: 'Colaboradores',
+
+  // ID da pasta do Drive com as fotos (extrair do URL da pasta)
+  // URL exemplo: https://drive.google.com/drive/folders/1ABC123XYZ
+  // O ID é o "1ABC123XYZ"
+  PASTA_FOTOS_ID: https://drive.google.com/drive/u/0/folders/1s_GnNwAK83LEgGHDAQwBcNU-5CTD2Z7m,
+
+  // Nomes EXATOS das colunas na planilha (case-sensitive, conforme cabeçalho real)
+  COLUNAS: {
+    nome:          'Nome',
+    matricula:     'Matrícula',
+    cargo:         'Cargo',
+    status:        'Status',           // Ativo / Inativo
+    unidade:       'Unidade',          // Itaim / Pinheiros / PUC
+    departamento:  'Departamento',     // Sushibar, Salão, Cozinha, RH, etc
+    supervisor:    'ID Superior',      // Matrícula do supervisor
+    nomeSuperior:  'Nome do Superior', // Apenas para validação visual
+    admissao:      'Data de Admissão',
+    demissao:      'Data de Demissão'
+  },
+
+  CACHE_FOTOS_MIN: 30,
+
+  // Matrícula do CEO (raiz). Deixe vazio para detecção automática.
+  CEO_MATRICULA: ''
+};
+
+// ============================================
+// ENDPOINT
+// ============================================
+function doGet(e) {
+  try {
+    const dados = montarOrganograma();
+    return ContentService
+      .createTextOutput(JSON.stringify(dados))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ erro: err.message, stack: err.stack }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ============================================
+// LÓGICA PRINCIPAL
+// ============================================
+function montarOrganograma() {
+  const colaboradores = lerPlanilha();
+  const fotos = listarFotosDrive();
+  const arvore = construirHierarquia(colaboradores, fotos);
+  const stats = calcularStats(colaboradores);
+  const orfaos = detectarOrfaos(colaboradores);
+
+  return {
+    geradoEm: new Date().toISOString(),
+    total: colaboradores.length,
+    stats: stats,
+    arvore: arvore,
+    avisos: orfaos.length > 0 ? { orfaos: orfaos } : null
+  };
+}
+
+// ============================================
+// LEITURA DA PLANILHA
+// ============================================
+function lerPlanilha() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const aba = ss.getSheetByName(CONFIG.ABA);
+  if (!aba) throw new Error('Aba "' + CONFIG.ABA + '" não encontrada');
+
+  const values = aba.getDataRange().getValues();
+  if (values.length < 2) throw new Error('Planilha vazia');
+
+  const headers = values[0].map(h => String(h).trim());
+  const idx = {};
+  Object.keys(CONFIG.COLUNAS).forEach(key => {
+    const col = CONFIG.COLUNAS[key];
+    const i = headers.indexOf(col);
+    if (i === -1) {
+      throw new Error('Coluna "' + col + '" não encontrada. Cabeçalhos da planilha: ' + headers.join(' | '));
+    }
+    idx[key] = i;
+  });
+
+  const resultado = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+
+    // Filtra somente ATIVOS
+    const status = String(row[idx.status]).trim().toLowerCase();
+    if (status !== 'ativo') continue;
+
+    // Matrícula obrigatória
+    const matricula = String(row[idx.matricula]).trim();
+    if (!matricula) continue;
+
+    const nome = String(row[idx.nome]).trim();
+    const cargo = String(row[idx.cargo]).trim();
+    const unidade = String(row[idx.unidade]).trim();
+    const departamento = String(row[idx.departamento]).trim();
+    const supervisor = String(row[idx.supervisor]).trim();
+
+    resultado.push({
+      id: matricula,
+      matricula: matricula,
+      nome: nome,
+      cargo: cargo,
+      supervisorId: supervisor || null,
+      unidade: unidade,
+      departamento: departamento,
+      nivel: detectarNivel(cargo),
+      unitClass: classeUnidade(unidade)
+    });
+  }
+
+  return resultado;
+}
+
+// ============================================
+// DETECÇÃO DE NÍVEL POR PREFIXO DO CARGO
+// ============================================
+function detectarNivel(cargo) {
+  const c = normalizar(cargo);
+
+  // Diretoria
+  if (/^(diretor|ceo|socio|presidente|coo|cfo|chro|cco)/.test(c)) return 'diretoria';
+
+  // Gerência
+  if (/^(gerente|coord)/.test(c)) return 'gerencia';
+
+  // Supervisor (Sup, Sup., Sup PI, Supervisor, Lider, Encarregado, Chefe, Maitre)
+  if (/^(sup|lider|líder|encarregado|chefe|maitre|maître)/.test(c)) return 'supervisor';
+
+  return 'operacional';
+}
+
+function normalizar(str) {
+  return String(str).toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function classeUnidade(unidade) {
+  const u = normalizar(unidade);
+  if (u.indexOf('puc') !== -1) return 'puc';
+  if (u.indexOf('itaim') !== -1) return 'itaim';
+  if (u.indexOf('pinheiros') !== -1) return 'pinheiros';
+  return null;
+}
+
+// ============================================
+// HIERARQUIA
+// ============================================
+function construirHierarquia(colaboradores, fotos) {
+  const mapa = {};
+  colaboradores.forEach(c => {
+    mapa[c.id] = Object.assign({}, c, {
+      foto: fotos[c.matricula] || null,
+      iniciais: gerarIniciais(c.nome),
+      children: []
+    });
+  });
+
+  let raiz = null;
+  const semSupervisor = [];
+
+  colaboradores.forEach(c => {
+    const node = mapa[c.id];
+    if (c.supervisorId && mapa[c.supervisorId]) {
+      mapa[c.supervisorId].children.push(node);
+    } else {
+      semSupervisor.push(node);
+    }
+  });
+
+  // Definir raiz
+  if (CONFIG.CEO_MATRICULA && mapa[CONFIG.CEO_MATRICULA]) {
+    raiz = mapa[CONFIG.CEO_MATRICULA];
+    semSupervisor.forEach(n => {
+      if (n.id !== raiz.id) raiz.children.push(n);
+    });
+  } else if (semSupervisor.length === 1) {
+    raiz = semSupervisor[0];
+  } else if (semSupervisor.length > 1) {
+    // Múltiplos sem supervisor — escolher o de nível mais alto, anexar resto
+    semSupervisor.sort((a, b) => {
+      const ordem = { diretoria: 0, gerencia: 1, supervisor: 2, operacional: 3 };
+      return (ordem[a.nivel] || 9) - (ordem[b.nivel] || 9);
+    });
+    raiz = semSupervisor[0];
+    for (let i = 1; i < semSupervisor.length; i++) {
+      raiz.children.push(semSupervisor[i]);
+    }
+  } else {
+    throw new Error('Nenhum colaborador sem supervisor encontrado para ser a raiz');
+  }
+
+  // Ordenar filhos
+  const ordemNivel = { diretoria: 0, gerencia: 1, supervisor: 2, operacional: 3 };
+  function ordenar(node) {
+    if (!node.children) return;
+    node.children.sort((a, b) => {
+      const da = ordemNivel[a.nivel] || 9;
+      const db = ordemNivel[b.nivel] || 9;
+      if (da !== db) return da - db;
+      return a.nome.localeCompare(b.nome, 'pt-BR');
+    });
+    node.children.forEach(ordenar);
+  }
+  ordenar(raiz);
+
+  return raiz;
+}
+
+function gerarIniciais(nome) {
+  const partes = String(nome).trim().split(/\s+/);
+  if (partes.length === 0) return '?';
+  if (partes.length === 1) return partes[0].charAt(0).toUpperCase();
+  return (partes[0].charAt(0) + partes[partes.length - 1].charAt(0)).toUpperCase();
+}
+
+// ============================================
+// FOTOS DO DRIVE
+// ============================================
+function listarFotosDrive() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('fotos_map');
+  if (cached) {
+    try { return JSON.parse(cached); } catch (e) { /* segue */ }
+  }
+
+  if (!CONFIG.PASTA_FOTOS_ID || CONFIG.PASTA_FOTOS_ID.indexOf('COLE_AQUI') !== -1) {
+    Logger.log('AVISO: PASTA_FOTOS_ID não configurado. Fotos não serão carregadas.');
+    return {};
+  }
+
+  const pasta = DriveApp.getFolderById(CONFIG.PASTA_FOTOS_ID);
+  const arquivos = pasta.getFiles();
+  const map = {};
+
+  while (arquivos.hasNext()) {
+    const arq = arquivos.next();
+    const nomeArq = arq.getName();
+    const m = nomeArq.match(/^(\d+)\./);
+    if (m) {
+      const matricula = m[1];
+      const id = arq.getId();
+      map[matricula] = 'https://lh3.googleusercontent.com/d/' + id + '=s120';
+    }
+  }
+
+  cache.put('fotos_map', JSON.stringify(map), CONFIG.CACHE_FOTOS_MIN * 60);
+  return map;
+}
+
+// ============================================
+// VALIDAÇÕES
+// ============================================
+function detectarOrfaos(colaboradores) {
+  const ids = {};
+  colaboradores.forEach(c => { ids[c.id] = true; });
+
+  const orfaos = [];
+  colaboradores.forEach(c => {
+    if (c.supervisorId && !ids[c.supervisorId]) {
+      orfaos.push({
+        matricula: c.matricula,
+        nome: c.nome,
+        supervisorIdInexistente: c.supervisorId
+      });
+    }
+  });
+  return orfaos;
+}
+
+function calcularStats(colaboradores) {
+  const stats = { total: colaboradores.length, itaim: 0, pinheiros: 0, puc: 0, backoffice: 0 };
+  colaboradores.forEach(c => {
+    if (c.unitClass === 'itaim') stats.itaim++;
+    else if (c.unitClass === 'pinheiros') stats.pinheiros++;
+    else if (c.unitClass === 'puc') stats.puc++;
+    else stats.backoffice++;
+  });
+  return stats;
+}
+
+// ============================================
+// UTILITÁRIOS — rodar manualmente no editor
+// ============================================
+function limparCacheFotos() {
+  CacheService.getScriptCache().remove('fotos_map');
+  Logger.log('Cache de fotos limpo.');
+}
+
+function testar() {
+  const dados = montarOrganograma();
+  Logger.log('========================================');
+  Logger.log('Total ativos: ' + dados.total);
+  Logger.log('Stats: ' + JSON.stringify(dados.stats));
+  Logger.log('Raiz: ' + dados.arvore.nome + ' (matrícula ' + dados.arvore.matricula + ', cargo "' + dados.arvore.cargo + '", nível ' + dados.arvore.nivel + ')');
+  Logger.log('Filhos diretos da raiz: ' + dados.arvore.children.length);
+  if (dados.avisos && dados.avisos.orfaos.length > 0) {
+    Logger.log('⚠ ATENÇÃO: ' + dados.avisos.orfaos.length + ' colaboradores com supervisor inexistente:');
+    dados.avisos.orfaos.slice(0, 10).forEach(o => {
+      Logger.log('  - ' + o.matricula + ' ' + o.nome + ' → supervisor ' + o.supervisorIdInexistente + ' não encontrado');
+    });
+  }
+  Logger.log('========================================');
+}
+
+function diagnosticarCargos() {
+  const colaboradores = lerPlanilha();
+  const porNivel = { diretoria: [], gerencia: [], supervisor: [], operacional: [] };
+
+  colaboradores.forEach(c => {
+    porNivel[c.nivel].push(c.cargo);
+  });
+
+  Logger.log('========== DIAGNÓSTICO POR NÍVEL ==========');
+  ['diretoria', 'gerencia', 'supervisor', 'operacional'].forEach(nivel => {
+    const cargosUnicos = Array.from(new Set(porNivel[nivel]));
+    Logger.log(nivel.toUpperCase() + ' (' + porNivel[nivel].length + ' pessoas, ' + cargosUnicos.length + ' cargos diferentes):');
+    cargosUnicos.sort().forEach(cg => Logger.log('  • ' + cg));
+  });
+  Logger.log('===========================================');
+}
