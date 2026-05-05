@@ -1407,23 +1407,27 @@ export default function EscalaPainel() {
                     const opacity = 0.12 + (n/maxSlot)*0.78;
                     return `rgba(53,56,63,${opacity.toFixed(2)})`;
                   };
+                  // grid: linha 1 = cabeçalho (140px), linhas 2+ = slots (rowH cada)
+                  const gTplRows = `140px repeat(${TOTAL_SLOTS},${rowH}px)`;
+                  const gTplCols = `${horaColW}px repeat(${colabsFiltrados.length},${colW}px) ${heatW}px`;
                   return (
-                    <div style={{display:'grid',gridTemplateColumns:`${horaColW}px repeat(${colabsFiltrados.length},${colW}px) ${heatW}px`,minWidth:horaColW+colW*colabsFiltrados.length+heatW,width:'max-content'}}>
-                      <div style={{position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,height:140,width:horaColW,minWidth:horaColW,display:'flex',alignItems:'flex-end',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',paddingBottom:8}}>HORÁRIOS</div>
-                      {colabsFiltrados.map(c=>(
-                        <div key={c.id} style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',height:140,paddingBottom:8}}>
+                    <div style={{display:'grid',gridTemplateColumns:gTplCols,gridTemplateRows:gTplRows,minWidth:horaColW+colW*colabsFiltrados.length+heatW,width:'max-content'}}>
+                      {/* ── cabeçalho (linha 1) ── */}
+                      <div style={{gridRow:1,gridColumn:1,position:'sticky',top:0,left:0,zIndex:30,background:T.carbon,color:T.citric,display:'flex',alignItems:'flex-end',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:9.5,fontWeight:600,letterSpacing:'1px',paddingBottom:8}}>HORÁRIOS</div>
+                      {colabsFiltrados.map((c,ci)=>(
+                        <div key={c.id} style={{gridRow:1,gridColumn:ci+2,position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:8}}>
                           <div style={{fontFamily:'DM Sans,sans-serif',fontSize:ehMobile?9:10,fontWeight:700,letterSpacing:'-0.1px',whiteSpace:'nowrap',writingMode:'vertical-rl',transform:'rotate(180deg)'}}>{abreviarNome(c.nome)}</div>
                         </div>
                       ))}
-                      {/* cabeçalho mapa de calor */}
-                      <div style={{position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',height:140,paddingBottom:8,width:heatW,minWidth:heatW}}>
+                      <div style={{gridRow:1,gridColumn:colabsFiltrados.length+2,position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:8,width:heatW,minWidth:heatW}}>
                         <div style={{fontFamily:'DM Mono,monospace',fontSize:8,fontWeight:600,letterSpacing:'.5px',whiteSpace:'nowrap',writingMode:'vertical-rl',transform:'rotate(180deg)',textTransform:'uppercase'}}>Picos</div>
                       </div>
+                      {/* ── conteúdo: cada slot ocupa 1 linha do grid (linha = slot+2) ── */}
                       {slotTotals.map((totalSlot,slot)=>{
-                        const lbl=slotLabel(slot);
-                        const full=slot%2===0;
-                        // destaque cobre hora cheia: slot par (início) + slot ímpar seguinte
-                        const horaBase = full ? slot : slot-1;
+                        const lbl = slotLabel(slot);
+                        const full = slot%2===0;   // par = início da hora (:00)
+                        const odd  = !full;         // ímpar = :30 → fronteira entre horas
+                        const gridRow = slot+2;     // linha 1 = cabeçalho
                         const dest = slotDestacado!==null && (slot===slotDestacado||slot===slotDestacado+1);
                         const isTop = slotDestacado!==null && slot===slotDestacado;
                         const isBot = slotDestacado!==null && slot===slotDestacado+1;
@@ -1431,22 +1435,32 @@ export default function EscalaPainel() {
                         const naFuncAlm = emFaixa(slot,cfgGrade.funcAlmocoIni,cfgGrade.funcAlmocoFim);
                         const naPrepJan = emFaixa(slot,cfgGrade.prepJantarIni,cfgGrade.prepJantarFim);
                         const naFuncJan = emFaixa(slot,cfgGrade.funcJantarIni,cfgGrade.funcJantarFim);
-                        const borda = full ? `1px solid ${T.gridLine}` : `1px solid transparent`;
-                        const bordaBot = isBot ? `1px solid ${T.carbon}` : borda;
+                        // fronteira de hora = fundo do slot ímpar; sem linha no meio da hora
+                        const bordaBot = isBot
+                          ? `1px solid ${T.carbon}`
+                          : odd ? `1px solid ${T.gridLine}` : `1px solid transparent`;
                         const bordaTop = isTop ? `1px solid ${T.carbon}` : undefined;
                         return (
                           <React.Fragment key={slot}>
-                            <div className="hora-cell" onClick={full ? ()=>setSlotDestacado(p=>p===slot?null:slot) : undefined} style={{
-                              fontWeight: full?600:400,
-                              color: full ? T.carbon : 'transparent',
-                              fontSize: full ? 9.5 : 0,
-                              borderBottom: bordaBot,
-                              borderTop: bordaTop,
-                              background: dest ? 'rgba(53,56,63,0.06)' : undefined,
-                              width: horaColW, maxWidth: horaColW, minWidth: horaColW,
-                              cursor: full ? 'pointer' : 'default',
-                            }}>{full ? (totalSlot>0 ? `${lbl} (${totalSlot})` : lbl) : ''}</div>
-                            {colabsFiltrados.map(c=>{
+                            {/* HORÁRIOS — apenas slots pares, abrange 2 linhas do grid */}
+                            {full && (
+                              <div onClick={()=>setSlotDestacado(p=>p===slot?null:slot)} style={{
+                                gridColumn:1, gridRow:`${gridRow}/span 2`,
+                                position:'sticky', left:0, zIndex:5,
+                                display:'flex', alignItems:'center', padding:'0 8px',
+                                background: isTop ? 'rgba(53,56,63,0.06)' : T.bg,
+                                borderTop: isTop ? `1px solid ${T.carbon}` : `1px solid ${T.gridLine}`,
+                                borderBottom: isTop ? `1px solid ${T.carbon}` : `1px solid ${T.gridLine}`,
+                                cursor:'pointer',
+                                fontFamily:'DM Mono,monospace', fontSize:9.5, fontWeight:600, color:T.carbon,
+                                width:horaColW, minWidth:horaColW, boxSizing:'border-box',
+                              }}>
+                                {Math.max(slotTotals[slot]||0,slotTotals[slot+1]||0)>0
+                                  ? `${lbl} (${Math.max(slotTotals[slot]||0,slotTotals[slot+1]||0)})`
+                                  : lbl}
+                              </div>
+                            )}
+                            {colabsFiltrados.map((c,ci)=>{
                               const t=escala[diaGrade.id]?.[c.id]||{};
                               const ativo=turnoSlots(t).has(slot);
                               let bg='transparent';
@@ -1454,11 +1468,10 @@ export default function EscalaPainel() {
                               else if (naFuncJan||naPrepJan||naFuncAlm||naPrepAlm) bg='#FFF4DC';
                               if (dest && bg==='transparent') bg='rgba(53,56,63,0.06)';
                               return (
-                                <div key={`${slot}-${c.id}`} style={{height:rowH,background:bg,borderRight:`1px solid ${T.gridLine}`,borderBottom:bordaBot,borderTop:bordaTop,overflow:'hidden'}}/>
+                                <div key={`${slot}-${c.id}`} style={{gridColumn:ci+2,gridRow,height:rowH,background:bg,borderRight:`1px solid ${T.gridLine}`,borderBottom:bordaBot,borderTop:bordaTop,overflow:'hidden'}}/>
                               );
                             })}
-                            {/* célula mapa de calor */}
-                            <div style={{height:rowH,background:heatBg(horaTotals[slot]),borderLeft:`1px solid ${T.gridLine}`,borderBottom:bordaBot,borderTop:bordaTop}}/>
+                            <div style={{gridColumn:colabsFiltrados.length+2,gridRow,height:rowH,background:heatBg(horaTotals[slot]),borderLeft:`1px solid ${T.gridLine}`,borderBottom:bordaBot,borderTop:bordaTop}}/>
                           </React.Fragment>
                         );
                       })}
