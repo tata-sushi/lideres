@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Download, Plus, X, UserPlus, ChevronLeft, ChevronRight, Printer, Save, ClipboardList, LayoutGrid, BarChart2, Clock } from 'lucide-react';
+import { Download, Plus, X, UserPlus, ChevronLeft, ChevronRight, Printer, Save, ClipboardList, LayoutGrid, BarChart2, Clock, Flame } from 'lucide-react';
 import { carregarEscala, salvarEscala, carregarColaboradores, carregarFerias, salvarFerias, salvarExtras, carregarHorarios, salvarHorarios } from './api.js';
 
 // ============================================================
@@ -583,6 +583,7 @@ export default function EscalaPainel() {
   const [gradeAberta, setGradeAberta] = useState(false);
   const [tabelaAberta, setTabelaAberta] = useState(false);
   const [resumoAberto, setResumoAberto] = useState(false);
+  const [mapaCalorAberto, setMapaCalorAberto] = useState(false);
   const [diaGradeIdx, setDiaGradeIdx] = useState(0);
   const [ehMobile, setEhMobile] = useState(false);
 
@@ -1494,6 +1495,81 @@ export default function EscalaPainel() {
                 ))}
               </div>
             </>
+          )}
+        </section>
+      </div>
+
+      {/* MAPA DE CALOR SEMANAL */}
+      <div style={{padding:'12px 20px 0'}}>
+        <section className="card">
+          <div onClick={()=>setMapaCalorAberto(p=>!p)} style={{padding:'10px 16px',borderBottom:mapaCalorAberto?`1px solid ${T.border}`:'none',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',userSelect:'none'}}>
+            <span className="cat-pill"><Flame size={13}/>Mapa de Calor Semanal</span>
+            <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>{mapaCalorAberto?'▲':'▼'}</span>
+          </div>
+          {mapaCalorAberto && (
+            <div style={{padding:'12px 16px',overflowX:'auto'}}>
+              {(()=>{
+                const HORAS = TOTAL_SLOTS / 2;
+                const matriz = DIAS_META.map(dia =>
+                  Array.from({length:HORAS}).map((_,hi)=>{
+                    const s0=hi*2, s1=hi*2+1;
+                    let maxN=0;
+                    colabsFiltrados.forEach(c=>{
+                      const t=escala[dia.id]?.[c.id]||{};
+                      if(t.folga) return;
+                      const n0=turnoSlots(t).has(s0)?1:0;
+                      const n1=turnoSlots(t).has(s1)?1:0;
+                      maxN=Math.max(maxN,n0,n1);
+                    });
+                    // conta total no slot de maior ocupação
+                    let total=0;
+                    const sPico=turnoSlots({...escala[dia.id]||{}});
+                    [s0,s1].forEach(s=>{
+                      let n=0;
+                      colabsFiltrados.forEach(c=>{
+                        const t=escala[dia.id]?.[c.id]||{};
+                        if(!t.folga&&turnoSlots(t).has(s)) n++;
+                      });
+                      if(n>total) total=n;
+                    });
+                    return total;
+                  })
+                );
+                const maxTotal=Math.max(1,...matriz.flat());
+                const heatBg=(n)=>{
+                  if(n===0) return 'transparent';
+                  const op=0.1+(n/maxTotal)*0.8;
+                  return `rgba(53,56,63,${op.toFixed(2)})`;
+                };
+                const cellW=38, cellH=22, labelW=52, gap=2;
+                return (
+                  <div style={{display:'flex',gap:0}}>
+                    {/* labels de hora */}
+                    <div style={{flexShrink:0,width:labelW}}>
+                      <div style={{height:36}}/>
+                      {Array.from({length:HORAS}).map((_,hi)=>(
+                        <div key={hi} style={{height:cellH+gap,display:'flex',alignItems:'center',fontFamily:'DM Mono,monospace',fontSize:9,fontWeight:600,color:T.muted}}>
+                          {slotLabel(hi*2)}
+                        </div>
+                      ))}
+                    </div>
+                    {/* colunas de dias */}
+                    {DIAS_META.map((dia,di)=>(
+                      <div key={dia.id} style={{width:cellW,marginRight:gap}}>
+                        <div style={{height:36,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4,fontFamily:'DM Mono,monospace',fontSize:9,fontWeight:700,color:T.carbon,textTransform:'uppercase',letterSpacing:'.5px'}}>
+                          {dia.curto}
+                        </div>
+                        {matriz[di].map((n,hi)=>(
+                          <div key={hi} style={{height:cellH,marginBottom:gap,background:heatBg(n),border:`1px solid ${T.gridLine}`,borderRadius:3,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                            {n>0&&<span style={{fontFamily:'DM Mono,monospace',fontSize:7,fontWeight:700,color:n/maxTotal>0.55?'#fff':T.carbon}}>{n}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
           )}
         </section>
       </div>
