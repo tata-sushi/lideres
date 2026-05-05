@@ -230,7 +230,7 @@ function construirHierarquia(colaboradores, fotos) {
     // Múltiplos sem supervisor — escolher o de nível mais alto, anexar resto
     semSupervisor.sort((a, b) => {
       const ordem = { diretoria: 0, gerencia: 1, supervisor: 2, operacional: 3 };
-      return (ordem[a.nivel] || 9) - (ordem[b.nivel] || 9);
+      return (ordem[a.nivel] ?? 9) - (ordem[b.nivel] ?? 9);
     });
     raiz = semSupervisor[0];
     for (let i = 1; i < semSupervisor.length; i++) {
