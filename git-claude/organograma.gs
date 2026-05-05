@@ -207,38 +207,42 @@ function construirHierarquia(colaboradores, fotos) {
   });
 
   let raiz = null;
-  const semSupervisor = [];
+  const semIdSuperior = [];  // ID Superior vazio → candidato a raiz
+  const orfaos = [];          // ID Superior preenchido mas pessoa não encontrada no mapa
 
   colaboradores.forEach(c => {
     const node = mapa[c.id];
     if (c.supervisorId && mapa[c.supervisorId]) {
       mapa[c.supervisorId].children.push(node);
+    } else if (c.supervisorId) {
+      orfaos.push(node);
     } else {
-      semSupervisor.push(node);
+      semIdSuperior.push(node);
     }
   });
 
-  // Definir raiz
+  // Definir raiz — apenas quem tem ID Superior vazio
   if (CONFIG.CEO_ID && mapa[CONFIG.CEO_ID]) {
     raiz = mapa[CONFIG.CEO_ID];
-    semSupervisor.forEach(n => {
-      if (n.id !== raiz.id) raiz.children.push(n);
-    });
-  } else if (semSupervisor.length === 1) {
-    raiz = semSupervisor[0];
-  } else if (semSupervisor.length > 1) {
-    // Múltiplos sem supervisor — escolher o de nível mais alto, anexar resto
-    semSupervisor.sort((a, b) => {
+    semIdSuperior.forEach(n => { if (n.id !== raiz.id) raiz.children.push(n); });
+  } else if (semIdSuperior.length === 1) {
+    raiz = semIdSuperior[0];
+  } else if (semIdSuperior.length > 1) {
+    // Vários com ID Superior vazio — desempate por nível
+    semIdSuperior.sort((a, b) => {
       const ordem = { diretoria: 0, gerencia: 1, supervisor: 2, operacional: 3 };
       return (ordem[a.nivel] ?? 9) - (ordem[b.nivel] ?? 9);
     });
-    raiz = semSupervisor[0];
-    for (let i = 1; i < semSupervisor.length; i++) {
-      raiz.children.push(semSupervisor[i]);
+    raiz = semIdSuperior[0];
+    for (let i = 1; i < semIdSuperior.length; i++) {
+      raiz.children.push(semIdSuperior[i]);
     }
   } else {
-    throw new Error('Nenhum colaborador sem supervisor encontrado para ser a raiz');
+    throw new Error('Nenhum colaborador com ID Superior vazio — defina pelo menos um para ser a raiz');
   }
+
+  // Órfãos viram filhos da raiz (com aviso, mas sem competir pela raiz)
+  orfaos.forEach(n => { if (n.id !== raiz.id) raiz.children.push(n); });
 
   // Ordenar filhos
   const ordemNivel = { diretoria: 0, gerencia: 1, supervisor: 2, operacional: 3 };
