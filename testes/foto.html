@@ -37,6 +37,7 @@
     font-family: 'DM Mono', monospace;
     font-size: 12px;
     color: var(--muted);
+    text-align: center;
   }
   #status.error { color: var(--error); }
   #status.ok    { color: var(--success); }
@@ -96,8 +97,13 @@
     align-self: flex-start;
   }
 
+  .card-badge.sem {
+    background: rgba(102,102,102,0.1);
+    color: var(--muted);
+  }
+
   .spinner {
-    width: 20px; height: 20px;
+    width: 18px; height: 18px;
     border: 2px solid var(--border);
     border-top-color: var(--citric);
     border-radius: 50%;
@@ -112,7 +118,8 @@
 </head>
 <body>
 
-<div id="status"><span class="spinner"></span> Autenticando...</div>
+<div id="status"><span class="spinner"></span> Carregando...</div>
+
 <div class="card" id="card">
   <img id="foto" src="" alt="">
   <div class="card-info">
@@ -123,50 +130,34 @@
 </div>
 
 <script>
-const BASE_URL = "https://rhid.com.br/v2/api.svc";
-const EMAIL    = "victor.carvalho@tatasushi.com.br";
-const PASSWORD = "Tata@123";
-const ID       = 521; // matrícula 07 — Victor Augusto
+const PROXY_URL = "https://script.google.com/macros/s/AKfycbxEI3PINWEQt52H_1_-pMV7EodTSS0LVBWjn7gpsM-L-YScu88rn-k0TEU3V_FyIqn8/exec";
+const ID        = 521; // matrícula 07 — Victor Augusto
 
 function toTitleCase(str) {
   if (!str) return "";
   return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function setStatus(msg, tipo = "") {
+function setStatus(msg, tipo) {
   const el = document.getElementById("status");
   el.innerHTML = msg;
-  el.className = tipo;
+  el.className = tipo || "";
 }
 
 async function run() {
   try {
-    // 1. Login
-    const loginRes = await fetch(BASE_URL + "/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: EMAIL, password: PASSWORD })
-    });
-    const loginData = await loginRes.json();
-    if (!loginData.accessToken) throw new Error("Falha na autenticação");
-    const token = loginData.accessToken;
+    setStatus('<span class="spinner"></span> Buscando dados...', '');
 
-    setStatus('<span class="spinner"></span> Buscando pessoa id=' + ID + '...', '');
+    const res  = await fetch(PROXY_URL + "?action=pessoa&id=" + ID);
+    const data = await res.json();
 
-    // 2. Busca direto no /person/{id}
-    const personRes = await fetch(BASE_URL + "/person/" + ID, {
-      headers: { "Authorization": "Bearer " + token }
-    });
-    if (!personRes.ok) throw new Error("HTTP " + personRes.status + " ao buscar pessoa");
-    const person = await personRes.json();
+    if (data.erro) throw new Error(data.erro);
 
-    const nome = toTitleCase(person.name || "");
-    const foto = person.foto || null;
-    const mt   = person.registration || ID;
+    const nome = toTitleCase(data.nome);
+    const foto = data.foto;
 
-    // 3. Renderiza
     document.getElementById("nome").textContent = nome;
-    document.getElementById("meta").textContent = "MT " + mt + " · id " + ID;
+    document.getElementById("meta").textContent = "MT " + data.mt + " · id " + data.id;
 
     if (foto) {
       document.getElementById("foto").src = "data:image/jpeg;base64," + foto;
@@ -174,10 +165,10 @@ async function run() {
       setStatus("✓ Foto carregada com sucesso", "ok");
     } else {
       document.getElementById("foto").style.display = "none";
-      document.getElementById("badge").textContent = "sem foto";
-      document.getElementById("badge").style.background = "rgba(102,102,102,0.1)";
-      document.getElementById("badge").style.color = "#666";
-      setStatus("✓ Pessoa encontrada — campo foto está vazio", "ok");
+      const badge = document.getElementById("badge");
+      badge.textContent = "sem foto";
+      badge.classList.add("sem");
+      setStatus("✓ Pessoa encontrada — campo foto vazio", "ok");
     }
 
     document.getElementById("card").classList.add("visible");
