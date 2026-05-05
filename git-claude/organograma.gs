@@ -328,11 +328,12 @@ function detectarOrfaos(colaboradores) {
 }
 
 function calcularStats(colaboradores) {
-  const stats = { total: colaboradores.length, itaim: 0, pinheiros: 0, puc: 0, backoffice: 0 };
+  const stats = { total: colaboradores.length, itaim: 0, pinheiros: 0, puc: 0, tatahouse: 0, backoffice: 0 };
   colaboradores.forEach(c => {
     if (c.unitClass === 'itaim') stats.itaim++;
     else if (c.unitClass === 'pinheiros') stats.pinheiros++;
     else if (c.unitClass === 'puc') stats.puc++;
+    else if (c.unitClass === 'tatahouse') stats.tatahouse++;
     else stats.backoffice++;
   });
   return stats;
