@@ -564,15 +564,20 @@
 <script>
 // ── Resumo RH (tabela do dashboard) ─────────────────────────────────────────
 (function() {
+  // ── Config ─────────────────────────────────────────────────────────────────
   var SHEET_EXP = '1oW3uXbig4B3gUQegxorxZghMnVrZcXk44AD08gx-cl0';
+  var SHEET_REC = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
+  var API_KEY   = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
+  var SHEET_ENTREVISTAS = 'CONTROLE DE ENTREVISTAS';
+  var SHEET_TESTES      = 'CONTROLE DE TESTES';
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
   function parseDateBR(s) {
     if (!s) return null;
     var p = s.split('/');
     if (p.length !== 3) return null;
     return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
   }
-
   function isHojeOuAmanha(dataStr) {
     var d = parseDateBR(dataStr);
     if (!d) return false;
@@ -581,39 +586,74 @@
     d.setHours(0,0,0,0);
     return d.getTime() === hoje.getTime() || d.getTime() === amanha.getTime();
   }
+  function normHeader(s) {
+    return (s||'').toString().toLowerCase().trim()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/\s+/g,'_');
+  }
+  function normVal(s) {
+    return (s||'').toString().toLowerCase().trim()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  }
+  function findCol(headers, alts) {
+    var n = headers.map(normHeader);
+    for (var k = 0; k < alts.length; k++) {
+      var t = normHeader(alts[k]);
+      for (var i = 0; i < n.length; i++) if (n[i] === t) return i;
+    }
+    for (var k2 = 0; k2 < alts.length; k2++) {
+      var t2 = normHeader(alts[k2]);
+      for (var i2 = 0; i2 < n.length; i2++) if (n[i2].indexOf(t2) >= 0) return i2;
+    }
+    return -1;
+  }
+  function recSheetURL(sheetName) {
+    return 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_REC
+         + '/values/' + encodeURIComponent(sheetName + '!A:Z')
+         + '?key=' + API_KEY;
+  }
 
+  // ── Estado das linhas ──────────────────────────────────────────────────────
   var recRows = [
     {
       indicador: 'Entrevistas com devolutiva pendente',
-      valor: 5,
+      valor: null,
       desc: 'Status: Aguardando devolutiva',
-      alerta: 5 > 0
+      alerta: false,
+      loading: true
     },
     {
       indicador: 'Entrevistas hoje e amanhã',
       valor: 0,
       desc: 'Status: Aguardando Entrevista — data de hoje ou amanhã',
-      alerta: false
+      alerta: false,
+      loading: false
     },
     {
       indicador: 'Testes aguardando aprovação',
-      valor: 8,
+      valor: null,
       desc: 'Aprovados no teste com status final em aberto',
-      alerta: false
+      alerta: false,
+      loading: true
     },
     {
       indicador: 'Testes hoje e amanhã',
       valor: 0,
       desc: 'Testes agendados para hoje ou amanhã',
-      alerta: false
+      alerta: false,
+      loading: false
     }
   ];
+  var expRows = [
+    {indicador:'Avaliações 1º período pendentes', valor:null, desc:'14 dias — líderes com avaliação em aberto', alerta:false, loading:true},
+    {indicador:'Avaliações 2º período pendentes', valor:null, desc:'46 dias — líderes com avaliação em aberto', alerta:false, loading:true}
+  ];
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   function pill(tipo) {
     var label = tipo === 'rec' ? 'Recrutamento' : 'Experiência';
     return '<span class="pill pill-' + tipo + '">' + label + '</span>';
   }
-
   function mkrow(tipo, indicador, valor, desc, alerta, loading) {
     var cls = loading ? 'val-zero' : (valor === null ? 'val-zero' : (alerta && valor > 0 ? 'val-alerta' : 'val'));
     var display = loading ? '...' : (valor !== null ? valor : '—');
@@ -623,12 +663,11 @@
       '<td class="' + cls + '">' + display + '</td>' +
     '</tr>';
   }
-
-  function renderAll(expRows) {
+  function render() {
     var html = '';
     for (var i = 0; i < recRows.length; i++) {
       var r = recRows[i];
-      html += mkrow('rec', r.indicador, r.valor, r.desc, r.alerta, false);
+      html += mkrow('rec', r.indicador, r.valor, r.desc, r.alerta, !!r.loading);
     }
     for (var j = 0; j < expRows.length; j++) {
       var e = expRows[j];
@@ -637,13 +676,49 @@
     var tb = document.getElementById('tbody');
     if (tb) tb.innerHTML = html;
   }
+  render();
 
-  var expPlaceholders = [
-    {indicador:'Avaliações 1º período pendentes', valor:null, desc:'14 dias — líderes com avaliação em aberto', alerta:false, loading:true},
-    {indicador:'Avaliações 2º período pendentes', valor:null, desc:'46 dias — líderes com avaliação em aberto', alerta:false, loading:true}
-  ];
-  renderAll(expPlaceholders);
+  // ── Fetch Recrutamento (Entrevistas + Testes pendentes) ────────────────────
+  function fetchRecSheet(sheetName, statusAlts, matchPhrase, idx, alertaIfPositive) {
+    fetch(recSheetURL(sheetName))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var rows = data && data.values || [];
+        if (data && data.error) throw new Error(data.error.message || 'API error');
+        if (rows.length < 2) {
+          recRows[idx].valor = 0;
+          recRows[idx].loading = false;
+          recRows[idx].alerta = false;
+          render();
+          return;
+        }
+        var col = findCol(rows[0], statusAlts);
+        var count = 0;
+        if (col >= 0) {
+          for (var i = 1; i < rows.length; i++) {
+            var v = normVal(rows[i][col] || '');
+            if (v.indexOf(matchPhrase) >= 0) count++;
+          }
+        }
+        recRows[idx].valor = count;
+        recRows[idx].loading = false;
+        recRows[idx].alerta = !!alertaIfPositive && count > 0;
+        render();
+      })
+      .catch(function() {
+        recRows[idx].valor = null;
+        recRows[idx].loading = false;
+        render();
+      });
+  }
+  fetchRecSheet(SHEET_ENTREVISTAS,
+    ['status_da_entrevista','status_entrevista','status','resultado','situacao'],
+    'aguardando devolutiva', 0, true);
+  fetchRecSheet(SHEET_TESTES,
+    ['status','status_final','resultado','situacao'],
+    'aguardando aprovacao', 2, true);
 
+  // ── Fetch Experiências (Google Sheets gviz/CSV) ────────────────────────────
   var xhr = new XMLHttpRequest();
   xhr.open('GET', 'https://docs.google.com/spreadsheets/d/' + SHEET_EXP + '/gviz/tq?tqx=out:csv', true);
   xhr.onreadystatechange = function() {
@@ -673,17 +748,18 @@
         }
       } catch(e) {}
     }
-    var expRows = [
+    expRows = [
       {indicador:'Avaliações 1º período pendentes', valor:exp14, desc:'14 dias — líderes com avaliação em aberto', alerta:exp14>0, loading:false},
       {indicador:'Avaliações 2º período pendentes', valor:exp46, desc:'46 dias — líderes com avaliação em aberto', alerta:exp46>0, loading:false}
     ];
-    renderAll(expRows);
+    render();
   };
   xhr.onerror = function() {
-    renderAll([
+    expRows = [
       {indicador:'Avaliações 1º período pendentes', valor:null, desc:'Não foi possível carregar a planilha', alerta:false, loading:false},
       {indicador:'Avaliações 2º período pendentes', valor:null, desc:'Não foi possível carregar a planilha', alerta:false, loading:false}
-    ]);
+    ];
+    render();
   };
   xhr.send();
 })();
