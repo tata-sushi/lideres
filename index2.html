@@ -522,12 +522,15 @@
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('dashboard-screen').style.display = 'flex';
         localStorage.setItem('lideres_session', JSON.stringify({
-          displayName: data.nome,
-          unidade:     data.unidade || '',
-          perfil:      data.perfil  || '',
-          cargo:       data.cargo   || '',
-          paginas:     data.paginas || [],
-          expiresAt:   Date.now() + SESSION_DURATION
+          displayName:   data.nome,
+          unidade:       data.unidade       || '',
+          perfil:        data.perfil        || '',
+          cargo:         data.cargo         || '',
+          departamento:  data.departamento  || '',
+          variacoes:     data.variacoes     || '',
+          departamentos: Array.isArray(data.departamentos) ? data.departamentos : [],
+          paginas:       data.paginas       || [],
+          expiresAt:     Date.now() + SESSION_DURATION
         }));
       } else {
         showError((data && data.erro) || 'Usuário ou senha incorretos.');
@@ -686,10 +689,11 @@
     } catch(e) {}
     return null;
   })();
-  var userPerfil  = session ? (session.perfil || '').toString().toLowerCase().trim() : '';
-  var userUnidade = session ? (session.unidade || '').toString().trim() : '';
-  var userNome    = session ? (session.displayName || '').toString().trim() : '';
-  var isAdminRH   = userPerfil === 'admin' || userPerfil === 'analista-rh';
+  var userPerfil   = session ? (session.perfil    || '').toString().toLowerCase().trim() : '';
+  var userUnidade  = session ? (session.unidade   || '').toString().trim() : '';
+  var userNome     = session ? (session.displayName || '').toString().trim() : '';
+  var userVariacao = session ? (session.variacoes  || '').toString().trim() : '';
+  var isAdminRH    = userPerfil === 'admin' || userPerfil === 'analista-rh';
 
   // ── Fetch Recrutamento (Entrevistas + Testes pendentes) ────────────────────
   function fetchRecSheet(sheetName, statusAlts, matchPhrase, idx, alertaIfPositive, filter) {
@@ -714,7 +718,12 @@
         }
         var col = findCol(rows[0], statusAlts);
         var fcol = filter ? findCol(rows[0], filter.colAlts) : -1;
-        var fval = filter ? normVal(filter.value) : '';
+        // suporta filter.values (array) ou filter.value (string)
+        var fvals = filter
+          ? (filter.values
+              ? filter.values.map(normVal).filter(Boolean)
+              : [normVal(filter.value)].filter(Boolean))
+          : [];
         var count = 0;
         if (col >= 0) {
           for (var i = 1; i < rows.length; i++) {
@@ -723,7 +732,7 @@
             if (filter) {
               if (fcol < 0) continue;
               var f = normVal(rows[i][fcol] || '');
-              if (f !== fval) continue;
+              if (fvals.indexOf(f) < 0) continue;
             }
             count++;
           }
@@ -740,11 +749,16 @@
       });
   }
 
-  // Entrevistas: admin vê tudo; demais filtram pelo nome do líder logado.
+  // Entrevistas: admin vê tudo; demais filtram pelo nome do líder (e variações do nome).
+  // Variações podem vir como "Matheus,Mateus" — separar por vírgula.
+  var _variacoesSplit = userVariacao
+    ? userVariacao.split(',').map(function(v){ return v.trim(); }).filter(Boolean)
+    : [];
+  var _nomesFiltro = [userNome].concat(_variacoesSplit).filter(Boolean);
   var entrevistasFilter = isAdminRH
     ? null
-    : (userNome
-        ? { colAlts: ['responsavel','recrutador','nome_do_recrutador','f1670'], value: userNome }
+    : (_nomesFiltro.length
+        ? { colAlts: ['entrevistador','responsavel','recrutador','nome_do_recrutador','f1670'], values: _nomesFiltro }
         : 'NONE');
   // Testes: admin vê tudo; demais filtram pela unidade do líder logado.
   var testesFilter = isAdminRH
