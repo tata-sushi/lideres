@@ -126,11 +126,11 @@ function lerPlanilha() {
     const status = String(row[idx.status]).trim().toLowerCase();
     if (status !== 'ativo') continue;
 
-    // ID Pessoa obrigatório (chave da hierarquia)
-    const idPessoa = String(row[idx.idPessoa]).trim();
+    const matricula = String(row[idx.matricula]).trim();
+    // ID Pessoa: usa matrícula como fallback (ex: PESSOAS_FIXAS sem idPersonRH)
+    const idPessoa = String(row[idx.idPessoa]).trim() || matricula;
     if (!idPessoa) continue;
 
-    const matricula = String(row[idx.matricula]).trim();
     const nome = String(row[idx.nome]).trim();
     const cargo = String(row[idx.cargo]).trim();
     const unidade = String(row[idx.unidade]).trim();
@@ -238,10 +238,15 @@ function construirHierarquia(colaboradores, fotos) {
   } else if (semIdSuperior.length === 1) {
     raiz = semIdSuperior[0];
   } else if (semIdSuperior.length > 1) {
-    // Vários com ID Superior vazio — desempate por nível; o primeiro vira raiz, os demais são peers
+    // Vários com ID Superior vazio — desempate: nível primeiro, depois CEO pelo cargo
     semIdSuperior.sort((a, b) => {
       const ordem = { diretoria: 0, gerencia: 1, supervisor: 2, operacional: 3 };
-      return (ordem[a.nivel] ?? 9) - (ordem[b.nivel] ?? 9);
+      const da = ordem[a.nivel] ?? 9, db = ordem[b.nivel] ?? 9;
+      if (da !== db) return da - db;
+      // Dentro do mesmo nível, cargo "ceo" vem antes (é a raiz real)
+      const aCeo = /^ceo$/.test(normalizar(a.cargo)) ? 0 : 1;
+      const bCeo = /^ceo$/.test(normalizar(b.cargo)) ? 0 : 1;
+      return aCeo - bCeo;
     });
     raiz = semIdSuperior[0];
     for (let i = 1; i < semIdSuperior.length; i++) {
