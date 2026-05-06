@@ -77,7 +77,7 @@ function doGet(e) {
 function montarOrganograma() {
   const colaboradores = lerPlanilha();
   const fotos = listarFotosDrive();
-  const arvore = construirHierarquia(colaboradores, fotos);
+  const { arvore, peers } = construirHierarquia(colaboradores, fotos);
   const stats = calcularStats(colaboradores);
   const orfaos = detectarOrfaos(colaboradores);
 
@@ -86,6 +86,7 @@ function montarOrganograma() {
     total: colaboradores.length,
     stats: stats,
     arvore: arvore,
+    peers: peers,
     avisos: orfaos.length > 0 ? { orfaos: orfaos } : null
   };
 }
@@ -229,21 +230,22 @@ function construirHierarquia(colaboradores, fotos) {
     }
   });
 
-  // Definir raiz — apenas quem tem ID Superior vazio
+  // Definir raiz e peers (sócios: sem supervisor, mas não é a raiz)
+  const peerNos = [];
   if (CONFIG.CEO_ID && mapa[CONFIG.CEO_ID]) {
     raiz = mapa[CONFIG.CEO_ID];
-    semIdSuperior.forEach(n => { if (n.id !== raiz.id) raiz.children.push(n); });
+    semIdSuperior.forEach(n => { if (n.id !== raiz.id) peerNos.push(n); });
   } else if (semIdSuperior.length === 1) {
     raiz = semIdSuperior[0];
   } else if (semIdSuperior.length > 1) {
-    // Vários com ID Superior vazio — desempate por nível
+    // Vários com ID Superior vazio — desempate por nível; o primeiro vira raiz, os demais são peers
     semIdSuperior.sort((a, b) => {
       const ordem = { diretoria: 0, gerencia: 1, supervisor: 2, operacional: 3 };
       return (ordem[a.nivel] ?? 9) - (ordem[b.nivel] ?? 9);
     });
     raiz = semIdSuperior[0];
     for (let i = 1; i < semIdSuperior.length; i++) {
-      raiz.children.push(semIdSuperior[i]);
+      peerNos.push(semIdSuperior[i]);
     }
   } else {
     throw new Error('Nenhum colaborador com ID Superior vazio — defina pelo menos um para ser a raiz');
@@ -266,7 +268,7 @@ function construirHierarquia(colaboradores, fotos) {
   }
   ordenar(raiz);
 
-  return raiz;
+  return { arvore: raiz, peers: peerNos };
 }
 
 function gerarIniciais(nome) {
