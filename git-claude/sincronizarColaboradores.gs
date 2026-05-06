@@ -43,7 +43,7 @@ var PESSOAS_FIXAS = [
     idDepartment  : "16",
     admissionDate : "01/08/2016",
     idPersonBoss  : "",
-    idPersonRH    : "",
+    idPersonRH    : "fixo_9",
     nomeSuperior  : "",
     birthDate     : "10/05/1974",
     dismissalDate : ""
@@ -58,7 +58,7 @@ var PESSOAS_FIXAS = [
     idDepartment  : "16",
     admissionDate : "01/08/2016",
     idPersonBoss  : "",
-    idPersonRH    : "",
+    idPersonRH    : "fixo_10",
     nomeSuperior  : "",
     birthDate     : "",
     dismissalDate : ""
