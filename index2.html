@@ -627,10 +627,10 @@
     },
     {
       indicador: 'Entrevistas hoje e amanhã',
-      valor: 0,
-      desc: 'Status: Aguardando Entrevista — data de hoje ou amanhã',
+      valor: null,
+      desc: 'Entrevistas agendadas para hoje ou amanhã',
       alerta: false,
-      loading: false
+      loading: true
     },
     {
       indicador: 'Testes aguardando aprovação',
@@ -773,6 +773,61 @@
   fetchRecSheet(SHEET_TESTES,
     ['status','status_final','resultado','situacao'],
     'aguardando aprovacao', 2, true, testesFilter);
+
+  // ── Fetch por data (hoje ou amanhã) ───────────────────────────────────────
+  function fetchHojeAmanha(sheetName, dateColAlts, idx, nameFilter) {
+    if (nameFilter === 'NONE') {
+      recRows[idx].valor = 0;
+      recRows[idx].loading = false;
+      render();
+      return;
+    }
+    fetch(recSheetURL(sheetName))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var rows = data && data.values || [];
+        if (data && data.error) throw new Error(data.error.message || 'API error');
+        if (rows.length < 2) {
+          recRows[idx].valor = 0;
+          recRows[idx].loading = false;
+          render();
+          return;
+        }
+        var dcol = findCol(rows[0], dateColAlts);
+        var fcol = nameFilter ? findCol(rows[0], nameFilter.colAlts) : -1;
+        var fvals = nameFilter
+          ? (nameFilter.values
+              ? nameFilter.values.map(normVal).filter(Boolean)
+              : [normVal(nameFilter.value)].filter(Boolean))
+          : [];
+        var count = 0;
+        if (dcol >= 0) {
+          for (var i = 1; i < rows.length; i++) {
+            var dateStr = (rows[i][dcol] || '').toString().trim();
+            if (!isHojeOuAmanha(dateStr)) continue;
+            if (nameFilter && fvals.length) {
+              if (fcol < 0) continue;
+              var f = normVal(rows[i][fcol] || '');
+              if (fvals.indexOf(f) < 0) continue;
+            }
+            count++;
+          }
+        }
+        recRows[idx].valor = count;
+        recRows[idx].loading = false;
+        recRows[idx].alerta = count > 0;
+        render();
+      })
+      .catch(function() {
+        recRows[idx].valor = null;
+        recRows[idx].loading = false;
+        render();
+      });
+  }
+
+  fetchHojeAmanha(SHEET_ENTREVISTAS,
+    ['data_da_entrevista','data_entrevista','data','date'],
+    1, entrevistasFilter);
 
   // ── Fetch Experiências (Google Sheets gviz/CSV) ────────────────────────────
   var xhr = new XMLHttpRequest();
