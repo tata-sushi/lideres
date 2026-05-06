@@ -127,8 +127,8 @@ function lerPlanilha() {
     if (status !== 'ativo') continue;
 
     const matricula = String(row[idx.matricula]).trim();
-    // ID Pessoa: usa matrícula como fallback (ex: PESSOAS_FIXAS sem idPersonRH)
-    const idPessoa = String(row[idx.idPessoa]).trim() || matricula;
+    // ID Pessoa: usa prefixo "fixo_" + matrícula como fallback para evitar colisão com IDs do RHID
+    const idPessoa = String(row[idx.idPessoa]).trim() || ('fixo_' + matricula);
     if (!idPessoa) continue;
 
     const nome = String(row[idx.nome]).trim();
