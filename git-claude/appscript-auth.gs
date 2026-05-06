@@ -1,60 +1,40 @@
 // ══════════════════════════════════════════════════════════════════════════
-//   APPS SCRIPT — Auth (Mapa de Liderança)
+//   APPS SCRIPT — Mapa de Liderança (autenticação + permissões do portal)
 // ══════════════════════════════════════════════════════════════════════════
 //
-//   Lê a aba do Mapa de Liderança e expõe dois endpoints:
-//     ?action=auth&usuario=<nome>&senha=<senha>
-//        → autentica e devolve todos os campos do líder
-//     ?action=listUsers
-//        → devolve lista de nomes dos usuários ATIVOS (para o dropdown)
+//   Planilha: https://docs.google.com/spreadsheets/d/14UsviSQbpJBPUNW1cuvCDnem7IRknSHBcxZg6jnq7pk
 //
-//   Colunas da aba (linha 1 = cabeçalho, dados a partir da linha 2):
-//     A=Usuário | B=Unidade | C=Perfil | D=Páginas | E=Ativo
-//     F=Senha   | G=Cargo   | H=Departamento | I=Variações | J=Departamentos
+//   Endpoints expostos via doGet:
+//     ?action=auth&usuario=<nome>&senha=<senha>  → autentica e retorna perfil + páginas + cargo
+//     ?action=listUsers                          → lista líderes ativos (popula dropdown)
 //
-//   Campos devolvidos pelo ?action=auth (quando ok: true):
-//     nome, unidade, perfil, cargo, departamento,
-//     variacoes (string), departamentos (array), paginas (array)
+//   Deploy atual (mantenha o mesmo URL ao publicar nova versão):
+//     https://script.google.com/macros/s/AKfycbykOWkQ3ceH_50bmc_3dcLjUrE9V4Ropbraxc0yykMIp6W8eDVtpyo2XmN1Y_KJQzol/exec
 //
-//   Deploy:
-//     1. script.google.com → abrir o projeto do auth
-//     2. Substituir o conteúdo de Code.gs por este arquivo
-//     3. Implantar → Gerenciar implantações → ✏️ Editar
-//        → Versão: Nova versão → Implantar  (a URL não muda)
+//   Colunas da aba "Mapa de Liderança":
+//     A=Usuário | B=Unidade | C=Perfil | D=Páginas(override) | E=Ativo | F=Senha | G=Cargo
+//     H=Departamento | I=Variações | J=Departamentos
 //
 // ══════════════════════════════════════════════════════════════════════════
 
-// ── Configuração ──────────────────────────────────────────────────────────
-var MAPA_SHEET_ID = 'SEU_SHEET_ID_AQUI';  // ← ID da planilha Mapa de Liderança
-var MAPA_ABA      = 'Mapa de Liderança';  // ← nome da aba (tab)
+var SHEET_ID  = '14UsviSQbpJBPUNW1cuvCDnem7IRknSHBcxZg6jnq7pk';
+var ABA_MAPA  = 'Mapa de Liderança';
+var ABA_PAGES = 'Páginas';
 
-// Índices das colunas (base 0)
-var COL_USUARIO      = 0;  // A
-var COL_UNIDADE      = 1;  // B
-var COL_PERFIL       = 2;  // C
-var COL_PAGINAS      = 3;  // D
-var COL_ATIVO        = 4;  // E
-var COL_SENHA        = 5;  // F
-var COL_CARGO        = 6;  // G
-var COL_DEPARTAMENTO = 7;  // H
-var COL_VARIACOES    = 8;  // I
-var COL_DEPARTAMENTOS= 9;  // J
-
-// ── Entrada principal ─────────────────────────────────────────────────────
+// ── Entrada principal ──────────────────────────────────────────
 function doGet(e) {
-  var action = (e && e.parameter && e.parameter.action) || '';
+  var action = e && e.parameter && e.parameter.action ? e.parameter.action : '';
+
   var result;
 
   if (action === 'auth') {
-    var usuario = (e.parameter.usuario || '').trim();
-    var senha   = (e.parameter.senha   || '').trim();
+    var usuario = e.parameter.usuario || '';
+    var senha   = e.parameter.senha   || '';
     result = autenticar(usuario, senha);
-
   } else if (action === 'listUsers') {
     result = listarUsuarios();
-
   } else {
-    result = { ok: false, erro: 'Ação desconhecida: ' + action };
+    result = { erro: 'Ação desconhecida: ' + action };
   }
 
   return ContentService
@@ -62,83 +42,147 @@ function doGet(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ── Autentica usuário e devolve todos os campos ───────────────────────────
+// ── Autentica e retorna páginas do perfil ─────────────────────
 function autenticar(usuario, senha) {
   try {
-    var ss    = SpreadsheetApp.openById(MAPA_SHEET_ID);
-    var sheet = ss.getSheetByName(MAPA_ABA);
-    if (!sheet) return { ok: false, erro: 'Aba "' + MAPA_ABA + '" não encontrada.' };
+    var ss = SpreadsheetApp.openById(SHEET_ID);
 
-    var dados = sheet.getDataRange().getValues();
+    // 1. Lê aba Mapa de Liderança
+    var sheetMapa = ss.getSheetByName(ABA_MAPA);
+    if (!sheetMapa) return { ok: false, erro: 'Aba "' + ABA_MAPA + '" não encontrada.' };
 
-    for (var i = 1; i < dados.length; i++) {
-      var row = dados[i];
+    var dadosMapa = sheetMapa.getDataRange().getValues();
+    // Colunas: A=Usuário, B=Unidade, C=Perfil, D=Páginas(override), E=Ativo, F=Senha, G=Cargo
+    //          H=Departamento, I=Variações, J=Departamentos
 
-      var nome         = String(row[COL_USUARIO]       || '').trim();
-      var unidade      = String(row[COL_UNIDADE]        || '').trim();
-      var perfil       = String(row[COL_PERFIL]         || '').trim();
-      var paginasRaw   = String(row[COL_PAGINAS]        || '').trim();
-      var ativo        = String(row[COL_ATIVO]          || '').trim().toLowerCase();
-      var senhaCad     = String(row[COL_SENHA]          || '').trim();
-      var cargo        = String(row[COL_CARGO]          || '').trim();
-      var departamento = String(row[COL_DEPARTAMENTO]   || '').trim();
-      var variacoes    = String(row[COL_VARIACOES]      || '').trim();
-      var deptosRaw    = String(row[COL_DEPARTAMENTOS]  || '').trim();
+    var usuarioEncontrado = null;
 
-      if (ativo !== 's') continue;
-      if (!nome) continue;
+    for (var i = 1; i < dadosMapa.length; i++) {
+      var row     = dadosMapa[i];
+      var nomeRow = String(row[0] || '').trim();
+      if (!nomeRow) continue;
 
-      if (_norm(nome) === _norm(usuario) && senhaCad === senha) {
-        var paginas      = paginasRaw ? paginasRaw.split(',').map(function(p){ return p.trim(); }).filter(Boolean) : [];
-        var departamentos= deptosRaw  ? deptosRaw.split(',').map(function(d){ return d.trim(); }).filter(Boolean) : [];
+      if (nomeRow.toLowerCase() !== usuario.toLowerCase()) continue;
 
-        return {
-          ok:            true,
-          nome:          nome,
-          unidade:       unidade,
-          perfil:        perfil,
-          cargo:         cargo,
-          departamento:  departamento,
-          variacoes:     variacoes,
-          departamentos: departamentos,
-          paginas:       paginas
-        };
+      // Usuário encontrado — verifica ativo
+      var ativo = String(row[4] || '').trim().toLowerCase();
+      if (ativo === 'n' || ativo === 'não' || ativo === 'nao' || ativo === 'false') {
+        return { ok: false, erro: 'Usuário inativo.' };
+      }
+
+      // Verifica senha (coluna F)
+      var senhaRow = String(row[5] || '').trim();
+      if (senhaRow !== String(senha).trim()) {
+        return { ok: false, erro: 'Senha incorreta.' };
+      }
+
+      // Departamentos (coluna J): separa por vírgula em array
+      var deptosRaw = String(row[9] || '').trim();
+      var departamentosArr = deptosRaw
+        ? deptosRaw.split(',').map(function(d){ return d.trim(); }).filter(Boolean)
+        : [];
+
+      // Autenticado — monta dados do usuário
+      usuarioEncontrado = {
+        nome:            nomeRow,
+        unidade:         String(row[1] || '').trim(),
+        perfil:          String(row[2] || '').trim().toLowerCase(),
+        paginasOverride: String(row[3] || '').trim(), // coluna D — exceção individual
+        cargo:           String(row[6] || '').trim(), // coluna G
+        departamento:    String(row[7] || '').trim(), // coluna H
+        variacoes:       String(row[8] || '').trim(), // coluna I
+        departamentos:   departamentosArr             // coluna J (array)
+      };
+      break;
+    }
+
+    if (!usuarioEncontrado) {
+      return { ok: false, erro: 'Usuário não encontrado.' };
+    }
+
+    // 2. Lê aba Páginas
+    var sheetPages = ss.getSheetByName(ABA_PAGES);
+    if (!sheetPages) return { ok: false, erro: 'Aba "' + ABA_PAGES + '" não encontrada.' };
+
+    var dadosPages = sheetPages.getDataRange().getValues();
+    // Colunas: A=ID, B=Nome, C=URL, D=Perfis (separados por vírgula)
+
+    var perfil  = usuarioEncontrado.perfil;
+    var paginas = [];
+
+    // admin vê tudo
+    if (perfil === 'admin') {
+      for (var j = 1; j < dadosPages.length; j++) {
+        var pg = dadosPages[j];
+        var id  = String(pg[0] || '').trim();
+        if (!id) continue;
+        paginas.push({
+          id:   id,
+          nome: String(pg[1] || '').trim(),
+          url:  String(pg[2] || '').trim()
+        });
+      }
+    } else {
+      // Filtra por perfil
+      for (var j = 1; j < dadosPages.length; j++) {
+        var pg      = dadosPages[j];
+        var id      = String(pg[0] || '').trim();
+        if (!id) continue;
+        var perfisCell = String(pg[3] || '').trim().toLowerCase();
+        var perfisArr  = perfisCell.split(',').map(function(p){ return p.trim(); });
+
+        // Página visível se perfil está na lista OU célula é '*'
+        if (perfisCell === '*' || perfisArr.indexOf(perfil) !== -1) {
+          paginas.push({
+            id:   id,
+            nome: String(pg[1] || '').trim(),
+            url:  String(pg[2] || '').trim()
+          });
+        }
       }
     }
 
-    return { ok: false, erro: 'Usuário ou senha incorretos.' };
+    return {
+      ok:            true,
+      nome:          usuarioEncontrado.nome,
+      unidade:       usuarioEncontrado.unidade,
+      perfil:        perfil,
+      cargo:         usuarioEncontrado.cargo,
+      departamento:  usuarioEncontrado.departamento,
+      variacoes:     usuarioEncontrado.variacoes,
+      departamentos: usuarioEncontrado.departamentos,
+      paginas:       paginas  // array de { id, nome, url }
+    };
 
   } catch (err) {
     return { ok: false, erro: err.toString() };
   }
 }
 
-// ── Lista nomes dos usuários ATIVOS (para o dropdown de login) ────────────
+// ── Lista líderes ativos (popula o dropdown do login) ──────────
 function listarUsuarios() {
   try {
-    var ss    = SpreadsheetApp.openById(MAPA_SHEET_ID);
-    var sheet = ss.getSheetByName(MAPA_ABA);
-    if (!sheet) return { ok: false, erro: 'Aba "' + MAPA_ABA + '" não encontrada.' };
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(ABA_MAPA);
+    if (!sheet) return { ok: false, erro: 'Aba "' + ABA_MAPA + '" não encontrada.' };
 
-    var dados    = sheet.getDataRange().getValues();
+    var dados = sheet.getDataRange().getValues();
     var usuarios = [];
 
     for (var i = 1; i < dados.length; i++) {
-      var nome  = String(dados[i][COL_USUARIO] || '').trim();
-      var ativo = String(dados[i][COL_ATIVO]   || '').trim().toLowerCase();
-      if (nome && ativo === 's') usuarios.push(nome);
+      var row  = dados[i];
+      var nome = String(row[0] || '').trim();
+      if (!nome) continue;
+
+      var ativo = String(row[4] || '').trim().toLowerCase();
+      if (ativo === 'n' || ativo === 'não' || ativo === 'nao' || ativo === 'false') continue;
+
+      usuarios.push(nome);
     }
 
+    usuarios.sort(function(a, b) { return a.localeCompare(b, 'pt-BR'); });
     return { ok: true, usuarios: usuarios };
-
   } catch (err) {
     return { ok: false, erro: err.toString() };
   }
-}
-
-// ── Remove acentos + lowercase para comparação insensível ────────────────
-function _norm(s) {
-  return String(s || '')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .trim().toLowerCase();
 }
