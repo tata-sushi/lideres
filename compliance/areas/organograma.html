@@ -1342,11 +1342,17 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   var W = 0, H = 0;
   var zoom = 1;
 
+  var PEER_DY   = 30;
+  var PEER_GAP  = 20;
+
   function renderSvg() {
     if (!container || !arvore) return;
     calcWidth(arvore);
     calcSubHeight(arvore);
-    position(arvore, 30, 30);
+    position(arvore, 30 + NODE_W + PEER_GAP, 30);
+
+    var socL = { x: arvore.x - NODE_W - PEER_GAP, y: arvore.y + PEER_DY, id: '__sl__', nome: 'Sócio', cargo: 'Sócio', nivel: 'diretoria', iniciais: 'S', foto: null };
+    var socR = { x: arvore.x + NODE_W + PEER_GAP, y: arvore.y + PEER_DY, id: '__sr__', nome: 'Sócio', cargo: 'Sócio', nivel: 'diretoria', iniciais: 'S', foto: null };
 
     var maxX = 0, maxY = 0;
     function bounds(n) {
@@ -1355,6 +1361,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       visibleChildren(n).forEach(bounds);
     }
     bounds(arvore);
+    maxX = Math.max(maxX, socR.x + NODE_W);
     W = maxX + 30;
     H = maxY + 30;
 
@@ -1367,6 +1374,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     }
     defsFor(arvore);
     parts.push('</defs>');
+
+    // Linha de paridade entre os 3 sócios
+    var _plY = socL.y + NODE_H / 2;
+    parts.push('<line x1="' + (socL.x + NODE_W/2) + '" y1="' + _plY + '" x2="' + (socR.x + NODE_W/2) + '" y2="' + _plY + '" stroke="rgba(53,56,63,0.18)" stroke-width="1.2" stroke-dasharray="5 4" fill="none"/>');
 
     parts.push('<g class="connectors" stroke="rgba(53,56,63,0.25)" stroke-width="1.2" fill="none">');
     function drawConn(n) {
@@ -1493,6 +1504,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       visibleChildren(n).forEach(drawNode);
     }
     drawNode(arvore);
+
+    // Nós sócio sintéticos
+    function drawSocioCard(s) {
+      parts.push('<g class="org-node" data-id="' + s.id + '">');
+      parts.push('<rect class="card-rect" x="' + s.x + '" y="' + s.y + '" width="' + NODE_W + '" height="' + NODE_H + '" rx="6" fill="#35383F" stroke="#35383F" stroke-width="1" style="cursor:pointer"/>');
+      var aCx = s.x + 22, aCy = s.y + NODE_H / 2;
+      parts.push('<circle cx="' + aCx + '" cy="' + aCy + '" r="' + (AVATAR_SIZE/2) + '" fill="#CFFF00" stroke="#FFFFFF" stroke-width="2" pointer-events="none"/>');
+      parts.push('<text x="' + aCx + '" y="' + (aCy + 4) + '" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="11" font-weight="700" fill="#35383F" pointer-events="none">S</text>');
+      var tX = aCx + AVATAR_SIZE / 2 + 8;
+      parts.push('<text x="' + tX + '" y="' + (s.y + 20) + '" font-family="DM Sans, sans-serif" font-size="11" font-weight="600" fill="#FFFFFF" pointer-events="none">Sócio</text>');
+      parts.push('<text x="' + tX + '" y="' + (s.y + 34) + '" font-family="DM Mono, monospace" font-size="9" fill="#CFFF00" pointer-events="none">Sócio</text>');
+      parts.push('</g>');
+    }
+    drawSocioCard(socL);
+    drawSocioCard(socR);
+
     parts.push('</g></svg>');
 
     container.innerHTML = parts.join('');
@@ -1522,7 +1549,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       }
       var card = e.target.closest('.org-node');
       if (!card) return;
-      var n = nodeMap[card.getAttribute('data-id')];
+      var _cid = card.getAttribute('data-id');
+      var n = nodeMap[_cid];
+      if (!n && (_cid === '__sl__' || _cid === '__sr__')) {
+        n = { nome: 'Sócio', cargo: 'Sócio', nivel: 'diretoria', matricula: '—', unidade: '—', departamento: '—', supervisorId: null, foto: null, iniciais: 'S', children: [] };
+      }
       if (n) openModal(n);
     });
   }
