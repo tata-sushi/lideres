@@ -206,7 +206,14 @@ function construirHierarquia(colaboradores, fotos) {
   const mapa = {};
   colaboradores.forEach(c => {
     mapa[c.id] = Object.assign({}, c, {
-      foto: fotos[c.matricula] || null,
+      foto: fotos[c.matricula] || (function() {
+        // Fallback: tenta pelo nome normalizado (ex: "Leo_Partel.jpg" → "leo_partel")
+        const nNorm = c.nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s_\-]+/g, '_');
+        // Tenta nome completo, depois primeiro+último
+        const partes = c.nome.trim().split(/\s+/);
+        const priUlt = (partes[0] + '_' + partes[partes.length - 1]).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        return fotos['nome_' + nNorm] || fotos['nome_' + priUlt] || null;
+      })(),
       iniciais: gerarIniciais(c.nome),
       children: []
     });
@@ -311,12 +318,14 @@ function listarFotosDrive() {
   while (arquivos.hasNext()) {
     const arq = arquivos.next();
     const nomeArq = arq.getName();
+    const url = 'https://lh3.googleusercontent.com/d/' + arq.getId() + '=s120';
+    // Indexa por matrícula (ex: "24441.jpg" → map["24441"])
     const m = nomeArq.match(/^(\d+)\./);
-    if (m) {
-      const matricula = m[1];
-      const id = arq.getId();
-      map[matricula] = 'https://lh3.googleusercontent.com/d/' + id + '=s120';
-    }
+    if (m) map[m[1]] = url;
+    // Também indexa pelo nome do arquivo normalizado (sem extensão, sem acentos, espaços→_)
+    const semExt = nomeArq.replace(/\.[^.]+$/, '');
+    const norm = semExt.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s_\-]+/g, '_');
+    map['nome_' + norm] = url;
   }
 
   cache.put('fotos_map', JSON.stringify(map), CONFIG.CACHE_FOTOS_MIN * 60);
