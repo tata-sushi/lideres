@@ -693,6 +693,7 @@
   var userUnidade  = session ? (session.unidade   || '').toString().trim() : '';
   var userNome     = session ? (session.displayName || '').toString().trim() : '';
   var userVariacao      = session ? (session.variacoes || '').toString().trim() : '';
+  var userDepartamento  = session ? (session.departamento || '').toString().trim() : '';
   var userDepartamentos = session && Array.isArray(session.departamentos) ? session.departamentos : [];
   var isAdminRH         = userPerfil === 'admin' || userPerfil === 'analista-rh';
 
@@ -725,6 +726,9 @@
               ? filter.values.map(normVal).filter(Boolean)
               : [normVal(filter.value)].filter(Boolean))
           : [];
+        var af    = filter && filter.andFilter || null;
+        var afcol = af ? findCol(rows[0], af.colAlts) : -1;
+        var afvals= af ? (af.values || []).map(normVal).filter(Boolean) : [];
         var count = 0;
         if (col >= 0) {
           for (var i = 1; i < rows.length; i++) {
@@ -734,6 +738,11 @@
               if (fcol < 0) continue;
               var f = normVal(rows[i][fcol] || '');
               if (fvals.indexOf(f) < 0) continue;
+            }
+            if (af && afvals.length) {
+              if (afcol < 0) continue;
+              var afv = normVal(rows[i][afcol] || '');
+              if (afvals.indexOf(afv) < 0) continue;
             }
             count++;
           }
@@ -761,13 +770,18 @@
     : (_nomesFiltro.length
         ? { colAlts: ['entrevistador','responsavel','recrutador','nome_do_recrutador','f1670'], values: _nomesFiltro }
         : 'NONE');
-  // Testes: admin vê tudo; demais filtram pela unidade do líder logado.
-  // Testes: filtra por unidade + unidades extras em departamentos (opção A).
+  // Testes: filtra por unidade (+ extras em departamentos) E por departamento do líder.
   var _unidadesFiltro = [userUnidade].concat(userDepartamentos).filter(Boolean);
   var testesFilter = isAdminRH
     ? null
     : (_unidadesFiltro.length
-        ? { colAlts: ['unidade'], values: _unidadesFiltro }
+        ? {
+            colAlts: ['unidade'],
+            values:  _unidadesFiltro,
+            andFilter: userDepartamento
+              ? { colAlts: ['departamento'], values: [userDepartamento] }
+              : null
+          }
         : 'NONE');
 
   fetchRecSheet(SHEET_ENTREVISTAS,
@@ -796,13 +810,16 @@
           render();
           return;
         }
-        var dcol = findCol(rows[0], dateColAlts);
-        var fcol = nameFilter ? findCol(rows[0], nameFilter.colAlts) : -1;
+        var dcol  = findCol(rows[0], dateColAlts);
+        var fcol  = nameFilter ? findCol(rows[0], nameFilter.colAlts) : -1;
         var fvals = nameFilter
           ? (nameFilter.values
               ? nameFilter.values.map(normVal).filter(Boolean)
               : [normVal(nameFilter.value)].filter(Boolean))
           : [];
+        var af2    = nameFilter && nameFilter.andFilter || null;
+        var afcol2 = af2 ? findCol(rows[0], af2.colAlts) : -1;
+        var afvals2= af2 ? (af2.values || []).map(normVal).filter(Boolean) : [];
         var count = 0;
         if (dcol >= 0) {
           for (var i = 1; i < rows.length; i++) {
@@ -812,6 +829,11 @@
               if (fcol < 0) continue;
               var f = normVal(rows[i][fcol] || '');
               if (fvals.indexOf(f) < 0) continue;
+            }
+            if (af2 && afvals2.length) {
+              if (afcol2 < 0) continue;
+              var afv2 = normVal(rows[i][afcol2] || '');
+              if (afvals2.indexOf(afv2) < 0) continue;
             }
             count++;
           }
