@@ -1085,6 +1085,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   var arvore = null;
   var nodeMap = {};
+  var peerNos = [];  // sócios vindos da planilha (sem supervisor, não-CEO)
 
   // Data de atualização no footer
   var now = new Date();
@@ -1129,6 +1130,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         arvore = inicializarNode(data.arvore);
         nodeMap = {};
         mapearNos(arvore, null);
+        peerNos = (data.peers || []).map(function(p) { return Object.assign({ children: [] }, p); });
+        peerNos.forEach(function(p) { nodeMap[p.id] = p; });
 
         atualizarStats(data.stats || {}, data.total || 0);
         showLoading(false);
@@ -1443,8 +1446,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     calcSubHeight(arvore);
     position(arvore, 30 + NODE_W + PEER_GAP, 30);
 
-    var socL = { x: arvore.x - NODE_W - PEER_GAP, y: arvore.y + PEER_DY, id: '__sl__', nome: 'Leo Young', cargo: 'Sócio', nivel: 'diretoria', iniciais: 'LY', foto: null };
-    var socR = { x: arvore.x + NODE_W + PEER_GAP, y: arvore.y + PEER_DY, id: '__sr__', nome: 'Luiz Hirata', cargo: 'Sócio', nivel: 'diretoria', iniciais: 'LH', foto: null };
+    var _pL = peerNos[0] || null;
+    var _pR = peerNos[1] || null;
+    var socL = _pL ? { x: arvore.x - NODE_W - PEER_GAP, y: arvore.y + PEER_DY, id: _pL.id, nome: _pL.nome, cargo: _pL.cargo, nivel: 'diretoria', iniciais: _pL.iniciais, foto: _pL.foto } : null;
+    var socR = _pR ? { x: arvore.x + NODE_W + PEER_GAP, y: arvore.y + PEER_DY, id: _pR.id, nome: _pR.nome, cargo: _pR.cargo, nivel: 'diretoria', iniciais: _pR.iniciais, foto: _pR.foto } : null;
 
     var maxX = 0, maxY = 0;
     function bounds(n) {
@@ -1453,7 +1458,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       visibleChildren(n).forEach(bounds);
     }
     bounds(arvore);
-    maxX = Math.max(maxX, socR.x + NODE_W);
+    if (socR) maxX = Math.max(maxX, socR.x + NODE_W);
     W = maxX + 30;
     H = maxY + 30;
 
@@ -1465,11 +1470,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       if (n.children) n.children.forEach(defsFor);
     }
     defsFor(arvore);
+    if (socL && socL.foto) parts.push('<clipPath id="clip_' + socL.id + '"><circle cx="0" cy="0" r="' + (AVATAR_SIZE/2) + '"/></clipPath>');
+    if (socR && socR.foto) parts.push('<clipPath id="clip_' + socR.id + '"><circle cx="0" cy="0" r="' + (AVATAR_SIZE/2) + '"/></clipPath>');
     parts.push('</defs>');
 
     // Linha de paridade entre os 3 sócios
-    var _plY = socL.y + NODE_H / 2;
-    parts.push('<line x1="' + (socL.x + NODE_W/2) + '" y1="' + _plY + '" x2="' + (socR.x + NODE_W/2) + '" y2="' + _plY + '" stroke="rgba(53,56,63,0.18)" stroke-width="1.2" stroke-dasharray="5 4" fill="none"/>');
+    if (socL && socR) {
+      var _plY = socL.y + NODE_H / 2;
+      parts.push('<line x1="' + (socL.x + NODE_W/2) + '" y1="' + _plY + '" x2="' + (socR.x + NODE_W/2) + '" y2="' + _plY + '" stroke="rgba(53,56,63,0.18)" stroke-width="1.2" stroke-dasharray="5 4" fill="none"/>');
+    }
 
     parts.push('<g class="connectors" stroke="rgba(53,56,63,0.25)" stroke-width="1.2" fill="none">');
     function drawConn(n) {
@@ -1597,16 +1606,23 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     }
     drawNode(arvore);
 
-    // Nós sócio sintéticos
+    // Nós sócio (dados reais da planilha)
     function drawSocioCard(s) {
-      parts.push('<g class="org-node" data-id="' + s.id + '">');
+      if (!s) return;
+      var dispNome = abreviarNome(s.nome);
+      var dispCargo = (s.cargo || 'Sócio').length > 16 ? (s.cargo || 'Sócio').slice(0, 15) + '…' : (s.cargo || 'Sócio');
+      parts.push('<g class="org-node" data-id="' + escapeHtml(s.id) + '">');
       parts.push('<rect class="card-rect" x="' + s.x + '" y="' + s.y + '" width="' + NODE_W + '" height="' + NODE_H + '" rx="6" fill="#35383F" stroke="#35383F" stroke-width="1" style="cursor:pointer"/>');
       var aCx = s.x + 22, aCy = s.y + NODE_H / 2;
-      parts.push('<circle cx="' + aCx + '" cy="' + aCy + '" r="' + (AVATAR_SIZE/2) + '" fill="#CFFF00" stroke="#FFFFFF" stroke-width="2" pointer-events="none"/>');
-      parts.push('<text x="' + aCx + '" y="' + (aCy + 4) + '" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="11" font-weight="700" fill="#35383F" pointer-events="none">S</text>');
+      if (s.foto) {
+        parts.push('<image href="' + escapeHtml(s.foto) + '" x="' + (aCx - AVATAR_SIZE/2) + '" y="' + (aCy - AVATAR_SIZE/2) + '" width="' + AVATAR_SIZE + '" height="' + AVATAR_SIZE + '" clip-path="url(#clip_' + escapeHtml(s.id) + ')" preserveAspectRatio="xMidYMid slice" pointer-events="none"/>');
+      } else {
+        parts.push('<circle cx="' + aCx + '" cy="' + aCy + '" r="' + (AVATAR_SIZE/2) + '" fill="#CFFF00" stroke="#FFFFFF" stroke-width="2" pointer-events="none"/>');
+        parts.push('<text x="' + aCx + '" y="' + (aCy + 4) + '" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="11" font-weight="700" fill="#35383F" pointer-events="none">' + escapeHtml(s.iniciais || '?') + '</text>');
+      }
       var tX = aCx + AVATAR_SIZE / 2 + 8;
-      parts.push('<text x="' + tX + '" y="' + (s.y + 20) + '" font-family="DM Sans, sans-serif" font-size="11" font-weight="600" fill="#FFFFFF" pointer-events="none">Sócio</text>');
-      parts.push('<text x="' + tX + '" y="' + (s.y + 34) + '" font-family="DM Mono, monospace" font-size="9" fill="#CFFF00" pointer-events="none">Sócio</text>');
+      parts.push('<text x="' + tX + '" y="' + (s.y + 20) + '" font-family="DM Sans, sans-serif" font-size="11" font-weight="600" fill="#FFFFFF" pointer-events="none">' + escapeHtml(dispNome) + '</text>');
+      parts.push('<text x="' + tX + '" y="' + (s.y + 34) + '" font-family="DM Mono, monospace" font-size="9" fill="#CFFF00" pointer-events="none">' + escapeHtml(dispCargo) + '</text>');
       parts.push('</g>');
     }
     drawSocioCard(socL);
@@ -1643,10 +1659,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       if (!card) return;
       var _cid = card.getAttribute('data-id');
       var n = nodeMap[_cid];
-      if (!n && (_cid === '__sl__' || _cid === '__sr__')) {
-        var _isSL = _cid === '__sl__';
-        n = { nome: _isSL ? 'Leo Young' : 'Luiz Hirata', cargo: 'Sócio', nivel: 'diretoria', matricula: '—', unidade: '—', departamento: '—', supervisorId: null, foto: null, iniciais: _isSL ? 'LY' : 'LH', children: [] };
-      }
       if (n) openModal(n);
     });
   }
@@ -1697,30 +1709,41 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       '</div>';
   }
 
+  function buildMpCard(p) {
+    var nome = escapeHtml(abreviarNome(p.nome));
+    var role = escapeHtml((p.cargo || 'Sócio').length > 14 ? (p.cargo || 'Sócio').slice(0,13) + '…' : (p.cargo || 'Sócio'));
+    var avatar = p.foto
+      ? '<img src="' + escapeHtml(p.foto) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>'
+      : escapeHtml(p.iniciais || '?');
+    return '<div class="mp-card mp-socio" data-id="' + escapeHtml(p.id) + '" style="cursor:pointer">' +
+      '<div class="mp-avatar">' + avatar + '</div>' +
+      '<div class="mp-name">' + nome + '</div>' +
+      '<div class="mp-role">' + role + '</div>' +
+      '</div>';
+  }
+
   function renderMobilePeer() {
     var el = document.getElementById('mobilePeerHeader');
     if (!el || !arvore) return;
-    var ceoIni = arvore.iniciais || '?';
     var ceoNome = abreviarNome(arvore.nome);
-    var ceoRole = arvore.cargo || '';
-    if (ceoRole.length > 16) ceoRole = ceoRole.slice(0, 15) + '…';
-    var fotoHtml;
-    if (arvore.foto) {
-      fotoHtml = '<img src="' + escapeHtml(arvore.foto) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>';
-    } else {
-      fotoHtml = escapeHtml(ceoIni);
-    }
-    el.innerHTML =
-      '<div class="mp-card mp-socio"><div class="mp-avatar">LY</div><div class="mp-name">Leo Young</div><div class="mp-role">Sócio</div></div>' +
+    var ceoRole = (arvore.cargo || '').length > 16 ? (arvore.cargo || '').slice(0, 15) + '…' : (arvore.cargo || '');
+    var fotoHtml = arvore.foto
+      ? '<img src="' + escapeHtml(arvore.foto) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>'
+      : escapeHtml(arvore.iniciais || '?');
+
+    var leftHtml  = peerNos[0] ? buildMpCard(peerNos[0]) : '';
+    var rightHtml = peerNos[1] ? buildMpCard(peerNos[1]) : '';
+
+    el.innerHTML = leftHtml +
       '<div class="mp-center">' +
-        '<div class="mp-card mp-ceo">' +
+        '<div class="mp-card mp-ceo" data-id="' + escapeHtml(arvore.id) + '" style="cursor:pointer">' +
           '<div class="mp-avatar mp-avatar-ceo">' + fotoHtml + '</div>' +
           '<div class="mp-name">' + escapeHtml(ceoNome) + '</div>' +
           '<div class="mp-role">' + escapeHtml(ceoRole) + '</div>' +
         '</div>' +
         '<div class="mp-connector"></div>' +
       '</div>' +
-      '<div class="mp-card mp-socio"><div class="mp-avatar">LH</div><div class="mp-name">Luiz Hirata</div><div class="mp-role">Sócio</div></div>';
+      rightHtml;
   }
 
   function renderTreeNode(n, isRoot) {
@@ -1775,14 +1798,20 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       }
       var row = e.target.closest('.tree-row');
       if (!row) return;
-      var _rid = row.getAttribute('data-id');
-      var n = nodeMap[_rid];
-      if (!n && (_rid === '__sl__' || _rid === '__sr__')) {
-        var _isSL = _cid === '__sl__';
-        n = { nome: _isSL ? 'Leo Young' : 'Luiz Hirata', cargo: 'Sócio', nivel: 'diretoria', matricula: '—', unidade: '—', departamento: '—', supervisorId: null, foto: null, iniciais: _isSL ? 'LY' : 'LH', children: [] };
-      }
+      var n = nodeMap[row.getAttribute('data-id')];
       if (n) openModal(n);
     });
+
+    // Clique nos cards do pódio mobile (sócios + CEO)
+    var mph = document.getElementById('mobilePeerHeader');
+    if (mph) {
+      mph.addEventListener('click', function(e) {
+        var card = e.target.closest('[data-id]');
+        if (!card) return;
+        var n = nodeMap[card.getAttribute('data-id')];
+        if (n) openModal(n);
+      });
+    }
   }
 
   window.treeExpandAll = function() { setCollapsed(arvore, false, false); renderTree(); };
