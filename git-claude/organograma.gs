@@ -230,11 +230,15 @@ function construirHierarquia(colaboradores, fotos) {
     }
   });
 
-  // Definir raiz e peers (sócios: sem supervisor, mas não é a raiz)
+  // Definir raiz e peers (sócios: sem supervisor, nível diretoria, mas não é a raiz)
   const peerNos = [];
   if (CONFIG.CEO_ID && mapa[CONFIG.CEO_ID]) {
     raiz = mapa[CONFIG.CEO_ID];
-    semIdSuperior.forEach(n => { if (n.id !== raiz.id) peerNos.push(n); });
+    semIdSuperior.forEach(n => {
+      if (n.id === raiz.id) return;
+      if (n.nivel === 'diretoria') peerNos.push(n);
+      else orfaos.push(n);
+    });
   } else if (semIdSuperior.length === 1) {
     raiz = semIdSuperior[0];
   } else if (semIdSuperior.length > 1) {
@@ -250,7 +254,9 @@ function construirHierarquia(colaboradores, fotos) {
     });
     raiz = semIdSuperior[0];
     for (let i = 1; i < semIdSuperior.length; i++) {
-      peerNos.push(semIdSuperior[i]);
+      // Só nível diretoria vai pro pódio; demais viram órfãos (filhos do CEO)
+      if (semIdSuperior[i].nivel === 'diretoria') peerNos.push(semIdSuperior[i]);
+      else orfaos.push(semIdSuperior[i]);
     }
   } else {
     throw new Error('Nenhum colaborador com ID Superior vazio — defina pelo menos um para ser a raiz');
