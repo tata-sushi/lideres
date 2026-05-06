@@ -678,8 +678,28 @@
   }
   render();
 
+  // ── Sessão do líder logado ─────────────────────────────────────────────────
+  var session = (function() {
+    try {
+      var s = JSON.parse(localStorage.getItem('lideres_session'));
+      if (s && s.expiresAt > Date.now()) return s;
+    } catch(e) {}
+    return null;
+  })();
+  var userPerfil  = session ? (session.perfil || '').toString().toLowerCase().trim() : '';
+  var userUnidade = session ? (session.unidade || '').toString().trim() : '';
+  var userNome    = session ? (session.displayName || '').toString().trim() : '';
+  var isAdminRH   = userPerfil === 'admin' || userPerfil === 'analista-rh';
+
   // ── Fetch Recrutamento (Entrevistas + Testes pendentes) ────────────────────
-  function fetchRecSheet(sheetName, statusAlts, matchPhrase, idx, alertaIfPositive) {
+  function fetchRecSheet(sheetName, statusAlts, matchPhrase, idx, alertaIfPositive, filter) {
+    if (filter === 'NONE') {
+      recRows[idx].valor = 0;
+      recRows[idx].loading = false;
+      recRows[idx].alerta = false;
+      render();
+      return;
+    }
     fetch(recSheetURL(sheetName))
       .then(function(r) { return r.json(); })
       .then(function(data) {
@@ -693,11 +713,19 @@
           return;
         }
         var col = findCol(rows[0], statusAlts);
+        var fcol = filter ? findCol(rows[0], filter.colAlts) : -1;
+        var fval = filter ? normVal(filter.value) : '';
         var count = 0;
         if (col >= 0) {
           for (var i = 1; i < rows.length; i++) {
             var v = normVal(rows[i][col] || '');
-            if (v.indexOf(matchPhrase) >= 0) count++;
+            if (v.indexOf(matchPhrase) < 0) continue;
+            if (filter) {
+              if (fcol < 0) continue;
+              var f = normVal(rows[i][fcol] || '');
+              if (f !== fval) continue;
+            }
+            count++;
           }
         }
         recRows[idx].valor = count;
@@ -711,12 +739,26 @@
         render();
       });
   }
+
+  // Entrevistas: admin vê tudo; demais filtram pelo nome do líder logado.
+  var entrevistasFilter = isAdminRH
+    ? null
+    : (userNome
+        ? { colAlts: ['responsavel','recrutador','nome_do_recrutador','f1670'], value: userNome }
+        : 'NONE');
+  // Testes: admin vê tudo; demais filtram pela unidade do líder logado.
+  var testesFilter = isAdminRH
+    ? null
+    : (userUnidade
+        ? { colAlts: ['unidade'], value: userUnidade }
+        : 'NONE');
+
   fetchRecSheet(SHEET_ENTREVISTAS,
     ['status_da_entrevista','status_entrevista','status','resultado','situacao'],
-    'aguardando devolutiva', 0, true);
+    'aguardando devolutiva', 0, true, entrevistasFilter);
   fetchRecSheet(SHEET_TESTES,
     ['status','status_final','resultado','situacao'],
-    'aguardando aprovacao', 2, true);
+    'aguardando aprovacao', 2, true, testesFilter);
 
   // ── Fetch Experiências (Google Sheets gviz/CSV) ────────────────────────────
   var xhr = new XMLHttpRequest();
