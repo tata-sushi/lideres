@@ -568,7 +568,7 @@
 // ── Resumo RH (tabela do dashboard) ─────────────────────────────────────────
 (function() {
   // ── Config ─────────────────────────────────────────────────────────────────
-  var SHEET_EXP = '1oW3uXbig4B3gUQegxorxZghMnVrZcXk44AD08gx-cl0';
+  var SHEET_EXP = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw'; // mesma da experiencias.html
   var SHEET_REC = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
   var API_KEY   = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
   var SHEET_ENTREVISTAS = 'CONTROLE DE ENTREVISTAS';
@@ -879,50 +879,48 @@
     ['dias_de_teste','data_do_teste','data_teste','data','date'],
     3, testesFilter);
 
-  // ── Fetch Experiências (Google Sheets gviz/CSV) ────────────────────────────
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', 'https://docs.google.com/spreadsheets/d/' + SHEET_EXP + '/gviz/tq?tqx=out:csv', true);
-  xhr.onreadystatechange = function() {
-    if (xhr.readyState !== 4) return;
-    var exp14 = 0, exp46 = 0;
-    if (xhr.status === 200) {
-      try {
-        var lines = xhr.responseText.split('\n');
-        var headers = lines[0] ? lines[0].replace(/"/g,'').split(',').map(function(h){ return h.trim().toLowerCase(); }) : [];
-        var colFase = -1, colDev = -1;
-        for (var i = 0; i < headers.length; i++) {
-          if (colFase < 0 && (headers[i].indexOf('fase') >= 0 || headers[i].indexOf('periodo') >= 0 || headers[i].indexOf('período') >= 0)) colFase = i;
-          if (colDev  < 0 && (headers[i].indexOf('devolutiva') >= 0 || headers[i].indexOf('feedback') >= 0 || headers[i].indexOf('preenchido') >= 0 || headers[i].indexOf('avaliacao') >= 0 || headers[i].indexOf('avaliação') >= 0)) colDev = i;
+  // ── Fetch Experiências (Sheets API — aba admissões) ───────────────────────
+  // A=MT | B=UNIDADE | C=DEPARTAMENTO | D=NOME_COLABORADOR
+  // E=DATA_ADMISSAO | F=DIAS_CONTRATO | G=STATUS_DEVOLUTIVA
+  // Fase: status 'Av. 1º Período' → passou para o 2º (46 dias); demais → 1º (14 dias)
+  var EXP_STATUS_OCULTOS = ['Não Efetivado 1º', 'Não Efetivado 2º', 'Av. 2º Período'];
+  // Unidades elegíveis: primária + extras (ex.: Tata House para Cesar)
+  var _expUnidades = isAdminRH
+    ? null
+    : [normVal(userUnidade)].concat(_extraUnidades).filter(Boolean);
+
+  fetch('https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_EXP +
+        '/values/' + encodeURIComponent('admissões') + '!A2:G1000' +
+        '?key=' + API_KEY)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var rows = data.values || [];
+      var exp14 = 0, exp46 = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        if (!(row[3] || '').trim()) continue;
+        var status = (row[6] || '').trim();
+        if (EXP_STATUS_OCULTOS.indexOf(status) >= 0) continue;
+        if (_expUnidades) {
+          var rowUn = normVal(row[1] || '');
+          if (_expUnidades.indexOf(rowUn) < 0) continue;
         }
-        for (var j = 1; j < lines.length; j++) {
-          var line = lines[j].replace(/"/g,'').trim();
-          if (!line) continue;
-          var cols = line.split(',');
-          var fase = colFase >= 0 ? (cols[colFase] || '').trim().toLowerCase() : '';
-          var dev  = colDev  >= 0 ? (cols[colDev]  || '').trim().toLowerCase() : '';
-          var pendente = !dev || dev === '' || dev === 'não' || dev === 'nao' || dev === 'pendente' || dev === 'false' || dev === '0';
-          if (fase.indexOf('14') >= 0 || fase === '1' || fase === 'primeiro' || fase === '1º') {
-            if (pendente) exp14++;
-          } else if (fase.indexOf('46') >= 0 || fase === '2' || fase === 'segundo' || fase === '2º') {
-            if (pendente) exp46++;
-          }
-        }
-      } catch(e) {}
-    }
-    expRows = [
-      {indicador:'Avaliações 1º período pendentes', valor:exp14, desc:'14 dias — líderes com avaliação em aberto', alerta:exp14>0, loading:false},
-      {indicador:'Avaliações 2º período pendentes', valor:exp46, desc:'46 dias — líderes com avaliação em aberto', alerta:exp46>0, loading:false}
-    ];
-    render();
-  };
-  xhr.onerror = function() {
-    expRows = [
-      {indicador:'Avaliações 1º período pendentes', valor:null, desc:'Não foi possível carregar a planilha', alerta:false, loading:false},
-      {indicador:'Avaliações 2º período pendentes', valor:null, desc:'Não foi possível carregar a planilha', alerta:false, loading:false}
-    ];
-    render();
-  };
-  xhr.send();
+        var fase = (status === 'Av. 1º Período') ? 46 : 14;
+        if (fase === 14) exp14++; else exp46++;
+      }
+      expRows = [
+        {indicador:'Avaliações 1º período pendentes', valor:exp14, desc:'14 dias — avaliações em aberto', alerta:exp14>0, loading:false},
+        {indicador:'Avaliações 2º período pendentes', valor:exp46, desc:'46 dias — avaliações em aberto', alerta:exp46>0, loading:false}
+      ];
+      render();
+    })
+    .catch(function() {
+      expRows = [
+        {indicador:'Avaliações 1º período pendentes', valor:null, desc:'Não foi possível carregar', alerta:false, loading:false},
+        {indicador:'Avaliações 2º período pendentes', valor:null, desc:'Não foi possível carregar', alerta:false, loading:false}
+      ];
+      render();
+    });
 })();
 </script>
 </body>
