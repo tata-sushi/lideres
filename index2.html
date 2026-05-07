@@ -718,31 +718,41 @@
           render();
           return;
         }
-        var col = findCol(rows[0], statusAlts);
-        var fcol = filter ? findCol(rows[0], filter.colAlts) : -1;
-        // suporta filter.values (array) ou filter.value (string)
-        var fvals = filter
-          ? (filter.values
-              ? filter.values.map(normVal).filter(Boolean)
-              : [normVal(filter.value)].filter(Boolean))
+        var col   = findCol(rows[0], statusAlts);
+        var fcol  = (filter && filter.colAlts) ? findCol(rows[0], filter.colAlts) : -1;
+        var fvals = (filter && filter.colAlts)
+          ? (filter.values ? filter.values.map(normVal).filter(Boolean)
+                           : [normVal(filter.value)].filter(Boolean))
           : [];
         var af    = filter && filter.andFilter || null;
         var afcol = af ? findCol(rows[0], af.colAlts) : -1;
         var afvals= af ? (af.values || []).map(normVal).filter(Boolean) : [];
+        // filtro 'combined': (UNIDADE=primary E DEPTO∈deptos) OU (UNIDADE∈deptos)
+        var isComb  = filter && filter.type === 'combined';
+        var cUCol   = isComb ? findCol(rows[0], ['unidade'])      : -1;
+        var cDCol   = isComb ? findCol(rows[0], ['departamento']) : -1;
+        var cPU     = isComb ? normVal(filter.primaryUnidade || '') : '';
+        var cDeps   = isComb ? (filter.deptos || []).map(normVal).filter(Boolean) : [];
         var count = 0;
         if (col >= 0) {
           for (var i = 1; i < rows.length; i++) {
             var v = normVal(rows[i][col] || '');
             if (v.indexOf(matchPhrase) < 0) continue;
-            if (filter) {
+            if (isComb) {
+              var rU = cUCol >= 0 ? normVal(rows[i][cUCol] || '') : '';
+              var rD = cDCol >= 0 ? normVal(rows[i][cDCol] || '') : '';
+              var ok = cDeps.length === 0 ? rU === cPU
+                : (rU === cPU && cDeps.indexOf(rD) >= 0) || cDeps.indexOf(rU) >= 0;
+              if (!ok) continue;
+            } else if (filter) {
               if (fcol < 0) continue;
               var f = normVal(rows[i][fcol] || '');
               if (fvals.indexOf(f) < 0) continue;
-            }
-            if (af && afvals.length) {
-              if (afcol < 0) continue;
-              var afv = normVal(rows[i][afcol] || '');
-              if (afvals.indexOf(afv) < 0) continue;
+              if (af && afvals.length) {
+                if (afcol < 0) continue;
+                var afv = normVal(rows[i][afcol] || '');
+                if (afvals.indexOf(afv) < 0) continue;
+              }
             }
             count++;
           }
@@ -770,20 +780,13 @@
     : (_nomesFiltro.length
         ? { colAlts: ['entrevistador','responsavel','recrutador','nome_do_recrutador','f1670'], values: _nomesFiltro }
         : 'NONE');
-  // Testes: GM (col J não vazia) vê todos os testes das suas unidades sem filtro de depto.
-  // Líder de departamento específico (col J vazia) filtra por unidade E departamento.
-  var _unidadesFiltro = [userUnidade].concat(userDepartamentos).filter(Boolean);
-  var _isGM = userDepartamentos.length > 0;
+  // Testes: filtro combinado — (UNIDADE=primary E DEPTO∈col_J) OU (UNIDADE∈col_J)
+  // col_J pode conter nomes de departamento ("bar","cozinha") e/ou nomes de unidade
+  // ("tata house"), permitindo que GMs vejam todas as unidades que gerenciam.
   var testesFilter = isAdminRH
     ? null
-    : (_unidadesFiltro.length
-        ? {
-            colAlts: ['unidade'],
-            values:  _unidadesFiltro,
-            andFilter: (!_isGM && userDepartamento)
-              ? { colAlts: ['departamento'], values: [userDepartamento] }
-              : null
-          }
+    : (userUnidade
+        ? { type: 'combined', primaryUnidade: userUnidade, deptos: userDepartamentos }
         : 'NONE');
 
   fetchRecSheet(SHEET_ENTREVISTAS,
@@ -812,30 +815,41 @@
           render();
           return;
         }
-        var dcol  = findCol(rows[0], dateColAlts);
-        var fcol  = nameFilter ? findCol(rows[0], nameFilter.colAlts) : -1;
-        var fvals = nameFilter
-          ? (nameFilter.values
-              ? nameFilter.values.map(normVal).filter(Boolean)
-              : [normVal(nameFilter.value)].filter(Boolean))
+        var dcol   = findCol(rows[0], dateColAlts);
+        var fcol   = (nameFilter && nameFilter.colAlts) ? findCol(rows[0], nameFilter.colAlts) : -1;
+        var fvals  = (nameFilter && nameFilter.colAlts)
+          ? (nameFilter.values ? nameFilter.values.map(normVal).filter(Boolean)
+                               : [normVal(nameFilter.value)].filter(Boolean))
           : [];
         var af2    = nameFilter && nameFilter.andFilter || null;
         var afcol2 = af2 ? findCol(rows[0], af2.colAlts) : -1;
         var afvals2= af2 ? (af2.values || []).map(normVal).filter(Boolean) : [];
+        // filtro 'combined'
+        var isComb2 = nameFilter && nameFilter.type === 'combined';
+        var c2UCol  = isComb2 ? findCol(rows[0], ['unidade'])      : -1;
+        var c2DCol  = isComb2 ? findCol(rows[0], ['departamento']) : -1;
+        var c2PU    = isComb2 ? normVal(nameFilter.primaryUnidade || '') : '';
+        var c2Deps  = isComb2 ? (nameFilter.deptos || []).map(normVal).filter(Boolean) : [];
         var count = 0;
         if (dcol >= 0) {
           for (var i = 1; i < rows.length; i++) {
             var dateStr = (rows[i][dcol] || '').toString().trim();
             if (!isHojeOuAmanha(dateStr)) continue;
-            if (nameFilter && fvals.length) {
+            if (isComb2) {
+              var rU2 = c2UCol >= 0 ? normVal(rows[i][c2UCol] || '') : '';
+              var rD2 = c2DCol >= 0 ? normVal(rows[i][c2DCol] || '') : '';
+              var ok2 = c2Deps.length === 0 ? rU2 === c2PU
+                : (rU2 === c2PU && c2Deps.indexOf(rD2) >= 0) || c2Deps.indexOf(rU2) >= 0;
+              if (!ok2) continue;
+            } else if (nameFilter && fvals.length) {
               if (fcol < 0) continue;
               var f = normVal(rows[i][fcol] || '');
               if (fvals.indexOf(f) < 0) continue;
-            }
-            if (af2 && afvals2.length) {
-              if (afcol2 < 0) continue;
-              var afv2 = normVal(rows[i][afcol2] || '');
-              if (afvals2.indexOf(afv2) < 0) continue;
+              if (af2 && afvals2.length) {
+                if (afcol2 < 0) continue;
+                var afv2 = normVal(rows[i][afcol2] || '');
+                if (afvals2.indexOf(afv2) < 0) continue;
+              }
             }
             count++;
           }
