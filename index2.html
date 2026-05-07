@@ -884,10 +884,11 @@
   // E=DATA_ADMISSAO | F=DIAS_CONTRATO | G=STATUS_DEVOLUTIVA
   // Fase: status 'Av. 1º Período' → passou para o 2º (46 dias); demais → 1º (14 dias)
   var EXP_STATUS_OCULTOS = ['Não Efetivado 1º', 'Não Efetivado 2º', 'Av. 2º Período'];
-  // Unidades elegíveis: primária + extras (ex.: Tata House para Cesar)
-  var _expUnidades = isAdminRH
-    ? null
-    : [normVal(userUnidade)].concat(_extraUnidades).filter(Boolean);
+  // Filtro combined idêntico ao de testes:
+  // (UNIDADE=primary E DEPTO∈deptos) OU (UNIDADE∈extraUnidades)
+  var _expPU    = normVal(userUnidade);
+  var _expDepts = _deptsFiltro.map(normVal).filter(Boolean);   // col J sem unidades extras
+  var _expExtras= _extraUnidades;                               // já normalizados
 
   fetch('https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_EXP +
         '/values/' + encodeURIComponent('admissões') + '!A2:G1000' +
@@ -901,9 +902,12 @@
         if (!(row[3] || '').trim()) continue;
         var status = (row[6] || '').trim();
         if (EXP_STATUS_OCULTOS.indexOf(status) >= 0) continue;
-        if (_expUnidades) {
-          var rowUn = normVal(row[1] || '');
-          if (_expUnidades.indexOf(rowUn) < 0) continue;
+        if (!isAdminRH) {
+          var eUn = normVal(row[1] || '');   // UNIDADE
+          var eDe = normVal(row[2] || '');   // DEPARTAMENTO
+          var eOk = (eUn === _expPU && (_expDepts.length === 0 || _expDepts.indexOf(eDe) >= 0))
+                 || (_expExtras.length > 0 && _expExtras.indexOf(eUn) >= 0);
+          if (!eOk) continue;
         }
         var fase = (status === 'Av. 1º Período') ? 46 : 14;
         if (fase === 14) exp14++; else exp46++;
