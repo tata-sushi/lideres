@@ -727,12 +727,13 @@
         var af    = filter && filter.andFilter || null;
         var afcol = af ? findCol(rows[0], af.colAlts) : -1;
         var afvals= af ? (af.values || []).map(normVal).filter(Boolean) : [];
-        // filtro 'combined': (UNIDADE=primary E DEPTO∈deptos) OU (UNIDADE∈deptos)
+        // filtro 'combined': (UNIDADE=primary E DEPTO∈deptos) OU (UNIDADE∈extraUnidades)
         var isComb  = filter && filter.type === 'combined';
         var cUCol   = isComb ? findCol(rows[0], ['unidade'])      : -1;
         var cDCol   = isComb ? findCol(rows[0], ['departamento']) : -1;
         var cPU     = isComb ? normVal(filter.primaryUnidade || '') : '';
         var cDeps   = isComb ? (filter.deptos || []).map(normVal).filter(Boolean) : [];
+        var cExtras = isComb ? (filter.extraUnidades || []).map(normVal).filter(Boolean) : [];
         var count = 0;
         if (col >= 0) {
           for (var i = 1; i < rows.length; i++) {
@@ -741,8 +742,8 @@
             if (isComb) {
               var rU = cUCol >= 0 ? normVal(rows[i][cUCol] || '') : '';
               var rD = cDCol >= 0 ? normVal(rows[i][cDCol] || '') : '';
-              var ok = cDeps.length === 0 ? rU === cPU
-                : (rU === cPU && cDeps.indexOf(rD) >= 0) || cDeps.indexOf(rU) >= 0;
+              var ok = (rU === cPU && (cDeps.length === 0 || cDeps.indexOf(rD) >= 0))
+                || (cExtras.length > 0 && cExtras.indexOf(rU) >= 0);
               if (!ok) continue;
             } else if (filter) {
               if (fcol < 0) continue;
@@ -780,13 +781,16 @@
     : (_nomesFiltro.length
         ? { colAlts: ['entrevistador','responsavel','recrutador','nome_do_recrutador','f1670'], values: _nomesFiltro }
         : 'NONE');
-  // Testes: filtro combinado — (UNIDADE=primary E DEPTO∈col_J) OU (UNIDADE∈col_J)
-  // col_J pode conter nomes de departamento ("bar","cozinha") e/ou nomes de unidade
-  // ("tata house"), permitindo que GMs vejam todas as unidades que gerenciam.
+  // Testes: filtro combinado — (UNIDADE=primary E DEPTO∈deptos) OU (UNIDADE∈extraUnidades)
+  // col_J pode conter nomes de departamento ("bar") e/ou nomes de unidade extra ("tata house").
+  // Regra explícita por ora: "Tata House" é tratado como unidade extra (não departamento).
+  var _UNIDADES_EXTRA = ['tata house']; // normVal remove acentos → "tatá house" também cobre
+  var _deptsFiltro    = userDepartamentos.filter(function(d){ return _UNIDADES_EXTRA.indexOf(normVal(d)) < 0; });
+  var _extraUnidades  = userDepartamentos.filter(function(d){ return _UNIDADES_EXTRA.indexOf(normVal(d)) >= 0; }).map(normVal);
   var testesFilter = isAdminRH
     ? null
     : (userUnidade
-        ? { type: 'combined', primaryUnidade: userUnidade, deptos: userDepartamentos }
+        ? { type: 'combined', primaryUnidade: userUnidade, deptos: _deptsFiltro, extraUnidades: _extraUnidades }
         : 'NONE');
 
   fetchRecSheet(SHEET_ENTREVISTAS,
@@ -825,11 +829,12 @@
         var afcol2 = af2 ? findCol(rows[0], af2.colAlts) : -1;
         var afvals2= af2 ? (af2.values || []).map(normVal).filter(Boolean) : [];
         // filtro 'combined'
-        var isComb2 = nameFilter && nameFilter.type === 'combined';
-        var c2UCol  = isComb2 ? findCol(rows[0], ['unidade'])      : -1;
-        var c2DCol  = isComb2 ? findCol(rows[0], ['departamento']) : -1;
-        var c2PU    = isComb2 ? normVal(nameFilter.primaryUnidade || '') : '';
-        var c2Deps  = isComb2 ? (nameFilter.deptos || []).map(normVal).filter(Boolean) : [];
+        var isComb2  = nameFilter && nameFilter.type === 'combined';
+        var c2UCol   = isComb2 ? findCol(rows[0], ['unidade'])      : -1;
+        var c2DCol   = isComb2 ? findCol(rows[0], ['departamento']) : -1;
+        var c2PU     = isComb2 ? normVal(nameFilter.primaryUnidade || '') : '';
+        var c2Deps   = isComb2 ? (nameFilter.deptos || []).map(normVal).filter(Boolean) : [];
+        var c2Extras = isComb2 ? (nameFilter.extraUnidades || []).map(normVal).filter(Boolean) : [];
         var count = 0;
         if (dcol >= 0) {
           for (var i = 1; i < rows.length; i++) {
@@ -838,8 +843,8 @@
             if (isComb2) {
               var rU2 = c2UCol >= 0 ? normVal(rows[i][c2UCol] || '') : '';
               var rD2 = c2DCol >= 0 ? normVal(rows[i][c2DCol] || '') : '';
-              var ok2 = c2Deps.length === 0 ? rU2 === c2PU
-                : (rU2 === c2PU && c2Deps.indexOf(rD2) >= 0) || c2Deps.indexOf(rU2) >= 0;
+              var ok2 = (rU2 === c2PU && (c2Deps.length === 0 || c2Deps.indexOf(rD2) >= 0))
+                || (c2Extras.length > 0 && c2Extras.indexOf(rU2) >= 0);
               if (!ok2) continue;
             } else if (nameFilter && fvals.length) {
               if (fcol < 0) continue;
