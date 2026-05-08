@@ -367,9 +367,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-var SHEET_ID   = 'SEU_SHEET_ID_AQUI';
-var API_KEY    = 'SUA_API_KEY_AQUI';
-var SHEET_NAME = 'Feriados';
 var APPS_SCRIPT_URL = 'SUA_APPS_SCRIPT_URL_AQUI';
 
 // ─── USUÁRIO LOGADO ───────────────────────────────────────────────────────────
@@ -380,29 +377,8 @@ var __nomeResponsavel = (function() {
   } catch(e) { return ''; }
 })();
 
-// ─── FERIADOS 2025/2026 ───────────────────────────────────────────────────────
-// Ajuste conforme necessidade. Feriados nacionais + SP + datas relevantes TATÁ.
-var FERIADOS_CONFIG = [
-  { id: 'carnaval-2025',       nome: 'Carnaval',                    data: '03/03/2025' },
-  { id: 'carnaval-ter-2025',   nome: 'Carnaval (Terça)',            data: '04/03/2025' },
-  { id: 'paixao-2025',         nome: 'Paixão de Cristo',           data: '18/04/2025' },
-  { id: 'tiradentes-2025',     nome: 'Tiradentes',                  data: '21/04/2025' },
-  { id: 'trabalho-2025',       nome: 'Dia do Trabalho',             data: '01/05/2025' },
-  { id: 'corpus-christi-2025', nome: 'Corpus Christi',              data: '19/06/2025' },
-  { id: 'anchieta-2025',       nome: 'Dia de Anchieta (SP)',        data: '09/07/2025' },
-  { id: 'independencia-2025',  nome: 'Independência do Brasil',     data: '07/09/2025' },
-  { id: 'aparecida-2025',      nome: 'Nossa Sra. Aparecida',        data: '12/10/2025' },
-  { id: 'finados-2025',        nome: 'Finados',                     data: '02/11/2025' },
-  { id: 'republica-2025',      nome: 'Proclamação da República',    data: '15/11/2025' },
-  { id: 'consciencia-2025',    nome: 'Consciência Negra (SP)',      data: '20/11/2025' },
-  { id: 'natal-2025',          nome: 'Natal',                       data: '25/12/2025' },
-  { id: 'ano-novo-2026',       nome: 'Ano Novo',                    data: '01/01/2026' },
-  { id: 'carnaval-seg-2026',   nome: 'Carnaval (Segunda)',          data: '16/02/2026' },
-  { id: 'carnaval-ter-2026',   nome: 'Carnaval (Terça)',            data: '17/02/2026' },
-  { id: 'paixao-2026',         nome: 'Paixão de Cristo',           data: '03/04/2026' },
-  { id: 'tiradentes-2026',     nome: 'Tiradentes',                  data: '21/04/2026' },
-  { id: 'trabalho-2026',       nome: 'Dia do Trabalho',             data: '01/05/2026' },
-];
+// ─── FERIADOS (populado dinamicamente pelo Apps Script) ───────────────────────
+var FERIADOS_CONFIG = [];
 
 // ─── ESTADO ───────────────────────────────────────────────────────────────────
 var dados = [];
@@ -438,110 +414,55 @@ function formatDateBR(s) {
 function isDecidido(d) {
   return d.decisao && d.decisao.trim() !== '';
 }
-function rowToObj(headers, row) {
-  var obj = {};
-  headers.forEach(function(h, i) {
-    obj[norm(h)] = (row[i] || '').trim();
-  });
-  return obj;
-}
-function normRow(obj) {
-  function v() {
-    for (var i=0; i<arguments.length; i++) {
-      if (obj[arguments[i]] !== undefined && obj[arguments[i]] !== '') return obj[arguments[i]];
-    }
-    return '';
-  }
-  return {
-    mt:         v('mt','matricula','mat'),
-    nome:       v('colaborador','nome','funcionario'),
-    unidade:    v('unidade'),
-    depto:      v('departamento','depto'),
-    cargo:      v('cargo','funcao'),
-    feriado:    v('feriado','id_feriado'),
-    data:       v('data_feriado','data'),
-    horas:      v('horas','horas_trabalhadas'),
-    decisao:    v('decisao','devolutiva','escolha'),
-    responsavel:v('responsavel','lider')
-  };
-}
-
-// ─── FETCH SHEETS ─────────────────────────────────────────────────────────────
-function sheetURL() {
-  return 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID
-    + '/values/' + encodeURIComponent(SHEET_NAME + '!A:K')
-    + '?key=' + API_KEY;
-}
-
+// ─── FETCH APPS SCRIPT ────────────────────────────────────────────────────────
 function loadData() {
   document.getElementById('content').innerHTML =
     '<div class="empty-state"><p style="opacity:.5">Carregando dados...</p></div>';
 
-  // --- MODO DEMO: dados locais para prototipação ---
-  // Remova esse bloco e descomente o fetch() abaixo quando a planilha estiver pronta
-  setTimeout(function(){
-    dados = DEMO_DATA;
-    if (!state.feriadoAtivo && FERIADOS_CONFIG.length) {
-      // Seleciona automaticamente o feriado mais próximo com registros
-      state.feriadoAtivo = FERIADOS_CONFIG[FERIADOS_CONFIG.length - 3];
-    }
-    updateBanner();
-    render();
-  }, 600);
-
-  // --- PRODUÇÃO: descomente isso e apague o bloco acima ---
-  /*
-  fetch(sheetURL())
+  fetch(APPS_SCRIPT_URL + '?acao=listar-feriados')
     .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.error) { showError(data.error.message); return; }
-      var rows = data.values || [];
-      if (rows.length < 2) { dados = []; render(); return; }
-      var headers = rows[0];
-      dados = [];
-      for (var i = 1; i < rows.length; i++) {
-        if (rows[i].some(function(c){ return c && c.trim(); })) {
-          var obj = normRow(rowToObj(headers, rows[i]));
-          obj._linha = i + 1;
-          dados.push(obj);
+    .then(function(res) {
+      if (!res.success) { showError(res.message || 'Resposta inválida'); return; }
+
+      dados = res.rows.map(function(r) {
+        return {
+          _linha:       r._linha,
+          feriado:      r.feriado_id,
+          feriado_nome: r.feriado_nome,
+          data:         r.feriado_data,
+          nome:         r.nome,
+          mt:           r.mt,
+          horas:        r.horas,
+          unidade:      r.unidade,
+          depto:        r.depto,
+          saldo:        r.saldo,
+          decisao:      r.decisao,
+          responsavel:  r.lider
+        };
+      });
+
+      // Constrói FERIADOS_CONFIG dinamicamente a partir dos dados
+      var seen = {};
+      FERIADOS_CONFIG = [];
+      dados.forEach(function(d) {
+        if (!seen[d.feriado]) {
+          seen[d.feriado] = true;
+          FERIADOS_CONFIG.push({ id: d.feriado, nome: d.feriado_nome, data: d.data });
         }
-      }
+      });
+      FERIADOS_CONFIG.sort(function(a, b) {
+        var da = parseDateBR(a.data), db = parseDateBR(b.data);
+        if (!da || !db) return 0;
+        return da - db;
+      });
+
       if (!state.feriadoAtivo && FERIADOS_CONFIG.length) {
         state.feriadoAtivo = FERIADOS_CONFIG[FERIADOS_CONFIG.length - 1];
       }
-      updateBanner();
       render();
     })
-    .catch(function(err) { showError(err.message || 'Erro de rede'); });
-  */
+    .catch(function(err) { showError('Erro de conexão: ' + err.message); });
 }
-
-// ─── DEMO DATA ────────────────────────────────────────────────────────────────
-var DEMO_DATA = (function() {
-  var nomes = [
-    { nome: 'Ana Paula Ferreira',  mt: '00123', unidade: 'Itaim Bibi',    depto: 'Salão',   cargo: 'Garçom/Garçonete' },
-    { nome: 'Carlos Eduardo Lima', mt: '00187', unidade: 'Pinheiros',     depto: 'Cozinha', cargo: 'Auxiliar de Cozinha' },
-    { nome: 'Fernanda Souza',      mt: '00201', unidade: 'Itaim Bibi',    depto: 'Delivery',cargo: 'Atendente' },
-    { nome: 'Rafael Oliveira',     mt: '00245', unidade: 'PUC Pinheiros',  depto: 'Salão',   cargo: 'Sushiman' },
-    { nome: 'Juliana Costa',       mt: '00298', unidade: 'Pinheiros',     depto: 'Bar',     cargo: 'Bartender' },
-    { nome: 'Marcos Almeida',      mt: '00312', unidade: 'Itaim Bibi',    depto: 'Cozinha', cargo: 'Sous Chef' },
-    { nome: 'Tatiana Ribeiro',     mt: '00367', unidade: 'PUC Pinheiros',  depto: 'Caixa',   cargo: 'Operador(a) de Caixa' },
-    { nome: 'Diego Mendes',        mt: '00389', unidade: 'Pinheiros',     depto: 'Delivery',cargo: 'Motoboy' },
-    { nome: 'Patricia Vieira',     mt: '00411', unidade: 'Itaim Bibi',    depto: 'Salão',   cargo: 'Hostess' },
-    { nome: 'Leonardo Santos',     mt: '00434', unidade: 'PUC Pinheiros',  depto: 'Cozinha', cargo: 'Cozinheiro(a)' },
-  ];
-  var feriado = FERIADOS_CONFIG[FERIADOS_CONFIG.length - 3];
-  return nomes.map(function(n, i) {
-    return Object.assign({}, n, {
-      feriado: feriado.id,
-      data: feriado.data,
-      horas: (Math.floor(Math.random() * 5) + 4) + ':00',
-      decisao: i < 3 ? (i === 0 ? 'Folga' : 'Pagamento') : '',
-      responsavel: i < 3 ? 'Victor Carvalho' : '',
-      _linha: i + 2
-    });
-  });
-})();
 
 function showError(msg) {
   document.getElementById('content').innerHTML =
@@ -716,6 +637,7 @@ function cardFeriado(d, idx) {
       '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">' + escH(d.unidade) + '</span></div>' +
       '<div class="card-field"><span class="field-label">Departamento</span><span class="field-value">' + escH(d.depto) + '</span></div>' +
       (d.horas ? '<div class="card-field"><span class="field-label">Horas Trabalhadas</span><span class="field-value">' + escH(d.horas) + '</span></div>' : '') +
+      (d.saldo ? '<div class="card-field"><span class="field-label">Saldo</span><span class="field-value" style="color:var(--green);font-family:\'DM Mono\',monospace;font-size:12px;">' + escH(d.saldo) + '</span></div>' : '') +
     '</div>' +
     footer +
   '</div>';
