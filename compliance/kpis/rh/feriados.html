@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Feriados — TATÁ Sushi</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -49,6 +50,29 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .kpi-number { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
 .kpi-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
 .kpi-sub strong { color: var(--carbon); font-weight: 600; }
+
+/* CHART CARDS */
+.chart-card { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px 16px; display: flex; flex-direction: column; }
+.chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
+.chart-wrap { position: relative; height: 240px; }
+
+.status-table { padding: 4px 0; }
+.status-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--border); gap: 12px; }
+.status-row:last-child { border-bottom: none; }
+.status-name { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); font-weight: 500; flex: 1; min-width: 0; }
+.status-name small { display: block; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); font-weight: 400; margin-top: 2px; letter-spacing: .04em; }
+.status-pills { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.status-pill { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.3px; }
+.status-pill.p-folga { background: var(--green-bg); color: var(--green); }
+.status-pill.p-pgto  { background: var(--amber-bg); color: var(--amber); }
+.status-pill.p-pend  { background: #F0F0F0; color: #888; }
+.status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+
+/* VIEW TOGGLE — Devolutivas vs KPI's */
+body[data-view="kpis"] #content,
+body[data-view="kpis"] #kpis-strip-devolutivas { display: none; }
+body:not([data-view="kpis"]) #dashboard,
+body:not([data-view="kpis"]) #kpis-strip-kpis { display: none; }
 
 /* MODAL DECISÃO */
 .btn-decisao-opt { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 14px 12px; border: 1px solid var(--border); background: var(--bg); color: var(--carbon); border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.5px; cursor: pointer; text-transform: uppercase; transition: all 0.15s; }
@@ -261,12 +285,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </header>
 
 <nav class="tabs">
-  <a class="tab-btn active" href="feriados.html">Devolutivas</a>
-  <a class="tab-btn" href="feriados-kpis.html">KPI's</a>
+  <button class="tab-btn active" id="tab-devolutivas" type="button" onclick="setTab('devolutivas')">Devolutivas</button>
+  <button class="tab-btn" id="tab-kpis" type="button" onclick="setTab('kpis')">KPI's</button>
 </nav>
 
 
-<div class="kpis-wrap" style="grid-template-columns:1fr;">
+<!-- KPI strip — Devolutivas -->
+<div class="kpis-wrap" id="kpis-strip-devolutivas" style="grid-template-columns:1fr;">
   <div class="kpi-card">
     <span class="kpi-label">Devolutivas pendentes</span>
     <span class="kpi-number" id="kpi-pendentes">—</span>
@@ -274,9 +299,45 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<!-- KPI strip — KPI's -->
+<div class="kpis-wrap" id="kpis-strip-kpis" style="grid-template-columns:1fr 1fr 1fr;">
+  <div class="kpi-card">
+    <span class="kpi-label">Colaboradores</span>
+    <span class="kpi-number" id="kpi-colaboradores">—</span>
+    <span class="kpi-sub">único(s)</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Horas Trabalhadas</span>
+    <span class="kpi-number" id="kpi-horas">—</span>
+    <span class="kpi-sub">média <strong id="kpi-horas-media">—</strong></span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Decisões</span>
+    <span class="kpi-number" id="kpi-decisoes">—</span>
+    <span class="kpi-sub"><strong id="kpi-decisao-folga">0</strong> folga / <strong id="kpi-decisao-pgto">0</strong> pgto</span>
+  </div>
+</div>
 
 <div class="filters-wrap" id="filters-wrap"></div>
+
+<!-- Devolutivas (cards) -->
 <main class="content" id="content"></main>
+
+<!-- KPI's (charts) -->
+<main id="dashboard">
+  <div class="chart-card">
+    <div class="chart-title">Colaboradores por Feriado</div>
+    <div class="chart-wrap"><canvas id="chart-colab"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Horas Trabalhadas por Feriado</div>
+    <div class="chart-wrap"><canvas id="chart-horas"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Decisões por Feriado</div>
+    <div class="status-table" id="rows-decisoes"></div>
+  </div>
+</main>
 
 <footer class="footer">
   <div class="footer-brand">TATÁ SUSHI &nbsp;|&nbsp; TATÁ POKE &nbsp;|&nbsp; 2016 – 2026</div>
@@ -412,10 +473,15 @@ var FERIADOS_CONFIG = [];
 // ─── ESTADO ───────────────────────────────────────────────────────────────────
 var dados = [];
 var state = {
+  tab: 'devolutivas',   // 'devolutivas' | 'kpis'
   feriadoAtivo: null,   // { id, nome, data }
   modalFeriado: null,   // feriado temporário selecionado no modal
   filters: { unidade: 'Todos', departamento: 'Todos' }
 };
+var _chartColabSel = null;
+var _chartHorasSel = null;
+var _chartColabInst = null;
+var _chartHorasInst = null;
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 function escH(s) {
@@ -442,6 +508,26 @@ function formatDateBR(s) {
 }
 function isDecidido(d) {
   return d.decisao && d.decisao.trim() !== '';
+}
+function parseHoras(s) {
+  if (s === null || s === undefined || s === '') return 0;
+  s = String(s).trim();
+  if (!s) return 0;
+  if (s.indexOf(':') >= 0) {
+    var p = s.split(':');
+    var h = parseInt(p[0], 10) || 0;
+    var m = parseInt(p[1], 10) || 0;
+    return h + m / 60;
+  }
+  return parseFloat(s.replace(',', '.')) || 0;
+}
+function formatHoras(h) {
+  if (!h) return '0h';
+  var horas = Math.floor(h);
+  var mins  = Math.round((h - horas) * 60);
+  if (mins === 60) { horas += 1; mins = 0; }
+  if (mins === 0) return horas + 'h';
+  return horas + 'h' + (mins < 10 ? '0' : '') + mins;
 }
 // ─── FETCH APPS SCRIPT ────────────────────────────────────────────────────────
 function loadData() {
@@ -557,8 +643,19 @@ function getDadosFeriado() {
 }
 function getFiltered() {
   var src = getDadosFeriado();
-  // Modo "Todos": exibe apenas pendentes
-  if (!state.feriadoAtivo) src = src.filter(function(d){ return !isDecidido(d); });
+  // Tab Devolutivas + modo "Todos": exibe apenas pendentes
+  if (!state.feriadoAtivo && state.tab === 'devolutivas') {
+    src = src.filter(function(d){ return !isDecidido(d); });
+  }
+  var f = state.filters;
+  return src.filter(function(d) {
+    if (f.unidade !== 'Todos' && d.unidade !== f.unidade) return false;
+    if (f.departamento !== 'Todos' && d.depto !== f.departamento) return false;
+    return true;
+  });
+}
+function getFilteredAll() {
+  var src = getDadosFeriado();
   var f = state.filters;
   return src.filter(function(d) {
     if (f.unidade !== 'Todos' && d.unidade !== f.unidade) return false;
@@ -604,17 +701,30 @@ function renderFilters() {
 
 // ─── KPIs ─────────────────────────────────────────────────────────────────────
 function renderKPIs() {
+  // Devolutivas: usa src bruto (não-filtrado) — feriado-relativo
   var src = getDadosFeriado();
   var pendentes = src.filter(function(d){ return !isDecidido(d); }).length;
   var folga     = src.filter(function(d){ return norm(d.decisao) === 'folga'; }).length;
   var pagamento = src.filter(function(d){ return norm(d.decisao).indexOf('pag') >= 0; }).length;
-  var total     = src.length;
-  var colabs    = unique(src.map(function(d){ return d.nome; })).length;
 
   document.getElementById('kpi-pendentes').textContent = pendentes;
-  document.getElementById('kpi-folga').textContent = folga;
+  document.getElementById('kpi-folga').textContent     = folga;
   document.getElementById('kpi-pagamento').textContent = pagamento;
 
+  // KPI's: usa filtros (unidade/depto) sobre todos os apontamentos
+  var all        = getFilteredAll();
+  var colabs     = unique(all.map(function(d){ return d.nome; })).length;
+  var totalHoras = all.reduce(function(acc, d){ return acc + parseHoras(d.horas); }, 0);
+  var mediaHoras = colabs ? totalHoras / colabs : 0;
+  var folga2     = all.filter(function(d){ return norm(d.decisao) === 'folga'; }).length;
+  var pagamento2 = all.filter(function(d){ return norm(d.decisao).indexOf('pag') >= 0; }).length;
+
+  document.getElementById('kpi-colaboradores').textContent = colabs;
+  document.getElementById('kpi-horas').textContent         = formatHoras(totalHoras);
+  document.getElementById('kpi-horas-media').textContent   = formatHoras(mediaHoras);
+  document.getElementById('kpi-decisoes').textContent      = folga2 + pagamento2;
+  document.getElementById('kpi-decisao-folga').textContent = folga2;
+  document.getElementById('kpi-decisao-pgto').textContent  = pagamento2;
 
   var el = document.getElementById('footer-date');
   if (el) el.textContent = 'Atualizado em ' + new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
@@ -775,12 +885,214 @@ function salvarDecisao(idx, decisao, dataCompensacao) {
   */
 }
 
+// ─── DASHBOARD (KPI's) ────────────────────────────────────────────────────────
+function aggregarPorFeriado(rows) {
+  var bucket = {};
+  FERIADOS_CONFIG.forEach(function(f) {
+    bucket[f.id] = { id: f.id, nome: f.nome, data: f.data, nomes: {}, totalHoras: 0, folga: 0, pagamento: 0, pendente: 0, total: 0 };
+  });
+  rows.forEach(function(d) {
+    var b = bucket[d.feriado];
+    if (!b) {
+      b = bucket[d.feriado] = { id: d.feriado, nome: d.feriado_nome, data: d.data, nomes: {}, totalHoras: 0, folga: 0, pagamento: 0, pendente: 0, total: 0 };
+    }
+    b.nomes[d.nome] = true;
+    b.totalHoras += parseHoras(d.horas);
+    b.total += 1;
+    var dc = norm(d.decisao || '');
+    if (dc === 'folga')              b.folga     += 1;
+    else if (dc.indexOf('pag') >= 0) b.pagamento += 1;
+    else                              b.pendente  += 1;
+  });
+  var arr = Object.keys(bucket).map(function(k){ return bucket[k]; });
+  arr.sort(function(a, b){
+    var da = parseDateBR(a.data), db = parseDateBR(b.data);
+    if (!da || !db) return 0;
+    return da - db;
+  });
+  return arr;
+}
+
+var barValueLabelsPlugin = {
+  id: 'barValueLabels',
+  afterDatasetsDraw: function(chart) {
+    var ctx = chart.ctx;
+    chart.data.datasets.forEach(function(ds, di) {
+      var meta = chart.getDatasetMeta(di);
+      meta.data.forEach(function(bar, i) {
+        var v = ds.data[i];
+        if (!v) return;
+        var label = (ds._formattedLabels && ds._formattedLabels[i]) || String(v);
+        ctx.save();
+        ctx.fillStyle = '#35383F';
+        ctx.font = '600 11px "DM Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(label, bar.x, bar.y - 4);
+        ctx.restore();
+      });
+    });
+  }
+};
+
+function renderChartColab() {
+  var canvas = document.getElementById('chart-colab');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  var grupos = aggregarPorFeriado(getFilteredAll());
+  var ativos = grupos.filter(function(g){ return g.total > 0; });
+
+  if (_chartColabInst) { _chartColabInst.destroy(); _chartColabInst = null; }
+  if (!ativos.length) { _chartColabSel = null; return; }
+  if (_chartColabSel !== null && _chartColabSel >= ativos.length) _chartColabSel = null;
+
+  var labels = ativos.map(function(g){ return g.nome; });
+  var counts = ativos.map(function(g){ return Object.keys(g.nomes).length; });
+  var bgColors = counts.map(function(_, i) {
+    if (_chartColabSel === null) return '#35383F';
+    return _chartColabSel === i ? '#35383F' : 'rgba(53,56,63,0.45)';
+  });
+
+  _chartColabInst = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{
+      label: 'Colaboradores',
+      data: counts,
+      backgroundColor: bgColors,
+      borderWidth: 0, borderRadius: 5, barPercentage: 0.6
+    }]},
+    plugins: [barValueLabelsPlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { top: 18 } },
+      onClick: function(e, els) {
+        if (els.length) {
+          var idx = els[0].index;
+          _chartColabSel = (_chartColabSel === idx) ? null : idx;
+          renderChartColab();
+        }
+      },
+      onHover: function(e, els) {
+        if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default';
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false }
+      },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 }, autoSkip: false, maxRotation: 35, minRotation: 0 } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderChartHoras() {
+  var canvas = document.getElementById('chart-horas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  var grupos = aggregarPorFeriado(getFilteredAll());
+  var ativos = grupos.filter(function(g){ return g.total > 0; });
+
+  if (_chartHorasInst) { _chartHorasInst.destroy(); _chartHorasInst = null; }
+  if (!ativos.length) { _chartHorasSel = null; return; }
+  if (_chartHorasSel !== null && _chartHorasSel >= ativos.length) _chartHorasSel = null;
+
+  var labels = ativos.map(function(g){ return g.nome; });
+  var values = ativos.map(function(g){ return Math.round(g.totalHoras * 100) / 100; });
+  var formatted = ativos.map(function(g){ return formatHoras(g.totalHoras); });
+  var bgColors = values.map(function(_, i) {
+    if (_chartHorasSel === null) return '#35383F';
+    return _chartHorasSel === i ? '#35383F' : 'rgba(53,56,63,0.45)';
+  });
+
+  _chartHorasInst = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{
+      label: 'Horas',
+      data: values,
+      _formattedLabels: formatted,
+      backgroundColor: bgColors,
+      borderWidth: 0, borderRadius: 5, barPercentage: 0.6
+    }]},
+    plugins: [barValueLabelsPlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { top: 18 } },
+      onClick: function(e, els) {
+        if (els.length) {
+          var idx = els[0].index;
+          _chartHorasSel = (_chartHorasSel === idx) ? null : idx;
+          renderChartHoras();
+        }
+      },
+      onHover: function(e, els) {
+        if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default';
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false }
+      },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 }, autoSkip: false, maxRotation: 35, minRotation: 0 } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderDecisoesTable(grupos) {
+  var el = document.getElementById('rows-decisoes');
+  if (!el) return;
+  var ativos = grupos.filter(function(g){ return g.total > 0; });
+  if (!ativos.length) {
+    el.innerHTML = '<div class="status-empty">Sem dados</div>';
+    return;
+  }
+  var totFolga = 0, totPgto = 0, totPend = 0;
+  ativos.forEach(function(g){ totFolga += g.folga; totPgto += g.pagamento; totPend += g.pendente; });
+
+  var rows = ativos.map(function(g) {
+    return '<div class="status-row">' +
+      '<span class="status-name">' + escH(g.nome) + '<small>' + escH(g.data) + '</small></span>' +
+      '<span class="status-pills">' +
+        '<span class="status-pill p-folga">' + g.folga + ' folga</span>' +
+        '<span class="status-pill p-pgto">' + g.pagamento + ' pgto</span>' +
+        (g.pendente ? '<span class="status-pill p-pend">' + g.pendente + ' pend.</span>' : '') +
+      '</span>' +
+    '</div>';
+  }).join('');
+  rows += '<div class="status-row" style="background:var(--bg);font-weight:600;">' +
+    '<span class="status-name" style="font-weight:700;">Total</span>' +
+    '<span class="status-pills">' +
+      '<span class="status-pill p-folga">' + totFolga + ' folga</span>' +
+      '<span class="status-pill p-pgto">' + totPgto + ' pgto</span>' +
+      (totPend ? '<span class="status-pill p-pend">' + totPend + ' pend.</span>' : '') +
+    '</span>' +
+  '</div>';
+  el.innerHTML = rows;
+}
+
+function renderDashboard() {
+  var grupos = aggregarPorFeriado(getFilteredAll());
+  renderChartColab();
+  renderChartHoras();
+  renderDecisoesTable(grupos);
+}
+
 // ─── RENDER ───────────────────────────────────────────────────────────────────
 function render() {
   renderKPIs();
+  renderFilters();
+
+  if (state.tab === 'kpis') {
+    renderDashboard();
+    return;
+  }
+
+  // Devolutivas
   var filtrados = getFiltered();
   _filteredCache = filtrados;
-  renderFilters();
   var c = document.getElementById('content');
   if (!filtrados.length) {
     c.innerHTML = '<div class="empty-state">' +
@@ -790,6 +1102,16 @@ function render() {
     return;
   }
   c.innerHTML = filtrados.map(function(d, i){ return cardFeriado(d, i); }).join('');
+}
+
+function setTab(tab) {
+  state.tab = tab;
+  document.body.dataset.view = tab;
+  document.getElementById('tab-devolutivas').classList.toggle('active', tab === 'devolutivas');
+  document.getElementById('tab-kpis').classList.toggle('active', tab === 'kpis');
+  _chartColabSel = null;
+  _chartHorasSel = null;
+  render();
 }
 
 function setFeriado(id) {
@@ -850,6 +1172,7 @@ document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeDra
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 (function(){
+  document.body.dataset.view = state.tab;
   var s = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'));}catch(e){return null;}}());
   if (s && s.displayName) {
     var parts = s.displayName.trim().split(/\s+/);
