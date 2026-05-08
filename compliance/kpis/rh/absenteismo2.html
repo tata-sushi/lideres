@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Absenteísmo — TATÁ Sushi</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -85,6 +86,27 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 /* EMPTY STATE */
 .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
 .empty-state p { font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; }
+
+/* DASHBOARD (KPI's tab) */
+.chart-card { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px 16px; display: flex; flex-direction: column; }
+.chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
+.chart-wrap { position: relative; height: 220px; }
+.status-table { padding: 4px 0; }
+.status-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
+.status-row:last-child { border-bottom: none; }
+.status-row:hover { background: #FAFAFA; }
+.status-row.cf-selected { background: #FAFAFA; box-shadow: inset 4px 0 0 0 var(--carbon); }
+.status-name { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); font-weight: 500; }
+.status-count { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 600; color: var(--carbon); font-variant-numeric: tabular-nums; }
+.status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.dashboard { padding-top: 14px; padding-bottom: 80px; }
+body[data-view="dashboard"] .kpis-wrap,
+body[data-view="dashboard"] .filters-wrap,
+body[data-view="dashboard"] #content { display: none; }
+body:not([data-view="dashboard"]) #dashboard { display: none; }
+@media (min-width: 768px) {
+  .chart-card { max-width: 800px; margin: 0 auto; }
+}
 
 /* FOOTER */
 .footer { background: var(--carbon); padding: 12px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; position: fixed; bottom: 0; left: 0; right: 0; }
@@ -231,6 +253,25 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <div class="filters-wrap" id="filters-wrap"></div>
 <main class="content" id="content"></main>
+
+<div class="dashboard" id="dashboard">
+  <div class="chart-card">
+    <div class="chart-title" id="chartTitleMes">Ausências por Mês</div>
+    <div class="chart-wrap"><canvas id="cAusMes"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title" id="chartTitleTipos">Tipos de Ausência</div>
+    <div class="status-table" id="statusTipos"></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title" id="chartTitleUnidade">Ausências por Unidade</div>
+    <div class="chart-wrap"><canvas id="cAusUnidade"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title" id="chartTitleDepto">Ausências por Departamento</div>
+    <div class="chart-wrap"><canvas id="cAusDepto"></canvas></div>
+  </div>
+</div>
 
 <footer class="footer">
   <span class="footer-module">TATÁ SUSHI &nbsp;|&nbsp; TATÁ POKE &nbsp;|&nbsp; 2016 – 2026</span>
@@ -413,6 +454,7 @@ function loadData() {
         }
       }
       render();
+      if (state.tab === 'todos') renderDashboard();
     })
     .catch(function(err) { showError(err.message || 'Erro de rede'); });
 }
@@ -626,8 +668,190 @@ function setTab(tab) {
   state.filters = { unidade: 'Todos', departamento: 'Todos', tipo: 'Todos' };
   document.getElementById('tab-pendentes').classList.toggle('active', tab === 'pendentes');
   document.getElementById('tab-todos').classList.toggle('active', tab === 'todos');
-  render();
+  if (tab === 'todos') {
+    document.body.setAttribute('data-view', 'dashboard');
+    render();
+    renderDashboard();
+  } else {
+    document.body.removeAttribute('data-view');
+    clearCF();
+    render();
+  }
 }
+
+// ─── DASHBOARD (KPI's tab) ────────────────────────────────────────────────────
+var _cfMes = null, _cfTipo = null, _cfUnidade = null, _cfDepto = null;
+var _charts = {};
+
+function setCF(dim, value) {
+  var key = '_cf' + dim.charAt(0).toUpperCase() + dim.slice(1);
+  if (window[key] === value) { window[key] = null; }
+  else { window[key] = value; }
+  renderDashboard();
+}
+function clearCF() {
+  _cfMes = null; _cfTipo = null; _cfUnidade = null; _cfDepto = null;
+}
+function rowMatchesCF(d, exceptDim) {
+  if (exceptDim !== 'mes' && _cfMes !== null) {
+    var dt = parseDateBR(d.data);
+    if (!dt) return false;
+    var my = String(dt.getMonth()+1).padStart(2,'0') + '/' + String(dt.getFullYear()).slice(-2);
+    if (my !== _cfMes) return false;
+  }
+  if (exceptDim !== 'tipo' && _cfTipo !== null) {
+    if ((d.tipo || '').trim() !== _cfTipo) return false;
+  }
+  if (exceptDim !== 'unidade' && _cfUnidade !== null) {
+    if ((d.unidade || '').trim() !== _cfUnidade) return false;
+  }
+  if (exceptDim !== 'depto' && _cfDepto !== null) {
+    if ((d.depto || '').trim() !== _cfDepto) return false;
+  }
+  return true;
+}
+function ctxFor(dim) {
+  return dados.filter(function(d){ return rowMatchesCF(d, dim); });
+}
+
+// Plugin Chart.js: rótulos numéricos no topo de cada barra (carbon, sem cor)
+var barValueLabelsPlugin = {
+  id: 'barValueLabels',
+  afterDatasetsDraw: function(chart) {
+    var ctx = chart.ctx;
+    chart.data.datasets.forEach(function(ds, dsIdx) {
+      var meta = chart.getDatasetMeta(dsIdx);
+      meta.data.forEach(function(bar, i) {
+        var val = ds.data[i];
+        if (val === null || val === undefined) return;
+        ctx.save();
+        ctx.fillStyle = '#35383F';
+        ctx.font = '600 11px DM Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(String(val), bar.x, bar.y - 4);
+        ctx.restore();
+      });
+    });
+  }
+};
+
+function renderDashboard() {
+  if (typeof Chart === 'undefined') return;
+  renderChartAusenciasMes();
+  renderStatusTipos();
+  renderChartUnidade();
+  renderChartDepto();
+}
+
+function renderChartAusenciasMes() {
+  var canvas = document.getElementById('cAusMes');
+  if (!canvas) return;
+  var src = ctxFor('mes');
+  // Agrega por MM/YY
+  var counts = {};
+  src.forEach(function(d) {
+    var dt = parseDateBR(d.data);
+    if (!dt) return;
+    var my = String(dt.getMonth()+1).padStart(2,'0') + '/' + String(dt.getFullYear()).slice(-2);
+    counts[my] = (counts[my] || 0) + 1;
+  });
+  var labels = Object.keys(counts).sort(function(a,b) {
+    var pa = a.split('/'), pb = b.split('/');
+    return (pa[1]+pa[0]).localeCompare(pb[1]+pb[0]);
+  });
+  var data = labels.map(function(l){ return counts[l]; });
+  var bg = labels.map(function(l) {
+    return _cfMes === null ? '#35383F' : (l === _cfMes ? '#35383F' : 'rgba(53,56,63,0.45)');
+  });
+  if (_charts.mes) _charts.mes.destroy();
+  _charts.mes = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: bg, borderWidth: 0, borderRadius: 5, barPercentage: 0.6 }] },
+    plugins: [barValueLabelsPlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { top: 18 } },
+      onClick: function(e, els) { if (els.length) setCF('mes', labels[els[0].index]); },
+      onHover: function(e, els) { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 } } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
+      }
+    }
+  });
+  document.getElementById('chartTitleMes').textContent = _cfMes ? ('Ausências por Mês — ' + _cfMes) : 'Ausências por Mês';
+}
+
+function renderStatusTipos() {
+  var el = document.getElementById('statusTipos');
+  if (!el) return;
+  var src = ctxFor('tipo');
+  var counts = {};
+  src.forEach(function(d) {
+    var t = (d.tipo || '').trim() || 'Sem tipo';
+    counts[t] = (counts[t] || 0) + 1;
+  });
+  var entries = Object.keys(counts).map(function(k){ return [k, counts[k]]; });
+  entries.sort(function(a,b){ return b[1] - a[1]; });
+  if (!entries.length) {
+    el.innerHTML = '<div class="status-empty">Sem dados</div>';
+    return;
+  }
+  el.innerHTML = entries.map(function(e) {
+    var sel = (_cfTipo === e[0]) ? ' cf-selected' : '';
+    return '<div class="status-row' + sel + '" onclick="setCF(\'tipo\', ' + JSON.stringify(e[0]).replace(/"/g,'&quot;') + ')">' +
+      '<span class="status-name">' + escH(e[0]) + '</span>' +
+      '<span class="status-count">' + e[1] + '</span>' +
+      '</div>';
+  }).join('');
+  document.getElementById('chartTitleTipos').textContent = _cfTipo ? ('Tipos de Ausência — ' + _cfTipo) : 'Tipos de Ausência';
+}
+
+function renderChartByDim(dim, canvasId, titleId, baseTitle) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  var src = ctxFor(dim);
+  var counts = {};
+  src.forEach(function(d) {
+    var k = (d[dim === 'depto' ? 'depto' : dim] || '').trim();
+    if (!k) return;
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  var entries = Object.keys(counts).map(function(k){ return [k, counts[k]]; });
+  entries.sort(function(a,b){ return b[1] - a[1]; });
+  var labels = entries.map(function(e){ return e[0]; });
+  var data   = entries.map(function(e){ return e[1]; });
+  var cfKey = '_cf' + dim.charAt(0).toUpperCase() + dim.slice(1);
+  var cfVal = window[cfKey];
+  var bg = labels.map(function(l) {
+    return cfVal === null ? '#35383F' : (l === cfVal ? '#35383F' : 'rgba(53,56,63,0.45)');
+  });
+  var key = canvasId;
+  if (_charts[key]) _charts[key].destroy();
+  _charts[key] = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: bg, borderWidth: 0, borderRadius: 5 }] },
+    plugins: [barValueLabelsPlugin],
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { right: 28 } },
+      onClick: function(e, els) { if (els.length) setCF(dim, labels[els[0].index]); },
+      onHover: function(e, els) { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true },
+        y: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 11 } } }
+      }
+    }
+  });
+  document.getElementById(titleId).textContent = cfVal ? (baseTitle + ' — ' + cfVal) : baseTitle;
+}
+
+function renderChartUnidade() { renderChartByDim('unidade', 'cAusUnidade', 'chartTitleUnidade', 'Ausências por Unidade'); }
+function renderChartDepto()   { renderChartByDim('depto',   'cAusDepto',   'chartTitleDepto',   'Ausências por Departamento'); }
 function setFilter(key, val) {
   state.filters[key] = val;
   if (key === 'unidade') state.filters.departamento = 'Todos';
