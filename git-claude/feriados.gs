@@ -11,7 +11,7 @@
 //  Aba "Feriados" — layout esperado:
 //    Row 1   : cabeçalho (A=Data, B=Feriado, C=Colaborador, D=Matrícula,
 //               E=Horas, F=Unidade, G=Departamento, H=Saldo Dia Anterior,
-//               I=Devolutiva, J=Líder)
+//               I=Devolutiva, J=Líder, K=Data Compensação)
 //    Row 2+  : dados
 // ============================================================
 
@@ -464,9 +464,10 @@ function wa_listarFeriados() {
 }
 
 function wa_salvarDecisao(p) {
-  var linha   = parseInt(p.linha, 10);
-  var decisao = String(p.decisao     || "").trim();
-  var lider   = String(p.responsavel || p.lider || "").trim();
+  var linha            = parseInt(p.linha, 10);
+  var decisao          = String(p.decisao          || "").trim();
+  var lider            = String(p.responsavel || p.lider || "").trim();
+  var dataCompensacao  = String(p.dataCompensacao  || "").trim();
 
   if (!linha || linha < 2) return { success: false, message: "Linha inválida: " + p.linha };
   if (!decisao)            return { success: false, message: "Decisão não informada." };
@@ -475,8 +476,9 @@ function wa_salvarDecisao(p) {
   var sheet = ss.getSheetByName(_WA_SHEET_NAME);
   if (!sheet) return { success: false, message: "Aba não encontrada: " + _WA_SHEET_NAME };
 
-  sheet.getRange(linha, 9).setValue(decisao);  // col I — Devolutiva
-  sheet.getRange(linha, 10).setValue(lider);   // col J — Líder
+  sheet.getRange(linha, 9).setValue(decisao);          // col I — Devolutiva
+  sheet.getRange(linha, 10).setValue(lider);           // col J — Líder
+  sheet.getRange(linha, 11).setValue(dataCompensacao); // col K — Data Compensação (Folga)
 
   return { success: true };
 }

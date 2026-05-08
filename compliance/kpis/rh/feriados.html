@@ -291,8 +291,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="modal-body" style="padding:16px 20px 8px;overflow:visible;">
       <div id="modal-decisao-nome" style="font-size:15px;font-weight:700;color:var(--carbon);margin-bottom:16px;text-transform:uppercase;letter-spacing:-0.1px;line-height:1.3;"></div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn-decisao-opt" onclick="confirmarDecisaoModal('Folga')">
+      <!-- Step 1: escolha -->
+      <div id="modal-step-opcoes" style="display:flex;gap:8px;">
+        <button class="btn-decisao-opt" onclick="selecionarFolga()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
           Folga
         </button>
@@ -300,6 +301,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           Pagamento
         </button>
+      </div>
+      <!-- Step 2: data da compensação (só para Folga) -->
+      <div id="modal-step-folga" style="display:none;">
+        <label style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.8px;text-transform:uppercase;color:var(--mid);display:block;margin-bottom:6px;">Data da compensação</label>
+        <input type="date" id="modal-folga-data" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--carbon);background:var(--bg);outline:none;"/>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn-cancelar-decisao" style="flex:1;" onclick="voltarOpcoes()">Voltar</button>
+          <button class="btn-decisao-opt" style="flex:2;" onclick="confirmarFolgaComData()">Confirmar Folga</button>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -640,6 +650,9 @@ function abrirModalDecisao(idx) {
   _modalDecisaoIdx = idx;
   var d = _filteredCache[idx];
   document.getElementById('modal-decisao-nome').textContent = d ? d.nome : '';
+  document.getElementById('modal-step-opcoes').style.display = 'flex';
+  document.getElementById('modal-step-folga').style.display = 'none';
+  document.getElementById('modal-folga-data').value = '';
   document.getElementById('modal-decisao-overlay').classList.add('open');
 }
 function fecharModalDecisao() {
@@ -649,15 +662,32 @@ function fecharModalDecisao() {
 function handleDecisaoModalClick(e) {
   if (e.target === document.getElementById('modal-decisao-overlay')) fecharModalDecisao();
 }
+function selecionarFolga() {
+  document.getElementById('modal-step-opcoes').style.display = 'none';
+  document.getElementById('modal-step-folga').style.display = 'block';
+}
+function voltarOpcoes() {
+  document.getElementById('modal-step-folga').style.display = 'none';
+  document.getElementById('modal-step-opcoes').style.display = 'flex';
+}
+function confirmarFolgaComData() {
+  var dataInput = document.getElementById('modal-folga-data').value;
+  if (!dataInput) { alert('Selecione a data da compensação'); return; }
+  var p = dataInput.split('-');
+  var dataBR = p[2] + '/' + p[1] + '/' + p[0];
+  var idx = _modalDecisaoIdx;
+  fecharModalDecisao();
+  salvarDecisao(idx, 'Folga', dataBR);
+}
 function confirmarDecisaoModal(valor) {
   if (_modalDecisaoIdx === null) return;
   var idx = _modalDecisaoIdx;
   fecharModalDecisao();
-  salvarDecisao(idx, valor);
+  salvarDecisao(idx, valor, null);
 }
 
 // ─── SALVAR DECISÃO ───────────────────────────────────────────────────────────
-function salvarDecisao(idx, decisao) {
+function salvarDecisao(idx, decisao, dataCompensacao) {
   var d = _filteredCache[idx];
   if (!d || !decisao) return;
 
@@ -671,6 +701,7 @@ function salvarDecisao(idx, decisao) {
     decisao:     decisao,
     responsavel: __nomeResponsavel
   });
+  if (dataCompensacao) params.set('dataCompensacao', dataCompensacao);
 
   fetch(APPS_SCRIPT_URL + '?' + params.toString())
     .then(function(r){ return r.json(); })
