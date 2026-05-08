@@ -451,9 +451,7 @@ function loadData() {
         return da - db;
       });
 
-      if (!state.feriadoAtivo && FERIADOS_CONFIG.length) {
-        state.feriadoAtivo = FERIADOS_CONFIG[FERIADOS_CONFIG.length - 1];
-      }
+      // inicia em "Todos" (feriadoAtivo = null)
       render();
     })
     .catch(function(err) { showError('Erro de conexão: ' + err.message); });
@@ -520,11 +518,13 @@ function updateBanner() {
 
 // ─── FILTROS ──────────────────────────────────────────────────────────────────
 function getDadosFeriado() {
-  if (!state.feriadoAtivo) return [];
+  if (!state.feriadoAtivo) return dados; // Todos os feriados
   return dados.filter(function(d){ return d.feriado === state.feriadoAtivo.id; });
 }
 function getFiltered() {
   var src = getDadosFeriado();
+  // Modo "Todos": exibe apenas pendentes
+  if (!state.feriadoAtivo) src = src.filter(function(d){ return !isDecidido(d); });
   var f = state.filters;
   return src.filter(function(d) {
     if (f.unidade !== 'Todos' && d.unidade !== f.unidade) return false;
@@ -551,7 +551,7 @@ function renderFilters() {
   // Feriado selector como filter-group
   var feriHtml = '<div class="filter-group"><label class="filter-label">Feriado</label>';
   feriHtml += '<select class="filter-select" onchange="setFeriado(this.value)">';
-  if (!state.feriadoAtivo) feriHtml += '<option value="">Selecione...</option>';
+  feriHtml += '<option value="todos"' + (!state.feriadoAtivo ? ' selected' : '') + '>Todos</option>';
   FERIADOS_CONFIG.forEach(function(fc) {
     var isSel = state.feriadoAtivo && state.feriadoAtivo.id === fc.id;
     feriHtml += '<option value="' + escH(fc.id) + '"' + (isSel ? ' selected' : '') + '>' + escH(fc.nome) + ' — ' + escH(fc.data) + '</option>';
@@ -719,13 +719,6 @@ function render() {
   _filteredCache = filtrados;
   renderFilters();
   var c = document.getElementById('content');
-  if (!state.feriadoAtivo) {
-    c.innerHTML = '<div class="empty-state">' +
-      '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#35383F" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
-      '<p style="margin-top:12px">Selecione um feriado no banner acima</p>' +
-    '</div>';
-    return;
-  }
   if (!filtrados.length) {
     c.innerHTML = '<div class="empty-state">' +
       '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#35383F" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>' +
@@ -737,6 +730,12 @@ function render() {
 }
 
 function setFeriado(id) {
+  if (id === 'todos') {
+    state.feriadoAtivo = null;
+    state.filters = { unidade: 'Todos', departamento: 'Todos' };
+    render();
+    return;
+  }
   var f = FERIADOS_CONFIG.filter(function(x){ return x.id === id; })[0];
   if (f) {
     state.feriadoAtivo = f;
