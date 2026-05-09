@@ -99,6 +99,23 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .status-name { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); font-weight: 500; }
 .status-count { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 600; color: var(--carbon); font-variant-numeric: tabular-nums; }
 .status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+
+/* Tabela de Colaboradores (mesmo padrão do bancodehoras) */
+.colab-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.colab-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 6px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); cursor: pointer; user-select: none; white-space: nowrap; }
+.colab-table thead th:hover { color: var(--carbon); }
+.colab-table tbody td { padding: 8px 6px; font-size: 13px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.colab-table tbody tr { cursor: pointer; transition: background 0.1s; }
+.colab-table tbody tr:hover { background: #FAFAFA; }
+.colab-table tbody tr.cf-selected { background: #FAFAFA; box-shadow: inset 4px 0 0 0 var(--carbon); }
+.colab-table tbody tr.cf-selected td { color: var(--carbon); font-weight: 600; }
+.colab-table th:nth-child(1), .colab-table td:nth-child(1) { width: 46%; }
+.colab-table th:nth-child(2), .colab-table td:nth-child(2) { width: 16%; }
+.colab-table th:nth-child(3), .colab-table td:nth-child(3) { width: 22%; }
+.colab-table th:nth-child(4), .colab-table td:nth-child(4) { width: 16%; }
+.colab-cell-num { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 600; color: var(--carbon); text-align: center; }
+.colab-cell-zero { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); text-align: center; }
+
 .dashboard { padding-top: 14px; padding-bottom: 80px; }
 body[data-view="dashboard"] .kpis-wrap,
 body[data-view="dashboard"] .filters-wrap,
@@ -270,6 +287,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="chart-card">
     <div class="chart-title" id="chartTitleDepto">Ausências por Departamento</div>
     <div class="chart-wrap"><canvas id="cAusDepto"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Colaboradores <span id="colab-count-label" style="color:var(--muted);font-size:10px;margin-left:8px;font-weight:500;letter-spacing:normal;text-transform:none;"></span></div>
+    <div class="table-wrap">
+      <table class="colab-table">
+        <thead>
+          <tr>
+            <th onclick="toggleColabSort('nome')">Colaborador <span id="colab-icon-nome">↕</span></th>
+            <th onclick="toggleColabSort('faltas')" style="text-align:center">Faltas <span id="colab-icon-faltas">↓</span></th>
+            <th onclick="toggleColabSort('justificadas')" style="text-align:center">Justificadas <span id="colab-icon-justificadas">↕</span></th>
+            <th onclick="toggleColabSort('suspensao')" style="text-align:center">Suspensão <span id="colab-icon-suspensao">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-colab"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -749,6 +782,97 @@ function renderDashboard() {
   renderStatusTipos();
   renderChartUnidade();
   renderChartDepto();
+  renderColabTable();
+}
+
+// Classifica o tipo da ausência em uma das três categorias da tabela
+function classifyTipoAusencia(tipo) {
+  var t = (tipo || '').toLowerCase().trim();
+  if (!t) return null;
+  if (t.indexOf('falta') !== -1) return 'faltas';
+  // Justificadas: licença, afastamento, atestado, suspensão de contrato
+  if (t.indexOf('licen') !== -1 || t.indexOf('afasta') !== -1 || t.indexOf('atest') !== -1 ||
+      (t.indexOf('suspens') !== -1 && t.indexOf('contrato') !== -1)) return 'justificadas';
+  // Suspensão (disciplinar) — qualquer "suspens" que não seja de contrato
+  if (t.indexOf('suspens') !== -1) return 'suspensao';
+  return null;
+}
+
+// Estado e helpers da tabela de colaboradores
+var _colabSortCol = 'faltas';
+var _colabSortDir = -1;
+var _colabRows = [];
+var _colabShown = 10;
+var COLAB_PAGE = 10;
+
+function buildColabRows() {
+  var src = ctxFor('colab'); // respeita o cross-filter ativo (não cf de colaborador, que não existe nessa view)
+  var by = {};
+  src.forEach(function(d) {
+    var cat = classifyTipoAusencia(d.tipo);
+    if (!cat) return;
+    var nome = (d.colaborador || d.nome || '').trim();
+    if (!nome) return;
+    if (!by[nome]) by[nome] = { nome: nome, faltas: 0, justificadas: 0, suspensao: 0, total: 0 };
+    by[nome][cat]++;
+    by[nome].total++;
+  });
+  return Object.keys(by).map(function(k) { return by[k]; });
+}
+
+function toggleColabSort(col) {
+  if (_colabSortCol === col) { _colabSortDir = -_colabSortDir; }
+  else { _colabSortCol = col; _colabSortDir = (col === 'nome') ? 1 : -1; }
+  var icons = { nome:'↕', faltas:'↕', justificadas:'↕', suspensao:'↕' };
+  icons[_colabSortCol] = _colabSortDir === -1 ? '↓' : '↑';
+  ['nome','faltas','justificadas','suspensao'].forEach(function(k) {
+    var el = document.getElementById('colab-icon-' + k);
+    if (el) el.textContent = icons[k];
+  });
+  _colabShown = COLAB_PAGE;
+  renderColabRows();
+}
+
+function renderColabTable() {
+  _colabRows = buildColabRows();
+  _colabShown = COLAB_PAGE;
+  var lbl = document.getElementById('colab-count-label');
+  if (lbl) lbl.textContent = '— ' + _colabRows.length + ' resultado' + (_colabRows.length !== 1 ? 's' : '');
+  renderColabRows();
+}
+
+function renderColabRows() {
+  var sorted = _colabRows.slice().sort(function(a,b) {
+    if (_colabSortCol === 'nome') return _colabSortDir * (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+    return _colabSortDir * ((b[_colabSortCol] || 0) - (a[_colabSortCol] || 0));
+  });
+  var display = sorted.slice(0, _colabShown);
+  function cellNum(n) {
+    var cls = (n > 0) ? 'colab-cell-num' : 'colab-cell-zero';
+    return '<td class="' + cls + '">' + n + '</td>';
+  }
+  var html = display.map(function(r) {
+    return '<tr>' +
+      '<td>' + escH(r.nome) + '</td>' +
+      cellNum(r.faltas) +
+      cellNum(r.justificadas) +
+      cellNum(r.suspensao) +
+      '</tr>';
+  }).join('');
+  var resto = sorted.length - _colabShown;
+  if (resto > 0) {
+    var proximo = Math.min(COLAB_PAGE, resto);
+    html += '<tr><td colspan="4" style="text-align:center;padding:10px;border-bottom:none">' +
+      '<button onclick="showMoreColab()" style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer">Ver mais (' + proximo + ')</button>' +
+      '</td></tr>';
+  }
+  document.getElementById('tbody-colab').innerHTML = html ||
+    '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Nenhum resultado</td></tr>';
+}
+
+function showMoreColab() {
+  _colabShown += COLAB_PAGE;
+  renderColabRows();
 }
 
 function renderChartAusenciasMes() {
