@@ -32,7 +32,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .tab-btn.active { background: var(--carbon); color: var(--citric); border-bottom-color: var(--carbon); }
 
 /* KPIS */
-.kpis-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
 .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
 .kpi-number { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
@@ -133,7 +132,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .colab-cell-zero { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); text-align: center; }
 
 .dashboard { padding-top: 14px; padding-bottom: 80px; }
-body[data-view="dashboard"] .kpis-wrap,
 body[data-view="dashboard"] .filters-wrap,
 body[data-view="dashboard"] #content { display: none; }
 body:not([data-view="dashboard"]) #dashboard { display: none; }
@@ -186,7 +184,6 @@ body:not([data-view="dashboard"]) #dash-filters { display: none; }
 @media (min-width: 768px) {
   .content { max-width: 800px; margin: 0 auto; padding: 24px 32px 80px; }
   .filters-wrap { max-width: 800px; margin: 0 auto; }
-  .kpis-wrap { max-width: 800px; margin: 0 auto; }
   #dash-filters { max-width: 800px; margin: 0 auto; }
   .filters-row { grid-template-columns: 1fr 1fr 1fr; }
   .card-body { grid-template-columns: repeat(3, 1fr); }
@@ -278,18 +275,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <button class="tab-btn" id="tab-todos" onclick="setTab('todos')">KPI's</button>
 </div>
 
-<div class="kpis-wrap">
-  <div class="kpi-card">
-    <span class="kpi-label">Faltas pendentes</span>
-    <span class="kpi-number" id="kpi-pendentes">—</span>
-    <span class="kpi-sub"><strong id="kpi-hoje">0</strong> hoje / <strong id="kpi-semana">0</strong> semana</span>
-  </div>
-  <div class="kpi-card">
-    <span class="kpi-label">Total do mês</span>
-    <span class="kpi-number" id="kpi-mes">—</span>
-    <span class="kpi-sub"><strong id="kpi-colabs">0</strong> colaborador(es)</span>
-  </div>
-</div>
 
 <div class="filters-wrap" id="filters-wrap"></div>
 <main class="content" id="content"></main>
@@ -605,45 +590,6 @@ function renderFilters() {
   document.getElementById('filters-wrap').innerHTML = html;
 }
 
-// ─── KPIs ─────────────────────────────────────────────────────────────────────
-function renderKPIs() {
-  var hoje = new Date(); hoje.setHours(0,0,0,0);
-  var seg = new Date(hoje);
-  var dia = hoje.getDay();
-  seg.setDate(seg.getDate() - (dia === 0 ? 6 : dia - 1));
-  var dom = new Date(seg); dom.setDate(dom.getDate() + 6);
-
-  var abs = dados.filter(function(d){ return !isFolga(d); });
-  var pendentes = abs.filter(function(d){
-    return !isJustificado(d) && (d.status || '').trim() === 'Ativo' && classifyTipoAusencia(d.tipo) === 'faltas';
-  }).length;
-  var hojeFaltas = abs.filter(function(d){
-    var dt = parseDateBR(d.data);
-    return dt && dt.getTime() === hoje.getTime();
-  }).length;
-  var semanaFaltas = abs.filter(function(d){
-    var dt = parseDateBR(d.data);
-    return dt && dt >= seg && dt <= dom;
-  }).length;
-  var mesRef = hoje.getMonth(), anoRef = hoje.getFullYear();
-  var mesFaltas = abs.filter(function(d){
-    var dt = parseDateBR(d.data);
-    return dt && dt.getMonth() === mesRef && dt.getFullYear() === anoRef;
-  }).length;
-  var colabsMes = unique(abs.filter(function(d){
-    var dt = parseDateBR(d.data);
-    return dt && dt.getMonth() === mesRef && dt.getFullYear() === anoRef;
-  }).map(function(d){ return d.nome; })).length;
-
-  document.getElementById('kpi-pendentes').textContent = pendentes;
-  document.getElementById('kpi-hoje').textContent = hojeFaltas;
-  document.getElementById('kpi-semana').textContent = semanaFaltas;
-  document.getElementById('kpi-mes').textContent = mesFaltas;
-  document.getElementById('kpi-colabs').textContent = colabsMes;
-
-  var el = document.getElementById('footer-date');
-  if (el) { var n = new Date(), p = function(x){return String(x).padStart(2,'0')}; el.textContent = 'Atualizado: ' + p(n.getDate()) + '/' + p(n.getMonth()+1) + '/' + n.getFullYear() + ', ' + p(n.getHours()) + ':' + p(n.getMinutes()) + ':' + p(n.getSeconds()); }
-}
 
 // ─── CARDS ────────────────────────────────────────────────────────────────────
 function cardAbsencia(d, idx) {
@@ -753,7 +699,6 @@ function confirmarModalDev() {
           newDiv.innerHTML = cardAbsencia(d, idx);
           cardEl.replaceWith(newDiv.firstChild);
         }
-        renderKPIs();
         renderFilters();
       } else {
         btn.textContent = 'Confirmar';
@@ -770,7 +715,8 @@ function confirmarModalDev() {
 
 // ─── RENDER ───────────────────────────────────────────────────────────────────
 function render() {
-  renderKPIs();
+  var _el = document.getElementById('footer-date');
+  if (_el) { var _n = new Date(), _p = function(x){return String(x).padStart(2,'0')}; _el.textContent = 'Atualizado: ' + _p(_n.getDate()) + '/' + _p(_n.getMonth()+1) + '/' + _n.getFullYear() + ', ' + _p(_n.getHours()) + ':' + _p(_n.getMinutes()) + ':' + _p(_n.getSeconds()); }
   var filtrados = getFiltered();
   _filteredCache = filtrados;
   renderFilters();
