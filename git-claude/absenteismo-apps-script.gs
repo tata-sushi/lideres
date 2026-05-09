@@ -356,7 +356,40 @@ function _getApuracaoAus3(token, idPerson, dataIni, dataFinal) {
   } catch(e) { return null; }
 }
 
-// ─── UTILITÁRIOS ─────────────────────────────────────────────────────────────
+// ─── WEB APP — salvar devolutiva ─────────────────────────────────────────────
+function doGet(e) {
+  var p = (e && e.parameter) ? e.parameter : {};
+  try {
+    if (p.acao === 'devolutiva-ausencia') return _json(_salvarDevolutiva(p));
+    return _json({ success: false, message: 'acao_desconhecida: ' + (p.acao || '') });
+  } catch (err) {
+    return _json({ success: false, message: String(err) });
+  }
+}
+
+function _salvarDevolutiva(p) {
+  var linha      = parseInt(p.linha, 10);
+  var devolutiva = (p.devolutiva || '').trim();
+  if (!linha || linha < 2) return { success: false, message: 'linha_invalida' };
+  if (!devolutiva)         return { success: false, message: 'devolutiva_vazia' };
+
+  var ss  = SpreadsheetApp.openById(CONFIG_AUS3.SS_ID);
+  var aba = ss.getSheetByName(CONFIG_AUS3.ABA_DADOS);
+  if (!aba) return { success: false, message: 'aba_nao_encontrada' };
+
+  aba.getRange(linha, 6).setValue(devolutiva); // col F — TIPO DE AUSÊNCIA
+  aba.getRange(linha, 8).setValue(devolutiva); // col H — DEVOLUTIVA
+
+  return { success: true };
+}
+
+function _json(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+
 function _getOrCreateSheetAus3(ss, name) {
   return ss.getSheetByName(name) || ss.insertSheet(name);
 }
