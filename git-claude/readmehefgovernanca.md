@@ -72,6 +72,8 @@ Isso distingue páginas de governança (menu/hub/seções) das páginas de dashb
 - **Font-size**: `10px` (mobile) → `10px` (desktop)
 - **Font-weight**: `500`
 - **Color**: `var(--t1)` (#111111 — texto escuro principal)
+- **Letter-spacing**: `0.5px`
+- **Text-transform**: `uppercase` — o nome do líder é sempre exibido em **MAIÚSCULAS**
 
 ### Visual
 - **Background**: `var(--bg)` (#F4F4F4 — fundo neutro)
@@ -145,23 +147,129 @@ Isso distingue páginas de governança (menu/hub/seções) das páginas de dashb
 
 ---
 
+## AUTH-GATE (IDENTIFICAÇÃO DO LÍDER + GUARDA DE ACESSO)
+
+Toda página de governança nova deve incorporar o **auth-gate** padrão logo após `<body>`. Ele valida a sessão do líder em `localStorage.lideres_session`, redireciona para o portal se inválida/expirada, mostra a tela "Sem acesso" quando o perfil não tem permissão, e expõe `window.__lideresUser` / `__lideresSession` / `__lideresPerfil` para o restante da página.
+
+**Referência canônica:** `compliance/kpis/rh/recrutamento.html` (linhas ~207–274). Replicado em `compliance/areas/rh/ferias.html` e `compliance/areas/rh/beneficios.html`.
+
+### Bloco completo (copiar/colar logo após `<body>`)
+
+```html
+<!-- ══ AUTH GATE — session guard (lideres) ══════════════════════ -->
+<style>
+html[data-auth="pending"] body > *:not(#auth-gate) { visibility: hidden; }
+html[data-auth="denied"]  body > *:not(#auth-gate) { display: none !important; }
+html[data-auth="ok"]      #auth-gate               { display: none !important; }
+#auth-gate { position:fixed; inset:0; z-index:99999; background:#F4F4F4; color:#35383F;
+  display:flex; align-items:center; justify-content:center; padding:24px; font-family:"DM Sans",sans-serif; }
+#auth-gate .gate-box { max-width:420px; width:100%; background:#FFF; border:1px solid #E2E2E2;
+  border-radius:16px; padding:32px 28px; text-align:center; }
+#auth-gate h2 { font-size:20px; font-weight:700; margin-bottom:10px; color:#111; }
+#auth-gate p  { font-size:14px; color:#555; line-height:1.55; margin-bottom:22px; }
+#auth-gate .gate-user { display:inline-block; font-family:"DM Mono",monospace; font-size:11px;
+  font-weight:600; color:#35383F; background:#F4F4F4; border:1px solid #E2E2E2;
+  border-radius:100px; padding:4px 10px; margin-bottom:18px; }
+#auth-gate .gate-btn { display:inline-flex; align-items:center; gap:8px; background:#35383F;
+  color:#FFF; border:none; border-radius:100px; padding:11px 22px; font-size:13px;
+  font-weight:600; text-decoration:none; }
+#auth-gate .gate-spin { width:28px; height:28px; border-radius:50%; border:3px solid #E2E2E2;
+  border-top-color:#35383F; animation:gate-spin .8s linear infinite; margin:0 auto 14px; }
+@keyframes gate-spin { to { transform:rotate(360deg); } }
+html[data-auth="pending"] #auth-gate .gate-denied  { display:none; }
+html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
+</style>
+<div id="auth-gate">
+  <div class="gate-box">
+    <div class="gate-loading">
+      <div class="gate-spin"></div>
+      <h2>Verificando acesso...</h2>
+      <p>Confirmando sua permissão.</p>
+    </div>
+    <div class="gate-denied">
+      <h2>Sem acesso</h2>
+      <span class="gate-user" id="gate-user"></span>
+      <p>Seu perfil não possui permissão para esta página. Procure a Gestão.</p>
+      <a class="gate-btn" href="https://lideres.tatasushi.tech/">← Voltar ao Portal</a>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  document.documentElement.setAttribute('data-auth', 'pending');
+  var PORTAL_URL    = 'https://lideres.tatasushi.tech/';
+  var PAGE_ID       = 'governanca-areas-rh-ferias';            /* ⚠️ trocar por página */
+  var PAGE_URL_FRAG = '/compliance/areas/rh/ferias';            /* ⚠️ trocar por página */
+  var session;
+  try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
+  if (!session || !session.displayName || !session.expiresAt || session.expiresAt < Date.now()) {
+    window.location.replace(PORTAL_URL); return;
+  }
+  if (typeof session.perfil === 'undefined' || typeof session.paginas === 'undefined') {
+    localStorage.removeItem('lideres_session'); window.location.replace(PORTAL_URL); return;
+  }
+  var perfil  = (session.perfil || '').toLowerCase();
+  var paginas = Array.isArray(session.paginas) ? session.paginas : [];
+  var hasAccess = paginas.some(function(p) {
+    var id  = String(p && p.id  || '').toLowerCase();
+    var url = String(p && p.url || '').toLowerCase();
+    return id === PAGE_ID || url.indexOf(PAGE_URL_FRAG) !== -1;
+  });
+  if (!hasAccess) {
+    document.documentElement.setAttribute('data-auth', 'denied');
+    document.addEventListener('DOMContentLoaded', function() {
+      var u = document.getElementById('gate-user');
+      if (u) u.textContent = session.displayName;
+    });
+    return;
+  }
+  window.__lideresUser    = session.displayName;
+  window.__lideresSession = session;
+  window.__lideresPerfil  = perfil;
+  document.documentElement.setAttribute('data-auth', 'ok');
+})();
+</script>
+<!-- ══ /AUTH GATE ═══════════════════════════════════════════════ -->
+```
+
+### Convenção `PAGE_ID` / `PAGE_URL_FRAG`
+
+| Campo | Formato | Exemplo |
+|---|---|---|
+| `PAGE_ID` | `governanca-<area>-<sub>-<pagina>` (kebab-case) | `governanca-areas-rh-ferias` |
+| `PAGE_URL_FRAG` | fragmento absoluto sem extensão | `/compliance/areas/rh/ferias` |
+
+A regra de acesso é **estrita**: libera se `id === PAGE_ID` OU `url` da permissão contém `PAGE_URL_FRAG`. Não há fallback genérico para `compliance`.
+
+### Estados visuais (controlados por `html[data-auth="..."]`)
+
+- `pending` — overlay loading com spinner; conteúdo da página oculto via `visibility: hidden`
+- `denied` — overlay "Sem acesso" com `displayName` do líder; conteúdo removido com `display: none`
+- `ok` — overlay sumido; página renderiza normalmente
+
+### Fluxo de redirecionamento
+
+1. Sem `lideres_session`, sem `displayName`, sem `expiresAt` ou expirada → `window.location.replace(PORTAL_URL)`
+2. Sessão sem `perfil` ou `paginas` (formato antigo) → limpa storage e redireciona
+3. Sessão válida sem permissão → estado `denied`
+4. Sessão válida com permissão → expõe globais e estado `ok`
+
+---
+
 ## POPULAÇÃO DO NOME DO LÍDER (SCRIPT)
 
-### Padrão Recomendado (Institucional — auth-gate moderno)
+### Padrão Recomendado (nome abreviado — primeiro + último)
 
-Use este padrão em **novas páginas de governança**:
+Use este padrão em **novas páginas de governança**, sempre **após** o auth-gate ter rodado:
 
 ```html
 <script>
-/* ── Preenche nome do líder no header ── */
 (function() {
-  var session = window.__lideresSession;
-  if (!session) {
-    try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-  }
-  if (session && session.displayName) {
-    var hu = document.getElementById('header-user');
-    if (hu) hu.textContent = session.displayName;
+  var s = window.__lideresSession || (function(){ try { return JSON.parse(localStorage.getItem('lideres_session')); } catch(e) { return null; } })();
+  if (s && s.displayName) {
+    var parts = s.displayName.trim().split(/\s+/);
+    var short = parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : parts[0];
+    var hu = document.getElementById('header-user'); if (hu) hu.textContent = short;
   }
 })();
 </script>
@@ -170,8 +278,11 @@ Use este padrão em **novas páginas de governança**:
 **Fluxo**:
 1. Lê `window.__lideresSession` (populado pelo auth-gate)
 2. Fallback: `JSON.parse(localStorage.getItem('lideres_session'))`
-3. Injeta `session.displayName` em `#header-user`
-4. Se vazio, permanece `"—"`
+3. Reduz `displayName` a **primeiro + último nome** (ex.: `"Maria Carolina Silva Souza"` → `"Maria Souza"`)
+4. Injeta em `#header-user` (já em uppercase via CSS — não precisa `.toUpperCase()` no JS)
+5. Se vazio, permanece `"—"`
+
+> ⚠️ O `text-transform:uppercase` é responsabilidade do CSS de `.header-user`. Mantenha o `displayName` original no JS — apenas o CSS força maiúsculas, o que evita inconsistência se o estilo mudar.
 
 ### Padrão Legado (menucompliance.html)
 
@@ -271,10 +382,11 @@ if (window.__lideresUser) {
 - Background: `var(--white)`
 - Wrappers `.header-left` + `.header-right` (estrutura flex dividida)
 - Logo: `.header-logo` com `height="34"` (mobile) → `height="40px"` (desktop via media query)
-- `.header-user`: DM Mono 10px, **`height: 28px`**, **`display: inline-flex; align-items: center`**, **`padding: 0 10px`**, border-radius **`4px` hardcoded**, `id="header-user"`, fallback `"—"`
+- `.header-user`: DM Mono 10px, **`height: 28px`**, **`display: inline-flex; align-items: center`**, **`padding: 0 10px`**, **`letter-spacing: 0.5px`**, **`text-transform: uppercase`**, border-radius **`4px` hardcoded**, `id="header-user"`, fallback `"—"`
 - `.header-plus`: **28×28**, background carbon, border-radius **`4px` hardcoded**, SVG 14×14 stroke citric 2.5
 - Footer: `.page-footer` com `.page-footer-brand` interno, texto exato da marca
-- Script de população via `window.__lideresSession` ou `localStorage.lideres_session`
+- **Auth-gate** completo logo após `<body>` (com `PAGE_ID`/`PAGE_URL_FRAG` específicos da página)
+- Script de população do nome via `window.__lideresSession` ou `localStorage.lideres_session`, exibindo **primeiro + último nome** (uppercase é via CSS)
 
 ### ❌ NÃO
 - Adicionar `.header-title` ou qualquer texto entre logo e user (usa só logo)
@@ -349,6 +461,8 @@ if (window.__lideresUser) {
       height: 28px;
       display: inline-flex;
       align-items: center;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
     }
     .header-plus {
       width: 28px; height: 28px;
