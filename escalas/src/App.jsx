@@ -942,6 +942,13 @@ export default function EscalaPainel() {
 
         .esc-root{font-family:'DM Sans',sans-serif;background:${T.bg};min-height:100vh;color:${T.text};font-size:14px;padding-bottom:60px;}
 
+        /* LOADING OVERLAY — padrão único do portal (git-claude/readmeload.md) */
+        .loading-overlay{display:none;position:fixed;inset:0;background:rgba(255,255,255,.75);z-index:500;align-items:center;justify-content:center;flex-direction:column;gap:10px;}
+        .loading-overlay.show{display:flex;}
+        .loading-overlay .spinner{width:28px;height:28px;border:3px solid ${T.border};border-top-color:${T.carbon};border-radius:50%;animation:spin .7s linear infinite;}
+        .loading-overlay span{font-family:'DM Mono',monospace;font-size:11px;color:${T.mid};}
+        @keyframes spin{to{transform:rotate(360deg);}}
+
         .btn-dev{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;padding:8px 14px;background:${T.carbon};color:${T.citric};border:none;border-radius:${T.radius};cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
         .btn-dev:hover{opacity:.87;}
         .btn-outline{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;padding:8px 14px;background:${T.surface};color:${T.mid};border:1px solid ${T.border};border-radius:${T.radius};cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
@@ -1094,7 +1101,7 @@ export default function EscalaPainel() {
           <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Escalas</div>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-          {syncStatus==='loading'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.muted}}>⟳ Carregando...</span>}
+          {/* status "loading" agora é exibido pelo .loading-overlay */}
           {syncStatus==='error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red}}>✗ Erro ao salvar</span>}
           {syncStatus==='load-error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red}}>✗ Erro ao carregar</span>}
           {syncStatus==='saved'&&!pendente&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.green}}>✓ Salvo</span>}
@@ -1653,6 +1660,12 @@ export default function EscalaPainel() {
           onRemove={removerFerias}
         />
       )}
+
+      {/* LOADING */}
+      <div className={'loading-overlay' + (syncStatus==='loading' ? ' show' : '')}>
+        <div className="spinner"></div>
+        <span>Carregando dados...</span>
+      </div>
 
       {/* FOOTER */}
       <footer style={{background:T.carbon,padding:'10px 20px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,position:'fixed',bottom:0,left:0,right:0,zIndex:50}}>
