@@ -320,6 +320,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </table>
     </div>
   </div>
+  <div class="chart-card">
+    <div class="chart-title">Analítico <span id="analitico-count-label" style="color:var(--muted);font-size:10px;margin-left:8px;font-weight:500;letter-spacing:normal;text-transform:none;"></span></div>
+    <div class="table-wrap">
+      <table class="colab-table" id="table-analitico">
+        <thead>
+          <tr>
+            <th onclick="toggleAnaliticoSort('nome')" style="width:36%">Colaborador <span id="an-icon-nome">↕</span></th>
+            <th onclick="toggleAnaliticoSort('data')" style="width:16%">Data <span id="an-icon-data">↓</span></th>
+            <th style="width:22%">Tipo</th>
+            <th style="width:26%">Justificativa</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-analitico"></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <footer class="footer">
@@ -862,6 +878,7 @@ function renderDashboard() {
   renderChartUnidade();
   renderChartDepto();
   renderColabTable();
+  renderAnalitico();
 }
 
 // Classifica o tipo da ausência em uma das três categorias da tabela
@@ -952,6 +969,66 @@ function renderColabRows() {
 function showMoreColab() {
   _colabShown += COLAB_PAGE;
   renderColabRows();
+}
+
+// ─── TABELA ANALÍTICA ─────────────────────────────────────────────────────────
+var _anSortCol = 'data';
+var _anSortDir = -1;
+var _anShown   = 10;
+var AN_PAGE    = 10;
+
+function toggleAnaliticoSort(col) {
+  if (_anSortCol === col) { _anSortDir = -_anSortDir; }
+  else { _anSortCol = col; _anSortDir = (col === 'nome') ? 1 : -1; }
+  var icons = { nome:'↕', data:'↕' };
+  icons[_anSortCol] = _anSortDir === -1 ? '↓' : '↑';
+  ['nome','data'].forEach(function(k) {
+    var el = document.getElementById('an-icon-' + k);
+    if (el) el.textContent = icons[k];
+  });
+  _anShown = AN_PAGE;
+  renderAnaliticoRows();
+}
+
+function renderAnalitico() {
+  _anShown = AN_PAGE;
+  var src = ctxFor('colab');
+  var lbl = document.getElementById('analitico-count-label');
+  if (lbl) lbl.textContent = '— ' + src.length + ' registro' + (src.length !== 1 ? 's' : '');
+  renderAnaliticoRows();
+}
+
+function renderAnaliticoRows() {
+  var src = ctxFor('colab');
+  src = src.slice().sort(function(a, b) {
+    if (_anSortCol === 'nome') return _anSortDir * (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+    var da = parseDateBR(a.data), db = parseDateBR(b.data);
+    return _anSortDir * ((db ? db.getTime() : 0) - (da ? da.getTime() : 0));
+  });
+  var display = src.slice(0, _anShown);
+  var html = display.map(function(d) {
+    var justif = d.devolutiva ? '<span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--mid)">' + escH(d.devolutiva) + '</span>' : '<span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted)">—</span>';
+    return '<tr>' +
+      '<td>' + escH(d.nome) + '</td>' +
+      '<td style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--mid)">' + escH(formatDateBR(d.data)) + '</td>' +
+      '<td>' + badgeTipo(d.tipo) + '</td>' +
+      '<td>' + justif + '</td>' +
+    '</tr>';
+  }).join('');
+  var resto = src.length - _anShown;
+  if (resto > 0) {
+    var proximo = Math.min(AN_PAGE, resto);
+    html += '<tr><td colspan="4" style="text-align:center;padding:10px;border-bottom:none">' +
+      '<button onclick="showMoreAnalitico()" style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer">Ver mais (' + proximo + ')</button>' +
+      '</td></tr>';
+  }
+  document.getElementById('tbody-analitico').innerHTML = html ||
+    '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Nenhum resultado</td></tr>';
+}
+
+function showMoreAnalitico() {
+  _anShown += AN_PAGE;
+  renderAnaliticoRows();
 }
 
 function renderChartAusenciasMes() {
