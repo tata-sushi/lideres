@@ -225,6 +225,18 @@ body { font-family: 'DM Mono', monospace; background: var(--bg); color: var(--ca
 .drawer-footer-avatar{width:32px;height:32px;border-radius:50%;background:var(--carbon);display:flex;align-items:center;justify-content:center;font-family:"DM Mono",monospace;font-size:10px;font-weight:500;color:var(--citric);flex-shrink:0}
 .drawer-footer-name{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--text)}
 .drawer-footer-role{font-family:"DM Mono",monospace;font-size:9px;color:var(--muted);letter-spacing:.04em;margin-top:1px}
+
+/* LOADING OVERLAY — padrão único do portal (git-claude/readmeload.md) */
+.loading-overlay { display: none; position: fixed; inset: 0; background: rgba(255,255,255,.75); z-index: 500; align-items: center; justify-content: center; flex-direction: column; gap: 10px; }
+.loading-overlay.show { display: flex; }
+.loading-overlay .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--carbon); border-radius: 50%; animation: spin .7s linear infinite; }
+.loading-overlay span { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); }
+
+/* ERROR INLINE — quando carregamento falha */
+.error-state { text-align: center; padding: 60px 20px; }
+.error-state-title { font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600; color: #C0392B; margin: 12px 0 6px; }
+.error-state-msg { font-family: 'DM Mono', monospace; font-size: 11px; color: #888; margin-bottom: 16px; }
+.error-state button { font-family: 'DM Mono', monospace; font-size: 10px; padding: 8px 18px; background: var(--carbon); color: var(--citric); border: none; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: .08em; }
 </style>
 </head>
 <body>
@@ -312,9 +324,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <button class="header-plus" onclick="openDrawer()" style="width:28px;height:28px;background:var(--carbon);border:none;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:var(--citric);fill:none;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
 </header>
 
-<div id="loadingState" style="display:flex;align-items:center;justify-content:center;padding:60px 20px;flex-direction:column;gap:12px">
-  <div style="width:32px;height:32px;border:3px solid #E0E0E0;border-top-color:#35383F;border-radius:50%;animation:spin .7s linear infinite"></div>
-  <div style="font-family:'DM Mono',monospace;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.08em">Carregando planilha...</div>
+<div id="errorState" style="display:none"></div>
+
+<!-- LOADING -->
+<div class="loading-overlay show" id="loading-overlay">
+  <div class="spinner"></div>
+  <span>Carregando dados...</span>
 </div>
 
 <div class="main" id="mainContent" style="display:none">
@@ -494,19 +509,19 @@ var _cardDataList = [];
 
 // ── Estado de carregamento ──
 function setLoading(on) {
-  var el = document.getElementById('loadingState');
-  if (el) el.style.display = on ? 'flex' : 'none';
+  var el = document.getElementById('loading-overlay');
+  if (el) el.classList.toggle('show', !!on);
 }
 function setError(msg) {
-  var el = document.getElementById('loadingState');
+  setLoading(false);
+  var el = document.getElementById('errorState');
   if (el) {
-    el.innerHTML = '<div style="text-align:center;padding:40px 20px">' +
-      '<div style="font-size:28px;margin-bottom:12px">⚠️</div>' +
-      '<div style="font-family:\'DM Sans\',sans-serif;font-size:15px;font-weight:600;color:#C0392B;margin-bottom:6px">Erro ao carregar planilha</div>' +
-      '<div style="font-family:\'DM Mono\',monospace;font-size:11px;color:#888;margin-bottom:16px">' + msg + '</div>' +
-      '<button onclick="carregarDados()" style="font-family:\'DM Mono\',monospace;font-size:10px;padding:8px 18px;background:#35383F;color:#CFFF00;border:none;border-radius:6px;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">Tentar novamente</button>' +
+    el.style.display = 'block';
+    el.innerHTML = '<div class="error-state">' +
+      '<div class="error-state-title">Erro ao carregar planilha</div>' +
+      '<div class="error-state-msg">' + msg + '</div>' +
+      '<button onclick="carregarDados()">Tentar novamente</button>' +
     '</div>';
-    el.style.display = 'flex';
   }
 }
 
@@ -547,6 +562,8 @@ function parseLinha(row) {
 
 // ── Carregamento via API ──
 function carregarDados() {
+  var err = document.getElementById('errorState');
+  if (err) { err.style.display = 'none'; err.innerHTML = ''; }
   setLoading(true);
   var url = 'https://sheets.googleapis.com/v4/spreadsheets/' +
     SHEETS_CONFIG.spreadsheetId + '/values/' +
