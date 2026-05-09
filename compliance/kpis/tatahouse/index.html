@@ -308,6 +308,8 @@ var CAMPOS_LABEL = {
 var DADOS_RAW = [];
 var filtered  = [];
 var _charts   = {};
+// Cross-filter (categóricos clicáveis)
+var _cf = { temperatura: null, atendimento: null, variedade: null };
 
 // ─── FETCH SHEETS ─────────────────────────────────────────────────────────────
 function loadData(){
@@ -396,6 +398,9 @@ function applyFilters(){
   var ano   = document.getElementById('filter-ano').value;
   filtered = DADOS_RAW.filter(function(d){
     if(ano !== 'Todos' && getAno(d) !== ano) return false;
+    if (_cf.temperatura && (d.temperatura||'') !== _cf.temperatura) return false;
+    if (_cf.atendimento && (d.atendimento||'') !== _cf.atendimento) return false;
+    if (_cf.variedade   && (d.variedade||'')   !== _cf.variedade)   return false;
     return true;
   });
   document.getElementById('result-count').textContent = filtered.length;
@@ -404,9 +409,17 @@ function applyFilters(){
 
 function clearFilters(){
   document.getElementById('filter-ano').value   = 'Todos';
+  _cf = { temperatura: null, atendimento: null, variedade: null };
   filtered = DADOS_RAW.slice();
   document.getElementById('result-count').textContent = filtered.length;
   render();
+}
+
+// Toggle de cross-filter — clicar a mesma barra desfaz; senão troca
+function setCF(dim, value) {
+  if (_cf[dim] === value) _cf[dim] = null;
+  else _cf[dim] = value;
+  applyFilters();
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -416,7 +429,13 @@ function avgField(f,src){ if(!src.length)return 0; return src.reduce(function(a,
 function avgFields(fields,src){ var t=0,c=0; fields.forEach(function(f){src.forEach(function(d){t+=score(d[f]);c++;});}); return c?t/c:0; }
 function pct(n,total){ return total?Math.round((n/total)*100):0; }
 function scoreLabel(s){ if(s>=4.5)return'Excelente'; if(s>=3.8)return'Bom'; if(s>=3)return'Regular'; return'Precisa Melhorar'; }
-function barColorFor(s){ if(s>=4.2)return'#1A5C2A'; if(s>=3)return'#35383F'; return'#D0021B'; }
+function barColorFor(s){ return '#35383F'; }
+// Devolve array de bgs para barras categóricas, respeitando o cf ativo
+function bgsForCF(labels, dim) {
+  var sel = dim ? _cf[dim] : null;
+  if (!sel) return labels.map(function(){ return '#35383F'; });
+  return labels.map(function(l){ return l === sel ? '#35383F' : 'rgba(53,56,63,0.45)'; });
+}
 function countByVal(f,src){ var c={}; src.forEach(function(d){var v=d[f]||'N/A';c[v]=(c[v]||0)+1;}); return c; }
 
 // ─── PLUGIN VALORES NAS BARRAS ────────────────────────────────────────────────
@@ -469,13 +488,13 @@ function render(){
   html += '<div class="chart-card">' +
     '<div class="chart-title">Distribuição de Satisfação</div>' +
     '<div class="nps-bar">' +
-      nseg('#1A5C2A',exP) + nseg('#35383F',boP) + nseg('#F5A623',reP) + nseg('#D0021B',pmP) +
+      nseg('#35383F',exP) + nseg('rgba(53,56,63,0.65)',boP) + nseg('rgba(53,56,63,0.35)',reP) + nseg('rgba(53,56,63,0.15)',pmP) +
     '</div>' +
     '<div class="nps-legend">' +
-      nleg('#1A5C2A','Excelente', exP+'% ('+exN+')') +
-      nleg('#35383F','Bom',       boP+'% ('+boN+')') +
-      nleg('#F5A623','Regular',   reP+'% ('+reN+')') +
-      nleg('#D0021B','Precisa Melhorar', pmP+'% ('+pmN+')') +
+      nleg('#35383F','Excelente', exP+'% ('+exN+')') +
+      nleg('rgba(53,56,63,0.65)','Bom',       boP+'% ('+boN+')') +
+      nleg('rgba(53,56,63,0.35)','Regular',   reP+'% ('+reN+')') +
+      nleg('rgba(53,56,63,0.15)','Precisa Melhorar', pmP+'% ('+pmN+')') +
     '</div>' +
   '</div>';
 
@@ -504,15 +523,15 @@ function render(){
   // Gráficos
   var critLabels = Object.keys(CAMPOS_LABEL).map(function(k){ return CAMPOS_LABEL[k]; });
   var critData   = Object.keys(CAMPOS_LABEL).map(function(k){ return +avgField(k,src).toFixed(2); });
-  makeHoriz('cCrit', critLabels, critData, critData.map(barColorFor));
+  makeHoriz('cCrit', critLabels, critData);
 
   makeBar('cTemp', countByVal('temperatura',src),
     ['Sempre','Na Maioria das Vezes','Às Vezes','Raramente'],
-    {'Sempre':'#1A5C2A','Na Maioria das Vezes':'#35383F','Às Vezes':'#F5A623','Raramente':'#D0021B'}
+    'temperatura'
   );
   makeBar('cAtend', countByVal('atendimento',src),
     ['Excelente','Bom','Regular','Precisa Melhorar','Precisa melhorar'],
-    {'Excelente':'#1A5C2A','Bom':'#35383F','Regular':'#F5A623','Precisa Melhorar':'#D0021B','Precisa melhorar':'#D0021B'}
+    'atendimento'
   );
 
   var fd = document.getElementById('footer-date');
@@ -531,8 +550,10 @@ function nseg(col,p){ return p>0?'<div class="nps-seg" style="width:'+p+'%;backg
 function nleg(col,label,val){ return '<div class="nps-legend-item"><div class="nps-dot" style="background:'+col+'"></div>'+escH(label)+' · <strong>'+val+'</strong></div>'; }
 
 // ─── CHART BUILDERS ───────────────────────────────────────────────────────────
-function makeHoriz(id, labels, data, bgs){
+// Bar horizontal (cCrit usa esse — sem cross-filter, todas em carbon)
+function makeHoriz(id, labels, data){
   var c=document.getElementById(id); if(!c||typeof Chart==='undefined')return;
+  var bgs = labels.map(function(){ return '#35383F'; });
   _charts[id]=new Chart(c,{
     type:'bar',
     data:{ labels:labels, datasets:[{ data:data, backgroundColor:bgs, borderWidth:0, borderRadius:4, barPercentage:0.65 }] },
@@ -548,11 +569,12 @@ function makeHoriz(id, labels, data, bgs){
     }
   });
 }
-function makeBar(id, counts, order, colors){
+// Bar vertical (cTemp/cAtend) — todas carbon + cross-filter clicável
+function makeBar(id, counts, order, cfDim){
   var c=document.getElementById(id); if(!c||typeof Chart==='undefined')return;
   var labels = order.filter(function(k){ return counts[k]; });
   var data   = labels.map(function(k){ return counts[k]; });
-  var bgs    = labels.map(function(k){ return colors[k]||'#35383F'; });
+  var bgs    = bgsForCF(labels, cfDim);
   _charts[id]=new Chart(c,{
     type:'bar',
     data:{ labels:labels, datasets:[{ data:data, backgroundColor:bgs, borderWidth:0, borderRadius:5, barPercentage:0.6 }] },
@@ -560,6 +582,8 @@ function makeBar(id, counts, order, colors){
     options:{
       responsive:true, maintainAspectRatio:false, animation:false,
       layout:{ padding:{ top:18 } },
+      onClick: function(e, els) { if (els.length && cfDim) setCF(cfDim, labels[els[0].index]); },
+      onHover: function(e, els) { if (e.native && cfDim) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       plugins:{ legend:{display:false}, tooltip:{enabled:false} },
       scales:{
         x:{ grid:{display:false}, border:{display:false}, ticks:{ color:'#35383F', font:{family:'DM Mono',size:10} } },
