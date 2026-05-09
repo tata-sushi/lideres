@@ -434,7 +434,11 @@ var JUSTIFICATIVAS = [
   'Trabalhou, mas esqueceu de registar o ponto'
 ];
 
+function isFolga(d) {
+  return (d.tipo || '').toLowerCase().indexOf('folga') !== -1;
+}
 function isJustificado(d) {
+  if (isFolga(d)) return true;
   return d.devolutiva && d.devolutiva.trim() !== '';
 }
 
@@ -545,21 +549,22 @@ function renderKPIs() {
   seg.setDate(seg.getDate() - (dia === 0 ? 6 : dia - 1));
   var dom = new Date(seg); dom.setDate(dom.getDate() + 6);
 
-  var pendentes = dados.filter(function(d){ return !isJustificado(d); }).length;
-  var hojeFaltas = dados.filter(function(d){
+  var abs = dados.filter(function(d){ return !isFolga(d); });
+  var pendentes = abs.filter(function(d){ return !isJustificado(d); }).length;
+  var hojeFaltas = abs.filter(function(d){
     var dt = parseDateBR(d.data);
     return dt && dt.getTime() === hoje.getTime();
   }).length;
-  var semanaFaltas = dados.filter(function(d){
+  var semanaFaltas = abs.filter(function(d){
     var dt = parseDateBR(d.data);
     return dt && dt >= seg && dt <= dom;
   }).length;
   var mesRef = hoje.getMonth(), anoRef = hoje.getFullYear();
-  var mesFaltas = dados.filter(function(d){
+  var mesFaltas = abs.filter(function(d){
     var dt = parseDateBR(d.data);
     return dt && dt.getMonth() === mesRef && dt.getFullYear() === anoRef;
   }).length;
-  var colabsMes = unique(dados.filter(function(d){
+  var colabsMes = unique(abs.filter(function(d){
     var dt = parseDateBR(d.data);
     return dt && dt.getMonth() === mesRef && dt.getFullYear() === anoRef;
   }).map(function(d){ return d.nome; })).length;
@@ -745,7 +750,7 @@ function rowMatchesCF(d, exceptDim) {
   return true;
 }
 function ctxFor(dim) {
-  return dados.filter(function(d){ return rowMatchesCF(d, dim); });
+  return dados.filter(function(d){ return !isFolga(d) && rowMatchesCF(d, dim); });
 }
 
 // Plugin Chart.js: rótulos numéricos no topo de cada barra (carbon, sem cor)
@@ -791,9 +796,8 @@ function classifyTipoAusencia(tipo) {
   var t = (tipo || '').toLowerCase().trim();
   if (!t) return null;
   if (t.indexOf('falta') !== -1) return 'faltas';
-  // Justificadas: licença, afastamento, atestado, folga, suspensão de contrato
+  // Justificadas: licença, afastamento, atestado, suspensão de contrato
   if (t.indexOf('licen') !== -1 || t.indexOf('afasta') !== -1 || t.indexOf('atest') !== -1 ||
-      t.indexOf('folga') !== -1 ||
       (t.indexOf('suspens') !== -1 && t.indexOf('contrato') !== -1)) return 'justificadas';
   // Suspensão (disciplinar) — qualquer "suspens" que não seja de contrato
   if (t.indexOf('suspens') !== -1) return 'suspensao';
