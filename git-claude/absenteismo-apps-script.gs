@@ -462,8 +462,11 @@ function _salvarDevolutiva(p) {
     ? 'Era ' + tipoAtual + ' alterou para ' + devolutiva
     : devolutiva;
 
-  aba.getRange(linha, 6).setValue(devolutiva); // col F — TIPO DE AUSÊNCIA
-  aba.getRange(linha, 8).setValue(msgColH);    // col H — DEVOLUTIVA
+  var responsavel = (p.responsavel || '').trim();
+
+  aba.getRange(linha, 6).setValue(devolutiva);   // col F — TIPO DE AUSÊNCIA
+  aba.getRange(linha, 8).setValue(msgColH);      // col H — DEVOLUTIVA
+  if (responsavel) aba.getRange(linha, 9).setValue(responsavel); // col I — LÍDER
 
   return { success: true };
 }
