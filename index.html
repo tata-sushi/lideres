@@ -330,6 +330,8 @@
     }
     .pill-rec { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-border); }
     .pill-exp { background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid var(--border); }
+    .pill-fer { background: rgba(255,200,100,0.12); color: #b87400; border: 1px solid rgba(255,200,100,0.3); }
+    .pill-abs { background: rgba(180,40,40,0.08); color: #b02020; border: 1px solid rgba(180,40,40,0.2); }
 
     @media(max-width:480px){
       .login-box { padding: 28px 20px; }
@@ -624,7 +626,7 @@
   // ── Estado das linhas ──────────────────────────────────────────────────────
   var recRows = [
     {
-      indicador: 'Entrevistas com devolutiva pendente',
+      indicador: 'Entrevistas com devolutivas pendentes',
       valor: null,
       desc: 'Status: Aguardando devolutiva',
       alerta: false,
@@ -653,14 +655,20 @@
     }
   ];
   var expRows = [
-    {indicador:'Avaliações 1º período pendentes', valor:null, desc:'14 dias — líderes com avaliação em aberto', alerta:false, loading:true},
-    {indicador:'Avaliações 2º período pendentes', valor:null, desc:'46 dias — líderes com avaliação em aberto', alerta:false, loading:true}
+    {indicador:'Avaliações 1º período pendentes', valor:null, desc:'14 dias — avaliações em aberto', alerta:false, loading:true},
+    {indicador:'Avaliações 2º período pendentes', valor:null, desc:'46 dias — avaliações em aberto', alerta:false, loading:true}
+  ];
+  var ferRows = [
+    {indicador:'Feriados — devolutivas pendentes', valor:null, desc:'Colaboradores sem decisão de folga ou pagamento', alerta:false, loading:true}
+  ];
+  var absRows = [
+    {indicador:'Absenteísmo — devolutivas pendentes', valor:null, desc:'Faltas sem devolutiva registrada', alerta:false, loading:true}
   ];
 
   // ── Render ─────────────────────────────────────────────────────────────────
   function pill(tipo) {
-    var label = tipo === 'rec' ? 'Recrutamento' : 'Experiência';
-    return '<span class="pill pill-' + tipo + '">' + label + '</span>';
+    var labels = { rec: 'Recrutamento', exp: 'Experiência', fer: 'Feriados', abs: 'Absenteísmo' };
+    return '<span class="pill pill-' + tipo + '">' + (labels[tipo] || tipo) + '</span>';
   }
   function mkrow(tipo, indicador, valor, desc, alerta, loading) {
     var cls = loading ? 'val-zero' : (valor === null ? 'val-zero' : (alerta && valor > 0 ? 'val-alerta' : 'val'));
@@ -680,6 +688,14 @@
     for (var j = 0; j < expRows.length; j++) {
       var e = expRows[j];
       html += mkrow('exp', e.indicador, e.valor, e.desc, e.alerta, !!e.loading);
+    }
+    for (var k = 0; k < ferRows.length; k++) {
+      var f = ferRows[k];
+      html += mkrow('fer', f.indicador, f.valor, f.desc, f.alerta, !!f.loading);
+    }
+    for (var l = 0; l < absRows.length; l++) {
+      var a = absRows[l];
+      html += mkrow('abs', a.indicador, a.valor, a.desc, a.alerta, !!a.loading);
     }
     var tb = document.getElementById('tbody');
     if (tb) tb.innerHTML = html;
@@ -928,6 +944,75 @@
         {indicador:'Avaliações 1º período pendentes', valor:null, desc:'Não foi possível carregar', alerta:false, loading:false},
         {indicador:'Avaliações 2º período pendentes', valor:null, desc:'Não foi possível carregar', alerta:false, loading:false}
       ];
+      render();
+    });
+
+  // ── Fetch Feriados (Apps Script — listar-feriados) ────────────────────────
+  var FERIADOS_URL = 'https://script.google.com/macros/s/AKfycbzgehdiUHa7w_Xd1stIf-s-Urq4CLYgN39zsFSI18QdxBXhkUErIQ4waHrDT-OwMNkg-g/exec';
+  fetch(FERIADOS_URL + '?acao=listar-feriados')
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      var count = 0;
+      if (res.success && Array.isArray(res.rows)) {
+        res.rows.forEach(function(r) {
+          var decidido = r.decisao && String(r.decisao).trim() !== '';
+          if (decidido) return;
+          if (!isAdminRH) {
+            var rowUn = normVal(r.unidade || '');
+            if (rowUn !== _expPU && _expExtras.indexOf(rowUn) < 0) return;
+          }
+          count++;
+        });
+      }
+      ferRows = [{indicador:'Feriados — devolutivas pendentes', valor:count, desc:'Colaboradores sem decisão de folga ou pagamento', alerta:count>0, loading:false}];
+      render();
+    })
+    .catch(function() {
+      ferRows = [{indicador:'Feriados — devolutivas pendentes', valor:null, desc:'Não foi possível carregar', alerta:false, loading:false}];
+      render();
+    });
+
+  // ── Fetch Absenteísmo (Sheets API — aba Ausências) ────────────────────────
+  var ABS_SHEET_ID = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
+  fetch('https://sheets.googleapis.com/v4/spreadsheets/' + ABS_SHEET_ID +
+        '/values/' + encodeURIComponent('Ausências') + '!A:H' +
+        '?key=' + API_KEY)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var rows = data.values || [];
+      if (rows.length < 2) { absRows = [{indicador:'Absenteísmo — devolutivas pendentes', valor:0, desc:'Faltas sem devolutiva registrada', alerta:false, loading:false}]; render(); return; }
+      var headers = rows[0].map(function(h){ return normVal(h); });
+      function ci() {
+        for (var a = 0; a < arguments.length; a++) {
+          var idx = headers.indexOf(arguments[a]);
+          if (idx >= 0) return idx;
+        }
+        return -1;
+      }
+      var iUn  = ci('unidade');
+      var iSt  = ci('status');
+      var iDev = ci('devolutiva','justificativa','obs');
+      var iTp  = ci('tipo');
+      var count = 0;
+      for (var i = 1; i < rows.length; i++) {
+        var row = rows[i];
+        var tipo      = iTp  >= 0 ? (row[iTp]  || '').toLowerCase().trim() : '';
+        var status    = iSt  >= 0 ? (row[iSt]  || '').trim() : '';
+        var devol     = iDev >= 0 ? (row[iDev] || '').trim() : '';
+        if (tipo.indexOf('falta') < 0) continue;
+        if (status !== 'Ativo') continue;
+        if (devol !== '') continue;
+        if (!isAdminRH) {
+          var rowUn = normVal(iUn >= 0 ? (row[iUn] || '') : '');
+          if (rowUn !== _expPU && _expExtras.indexOf(rowUn) < 0) continue;
+        }
+        count++;
+      }
+      absRows = [{indicador:'Absenteísmo — devolutivas pendentes', valor:count, desc:'Faltas sem devolutiva registrada', alerta:count>0, loading:false}];
+      render();
+    })
+    .catch(function() {
+      absRows = [{indicador:'Absenteísmo — devolutivas pendentes', valor:null, desc:'Não foi possível carregar', alerta:false, loading:false}];
       render();
     });
 })();
