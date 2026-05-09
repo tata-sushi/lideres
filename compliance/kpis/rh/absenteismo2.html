@@ -415,6 +415,7 @@ function slugTipo(tipo) {
   if (t.indexOf('atestado') >= 0) return 'atestado';
   if (t.indexOf('suspensao') >= 0 || t.indexOf('suspensão') >= 0) return 'suspensao';
   if (t.indexOf('falta') >= 0) return 'falta';
+  if (t.indexOf('folga') >= 0 || t.indexOf('licen') >= 0 || t.indexOf('afasta') >= 0) return 'justificado';
   return 'default';
 }
 function badgeTipo(tipo) {
@@ -433,7 +434,11 @@ var JUSTIFICATIVAS = [
   'Trabalhou, mas esqueceu de registar o ponto'
 ];
 
+function isFolga(d) {
+  return (d.tipo || '').toLowerCase().indexOf('folga') !== -1;
+}
 function isJustificado(d) {
+  if (isFolga(d)) return true;
   return d.devolutiva && d.devolutiva.trim() !== '';
 }
 
@@ -504,7 +509,11 @@ function showError(msg) {
 function getFiltered() {
   var f = state.filters;
   return dados.filter(function(d) {
-    if (state.tab === 'pendentes' && isJustificado(d)) return false;
+    if (state.tab === 'pendentes') {
+      if (isJustificado(d)) return false;
+      if ((d.status || '').trim() !== 'Ativo') return false;
+      if (classifyTipoAusencia(d.tipo) !== 'faltas') return false;
+    }
     if (f.unidade !== 'Todos' && d.unidade !== f.unidade) return false;
     if (f.departamento !== 'Todos' && d.depto !== f.departamento) return false;
     if (f.tipo !== 'Todos' && d.tipo !== f.tipo) return false;
@@ -544,21 +553,24 @@ function renderKPIs() {
   seg.setDate(seg.getDate() - (dia === 0 ? 6 : dia - 1));
   var dom = new Date(seg); dom.setDate(dom.getDate() + 6);
 
-  var pendentes = dados.filter(function(d){ return !isJustificado(d); }).length;
-  var hojeFaltas = dados.filter(function(d){
+  var abs = dados.filter(function(d){ return !isFolga(d); });
+  var pendentes = abs.filter(function(d){
+    return !isJustificado(d) && (d.status || '').trim() === 'Ativo' && classifyTipoAusencia(d.tipo) === 'faltas';
+  }).length;
+  var hojeFaltas = abs.filter(function(d){
     var dt = parseDateBR(d.data);
     return dt && dt.getTime() === hoje.getTime();
   }).length;
-  var semanaFaltas = dados.filter(function(d){
+  var semanaFaltas = abs.filter(function(d){
     var dt = parseDateBR(d.data);
     return dt && dt >= seg && dt <= dom;
   }).length;
   var mesRef = hoje.getMonth(), anoRef = hoje.getFullYear();
-  var mesFaltas = dados.filter(function(d){
+  var mesFaltas = abs.filter(function(d){
     var dt = parseDateBR(d.data);
     return dt && dt.getMonth() === mesRef && dt.getFullYear() === anoRef;
   }).length;
-  var colabsMes = unique(dados.filter(function(d){
+  var colabsMes = unique(abs.filter(function(d){
     var dt = parseDateBR(d.data);
     return dt && dt.getMonth() === mesRef && dt.getFullYear() === anoRef;
   }).map(function(d){ return d.nome; })).length;
@@ -744,7 +756,7 @@ function rowMatchesCF(d, exceptDim) {
   return true;
 }
 function ctxFor(dim) {
-  return dados.filter(function(d){ return rowMatchesCF(d, dim); });
+  return dados.filter(function(d){ return !isFolga(d) && rowMatchesCF(d, dim); });
 }
 
 // Plugin Chart.js: rótulos numéricos no topo de cada barra (carbon, sem cor)
