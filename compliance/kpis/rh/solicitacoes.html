@@ -441,24 +441,12 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.err  { background: var(--red); }
 
-/* ── LOADING SCREEN ── */
-#loading-screen {
-  position: fixed; inset: 0; z-index: 9999;
-  background: var(--bg);
-  display: flex; align-items: center; justify-content: center;
-  transition: opacity 0.3s ease;
-}
-#loading-screen.hidden { opacity: 0; pointer-events: none; }
-.loading-inner { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.loading-spinner {
-  width: 36px; height: 36px;
-  border: 3px solid var(--border);
-  border-top-color: var(--carbon);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
+/* LOADING OVERLAY — padrão único do portal (git-claude/readmeload.md) */
+.loading-overlay { display: none; position: fixed; inset: 0; background: rgba(255,255,255,.75); z-index: 500; align-items: center; justify-content: center; flex-direction: column; gap: 10px; }
+.loading-overlay.show { display: flex; }
+.loading-overlay .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--carbon); border-radius: 50%; animation: spin .7s linear infinite; }
+.loading-overlay span { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); }
 @keyframes spin { to { transform: rotate(360deg); } }
-.loading-text { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); letter-spacing: 1px; text-transform: uppercase; }
 
 /* ── DESKTOP ── */
 @media (min-width: 768px) {
@@ -585,12 +573,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </script>
 <!-- ══ /AUTH GATE ═══════════════════════════════════════════════ -->
 
-<!-- LOADING SCREEN -->
-<div id="loading-screen">
-  <div class="loading-inner">
-    <div class="loading-spinner"></div>
-    <div class="loading-text">Carregando...</div>
-  </div>
+<!-- LOADING -->
+<div class="loading-overlay show" id="loading-overlay">
+  <div class="spinner"></div>
+  <span>Carregando dados...</span>
 </div>
 
 <!-- HEADER -->
@@ -855,13 +841,6 @@ function initApp() {
 
   var hu = document.getElementById('header-user');
   if (hu) hu.textContent = short;
-
-  // Revelar app e esconder loading
-  var ls = document.getElementById('loading-screen');
-  if (ls) {
-    ls.classList.add('hidden');
-    setTimeout(function() { ls.style.display = 'none'; }, 350);
-  }
 
   init();
 }
@@ -1138,19 +1117,12 @@ var COL = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function showLoading() {
-  document.getElementById('cards-grid').innerHTML =
-    '<div class="empty-state">' +
-      '<div class="empty-icon">' +
-        '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#DDD" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
-          '<line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>' +
-          '<line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/>' +
-          '<line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>' +
-          '<line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>' +
-        '</svg>' +
-      '</div>' +
-      '<div class="empty-title">Carregando dados da planilha…</div>' +
-      '<div class="empty-sub">Buscando via Google Sheets API</div>' +
-    '</div>';
+  var el = document.getElementById('loading-overlay');
+  if (el) el.classList.add('show');
+}
+function hideLoading() {
+  var el = document.getElementById('loading-overlay');
+  if (el) el.classList.remove('show');
 }
 
 function showError(msg) {
@@ -1304,7 +1276,8 @@ function fetchAndRender() {
     .catch(function(err) {
       showError(err.message || 'Erro desconhecido');
       console.error(err);
-    });
+    })
+    .finally(hideLoading);
 }
 
 function findCol(header, candidates) {
