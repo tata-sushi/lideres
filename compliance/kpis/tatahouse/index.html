@@ -308,8 +308,6 @@ var CAMPOS_LABEL = {
 var DADOS_RAW = [];
 var filtered  = [];
 var _charts   = {};
-// Cross-filter (categóricos clicáveis)
-var _cf = { temperatura: null, atendimento: null, variedade: null };
 
 // ─── FETCH SHEETS ─────────────────────────────────────────────────────────────
 function loadData(){
@@ -398,9 +396,6 @@ function applyFilters(){
   var ano   = document.getElementById('filter-ano').value;
   filtered = DADOS_RAW.filter(function(d){
     if(ano !== 'Todos' && getAno(d) !== ano) return false;
-    if (_cf.temperatura && (d.temperatura||'') !== _cf.temperatura) return false;
-    if (_cf.atendimento && (d.atendimento||'') !== _cf.atendimento) return false;
-    if (_cf.variedade   && (d.variedade||'')   !== _cf.variedade)   return false;
     return true;
   });
   document.getElementById('result-count').textContent = filtered.length;
@@ -409,17 +404,9 @@ function applyFilters(){
 
 function clearFilters(){
   document.getElementById('filter-ano').value   = 'Todos';
-  _cf = { temperatura: null, atendimento: null, variedade: null };
   filtered = DADOS_RAW.slice();
   document.getElementById('result-count').textContent = filtered.length;
   render();
-}
-
-// Toggle de cross-filter — clicar a mesma barra desfaz; senão troca
-function setCF(dim, value) {
-  if (_cf[dim] === value) _cf[dim] = null;
-  else _cf[dim] = value;
-  applyFilters();
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -430,12 +417,6 @@ function avgFields(fields,src){ var t=0,c=0; fields.forEach(function(f){src.forE
 function pct(n,total){ return total?Math.round((n/total)*100):0; }
 function scoreLabel(s){ if(s>=4.5)return'Excelente'; if(s>=3.8)return'Bom'; if(s>=3)return'Regular'; return'Precisa Melhorar'; }
 function barColorFor(s){ return '#35383F'; }
-// Devolve array de bgs para barras categóricas, respeitando o cf ativo
-function bgsForCF(labels, dim) {
-  var sel = dim ? _cf[dim] : null;
-  if (!sel) return labels.map(function(){ return '#35383F'; });
-  return labels.map(function(l){ return l === sel ? '#35383F' : 'rgba(53,56,63,0.45)'; });
-}
 function countByVal(f,src){ var c={}; src.forEach(function(d){var v=d[f]||'N/A';c[v]=(c[v]||0)+1;}); return c; }
 
 // ─── PLUGIN VALORES NAS BARRAS ────────────────────────────────────────────────
@@ -526,12 +507,10 @@ function render(){
   makeHoriz('cCrit', critLabels, critData);
 
   makeBar('cTemp', countByVal('temperatura',src),
-    ['Sempre','Na Maioria das Vezes','Às Vezes','Raramente'],
-    'temperatura'
+    ['Sempre','Na Maioria das Vezes','Às Vezes','Raramente']
   );
   makeBar('cAtend', countByVal('atendimento',src),
-    ['Excelente','Bom','Regular','Precisa Melhorar','Precisa melhorar'],
-    'atendimento'
+    ['Excelente','Bom','Regular','Precisa Melhorar','Precisa melhorar']
   );
 
   var fd = document.getElementById('footer-date');
@@ -569,12 +548,12 @@ function makeHoriz(id, labels, data){
     }
   });
 }
-// Bar vertical (cTemp/cAtend) — todas carbon + cross-filter clicável
-function makeBar(id, counts, order, cfDim){
+// Bar vertical (cTemp/cAtend) — todas carbon, sem interação
+function makeBar(id, counts, order){
   var c=document.getElementById(id); if(!c||typeof Chart==='undefined')return;
   var labels = order.filter(function(k){ return counts[k]; });
   var data   = labels.map(function(k){ return counts[k]; });
-  var bgs    = bgsForCF(labels, cfDim);
+  var bgs    = labels.map(function(){ return '#35383F'; });
   _charts[id]=new Chart(c,{
     type:'bar',
     data:{ labels:labels, datasets:[{ data:data, backgroundColor:bgs, borderWidth:0, borderRadius:5, barPercentage:0.6 }] },
@@ -582,8 +561,6 @@ function makeBar(id, counts, order, cfDim){
     options:{
       responsive:true, maintainAspectRatio:false, animation:false,
       layout:{ padding:{ top:18 } },
-      onClick: function(e, els) { if (els.length && cfDim) setCF(cfDim, labels[els[0].index]); },
-      onHover: function(e, els) { if (e.native && cfDim) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       plugins:{ legend:{display:false}, tooltip:{enabled:false} },
       scales:{
         x:{ grid:{display:false}, border:{display:false}, ticks:{ color:'#35383F', font:{family:'DM Mono',size:10} } },
