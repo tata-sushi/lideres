@@ -459,8 +459,8 @@ function _salvarDevolutiva(p) {
 
   var tipoAtual = (aba.getRange(linha, 6).getValue() || '').toString().trim();
   var msgColH   = (tipoAtual && tipoAtual.toLowerCase() !== devolutiva.toLowerCase())
-    ? 'Era ' + tipoAtual + ' alterou para ' + devolutiva
-    : devolutiva;
+    ? 'Não foi ' + tipoAtual + ', foi ' + devolutiva
+    : 'Confirmou que foi ' + devolutiva;
 
   var responsavel = (p.responsavel || '').trim();
   var hoje        = Utilities.formatDate(new Date(), "America/Sao_Paulo", "dd/MM/yyyy");
