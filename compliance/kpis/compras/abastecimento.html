@@ -78,10 +78,13 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .empty { text-align: center; padding: 60px 20px; }
 .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
 .empty p { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; line-height: 1.8; }
-.loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 60px 20px; }
-.loading-spinner { width: 28px; height: 28px; border: 2px solid var(--border); border-top-color: var(--carbon); border-radius: 50%; animation: lid-spin 0.8s linear infinite; }
-.loading p { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
-@keyframes lid-spin { to { transform: rotate(360deg); } }
+
+/* LOADING OVERLAY — padrão único do portal (git-claude/readmeload.md) */
+.loading-overlay { display: none; position: fixed; inset: 0; background: rgba(255,255,255,.75); z-index: 500; align-items: center; justify-content: center; flex-direction: column; gap: 10px; }
+.loading-overlay.show { display: flex; }
+.loading-overlay .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--carbon); border-radius: 50%; animation: spin .7s linear infinite; }
+.loading-overlay span { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── FOOTER ── */
 .footer { background: var(--carbon); padding: 12px 20px; display: flex; flex-direction: column; align-items: center; gap: 3px; position: fixed; bottom: 0; left: 0; right: 0; }
@@ -486,6 +489,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="page" id="page-entregas"></div>
   <div class="page" id="page-kpis"></div>
 </main>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="spinner"></div>
+  <span>Carregando dados...</span>
+</div>
 
 <footer class="footer">
   <span class="footer-text">TATÁ SUSHI &nbsp;|&nbsp; TATÁ POKE &nbsp;|&nbsp; 2016 – 2026</span>
@@ -894,9 +903,13 @@ function statusBackendParaUI(p) {
 
 var gasErro = null;
 
+function showLoading() { document.getElementById('loading-overlay').classList.add('show'); }
+function hideLoading() { document.getElementById('loading-overlay').classList.remove('show'); }
+
 async function carregarPedidos() {
   gasErro = null;
-  if (!GAS_URL) { carregando = false; renderAll(); updateKPIs(); return; }
+  showLoading();
+  if (!GAS_URL) { carregando = false; hideLoading(); renderAll(); updateKPIs(); return; }
   try {
     // Sem filtro por unidade/perfil: lista todos os pedidos da planilha
     var data = await gasGet({ action: 'getPedidos' });
@@ -909,6 +922,7 @@ async function carregarPedidos() {
     toast('Erro ao carregar pedidos: ' + e.message);
   }
   carregando = false;
+  hideLoading();
   renderAll(); updateKPIs();
   var agora = new Date();
   var el = document.getElementById('footer-date-updated');
@@ -1475,18 +1489,18 @@ function renderAba(aba) {
   var container = document.getElementById('page-' + aba);
   if (!container) return;
   if (carregando) {
-    container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Carregando pedidos…</p></div>';
+    container.innerHTML = '';
     return;
   }
   var base = ORDERS.filter(dentroDe10Dias).sort(ordenaPorDataDesc);
   var lista = aplicarFiltros(base);
   if (lista.length === 0) {
     if (gasErro) {
-      container.innerHTML = '<div class="loading"><p>Falha ao carregar dados da planilha.</p><p style="font-size:10px;margin-top:4px;opacity:.6;">' + gasErro + '</p></div>';
+      container.innerHTML = '<div class="empty"><p>Falha ao carregar dados da planilha.</p><p style="font-size:10px;margin-top:4px;opacity:.6;">' + gasErro + '</p></div>';
     } else if (base.length === 0) {
-      container.innerHTML = '<div class="loading"><p>Nenhum pedido encontrado nos últimos 30 dias.</p></div>';
+      container.innerHTML = '<div class="empty"><p>Nenhum pedido encontrado nos últimos 30 dias.</p></div>';
     } else {
-      container.innerHTML = '<div class="loading"><p>Nenhum pedido com esses filtros.</p></div>';
+      container.innerHTML = '<div class="empty"><p>Nenhum pedido com esses filtros.</p></div>';
     }
     return;
   }
