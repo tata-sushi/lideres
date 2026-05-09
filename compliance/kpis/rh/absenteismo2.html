@@ -137,6 +137,13 @@ body[data-view="dashboard"] .kpis-wrap,
 body[data-view="dashboard"] .filters-wrap,
 body[data-view="dashboard"] #content { display: none; }
 body:not([data-view="dashboard"]) #dashboard { display: none; }
+body:not([data-view="dashboard"]) #dash-filters { display: none; }
+#dash-filters { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+#dash-filters .filters-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#dash-filters .date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dash-filter-input { appearance: none; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); width: 100%; transition: border-color 0.15s; }
+.dash-filter-input:focus { outline: none; border-color: var(--carbon); }
+@media (min-width: 600px) { #dash-filters .filters-row, #dash-filters .date-row { grid-template-columns: 1fr 1fr 1fr 1fr; } }
 @media (min-width: 768px) {
   .chart-card { max-width: 800px; margin: 0 auto; }
 }
@@ -287,6 +294,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="filters-wrap" id="filters-wrap"></div>
 <main class="content" id="content"></main>
 
+<div id="dash-filters"></div>
+
 <div class="dashboard" id="dashboard">
   <div class="chart-card">
     <div class="chart-title" id="chartTitleMes">Ausências por Mês</div>
@@ -317,22 +326,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           </tr>
         </thead>
         <tbody id="tbody-colab"></tbody>
-      </table>
-    </div>
-  </div>
-  <div class="chart-card">
-    <div class="chart-title">Analítico <span id="analitico-count-label" style="color:var(--muted);font-size:10px;margin-left:8px;font-weight:500;letter-spacing:normal;text-transform:none;"></span></div>
-    <div class="table-wrap">
-      <table class="colab-table" id="table-analitico">
-        <thead>
-          <tr>
-            <th onclick="toggleAnaliticoSort('nome')" style="width:36%">Colaborador <span id="an-icon-nome">↕</span></th>
-            <th onclick="toggleAnaliticoSort('data')" style="width:16%">Data <span id="an-icon-data">↓</span></th>
-            <th style="width:22%">Tipo</th>
-            <th style="width:26%">Justificativa</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-analitico"></tbody>
       </table>
     </div>
   </div>
@@ -447,7 +440,8 @@ var __nomeResponsavel = (function() {
 var dados = [];
 var state = {
   tab: 'pendentes',
-  filters: { unidade: 'Todos', departamento: 'Todos', tipo: 'Todos' }
+  filters:     { unidade: 'Todos', departamento: 'Todos', tipo: 'Todos' },
+  dashFilters: { unidade: 'Todos', departamento: 'Todos', dataIni: '', dataFim: '' }
 };
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
@@ -793,7 +787,8 @@ function render() {
 
 function setTab(tab) {
   state.tab = tab;
-  state.filters = { unidade: 'Todos', departamento: 'Todos', tipo: 'Todos' };
+  state.filters     = { unidade: 'Todos', departamento: 'Todos', tipo: 'Todos' };
+  state.dashFilters = { unidade: 'Todos', departamento: 'Todos', dataIni: '', dataFim: '' };
   document.getElementById('tab-pendentes').classList.toggle('active', tab === 'pendentes');
   document.getElementById('tab-todos').classList.toggle('active', tab === 'todos');
   if (tab === 'todos') {
@@ -839,7 +834,59 @@ function rowMatchesCF(d, exceptDim) {
   return true;
 }
 function ctxFor(dim) {
-  return dados.filter(function(d){ return !isFolga(d) && rowMatchesCF(d, dim); });
+  var df = state.dashFilters;
+  return dados.filter(function(d) {
+    if (isFolga(d)) return false;
+    if (!rowMatchesCF(d, dim)) return false;
+    if (df.unidade !== 'Todos' && d.unidade !== df.unidade) return false;
+    if (df.departamento !== 'Todos' && d.depto !== df.departamento) return false;
+    if (df.dataIni) {
+      var dt = parseDateBR(d.data);
+      var ini = parseDateBR(df.dataIni.split('-').reverse().join('/'));
+      if (dt && ini && dt < ini) return false;
+    }
+    if (df.dataFim) {
+      var dt2 = parseDateBR(d.data);
+      var fim = parseDateBR(df.dataFim.split('-').reverse().join('/'));
+      if (dt2 && fim && dt2 > fim) return false;
+    }
+    return true;
+  });
+}
+
+// ─── FILTROS DO DASHBOARD ─────────────────────────────────────────────────────
+function renderDashFilters() {
+  var df = state.dashFilters;
+  var unidades = unique(dados.map(function(d){ return d.unidade; })).filter(Boolean).sort();
+  var deptoSrc = df.unidade === 'Todos' ? dados : dados.filter(function(d){ return d.unidade === df.unidade; });
+  var deptos   = unique(deptoSrc.map(function(d){ return d.depto; })).filter(Boolean).sort();
+
+  function sel(label, key, opts, cur) {
+    var h = '<div class="filter-group"><label class="filter-label">' + label + '</label>';
+    h += '<select class="filter-select dash-filter-input" onchange="setDashFilter(\'' + key + '\',this.value)">';
+    h += '<option value="Todos"' + (cur==='Todos'?' selected':'') + '>Todos</option>';
+    opts.forEach(function(o){ h += '<option value="' + escH(o) + '"' + (cur===o?' selected':'') + '>' + escH(o) + '</option>'; });
+    return h + '</select></div>';
+  }
+  function dateInput(label, key, val) {
+    return '<div class="filter-group"><label class="filter-label">' + label + '</label>' +
+      '<input type="date" class="dash-filter-input" value="' + escH(val) + '" onchange="setDashFilter(\'' + key + '\',this.value)"></div>';
+  }
+
+  var html = '<div class="filters-row">' +
+    sel('Unidade', 'unidade', unidades, df.unidade) +
+    sel('Departamento', 'departamento', deptos, df.departamento) +
+    dateInput('De', 'dataIni', df.dataIni) +
+    dateInput('Até', 'dataFim', df.dataFim) +
+  '</div>';
+  document.getElementById('dash-filters').innerHTML = html;
+}
+
+function setDashFilter(key, val) {
+  state.dashFilters[key] = val;
+  if (key === 'unidade') state.dashFilters.departamento = 'Todos';
+  renderDashFilters();
+  renderDashboard();
 }
 
 // Plugin Chart.js: rótulos numéricos no topo de cada barra (carbon, sem cor)
@@ -873,12 +920,12 @@ var barValueLabelsPlugin = {
 
 function renderDashboard() {
   if (typeof Chart === 'undefined') return;
+  renderDashFilters();
   renderChartAusenciasMes();
   renderStatusTipos();
   renderChartUnidade();
   renderChartDepto();
   renderColabTable();
-  renderAnalitico();
 }
 
 // Classifica o tipo da ausência em uma das três categorias da tabela
@@ -971,65 +1018,6 @@ function showMoreColab() {
   renderColabRows();
 }
 
-// ─── TABELA ANALÍTICA ─────────────────────────────────────────────────────────
-var _anSortCol = 'data';
-var _anSortDir = -1;
-var _anShown   = 10;
-var AN_PAGE    = 10;
-
-function toggleAnaliticoSort(col) {
-  if (_anSortCol === col) { _anSortDir = -_anSortDir; }
-  else { _anSortCol = col; _anSortDir = (col === 'nome') ? 1 : -1; }
-  var icons = { nome:'↕', data:'↕' };
-  icons[_anSortCol] = _anSortDir === -1 ? '↓' : '↑';
-  ['nome','data'].forEach(function(k) {
-    var el = document.getElementById('an-icon-' + k);
-    if (el) el.textContent = icons[k];
-  });
-  _anShown = AN_PAGE;
-  renderAnaliticoRows();
-}
-
-function renderAnalitico() {
-  _anShown = AN_PAGE;
-  var src = ctxFor('colab');
-  var lbl = document.getElementById('analitico-count-label');
-  if (lbl) lbl.textContent = '— ' + src.length + ' registro' + (src.length !== 1 ? 's' : '');
-  renderAnaliticoRows();
-}
-
-function renderAnaliticoRows() {
-  var src = ctxFor('colab');
-  src = src.slice().sort(function(a, b) {
-    if (_anSortCol === 'nome') return _anSortDir * (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
-    var da = parseDateBR(a.data), db = parseDateBR(b.data);
-    return _anSortDir * ((db ? db.getTime() : 0) - (da ? da.getTime() : 0));
-  });
-  var display = src.slice(0, _anShown);
-  var html = display.map(function(d) {
-    var justif = d.devolutiva ? '<span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--mid)">' + escH(d.devolutiva) + '</span>' : '<span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted)">—</span>';
-    return '<tr>' +
-      '<td>' + escH(d.nome) + '</td>' +
-      '<td style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--mid)">' + escH(formatDateBR(d.data)) + '</td>' +
-      '<td>' + badgeTipo(d.tipo) + '</td>' +
-      '<td>' + justif + '</td>' +
-    '</tr>';
-  }).join('');
-  var resto = src.length - _anShown;
-  if (resto > 0) {
-    var proximo = Math.min(AN_PAGE, resto);
-    html += '<tr><td colspan="4" style="text-align:center;padding:10px;border-bottom:none">' +
-      '<button onclick="showMoreAnalitico()" style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer">Ver mais (' + proximo + ')</button>' +
-      '</td></tr>';
-  }
-  document.getElementById('tbody-analitico').innerHTML = html ||
-    '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Nenhum resultado</td></tr>';
-}
-
-function showMoreAnalitico() {
-  _anShown += AN_PAGE;
-  renderAnaliticoRows();
-}
 
 function renderChartAusenciasMes() {
   var canvas = document.getElementById('cAusMes');
