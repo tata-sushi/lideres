@@ -46,26 +46,33 @@ const MAPA_TIPOS_AUS3 = {
   "acompanhamento familiar"   : "Acompanhamento Familiar",
   "declaração de horas"       : "Declaração de Horas",
   "declaracao de horas"       : "Declaração de Horas",
-  "folga aniversário"         : "Folga Aniversário",
-  "folga aniversario"         : "Folga Aniversário",
 };
 
-// ─── SEMANAL (últimos 10 dias) ────────────────────────────────────────────────
+// ─── SEMANAL (seg–dom da semana anterior) ─────────────────────────────────────
+// Agendar: toda sexta-feira no Google Apps Script
+// Processa em lotes de 50 para não exceder o limite de 6 min do Apps Script
+const LOTE_SIZE_AUS3 = 100;
+
 function importarAusenciasSemanal3() {
-  const { dataIni, dataFinal } = _getUltimos10Dias();
-  _executarImportacaoAus3(dataIni, dataFinal);
+  // Limpa estado anterior e inicia do zero
+  PropertiesService.getScriptProperties().deleteAllProperties();
+  const { dataIni, dataFinal } = _getSemanAnterior();
+  PropertiesService.getScriptProperties().setProperties({
+    AUS3_DATINI   : dataIni,
+    AUS3_DATFINAL : dataFinal,
+    AUS3_INDEX    : "0",
+  });
+  _processarLoteAus3();
 }
 
-// ─── HISTÓRICO DESDE 26/04/2026 ───────────────────────────────────────────────
-function importarAusenciasDesde26Abril() {
-  const dataIni   = "2026-04-26";
-  const dataFinal = Utilities.formatDate(new Date(), "America/Sao_Paulo", "yyyy-MM-dd");
-  Logger.log("Ausências | Histórico: " + dataIni + " → " + dataFinal);
-  _executarImportacaoAus3(dataIni, dataFinal);
-}
+function _processarLoteAus3() {
+  const props    = PropertiesService.getScriptProperties();
+  const dataIni  = props.getProperty("AUS3_DATINI");
+  const dataFinal= props.getProperty("AUS3_DATFINAL");
+  const startIdx = parseInt(props.getProperty("AUS3_INDEX") || "0", 10);
 
-// ─── NÚCLEO COMPARTILHADO ─────────────────────────────────────────────────────
-function _executarImportacaoAus3(dataIni, dataFinal) {
+  if (!dataIni || !dataFinal) { Logger.log("Nenhuma execução em andamento."); return; }
+
   const ss  = SpreadsheetApp.openById(CONFIG_AUS3.SS_ID);
   const aba = _getOrCreateSheetAus3(ss, CONFIG_AUS3.ABA_DADOS);
 
@@ -78,28 +85,35 @@ function _executarImportacaoAus3(dataIni, dataFinal) {
     aba.setFrozenRows(1);
   }
 
-  Logger.log("Período: " + dataIni + " → " + dataFinal);
-
   const token = _loginAus3();
   if (!token) { Logger.log("Falha no login."); return; }
 
-  const pessoas     = _getAllPersonsAus3(token);
-  const mapaDepts   = _buscarMapaDepartamentosAus3(token, pessoas);
-  const pessoasRich = _enriquecerPessoasAus3(pessoas, token, mapaDepts);
+  // Busca pessoas apenas no primeiro lote e salva no cache
+  let elegiveisJSON = props.getProperty("AUS3_ELEGIVEIS");
+  let elegiveis;
+  if (!elegiveisJSON) {
+    const pessoas     = _getAllPersonsAus3(token);
+    const mapaDepts   = _buscarMapaDepartamentosAus3(token, pessoas);
+    const pessoasRich = _enriquecerPessoasAus3(pessoas, token, mapaDepts);
+    elegiveis = pessoasRich.filter(p =>
+      !NOMES_EXCLUIR_AUS3.some(n => (p.name || "").toUpperCase().includes(n.toUpperCase())) &&
+      !MATRICULAS_EXCLUIR_AUS3.includes(String(p.registration || "").trim())
+    );
+    props.setProperty("AUS3_ELEGIVEIS", JSON.stringify(elegiveis));
+    Logger.log("Elegíveis: " + elegiveis.length);
+  } else {
+    elegiveis = JSON.parse(elegiveisJSON);
+  }
 
-  const elegiveis = pessoasRich.filter(p =>
-    !NOMES_EXCLUIR_AUS3.some(n => (p.name || "").toUpperCase().includes(n.toUpperCase())) &&
-    !MATRICULAS_EXCLUIR_AUS3.includes(String(p.registration || "").trim())
-  );
-
-  Logger.log("Elegíveis: " + elegiveis.length);
-
-  const chaves       = _carregarChavesComLinha(aba);
-  const novasLinhas  = [];
+  const lote    = elegiveis.slice(startIdx, startIdx + LOTE_SIZE_AUS3);
+  const chaves  = _carregarChavesComLinha(aba);
+  const novasLinhas = [];
   let   atualizacoes = 0;
 
-  for (let i = 0; i < elegiveis.length; i++) {
-    const p      = elegiveis[i];
+  Logger.log("Processando lote: " + (startIdx + 1) + " → " + (startIdx + lote.length) + " de " + elegiveis.length);
+
+  for (let i = 0; i < lote.length; i++) {
+    const p      = lote[i];
     const mt     = String(p.registration || "");
     const status = _traduzirStatusAus3(p.status, mt);
 
@@ -122,13 +136,23 @@ function _executarImportacaoAus3(dataIni, dataFinal) {
       const chave = mt + "|" + dataFalta;
 
       if (chaves[chave]) {
+        const unidadeNova = p.unidade || "";
+        const deptoNovo   = toTitleCaseAus3(p.departmentName || "");
+        if (chaves[chave].unidade !== unidadeNova) {
+          aba.getRange(chaves[chave].linha, 3).setValue(unidadeNova);
+          atualizacoes++;
+        }
+        if (chaves[chave].depto !== deptoNovo) {
+          aba.getRange(chaves[chave].linha, 4).setValue(deptoNovo);
+          atualizacoes++;
+        }
         if (chaves[chave].tipo !== tipoAusencia) {
           aba.getRange(chaves[chave].linha, 6).setValue(tipoAusencia);
           atualizacoes++;
         }
         aba.getRange(chaves[chave].linha, 7).setValue(status);
       } else {
-        chaves[chave] = true;
+        chaves[chave] = { linha: aba.getLastRow() + 1 + novasLinhas.length, tipo: tipoAusencia, unidade: p.unidade || "", depto: toTitleCaseAus3(p.departmentName || "") };
         novasLinhas.push([
           mt,
           toTitleCaseAus3(p.name || ""),
@@ -141,7 +165,7 @@ function _executarImportacaoAus3(dataIni, dataFinal) {
       }
     });
 
-    if ((i + 1) % 10 === 0) Utilities.sleep(500);
+    if ((i + 1) % 10 === 0) Utilities.sleep(300);
   }
 
   if (novasLinhas.length > 0) {
@@ -150,17 +174,54 @@ function _executarImportacaoAus3(dataIni, dataFinal) {
     aba.autoResizeColumns(1, COLUNAS_AUS3.length);
   }
 
-  Logger.log("Concluído! Novas: " + novasLinhas.length + " | Atualizações: " + atualizacoes);
+  Logger.log("Lote concluído. Novas: " + novasLinhas.length + " | Atualizações: " + atualizacoes);
+
+  const proximoIdx = startIdx + LOTE_SIZE_AUS3;
+  if (proximoIdx < elegiveis.length) {
+    // Ainda há lotes — agenda próxima execução em 1 minuto
+    props.setProperty("AUS3_INDEX", String(proximoIdx));
+    ScriptApp.newTrigger("_processarLoteAus3")
+      .timeBased()
+      .after(60 * 1000)
+      .create();
+    Logger.log("Próximo lote agendado: a partir do índice " + proximoIdx);
+  } else {
+    // Concluído — limpa estado e triggers temporários
+    props.deleteAllProperties();
+    _limparTriggersAus3();
+    Logger.log("Importação completa!");
+  }
 }
 
-// ─── ÚLTIMOS 10 DIAS ──────────────────────────────────────────────────────────
-function _getUltimos10Dias() {
-  const hoje   = new Date();
-  const inicio = new Date(hoje);
-  inicio.setDate(hoje.getDate() - 10);
-  inicio.setHours(0, 0, 0, 0);
+function _limparTriggersAus3() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === "_processarLoteAus3") {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+}
+
+
+
+// ─── DUAS SEMANAS ANTERIORES (seg–dom) ───────────────────────────────────────
+// Pega o último domingo completo e volta 13 dias para a segunda de 2 semanas atrás.
+// Registros já existentes só têm tipo/status atualizados se mudaram — sem duplicatas.
+function _getSemanAnterior() {
+  const hoje      = new Date();
+  const diaSemana = hoje.getDay(); // 0=dom, 1=seg ... 6=sab
+
+  // Domingo da semana passada
+  const dom = new Date(hoje);
+  dom.setDate(hoje.getDate() - diaSemana);
+  dom.setHours(23, 59, 59, 0);
+
+  // Segunda de 2 semanas atrás (13 dias antes do domingo)
+  const seg = new Date(dom);
+  seg.setDate(dom.getDate() - 13);
+  seg.setHours(0, 0, 0, 0);
+
   const fmt = d => Utilities.formatDate(d, "America/Sao_Paulo", "yyyy-MM-dd");
-  return { dataIni: fmt(inicio), dataFinal: fmt(hoje) };
+  return { dataIni: fmt(seg), dataFinal: fmt(dom) };
 }
 
 // ─── TRADUZIR STATUS ──────────────────────────────────────────────────────────
@@ -184,6 +245,7 @@ function _extrairTipoAusencia3(dia) {
   const lista = dia.listAfdtManutencao;
   if (!lista || lista.length === 0) return null;
 
+  // 1. Priorizar abreviationJustification
   for (let i = 0; i < lista.length; i++) {
     const abrev = lista[i].abreviationJustification;
     if (abrev && abrev.trim() !== "" && abrev !== "null") {
@@ -192,6 +254,7 @@ function _extrairTipoAusencia3(dia) {
     }
   }
 
+  // 2. Fallback: detalheDiferencaConsiderada filtrado
   for (let i = 0; i < lista.length; i++) {
     const item = lista[i];
     if (!item.afdtLogs || item.afdtLogs.length === 0) continue;
@@ -216,11 +279,14 @@ function _carregarChavesComLinha(aba) {
   const chaves = {};
   const ultima = aba.getLastRow();
   if (ultima < 2) return chaves;
-  aba.getRange(2, 1, ultima - 1, 6).getValues().forEach((row, idx) => {
-    const mt   = String(row[0] || "").trim();
-    const data = String(row[4] || "").trim();
-    const tipo = String(row[5] || "").trim();
-    if (mt && data) chaves[mt + "|" + data] = { linha: idx + 2, tipo: tipo };
+  aba.getRange(2, 1, ultima - 1, 7).getValues().forEach((row, idx) => {
+    const mt      = String(row[0] || "").trim();
+    const data    = String(row[4] || "").trim();
+    const tipo    = String(row[5] || "").trim();
+    const status  = String(row[6] || "").trim();
+    const unidade = String(row[2] || "").trim();
+    const depto   = String(row[3] || "").trim();
+    if (mt && data) chaves[mt + "|" + data] = { linha: idx + 2, tipo: tipo, status: status, unidade: unidade, depto: depto };
   });
   return chaves;
 }
@@ -356,6 +422,20 @@ function _getApuracaoAus3(token, idPerson, dataIni, dataFinal) {
   } catch(e) { return null; }
 }
 
+// ─── UTILITÁRIOS ─────────────────────────────────────────────────────────────
+function _getOrCreateSheetAus3(ss, name) {
+  return ss.getSheetByName(name) || ss.insertSheet(name);
+}
+
+function toTitleCaseAus3(str) {
+  if (!str) return "";
+  const minusculas = ["de","da","do","das","dos","e","a","o"];
+  return str.toLowerCase().replace(/(?:^|\s)\S/g, function(c, i) {
+    const word = str.toLowerCase().slice(i).match(/\S+/)[0];
+    return (i === 0 || !minusculas.includes(word)) ? c.toUpperCase() : c;
+  });
+}
+
 // ─── WEB APP — salvar devolutiva ─────────────────────────────────────────────
 function doGet(e) {
   var p = (e && e.parameter) ? e.parameter : {};
@@ -377,8 +457,8 @@ function _salvarDevolutiva(p) {
   var aba = ss.getSheetByName(CONFIG_AUS3.ABA_DADOS);
   if (!aba) return { success: false, message: 'aba_nao_encontrada' };
 
-  var tipoAtual  = (aba.getRange(linha, 6).getValue() || '').toString().trim();
-  var msgColH    = (tipoAtual && tipoAtual.toLowerCase() !== devolutiva.toLowerCase())
+  var tipoAtual = (aba.getRange(linha, 6).getValue() || '').toString().trim();
+  var msgColH   = (tipoAtual && tipoAtual.toLowerCase() !== devolutiva.toLowerCase())
     ? 'Era ' + tipoAtual + ' alterou para ' + devolutiva
     : devolutiva;
 
@@ -392,18 +472,4 @@ function _json(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
-}
-
-
-function _getOrCreateSheetAus3(ss, name) {
-  return ss.getSheetByName(name) || ss.insertSheet(name);
-}
-
-function toTitleCaseAus3(str) {
-  if (!str) return "";
-  const minusculas = ["de","da","do","das","dos","e","a","o"];
-  return str.toLowerCase().replace(/(?:^|\s)\S/g, function(c, i) {
-    const word = str.toLowerCase().slice(i).match(/\S+/)[0];
-    return (i === 0 || !minusculas.includes(word)) ? c.toUpperCase() : c;
-  });
 }
