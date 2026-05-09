@@ -1430,7 +1430,7 @@ export default function EscalaPainel() {
                       <div style={{gridRow:1,gridColumn:colabsFiltrados.length+2,position:'sticky',top:0,zIndex:10,background:T.carbon,color:'#F0F0F0',borderLeft:'1px solid #2E3038',display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:8,width:heatW,minWidth:heatW}}>
                         <div style={{fontFamily:'DM Mono,monospace',fontSize:8,fontWeight:600,letterSpacing:'.5px',whiteSpace:'nowrap',writingMode:'vertical-rl',transform:'rotate(180deg)',textTransform:'uppercase'}}>Picos</div>
                       </div>
-                      {/* ── conteúdo: cada slot ocupa 1 linha do grid (linha = slot+2) ── */}
+                      {/* ── conteúdo: cada slot ocupa 1 linha do grid  (linha = slot+2) ── */}
                       {slotTotals.map((totalSlot,slot)=>{
                         const lbl = slotLabel(slot);
                         const full = slot%2===0;   // par = início da hora (:00)
