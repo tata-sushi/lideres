@@ -463,10 +463,12 @@ function _salvarDevolutiva(p) {
     : devolutiva;
 
   var responsavel = (p.responsavel || '').trim();
+  var hoje        = Utilities.formatDate(new Date(), "America/Sao_Paulo", "dd/MM/yyyy");
+  var idLider     = responsavel ? responsavel + ' · ' + hoje : hoje;
 
   aba.getRange(linha, 6).setValue(devolutiva);   // col F — TIPO DE AUSÊNCIA
   aba.getRange(linha, 8).setValue(msgColH);      // col H — DEVOLUTIVA
-  if (responsavel) aba.getRange(linha, 9).setValue(responsavel); // col I — LÍDER
+  aba.getRange(linha, 9).setValue(idLider);      // col I — LÍDER · DATA
 
   return { success: true };
 }
