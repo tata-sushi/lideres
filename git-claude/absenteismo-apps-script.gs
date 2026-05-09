@@ -377,8 +377,13 @@ function _salvarDevolutiva(p) {
   var aba = ss.getSheetByName(CONFIG_AUS3.ABA_DADOS);
   if (!aba) return { success: false, message: 'aba_nao_encontrada' };
 
+  var tipoAtual  = (aba.getRange(linha, 6).getValue() || '').toString().trim();
+  var msgColH    = (tipoAtual && tipoAtual.toLowerCase() !== devolutiva.toLowerCase())
+    ? 'Era ' + tipoAtual + ' alterou para ' + devolutiva
+    : devolutiva;
+
   aba.getRange(linha, 6).setValue(devolutiva); // col F — TIPO DE AUSÊNCIA
-  aba.getRange(linha, 8).setValue(devolutiva); // col H — DEVOLUTIVA
+  aba.getRange(linha, 8).setValue(msgColH);    // col H — DEVOLUTIVA
 
   return { success: true };
 }
