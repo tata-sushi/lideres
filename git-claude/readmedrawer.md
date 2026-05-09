@@ -325,6 +325,27 @@ Todo bloco do body segue a mesma estrutura:
 
 **Para múltiplos botões:** adicionar `<button class="drawer-sam-btn">` um abaixo do outro com `margin-top: 8px` ou gap via flex no pai.
 
+**Botão de link `.drawer-link-card`** (para links de navegação, ex: KPI's):
+
+```html
+<a href="/caminho/para/kpis.html" class="drawer-link-card">
+  <svg class="drawer-link-card-bg" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+  <span class="drawer-link-card-label">KPI's</span>
+</a>
+```
+
+CSS necessário:
+```css
+.drawer-link-card{position:relative;display:flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px 14px;text-decoration:none;transition:border-color .15s;width:100%;overflow:hidden;}
+.drawer-link-card:hover{border-color:var(--carbon);}
+.drawer-link-card-bg{position:absolute;right:-10px;top:50%;transform:translateY(-50%) rotate(-25deg);width:80px;height:80px;stroke:var(--carbon);fill:none;stroke-width:1.8;stroke-linecap:round;opacity:.18;}
+.drawer-link-card-label{font-family:"DM Mono",monospace;font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--t1);position:relative;}
+```
+
+- Texto centralizado, ícone `80px` rotacionado `-25°` com `opacity:.18` no fundo à direita
+- Mesma altura que `.drawer-sam-btn`
+- Trocar o SVG conforme o contexto (barras = KPI, engrenagem = config, etc.)
+
 **Exemplos de uso:**
 - "Criar documentos" (Papelaria)
 - "Nova Rescisão" (Desligamentos)
