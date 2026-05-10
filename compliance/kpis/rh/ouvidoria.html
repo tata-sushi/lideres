@@ -51,8 +51,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
 /* CHARTS */
 .charts-section{max-width:1100px;margin:20px auto 0;padding:0 24px;display:grid;grid-template-columns:180px 220px 1fr;gap:16px;}
-.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);}
-.chart-title{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.8px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 20px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;}
+.chart-card .chart-title{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.8px;text-transform:uppercase;color:var(--carbon);margin-bottom:14px;text-align:center;font-weight:700;}
+.chart-wrap{position:relative;height:220px;}
 
 /* TABLE */
 .table-section{max-width:1100px;margin:16px auto 0;padding:0 24px 100px;}
@@ -359,20 +360,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <div class="charts-section">
-  <div class="chart-card" style="display:flex;flex-direction:column;justify-content:flex-start;">
-    <div class="chart-title" style="text-align:center;">Total de Ocorrências</div>
+  <div class="chart-card" style="justify-content:flex-start;">
+    <div class="chart-title">Total de Ocorrências</div>
     <div id="kpi-total-inline" style="font-size:52px;font-weight:700;color:var(--carbon);line-height:1;margin:8px 0 4px;text-align:center;"></div>
     <div id="kpi-total-sub" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-align:center;"></div>
   </div>
-  <div class="chart-card" style="display:flex;flex-direction:column;">
-    <div class="chart-title" style="text-align:center;">Identificou-se?</div>
-    <canvas id="chart-ident" height="180"></canvas>
+  <div class="chart-card">
+    <div class="chart-title">Identificou-se?</div>
+    <div class="chart-wrap"><canvas id="chart-ident"></canvas></div>
   </div>
-  <div class="chart-card" style="display:flex;flex-direction:column;">
-    <div class="chart-title" style="text-align:center;">Ocorrências por competência</div>
-    <div style="position:relative;height:120px;flex:1;">
-      <canvas id="chart-periodo"></canvas>
-    </div>
+  <div class="chart-card">
+    <div class="chart-title">Ocorrências por competência</div>
+    <div class="chart-wrap"><canvas id="chart-periodo"></canvas></div>
   </div>
 </div>
 
@@ -732,6 +731,35 @@ function renderTable(rows) {
 
 var chartIdent = null, chartPeriodo = null;
 
+// Plugin Chart.js: rótulos numéricos no topo de cada barra (carbon)
+var barValueLabelsPlugin = {
+  id: 'barValueLabels',
+  afterDatasetsDraw: function(chart) {
+    var ctx = chart.ctx;
+    var horizontal = chart.options && chart.options.indexAxis === 'y';
+    chart.data.datasets.forEach(function(ds, dsIdx) {
+      var meta = chart.getDatasetMeta(dsIdx);
+      meta.data.forEach(function(bar, i) {
+        var val = ds.data[i];
+        if (val === null || val === undefined) return;
+        ctx.save();
+        ctx.fillStyle = '#35383F';
+        ctx.font = '600 11px DM Mono, monospace';
+        if (horizontal) {
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(val), bar.x + 6, bar.y);
+        } else {
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(String(val), bar.x, bar.y - 4);
+        }
+        ctx.restore();
+      });
+    });
+  }
+};
+
 function renderCharts(rows) {
   var sim = rows.filter(function(r){return isIdentificado(r);}).length;
   var nao = rows.length - sim;
@@ -742,21 +770,30 @@ function renderCharts(rows) {
     type: 'doughnut',
     data: {
       labels: ['Sim','Não'],
-      datasets: [{data:[sim,nao], backgroundColor:['#111111','#35383F'], borderWidth:0}]
+      datasets: [{
+        data:[sim,nao],
+        backgroundColor:['#35383F','rgba(53,56,63,0.45)'],
+        borderWidth:2,
+        borderColor:'#fff'
+      }]
     },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      cutout: '60%',
       plugins: {
         legend: {
           position: 'bottom',
-          labels: {font:{family:'DM Mono',size:10}, color:'#555', boxWidth:12, padding:10}
+          labels: {font:{family:'DM Mono',size:10}, color:'#35383F', boxWidth:10, padding:8}
         },
+        tooltip: {enabled: false},
         datalabels: {
           color: '#CFFF00',
           font: {family:'DM Mono', size:11, weight:'600'},
           formatter: function(value) { return value > 0 ? value : null; }
         }
-      },
-      cutout: '60%'
+      }
     }
   });
 
@@ -778,25 +815,23 @@ function renderCharts(rows) {
     type: 'bar',
     data: {
       labels: keys,
-      datasets: [{data:vals, backgroundColor:'#35383F', borderRadius:4}]
+      datasets: [{data:vals, backgroundColor:'#35383F', borderWidth:0, borderRadius:5, barPercentage:0.6}]
     },
+    plugins: [barValueLabelsPlugin],
     options: {
+      responsive: true,
       maintainAspectRatio: false,
+      animation: false,
+      layout: {padding: {top:18}},
       plugins: {
         legend: {display:false},
-        datalabels: {
-          anchor: 'end',
-          align: 'top',
-          color: '#555',
-          font: {family:'DM Mono', size:10, weight:'500'},
-          formatter: function(v) { return v; }
-        }
+        tooltip: {enabled: false},
+        datalabels: {display: false}
       },
       scales: {
-        x: {ticks:{font:{family:'DM Mono',size:10}, color:'#999'}},
-        y: {display:false, beginAtZero:true}
-      },
-      layout: {padding: {top:18}}
+        x: {grid:{display:false}, border:{display:false}, ticks:{color:'#35383F', font:{family:'DM Mono',size:10}}},
+        y: {grid:{display:false}, border:{display:false}, ticks:{display:false}, beginAtZero:true}
+      }
     }
   });
 }
