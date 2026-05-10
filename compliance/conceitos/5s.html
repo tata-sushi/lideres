@@ -154,6 +154,16 @@ html, body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(-
   background:var(--citric); border-color:var(--carbon); color:var(--carbon);
   transform:scale(1.08); box-shadow:0 0 0 4px rgba(207,255,0,.18);
 }
+.flow-node-dot svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.flow-node[data-locked="true"] { cursor:pointer; }
+.flow-node[data-locked="true"] .flow-node-dot {
+  background:rgba(53,56,63,.06); border-color:var(--border); color:var(--t3);
+  border-style:dashed;
+}
+.flow-node[data-locked="true"][data-state="active"] .flow-node-dot {
+  background:var(--carbon); border-color:var(--carbon); color:var(--citric);
+  border-style:solid; transform:scale(1.08); box-shadow:0 0 0 4px rgba(53,56,63,.12);
+}
 .flow-node-label {
   font-family:"DM Mono",monospace; font-size:9px; font-weight:500;
   letter-spacing:.06em; text-transform:uppercase; color:var(--t3);
@@ -162,9 +172,40 @@ html, body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(-
 .flow-node[data-state="active"] .flow-node-label { color:var(--t1); font-weight:600; }
 
 .flow-panel {
+  position:relative;
   background:var(--bg); border:1px solid var(--border);
   border-radius:var(--r); padding:18px 16px;
+  overflow:hidden;
 }
+.flow-panel.is-locked .flow-panel-head,
+.flow-panel.is-locked .flow-quote,
+.flow-panel.is-locked .flow-section {
+  filter:blur(4px);
+  pointer-events:none;
+  user-select:none;
+  opacity:.7;
+}
+.flow-lock {
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:10px; padding:24px 20px; text-align:center;
+  background:rgba(244,244,244,.55);
+  -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px);
+  z-index:5;
+}
+.flow-lock-icon {
+  width:52px; height:52px; flex-shrink:0;
+  background:var(--carbon); border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 18px rgba(53,56,63,.18);
+}
+.flow-lock-icon svg { width:22px; height:22px; stroke:var(--citric); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.flow-lock-eyebrow {
+  font-family:"DM Mono",monospace; font-size:9px; font-weight:500;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--t3);
+}
+.flow-lock-title { font-size:15px; font-weight:700; color:var(--t1); line-height:1.25; }
+.flow-lock-text { font-size:12.5px; line-height:1.5; color:var(--t2); max-width:260px; }
 .flow-panel-head { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
 .flow-panel-icon {
   width:44px; height:44px; flex-shrink:0;
@@ -739,7 +780,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         warning: "Limpeza <strong>não é tarefa exclusiva</strong> da equipe de limpeza. Quem usa, conserva."
       },
       {
-        n: 4, jp: "Seiketsu", name: "Senso de Padronização",
+        n: 4, jp: "Seiketsu", name: "Senso de Padronização", locked: true,
         icon: '<svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1"></rect><line x1="9" y1="12" x2="15" y2="12"></line><line x1="9" y1="16" x2="13" y2="16"></line></svg>',
         quote: "Qualquer pessoa do time consegue executar igual?",
         doList: [
@@ -752,7 +793,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         warning: "<strong>Padrão sem treinamento não vira hábito.</strong> Documento engavetado não muda comportamento."
       },
       {
-        n: 5, jp: "Shitsuke", name: "Senso de Disciplina",
+        n: 5, jp: "Shitsuke", name: "Senso de Disciplina", locked: true,
         icon: '<svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>',
         quote: "Isso virou cultura — ou ainda depende de cobrança?",
         doList: [
@@ -776,31 +817,42 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var track = root.querySelector('.flow-track');
     var active = 1;
     var checks = [{}, {}, {}, {}, {}];
+    var LOCK_SVG = '<svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="1.5"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>';
+
+    function lastUnlockedAtOrBefore(step) {
+      for (var k = step; k >= 1; k--) {
+        if (!SENSOS[k - 1].locked) return k;
+      }
+      return 1;
+    }
 
     function updateProgressLine() {
       var firstDot = nodes[0].querySelector('.flow-node-dot');
       var lastDot = nodes[nodes.length - 1].querySelector('.flow-node-dot');
-      var activeDot = nodes[active - 1].querySelector('.flow-node-dot');
+      var progressStep = lastUnlockedAtOrBefore(active);
+      var progressDot = nodes[progressStep - 1].querySelector('.flow-node-dot');
       var trackRect = track.getBoundingClientRect();
       var firstRect = firstDot.getBoundingClientRect();
       var lastRect = lastDot.getBoundingClientRect();
-      var activeRect = activeDot.getBoundingClientRect();
+      var progressRect = progressDot.getBoundingClientRect();
       var startX = firstRect.left + firstRect.width / 2 - trackRect.left;
       var endX = lastRect.left + lastRect.width / 2 - trackRect.left;
-      var activeX = activeRect.left + activeRect.width / 2 - trackRect.left;
+      var progressX = progressRect.left + progressRect.width / 2 - trackRect.left;
       var topY = firstRect.top + firstRect.height / 2 - trackRect.top - 1;
       track.style.setProperty('--line-start', startX + 'px');
       track.style.setProperty('--line-width', (endX - startX) + 'px');
       track.style.setProperty('--line-top', topY + 'px');
-      track.style.setProperty('--progress-width', (activeX - startX) + 'px');
+      track.style.setProperty('--progress-width', (progressX - startX) + 'px');
     }
 
     function render() {
       var s = SENSOS[active - 1];
+      var isLocked = !!s.locked;
       panel.classList.remove('is-anim');
       void panel.offsetWidth;
       panel.classList.add('is-anim');
-      panel.innerHTML =
+      panel.classList.toggle('is-locked', isLocked);
+      var contentHTML =
         '<div class="flow-panel-head">' +
           '<div class="flow-panel-icon">' + s.icon + '</div>' +
           '<div>' +
@@ -826,12 +878,26 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           '<div class="flow-section-label">Cuidado</div>' +
           '<div class="flow-warning">' + s.warning + '</div>' +
         '</div>';
+      var lockHTML = isLocked
+        ? '<div class="flow-lock" role="status">' +
+            '<div class="flow-lock-icon">' + LOCK_SVG + '</div>' +
+            '<div class="flow-lock-eyebrow">' + s.n + 'º Senso · ' + s.jp + '</div>' +
+            '<div class="flow-lock-title">Conteúdo bloqueado</div>' +
+            '<div class="flow-lock-text">Conclua os sensos anteriores para desbloquear este conteúdo.</div>' +
+          '</div>'
+        : '';
+      panel.innerHTML = contentHTML + lockHTML;
 
       for (var i = 0; i < nodes.length; i++) {
         var step = parseInt(nodes[i].dataset.step, 10);
+        var nodeLocked = !!SENSOS[step - 1].locked;
         var state = step < active ? 'done' : (step === active ? 'active' : 'pending');
+        if (nodeLocked && state === 'done') state = 'pending';
         nodes[i].dataset.state = state;
+        nodes[i].dataset.locked = nodeLocked ? 'true' : 'false';
         nodes[i].setAttribute('aria-selected', step === active ? 'true' : 'false');
+        var dot = nodes[i].querySelector('.flow-node-dot');
+        dot.innerHTML = nodeLocked ? LOCK_SVG : String(step);
       }
 
       cur.textContent = active;
