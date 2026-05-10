@@ -197,16 +197,39 @@ html, body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(-
 .flow-section-label::before {
   content:""; width:5px; height:5px; background:var(--citric); border-radius:50%;
 }
-.flow-list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:7px; }
+.flow-list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:4px; }
 .flow-list li {
-  position:relative; padding-left:22px;
+  position:relative; padding:6px 8px 6px 28px;
   font-size:13px; line-height:1.55; color:var(--t2);
+  cursor:pointer; user-select:none;
+  border-radius:5px;
+  transition:background .15s, color .15s;
+  outline:none;
 }
-.flow-list li strong { color:var(--t1); font-weight:600; }
+.flow-list li strong { color:var(--t1); font-weight:600; transition:color .15s; }
 .flow-list li::before {
-  content:""; position:absolute; left:4px; top:7px;
-  width:9px; height:9px; border:1.5px solid var(--carbon); border-radius:2px;
+  content:""; position:absolute; left:6px; top:9px;
+  width:14px; height:14px; box-sizing:border-box;
+  border:1.5px solid var(--carbon); border-radius:3px;
+  background:var(--white);
+  transition:background .15s, border-color .15s;
 }
+.flow-list li::after {
+  content:""; position:absolute; left:9px; top:11px;
+  width:8px; height:5px;
+  border-left:2px solid var(--white); border-bottom:2px solid var(--white);
+  transform:rotate(-45deg) scale(0);
+  transform-origin:center;
+  transition:transform .18s cubic-bezier(.5,1.6,.5,1);
+}
+.flow-list li:hover { background:rgba(0,0,0,.03); }
+.flow-list li:focus-visible { box-shadow:0 0 0 2px rgba(207,255,0,.4); }
+.flow-list li[data-checked="true"] { color:var(--t3); }
+.flow-list li[data-checked="true"] strong { color:var(--t2); }
+.flow-list li[data-checked="true"]::before {
+  background:var(--green-tx); border-color:var(--green-tx);
+}
+.flow-list li[data-checked="true"]::after { transform:rotate(-45deg) scale(1); }
 .flow-example {
   background:var(--white); border:1px solid var(--border); border-radius:var(--r);
   padding:12px 14px; font-size:13px; line-height:1.6; color:var(--t2);
@@ -752,6 +775,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var nodes = root.querySelectorAll('.flow-node');
     var track = root.querySelector('.flow-track');
     var active = 1;
+    var checks = [{}, {}, {}, {}, {}];
 
     function updateProgressLine() {
       var firstDot = nodes[0].querySelector('.flow-node-dot');
@@ -788,7 +812,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         '<div class="flow-section">' +
           '<div class="flow-section-label">O que fazer</div>' +
           '<ul class="flow-list">' +
-            s.doList.map(function(it){ return '<li>' + it + '</li>'; }).join('') +
+            s.doList.map(function(it, i){
+              var on = !!checks[active - 1][i];
+              return '<li role="checkbox" tabindex="0" data-idx="' + i + '" data-checked="' + on + '" aria-checked="' + on + '">' + it + '</li>';
+            }).join('') +
           '</ul>' +
         '</div>' +
         '<div class="flow-section">' +
@@ -832,6 +859,23 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     }
     prev.addEventListener('click', function(){ go(active - 1); });
     next.addEventListener('click', function(){ go(active + 1); });
+
+    function toggleCheck(li) {
+      var idx = li.dataset.idx;
+      var on = li.dataset.checked !== 'true';
+      li.dataset.checked = on ? 'true' : 'false';
+      li.setAttribute('aria-checked', on ? 'true' : 'false');
+      checks[active - 1][idx] = on;
+    }
+    panel.addEventListener('click', function(e){
+      var li = e.target.closest && e.target.closest('.flow-list li');
+      if (li) toggleCheck(li);
+    });
+    panel.addEventListener('keydown', function(e){
+      if (e.key !== ' ' && e.key !== 'Enter') return;
+      var li = e.target.closest && e.target.closest('.flow-list li');
+      if (li) { e.preventDefault(); toggleCheck(li); }
+    });
 
     document.addEventListener('keydown', function(e){
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
