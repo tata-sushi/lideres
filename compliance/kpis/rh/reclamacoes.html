@@ -358,18 +358,36 @@ function parseVal(s) {
 
 function mapRow(r) {
   return {
-    notificacao:   pick(r, 'data_da_notificacao', 'data da notificacao', 'notificacao', 'data'),
+    notificacao:   pick(r, 'data_da_notificacao', 'data da notificacao', 'data_notificacao', 'notificacao', 'data_da_notificacao', 'data'),
     reclamante:    pick(r, 'reclamante'),
-    solicitacao:   pick(r, 'solicitacoes', 'solicitacao'),
-    audiencia:     pick(r, 'data_da_audiencia', 'data da audiencia', 'audiencia') || '—',
-    resolucao:     pick(r, 'resolucao'),
+    solicitacao:   pick(r, 'solicitacoes', 'solicitacao', 'solicitacao_', 'solicitacoes_'),
+    audiencia:     pick(r, 'data_da_audiencia', 'data da audiencia', 'data_audiencia', 'audiencia') || '—',
+    resolucao:     pick(r, 'resolucao', 'resolucao_'),
     resultado:     pick(r, 'resultado'),
-    valorCausa:    parseVal(pick(r, 'valor_da_causa', 'valor da causa', 'valorcausa')),
-    valorQuitacao: parseVal(pick(r, 'valor_da_quitacao', 'valor da quitacao', 'valorquitacao')),
+    valorCausa:    parseVal(pick(r, 'valor_da_causa', 'valor da causa', 'valorcausa', 'valor_causa')),
+    valorQuitacao: parseVal(pick(r, 'valor_da_quitacao', 'valor da quitacao', 'valorquitacao', 'valor_quitacao')),
     unidade:       pick(r, 'unidade'),
     departamento:  pick(r, 'departamento'),
     obs:           pick(r, 'obs')
   };
+}
+
+function normKey(h) {
+  return String(h || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().replace(/\s+/g, '_');
+}
+
+function rowsToObjs(values) {
+  if (!values || values.length < 2) return [];
+  var headers = values[0];
+  var result = [];
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    if (!row.some(function(c) { return c && String(c).trim(); })) continue;
+    var obj = {};
+    headers.forEach(function(h, j) { obj[normKey(h)] = String(row[j] || '').trim(); });
+    result.push(obj);
+  }
+  return result;
 }
 
 function loadData() {
@@ -378,8 +396,23 @@ function loadData() {
   fetch(SCRIPT_URL)
     .then(function(r) { return r.json(); })
     .then(function(json) {
-      if (!json.ok) { console.error('Erro backend:', json.error); return; }
-      processos = (json.data || []).map(mapRow).filter(function(p) { return p.notificacao || p.reclamante; });
+      var rows;
+      // Formato 1: {ok:true, data:[{...},...]}  (ouvidoria/recrutamento pattern)
+      if (json.ok && Array.isArray(json.data))          { rows = json.data; }
+      // Formato 2: {values:[[headers],[row],...]}       (Sheets API pattern)
+      else if (json.values)                             { rows = rowsToObjs(json.values); }
+      // Formato 3: array direto
+      else if (Array.isArray(json))                     { rows = json; }
+      // Formato 4: {processos:[...]} ou {data:[...]} sem ok
+      else if (Array.isArray(json.processos))           { rows = json.processos; }
+      else if (Array.isArray(json.data))                { rows = json.data; }
+      else {
+        console.error('Formato de resposta desconhecido:', json);
+        if (content) content.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Formato de dados inválido</p></div>';
+        return;
+      }
+      processos = rows.map(mapRow).filter(function(p) { return p.notificacao || p.reclamante; });
+      updateAnoSelect();
       applyFilters();
     })
     .catch(function(e) {
