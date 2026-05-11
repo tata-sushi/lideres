@@ -339,8 +339,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 // ─── Backend ──────────────────────────────────────────────────────────────────
-var SHEET_ID   = '1EZ85re9-moEEfNojwglwxLS_4skM2DFK7L1EQLZjWbI';
-var SCRIPT_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&gid=0';
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxEs6_B76XgPgy3qHR164Q1zpmDVgM5QA3G1AT1fPd27S26q5ZtcBmissxRwWR8iwUw/exec';
 var processos = [];
 
 function pick(obj) {
@@ -391,31 +390,20 @@ function rowsToObjs(values) {
   return result;
 }
 
-function parseGviz(text) {
-  var match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?\s*$/);
-  if (!match) return null;
-  var json = JSON.parse(match[1]);
-  var table = json.table;
-  if (!table) return null;
-  var cols = table.cols.map(function(c) { return normKey(c.label || c.id); });
-  return (table.rows || []).map(function(row) {
-    var obj = {};
-    (row.c || []).forEach(function(cell, i) {
-      obj[cols[i]] = cell && cell.f != null ? String(cell.f) : (cell && cell.v != null ? String(cell.v) : '');
-    });
-    return obj;
-  });
-}
-
 function loadData() {
   var content = document.getElementById('content');
   if (content) content.innerHTML = '<div class="empty-state"><p style="opacity:.5">Carregando dados...</p></div>';
   fetch(SCRIPT_URL)
-    .then(function(r) { return r.text(); })
-    .then(function(text) {
-      var rows = parseGviz(text);
-      if (!rows) {
-        console.error('Formato gviz inválido:', text.slice(0, 200));
+    .then(function(r) { return r.json(); })
+    .then(function(json) {
+      var rows;
+      if (json.ok && Array.isArray(json.data))          { rows = json.data; }
+      else if (json.values)                             { rows = rowsToObjs(json.values); }
+      else if (Array.isArray(json))                     { rows = json; }
+      else if (Array.isArray(json.processos))           { rows = json.processos; }
+      else if (Array.isArray(json.data))                { rows = json.data; }
+      else {
+        console.error('Formato de resposta desconhecido:', json);
         if (content) content.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Formato de dados inválido</p></div>';
         return;
       }
