@@ -458,6 +458,9 @@ function getAno(notificacao) {
 function applyFilters() {
   var fRes = document.getElementById('fResultado').value;
   var fAno = document.getElementById('fAno').value;
+  // sincroniza estado de cross-filter com os selects
+  _cfAno = fAno || null;
+  _cfStatus = fRes ? statusDropdownToChart(fRes) : null;
   var filtered = processos.filter(function(p) {
     if (fRes && p.resultado !== fRes) return false;
     if (fAno && getAno(p.notificacao) !== fAno) return false;
@@ -465,11 +468,13 @@ function applyFilters() {
   });
   document.getElementById('count-shown').textContent = filtered.length;
   renderCards(filtered);
+  renderCharts();
 }
 
 function clearFilters() {
   document.getElementById('fResultado').value = '';
   document.getElementById('fAno').value = '';
+  _cfAno = null; _cfStatus = null; _cfDepto = null;
   applyFilters();
 }
 
@@ -536,67 +541,81 @@ var barValueLabelsPlugin = {
   }
 };
 
-function initCharts() {
-  var barColor = '#35383F';
+// ─── Cross-filter state ───────────────────────────────────────────────────────
+var _cfAno = null, _cfStatus = null, _cfDepto = null;
+var _chartAnos = null, _chartStatus = null, _chartDepto = null;
 
-  // Por ano
-  new Chart(document.getElementById('cAnos').getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels: ['2021','2022','2024','2025','2026'],
-      datasets: [{ data: [1,3,4,11,3], backgroundColor: barColor, borderWidth: 0, borderRadius: 5, barPercentage: 0.6 }]
-    },
-    plugins: [barValueLabelsPlugin],
-    options: {
-      responsive: true, maintainAspectRatio: false, animation: false,
-      layout: { padding: { top: 18 } },
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
-      scales: {
-        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 } } },
-        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
-      }
-    }
-  });
+var CHART_ANOS_LABELS   = ['2021','2022','2024','2025','2026'];
+var CHART_ANOS_DATA     = [1,3,4,11,3];
+var CHART_STATUS_LABELS = ['Acordo','Improcedente','Aguardando','Procedente','Extinto'];
+var CHART_STATUS_DATA   = [10,5,3,2,1];
+var CHART_DEPTO_LABELS  = ['Sushibar','Limpeza','Cozinha','Vallet','Manutenção','Poke','Salão'];
+var CHART_DEPTO_DATA    = [9,5,3,2,1,1,1];
 
-  // Por status
-  new Chart(document.getElementById('cStatus').getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels: ['Acordo','Improcedente','Aguardando','Procedente','Extinto'],
-      datasets: [{ data: [10,5,3,2,1], backgroundColor: barColor, borderWidth: 0, borderRadius: 5, barPercentage: 0.6 }]
-    },
-    plugins: [barValueLabelsPlugin],
-    options: {
-      responsive: true, maintainAspectRatio: false, animation: false,
-      layout: { padding: { top: 18 } },
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
-      scales: {
-        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 } } },
-        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
-      }
-    }
-  });
+// Mapeia label do gráfico de status para o value do select fResultado
+function statusChartToDropdown(s) {
+  return s === 'Aguardando' ? 'Aguardando Audiência' : s;
+}
+function statusDropdownToChart(s) {
+  return s === 'Aguardando Audiência' ? 'Aguardando' : s;
+}
 
-  // Por departamento (horizontal)
-  new Chart(document.getElementById('cDepto').getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels: ['Sushibar','Limpeza','Cozinha','Vallet','Manutenção','Poke','Salão'],
-      datasets: [{ data: [9,5,3,2,1,1,1], backgroundColor: barColor, borderWidth: 0, borderRadius: 5 }]
-    },
-    plugins: [barValueLabelsPlugin],
-    options: {
-      indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false, animation: false,
-      layout: { padding: { right: 36 } },
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
-      scales: {
-        x: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true },
-        y: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 11 } } }
-      }
-    }
+function fadedBg(labels, selected) {
+  return labels.map(function(l) {
+    if (!selected) return '#35383F';
+    return l === selected ? '#35383F' : 'rgba(53,56,63,0.25)';
   });
 }
+
+function setCfAno(ano) {
+  _cfAno = (_cfAno === ano) ? null : ano;
+  document.getElementById('fAno').value = _cfAno || '';
+  applyFilters();
+}
+function setCfStatus(status) {
+  _cfStatus = (_cfStatus === status) ? null : status;
+  document.getElementById('fResultado').value = _cfStatus ? statusChartToDropdown(_cfStatus) : '';
+  applyFilters();
+}
+function setCfDepto(depto) {
+  _cfDepto = (_cfDepto === depto) ? null : depto;
+  renderCharts();
+}
+
+function buildChartConfig(labels, data, selected, onClickFn, opts) {
+  opts = opts || {};
+  return {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: fadedBg(labels, selected), borderWidth: 0, borderRadius: 5, barPercentage: opts.horizontal ? undefined : 0.6 }] },
+    plugins: [barValueLabelsPlugin],
+    options: {
+      indexAxis: opts.horizontal ? 'y' : 'x',
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: opts.horizontal ? { padding: { right: 36 } } : { padding: { top: 18 } },
+      onClick: function(e, els) { if (els.length) onClickFn(labels[els[0].index]); },
+      onHover: function(e, els) { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: opts.horizontal ? {
+        x: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true },
+        y: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 11 } } }
+      } : {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 } } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
+      }
+    }
+  };
+}
+
+function renderCharts() {
+  if (_chartAnos)   _chartAnos.destroy();
+  if (_chartStatus) _chartStatus.destroy();
+  if (_chartDepto)  _chartDepto.destroy();
+  _chartAnos   = new Chart(document.getElementById('cAnos').getContext('2d'),   buildChartConfig(CHART_ANOS_LABELS,   CHART_ANOS_DATA,   _cfAno,    setCfAno));
+  _chartStatus = new Chart(document.getElementById('cStatus').getContext('2d'), buildChartConfig(CHART_STATUS_LABELS, CHART_STATUS_DATA, _cfStatus, setCfStatus));
+  _chartDepto  = new Chart(document.getElementById('cDepto').getContext('2d'),  buildChartConfig(CHART_DEPTO_LABELS,  CHART_DEPTO_DATA,  _cfDepto,  setCfDepto, { horizontal: true }));
+}
+
+function initCharts() { renderCharts(); }
 
 // ─── Drawer ───────────────────────────────────────────────────────────────────
 var _drawerKPIsLoaded = false;
