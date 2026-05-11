@@ -814,6 +814,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.54"/></svg>
           Reiniciar
         </button>
+        <div class="hflow-lock" id="hf-final-lock">
+          <div class="hflow-lock-icon"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="1.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+          <div class="hflow-lock-eyebrow">Conclusão</div>
+          <div class="hflow-lock-title">Etapas pendentes</div>
+          <div class="hflow-lock-text">Desbloqueie todas as etapas para concluir o ciclo 5S.</div>
+        </div>
       </div>
 
     </div>
@@ -1076,19 +1082,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       coverList.innerHTML = html;
     })();
 
-    /* Render dots (5 sensos + ✓ final = 6 estados, mas capa é 0 e não tem dot) */
-    /* Vou usar 5 dots: cada um representa um senso 1-5. Capa = nenhum dot ativo. */
-    for (var k = 0; k < 5; k++) {
+    /* Render dots: 5 sensos (01-05) + ✓ final */
+    for (var k = 0; k < 6; k++) {
       (function(idx){
+        var isFinal = idx === 5;
         var item = document.createElement('div');
         item.className = 'hflow-dot-item';
         var dot = document.createElement('div');
         dot.className = 'hflow-dot';
-        dot.textContent = String(idx+1).padStart(2,'0');
-        dot.title = JPS[idx] + ' · ' + NAMES[idx];
-        dot.addEventListener('click', function(){ hfGoTo(idx + 1); });
+        dot.textContent = isFinal ? '✓' : String(idx+1).padStart(2,'0');
+        dot.title = isFinal ? 'Ciclo Concluído' : (JPS[idx] + ' · ' + NAMES[idx]);
+        dot.addEventListener('click', function(){ hfGoTo(isFinal ? 6 : idx + 1); });
         item.appendChild(dot);
-        if (idx < 4) {
+        if (idx < 5) {
           var line = document.createElement('div');
           line.className = 'hflow-dot-line';
           item.appendChild(line);
@@ -1111,21 +1117,37 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       /* dots */
       var dots = dotsEl.querySelectorAll('.hflow-dot');
       var lines = dotsEl.querySelectorAll('.hflow-dot-line');
+      var anyLocked = isLocked(4) || isLocked(5);
       dots.forEach(function(d, i) {
         d.classList.remove('current', 'visited', 'locked');
-        var step = i + 1;
-        if (isLocked(step)) {
-          d.classList.add('locked');
-          d.innerHTML = LOCK_DOT_SVG;
+        var isFinalDot = i === 5;
+        if (isFinalDot) {
+          if (anyLocked) {
+            d.classList.add('locked');
+            d.innerHTML = LOCK_DOT_SVG;
+          } else {
+            d.textContent = '✓';
+          }
+          if (hfCur === 6) d.classList.add('current');
+          else if (hfCur > 6) d.classList.add('visited');
         } else {
-          d.textContent = String(step).padStart(2, '0');
+          var step = i + 1;
+          if (isLocked(step)) {
+            d.classList.add('locked');
+            d.innerHTML = LOCK_DOT_SVG;
+          } else {
+            d.textContent = String(step).padStart(2, '0');
+          }
+          if (hfCur === step) d.classList.add('current');
+          else if (hfCur > step) d.classList.add('visited');
         }
-        if (hfCur === step) d.classList.add('current');
-        else if (hfCur > step) d.classList.add('visited');
       });
       lines.forEach(function(l, i) {
         l.classList.toggle('passed', hfCur > i + 1);
       });
+      /* lock do card final */
+      var finalLock = document.getElementById('hf-final-lock');
+      if (finalLock) finalLock.style.display = anyLocked ? '' : 'none';
       /* barra de progresso */
       var pct = hfCur === 0 ? 0 : Math.min(Math.round((hfCur / 5) * 100), 100);
       fillEl.style.width = pct + '%';
