@@ -311,20 +311,20 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="drawer-section">
       <div class="drawer-section-label">O que é</div>
-      <p class="drawer-about"><strong>Reclamações Trabalhistas</strong> consolida os processos trabalhistas movidos contra o TATÁ Sushi, com informações sobre valor da causa, custos de quitação, status dos processos e resolução.</p>
+      <p class="drawer-about"><strong>Governança de Processos</strong> é a maneira pela qual consolidamos as iniciativas da gestão de processos do TATÁ Sushi, com papéis, diretrizes e mecanismos que orientam como os processos devem ser definidos, executados, monitorados e aprimorados continuamente.</p>
     </div>
     <div class="drawer-section">
       <div class="drawer-section-label">Números</div>
       <div class="drawer-kpi-grid">
         <div class="drawer-kpi-card">
-          <span class="drawer-kpi-card-label">Casos</span>
-          <span class="drawer-kpi-card-number">21</span>
-          <span class="drawer-kpi-card-sub">total</span>
+          <span class="drawer-kpi-card-label">Seções</span>
+          <span class="drawer-kpi-card-number" id="drawer-kpi-secoes">7</span>
+          <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-pags">—</strong> pág / <strong id="drawer-kpi-dash">—</strong> dash</span>
         </div>
         <div class="drawer-kpi-card">
-          <span class="drawer-kpi-card-label">Quitação</span>
-          <span class="drawer-kpi-card-number" style="font-size:18px;">R$112K</span>
-          <span class="drawer-kpi-card-sub">pago</span>
+          <span class="drawer-kpi-card-label">Unidades</span>
+          <span class="drawer-kpi-card-number" id="drawer-kpi-unidades">—</span>
+          <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-deptos">—</strong> depto / <strong id="drawer-kpi-colabs">—</strong> colab</span>
         </div>
       </div>
     </div>
@@ -564,9 +564,50 @@ function initCharts() {
 }
 
 // ─── Drawer ───────────────────────────────────────────────────────────────────
+var _drawerKPIsLoaded = false;
+function loadDrawerKPIs() {
+  if (_drawerKPIsLoaded) return;
+  fetch('https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec?action=listColaboradores')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var unidades = new Set(), deptos = new Set();
+      data.colaboradores.forEach(function(c) {
+        if (c.unidade) unidades.add(c.unidade);
+        if (c.departamento) deptos.add(c.departamento);
+      });
+      document.getElementById('drawer-kpi-unidades').textContent = unidades.size;
+      document.getElementById('drawer-kpi-deptos').textContent   = deptos.size;
+      document.getElementById('drawer-kpi-colabs').textContent   = data.total;
+      _drawerKPIsLoaded = true;
+    })
+    .catch(function() {});
+}
+var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
+var _drawerMetaLoaded = false;
+function loadDrawerMeta() {
+  if (_drawerMetaLoaded) return;
+  fetch(GITHUB_TREE_URL)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.tree) return;
+      var pages = 0, dashboards = 0;
+      data.tree.forEach(function(f) {
+        if (f.type !== 'blob' || !f.path.endsWith('.html')) return;
+        if (f.path.startsWith('compliance/kpis/')) { dashboards++; }
+        else if (f.path.startsWith('compliance/')) { pages++; }
+      });
+      var el = function(id) { return document.getElementById(id); };
+      if (el('drawer-kpi-pags')) el('drawer-kpi-pags').textContent = pages;
+      if (el('drawer-kpi-dash')) el('drawer-kpi-dash').textContent = dashboards;
+      _drawerMetaLoaded = true;
+    })
+    .catch(function() {});
+}
 function openDrawer() {
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawer-overlay').classList.add('open');
+  loadDrawerKPIs();
+  loadDrawerMeta();
 }
 function closeDrawer() {
   document.getElementById('drawer').classList.remove('open');
