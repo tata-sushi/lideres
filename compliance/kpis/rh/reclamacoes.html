@@ -402,9 +402,13 @@ function loadData() {
     .then(function(r) { return r.json(); })
     .then(function(json) {
       var rows;
+      // Formato 1: {ok:true, data:[{...},...]}  (ouvidoria/recrutamento pattern)
       if (json.ok && Array.isArray(json.data))          { rows = json.data; }
+      // Formato 2: {values:[[headers],[row],...]}       (Sheets API pattern)
       else if (json.values)                             { rows = rowsToObjs(json.values); }
+      // Formato 3: array direto
       else if (Array.isArray(json))                     { rows = json; }
+      // Formato 4: {processos:[...]} ou {data:[...]} sem ok
       else if (Array.isArray(json.processos))           { rows = json.processos; }
       else if (Array.isArray(json.data))                { rows = json.data; }
       else {
@@ -484,9 +488,9 @@ function updateAnoSelect() {
   processos.forEach(function(p) { var a = getAno(p.notificacao); if (a) anos[a] = true; });
   populateSelect('fAno', Object.keys(anos).sort(), 'Todos');
 
-  var status = {};
-  processos.forEach(function(p) { if (p.resolucao) status[p.resolucao] = true; });
-  populateSelect('fResultado', Object.keys(status).sort(), 'Todos');
+  var resultados = {};
+  processos.forEach(function(p) { if (p.resultado) resultados[p.resultado] = true; });
+  populateSelect('fResultado', Object.keys(resultados).sort(), 'Todos');
 
   var unidades = {};
   processos.forEach(function(p) { if (p.unidade) unidades[p.unidade] = true; });
@@ -497,20 +501,23 @@ function updateAnoSelect() {
   populateSelect('fDepto', Object.keys(deptos).sort(), 'Todos');
 }
 
-function applyFilters() {
+function passesCf(p, except) {
   var fRes     = document.getElementById('fResultado').value;
   var fAno     = document.getElementById('fAno').value;
   var fUnidade = document.getElementById('fUnidade').value;
   var fDepto   = document.getElementById('fDepto').value;
-  _cfAno    = fAno || null;
-  _cfStatus = fRes || null;
-  var filtered = processos.filter(function(p) {
-    if (fRes     && p.resolucao    !== fRes)             return false;
-    if (fAno     && getAno(p.notificacao) !== fAno)      return false;
-    if (fUnidade && p.unidade      !== fUnidade)         return false;
-    if (fDepto   && p.departamento !== fDepto)           return false;
-    return true;
-  });
+  if (except !== 'ano'    && fAno   && getAno(p.notificacao) !== fAno) return false;
+  if (except !== 'status' && fRes   && p.resultado !== fRes) return false;
+  if (except !== 'depto'  && fDepto && (p.departamento || '') !== fDepto) return false;
+  if (fUnidade && (p.unidade || '') !== fUnidade) return false;
+  return true;
+}
+
+function applyFilters() {
+  _cfAno    = document.getElementById('fAno').value      || null;
+  _cfStatus = document.getElementById('fResultado').value || null;
+  _cfDepto  = document.getElementById('fDepto').value    || null;
+  var filtered = processos.filter(function(p) { return passesCf(p, null); });
   document.getElementById('count-shown').textContent = filtered.length;
   updateKPIs(filtered);
   renderCards(filtered);
@@ -601,18 +608,19 @@ function fadedBg(labels, selected) {
 }
 
 function setCfAno(ano) {
-  _cfAno = (_cfAno === ano) ? null : ano;
-  document.getElementById('fAno').value = _cfAno || '';
+  var sel = document.getElementById('fAno');
+  sel.value = (sel.value === ano) ? '' : ano;
   applyFilters();
 }
 function setCfStatus(status) {
-  _cfStatus = (_cfStatus === status) ? null : status;
-  document.getElementById('fResultado').value = _cfStatus || '';
+  var sel = document.getElementById('fResultado');
+  sel.value = (sel.value === status) ? '' : status;
   applyFilters();
 }
 function setCfDepto(depto) {
-  _cfDepto = (_cfDepto === depto) ? null : depto;
-  renderCharts();
+  var sel = document.getElementById('fDepto');
+  sel.value = (sel.value === depto) ? '' : depto;
+  applyFilters();
 }
 
 function buildChartConfig(labels, data, selected, onClickFn, opts) {
@@ -645,23 +653,26 @@ function groupBy(arr, keyFn) {
   return counts;
 }
 
-function renderCharts(filtered) {
-  var src = filtered || processos;
+function renderCharts() {
+  // Cada gráfico mostra contagens filtradas por todos os cross-filters EXCETO o seu próprio
+  var anosRows   = processos.filter(function(p) { return passesCf(p, 'ano'); });
+  var statusRows = processos.filter(function(p) { return passesCf(p, 'status'); });
+  var deptoRows  = processos.filter(function(p) { return passesCf(p, 'depto'); });
 
-  // Ano chart — use all processos so total counts are visible (cross-filter just highlights)
-  var anosCounts = groupBy(processos, function(p) { return getAno(p.notificacao); });
+  // Ano chart
+  var anosCounts = groupBy(anosRows, function(p) { return getAno(p.notificacao); });
   var anosLabels = Object.keys(anosCounts).sort();
   var anosData   = anosLabels.map(function(l) { return anosCounts[l]; });
 
-  // Status chart — use all processos
-  var statusCounts = groupBy(processos, function(p) { return p.resolucao || ''; });
+  // Status chart — usa resultado e respeita cross-filter de ano/depto
+  var statusCounts = groupBy(statusRows, function(p) { return p.resultado || ''; });
   var statusEntries = Object.keys(statusCounts).map(function(k) { return [k, statusCounts[k]]; });
   statusEntries.sort(function(a,b) { return b[1] - a[1]; });
   var statusLabels = statusEntries.map(function(e) { return e[0]; });
   var statusData   = statusEntries.map(function(e) { return e[1]; });
 
-  // Depto chart — use all processos
-  var deptoCounts = groupBy(processos, function(p) { return p.departamento || ''; });
+  // Depto chart
+  var deptoCounts = groupBy(deptoRows, function(p) { return p.departamento || ''; });
   var deptoEntries = Object.keys(deptoCounts).map(function(k) { return [k, deptoCounts[k]]; });
   deptoEntries.sort(function(a,b) { return b[1] - a[1]; });
   var deptoLabels = deptoEntries.map(function(e) { return e[0]; });
