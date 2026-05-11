@@ -32,10 +32,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
 .kpis-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
-.kpi-card.highlight { background: var(--carbon); border-color: var(--carbon); }
-.kpi-card.highlight .kpi-label { color: rgba(207,255,0,.7); }
-.kpi-card.highlight .kpi-number { color: var(--citric); }
-.kpi-card.highlight .kpi-sub { color: rgba(255,255,255,.5); }
 .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
 .kpi-number { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
 .kpi-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
@@ -215,15 +211,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </header>
 
 <div class="kpis-wrap">
-  <div class="kpi-card highlight">
+  <div class="kpi-card">
     <span class="kpi-label">Total de Casos</span>
     <span class="kpi-number" id="kpi-total">—</span>
-    <span class="kpi-sub">Reclamações trabalhistas</span>
+    <span class="kpi-sub"></span>
   </div>
-  <div class="kpi-card highlight">
+  <div class="kpi-card">
     <span class="kpi-label">Custo de Quitação</span>
     <span class="kpi-number" id="kpi-quitacao">—</span>
-    <span class="kpi-sub">Total pago até o momento</span>
+    <span class="kpi-sub"></span>
   </div>
   <div class="kpi-card">
     <span class="kpi-label">Acordos</span>
@@ -233,7 +229,42 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="kpi-card">
     <span class="kpi-label">Valor da Causa</span>
     <span class="kpi-number" id="kpi-causa">—</span>
-    <span class="kpi-sub">Total valor solicitado</span>
+    <span class="kpi-sub"></span>
+  </div>
+</div>
+
+<div class="filters-wrap" id="filters-wrap">
+  <div class="filters-row">
+    <div class="filter-group">
+      <label class="filter-label">Status</label>
+      <select class="filter-select" id="fResultado" onchange="applyFilters()">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Ano</label>
+      <select class="filter-select" id="fAno" onchange="applyFilters()">
+        <option value="">Todos</option>
+      </select>
+    </div>
+  </div>
+  <div class="filters-row">
+    <div class="filter-group">
+      <label class="filter-label">Unidade</label>
+      <select class="filter-select" id="fUnidade" onchange="applyFilters()">
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Departamento</label>
+      <select class="filter-select" id="fDepto" onchange="applyFilters()">
+        <option value="">Todos</option>
+      </select>
+    </div>
+  </div>
+  <div class="filters-actions">
+    <button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>
+    <span class="results-count"><span id="count-shown">0</span> processo(s)</span>
   </div>
 </div>
 
@@ -250,32 +281,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="chart-card">
   <div class="chart-title">Reclamações por Departamento</div>
   <div class="chart-wrap" style="height:260px;"><canvas id="cDepto"></canvas></div>
-</div>
-
-<div class="filters-wrap" id="filters-wrap">
-  <div class="filters-row">
-    <div class="filter-group">
-      <label class="filter-label">Resultado</label>
-      <select class="filter-select" id="fResultado" onchange="applyFilters()">
-        <option value="">Todos</option>
-        <option value="Acordo">Acordo</option>
-        <option value="Procedente">Procedente</option>
-        <option value="Improcedente">Improcedente</option>
-        <option value="Aguardando Audiência">Aguardando Audiência</option>
-        <option value="Extinto">Extinto</option>
-      </select>
-    </div>
-    <div class="filter-group">
-      <label class="filter-label">Ano</label>
-      <select class="filter-select" id="fAno" onchange="applyFilters()">
-        <option value="">Todos</option>
-      </select>
-    </div>
-  </div>
-  <div class="filters-actions">
-    <button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>
-    <span class="results-count"><span id="count-shown">0</span> processo(s)</span>
-  </div>
 </div>
 
 <main class="content" id="content"></main>
@@ -454,7 +459,7 @@ function fmtK(n) {
 
 function updateKPIs(filtered) {
   var total = filtered.length;
-  var acordos = filtered.filter(function(p) { return (p.resultado || '').toLowerCase().indexOf('acordo') !== -1; }).length;
+  var acordos = filtered.filter(function(p) { return (p.resolucao || '').toLowerCase().indexOf('acordo') !== -1; }).length;
   var quitacao = filtered.reduce(function(a, p) { return a + (p.valorQuitacao || 0); }, 0);
   var causa = filtered.reduce(function(a, p) { return a + (p.valorCausa || 0); }, 0);
   var el = function(id) { return document.getElementById(id); };
@@ -465,34 +470,53 @@ function updateKPIs(filtered) {
   if (el('kpi-acordos-sub')) el('kpi-acordos-sub').textContent = total === 1 ? '1 processo filtrado' : (total < processos.length ? total + ' processos filtrados' : 'Status dos processos');
 }
 
-function updateAnoSelect() {
-  var anos = {};
-  processos.forEach(function(p) { var a = getAno(p.notificacao); if (a) anos[a] = true; });
-  var sorted = Object.keys(anos).sort();
-  var sel = document.getElementById('fAno');
+function populateSelect(id, values, defaultLabel) {
+  var sel = document.getElementById(id);
   if (!sel) return;
   var cur = sel.value;
-  sel.innerHTML = '<option value="">Todos</option>';
-  sorted.forEach(function(a) {
+  sel.innerHTML = '<option value="">' + defaultLabel + '</option>';
+  values.forEach(function(v) {
     var opt = document.createElement('option');
-    opt.value = a; opt.textContent = a;
-    if (a === cur) opt.selected = true;
+    opt.value = v; opt.textContent = v;
+    if (v === cur) opt.selected = true;
     sel.appendChild(opt);
   });
 }
 
+function updateAnoSelect() {
+  var anos = {};
+  processos.forEach(function(p) { var a = getAno(p.notificacao); if (a) anos[a] = true; });
+  populateSelect('fAno', Object.keys(anos).sort(), 'Todos');
+
+  var resultados = {};
+  processos.forEach(function(p) { if (p.resultado) resultados[p.resultado] = true; });
+  populateSelect('fResultado', Object.keys(resultados).sort(), 'Todos');
+
+  var unidades = {};
+  processos.forEach(function(p) { if (p.unidade) unidades[p.unidade] = true; });
+  populateSelect('fUnidade', Object.keys(unidades).sort(), 'Todas');
+
+  var deptos = {};
+  processos.forEach(function(p) { if (p.departamento) deptos[p.departamento] = true; });
+  populateSelect('fDepto', Object.keys(deptos).sort(), 'Todos');
+}
+
 function passesCf(p, except) {
-  if (except !== 'ano'    && _cfAno    && getAno(p.notificacao) !== _cfAno) return false;
-  if (except !== 'status' && _cfStatus && p.resultado !== statusChartToDropdown(_cfStatus)) return false;
-  if (except !== 'depto'  && _cfDepto  && (p.departamento || '') !== _cfDepto) return false;
+  var fRes     = document.getElementById('fResultado').value;
+  var fAno     = document.getElementById('fAno').value;
+  var fUnidade = document.getElementById('fUnidade').value;
+  var fDepto   = document.getElementById('fDepto').value;
+  if (except !== 'ano'    && fAno   && getAno(p.notificacao) !== fAno) return false;
+  if (except !== 'status' && fRes   && p.resultado !== fRes) return false;
+  if (except !== 'depto'  && fDepto && (p.departamento || '') !== fDepto) return false;
+  if (fUnidade && (p.unidade || '') !== fUnidade) return false;
   return true;
 }
 
 function applyFilters() {
-  var fRes = document.getElementById('fResultado').value;
-  var fAno = document.getElementById('fAno').value;
-  _cfAno = fAno || null;
-  _cfStatus = fRes ? statusDropdownToChart(fRes) : null;
+  _cfAno    = document.getElementById('fAno').value      || null;
+  _cfStatus = document.getElementById('fResultado').value || null;
+  _cfDepto  = document.getElementById('fDepto').value    || null;
   var filtered = processos.filter(function(p) { return passesCf(p, null); });
   document.getElementById('count-shown').textContent = filtered.length;
   updateKPIs(filtered);
@@ -503,6 +527,8 @@ function applyFilters() {
 function clearFilters() {
   document.getElementById('fResultado').value = '';
   document.getElementById('fAno').value = '';
+  document.getElementById('fUnidade').value = '';
+  document.getElementById('fDepto').value = '';
   _cfAno = null; _cfStatus = null; _cfDepto = null;
   applyFilters();
 }
@@ -520,7 +546,7 @@ function renderCards(list) {
       + '<div>'
       + '<div class="reclamante-name">' + escH(p.reclamante) + '</div>'
       + '</div>'
-      + '<span class="status-badge ' + statusClass(p.resultado) + '">' + escH(p.resultado) + '</span>'
+      + '<span class="status-badge ' + statusClass(p.resolucao) + '">' + escH(p.resolucao) + '</span>'
       + '</div>'
       + '<div class="card-body">'
       + '<div class="card-field"><span class="field-label">Notificação</span><span class="field-value">' + escH(p.notificacao) + '</span></div>'
@@ -574,14 +600,6 @@ var barValueLabelsPlugin = {
 var _cfAno = null, _cfStatus = null, _cfDepto = null;
 var _chartAnos = null, _chartStatus = null, _chartDepto = null;
 
-// Mapeia label do gráfico de status para o value do select fResultado
-function statusChartToDropdown(s) {
-  return s === 'Aguardando' ? 'Aguardando Audiência' : s;
-}
-function statusDropdownToChart(s) {
-  return s === 'Aguardando Audiência' ? 'Aguardando' : s;
-}
-
 function fadedBg(labels, selected) {
   return labels.map(function(l) {
     if (!selected) return '#35383F';
@@ -590,17 +608,18 @@ function fadedBg(labels, selected) {
 }
 
 function setCfAno(ano) {
-  _cfAno = (_cfAno === ano) ? null : ano;
-  document.getElementById('fAno').value = _cfAno || '';
+  var sel = document.getElementById('fAno');
+  sel.value = (sel.value === ano) ? '' : ano;
   applyFilters();
 }
 function setCfStatus(status) {
-  _cfStatus = (_cfStatus === status) ? null : status;
-  document.getElementById('fResultado').value = _cfStatus ? statusChartToDropdown(_cfStatus) : '';
+  var sel = document.getElementById('fResultado');
+  sel.value = (sel.value === status) ? '' : status;
   applyFilters();
 }
 function setCfDepto(depto) {
-  _cfDepto = (_cfDepto === depto) ? null : depto;
+  var sel = document.getElementById('fDepto');
+  sel.value = (sel.value === depto) ? '' : depto;
   applyFilters();
 }
 
@@ -645,11 +664,11 @@ function renderCharts() {
   var anosLabels = Object.keys(anosCounts).sort();
   var anosData   = anosLabels.map(function(l) { return anosCounts[l]; });
 
-  // Status chart
+  // Status chart — usa resultado e respeita cross-filter de ano/depto
   var statusCounts = groupBy(statusRows, function(p) { return p.resultado || ''; });
   var statusEntries = Object.keys(statusCounts).map(function(k) { return [k, statusCounts[k]]; });
   statusEntries.sort(function(a,b) { return b[1] - a[1]; });
-  var statusLabels = statusEntries.map(function(e) { return statusDropdownToChart(e[0]); });
+  var statusLabels = statusEntries.map(function(e) { return e[0]; });
   var statusData   = statusEntries.map(function(e) { return e[1]; });
 
   // Depto chart
