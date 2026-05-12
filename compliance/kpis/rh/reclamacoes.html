@@ -375,7 +375,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <!-- Modal Novo Processo -->
 <div class="np-overlay" id="np-overlay" onclick="npOverlayClick(event)">
   <div class="np-panel">
-    <div class="np-title">Novo Processo</div>
+    <div class="np-title" id="np-title">Novo Processo</div>
+    <input type="hidden" id="np-row-index">
+    <input type="hidden" id="np-reclamante-original">
     <div class="np-grid">
       <div class="np-field">
         <span class="np-label">Notificação</span>
@@ -456,6 +458,7 @@ function parseVal(s) {
 
 function mapRow(r) {
   return {
+    rowIndex:      pick(r, 'row_index', 'rowindex', 'row_idx'),
     notificacao:   pick(r, 'data_da_notificacao', 'data da notificacao', 'data_notificacao', 'notificacao', 'data_da_notificacao', 'data'),
     reclamante:    pick(r, 'reclamante'),
     solicitacao:   pick(r, 'solicitacoes', 'solicitacao', 'solicitacao_', 'solicitacoes_'),
@@ -636,13 +639,17 @@ function renderCards(list) {
     el.innerHTML = '<div class="empty-state"><p>Nenhum processo encontrado</p></div>';
     return;
   }
-  el.innerHTML = list.map(function(p) {
+  el.innerHTML = list.map(function(p, idx) {
+    var pIdx = processos.indexOf(p);
     return '<div class="card">'
       + '<div class="card-header">'
       + '<div>'
       + '<div class="reclamante-name">' + escH(p.reclamante) + '</div>'
       + '</div>'
+      + '<div style="display:flex;align-items:center;gap:8px;">'
       + '<span class="status-badge ' + statusClass(p.resolucao) + '">' + escH(p.resolucao) + '</span>'
+      + '<button onclick="openEditProcesso(' + pIdx + ')" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-family:\'DM Mono\',monospace;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--mid);cursor:pointer;" title="Editar">Editar</button>'
+      + '</div>'
       + '</div>'
       + '<div class="card-body">'
       + '<div class="card-field"><span class="field-label">Notificação</span><span class="field-value">' + escH(p.notificacao) + '</span></div>'
@@ -840,14 +847,50 @@ function closeDrawer() {
 document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDrawer(); });
 }
 
-// ─── Modal Novo Processo ──────────────────────────────────────────────────────
+// ─── Modal Processo (novo + editar) ──────────────────────────────────────────
+function _npReset() {
+  ['np-notificacao','np-audiencia','np-reclamante','np-solicitacao',
+   'np-unidade','np-departamento','np-valor-causa','np-valor-quitacao',
+   'np-resultado','np-resolucao','np-obs','np-row-index','np-reclamante-original']
+    .forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('np-resultado').value = '';
+  document.getElementById('np-save').disabled = false;
+  document.getElementById('np-save').textContent = 'Salvar';
+}
+function _fmtDateInput(ddmmyyyy) {
+  if (!ddmmyyyy || ddmmyyyy === '—') return '';
+  var p = ddmmyyyy.split('/');
+  return p.length === 3 ? p[2] + '-' + p[1] + '-' + p[0] : '';
+}
 function openNovoProcesso() {
+  _npReset();
+  document.getElementById('np-title').textContent = 'Novo Processo';
+  document.getElementById('np-overlay').classList.add('open');
+}
+function openEditProcesso(idx) {
+  var p = processos[idx];
+  if (!p) return;
+  _npReset();
+  document.getElementById('np-title').textContent = 'Editar Processo';
+  document.getElementById('np-row-index').value         = p.rowIndex || '';
+  var origEl = document.getElementById('np-reclamante-original');
+  origEl.value = p.reclamante;
+  origEl.dataset.notificacao = p.notificacao || '';
+  document.getElementById('np-notificacao').value       = _fmtDateInput(p.notificacao);
+  document.getElementById('np-audiencia').value         = _fmtDateInput(p.audiencia);
+  document.getElementById('np-reclamante').value        = p.reclamante;
+  document.getElementById('np-solicitacao').value       = p.solicitacao;
+  document.getElementById('np-unidade').value           = p.unidade;
+  document.getElementById('np-departamento').value      = p.departamento;
+  document.getElementById('np-valor-causa').value       = p.valorCausa || '';
+  document.getElementById('np-valor-quitacao').value    = p.valorQuitacao || '';
+  document.getElementById('np-resultado').value         = p.resolucao || '';
+  document.getElementById('np-resolucao').value         = p.resultado || '';
+  document.getElementById('np-obs').value               = p.obs || '';
   document.getElementById('np-overlay').classList.add('open');
 }
 function closeNovoProcesso() {
   document.getElementById('np-overlay').classList.remove('open');
-  document.getElementById('np-save').disabled = false;
-  document.getElementById('np-save').textContent = 'Salvar';
 }
 function npOverlayClick(e) {
   if (e.target === document.getElementById('np-overlay')) closeNovoProcesso();
@@ -857,8 +900,10 @@ function salvarNovoProcesso() {
   var btn = document.getElementById('np-save');
   btn.disabled = true;
   btn.textContent = 'Salvando…';
+  var rowIndex = npVal('np-row-index');
+  var isEdit = !!rowIndex || !!npVal('np-reclamante-original');
   var payload = {
-    action: 'addReclamacao',
+    action:              isEdit ? 'updateReclamacao' : 'addReclamacao',
     data_da_notificacao: npVal('np-notificacao'),
     data_da_audiencia:   npVal('np-audiencia'),
     reclamante:          npVal('np-reclamante'),
@@ -871,6 +916,11 @@ function salvarNovoProcesso() {
     resolucao:           npVal('np-resolucao'),
     obs:                 npVal('np-obs')
   };
+  if (isEdit) {
+    if (rowIndex) payload.row_index = rowIndex;
+    payload.reclamante_original = npVal('np-reclamante-original');
+    payload.notificacao_original = document.getElementById('np-reclamante-original').dataset.notificacao || '';
+  }
   fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) })
     .then(function(r) { return r.json(); })
     .then(function() {
