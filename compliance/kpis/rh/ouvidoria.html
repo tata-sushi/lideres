@@ -587,32 +587,57 @@ function loadData() {
 }
 
 
-function getFiltered() {
+// ─── Cross-filter state ─────────────────────────────────────────────
+var _cfIdent = null;     // 'Sim' | 'Não' | null  (sincroniza com f-identificado)
+var _cfPeriodo = null;   // 'MM/YYYY' | null      (cross-filter de mês/ano)
+
+function getFiltered(except) {
   var ident = document.getElementById('f-identificado').value;
   var dev = document.getElementById('f-devolutiva').value;
   var per = document.getElementById('f-periodo').value;
   return DATA.filter(function(r) {
-    if (ident === 'Sim' && !isIdentificado(r)) return false;
-    if (ident === 'Não' && isIdentificado(r)) return false;
-    if (dev === 'Com devolutiva' && !r.devolutiva) return false;
-    if (dev === 'Sem devolutiva' && r.devolutiva) return false;
-    if (per && getYear(r.data) !== per) return false;
+    if (except !== 'ident'   && ident === 'Sim'  && !isIdentificado(r)) return false;
+    if (except !== 'ident'   && ident === 'Não'  &&  isIdentificado(r)) return false;
+    if (                       dev === 'Com devolutiva' && !r.devolutiva) return false;
+    if (                       dev === 'Sem devolutiva' &&  r.devolutiva) return false;
+    if (                       per && getYear(r.data) !== per) return false;
+    if (except !== 'periodo' && _cfPeriodo && getMonthYear(r.data) !== _cfPeriodo) return false;
     return true;
   });
 }
 
 function applyFilter() {
+  var ident = document.getElementById('f-identificado').value;
+  _cfIdent = (ident === 'Sim' || ident === 'Não') ? ident : null;
   filtered = getFiltered();
   visibleCount = PAGE_SIZE;
   renderTable(filtered);
   renderKPI(filtered);
-  renderCharts(filtered);
+  renderCharts();
+}
+
+function setCfIdent(label) {
+  // label vem do gráfico: 'Sim' ou 'Não'
+  var sel = document.getElementById('f-identificado');
+  sel.value = (sel.value === label) ? 'Todos' : label;
+  applyFilter();
+}
+
+function setCfPeriodo(my) {
+  _cfPeriodo = (_cfPeriodo === my) ? null : my;
+  filtered = getFiltered();
+  visibleCount = PAGE_SIZE;
+  renderTable(filtered);
+  renderKPI(filtered);
+  renderCharts();
 }
 
 function clearFilters() {
   document.getElementById('f-identificado').value = 'Todos';
   document.getElementById('f-devolutiva').value = 'Todas';
   document.getElementById('f-periodo').value = '';
+  _cfIdent = null;
+  _cfPeriodo = null;
   applyFilter();
 }
 
@@ -760,9 +785,15 @@ var barValueLabelsPlugin = {
   }
 };
 
-function renderCharts(rows) {
-  var sim = rows.filter(function(r){return isIdentificado(r);}).length;
-  var nao = rows.length - sim;
+function renderCharts() {
+  // Doughnut "Identificou-se?": contagens respeitam todos os filtros EXCETO o de identificação
+  var identRows = getFiltered('ident');
+  var sim = identRows.filter(function(r){return isIdentificado(r);}).length;
+  var nao = identRows.length - sim;
+  var identBg = [
+    (!_cfIdent || _cfIdent === 'Sim') ? '#35383F' : 'rgba(53,56,63,0.20)',
+    (!_cfIdent || _cfIdent === 'Não') ? 'rgba(53,56,63,0.45)' : 'rgba(53,56,63,0.20)'
+  ];
 
   if (chartIdent) chartIdent.destroy();
   var ctx1 = document.getElementById('chart-ident').getContext('2d');
@@ -772,7 +803,7 @@ function renderCharts(rows) {
       labels: ['Sim','Não'],
       datasets: [{
         data:[sim,nao],
-        backgroundColor:['#35383F','rgba(53,56,63,0.45)'],
+        backgroundColor: identBg,
         borderWidth:2,
         borderColor:'#fff'
       }]
@@ -782,6 +813,8 @@ function renderCharts(rows) {
       maintainAspectRatio: false,
       animation: false,
       cutout: '60%',
+      onClick: function(e, els) { if (els.length) setCfIdent(els[0].index === 0 ? 'Sim' : 'Não'); },
+      onHover: function(e, els) { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       plugins: {
         legend: {
           position: 'bottom',
@@ -789,7 +822,7 @@ function renderCharts(rows) {
         },
         tooltip: {enabled: false},
         datalabels: {
-          color: '#CFFF00',
+          color: '#FFFFFF',
           font: {family:'DM Mono', size:11, weight:'600'},
           formatter: function(value) { return value > 0 ? value : null; }
         }
@@ -797,9 +830,10 @@ function renderCharts(rows) {
     }
   });
 
-  // Group by month/year
+  // Bar "Ocorrências por competência": respeita todos os filtros EXCETO o de período
+  var periodoRows = getFiltered('periodo');
   var periodos = {};
-  rows.forEach(function(r) {
+  periodoRows.forEach(function(r) {
     var key = getMonthYear(r.data);
     if (key) periodos[key] = (periodos[key]||0)+1;
   });
@@ -808,6 +842,9 @@ function renderCharts(rows) {
     return (parseInt(pa[1])*12+parseInt(pa[0])) - (parseInt(pb[1])*12+parseInt(pb[0]));
   });
   var vals = keys.map(function(k){return periodos[k];});
+  var periodoBg = keys.map(function(k) {
+    return (!_cfPeriodo || k === _cfPeriodo) ? '#35383F' : 'rgba(53,56,63,0.25)';
+  });
 
   if (chartPeriodo) chartPeriodo.destroy();
   var ctx2 = document.getElementById('chart-periodo').getContext('2d');
@@ -815,7 +852,7 @@ function renderCharts(rows) {
     type: 'bar',
     data: {
       labels: keys,
-      datasets: [{data:vals, backgroundColor:'#35383F', borderWidth:0, borderRadius:5, barPercentage:0.6}]
+      datasets: [{data:vals, backgroundColor: periodoBg, borderWidth:0, borderRadius:5, barPercentage:0.6}]
     },
     plugins: [barValueLabelsPlugin],
     options: {
@@ -823,6 +860,8 @@ function renderCharts(rows) {
       maintainAspectRatio: false,
       animation: false,
       layout: {padding: {top:18}},
+      onClick: function(e, els) { if (els.length) setCfPeriodo(keys[els[0].index]); },
+      onHover: function(e, els) { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       plugins: {
         legend: {display:false},
         tooltip: {enabled: false},
