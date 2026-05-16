@@ -608,16 +608,17 @@ body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(--t1); 
   padding: 0 4px; display: flex; align-items: center;
 }
 
-/* ── MODAL OBS — cards por loja ── */
-.obs-loja-card {
-  border: 1px solid var(--border); border-radius: var(--r);
-  padding: 14px; margin-bottom: 12px;
+/* ── MODAL OBS ── */
+.obs-chip {
+  padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border);
+  background: var(--bg); font-family: "DM Sans",sans-serif; font-size: 12px;
+  font-weight: 500; color: var(--t2); cursor: pointer; margin-bottom: 10px;
+  transition: all .15s;
 }
-.obs-loja-title {
-  font-size: 12px; font-weight: 700; color: var(--t1);
-  margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+.obs-chip.active {
+  background: var(--carbon); border-color: var(--carbon);
+  color: var(--citric); font-weight: 700;
 }
-.obs-loja-title svg { width: 13px; height: 13px; stroke: var(--t3); fill: none; stroke-width: 2; flex-shrink: 0; }
 
 /* linhas editáveis da tabela */
 .cs-table tbody tr { cursor: pointer; }
@@ -1970,20 +1971,23 @@ csSyncSheets();
 
 <!-- ── MODAL OBS (Parâmetros por loja) ── -->
 <div class="ces-modal-overlay" id="ces-obs-overlay">
-  <div class="ces-modal" style="max-width:540px;">
+  <div class="ces-modal" style="max-width:480px;">
     <div class="ces-modal-header">
       <span class="ces-modal-title">Salário Base &amp; Valor do Ponto</span>
       <button class="ces-modal-close" onclick="closeObsModal()">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
+    <div style="padding:12px 20px 0;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;" id="ces-obs-chips">
+      <!-- chips de unidade preenchidos via JS -->
+    </div>
     <div class="ces-modal-body" id="ces-obs-body">
-      <!-- preenchido via JS, 1 card por loja -->
+      <!-- campos da unidade selecionada -->
     </div>
     <div class="ces-modal-footer">
       <button class="ces-modal-cancel" onclick="closeObsModal()">Fechar</button>
       <span class="ces-modal-toast" id="ces-obs-toast"></span>
-      <button class="ces-modal-save" id="ces-obs-save-btn" onclick="cesSubmitObs()">Salvar alterações</button>
+      <button class="ces-modal-save" id="ces-obs-save-btn" onclick="cesSubmitObs()">Salvar</button>
     </div>
   </div>
 </div>
@@ -2186,51 +2190,67 @@ function _cesModalToast(msg) {
 }
 
 /* ── MODAL OBS ── */
+var _obsLojas = [];
+var _obsLojaSel = 0;
+
+var _OBS_DEFAULT = [
+  { loja_nome:"Itaim",            salario_min:0, piso_cct:0, piso_tata:0, valor_pt_gorjeta:0, valor_pt_premio:0 },
+  { loja_nome:"Pinheiros",        salario_min:0, piso_cct:0, piso_tata:0, valor_pt_gorjeta:0, valor_pt_premio:0 },
+  { loja_nome:"Poke - Pinheiros", salario_min:0, piso_cct:0, piso_tata:0, valor_pt_gorjeta:0, valor_pt_premio:0 },
+  { loja_nome:"Administrativo",   salario_min:0, piso_cct:0, piso_tata:0, valor_pt_gorjeta:0, valor_pt_premio:0 },
+  { loja_nome:"Tatá House",       salario_min:0, piso_cct:0, piso_tata:0, valor_pt_gorjeta:0, valor_pt_premio:0 }
+];
+
 function openObsModal() {
-  var body = document.getElementById("ces-obs-body");
-  body.innerHTML = "";
-
-  var lojas = CS_OBS.length ? CS_OBS : [
-    { loja_nome:"Itaim",           salario_min:0, piso_cct:0, piso_tata:0, valor_pt_gorjeta:0, valor_pt_premio:0 },
-    { loja_nome:"Pinheiros",       salario_min:0, piso_cct:0, piso_tata:0, valor_pt_gorjeta:0, valor_pt_premio:0 },
-    { loja_nome:"Poke - Pinheiros",salario_min:0, piso_cct:0, piso_tata:0, valor_pt_gorjeta:0, valor_pt_premio:0 },
-    { loja_nome:"Administrativo",  salario_min:0, piso_cct:0, piso_tata:0, valor_pt_gorjeta:0, valor_pt_premio:0 },
-    { loja_nome:"Tatá House",      salario_min:0, piso_cct:0, piso_tata:0, valor_pt_gorjeta:0, valor_pt_premio:0 }
-  ];
-
-  lojas.forEach(function(loja, i) {
-    var slug = "obs-" + i;
-    var card = document.createElement("div");
-    card.className = "obs-loja-card";
-    card.innerHTML =
-      '<div class="obs-loja-title">'+
-        '<svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>'+
-        loja.loja_nome+
-      '</div>'+
-      '<input type="hidden" id="'+slug+'-nome" value="'+loja.loja_nome+'">'+
-      '<div class="ces-field-row">'+
-        '<div class="ces-field"><label>Salário Mín. Legal (R$)</label>'+
-          '<input type="number" id="'+slug+'-sal-min" min="0" step="0.01" value="'+(loja.salario_min||'')+'"></div>'+
-        '<div class="ces-field"><label>Piso CCT (R$)</label>'+
-          '<input type="number" id="'+slug+'-piso-cct" min="0" step="0.01" value="'+(loja.piso_cct||'')+'"></div>'+
-      '</div>'+
-      '<div class="ces-field-row">'+
-        '<div class="ces-field"><label>Piso TATÁ (R$)</label>'+
-          '<input type="number" id="'+slug+'-piso-tata" min="0" step="0.01" value="'+(loja.piso_tata||'')+'"></div>'+
-        '<div class="ces-field"><label>Valor Pt Gorjeta (R$)</label>'+
-          '<input type="number" id="'+slug+'-pt-gorj" min="0" step="0.01" value="'+(loja.valor_pt_gorjeta||'')+'"></div>'+
-      '</div>'+
-      '<div class="ces-field" style="max-width:50%;padding-right:5px;">'+
-        '<label>Valor Pt Prêmio (R$)</label>'+
-        '<input type="number" id="'+slug+'-pt-prem" min="0" step="0.01" value="'+(loja.valor_pt_premio||'')+'">'+
-      '</div>';
-    body.appendChild(card);
-  });
-
+  _obsLojas = CS_OBS.length ? CS_OBS.slice() : _OBS_DEFAULT.map(function(l){ return Object.assign({},l); });
+  _obsLojaSel = 0;
+  _obsRenderChips();
+  _obsRenderCard();
   document.getElementById("ces-obs-toast").textContent = "";
   document.getElementById("ces-obs-save-btn").disabled = false;
   document.getElementById("ces-obs-overlay").classList.add("open");
   document.body.style.overflow = "hidden";
+}
+
+function _obsRenderChips() {
+  var chips = document.getElementById("ces-obs-chips");
+  chips.innerHTML = "";
+  _obsLojas.forEach(function(loja, i) {
+    var btn = document.createElement("button");
+    btn.className = "obs-chip" + (i === _obsLojaSel ? " active" : "");
+    btn.textContent = loja.loja_nome;
+    btn.onclick = function() { _obsSelectLoja(i); };
+    chips.appendChild(btn);
+  });
+}
+
+function _obsSelectLoja(i) {
+  _obsLojaSel = i;
+  _obsRenderChips();
+  _obsRenderCard();
+  document.getElementById("ces-obs-toast").textContent = "";
+}
+
+function _obsRenderCard() {
+  var loja = _obsLojas[_obsLojaSel];
+  var body = document.getElementById("ces-obs-body");
+  body.innerHTML =
+    '<div class="ces-field-row">'+
+      '<div class="ces-field"><label>Salário Mín. Legal (R$)</label>'+
+        '<input type="number" id="obs-sal-min" min="0" step="0.01" value="'+(loja.salario_min||'')+'"></div>'+
+      '<div class="ces-field"><label>Piso CCT (R$)</label>'+
+        '<input type="number" id="obs-piso-cct" min="0" step="0.01" value="'+(loja.piso_cct||'')+'"></div>'+
+    '</div>'+
+    '<div class="ces-field-row">'+
+      '<div class="ces-field"><label>Piso TATÁ (R$)</label>'+
+        '<input type="number" id="obs-piso-tata" min="0" step="0.01" value="'+(loja.piso_tata||'')+'"></div>'+
+      '<div class="ces-field"><label>Valor Pt Gorjeta (R$)</label>'+
+        '<input type="number" id="obs-pt-gorj" min="0" step="0.01" value="'+(loja.valor_pt_gorjeta||'')+'"></div>'+
+    '</div>'+
+    '<div class="ces-field" style="max-width:50%;">'+
+      '<label>Valor Pt Prêmio (R$)</label>'+
+      '<input type="number" id="obs-pt-prem" min="0" step="0.01" value="'+(loja.valor_pt_premio||'')+'">'+
+    '</div>';
 }
 
 function closeObsModal() {
@@ -2240,45 +2260,32 @@ function closeObsModal() {
 
 function cesSubmitObs() {
   if (!CS_SHEETS_URL) { _cesObsToast("CS_SHEETS_URL não configurada"); return; }
-  var body = document.getElementById("ces-obs-body");
-  var cards = body.querySelectorAll(".obs-loja-card");
+  var loja = _obsLojas[_obsLojaSel];
+  var payload = {
+    action:           "saveObs",
+    loja_nome:        loja.loja_nome,
+    salario_min:      document.getElementById("obs-sal-min").value,
+    piso_cct:         document.getElementById("obs-piso-cct").value,
+    piso_tata:        document.getElementById("obs-piso-tata").value,
+    valor_pt_gorjeta: document.getElementById("obs-pt-gorj").value,
+    valor_pt_premio:  document.getElementById("obs-pt-prem").value
+  };
   var btn = document.getElementById("ces-obs-save-btn");
   btn.disabled = true;
   _cesObsToast("Salvando...");
-
-  var promises = [];
-  cards.forEach(function(card, i) {
-    var slug = "obs-" + i;
-    var payload = {
-      action:           "saveObs",
-      loja_nome:        document.getElementById(slug+"-nome").value,
-      salario_min:      document.getElementById(slug+"-sal-min").value,
-      piso_cct:         document.getElementById(slug+"-piso-cct").value,
-      piso_tata:        document.getElementById(slug+"-piso-tata").value,
-      valor_pt_gorjeta: document.getElementById(slug+"-pt-gorj").value,
-      valor_pt_premio:  document.getElementById(slug+"-pt-prem").value
-    };
-    promises.push(
-      fetch(CS_SHEETS_URL, {
-        method: "POST", mode: "no-cors",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify(payload)
-      })
-    );
+  fetch(CS_SHEETS_URL, {
+    method: "POST", mode: "no-cors",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify(payload)
+  })
+  .then(function() {
+    _cesObsToast("Salvo! Sincronizando...");
+    setTimeout(function() { closeObsModal(); csSyncSheets(); }, 800);
+  })
+  .catch(function() {
+    btn.disabled = false;
+    _cesObsToast("Erro ao salvar.");
   });
-
-  Promise.all(promises)
-    .then(function() {
-      _cesObsToast("Salvo! Sincronizando...");
-      setTimeout(function() {
-        closeObsModal();
-        csSyncSheets();
-      }, 800);
-    })
-    .catch(function() {
-      btn.disabled = false;
-      _cesObsToast("Erro ao salvar.");
-    });
 }
 
 function _cesObsToast(msg) {
