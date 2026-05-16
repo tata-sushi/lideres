@@ -857,14 +857,6 @@ body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(--t1); 
 .cs-info-text strong { color:var(--t1); font-weight:600; }
 
 /* ── SYNC BAR ── */
-.cs-sync-bar { display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); margin-bottom:16px; }
-.cs-sync-dot { width:6px; height:6px; border-radius:50%; background:#ccc; flex-shrink:0; }
-.cs-sync-dot.ok { background:#3a7a3a; }
-.cs-sync-dot.loading { background:#e6b84a; animation:pulse .8s ease infinite; }
-.cs-sync-dot.err { background:#c0392b; }
-.cs-sync-text { font-family:"DM Mono",monospace; font-size:9px; color:var(--t3); letter-spacing:.06em; flex:1; }
-.cs-sync-btn { font-family:"DM Mono",monospace; font-size:9px; font-weight:500; color:var(--t2); background:transparent; border:1px solid var(--border); border-radius:4px; padding:3px 8px; cursor:pointer; transition:border-color .15s; }
-.cs-sync-btn:hover { border-color:var(--carbon); color:var(--t1); }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
 /* ── TABELA ── */
@@ -1224,12 +1216,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <!-- /INTRO -->
 
-    <div class="cs-sync-bar">
-      <span class="cs-sync-dot" id="cs-sync-dot"></span>
-      <span class="cs-sync-text" id="cs-sync-text">Conectar ao Google Sheets para dados ao vivo</span>
-      <button class="cs-sync-btn" onclick="csSyncSheets()">↻ Sincronizar</button>
-    </div>
-
     <!-- Configuração de pontos -->
     <div class="cs-config-grid">
       <div class="cs-config-card">
@@ -1535,6 +1521,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="cs-desc-header">
     <span class="cs-desc-header-title">Descrição de Cargo</span>
     <div style="display:flex;align-items:center;gap:6px;">
+      <button class="cs-desc-close" onclick="csEditFromDesc()" title="Editar" style="background:var(--bg);border-color:var(--border);">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
       <button class="cs-desc-close" onclick="csPrintDesc()" title="Imprimir" style="background:var(--carbon);border-color:var(--carbon);">
         <svg viewBox="0 0 24 24" style="stroke:var(--citric);"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
       </button>
@@ -1675,7 +1664,7 @@ function csRecalc() {
       '<td class="right gorjeta-pts">'+(gorj || '<span style="color:var(--t3)">—</span>')+'</td>'+
       '<td class="right premio-pts">'+(prem || '<span style="color:var(--t3)">—</span>')+'</td>'+
       '<td class="right valor" style="color:var(--carbon);font-weight:700;">'+brl(bruto)+'</td>';
-    (function(cargo){ tr.onclick = function(){ openEditModal(cargo); }; })(c);
+    (function(cargo){ tr.onclick = function(){ csOpenDesc(cargo.id); }; })(c);
     tbody.appendChild(tr);
   });
 }
@@ -1730,10 +1719,31 @@ function csFilterCargos() {
 }
 
 /* ── DRAWER DESCRIÇÃO ── */
+var _csDescCurrentCargo = null;
+
+function csEditFromDesc() {
+  csCloseDesc();
+  if (_csDescCurrentCargo) openEditModal(_csDescCurrentCargo);
+}
+
 function csOpenDesc(id) {
   var cargo = CS_CARGOS.find(function(c){ return c.id === id; });
   var desc = CS_DESCRICOES[id];
-  if (!cargo || !desc) return;
+  _csDescCurrentCargo = cargo || null;
+  if (!cargo) return;
+  if (!desc) {
+    // sem descrição cadastrada: abre drawer mínimo com botão de editar
+    var body = document.getElementById("cs-desc-body");
+    body.innerHTML =
+      '<p class="cs-desc-cargo-title">'+cargo.nome+'</p>'+
+      '<p class="cs-desc-cargo-dept">'+cargo.dept+'</p>'+
+      '<div class="cs-desc-section"><p class="cs-desc-text" style="color:var(--t3);font-style:italic;">Descrição ainda não cadastrada na aba Cargos da planilha.</p></div>';
+    document.getElementById("cs-desc-drawer").classList.add("open");
+    document.getElementById("cs-desc-overlay").classList.add("open");
+    document.getElementById("cs-print-cargo-label").textContent = cargo.nome + " · " + cargo.dept;
+    document.body.style.overflow = "hidden";
+    return;
+  }
   var body = document.getElementById("cs-desc-body");
   var atrib = desc.atribuicoes.map(function(a){ return "<li>"+a+"</li>"; }).join("");
   var comp = desc.comp.map(function(a){ return "<li>"+a+"</li>"; }).join("");
@@ -1786,14 +1796,7 @@ function hideLoading() {
 }
 
 function csSyncSheets() {
-  if (!CS_SHEETS_URL) {
-    document.getElementById("cs-sync-dot").className = "cs-sync-dot err";
-    document.getElementById("cs-sync-text").textContent = "Configure CS_SHEETS_URL para sincronizar";
-    hideLoading();
-    return;
-  }
-  document.getElementById("cs-sync-dot").className = "cs-sync-dot loading";
-  document.getElementById("cs-sync-text").textContent = "Sincronizando...";
+  if (!CS_SHEETS_URL) { hideLoading(); return; }
   fetch(CS_SHEETS_URL + "?action=getAll")
     .then(function(r){ return r.json(); })
     .then(function(data) {
@@ -1821,17 +1824,33 @@ function csSyncSheets() {
           };
         });
       }
-      if (data && data.obs)    CS_OBS = data.obs;
+      if (data && data.cargos && data.cargos.length) {
+        CS_DESCRICOES = {};
+        data.cargos.forEach(function(c) {
+          var key = c.cargo_id;
+          CS_DESCRICOES[key] = {
+            resumo:      c.objetivos || "",
+            atribuicoes: _splitBullets(c.responsabilidades),
+            requisitos: {
+              experiencia:  c.experiencia  || "Não exigida",
+              escolaridade: c.formacao     || "Ensino Médio",
+              cnh:          "Não exigida"
+            },
+            comp: _splitBullets(c.competencias)
+          };
+        });
+      }
+      if (data && data.obs) CS_OBS = data.obs;
       csRecalc();
       csRenderCargos();
-      document.getElementById("cs-sync-dot").className = "cs-sync-dot ok";
-      document.getElementById("cs-sync-text").textContent = "Sincronizado · " + new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
     })
-    .catch(function() {
-      document.getElementById("cs-sync-dot").className = "cs-sync-dot err";
-      document.getElementById("cs-sync-text").textContent = "Erro ao sincronizar. Verifique a URL.";
-    })
+    .catch(function() {})
     .finally(hideLoading);
+}
+
+function _splitBullets(text) {
+  if (!text) return [];
+  return String(text).split(/[\n•]+/).map(function(s){ return s.trim(); }).filter(Boolean);
 }
 
 function csNormalizeNivel(raw, cargo) {
