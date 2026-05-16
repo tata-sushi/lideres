@@ -283,10 +283,12 @@ body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(--t1); 
 .drawer-section-label { font-family:"DM Mono",monospace; font-size:9px; font-weight:500; letter-spacing:.16em; text-transform:uppercase; color:var(--t3); margin-bottom:10px; display:flex; align-items:center; gap:8px; }
 .drawer-section-label::after { content:""; flex:1; height:1px; background:var(--border); }
 .drawer-about { font-size:13px; line-height:1.7; color:var(--t2); }
-.drawer-kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
-.drawer-kpi { background:var(--bg); border:1px solid var(--border); border-radius:var(--r); padding:12px; }
-.drawer-kpi-label { font-family:"DM Mono",monospace; font-size:8.5px; font-weight:500; letter-spacing:.12em; text-transform:uppercase; color:var(--t3); margin-bottom:5px; }
-.drawer-kpi-value { font-size:26px; font-weight:700; color:var(--t1); line-height:1; }
+.drawer-kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.drawer-kpi-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.drawer-kpi-card-label{font-family:"DM Mono",monospace;font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--t2)}
+.drawer-kpi-card-number{font-family:"DM Sans",sans-serif;font-size:28px;font-weight:700;color:var(--t1);line-height:1;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.drawer-kpi-card-sub{font-family:"DM Mono",monospace;font-size:10px;color:var(--t3)}
+.drawer-kpi-card-sub strong{font-family:"DM Sans",sans-serif;font-weight:700;color:var(--t1)}
 .drawer-version { background:var(--carbon); border-radius:var(--r); padding:14px 16px; display:flex; align-items:center; justify-content:space-between; }
 .drawer-version-label { font-family:"DM Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:rgba(255,255,255,.4); }
 .drawer-version-val { font-family:"DM Mono",monospace; font-size:20px; font-weight:300; color:var(--citric); letter-spacing:.04em; }
@@ -1761,7 +1763,7 @@ csRenderCargos();
           <div class="drawer-version-label">Portal</div>
           <div style="font-size:13px;font-weight:600;color:var(--white);margin-top:2px;">Governança de Processos</div>
         </div>
-        <div class="drawer-version-val">v2.0h</div>
+        <div class="drawer-version-val">v3.2r</div>
       </div>
     </div>
 
@@ -1773,10 +1775,16 @@ csRenderCargos();
     <div class="drawer-section">
       <div class="drawer-section-label">Números</div>
       <div class="drawer-kpi-grid">
-        <div class="drawer-kpi"><div class="drawer-kpi-label">Seções</div><div class="drawer-kpi-value">7</div></div>
-        <div class="drawer-kpi"><div class="drawer-kpi-label">Departamentos</div><div class="drawer-kpi-value">14</div></div>
-        <div class="drawer-kpi"><div class="drawer-kpi-label">Parceiros</div><div class="drawer-kpi-value">3</div></div>
-        <div class="drawer-kpi"><div class="drawer-kpi-label">Dashboards</div><div class="drawer-kpi-value">—</div></div>
+        <div class="drawer-kpi-card">
+          <span class="drawer-kpi-card-label">Seções</span>
+          <span class="drawer-kpi-card-number" id="drawer-kpi-secoes">7</span>
+          <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-pags">—</strong> pág / <strong id="drawer-kpi-dash">—</strong> dash</span>
+        </div>
+        <div class="drawer-kpi-card">
+          <span class="drawer-kpi-card-label">Unidades</span>
+          <span class="drawer-kpi-card-number" id="drawer-kpi-unidades">—</span>
+          <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-deptos">—</strong> depto / <strong id="drawer-kpi-colabs">—</strong> colab</span>
+        </div>
       </div>
     </div>
 
@@ -1805,10 +1813,51 @@ csRenderCargos();
   }
 })();
 
+var _drawerKpisLoaded = false;
+function loadDrawerKPIs() {
+  if (_drawerKpisLoaded) return;
+  fetch('https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec?action=listColaboradores')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var unidades = new Set(), deptos = new Set();
+      data.colaboradores.forEach(function(c) {
+        if (c.unidade) unidades.add(c.unidade);
+        if (c.departamento) deptos.add(c.departamento);
+      });
+      document.getElementById('drawer-kpi-unidades').textContent = unidades.size;
+      document.getElementById('drawer-kpi-deptos').textContent   = deptos.size;
+      document.getElementById('drawer-kpi-colabs').textContent   = data.total;
+      _drawerKpisLoaded = true;
+    })
+    .catch(function() {});
+}
+var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
+var _drawerMetaLoaded = false;
+function loadDrawerMeta() {
+  if (_drawerMetaLoaded) return;
+  fetch(GITHUB_TREE_URL)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.tree) return;
+      var pages = 0, dashboards = 0;
+      data.tree.forEach(function(f) {
+        if (f.type !== 'blob' || !f.path.endsWith('.html')) return;
+        if (f.path.startsWith('compliance/kpis/')) { dashboards++; }
+        else if (f.path.startsWith('compliance/')) { pages++; }
+      });
+      var el = function(id) { return document.getElementById(id); };
+      if (el('drawer-kpi-pags')) el('drawer-kpi-pags').textContent = pages;
+      if (el('drawer-kpi-dash')) el('drawer-kpi-dash').textContent = dashboards;
+      _drawerMetaLoaded = true;
+    })
+    .catch(function() {});
+}
 function openDrawer() {
   document.getElementById("drawer").classList.add("open");
   document.getElementById("drawer-overlay").classList.add("open");
   document.body.style.overflow = "hidden";
+  loadDrawerKPIs();
+  loadDrawerMeta();
 }
 
 function closeDrawer() {
