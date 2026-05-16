@@ -1194,11 +1194,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <thead>
           <tr>
             <th>Cargo</th>
-            <th>Nível</th>
+            <th class="right">Salário Fixo</th>
+            <th class="right">Insalubridade</th>
+            <th class="right">Periculosidade</th>
             <th class="right">Pts Gorjeta</th>
             <th class="right">Pts Prêmio</th>
-            <th class="right">Fixo CLT (R$)</th>
-            <th class="right">Bruto Est. (R$)</th>
+            <th class="right">Bruto Aproximado</th>
           </tr>
         </thead>
         <tbody id="cs-tbody">
@@ -1577,14 +1578,21 @@ function csRecalc() {
   var tbody = document.getElementById("cs-tbody");
   tbody.innerHTML = "";
   CS_CARGOS.forEach(function(c) {
-    var bruto = c.fixo + (c.gorjeta * ptG) + (c.premio * ptP);
+    var fixo  = parseFloat(c.fixo)           || 0;
+    var insal = parseFloat(c.insalubridade)  || 0;
+    var peric = parseFloat(c.periculosidade) || 0;
+    var gorj  = parseFloat(c.gorjeta)        || 0;
+    var prem  = parseFloat(c.premio)         || 0;
+    var bruto = fixo + insal + peric + (gorj * ptG) + (prem * ptP);
+    var nivelHTML = c.nivel ? ' <span class="nivel-pill '+nivelCls(c.nivel)+'" style="font-size:7px;padding:1px 5px;vertical-align:middle;">'+c.nivel+'</span>' : '';
     var tr = document.createElement("tr");
     tr.innerHTML =
-      '<td class="cargo-name">'+c.nome+'</td>'+
-      '<td class="nivel-badge-cell"><span class="nivel-pill '+nivelCls(c.nivel)+'">'+c.nivel+'</span></td>'+
-      '<td class="right gorjeta-pts">'+c.gorjeta+'</td>'+
-      '<td class="right premio-pts">'+c.premio+'</td>'+
-      '<td class="right mono">'+brl(c.fixo)+'</td>'+
+      '<td class="cargo-name">'+c.nome+nivelHTML+'</td>'+
+      '<td class="right mono">'+brl(fixo)+'</td>'+
+      '<td class="right mono">'+(insal ? brl(insal) : '<span style="color:var(--t3)">—</span>')+'</td>'+
+      '<td class="right mono">'+(peric ? brl(peric) : '<span style="color:var(--t3)">—</span>')+'</td>'+
+      '<td class="right gorjeta-pts">'+(gorj || '<span style="color:var(--t3)">—</span>')+'</td>'+
+      '<td class="right premio-pts">'+(prem || '<span style="color:var(--t3)">—</span>')+'</td>'+
       '<td class="right valor calculado">'+brl(bruto)+'</td>';
     tbody.appendChild(tr);
   });
@@ -1682,16 +1690,13 @@ function csCloseDesc() {
   document.body.style.overflow = "";
 }
 
-/* ── GOOGLE SHEETS SYNC ── */
-/* 
-  CONFIGURAR:
-  1. Criar planilha "TATA_Cargos" no Google Sheets com abas:
-     - "Tabela" — colunas: id, nome, nivel, dept, gorjeta_pts, premio_pts, fixo_clt
-     - "Descricoes" — colunas: id, resumo, atribuicoes (JSON array), exp, escol, cnh, competencias (JSON array)
-  2. Publicar como Apps Script Web App (executar como: eu, acesso: qualquer pessoa)
-  3. Colar a URL do Apps Script em CS_SHEETS_URL abaixo
+/* ── GOOGLE SHEETS SYNC ──
+   Backend: git-claude/ces-apps-script.gs
+   Planilha: docs.google.com/spreadsheets/d/17MboMur_B_pxMKK4M7VfTsKUQIVCtEEIa72HSOF6Jvw
 */
-var CS_SHEETS_URL = ""; /* ← cole aqui a URL do Apps Script */
+var CS_SHEETS_URL = "https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec";
+
+var CS_OBS = []; // referências por loja (salário mín, pisos, valor do pt)
 
 function csSyncSheets() {
   if (!CS_SHEETS_URL) {
@@ -1701,17 +1706,36 @@ function csSyncSheets() {
   }
   document.getElementById("cs-sync-dot").className = "cs-sync-dot loading";
   document.getElementById("cs-sync-text").textContent = "Sincronizando...";
-  fetch(CS_SHEETS_URL + "?action=getCargos")
+  fetch(CS_SHEETS_URL + "?action=getAll")
     .then(function(r){ return r.json(); })
     .then(function(data) {
-      if (data.cargos) {
-        CS_CARGOS = data.cargos;
-        csRecalc();
-        csRenderCargos();
+      if (data && data.salarios && data.salarios.length) {
+        CS_CARGOS = data.salarios.map(function(s, i) {
+          var nivel = csNormalizeNivel(s.niveis, s.cargo);
+          return {
+            id:             s.cargo_id || ("c" + i),
+            nome:           s.cargo + (s.niveis ? " " + s.niveis : ""),
+            cargo_base:     s.cargo,
+            nivel:          nivel,
+            niveis_raw:     s.niveis,
+            dept:           s.departamento,
+            unidade:        s.unidade,
+            cbo:            s.cbo,
+            hierarquia:     s.hierarquia,
+            fixo:           s.salario_fixo,
+            insalubridade:  s.insalubridade,
+            periculosidade: s.periculosidade,
+            gorjeta:        s.ponto_gorjeta,
+            premio:         s.ponto_premio,
+            bruto_sheet:    s.bruto_aproximado,
+            obs:            s.obs,
+            icone:          csInferIcon(s.cargo, s.departamento)
+          };
+        });
       }
-      if (data.descricoes) {
-        CS_DESCRICOES = data.descricoes;
-      }
+      if (data && data.obs)    CS_OBS = data.obs;
+      csRecalc();
+      csRenderCargos();
       document.getElementById("cs-sync-dot").className = "cs-sync-dot ok";
       document.getElementById("cs-sync-text").textContent = "Sincronizado · " + new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
     })
@@ -1719,6 +1743,30 @@ function csSyncSheets() {
       document.getElementById("cs-sync-dot").className = "cs-sync-dot err";
       document.getElementById("cs-sync-text").textContent = "Erro ao sincronizar. Verifique a URL.";
     });
+}
+
+function csNormalizeNivel(raw, cargo) {
+  var n = String(raw || "").trim().toUpperCase();
+  if (n === "JR") return "N2";
+  if (n === "PL") return "N3";
+  if (n === "SR") return "N4";
+  var c = String(cargo || "").toLowerCase();
+  if (c.indexOf("aprendiz") >= 0 || c.indexOf("estagi") >= 0) return "N1";
+  if (c.indexOf("gerente") >= 0 || c.indexOf("chef executivo") >= 0 || c.indexOf("diretor") >= 0) return "NS";
+  return "";
+}
+
+function csInferIcon(cargo, dept) {
+  var c = (cargo || "").toLowerCase();
+  var d = (dept || "").toLowerCase();
+  if (c.indexOf("bar") === 0 || c.indexOf("bartender") >= 0) return "bar";
+  if (c.indexOf("chef") >= 0 || c.indexOf("cozinheiro") >= 0 || d.indexOf("cozinha") >= 0) return "chef";
+  if (c.indexOf("garçom") >= 0 || c.indexOf("garcom") >= 0 || c.indexOf("atendente") >= 0) return "user";
+  if (c.indexOf("caixa") >= 0 || c.indexOf("financ") >= 0 || c.indexOf("compras") >= 0) return "card";
+  if (c.indexOf("lider") >= 0 || c.indexOf("líder") >= 0 || c.indexOf("gerente") >= 0 || c.indexOf("coordenador") >= 0) return "lead";
+  if (c.indexOf("sushi") >= 0) return "star";
+  if (d.indexOf("rh") >= 0) return "team";
+  return "user";
 }
 
 /* ── PRINT DESCRIÇÃO ── */
@@ -1740,6 +1788,7 @@ function csPrintDesc() {
 csRecalc();
 csRenderNiveis();
 csRenderCargos();
+csSyncSheets();
 
 </script>
 
