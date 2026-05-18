@@ -883,6 +883,19 @@ body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(--t1); 
 .cs-info-text { font-size:12px; line-height:1.65; color:var(--t2); }
 .cs-info-text strong { color:var(--t1); font-weight:600; }
 
+/* ── FILTROS TABELA ── */
+.cs-table-filters { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.cs-filter-sel {
+  padding:8px 12px; border:1px solid var(--border); border-radius:var(--r);
+  font-family:"DM Mono",monospace; font-size:10px; font-weight:500;
+  letter-spacing:.08em; text-transform:uppercase; color:var(--t2);
+  background:var(--white); outline:none; cursor:pointer; transition:border-color .15s;
+  appearance:none; -webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2399999E' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 10px center; padding-right:28px;
+}
+.cs-filter-sel:focus { border-color:var(--carbon); }
+
 /* ── SYNC BAR ── */
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
@@ -901,7 +914,7 @@ body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(--t1); 
 .cs-table td.cargo-name { font-weight:600; font-size:13px; color:var(--white); }
 .cs-table td.mono { font-family:"DM Mono",monospace; font-size:11px; color:rgba(255,255,255,.5); }
 .cs-table td.valor { font-family:"DM Mono",monospace; font-size:12px; font-weight:600; color:rgba(255,255,255,.8); }
-.cs-table td.valor.calculado { color:var(--citric); font-weight:700; }
+.cs-table td.valor.calculado { color:var(--white); font-weight:700; }
 .cs-table td.gorjeta-pts, .cs-table td.premio-pts { font-family:"DM Mono",monospace; font-size:11px; color:rgba(255,255,255,.45); }
 
 /* ── NIVEL PILLS ── */
@@ -1241,44 +1254,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <!-- /INTRO -->
 
-    <!-- Configuração de pontos -->
-    <div class="cs-config-grid">
-      <div class="cs-config-card">
-        <div class="cs-config-label">Valor Ponto Gorjeta</div>
-        <div class="cs-config-input-wrap">
-          <span class="cs-config-prefix">R$</span>
-          <input class="cs-config-input" id="pt-gorjeta" type="number" step="0.01" value="4.50" oninput="csRecalc()">
-        </div>
-        <div class="cs-config-hint">por ponto / mês</div>
-      </div>
-      <div class="cs-config-card">
-        <div class="cs-config-label">Valor Ponto Prêmio</div>
-        <div class="cs-config-input-wrap">
-          <span class="cs-config-prefix">R$</span>
-          <input class="cs-config-input" id="pt-premio" type="number" step="0.01" value="6.00" oninput="csRecalc()">
-        </div>
-        <div class="cs-config-hint">por ponto / mês</div>
-      </div>
-      <div class="cs-config-card">
-        <div class="cs-config-label">Encargo s/ Salário</div>
-        <div class="cs-config-input-wrap">
-          <span class="cs-config-prefix">%</span>
-          <input class="cs-config-input" id="pct-encargo" type="number" step="0.1" value="73.5" oninput="csRecalc()">
-        </div>
-        <div class="cs-config-hint">INSS + FGTS + 13º + férias</div>
-      </div>
-      <div class="cs-config-card">
-        <div class="cs-config-label">Período de Referência</div>
-        <div class="cs-config-input-wrap">
-          <input class="cs-config-input" id="periodo-ref" type="text" value="Mai / 2025" style="font-size:14px;" oninput="csRecalc()">
-        </div>
-        <div class="cs-config-hint">mês vigente da tabela</div>
-      </div>
-    </div>
-
-    <div class="cs-info-banner">
-      <div class="cs-info-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
-      <div class="cs-info-text"><strong>Salário Bruto</strong> = Fixo Registro + (Pts Gorjeta × Valor/Pt) + (Pts Prêmio × Valor/Pt). Os valores calculados atualizam automaticamente ao alterar os pontos acima. Clique em qualquer célula editável para ajustar.</div>
+    <!-- Filtros da tabela -->
+    <div class="cs-table-filters">
+      <select class="cs-filter-sel" id="cs-filter-unidade" onchange="csRecalc()">
+        <option value="">Todas as unidades</option>
+        <option>Itaim</option>
+        <option>Pinheiros</option>
+        <option>Poke - Pinheiros</option>
+        <option>Administrativo</option>
+        <option>Tatá House</option>
+      </select>
+      <select class="cs-filter-sel" id="cs-filter-dept" onchange="csRecalc()">
+        <option value="">Todos os departamentos</option>
+      </select>
     </div>
 
     <div class="cs-table-wrap">
@@ -1669,11 +1657,16 @@ function csTab(id, el) {
 
 /* ── RENDER TABELA ── */
 function csRecalc() {
-  var ptG = parseFloat(document.getElementById("pt-gorjeta").value) || 0;
-  var ptP = parseFloat(document.getElementById("pt-premio").value) || 0;
-  var tbody = document.getElementById("cs-tbody");
+  var obsRef   = CS_OBS && CS_OBS[0] || {};
+  var ptG      = parseFloat(obsRef.valor_pt_gorjeta) || 0;
+  var ptP      = parseFloat(obsRef.valor_pt_premio)  || 0;
+  var selUnit  = (document.getElementById("cs-filter-unidade") || {}).value || "";
+  var selDept  = (document.getElementById("cs-filter-dept")    || {}).value || "";
+  var tbody    = document.getElementById("cs-tbody");
   tbody.innerHTML = "";
   CS_CARGOS.forEach(function(c) {
+    if (selUnit && c.unidade !== selUnit) return;
+    if (selDept && c.dept   !== selDept)  return;
     var fixo  = parseFloat(c.fixo)           || 0;
     var insal = parseFloat(c.insalubridade)  || 0;
     var peric = parseFloat(c.periculosidade) || 0;
@@ -1681,18 +1674,29 @@ function csRecalc() {
     var prem  = parseFloat(c.premio)         || 0;
     var bruto = fixo + insal + peric + (gorj * ptG) + (prem * ptP);
     var tr = document.createElement("tr");
-    tr.title = "Clique para editar";
+    tr.title = "Clique para ver detalhes";
     tr.innerHTML =
       '<td class="cargo-name">'+c.nome+'</td>'+
       '<td class="right mono">'+brl(fixo)+'</td>'+
-      '<td class="right mono">'+(insal ? brl(insal) : '<span style="color:var(--t3)">—</span>')+'</td>'+
-      '<td class="right mono">'+(peric ? brl(peric) : '<span style="color:var(--t3)">—</span>')+'</td>'+
-      '<td class="right gorjeta-pts">'+(gorj || '<span style="color:var(--t3)">—</span>')+'</td>'+
-      '<td class="right premio-pts">'+(prem || '<span style="color:var(--t3)">—</span>')+'</td>'+
-      '<td class="right valor" style="color:var(--carbon);font-weight:700;">'+brl(bruto)+'</td>';
+      '<td class="right mono">'+(insal ? brl(insal) : '<span style="color:rgba(255,255,255,.25)">—</span>')+'</td>'+
+      '<td class="right mono">'+(peric ? brl(peric) : '<span style="color:rgba(255,255,255,.25)">—</span>')+'</td>'+
+      '<td class="right gorjeta-pts">'+(gorj || '<span style="color:rgba(255,255,255,.25)">—</span>')+'</td>'+
+      '<td class="right premio-pts">'+(prem || '<span style="color:rgba(255,255,255,.25)">—</span>')+'</td>'+
+      '<td class="right valor calculado">'+brl(bruto)+'</td>';
     (function(cargo){ tr.onclick = function(){ csOpenDesc(cargo.id); }; })(c);
     tbody.appendChild(tr);
   });
+}
+
+function csPopulateDeptFilter() {
+  var sel = document.getElementById("cs-filter-dept");
+  if (!sel) return;
+  var depts = [];
+  CS_CARGOS.forEach(function(c){ if (c.dept && depts.indexOf(c.dept) < 0) depts.push(c.dept); });
+  depts.sort();
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">Todos os departamentos</option>';
+  depts.forEach(function(d){ sel.innerHTML += '<option'+(d===cur?' selected':'')+'>'+d+'</option>'; });
 }
 
 /* ── RENDER NÍVEIS ── */
@@ -1878,6 +1882,7 @@ function csSyncSheets() {
         });
       }
       if (data && data.obs) CS_OBS = data.obs;
+      csPopulateDeptFilter();
       csRecalc();
       csRenderCargos();
     })
@@ -1930,6 +1935,7 @@ function csPrintDesc() {
 }
 
 /* ── INIT ── */
+csPopulateDeptFilter();
 csRecalc();
 csRenderNiveis();
 csRenderCargos();
