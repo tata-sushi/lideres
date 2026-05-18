@@ -197,7 +197,8 @@ function listCargos() {
       experiencia:      String(r[11] || '').trim(),
       competencias:     String(r[12] || '').trim(),
       cnh:              String(r[13] || '').trim(),
-      uniformes_epi:    String(r[14] || '').trim()
+      uniformes:        String(r[14] || '').trim(),
+      epis:             String(r[15] || '').trim()
     });
   }
   return out;
