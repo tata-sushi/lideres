@@ -1114,6 +1114,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         if (!data.arvore) throw new Error('Resposta invalida (sem arvore)');
 
         arvore = inicializarNode(data.arvore);
+        sortChildren(arvore);
         nodeMap = {};
         mapearNos(arvore, null);
         peerNos = (data.peers || []).map(function(p) { return Object.assign({ children: [] }, p); });
@@ -1201,6 +1202,26 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     return c;
   }
   function isOperacional(n) { return n.nivel === 'operacional'; }
+
+  function cargoSortKey(n) {
+    var nivelOrd = { diretoria: 0, gerencia: 1, supervisor: 2, operacional: 3 };
+    var base = (nivelOrd[n.nivel] !== undefined ? nivelOrd[n.nivel] : 3) * 10;
+    var c = String(n.cargo || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    var s;
+    if      (/\bsr\b|\bsenior\b|\bp3\b/.test(c)) s = 0;
+    else if (/\bp2\b/.test(c))                   s = 1;
+    else if (/\bp1\b|\bpl\b|\bpleno\b/.test(c))  s = 2;
+    else if (/\bjr\b/.test(c))                    s = 3;
+    else if (/aprendiz|estagia/.test(c))          s = 5;
+    else                                           s = 4;
+    return base + s;
+  }
+
+  function sortChildren(n) {
+    if (!n.children || n.children.length < 2) { if (n.children) n.children.forEach(sortChildren); return; }
+    n.children.sort(function(a, b) { return cargoSortKey(a) - cargoSortKey(b); });
+    n.children.forEach(sortChildren);
+  }
 
   // ── FILTRO POR UNIDADE ────────────────────────────────────
   var _unitFilter = '';
