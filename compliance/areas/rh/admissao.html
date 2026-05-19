@@ -587,9 +587,6 @@ body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(--t1); 
 .adm-doc-item input[type="checkbox"] { width:15px; height:15px; margin-top:3px; cursor:pointer; accent-color:var(--carbon); flex-shrink:0; }
 .adm-doc-name { font-size:13px; font-weight:600; color:var(--t1); }
 .adm-doc-desc { font-family:'DM Mono',monospace; font-size:10px; color:var(--t3); margin-top:2px; }
-.adm-ca-row { margin-top:8px; display:flex; align-items:center; gap:8px; }
-.adm-ca-label { font-family:'DM Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:0.5px; color:#7A4A00; font-weight:500; white-space:nowrap; }
-.adm-ca-input { flex:1; height:28px; padding:0 8px; border:1px solid #FCD34D; border-radius:6px; background:var(--white); font-family:'DM Mono',monospace; font-size:12px; color:var(--t1); outline:none; min-width:0; }
 @keyframes admModalIn { from{opacity:0;transform:scale(.97) translateY(6px)} to{opacity:1;transform:scale(1) translateY(0)} }
 @media (min-width:768px) {
   .adm-modal { max-height:88vh; }
@@ -1136,6 +1133,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="adm-handle"></div>
     <div class="adm-modal-header">
       <div>
+        <div class="adm-eyebrow">Admissão &amp; Integração</div>
         <div class="adm-modal-title">Gerar Documentos</div>
       </div>
       <button class="adm-close-btn" onclick="closeModalAdmissao()">✕</button>
@@ -1150,20 +1148,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="form-divider">Documentos</div>
       <p style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);margin-bottom:10px;">Selecione os documentos a incluir no PDF.</p>
       <div class="adm-doc-list" id="adm-doc-list"></div>
-      <div id="adm-ca-field" style="display:none;margin-top:10px;">
-        <div class="form-divider" style="margin-top:14px;">N° CA — Japona Térmica</div>
-        <div class="adm-ca-row">
-          <span class="adm-ca-label">N° CA *</span>
-          <input class="adm-ca-input" type="text" id="adm-ca" placeholder="Ex: 12345" inputmode="numeric" maxlength="30">
-        </div>
-      </div>
-      <div id="adm-ca-luva-field" style="display:none;margin-top:10px;">
-        <div class="form-divider" style="margin-top:14px;">N° CA — Luva Térmica</div>
-        <div class="adm-ca-row">
-          <span class="adm-ca-label">N° CA *</span>
-          <input class="adm-ca-input" type="text" id="adm-ca-luva" placeholder="Ex: 12345" inputmode="numeric" maxlength="30">
-        </div>
-      </div>
     </div>
     <div class="adm-modal-footer">
       <div class="adm-error" id="adm-error"></div>
@@ -1334,12 +1318,6 @@ function openDrawer() {
     _admLoadColaboradores();
     _admBuildDocList();
     document.getElementById('adm-colab').value = '';
-    document.getElementById('adm-ca').value = '';
-    document.getElementById('adm-ca-luva').value = '';
-    var _japCb = document.getElementById('admdoc_japona_termica');
-    document.getElementById('adm-ca-field').style.display = (_japCb && _japCb.checked) ? 'block' : 'none';
-    var _luvaCb = document.getElementById('admdoc_luva_termica');
-    document.getElementById('adm-ca-luva-field').style.display = (_luvaCb && _luvaCb.checked) ? 'block' : 'none';
     _admSetLoading(false, 'Gerar PDF');
     _admShowError('');
     document.getElementById('adm-overlay').classList.add('open');
@@ -1377,29 +1355,43 @@ function openDrawer() {
     var list = document.getElementById('adm-doc-list');
     list.innerHTML = '';
     ADM_DOCS.forEach(function(doc) {
+      var hasCa = doc.id === 'japona_termica' || doc.id === 'luva_termica';
+      var caId  = doc.id === 'japona_termica' ? 'adm-ca' : 'adm-ca-luva';
+      var rowId = 'adm-ca-row-' + doc.id;
+
       var item = document.createElement('div');
       item.className = 'adm-doc-item';
-      item.innerHTML =
+      if (hasCa) item.style.cssText = 'flex-direction:column;align-items:stretch;';
+
+      var top = document.createElement('div');
+      top.style.cssText = 'display:flex;align-items:flex-start;gap:10px;';
+      top.innerHTML =
         '<input type="checkbox" id="admdoc_' + doc.id + '" value="' + doc.id + '" checked' +
-        (doc.id === 'japona_termica' ? ' onchange="_admToggleCaField(this.checked)"' : doc.id === 'luva_termica' ? ' onchange="_admToggleCaLuvaField(this.checked)"' : '') + '>' +
+        (hasCa ? ' onchange="_admToggleCaInItem(\'' + rowId + '\',\'' + caId + '\',this.checked)"' : '') + '>' +
         '<label for="admdoc_' + doc.id + '" style="cursor:pointer;flex:1;">' +
           '<div class="adm-doc-name">' + doc.nome + '</div>' +
           '<div class="adm-doc-desc">' + doc.desc + '</div>' +
         '</label>';
+      item.appendChild(top);
+
+      if (hasCa) {
+        var caRow = document.createElement('div');
+        caRow.className = 'adm-ca-row';
+        caRow.id = rowId;
+        caRow.innerHTML =
+          '<span class="adm-ca-label">N° CA *</span>' +
+          '<input class="adm-ca-input" type="text" id="' + caId + '" placeholder="Ex: 12345" inputmode="numeric" maxlength="30" onclick="event.stopPropagation()">';
+        item.appendChild(caRow);
+      }
+
       list.appendChild(item);
     });
   }
 
-  function _admToggleCaField(checked) {
-    var el = document.getElementById('adm-ca-field');
-    el.style.display = checked ? 'block' : 'none';
-    if (!checked) document.getElementById('adm-ca').value = '';
-  }
-
-  function _admToggleCaLuvaField(checked) {
-    var el = document.getElementById('adm-ca-luva-field');
-    el.style.display = checked ? 'block' : 'none';
-    if (!checked) document.getElementById('adm-ca-luva').value = '';
+  function _admToggleCaInItem(rowId, inputId, checked) {
+    var row = document.getElementById(rowId);
+    if (row) row.style.display = checked ? 'flex' : 'none';
+    if (!checked) { var inp = document.getElementById(inputId); if (inp) inp.value = ''; }
   }
 
   function _admSetLoading(loading, label) {
