@@ -1295,8 +1295,32 @@ function openDrawer() {
     { id: 'camara_fria_acesso',nome: 'Termo de Resp. sobre Acesso à Câmara Fria',          desc: 'Responsabilidades para colaboradores autorizados',  sectionLabel: 'Termo de Responsabilidade sobre Acesso à Câmara Fria',   singleSig: true },
   ];
 
+  var _ORG_URL = 'https://script.google.com/macros/s/AKfycbxUWUoOmv-Cn19-FjUJ18jYTu5G_embOGDaQDsgC4Jd8agVfgqs98Tbu3qlqa9e7tpu/exec';
   var _admColabLoaded = false;
   var _admColabMap = {};
+
+  function _admEnriquecerAdmissao() {
+    fetch(_ORG_URL)
+      .then(function(r) { return r.json(); })
+      .then(function(org) {
+        if (!org || !org.arvore) return;
+        var nomeAdmMap = {};
+        function flat(node) {
+          if (!node) return;
+          if (node.nome && node.admissao) nomeAdmMap[node.nome] = node.admissao;
+          (node.children || []).forEach(flat);
+        }
+        flat(org.arvore);
+        (org.peers || []).forEach(flat);
+        Object.keys(_admColabMap).forEach(function(key) {
+          var c = _admColabMap[key];
+          if (!c.admissao && c.nome && nomeAdmMap[c.nome]) {
+            c.admissao = nomeAdmMap[c.nome];
+          }
+        });
+      })
+      .catch(function() {});
+  }
 
   function openModalAdmissao() {
     closeDrawer();
@@ -1337,6 +1361,7 @@ function openDrawer() {
           sel.appendChild(opt);
         });
         _admColabLoaded = true;
+        _admEnriquecerAdmissao();
       })
       .catch(function() {});
   }
