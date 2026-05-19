@@ -32,7 +32,7 @@ const CONFIG = {
     cargo:         'Cargo',
     status:        'Status',           // Ativo / Inativo
     unidade:       'Unidade',          // Itaim / Pinheiros / PUC
-    departamento:  'ID Departamento', // antes era 'Departamento'
+    departamento:  'Departamento',     // Sushibar, Salão, Cozinha, RH, etc (col F)
     idPessoa:      'ID Pessoa',        // ID interno usado para vincular hierarquia
     supervisor:    'ID Superior',      // ID Pessoa do supervisor
     nomeSuperior:  'Nome do Superior', // Apenas para validação visual
