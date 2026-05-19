@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Armários &amp; Chaves — TATÁ Sushi</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -66,13 +67,18 @@ body {
 .content { padding: 16px 20px 100px; }
 
 /* ── KPI CARDS ── */
-.kpi-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 20px; }
-.kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; align-items: center; text-align: center; }
-.kpi-label { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
-.kpi-num { font-size: 36px; font-weight: 700; color: var(--carbon); line-height: 1; }
-.kpi-sub { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--mid); margin-top: 4px; }
-.kpi-sub strong { color: var(--carbon); font-weight: 500; }
+.kpi-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; }
+.kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
+.kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
+.kpi-num { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.kpi-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+.kpi-sub strong { color: var(--carbon); font-weight: 600; }
+
+/* ── CHARTS ── */
+.chart-card { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px 16px; display: flex; flex-direction: column; }
+.chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
+.chart-wrap { position: relative; height: 180px; }
 
 /* ── STATUS CARDS (quad-grid) ── */
 .quad-grid { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
@@ -269,8 +275,9 @@ body {
 /* ── DESKTOP ── */
 @media (min-width: 768px) {
   .content { max-width: 1280px; margin: 0 auto; padding: 20px 32px 100px; }
-  .kpi-wrap { padding: 16px 32px; }
+  .kpi-wrap { padding: 14px 32px; }
   .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+  .chart-card { max-width: 800px; margin: 0 auto; }
   .quad-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
   .overlay { align-items: center; }
   .modal { border-radius: 12px; width: 580px; max-height: 88vh; animation: modalIn 0.25s ease; }
@@ -479,6 +486,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="kpi-sub" id="kpi-prob-sub">Requer atenção</div>
       </div>
     </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="chart-card">
+    <div class="chart-title">Status dos Armários</div>
+    <div class="chart-wrap"><canvas id="cStatus"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Ocupação por Unidade</div>
+    <div class="chart-wrap"><canvas id="cUnidade"></canvas></div>
   </div>
 
   <!-- search -->
@@ -710,6 +727,129 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 /* ════════════════════════════════════════════════
+   CHART PLUGIN — value labels
+   ════════════════════════════════════════════════ */
+var barValueLabelsPlugin = {
+  id: 'barValueLabels',
+  afterDatasetsDraw: function(chart) {
+    var ctx = chart.ctx;
+    var horizontal = chart.options && chart.options.indexAxis === 'y';
+    chart.data.datasets.forEach(function(ds, dsIdx) {
+      var meta = chart.getDatasetMeta(dsIdx);
+      meta.data.forEach(function(bar, i) {
+        var val = ds.data[i];
+        if (val === null || val === undefined) return;
+        ctx.save();
+        if (horizontal) {
+          ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#35383F'; ctx.font = '600 11px DM Mono, monospace';
+          ctx.fillText(String(val), bar.x + 6, bar.y);
+        } else {
+          ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+          ctx.fillStyle = '#35383F'; ctx.font = '600 11px DM Mono, monospace';
+          ctx.fillText(String(val), bar.x, bar.y - 4);
+        }
+        ctx.restore();
+      });
+    });
+  }
+};
+
+var _chStatus  = null;
+var _chUnidade = null;
+
+function renderCharts() {
+  var src = activeUnitFilter === 'all'
+    ? ARMARIOS
+    : ARMARIOS.filter(function(a){ return a.unidade === activeUnitFilter; });
+
+  /* ─── Chart 1: Status ─── */
+  var statusLabels = ['Livre', 'Ocupado', 'Manutenção', 'Bloqueado'];
+  var statusKeys   = ['livre', 'ocupado', 'manut', 'bloq'];
+  var statusData   = statusKeys.map(function(k){
+    return src.filter(function(a){ return a.status === k; }).length;
+  });
+
+  var cfgStatus = {
+    type: 'bar',
+    data: {
+      labels: statusLabels,
+      datasets: [{
+        data: statusData,
+        backgroundColor: '#35383F',
+        borderRadius: 3,
+        barPercentage: 0.6
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { right: 40 } },
+      scales: {
+        x: { display: false, grid: { display: false }, border: { display: false } },
+        y: {
+          grid: { display: false }, border: { display: false },
+          ticks: { font: { family: 'DM Mono, monospace', size: 11 }, color: '#35383F' }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false }
+      }
+    },
+    plugins: [barValueLabelsPlugin]
+  };
+
+  var canvasStatus = document.getElementById('cStatus');
+  if (_chStatus) { _chStatus.destroy(); }
+  _chStatus = new Chart(canvasStatus, cfgStatus);
+
+  /* ─── Chart 2: Ocupação por Unidade ─── */
+  var allUnits = Object.keys(ARMARIOS_CONFIG);
+  var unitsSrc = activeUnitFilter === 'all' ? allUnits : [activeUnitFilter];
+  var unidadeLabels = unitsSrc;
+  var unidadeData   = unitsSrc.map(function(u){
+    return ARMARIOS.filter(function(a){ return a.unidade === u && a.status === 'ocupado'; }).length;
+  });
+
+  var cfgUnidade = {
+    type: 'bar',
+    data: {
+      labels: unidadeLabels,
+      datasets: [{
+        data: unidadeData,
+        backgroundColor: '#35383F',
+        borderRadius: 3,
+        barPercentage: 0.6
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { right: 40 } },
+      scales: {
+        x: { display: false, grid: { display: false }, border: { display: false } },
+        y: {
+          grid: { display: false }, border: { display: false },
+          ticks: { font: { family: 'DM Mono, monospace', size: 11 }, color: '#35383F' }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false }
+      }
+    },
+    plugins: [barValueLabelsPlugin]
+  };
+
+  var canvasUnidade = document.getElementById('cUnidade');
+  if (_chUnidade) { _chUnidade.destroy(); }
+  _chUnidade = new Chart(canvasUnidade, cfgUnidade);
+}
+
+/* ════════════════════════════════════════════════
    CONFIG — URLs Apps Script
    ════════════════════════════════════════════════ */
 // URL do Apps Script de Armários (deploy /exec)
@@ -892,6 +1032,7 @@ function filtrar() {
 
 function renderTudo() {
   renderKPIs();
+  renderCharts();
   renderMapa();
   renderListas();
 }
