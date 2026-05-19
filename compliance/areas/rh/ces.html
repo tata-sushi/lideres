@@ -2225,17 +2225,139 @@ function csInferIcon(cargo, dept) {
 
 /* ── PRINT DESCRIÇÃO ── */
 function csPrintDesc() {
-  var drawer = document.getElementById("cs-desc-drawer");
-  // data no footer
-  var now = new Date();
+  if (!_csDescCurrentCargo) return;
+  var cargo = _csDescCurrentCargo;
+  var desc  = CS_DESCRICOES[String(cargo.id)] || {};
+
+  var nivelMap = { N1:"N1 — Entrada", N2:"N2 — Operacional", N3:"N3 — Especialista", N4:"N4 — Liderança", NS:"NS — Estratégico" };
+  var nivelLbl = nivelMap[cargo.nivel] || cargo.nivel || "—";
+
+  var agora = new Date();
   var pad = function(n){ return String(n).padStart(2,"0"); };
-  document.getElementById("cs-print-date").textContent =
-    pad(now.getDate())+"/"+pad(now.getMonth()+1)+"/"+now.getFullYear();
-  // prepara: adiciona id de frame para CSS de impressão
-  drawer.id = "cs-print-frame";
-  window.print();
-  // restaura id
-  setTimeout(function(){ drawer.id = "cs-desc-drawer"; }, 500);
+  var dataFmt = pad(agora.getDate())+"/"+pad(agora.getMonth()+1)+"/"+agora.getFullYear();
+  var emitidoEm = dataFmt + ", " + pad(agora.getHours())+":"+pad(agora.getMinutes());
+
+  function escHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  var logoSrc = window.location.origin + "/compliance/areas/institucional/logos/logo_sushi_preto_citric.png";
+
+  function section(label, contentHtml) {
+    if (!contentHtml) return "";
+    return '<div class="rp-section">' +
+      '<div class="rp-section-label">' + escHtml(label) + '</div>' +
+      '<div class="rp-section-body">' + contentHtml + '</div>' +
+    '</div>';
+  }
+
+  function bulletList(items) {
+    if (!items || !items.length) return "";
+    return '<ul class="rp-list">' + items.map(function(r){ return "<li>"+escHtml(r)+"</li>"; }).join("") + '</ul>';
+  }
+
+  function paragraph(text) {
+    return text ? '<p class="rp-p">' + escHtml(text) + '</p>' : "";
+  }
+
+  function dlItem(k, v) {
+    if (!v) return "";
+    return '<div class="rp-dl-row"><span class="rp-dl-k">' + escHtml(k) + '</span><span class="rp-dl-v">' + escHtml(v) + '</span></div>';
+  }
+
+  var qualHtml = "";
+  qualHtml += dlItem("Formação",                  desc.formacao);
+  qualHtml += dlItem("Experiências",              desc.experiencia);
+  qualHtml += dlItem("Competências Técnicas",     desc.competencias);
+  qualHtml += dlItem("Competências Comportamentais", desc.cnh);
+
+  var epiHtml = "";
+  epiHtml += dlItem("Uniformes", desc.uniformes);
+  epiHtml += dlItem("EPIs",      desc.epis);
+
+  var css = '' +
+    '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}' +
+    ':root{--carbon:#34373F;--ink-1:#111;--ink-2:#222;--ink-3:#212121;--gray-1:#444;--gray-2:#666;--gray-3:#888;--bg-strip:#F4F4F4;--bg-box:#FAFAFA;--border:#DDD;--border-soft:#EDEDED;}' +
+    'body{background:#CBD5E1;font-family:"DM Sans","Helvetica Neue",Arial,sans-serif;min-height:100vh;padding:32px 16px 64px;display:flex;flex-direction:column;align-items:center;color:var(--ink-1);}' +
+    '.page{width:100%;max-width:760px;background:#fff;padding:34px 46px 44px;box-shadow:0 4px 32px rgba(0,0,0,0.18);font-size:10px;line-height:1.55;color:var(--ink-2);}' +
+    '.rp-header{display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:1.5px solid var(--ink-1);margin-bottom:18px;}' +
+    '.rp-logo{width:42px;height:42px;flex-shrink:0;object-fit:contain;}' +
+    '.rp-header-title{flex:1;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-1);line-height:1.25;}' +
+    '.rp-header-right{flex-shrink:0;text-align:right;font-size:9px;color:var(--gray-1);line-height:1.65;}' +
+    '.rp-header-right strong{color:var(--ink-1);font-weight:700;}' +
+    '.rp-header-right small{display:block;font-size:8px;color:var(--gray-3);font-weight:400;margin-top:1px;}' +
+    '.rp-intro-row{display:flex;align-items:stretch;gap:10px;margin-bottom:18px;flex-wrap:wrap;}' +
+    '.rp-intro-field{display:flex;flex-direction:column;gap:4px;min-width:0;}' +
+    '.rp-intro-field.grow{flex:1;min-width:0;}' +
+    '.rp-intro-label{font-family:"DM Mono",monospace;font-size:8px;text-transform:uppercase;letter-spacing:.6px;color:var(--gray-3);white-space:nowrap;}' +
+    '.rp-intro-value{background:var(--bg-strip);padding:7px 12px;font-size:10.5px;font-weight:700;color:var(--ink-1);border-radius:3px;}' +
+    '.rp-section{margin-bottom:14px;}' +
+    '.rp-section-label{font-family:"DM Mono",monospace;font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--carbon);padding-bottom:5px;margin-bottom:8px;border-bottom:1px solid var(--border);}' +
+    '.rp-section-body{font-size:10px;color:var(--ink-2);line-height:1.7;}' +
+    '.rp-p{font-size:10px;color:var(--ink-2);line-height:1.7;text-align:justify;}' +
+    '.rp-list{padding-left:6px;list-style:none;}' +
+    '.rp-list li{font-size:10px;color:var(--ink-3);line-height:1.65;margin-bottom:3px;position:relative;padding-left:12px;}' +
+    '.rp-list li::before{content:"\\2022";position:absolute;left:0;color:var(--carbon);font-weight:700;}' +
+    '.rp-dl-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:5px;font-size:10px;line-height:1.65;}' +
+    '.rp-dl-k{flex:0 0 180px;font-weight:700;color:var(--ink-1);}' +
+    '.rp-dl-v{flex:1;color:var(--gray-1);text-align:justify;}' +
+    '.rp-cidade{text-align:right;font-size:9px;color:var(--ink-2);margin-top:22px;margin-bottom:26px;}' +
+    '.rp-sigs{display:flex;gap:48px;margin-bottom:18px;}' +
+    '.rp-sig{flex:1;min-width:0;}' +
+    '.rp-sig-line{border-top:1.2px solid #000;margin-bottom:6px;}' +
+    '.rp-sig-label{font-size:9px;color:var(--gray-2);}' +
+    '.rp-footer-meta{margin-top:18px;padding-top:10px;border-top:1px solid var(--border-soft);display:flex;justify-content:space-between;font-family:"DM Mono",monospace;font-size:8px;color:var(--gray-3);text-transform:uppercase;letter-spacing:.6px;}' +
+    '@media print{body{background:#fff;padding:0;}.page{box-shadow:none;width:100%;max-width:100%;padding:24px 36px 36px;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}.rp-intro-value,.rp-section-label{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}';
+
+  var titulo = "Descrição de Cargo";
+
+  var html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>' + escHtml(titulo + " — " + cargo.nome) + ' — TATÁ Sushi</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">' +
+    '<style>' + css + '</style></head><body>' +
+    '<div class="page">' +
+      '<div class="rp-header">' +
+        '<img class="rp-logo" src="' + logoSrc + '" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' +
+        '<div class="rp-header-title">' + escHtml(titulo) + '</div>' +
+        '<div class="rp-header-right">' +
+          'Data: <strong>' + dataFmt + '</strong>' +
+          '<small>Emitido em ' + emitidoEm + '</small>' +
+        '</div>' +
+      '</div>' +
+      '<div class="rp-intro-row">' +
+        '<div class="rp-intro-field grow"><span class="rp-intro-label">Cargo</span><span class="rp-intro-value">' + escHtml(cargo.nome || "—") + '</span></div>' +
+        '<div class="rp-intro-field"><span class="rp-intro-label">Departamento</span><span class="rp-intro-value">' + escHtml(cargo.dept || "—") + '</span></div>' +
+        '<div class="rp-intro-field"><span class="rp-intro-label">Nível</span><span class="rp-intro-value">' + escHtml(nivelLbl) + '</span></div>' +
+      '</div>' +
+      section("Objetivo", paragraph(desc.objetivos)) +
+      section("Responsabilidades", bulletList(desc.responsabilidades)) +
+      section("Qualificações", qualHtml) +
+      section("Uniformes e EPI's", epiHtml) +
+      '<div class="rp-cidade">São Paulo, ' + dataFmt + '</div>' +
+      '<div class="rp-sigs">' +
+        '<div class="rp-sig"><div class="rp-sig-line"></div><div class="rp-sig-label">Colaborador(a) — Ciência</div></div>' +
+        '<div class="rp-sig"><div class="rp-sig-line"></div><div class="rp-sig-label">Líder / RH</div></div>' +
+      '</div>' +
+      '<div class="rp-footer-meta">' +
+        '<span>TATÁ Sushi · TATÁ Poke</span>' +
+        '<span>' + escHtml(cargo.nome) + ' · ' + escHtml(cargo.dept || "—") + '</span>' +
+        '<span>' + dataFmt + '</span>' +
+      '</div>' +
+    '</div>' +
+    '</body></html>';
+
+  var w = window.open('', '_blank');
+  if (!w) {
+    alert("Permita pop-ups para gerar o PDF.");
+    return;
+  }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(function(){ w.print(); }, 600);
 }
 
 /* ── INIT ── */
