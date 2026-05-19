@@ -42,7 +42,8 @@ const CONFIG = {
 
   // Colunas opcionais — sem erro se ausentes na planilha
   COLUNAS_OPCIONAIS: {
-    dataNascimento: 'Data de Nascimento'
+    dataNascimento: 'Data de Nascimento',
+    cargoId:        'cargo_id'
   },
 
   CACHE_FOTOS_MIN: 5,
@@ -149,7 +150,8 @@ function lerPlanilha() {
       nivel: detectarNivel(cargo),
       unitClass: classeUnidade(unidade),
       admissao: isoDate(row[idx.admissao]),
-      dataNascimento: idxOpt.dataNascimento >= 0 ? isoDate(row[idxOpt.dataNascimento]) : null
+      dataNascimento: idxOpt.dataNascimento >= 0 ? isoDate(row[idxOpt.dataNascimento]) : null,
+      cargoId: idxOpt.cargoId >= 0 ? String(row[idxOpt.cargoId]).trim() || null : null
     });
   }
 

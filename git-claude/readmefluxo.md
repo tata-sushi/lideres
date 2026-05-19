@@ -822,7 +822,9 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
 | Arquivo | Steps | Capa | Locks | Final | Fullscreen | Checkboxes |
 |---|---|---|---|---|---|---|
 | `compliance/conceitos/5s.html` | 5 | ✓ | 2 (4 desbloq, 5 perm) | ✓ | ✓ | ✓ |
-| `compliance/areas/rh/sancoes.html` | 5 | — | 0 | ✓ | — | — |
+| `compliance/areas/rh/sancoes.html` | 5 | — | 0* | ✓ | — | ✓ |
+
+*Sanções não tem cards bloqueados ativos, mas o pattern de `anyStepLocked()` + `hf-final-lock` está implementado e pronto para uso futuro.
 
 ---
 
