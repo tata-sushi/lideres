@@ -32,7 +32,7 @@ const CONFIG = {
     cargo:         'Cargo',
     status:        'Status',           // Ativo / Inativo
     unidade:       'Unidade',          // Itaim / Pinheiros / PUC
-    departamento:  'Departamento',     // Sushibar, Salão, Cozinha, RH, etc
+    departamento:  'Departamento',     // Sushibar, Salão, Cozinha, RH, etc (col F)
     idPessoa:      'ID Pessoa',        // ID interno usado para vincular hierarquia
     supervisor:    'ID Superior',      // ID Pessoa do supervisor
     nomeSuperior:  'Nome do Superior', // Apenas para validação visual
@@ -42,7 +42,8 @@ const CONFIG = {
 
   // Colunas opcionais — sem erro se ausentes na planilha
   COLUNAS_OPCIONAIS: {
-    dataNascimento: 'Data de Nascimento'
+    dataNascimento: 'Data de Nascimento',
+    cargoId:        'cargo_id'
   },
 
   CACHE_FOTOS_MIN: 5,
@@ -115,7 +116,9 @@ function lerPlanilha() {
 
   const idxOpt = {};
   Object.keys(CONFIG.COLUNAS_OPCIONAIS || {}).forEach(key => {
-    idxOpt[key] = headers.indexOf(CONFIG.COLUNAS_OPCIONAIS[key]);
+    // lastIndexOf para cargo_id porque a planilha tem duas colunas com esse nome;
+    // a que interessa (CES) é sempre a mais à direita
+    idxOpt[key] = headers.lastIndexOf(CONFIG.COLUNAS_OPCIONAIS[key]);
   });
 
   const resultado = [];
@@ -149,7 +152,8 @@ function lerPlanilha() {
       nivel: detectarNivel(cargo),
       unitClass: classeUnidade(unidade),
       admissao: isoDate(row[idx.admissao]),
-      dataNascimento: idxOpt.dataNascimento >= 0 ? isoDate(row[idxOpt.dataNascimento]) : null
+      dataNascimento: idxOpt.dataNascimento >= 0 ? isoDate(row[idxOpt.dataNascimento]) : null,
+      cargoId: idxOpt.cargoId >= 0 ? String(row[idxOpt.cargoId]).trim() || null : null
     });
   }
 

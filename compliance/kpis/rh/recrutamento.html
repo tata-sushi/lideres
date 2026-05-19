@@ -52,9 +52,11 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .dashboard { padding-top: 14px; padding-bottom: 80px; }
 
 body:not([data-view="dashboard"]) .kpis-wrap,
+body:not([data-view="dashboard"]) .dash-filters-wrap,
 body[data-view="dashboard"] .filters-wrap,
 body[data-view="dashboard"] .content { display: none; }
 body:not([data-view="dashboard"]) #dashboard { display: none; }
+.dash-filters-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
 
 .tabs { display: flex; overflow-x: auto; background: var(--surface); border-bottom: 2px solid var(--border); scrollbar-width: none; -ms-overflow-style: none; }
 .tabs::-webkit-scrollbar { display: none; }
@@ -159,6 +161,7 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
 @media (min-width: 768px) {
   .content { max-width: 800px; margin: 0 auto; padding: 24px 32px 80px; }
   .filters-wrap { max-width: 800px; margin: 0 auto; }
+  .dash-filters-wrap { max-width: 800px; margin: 0 auto; }
   .kpis-wrap { max-width: 800px; margin: 0 auto; }
   .chart-card { max-width: 800px; margin: 0 auto; }
   .dash-subtabs { max-width: 800px; margin: 0 auto; }
@@ -312,6 +315,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <span class="kpi-sub"><strong id="kpi-teste-hoje">0</strong> hoje / <strong id="kpi-teste-mes">0</strong> mês</span>
   </div>
 </div>
+<div class="dash-filters-wrap" id="dash-filters-wrap"></div>
 <div class="dashboard" id="dashboard">
   <div class="chart-card" id="chartCardFunil">
     <div class="chart-title">Funil de Recrutamento 2026</div>
@@ -554,6 +558,7 @@ var state = {
   tab: 'entrevistas',
   dashSrc: 'entrevistas',
   filters: { unidade: 'Todos', departamento: 'Todos', data: 'Todos', entrevistador: 'Todos', status: 'Todos' },
+  dashFilters: { unidade: 'Todos', departamento: 'Todos', periodo: 'Todos' },
   loading: true,
   error: null
 };
@@ -800,6 +805,33 @@ function getStatusOpts() {
   return unique(src.map(function(r){ return state.tab==='entrevistas' ? r.status_entrevista : r.status_final; }));
 }
 
+// ─── Filtros do Dashboard (unidade, departamento, período) ───────────────────
+function applyDashFilters(rows) {
+  var f = state.dashFilters;
+  if (!f) return rows;
+  if (f.unidade==='Todos' && f.departamento==='Todos' && f.periodo==='Todos') return rows;
+  return rows.filter(function(r) {
+    if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
+    if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
+    if (f.periodo!=='Todos' && dataToMY(r.data)!==f.periodo) return false;
+    return true;
+  });
+}
+
+function getDashPeriodos() {
+  var srcAll = (entrevistas||[]).concat(testes||[]);
+  var seen = {}, out = [];
+  srcAll.forEach(function(r){
+    var my = dataToMY(r.data);
+    if (my && !seen[my]) { seen[my] = true; out.push(my); }
+  });
+  out.sort(function(a,b){
+    var pa = a.split('/'), pb = b.split('/');
+    return new Date(parseInt(pa[1]),parseInt(pa[0])-1,1) - new Date(parseInt(pb[1]),parseInt(pb[0])-1,1);
+  });
+  return out;
+}
+
 // ─── Loading / Error ──────────────────────────────────────────────────────────
 function showLoading() { document.getElementById('loading-overlay').classList.add('show'); }
 function hideLoading() { document.getElementById('loading-overlay').classList.remove('show'); }
@@ -844,6 +876,43 @@ function renderFilters() {
   html+='</div><div class="filters-actions"><button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>';
   html+='<span class="results-count"><span>'+filtered.length+'</span> resultado(s)</span></div>';
   document.getElementById('filters-wrap').innerHTML=html;
+}
+
+function renderDashFilters() {
+  var wrap = document.getElementById('dash-filters-wrap');
+  if (!wrap) return;
+  var srcAll = (entrevistas||[]).concat(testes||[]);
+  var f = state.dashFilters;
+  function sel(label, key, opts, curVal) {
+    var h='<div class="filter-group"><label class="filter-label">'+label+'</label><select class="filter-select" onchange="setDashFilter(\''+key+'\',this.value)">';
+    h+='<option value="Todos"'+(curVal==='Todos'?' selected':'')+'>Todos</option>';
+    opts.forEach(function(o){ h+='<option value="'+escH(o)+'"'+(curVal===o?' selected':'')+'>'+escH(o)+'</option>'; });
+    return h+'</select></div>';
+  }
+  var deptSrc = f.unidade==='Todos' ? srcAll : srcAll.filter(function(r){return r.unidade===f.unidade;});
+  var html='<div class="filters-row">';
+  html+=sel('Unidade','unidade',unique(srcAll.map(function(r){return r.unidade;})),f.unidade);
+  html+=sel('Departamento','departamento',unique(deptSrc.map(function(r){return r.departamento;})),f.departamento);
+  html+=sel('Período','periodo',getDashPeriodos(),f.periodo);
+  html+='</div><div class="filters-actions"><button class="btn-clear" onclick="clearDashFilters()">Limpar filtros</button></div>';
+  wrap.innerHTML=html;
+}
+
+function setDashFilter(key, val) {
+  state.dashFilters[key] = val;
+  if (key==='unidade') state.dashFilters.departamento = 'Todos';
+  _cfMes = null;
+  _cfFunilIdx = null;
+  _cfRecrutador = null;
+  render();
+}
+
+function clearDashFilters() {
+  state.dashFilters = { unidade: 'Todos', departamento: 'Todos', periodo: 'Todos' };
+  _cfMes = null;
+  _cfFunilIdx = null;
+  _cfRecrutador = null;
+  render();
 }
 
 // ─── Cards ────────────────────────────────────────────────────────────────────
@@ -933,8 +1002,8 @@ function contarSemana(rows, excluir) {
 }
 
 function renderKPIs() {
-  var e = contarSemana(entrevistas, function(r){ return isHorarioZero(r.horario); });
-  var t = contarSemana(testes, function(r){ return isValorZero(r.pretensao); });
+  var e = contarSemana(applyDashFilters(entrevistas), function(r){ return isHorarioZero(r.horario); });
+  var t = contarSemana(applyDashFilters(testes), function(r){ return isValorZero(r.pretensao); });
   document.getElementById('kpi-entrev-semana').textContent = e.semana;
   document.getElementById('kpi-entrev-hoje').textContent = e.hoje;
   document.getElementById('kpi-entrev-mes').textContent = e.mes;
@@ -955,7 +1024,7 @@ function dataToMY(s) {
 // apenas a exclusão de registros sem horário/valor; ignora filtros da lista
 // (que pertencem à aba Entrevistas/Testes).
 function getFilteredForChart() {
-  var src = state.dashSrc==='entrevistas' ? entrevistas : testes;
+  var src = applyDashFilters(state.dashSrc==='entrevistas' ? entrevistas : testes);
   var rows;
   if (_cfFunilIdx !== null) {
     rows = _applyFunilFilter(src);
@@ -1111,7 +1180,9 @@ function renderStatusTable() {
 function renderChartRecrutador() {
   var canvas = document.getElementById('cRecrutador');
   if (!canvas || typeof Chart === 'undefined') return;
-  var src = entrevistas.filter(_funilDentroPeriodo);
+  var entrevistasDash = applyDashFilters(entrevistas);
+  var testesDash      = applyDashFilters(testes);
+  var src = entrevistasDash.filter(_funilDentroPeriodo);
   if (_cfMes) src = src.filter(function(r){ return dataToMY(r.data) === _cfMes; });
   var counts = {};
   src.forEach(function(r) {
@@ -1126,13 +1197,13 @@ function renderChartRecrutador() {
 
   // Contratados por recrutador: cruza testes (status_final=contratado) com entrevistas pelo nome
   var recrutadorMap = {};
-  entrevistas.filter(_funilDentroPeriodo).forEach(function(r) {
+  entrevistasDash.filter(_funilDentroPeriodo).forEach(function(r) {
     var k = norm((r.nome||'').toLowerCase().trim());
     if (k && !recrutadorMap[k]) recrutadorMap[k] = (r.recrutador||'').trim();
   });
   var contratadosPorRec = {};
   var contratadoSeen = {};
-  testes.filter(function(r) {
+  testesDash.filter(function(r) {
     if (!_funilDentroPeriodo(r)) return false;
     if (_cfMes && dataToMY(r.data) !== _cfMes) return false;
     return norm((r.status_final||'').toLowerCase()) === 'contratado';
@@ -1267,8 +1338,8 @@ function _funilDentroPeriodo(r) {
 }
 
 function buildFunnelData() {
-  var entrevistasBase = entrevistas.filter(_funilDentroPeriodo);
-  var testesBase      = testes.filter(_funilDentroPeriodo);
+  var entrevistasBase = applyDashFilters(entrevistas).filter(_funilDentroPeriodo);
+  var testesBase      = applyDashFilters(testes).filter(_funilDentroPeriodo);
   if (_cfMes) {
     entrevistasBase = entrevistasBase.filter(function(r){ return dataToMY(r.data) === _cfMes; });
     testesBase      = testesBase.filter(function(r){ return dataToMY(r.data) === _cfMes; });
@@ -1384,7 +1455,7 @@ function _applyFunilFilter(rows) {
   var out;
   if (stage.special === 'refs') {
     var refMap = {};
-    entrevistas.filter(_funilDentroPeriodo).forEach(function(r){
+    applyDashFilters(entrevistas).filter(_funilDentroPeriodo).forEach(function(r){
       var k = norm((r.nome||'').toLowerCase().trim());
       if (!k || refMap[k]) return;
       refMap[k] = norm((r.referencia||'').toLowerCase().trim());
@@ -1522,6 +1593,8 @@ function render() {
   if (state.error)   { showError(state.error); return; }
   (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};document.getElementById('footer-date').textContent='Atualizado: '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());})();
   if (state.tab === 'dashboard') {
+    renderKPIs();
+    renderDashFilters();
     renderChartRecrut();
     renderStatusTable();
     renderFunil();
