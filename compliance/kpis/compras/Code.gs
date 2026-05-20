@@ -167,15 +167,15 @@ function getCatalogo() {
     var label        = String(r[1] || '').trim();
     var fornecedor   = String(r[2] || '').trim();
     var prazoEntrega = String(r[3] || '').trim();
-    var fatorCompra  = Number(r[4]) || 0;
-    var pedidoMinimo = Number(r[5]) || 0;
+    var fatorCompra  = r[4] !== '' ? String(r[4]) : '';
+    var pedidoMinimo = r[5] !== '' ? String(r[5]) : '';
     var nome         = String(r[6] || '').trim();
     var un           = String(r[7] || '').trim();
     var ativo        = r[8] === true || String(r[8]).toUpperCase() === 'TRUE';
 
     if (!key || !nome || !ativo) return;
     if (!catalogo[key]) catalogo[key] = { label: label, produtos: [] };
-    var multiplo = Number(r[9]) || 0;
+    var multiplo = r[9] !== '' ? String(r[9]) : '';
     catalogo[key].produtos.push({ nome: nome, un: un, fornecedor: fornecedor, prazoEntrega: prazoEntrega, fatorCompra: fatorCompra, pedidoMinimo: pedidoMinimo, multiplo: multiplo });
   });
 
