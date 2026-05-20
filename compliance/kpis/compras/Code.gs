@@ -43,7 +43,9 @@ var PED_HEADER = [
   // Identificação extra  (coluna R, índice 17)
   'departamento',         // departamento do solicitante (ex.: salao, cozinha, gerencia)
   // Compras — previsão   (coluna S, índice 18)
-  'dataEntregaPrevista'   // data prevista de entrega definida por Compras
+  'dataEntregaPrevista',  // data prevista de entrega definida por Compras
+  // Vencimento           (coluna T, índice 19)
+  'dataVencimento'        // data de vencimento da nota fiscal
 ];
 
 // Aba PedidoItens: uma linha por item, join via pedidoId
@@ -268,7 +270,8 @@ function rowParaPedido(r) {
     obsEstoque:          String(r[15] || ''),
     status:              String(r[16] || 'solicitado'),
     departamento:        String(r[17] || ''),
-    dataEntregaPrevista: String(r[18] || '')
+    dataEntregaPrevista: String(r[18] || ''),
+    dataVencimento:      String(r[19] || '')
   };
 }
 
@@ -421,6 +424,7 @@ function updateEstoque(body) {
   shP.getRange(rowIdx, 15).setValue(body.recebidoPor || '');
   shP.getRange(rowIdx, 16).setValue(body.obsEstoque  || '');
   shP.getRange(rowIdx, 17).setValue(novoStatus);
+  if (body.dataVencimento) shP.getRange(rowIdx, 20).setValue(body.dataVencimento); // col T
 
   return { id: id, idDisplay: novoDisplay, status: novoStatus, parcial: temDivergencia };
 }
