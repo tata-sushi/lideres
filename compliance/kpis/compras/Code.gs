@@ -14,7 +14,7 @@ var TZ = 'America/Sao_Paulo';
 // ── Cabeçalhos das abas ───────────────────────────────────────
 
 var CAT_HEADER = [
-  'categoriaKey', 'categoriaLabel', 'fornecedor', 'prazoEntrega', 'fatorCompra', 'pedidoMinimo', 'produtoNome', 'unidade', 'ativo'
+  'categoriaKey', 'categoriaLabel', 'fornecedor', 'prazoEntrega', 'fatorCompra', 'pedidoMinimo', 'produtoNome', 'unidade', 'ativo', 'multiplo'
 ];
 
 // Aba Pedidos: uma linha por pedido, atualizada pelos 3 estágios
@@ -175,7 +175,8 @@ function getCatalogo() {
 
     if (!key || !nome || !ativo) return;
     if (!catalogo[key]) catalogo[key] = { label: label, produtos: [] };
-    catalogo[key].produtos.push({ nome: nome, un: un, fornecedor: fornecedor, prazoEntrega: prazoEntrega, fatorCompra: fatorCompra, pedidoMinimo: pedidoMinimo });
+    var multiplo = Number(r[9]) || 0;
+    catalogo[key].produtos.push({ nome: nome, un: un, fornecedor: fornecedor, prazoEntrega: prazoEntrega, fatorCompra: fatorCompra, pedidoMinimo: pedidoMinimo, multiplo: multiplo });
   });
 
   return { catalogo: catalogo };

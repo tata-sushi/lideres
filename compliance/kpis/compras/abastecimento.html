@@ -224,14 +224,17 @@ textarea.fctrl { resize: vertical; min-height: 70px; font-family: 'DM Sans', san
 .cat-name { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; color: var(--carbon); }
 .cat-remove { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 2px; transition: color 0.15s; }
 .cat-remove:hover { color: #E53E3E; }
-.cat-table-wrap { overflow-x: auto; }
-.cat-table { width: 100%; border-collapse: collapse; }
-.cat-table th { font-family: 'DM Mono', monospace; font-size: 8.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); padding: 8px 14px; background: var(--surface); border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
-.cat-table th:last-child { text-align: right; width: 90px; }
-.cat-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 13px; background: var(--surface); vertical-align: middle; }
-.cat-table tr:last-child td { border-bottom: none; }
-.cat-table td.unit { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); white-space: nowrap; }
-.qty-input { width: 80px; text-align: right; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); background: var(--bg); display: block; margin-left: auto; transition: border-color 0.15s; }
+.cat-item-header { display: flex; align-items: center; padding: 6px 14px; border-bottom: 1px solid var(--border); }
+.cat-item { padding: 9px 14px; border-bottom: 1px solid var(--border); }
+.cat-item:last-child { border-bottom: none; }
+.cat-item-main { display: flex; align-items: center; gap: 8px; }
+.cat-item-sub { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-col-nome { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-col-nome.hdr { font-family: 'DM Mono', monospace; font-size: 8.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+.cat-col-num { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); width: 44px; text-align: center; flex-shrink: 0; }
+.cat-col-num.hdr { font-family: 'DM Mono', monospace; font-size: 8.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+.cat-col-qty { width: 72px; flex-shrink: 0; }
+.qty-input { width: 100%; text-align: right; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); background: var(--bg); display: block; transition: border-color 0.15s; }
 .qty-input:focus { outline: none; border-color: var(--carbon); background: #fff; }
 
 /* ── MODAL BAIXA NF ── */
@@ -853,7 +856,7 @@ async function carregarCatalogo() {
         convertido[key] = {
           label: c.label,
           produtos: (c.produtos || []).map(function(p) {
-            return { nome: p.nome, un: p.un, fornecedor: p.fornecedor || '', prazoEntrega: p.prazoEntrega || '', fatorCompra: p.fatorCompra || 0, pedidoMinimo: p.pedidoMinimo || 0 };
+            return { nome: p.nome, un: p.un, fornecedor: p.fornecedor || '', prazoEntrega: p.prazoEntrega || '', fatorCompra: p.fatorCompra || 0, pedidoMinimo: p.pedidoMinimo || 0, multiplo: p.multiplo || 0 };
           })
         };
       });
@@ -1332,25 +1335,39 @@ function renderCatSection(key) {
   var span=document.createElement('span'); span.className='cat-name'; span.textContent=cat.label;
   var btnRem=document.createElement('button'); btnRem.className='cat-remove'; btnRem.textContent='×'; btnRem.onclick=function(){removeCategoria(key);};
   hdr.appendChild(span); hdr.appendChild(btnRem);
-  var wrap=document.createElement('div'); wrap.className='cat-table-wrap';
-  var table=document.createElement('table'); table.className='cat-table';
-  var thead=document.createElement('thead'); var headRow=document.createElement('tr');
-  ['Produto','Fornecedor','Prazo','Fator','Mín. Pedido','Un.','Qtd'].forEach(function(h){var th=document.createElement('th');th.textContent=h;headRow.appendChild(th);});
-  thead.appendChild(headRow);
-  var tbody=document.createElement('tbody');
-  cat.produtos.forEach(function(p,i){
-    var tr=document.createElement('tr');
-    var td1=document.createElement('td'); td1.textContent=p.nome;
-    var td2=document.createElement('td'); td2.className='unit'; td2.textContent=p.fornecedor||'—';
-    var td3=document.createElement('td'); td3.className='unit'; td3.textContent=p.prazoEntrega||'—';
-    var td4=document.createElement('td'); td4.className='unit'; td4.textContent=p.fatorCompra||'—';
-    var td5=document.createElement('td'); td5.className='unit'; td5.textContent=p.pedidoMinimo||'—';
-    var td6=document.createElement('td'); td6.className='unit'; td6.textContent=p.un;
-    var td7=document.createElement('td');
-    var inp=document.createElement('input'); inp.type='number'; inp.className='qty-input'; inp.min='0'; inp.placeholder='—'; inp.id='qty-'+key+'-'+i;
-    td7.appendChild(inp); tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5); tr.appendChild(td6); tr.appendChild(td7); tbody.appendChild(tr);
+  // header row
+  var hdrRow=document.createElement('div'); hdrRow.className='cat-item-header';
+  var hNome=document.createElement('span'); hNome.className='cat-col-nome hdr'; hNome.textContent='Produto';
+  var hFator=document.createElement('span'); hFator.className='cat-col-num hdr'; hFator.textContent='Fator';
+  var hMin=document.createElement('span'); hMin.className='cat-col-num hdr'; hMin.textContent='Mín.';
+  var hMult=document.createElement('span'); hMult.className='cat-col-num hdr'; hMult.textContent='Múlt.';
+  var hQty=document.createElement('span'); hQty.className='cat-col-qty hdr'; hQty.style.cssText='font-family:"DM Mono",monospace;font-size:8.5px;font-weight:500;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);text-align:right;display:block;'; hQty.textContent='Qtd';
+  hdrRow.appendChild(hNome); hdrRow.appendChild(hFator); hdrRow.appendChild(hMin); hdrRow.appendChild(hMult); hdrRow.appendChild(hQty);
+  div.appendChild(hdr); div.appendChild(hdrRow);
+
+  // sort by fornecedor then nome
+  var sorted=cat.produtos.map(function(p,i){return {p:p,i:i};}).sort(function(a,b){
+    var fA=a.p.fornecedor||''; var fB=b.p.fornecedor||'';
+    return fA.localeCompare(fB,'pt-BR') || a.p.nome.localeCompare(b.p.nome,'pt-BR');
   });
-  table.appendChild(thead); table.appendChild(tbody); wrap.appendChild(table); div.appendChild(hdr); div.appendChild(wrap); container.appendChild(div);
+
+  sorted.forEach(function(obj){
+    var p=obj.p; var origIdx=obj.i;
+    var item=document.createElement('div'); item.className='cat-item';
+    var main=document.createElement('div'); main.className='cat-item-main';
+    var nomeEl=document.createElement('span'); nomeEl.className='cat-col-nome'; nomeEl.textContent=p.nome;
+    var fatorEl=document.createElement('span'); fatorEl.className='cat-col-num'; fatorEl.textContent=p.fatorCompra||'—';
+    var minEl=document.createElement('span'); minEl.className='cat-col-num'; minEl.textContent=p.pedidoMinimo||'—';
+    var multEl=document.createElement('span'); multEl.className='cat-col-num'; multEl.textContent=p.multiplo||'—';
+    var qtyEl=document.createElement('span'); qtyEl.className='cat-col-qty';
+    var inp=document.createElement('input'); inp.type='number'; inp.className='qty-input'; inp.min='0'; inp.placeholder='—'; inp.id='qty-'+key+'-'+origIdx;
+    qtyEl.appendChild(inp);
+    main.appendChild(nomeEl); main.appendChild(fatorEl); main.appendChild(minEl); main.appendChild(multEl); main.appendChild(qtyEl);
+    var sub=document.createElement('div'); sub.className='cat-item-sub';
+    sub.textContent=(p.fornecedor||'—')+(p.prazoEntrega?' · '+p.prazoEntrega:'');
+    item.appendChild(main); item.appendChild(sub); div.appendChild(item);
+  });
+  container.appendChild(div);
 }
 function removeCategoria(key) {
   activeCats=activeCats.filter(function(k){return k!==key;});
