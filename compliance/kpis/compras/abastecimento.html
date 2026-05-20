@@ -266,7 +266,7 @@ textarea.fctrl { resize: vertical; min-height: 70px; font-family: 'DM Sans', san
 .nf-un-input:focus { outline: none; border-color: var(--carbon); background: #fff; }
 .btn-add-item { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: transparent; border: 1px dashed var(--border); border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); cursor: pointer; transition: all 0.15s; width: 100%; }
 .btn-add-item:hover { border-color: var(--carbon); color: var(--carbon); }
-.bonus-row td { background: #FFFEF0; }
+.bonus-row td { background: #F0FFF4; }
 .nf-grand-total { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
 .nf-grand-label { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
 .nf-grand-value { font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 700; color: var(--carbon); }
@@ -1714,6 +1714,60 @@ function abrirModalNF(orderId, fornIdx) {
   document.getElementById('modal-nf').classList.add('active'); document.body.style.overflow='hidden';
 }
 
+function addBonificacaoRow() {
+  var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===nfOrderId){order=ORDERS[i];break;}}
+  var fornNome='—';
+  if(order){
+    var forn=order.fornecedores?order.fornecedores[nfFornIdx]:{nome:(order.raw&&order.raw.fornecedor)||'—'};
+    fornNome=forn.nome||'—';
+  }
+  var idx=nfBonusCount++;
+  var tbody=document.getElementById('nf-tbody');
+  var rowId='bon-'+idx;
+  var tr=document.createElement('tr'); tr.id=rowId+'-tr'; tr.className='bonus-row';
+
+  // PRODUTO — nome + fornecedor como legenda
+  var tdNome=document.createElement('td');
+  var inpNome=document.createElement('input'); inpNome.type='text'; inpNome.className='nf-txt-input'; inpNome.placeholder='Nome do item…'; inpNome.id=rowId+'-nome';
+  var lblForn=document.createElement('div'); lblForn.style.cssText='font-family:"DM Mono",monospace;font-size:9px;color:var(--muted);margin-top:3px;'; lblForn.textContent=fornNome;
+  tdNome.appendChild(inpNome); tdNome.appendChild(lblForn);
+
+  // UNIDADE
+  var tdUn=document.createElement('td'); tdUn.className='td-ped'; tdUn.style.textAlign='left';
+  var inpUn=document.createElement('input'); inpUn.type='text'; inpUn.className='nf-un-input'; inpUn.placeholder='un'; inpUn.id=rowId+'-un';
+  tdUn.appendChild(inpUn);
+
+  // VL. PEDIDO — não aplica
+  var tdVlPed=document.createElement('td'); tdVlPed.className='td-total'; tdVlPed.style.color='var(--muted)'; tdVlPed.textContent='—';
+
+  // RECEBIDO — input visível direto
+  var tdRec=document.createElement('td'); tdRec.style.textAlign='right';
+  var inpRec=document.createElement('input'); inpRec.type='number'; inpRec.className='nf-edit-input visible'; inpRec.min='0'; inpRec.placeholder='0'; inpRec.id=rowId+'-rec-inp';
+  inpRec.oninput=calcGrandTotal;
+  tdRec.appendChild(inpRec);
+
+  // VL. RECEBIDO — não aplica (bonificação = sem custo)
+  var tdVl=document.createElement('td'); tdVl.className='td-total'; tdVl.style.color='var(--muted)'; tdVl.textContent='—';
+
+  // TOTAL — não aplica
+  var tdTotal=document.createElement('td'); tdTotal.className='td-total'; tdTotal.textContent='—';
+
+  // BADGE BÔNUS
+  var tdDif=document.createElement('td'); tdDif.className='td-dif td-nao-rec-lbl'; tdDif.style.color='#2E7D32'; tdDif.textContent='BÔNUS';
+
+  // BOTÃO REMOVER
+  var tdBtn=document.createElement('td'); tdBtn.style.paddingLeft='4px';
+  var btn=document.createElement('button'); btn.className='btn-row-edit'; btn.title='Remover linha';
+  btn.innerHTML='<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  btn.onclick=function(){ tbody.removeChild(tr); };
+  tdBtn.appendChild(btn);
+
+  tr.appendChild(tdNome); tr.appendChild(tdUn); tr.appendChild(tdVlPed);
+  tr.appendChild(tdRec); tr.appendChild(tdVl); tr.appendChild(tdTotal); tr.appendChild(tdDif); tr.appendChild(tdBtn);
+  tbody.appendChild(tr);
+  inpNome.focus();
+}
+
 function addNFRow(item, idx, isBonus) {
   var tbody=document.getElementById('nf-tbody');
   var rowId = isBonus ? 'bon-'+idx : 'item-'+idx;
@@ -1889,8 +1943,7 @@ async function confirmarBaixaNF() {
     if(!inpNome||!inpNome.value.trim()) continue;
     var inpUn=document.getElementById(bonRowId+'-un');
     var inpRecB=document.getElementById(bonRowId+'-rec-inp');
-    var inpVlB=document.getElementById(bonRowId+'-vl-inp');
-    itensPdf.push({nome:inpNome.value.trim()+' (bonificação)',un:(inpUn&&inpUn.value)||'',qtdPedido:0,vlPedido:0,rec:parseFloat(inpRecB&&inpRecB.value)||0,vlRec:parseFloat(inpVlB&&inpVlB.value)||0});
+    itensPdf.push({nome:inpNome.value.trim()+' (bonificação)',un:(inpUn&&inpUn.value)||'',qtdPedido:0,vlPedido:0,rec:parseFloat(inpRecB&&inpRecB.value)||0,vlRec:0});
   }
   // Anexos
   var anexos=[];
