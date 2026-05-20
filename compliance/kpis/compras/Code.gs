@@ -14,7 +14,7 @@ var TZ = 'America/Sao_Paulo';
 // ── Cabeçalhos das abas ───────────────────────────────────────
 
 var CAT_HEADER = [
-  'categoriaKey', 'categoriaLabel', 'produtoNome', 'unidade', 'qtdMinima', 'ativo'
+  'categoriaKey', 'categoriaLabel', 'fornecedor', 'prazoEntrega', 'fatorCompra', 'pedidoMinimo', 'produtoNome', 'unidade', 'ativo'
 ];
 
 // Aba Pedidos: uma linha por pedido, atualizada pelos 3 estágios
@@ -163,16 +163,19 @@ function getCatalogo() {
   var catalogo = {};
 
   rows.forEach(function(r) {
-    var key    = String(r[0] || '').trim();
-    var label  = String(r[1] || '').trim();
-    var nome   = String(r[2] || '').trim();
-    var un     = String(r[3] || '').trim();
-    var qtdMin = Number(r[4]) || 0;
-    var ativo  = r[5] === true || String(r[5]).toUpperCase() === 'TRUE';
+    var key          = String(r[0] || '').trim();
+    var label        = String(r[1] || '').trim();
+    var fornecedor   = String(r[2] || '').trim();
+    var prazoEntrega = String(r[3] || '').trim();
+    var fatorCompra  = Number(r[4]) || 0;
+    var pedidoMinimo = Number(r[5]) || 0;
+    var nome         = String(r[6] || '').trim();
+    var un           = String(r[7] || '').trim();
+    var ativo        = r[8] === true || String(r[8]).toUpperCase() === 'TRUE';
 
     if (!key || !nome || !ativo) return;
     if (!catalogo[key]) catalogo[key] = { label: label, produtos: [] };
-    catalogo[key].produtos.push({ nome: nome, un: un, qtdMinima: qtdMin });
+    catalogo[key].produtos.push({ nome: nome, un: un, fornecedor: fornecedor, prazoEntrega: prazoEntrega, fatorCompra: fatorCompra, pedidoMinimo: pedidoMinimo });
   });
 
   return { catalogo: catalogo };
