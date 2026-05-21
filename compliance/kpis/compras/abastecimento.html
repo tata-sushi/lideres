@@ -1033,7 +1033,8 @@ function statusBackendParaUI(p) {
     comprado:         { cls:'b-aguardando',       lbl:'Aguardando recebimento', aba:'entregas' },
     parcial:          { cls:'b-aguardando',       lbl:'Aguardando recebimento', aba:'entregas' },
     parcial_entrega:  { cls:'b-parcial-entrega',  lbl:'Recebimento parcial',    aba:'entregas' },
-    recebido:         { cls:'b-concluido',        lbl:'Recebido',               aba:'pedidos' },
+    recebido:         { cls:'b-concluido',        lbl:'Recebido',               aba:'conferencia' },
+    conferido:        { cls:'b-conferido',        lbl:'Conferido',              aba:'pedidos' },
     cancelado:        { cls:'b-rascunho',         lbl:'Cancelado',              aba:'pedidos' }
   };
   return map[p.status] || { cls:'b-enviado', lbl:'Aguardando compra', aba:'processamento' };
@@ -1091,7 +1092,7 @@ async function pedidoParaUI(p) {
   function mapItens(itens) {
     return itens.map(function(it) {
       var catLabel = (CATALOGO[it.categoriaKey] && CATALOGO[it.categoriaKey].label) || it.categoriaKey;
-      var qty = (s.aba === 'entregas' && it.qtdComprada) ? Number(it.qtdComprada) : Number(it.qtdSolicitada) || 0;
+      var qty = ((s.aba === 'entregas' || s.aba === 'conferencia') && it.qtdComprada) ? Number(it.qtdComprada) : Number(it.qtdSolicitada) || 0;
       return {
         cat:         catLabel,
         nome:        it.produtoNome,
@@ -1123,7 +1124,7 @@ async function pedidoParaUI(p) {
 
   // Após Compras: agrupa itens por fornecedor (1 card por fornecedor na aba Recebimentos)
   var fornecedores = null;
-  if (p.status === 'comprado' || p.status === 'parcial' || p.status === 'recebido' || p.status === 'parcial_entrega') {
+  if (p.status === 'comprado' || p.status === 'parcial' || p.status === 'recebido' || p.status === 'parcial_entrega' || p.status === 'conferido') {
     var grupos = {};
     (p.itens || []).forEach(function(it) {
       var f = String(it.fornecedor || '').trim() || String(p.fornecedor || '—');
@@ -1220,6 +1221,10 @@ document.addEventListener('DOMContentLoaded', async function() {
   if (!session || !session.displayName) return;
   var userName = session.displayName;
   currentUser = { name: userName };
+  PERFIL = String(session.perfil || '').toLowerCase();
+  // Mostrar aba Conferência apenas para perfil escritorio
+  var tabConf = document.getElementById('tab-conferencia');
+  if (tabConf) tabConf.style.display = (PERFIL === 'escritorio') ? '' : 'none';
   var initials = userName.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase();
   // Abreviar nome: "João Silva Santos" → "João Santos"
   var headerUserName = userName;
@@ -1562,7 +1567,7 @@ async function enviarPedido() {
 }
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
-function renderAll() { renderFilters(); renderAba('pedidos'); renderAba('processamento'); renderAba('entregas'); }
+function renderAll() { renderFilters(); renderAba('pedidos'); renderAba('processamento'); renderAba('entregas'); renderConferencia(); }
 
 function dentroDe10Dias(o) {
   var raw = o.raw && o.raw.dataSolicitacao;
@@ -1649,7 +1654,8 @@ function renderFilters() {
     { value: 'b-enviado',        label: 'Aguardando compra' },
     { value: 'b-aguardando',     label: 'Aguardando recebimento' },
     { value: 'b-parcial-entrega',label: 'Recebimento parcial' },
-    { value: 'b-concluido',      label: 'Recebido' }
+    { value: 'b-concluido',      label: 'Recebido' },
+    { value: 'b-conferido',      label: 'Conferido' }
   ];
 
   function sel(label, key, opts, curVal, isObj) {
@@ -2035,6 +2041,264 @@ function removeFoto(e,idx) {
 
 function fecharModalNF() { document.getElementById('modal-nf').classList.remove('active'); document.body.style.overflow=''; nfOrderId=null; nfFornIdx=null; }
 
+// ── CONFERÊNCIA (Estágio 4 — Escritório) ─────────────────────────────────────
+
+var CONF_ORDERS = [];
+var confOrderId = null;
+
+async function carregarConferencias() {
+  if (!GAS_URL) { renderConferencia(); return; }
+  try {
+    var data = await gasGet({ action: 'getConferencias' });
+    if (data && data.conferencias) {
+      CONF_ORDERS = await Promise.all(data.conferencias.map(pedidoParaUI));
+    }
+  } catch(e) {
+    toast('Erro ao carregar conferências: ' + e.message);
+  }
+  renderConferencia();
+}
+
+function renderConferencia() {
+  var container = document.getElementById('page-conferencia');
+  if (!container) return;
+  if (carregando) { container.innerHTML = ''; return; }
+
+  // Filtra pedidos com aba='conferencia' (status recebido aguardando conferência)
+  var lista = ORDERS.filter(function(o) {
+    return o.aba === 'conferencia';
+  });
+
+  if (lista.length === 0) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">✓</div><p>Nenhum pedido aguardando conferência.</p></div>';
+    return;
+  }
+
+  var html = '<div style="display:flex;flex-direction:column;gap:12px;">';
+  lista.forEach(function(o) {
+    var raw = o.raw || {};
+    var fornNome = raw.fornecedor || '—';
+    var dataReceb = fmtDataBR(raw.dataRecebimento);
+    var recebidoPor = raw.recebidoPor || '—';
+    var titulo = 'Pedido ' + (o.idDisplay || ('#' + o.id));
+    html += '<div class="card">' +
+      '<div class="card-header"><div><div class="order-title">' + titulo + '</div></div>' +
+      '<span class="badge b-concluido">Recebido</span></div>' +
+      '<div class="card-body">' +
+        '<div class="card-col">' +
+          '<div class="card-field"><span class="field-label">Data do pedido</span><span class="field-value">' + o.data + '</span></div>' +
+          '<div class="card-field"><span class="field-label">Recebido em</span><span class="field-value">' + dataReceb + '</span></div>' +
+          '<div class="card-field"><span class="field-label">Recebido por</span><span class="field-value">' + recebidoPor + '</span></div>' +
+        '</div>' +
+        '<div class="card-col">' +
+          '<div class="card-field"><span class="field-label">Fornecedor</span><span class="field-value">' + fornNome + '</span></div>' +
+          '<div class="card-field"><span class="field-label">Categorias</span><span class="field-value">' + (o.cats.join(', ') || '—') + '</span></div>' +
+          '<div class="card-field"><span class="field-label">Itens</span><span class="field-value">' + o.itensList.length + ' produtos</span></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="card-footer" style="justify-content:flex-end;">' +
+        '<button class="btn-ver" onclick="abrirModalConferencia(\'' + o.id + '\')">' +
+          '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
+          ' Conferir' +
+        '</button>' +
+      '</div>' +
+    '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function abrirModalConferencia(orderId) {
+  var order = null;
+  for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === orderId) { order = ORDERS[i]; break; } }
+  if (!order) return;
+  confOrderId = orderId;
+  var raw = order.raw || {};
+
+  document.getElementById('conf-id').textContent = order.idDisplay || ('#' + orderId);
+  document.getElementById('conf-subtitle').textContent = order.cats.join(', ') + ' · ' + (raw.unidade || '');
+
+  // Referência do estoquista (somente leitura)
+  document.getElementById('conf-orig-quem').textContent = raw.recebidoPor || '—';
+  document.getElementById('conf-orig-data-receb').textContent = fmtDataBR(raw.dataRecebimento);
+  document.getElementById('conf-orig-obs').textContent = raw.obsEstoque || '—';
+
+  // Campos editáveis — NF
+  document.getElementById('conf-nf-numero').value = raw.notaFiscal || '';
+  document.getElementById('conf-nf-data-emissao').value = raw.dataCompra || '';
+  document.getElementById('conf-nf-data-receb').value = raw.dataRecebimento || '';
+  document.getElementById('conf-nf-data-venc').value = raw.dataVencimento || '';
+  document.getElementById('conf-obs').value = raw.obsEstoque || '';
+
+  // Fornecedor select
+  var selForn = document.getElementById('conf-nf-fornecedor');
+  selForn.innerHTML = '';
+  getFornecedores().forEach(function(f) {
+    var o = document.createElement('option');
+    o.value = f; o.textContent = f;
+    if (f === raw.fornecedor) o.selected = true;
+    selForn.appendChild(o);
+  });
+  if (raw.fornecedor && selForn.value !== raw.fornecedor) {
+    var oExtra = document.createElement('option'); oExtra.value = raw.fornecedor; oExtra.textContent = raw.fornecedor; oExtra.selected = true;
+    selForn.insertBefore(oExtra, selForn.firstChild);
+  }
+
+  // Quem recebeu select
+  var selQuem = document.getElementById('conf-nf-quem');
+  selQuem.innerHTML = '<option value="">Selecionar…</option>';
+  RECEBEDORES.forEach(function(r) { var o = document.createElement('option'); o.value = r; o.textContent = r; selQuem.appendChild(o); });
+  selQuem.value = raw.recebidoPor || '';
+
+  // Tabela de itens
+  var tbody = document.getElementById('conf-tbody');
+  tbody.innerHTML = '';
+  order.itensList.forEach(function(item, idx) {
+    var raw_item = (order.raw && order.raw.itens && order.raw.itens[idx]) || {};
+    var qtdRec = raw_item.qtdRecebida != null ? raw_item.qtdRecebida : item.qtdRecebida;
+    var qtdComp = raw_item.qtdComprada != null ? raw_item.qtdComprada : item.qtdComprada;
+    var qtdSol = raw_item.qtdSolicitada != null ? raw_item.qtdSolicitada : (item.qty || 0);
+    var vlUnit = item.vlPedido || 0;
+    var tr = document.createElement('tr');
+    var total = (Number(qtdRec) || 0) * vlUnit;
+    tr.innerHTML =
+      '<td>' + item.nome + '<br><span style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--muted);">' + (item.un || '') + '</span></td>' +
+      '<td class="td-ped" data-label="Pedido">' + qtdSol + '</td>' +
+      '<td class="td-ped" data-label="Comprado">' + qtdComp + '</td>' +
+      '<td data-label="Recebido" style="text-align:right;">' +
+        '<input type="number" class="nf-rec-input" id="conf-rec-' + idx + '" min="0" value="' + (qtdRec || '') + '" oninput="confRecalcTotal()">' +
+      '</td>' +
+      '<td data-label="Vl. Unit" style="text-align:right;">' +
+        '<input type="number" class="nf-vl-input" id="conf-vl-' + idx + '" min="0" step="0.01" value="' + (vlUnit || '') + '" oninput="confRecalcTotal()">' +
+      '</td>' +
+      '<td class="td-total" id="conf-total-' + idx + '" data-label="Total" style="text-align:right;">' +
+        (total > 0 ? 'R$ ' + total.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—') +
+      '</td>';
+    tbody.appendChild(tr);
+  });
+  confRecalcTotal();
+
+  document.getElementById('modal-conferencia').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function confRecalcTotal() {
+  var order = null;
+  for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
+  if (!order) return;
+  var grandTotal = 0;
+  order.itensList.forEach(function(item, idx) {
+    var rec = parseFloat((document.getElementById('conf-rec-' + idx) || {}).value) || 0;
+    var vl  = parseFloat((document.getElementById('conf-vl-' + idx)  || {}).value) || 0;
+    var total = rec * vl;
+    grandTotal += total;
+    var tdTotal = document.getElementById('conf-total-' + idx);
+    if (tdTotal) tdTotal.textContent = total > 0 ? 'R$ ' + total.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
+  });
+  var el = document.getElementById('conf-grand');
+  if (el) el.textContent = 'R$ ' + grandTotal.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function fecharModalConferencia() {
+  document.getElementById('modal-conferencia').classList.remove('active');
+  document.body.style.overflow = '';
+  confOrderId = null;
+}
+
+function _coletarDadosConferencia() {
+  var order = null;
+  for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
+  if (!order) return null;
+  var itens = order.itensList.map(function(item, idx) {
+    return {
+      produtoNome: item.nome,
+      qtdRecebida: parseFloat((document.getElementById('conf-rec-' + idx) || {}).value) || 0,
+      vlUnitario:  parseFloat((document.getElementById('conf-vl-'  + idx) || {}).value) || 0
+    };
+  });
+  return {
+    id:              confOrderId,
+    fornecedor:      document.getElementById('conf-nf-fornecedor').value,
+    notaFiscal:      document.getElementById('conf-nf-numero').value.trim(),
+    dataRecebimento: document.getElementById('conf-nf-data-receb').value,
+    dataVencimento:  document.getElementById('conf-nf-data-venc').value,
+    recebidoPor:     document.getElementById('conf-nf-quem').value,
+    obsEstoque:      document.getElementById('conf-obs').value.trim(),
+    itens:           itens
+  };
+}
+
+async function salvarConferencia() {
+  var dados = _coletarDadosConferencia();
+  if (!dados) { toast('Erro ao coletar dados.'); return; }
+  var nome = (currentUser && currentUser.name) || (window.__lideresUser) || '—';
+  dados.action = 'salvarConferencia';
+  dados.editadoPor = nome;
+  if (GAS_URL) {
+    try {
+      await gasPost(dados);
+      // Atualiza estado local do raw para refletir correções
+      var order = null;
+      for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
+      if (order && order.raw) {
+        order.raw.fornecedor      = dados.fornecedor;
+        order.raw.notaFiscal      = dados.notaFiscal;
+        order.raw.dataRecebimento = dados.dataRecebimento;
+        order.raw.dataVencimento  = dados.dataVencimento;
+        order.raw.recebidoPor     = dados.recebidoPor;
+        order.raw.obsEstoque      = dados.obsEstoque;
+        order.raw.editadoPor      = nome;
+      }
+      toast('Correção salva — ' + confOrderId);
+    } catch(e) {
+      toast('Erro ao salvar correção: ' + e.message);
+    }
+  } else {
+    toast('Correção salva localmente — ' + confOrderId);
+  }
+}
+
+async function confirmarConferencia() {
+  var dados = _coletarDadosConferencia();
+  if (!dados) { toast('Erro ao coletar dados.'); return; }
+  var nome = (currentUser && currentUser.name) || (window.__lideresUser) || '—';
+  dados.action = 'confirmarConferencia';
+  dados.conferidoPor = nome;
+  if (GAS_URL) {
+    try {
+      var res = await gasPost(dados);
+      // Atualiza estado local
+      var order = null;
+      for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
+      if (order) {
+        order.status = 'b-conferido';
+        order.label  = 'Conferido';
+        order.aba    = 'conferencia';
+        if (res && res.idDisplay) order.idDisplay = res.idDisplay;
+        if (order.raw) {
+          order.raw.status        = 'conferido';
+          order.raw.fornecedor    = dados.fornecedor;
+          order.raw.notaFiscal    = dados.notaFiscal;
+          order.raw.dataRecebimento = dados.dataRecebimento;
+          order.raw.dataVencimento  = dados.dataVencimento;
+          order.raw.recebidoPor   = dados.recebidoPor;
+          order.raw.obsEstoque    = dados.obsEstoque;
+          order.raw.conferidoPor  = nome;
+        }
+      }
+      toast('Conferência confirmada — ' + confOrderId);
+      fecharModalConferencia();
+      renderAll(); updateKPIs();
+    } catch(e) {
+      toast('Erro ao confirmar conferência: ' + e.message);
+    }
+  } else {
+    toast('Conferência confirmada localmente — ' + confOrderId);
+    fecharModalConferencia();
+    renderAll(); updateKPIs();
+  }
+}
+
 // ── CONFIRMAR BAIXA NF (Estágio 3 — Estoque) ─────────────────────────────────
 async function confirmarBaixaNF() {
   if(!document.getElementById('nf-numero').value.trim()){toast('Informe o número da NF.');return;}
@@ -2094,7 +2358,7 @@ async function confirmarBaixaNF() {
     var algumFeito = order.fornecedores.some(function(f){return f.status==='b-concluido';});
     var algumPend  = order.fornecedores.some(function(f){return f.status==='b-aguardando';});
     if(allDone){
-      order.status='b-concluido'; order.label='Recebido'; order.aba='pedidos';
+      order.status='b-concluido'; order.label='Recebido'; order.aba='conferencia';
     } else if(algumFeito && algumPend && order.fornecedores.length > 1){
       order.status='b-parcial-entrega'; order.label='Recebimento parcial'; order.aba='entregas';
     }
@@ -2113,7 +2377,9 @@ async function confirmarBaixaNF() {
       });
       if (res && res.idDisplay) order.idDisplay = res.idDisplay;
       if (res) {
-        if (res.status === 'parcial_entrega') {
+        if (res.status === 'recebido') {
+          order.status='b-concluido'; order.label='Recebido'; order.aba='conferencia';
+        } else if (res.status === 'parcial_entrega') {
           order.status='b-parcial-entrega'; order.label='Recebimento parcial'; order.aba='entregas';
         } else if (res.status === 'parcial') {
           order.status='b-aguardando'; order.label='Aguardando recebimento'; order.aba='entregas';
@@ -2157,7 +2423,7 @@ function updateKPIs() {
   var naSemana = lista.filter(function(o) { var d = dataPedido(o); return d && d >= ini7;  }).length;
   var noMes    = lista.filter(function(o) { var d = dataPedido(o); return d && d >= ini30; }).length;
 
-  var recebidosTotal = lista.filter(function(o) { return o.status === 'b-concluido';  }).length;
+  var recebidosTotal = lista.filter(function(o) { return o.status === 'b-concluido' || o.status === 'b-conferido';  }).length;
   var aguardCompra   = lista.filter(function(o) { return o.status === 'b-enviado';    }).length;
   var aguardReceb    = lista.filter(function(o) { return o.status === 'b-aguardando' || o.status === 'b-parcial-entrega'; }).length;
 
