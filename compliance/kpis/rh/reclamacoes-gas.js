@@ -123,8 +123,8 @@ function fieldValue(header, p) {
     'departamento':        p.departamento         || '',
     'valor_da_causa':      p.valor_da_causa !== undefined ? Number(p.valor_da_causa) || 0 : null,
     'valor_da_quitacao':   p.valor_da_quitacao !== undefined ? Number(p.valor_da_quitacao) || 0 : null,
-    'resultado':           p.resolucao            || '',
-    'resolucao':           p.resultado            || '',
+    'resultado':           p.resultado            || '',
+    'resolucao':           p.resolucao            || '',
     'obs':                 p.obs                  || ''
   };
   return h in map ? map[h] : null;
