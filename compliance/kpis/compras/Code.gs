@@ -14,7 +14,7 @@ var TZ = 'America/Sao_Paulo';
 // ── Cabeçalhos das abas ───────────────────────────────────────
 
 var CAT_HEADER = [
-  'categoriaKey', 'categoriaLabel', 'produtoNome', 'unidade', 'qtdMinima', 'ativo'
+  'categoriaKey', 'categoriaLabel', 'fornecedor', 'prazoEntrega', 'fatorCompra', 'pedidoMinimo', 'produtoNome', 'unidade', 'ativo', 'multiplo'
 ];
 
 // Aba Pedidos: uma linha por pedido, atualizada pelos 3 estágios
@@ -43,7 +43,14 @@ var PED_HEADER = [
   // Identificação extra  (coluna R, índice 17)
   'departamento',         // departamento do solicitante (ex.: salao, cozinha, gerencia)
   // Compras — previsão   (coluna S, índice 18)
-  'dataEntregaPrevista'   // data prevista de entrega definida por Compras
+  'dataEntregaPrevista',  // data prevista de entrega definida por Compras
+  // Vencimento           (coluna T, índice 19)
+  'dataVencimento',       // data de vencimento da nota fiscal
+  // Conferência          (colunas U-X, índices 20-23)
+  'editadoPor',           // usuário do escritório que salvou correção (col U, índice 20)
+  'dataUltimaEdicao',     // data/hora da última correção (col V, índice 21)
+  'conferidoPor',         // usuário do escritório que confirmou conferência (col W, índice 22)
+  'dataConferencia'       // data/hora da confirmação (col X, índice 23)
 ];
 
 // Aba PedidoItens: uma linha por item, join via pedidoId
@@ -122,10 +129,12 @@ function gerarId(unidade) {
 // solicitado         → #pinheiros0001
 // comprado           → #pinheiros0001c
 // recebido | parcial → #pinheiros0001cr
+// conferido          → #pinheiros0001crc
 function formatIdDisplay(id, status) {
   var sufixo = '';
-  if (status === 'comprado')                                           sufixo = 'c';
+  if (status === 'comprado')                                                          sufixo = 'c';
   if (status === 'recebido' || status === 'parcial' || status === 'parcial_entrega') sufixo = 'cr';
+  if (status === 'conferido')                                                         sufixo = 'crc';
   return '#' + id + sufixo;
 }
 
@@ -134,9 +143,10 @@ function formatIdDisplay(id, status) {
 function doGet(e) {
   try {
     var a = e.parameter.action;
-    if (a === 'getCatalogo') return jsonOk(getCatalogo());
-    if (a === 'getPedidos')  return jsonOk(getPedidos(e.parameter.unidade, e.parameter.perfil));
-    if (a === 'getPedido')   return jsonOk(getPedido(e.parameter.id));
+    if (a === 'getCatalogo')     return jsonOk(getCatalogo());
+    if (a === 'getPedidos')      return jsonOk(getPedidos(e.parameter.unidade, e.parameter.perfil));
+    if (a === 'getPedido')       return jsonOk(getPedido(e.parameter.id));
+    if (a === 'getConferencias') return jsonOk(getConferencias());
     return jsonErr('action inválida: ' + a);
   } catch(err) { return jsonErr(err.message); }
 }
@@ -145,10 +155,12 @@ function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
     var a    = body.action;
-    if (a === 'savePedido')    return jsonOk(savePedido(body));
-    if (a === 'updateCompras') return jsonOk(updateCompras(body));
-    if (a === 'updateEstoque') return jsonOk(updateEstoque(body));
-    if (a === 'updateStatus')  return jsonOk(updateStatus(body.id, body.status));
+    if (a === 'savePedido')          return jsonOk(savePedido(body));
+    if (a === 'updateCompras')       return jsonOk(updateCompras(body));
+    if (a === 'updateEstoque')       return jsonOk(updateEstoque(body));
+    if (a === 'updateStatus')        return jsonOk(updateStatus(body.id, body.status));
+    if (a === 'salvarConferencia')   return jsonOk(salvarConferencia(body));
+    if (a === 'confirmarConferencia')return jsonOk(confirmarConferencia(body));
     return jsonErr('action inválida: ' + a);
   } catch(err) { return jsonErr(err.message); }
 }
@@ -161,16 +173,20 @@ function getCatalogo() {
   var catalogo = {};
 
   rows.forEach(function(r) {
-    var key    = String(r[0] || '').trim();
-    var label  = String(r[1] || '').trim();
-    var nome   = String(r[2] || '').trim();
-    var un     = String(r[3] || '').trim();
-    var qtdMin = Number(r[4]) || 0;
-    var ativo  = r[5] === true || String(r[5]).toUpperCase() === 'TRUE';
+    var key          = String(r[0] || '').trim();
+    var label        = String(r[1] || '').trim();
+    var fornecedor   = String(r[2] || '').trim();
+    var prazoEntrega = String(r[3] || '').trim();
+    var fatorCompra  = r[4] !== '' ? String(r[4]) : '';
+    var pedidoMinimo = r[5] !== '' ? String(r[5]) : '';
+    var nome         = String(r[6] || '').trim();
+    var un           = String(r[7] || '').trim();
+    var ativo        = r[8] === true || String(r[8]).toUpperCase() === 'TRUE';
 
     if (!key || !nome || !ativo) return;
     if (!catalogo[key]) catalogo[key] = { label: label, produtos: [] };
-    catalogo[key].produtos.push({ nome: nome, un: un, qtdMinima: qtdMin });
+    var multiplo = r[9] !== '' ? String(r[9]) : '';
+    catalogo[key].produtos.push({ nome: nome, un: un, fornecedor: fornecedor, prazoEntrega: prazoEntrega, fatorCompra: fatorCompra, pedidoMinimo: pedidoMinimo, multiplo: multiplo });
   });
 
   return { catalogo: catalogo };
@@ -268,7 +284,12 @@ function rowParaPedido(r) {
     obsEstoque:          String(r[15] || ''),
     status:              String(r[16] || 'solicitado'),
     departamento:        String(r[17] || ''),
-    dataEntregaPrevista: String(r[18] || '')
+    dataEntregaPrevista: String(r[18] || ''),
+    dataVencimento:      String(r[19] || ''),
+    editadoPor:          String(r[20] || ''),
+    dataUltimaEdicao:    String(r[21] || ''),
+    conferidoPor:        String(r[22] || ''),
+    dataConferencia:     String(r[23] || '')
   };
 }
 
@@ -421,6 +442,7 @@ function updateEstoque(body) {
   shP.getRange(rowIdx, 15).setValue(body.recebidoPor || '');
   shP.getRange(rowIdx, 16).setValue(body.obsEstoque  || '');
   shP.getRange(rowIdx, 17).setValue(novoStatus);
+  if (body.dataVencimento) shP.getRange(rowIdx, 20).setValue(body.dataVencimento); // col T
 
   return { id: id, idDisplay: novoDisplay, status: novoStatus, parcial: temDivergencia };
 }
@@ -434,6 +456,124 @@ function updateStatus(id, status) {
   shP.getRange(rowIdx, 17).setValue(status);
   shP.getRange(rowIdx, 2).setValue(formatIdDisplay(id, status));
   return { id: id, status: status };
+}
+
+// ── ESTÁGIO 4 — Conferência (Escritório) ─────────────────────
+
+function getConferencias() {
+  var sh    = getOrCreateSheet('Pedidos', PED_HEADER);
+  var shI   = getOrCreateSheet('PedidoItens', ITEM_HEADER);
+  var rows  = todasLinhas(sh);
+  var iRows = todasLinhas(shI);
+
+  var itensPorPedido = {};
+  iRows.forEach(function(r) {
+    var pid = String(r[0] || '').trim();
+    if (!pid) return;
+    if (!itensPorPedido[pid]) itensPorPedido[pid] = [];
+    itensPorPedido[pid].push({
+      pedidoId:            pid,
+      categoriaKey:        String(r[1]  || ''),
+      produtoNome:         String(r[2]  || ''),
+      unidade:             String(r[3]  || ''),
+      qtdSolicitada:       Number(r[4]) || 0,
+      qtdComprada:         Number(r[5]) || 0,
+      qtdRecebida:         Number(r[6]) || 0,
+      obsItem:             String(r[7]  || ''),
+      fornecedor:          String(r[8]  || ''),
+      dataEntregaPrevista: String(r[9]  || ''),
+      dataRecebimento:     String(r[10] || '')
+    });
+  });
+
+  var pedidos = rows
+    .filter(function(r) {
+      if (!r[0]) return false;
+      return String(r[16]) === 'recebido';
+    })
+    .map(function(r) {
+      var p = rowParaPedido(r);
+      p.itens = itensPorPedido[p.id] || [];
+      return p;
+    });
+  return { conferencias: pedidos };
+}
+
+// body: { id, fornecedor, notaFiscal, dataEmissao, dataRecebimento, dataVencimento,
+//         recebidoPor, obsEstoque, editadoPor,
+//         itens: [{produtoNome, qtdRecebida, vlUnitario}] }
+function salvarConferencia(body) {
+  var id     = String(body.id || '');
+  var shP    = getOrCreateSheet('Pedidos', PED_HEADER);
+  var rowIdx = _findRow(shP, id);
+  if (rowIdx === -1) throw new Error('Pedido não encontrado: ' + id);
+
+  // Atualiza campos editáveis da NF sem alterar status
+  if (body.fornecedor       != null) shP.getRange(rowIdx, 10).setValue(body.fornecedor);
+  if (body.notaFiscal       != null) shP.getRange(rowIdx, 12).setValue(body.notaFiscal);
+  if (body.dataRecebimento  != null) shP.getRange(rowIdx, 14).setValue(body.dataRecebimento);
+  if (body.recebidoPor      != null) shP.getRange(rowIdx, 15).setValue(body.recebidoPor);
+  if (body.obsEstoque       != null) shP.getRange(rowIdx, 16).setValue(body.obsEstoque);
+  if (body.dataVencimento   != null) shP.getRange(rowIdx, 20).setValue(body.dataVencimento);
+  // Conferência metadata
+  shP.getRange(rowIdx, 21).setValue(String(body.editadoPor || ''));   // col U
+  shP.getRange(rowIdx, 22).setValue(hoje());                           // col V
+
+  // Atualiza qtdRecebida e vlUnitario nos itens
+  if (Array.isArray(body.itens) && body.itens.length > 0) {
+    var shI  = getOrCreateSheet('PedidoItens', ITEM_HEADER);
+    var iAll = shI.getDataRange().getValues();
+    body.itens.forEach(function(upd) {
+      for (var i = 1; i < iAll.length; i++) {
+        if (String(iAll[i][0]) === id && String(iAll[i][2]) === String(upd.produtoNome)) {
+          if (upd.qtdRecebida != null) shI.getRange(i + 1, 7).setValue(Number(upd.qtdRecebida) || 0);
+          break;
+        }
+      }
+    });
+  }
+
+  return { id: id };
+}
+
+// body: { id, fornecedor, notaFiscal, dataEmissao, dataRecebimento, dataVencimento,
+//         recebidoPor, obsEstoque, conferidoPor,
+//         itens: [{produtoNome, qtdRecebida, vlUnitario}] }
+function confirmarConferencia(body) {
+  var id     = String(body.id || '');
+  var shP    = getOrCreateSheet('Pedidos', PED_HEADER);
+  var rowIdx = _findRow(shP, id);
+  if (rowIdx === -1) throw new Error('Pedido não encontrado: ' + id);
+
+  // Salva correções
+  if (body.fornecedor       != null) shP.getRange(rowIdx, 10).setValue(body.fornecedor);
+  if (body.notaFiscal       != null) shP.getRange(rowIdx, 12).setValue(body.notaFiscal);
+  if (body.dataRecebimento  != null) shP.getRange(rowIdx, 14).setValue(body.dataRecebimento);
+  if (body.recebidoPor      != null) shP.getRange(rowIdx, 15).setValue(body.recebidoPor);
+  if (body.obsEstoque       != null) shP.getRange(rowIdx, 16).setValue(body.obsEstoque);
+  if (body.dataVencimento   != null) shP.getRange(rowIdx, 20).setValue(body.dataVencimento);
+  // Conferência metadata
+  shP.getRange(rowIdx, 23).setValue(String(body.conferidoPor || ''));  // col W
+  shP.getRange(rowIdx, 24).setValue(hoje());                            // col X
+  // Atualiza status e idDisplay
+  shP.getRange(rowIdx, 17).setValue('conferido');
+  shP.getRange(rowIdx, 2).setValue(formatIdDisplay(id, 'conferido'));
+
+  // Atualiza qtdRecebida nos itens
+  if (Array.isArray(body.itens) && body.itens.length > 0) {
+    var shI  = getOrCreateSheet('PedidoItens', ITEM_HEADER);
+    var iAll = shI.getDataRange().getValues();
+    body.itens.forEach(function(upd) {
+      for (var i = 1; i < iAll.length; i++) {
+        if (String(iAll[i][0]) === id && String(iAll[i][2]) === String(upd.produtoNome)) {
+          if (upd.qtdRecebida != null) shI.getRange(i + 1, 7).setValue(Number(upd.qtdRecebida) || 0);
+          break;
+        }
+      }
+    });
+  }
+
+  return { id: id, idDisplay: formatIdDisplay(id, 'conferido'), status: 'conferido' };
 }
 
 // ── Helper interno ────────────────────────────────────────────

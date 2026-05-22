@@ -74,6 +74,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .s-procedente    { background: #FDEAEA; color: #7A1A1A; }
 .s-improcedente  { background: #F0F0F0; color: #555; }
 .s-aguardando    { background: #FFF4DC; color: #7A4A00; }
+.s-julgamento    { background: #EDE9FF; color: #3D1F8C; }
 .s-extinto       { background: #F0F0F0; color: #888; }
 
 .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
@@ -420,7 +421,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <option>Acordo</option>
           <option>Improcedente</option>
           <option>Aguardando Audiência</option>
-          <option>Em Andamento</option>
+          <option>Aguardando Julgamento</option>
         </select>
       </div>
       <div class="np-field">
@@ -540,6 +541,7 @@ function statusClass(r) {
   if (s.includes('acordo')) return 's-acordo';
   if (s.includes('procedente') && !s.includes('improcedente')) return 's-procedente';
   if (s.includes('improcedente')) return 's-improcedente';
+  if (s.includes('julgamento')) return 's-julgamento';
   if (s.includes('aguard')) return 's-aguardando';
   if (s.includes('extinto')) return 's-extinto';
   return 's-improcedente';
@@ -581,7 +583,7 @@ function updateAnoSelect() {
   populateSelect('fAno', Object.keys(anos).sort(), 'Todos');
 
   var resultados = {};
-  processos.forEach(function(p) { if (p.resolucao) resultados[p.resolucao] = true; });
+  processos.forEach(function(p) { if (p.resultado) resultados[p.resultado] = true; });
   populateSelect('fResultado', Object.keys(resultados).sort(), 'Todos');
 
   var unidades = {};
@@ -599,7 +601,7 @@ function passesCf(p, except) {
   var fUnidade = document.getElementById('fUnidade').value;
   var fDepto   = document.getElementById('fDepto').value;
   if (except !== 'ano'    && fAno   && getAno(p.notificacao) !== fAno) return false;
-  if (except !== 'status' && fRes   && p.resolucao !== fRes) return false;
+  if (except !== 'status' && fRes   && p.resultado !== fRes) return false;
   if (except !== 'depto'  && fDepto && (p.departamento || '') !== fDepto) return false;
   if (fUnidade && (p.unidade || '') !== fUnidade) return false;
   return true;
@@ -617,7 +619,7 @@ function applyFilters() {
       if (pts.length !== 3) return 0;
       return new Date(pts[2], pts[1] - 1, pts[0]).getTime();
     }
-    return toTs(b.notificacao) - toTs(a.notificacao);
+    return toTs(b.audiencia) - toTs(a.audiencia);
   });
   document.getElementById('count-shown').textContent = filtered.length;
   updateKPIs(filtered);
@@ -648,7 +650,7 @@ function renderCards(list) {
       + '<div>'
       + '<div class="reclamante-name">' + escH(p.reclamante) + '</div>'
       + '</div>'
-      + '<span class="status-badge ' + statusClass(p.resolucao) + '">' + escH(p.resolucao) + '</span>'
+      + '<span class="status-badge ' + statusClass(p.resultado) + '">' + escH(p.resultado) + '</span>'
       + '</div>'
       + '<div class="card-body">'
       + '<div class="card-field"><span class="field-label">Notificação</span><span class="field-value">' + escH(p.notificacao) + '</span></div>'
@@ -658,10 +660,10 @@ function renderCards(list) {
       + '<div class="card-field" style="grid-column:1/-1;"><span class="field-label">Solicitação</span><span class="field-value solicitacao">' + escH(p.solicitacao) + '</span></div>'
       + '</div>'
       + '<div class="card-footer">'
-      + '<div class="resolucao-text"><strong>Resolução:</strong> ' + escH(p.resultado) + '</div>'
-      + (isAberto(p.resolucao) ? '<button class="btn-editar" onclick="openEditProcesso(' + pIdx + ')">'
+      + '<div class="resolucao-text"><strong>Resolução:</strong> ' + escH(p.resolucao) + '</div>'
+      + '<button class="btn-editar" onclick="openEditProcesso(' + pIdx + ')">'
       + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
-      + ' Atualizar</button>' : '')
+      + ' Atualizar</button>'
       + '</div>'
       + '</div>';
   }).join('');
@@ -798,8 +800,8 @@ function renderCharts() {
   var anosData   = anosLabels.map(function(l) { return anosCounts[l]; });
   var anosExtras = anosLabels.map(function(l) { return fmtBRL(anosQuit[l] || 0); });
 
-  // Status chart — usa coluna E (resolucao) e respeita cross-filter de ano/depto
-  var statusKey  = function(p) { return p.resolucao || ''; };
+  // Status chart — usa coluna E (resultado) e respeita cross-filter de ano/depto
+  var statusKey  = function(p) { return p.resultado || ''; };
   var statusCounts = groupBy(statusRows, statusKey);
   var statusQuit   = sumQuitacaoBy(statusRows, statusKey);
   var statusEntries = Object.keys(statusCounts).map(function(k) { return [k, statusCounts[k]]; });
@@ -921,8 +923,8 @@ function openEditProcesso(idx) {
   document.getElementById('np-departamento').value      = p.departamento;
   document.getElementById('np-valor-causa').value       = p.valorCausa || '';
   document.getElementById('np-valor-quitacao').value    = p.valorQuitacao || '';
-  document.getElementById('np-resultado').value         = p.resolucao || '';
-  document.getElementById('np-resolucao').value         = p.resultado || '';
+  document.getElementById('np-resultado').value         = p.resultado || '';
+  document.getElementById('np-resolucao').value         = p.resolucao || '';
   document.getElementById('np-obs').value               = p.obs || '';
   document.getElementById('np-overlay').classList.add('open');
 }
