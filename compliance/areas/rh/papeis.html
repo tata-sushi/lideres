@@ -26,12 +26,10 @@ html, body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(-
 }
 .header-left { display:flex; align-items:center; gap:10px; }
 .header-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
-.header-icon { width:28px; height:28px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r); display:flex; align-items:center; justify-content:center; }
-.header-icon svg { width:14px; height:14px; stroke:var(--citric); fill:none; stroke-width:2; stroke-linecap:round; }
-.header-title { font-size:14px; font-weight:600; color:var(--t1); }
+.header-logo { height:34px; flex-shrink:0; display:block; }
 .header-user { font-family:"DM Mono",monospace; font-size:10px; font-weight:500; color:var(--t1); background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:0 10px; height:28px; display:inline-flex; align-items:center; letter-spacing:0.5px; text-transform:uppercase; }
-.header-plus { height:30px; padding:0 12px; background:var(--citric); border:none; border-radius:var(--r); display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; flex-shrink:0; font-family:"DM Mono",monospace; font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--carbon); white-space:nowrap; }
-.header-plus svg { width:12px; height:12px; stroke:var(--carbon); fill:none; stroke-width:2.8; stroke-linecap:round; }
+.header-plus { width:28px; height:28px; background:var(--citric); border:none; border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
+.header-plus svg { width:14px; height:14px; stroke:var(--carbon); fill:none; stroke-width:2.8; stroke-linecap:round; }
 
 /* ── HERO (Nosso Propósito) ───────────────────────────────── */
 .hero { padding:36px 24px 12px; max-width:1100px; margin:0 auto; }
@@ -212,6 +210,7 @@ html, body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(-
 }
 @media (min-width:768px) {
   .header { padding:0 40px; height:60px; }
+  .header-logo { height:40px; }
   .hero { padding:64px 40px 16px; }
   .pillars { padding:48px 40px 16px; }
   .hero-divider { padding:0 40px; margin-top:32px; }
@@ -229,11 +228,84 @@ html, body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(-
 </head>
 <body>
 
-<header class="header">
-  <div class="header-left">
-    <div class="header-icon">
-      <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+<!-- ══ AUTH GATE — session guard (lideres) ══════════════════════ -->
+<style>
+html[data-auth="pending"] body > *:not(#auth-gate) { visibility: hidden; }
+html[data-auth="denied"]  body > *:not(#auth-gate) { display: none !important; }
+html[data-auth="ok"]      #auth-gate               { display: none !important; }
+#auth-gate { position:fixed; inset:0; z-index:99999; background:#F4F4F4; color:#35383F;
+  display:flex; align-items:center; justify-content:center; padding:24px; font-family:"DM Sans",sans-serif; }
+#auth-gate .gate-box { max-width:420px; width:100%; background:#FFF; border:1px solid #E2E2E2;
+  border-radius:16px; padding:32px 28px; text-align:center; }
+#auth-gate h2 { font-size:20px; font-weight:700; margin-bottom:10px; color:#111; }
+#auth-gate p  { font-size:14px; color:#555; line-height:1.55; margin-bottom:22px; }
+#auth-gate .gate-user { display:inline-block; font-family:"DM Mono",monospace; font-size:11px;
+  font-weight:600; color:#35383F; background:#F4F4F4; border:1px solid #E2E2E2;
+  border-radius:100px; padding:4px 10px; margin-bottom:18px; }
+#auth-gate .gate-btn { display:inline-flex; align-items:center; gap:8px; background:#35383F;
+  color:#FFF; border:none; border-radius:100px; padding:11px 22px; font-size:13px;
+  font-weight:600; text-decoration:none; }
+#auth-gate .gate-spin { width:28px; height:28px; border-radius:50%; border:3px solid #E2E2E2;
+  border-top-color:#35383F; animation:gate-spin .8s linear infinite; margin:0 auto 14px; }
+@keyframes gate-spin { to { transform:rotate(360deg); } }
+html[data-auth="pending"] #auth-gate .gate-denied  { display:none; }
+html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
+</style>
+<div id="auth-gate">
+  <div class="gate-box">
+    <div class="gate-loading">
+      <div class="gate-spin"></div>
+      <h2>Verificando acesso...</h2>
+      <p>Confirmando sua permissão.</p>
     </div>
+    <div class="gate-denied">
+      <h2>Sem acesso</h2>
+      <span class="gate-user" id="gate-user"></span>
+      <p>Seu perfil não possui permissão para esta página. Procure a Gestão.</p>
+      <a class="gate-btn" href="https://lideres.tatasushi.tech/">← Voltar ao Portal</a>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  document.documentElement.setAttribute('data-auth', 'pending');
+  var PORTAL_URL    = 'https://lideres.tatasushi.tech/';
+  var PAGE_ID       = 'governanca-areas-rh-papeis';
+  var PAGE_URL_FRAG = '/compliance/areas/rh/papeis';
+  var session;
+  try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
+  if (!session || !session.displayName || !session.expiresAt || session.expiresAt < Date.now()) {
+    window.location.replace(PORTAL_URL); return;
+  }
+  if (typeof session.perfil === 'undefined' || typeof session.paginas === 'undefined') {
+    localStorage.removeItem('lideres_session'); window.location.replace(PORTAL_URL); return;
+  }
+  var perfil  = (session.perfil || '').toLowerCase();
+  var paginas = Array.isArray(session.paginas) ? session.paginas : [];
+  var hasAccess = paginas.some(function(p) {
+    var id  = String(p && p.id  || '').toLowerCase();
+    var url = String(p && p.url || '').toLowerCase();
+    return id === PAGE_ID || url.indexOf(PAGE_URL_FRAG) !== -1;
+  });
+  if (!hasAccess) {
+    document.documentElement.setAttribute('data-auth', 'denied');
+    document.addEventListener('DOMContentLoaded', function() {
+      var u = document.getElementById('gate-user');
+      if (u) u.textContent = session.displayName;
+    });
+    return;
+  }
+  window.__lideresUser    = session.displayName;
+  window.__lideresSession = session;
+  window.__lideresPerfil  = perfil;
+  document.documentElement.setAttribute('data-auth', 'ok');
+})();
+</script>
+<!-- ══ /AUTH GATE ═══════════════════════════════════════════════ -->
+
+<div class="header">
+  <div class="header-left">
+    <img class="header-logo" src="/compliance/areas/institucional/logos/logocompliance.png" alt="TATÁ" height="34"/>
   </div>
   <div class="header-right">
     <span class="header-user" id="header-user">—</span>
@@ -241,7 +313,7 @@ html, body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(-
       <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </button>
   </div>
-</header>
+</div>
 
 <div class="page">
 
