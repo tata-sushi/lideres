@@ -10,18 +10,18 @@
  *
  *  ABA "Ferramentas":
  *    Col A  Timestamp | B Nome | C Categoria | D Descrição
- *    Col E  Departamentos | F Enviado Por
+ *    Col E  Departamentos | F Subsistemas RH | G Enviado Por
  *
  *  ABA "Parceiros":
  *    Col A  Timestamp | B Nome | C Categoria | D Descrição
- *    Col E  Departamentos | F Email | G WhatsApp | H Enviado Por
+ *    Col E  Departamentos | F Subsistemas RH | G Email | H WhatsApp | I Enviado Por
  *
  *  AÇÕES:
  *    GET  ?action=get                        → retorna aba Ferramentas (retrocompat.)
  *    GET  ?action=get&sheet=Parceiros        → retorna aba Parceiros
- *    POST { action:"add", nome, categoria, descricao, departamentos, enviado_por }
+ *    POST { action:"add", nome, categoria, descricao, departamentos, subsistemas_rh, enviado_por }
  *    POST { action:"add", sheet:"Parceiros", nome, categoria, descricao,
- *           departamentos, email, whatsapp, enviado_por }
+ *           departamentos, subsistemas_rh, email, whatsapp, enviado_por }
  * ══════════════════════════════════════════════════════════════════════════
  */
 
@@ -70,7 +70,7 @@ function lerRegistros(sheetName) {
   if (last < 2) return [];
 
   var isParceiros = (sheetName === 'Parceiros');
-  var numCols     = isParceiros ? 8 : 6;
+  var numCols     = isParceiros ? 9 : 7;
   var rows        = sheet.getRange(2, 1, last - 1, numCols).getValues();
   var result      = [];
 
@@ -78,14 +78,15 @@ function lerRegistros(sheetName) {
     var nome = String(r[1] || '').trim();
     if (!nome) return;
     var obj = {
-      nome:          nome,
-      categoria:     String(r[2] || '').trim(),
-      descricao:     String(r[3] || '').trim(),
-      departamentos: String(r[4] || '').trim(),
+      nome:           nome,
+      categoria:      String(r[2] || '').trim(),
+      descricao:      String(r[3] || '').trim(),
+      departamentos:  String(r[4] || '').trim(),
+      subsistemas_rh: String(r[5] || '').trim(),
     };
     if (isParceiros) {
-      obj.email    = String(r[5] || '').trim();
-      obj.whatsapp = String(r[6] || '').trim();
+      obj.email    = String(r[6] || '').trim();
+      obj.whatsapp = String(r[7] || '').trim();
     }
     result.push(obj);
   });
@@ -98,11 +99,12 @@ function lerRegistros(sheetName) {
 /* ────────────────────────────────────────────────── */
 function adicionarRegistro(p) {
   var sheetName = p.sheet || 'Ferramentas';
-  var nome      = String(p.nome        || '').trim();
-  var categoria = String(p.categoria   || '').trim();
-  var descricao = String(p.descricao   || '').trim();
-  var depto     = String(p.departamentos || '').trim();
-  var enviado   = String(p.enviado_por || '').trim();
+  var nome      = String(p.nome           || '').trim();
+  var categoria = String(p.categoria      || '').trim();
+  var descricao = String(p.descricao      || '').trim();
+  var depto     = String(p.departamentos  || '').trim();
+  var subsRH    = String(p.subsistemas_rh || '').trim();
+  var enviado   = String(p.enviado_por    || '').trim();
 
   if (!nome || !categoria || !descricao) {
     return { ok: false, message: 'Campos obrigatórios não preenchidos.' };
@@ -116,12 +118,12 @@ function adicionarRegistro(p) {
   var row;
 
   if (sheetName === 'Parceiros') {
-    row = [ts, nome, categoria, descricao, depto,
+    row = [ts, nome, categoria, descricao, depto, subsRH,
            String(p.email    || '').trim(),
            String(p.whatsapp || '').trim(),
            enviado];
   } else {
-    row = [ts, nome, categoria, descricao, depto, enviado];
+    row = [ts, nome, categoria, descricao, depto, subsRH, enviado];
   }
 
   sheet.appendRow(row);
