@@ -67,6 +67,9 @@ html, body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(-
 .tool-row:last-child { border-bottom:none; }
 .tool-row-top { display:flex; align-items:center; gap:10px; margin-bottom:5px; }
 .tool-row-name { font-size:13px; font-weight:600; color:var(--t1); flex:1; }
+.tool-edit-btn { width:26px; height:26px; background:transparent; border:1px solid var(--border); border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--t3); transition:border-color .15s,color .15s; flex-shrink:0; }
+.tool-edit-btn:hover { border-color:var(--carbon); color:var(--t1); }
+.tool-edit-btn svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 .tool-row-desc { font-size:12px; color:var(--t2); line-height:1.55; margin-bottom:8px; }
 .contact-links { display:flex; flex-wrap:wrap; gap:12px; margin-top:9px; }
 .contact-link {
@@ -609,11 +612,14 @@ function renderItems(data) {
     cats[c].push(t);
   });
 
+  _itemsById = {};
   var html = '';
   Object.keys(cats).forEach(function(cat, i) {
     var items = cats[cat];
     var id = 'acc-' + i;
-    var rowsHtml = items.map(function(t) {
+    var rowsHtml = items.map(function(t, j) {
+      var itemId = id + '-' + j;
+      _itemsById[itemId] = t;
       var depts = (t.departamentos||'').split(',').map(function(d){ return d.trim(); }).filter(Boolean);
       var pillsHtml = depts.map(function(d){ return '<span class="dept-pill">'+d+'</span>'; }).join('');
       var contactHtml = '';
@@ -626,8 +632,9 @@ function renderItems(data) {
         }
         contactHtml = '<div class="contact-links">'+links+'</div>';
       }
+      var editBtn = '<button class="tool-edit-btn" onclick="openEditForm(\''+itemId+'\')" title="Editar"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>';
       return '<div class="tool-row">'
-        + '<div class="tool-row-top"><span class="tool-row-name">'+t.nome+'</span></div>'
+        + '<div class="tool-row-top"><span class="tool-row-name">'+t.nome+'</span>'+editBtn+'</div>'
         + (t.descricao ? '<p class="tool-row-desc">'+t.descricao+'</p>' : '')
         + (pillsHtml ? '<div class="dept-pills">'+pillsHtml+'</div>' : '')
         + contactHtml
@@ -734,6 +741,7 @@ function closeFormModal(e) {
   if (e && e.target !== document.getElementById('form-modal-overlay')) return;
   document.getElementById('form-modal-overlay').classList.remove('open');
   document.body.style.overflow = '';
+  _resetForm();
 }
 
 /* ══════════════════════════════════════
@@ -782,33 +790,39 @@ function submitForm() {
   var whatsapp = document.getElementById('f-whatsapp').value.trim();
 
   var payload = {
-    action:        'add',
-    sheet:         SHEET_NAME,
-    nome:          nome,
-    categoria:     cat,
-    descricao:     desc,
-    departamentos: depts.join(', '),
+    action:         _editMode ? 'update' : 'add',
+    nome_original:  _editMode ? _editNomeOriginal : undefined,
+    sheet:          SHEET_NAME,
+    nome:           nome,
+    categoria:      cat,
+    descricao:      desc,
+    departamentos:  depts.join(', '),
     subsistemas_rh: subsRH.join(', '),
-    email:         email,
-    whatsapp:      whatsapp,
-    enviado_por:   lider
+    email:          email,
+    whatsapp:       whatsapp,
+    enviado_por:    lider
   };
 
   fetch(APPS_SCRIPT_URL, { method:'POST', body:JSON.stringify(payload) })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.ok) {
+        if (_editMode) {
+          document.querySelector('.form-success-title').textContent = 'Fornecedor atualizado!';
+          document.querySelector('.form-success-desc').textContent = 'As alterações foram salvas com sucesso.';
+        }
         document.getElementById('form-body').style.display = 'none';
         document.getElementById('form-footer').style.display = 'none';
         document.getElementById('form-success').style.display = 'block';
+        if (_editMode) { setTimeout(function(){ closeFormModal(); loadItems(); }, 1400); }
       } else {
-        btn.textContent = 'Acrescentar Fornecedor';
+        btn.textContent = _editMode ? 'Salvar Alterações' : 'Acrescentar Fornecedor';
         btn.disabled = false;
         alert('Erro: ' + (d.message || 'Tente novamente.'));
       }
     })
     .catch(function(){
-      btn.textContent = 'Acrescentar Fornecedor';
+      btn.textContent = _editMode ? 'Salvar Alterações' : 'Acrescentar Fornecedor';
       btn.disabled = false;
       alert('Erro ao enviar. Tente novamente.');
     });
@@ -823,6 +837,60 @@ function toggleTodos(label) {
   var val    = !cb.checked;
   cb.checked = val;
   checks.forEach(function(c){ c.checked = val; });
+}
+
+/* ── Edit state ── */
+var _itemsById = {};
+var _editMode = false;
+var _editNomeOriginal = null;
+
+function openEditForm(itemId) {
+  var t = _itemsById[itemId];
+  if (!t) return;
+  _editMode = true;
+  _editNomeOriginal = t.nome;
+  document.getElementById('f-nome').value = t.nome;
+  document.getElementById('f-cat').value = t.categoria;
+  document.getElementById('f-desc').value = t.descricao || '';
+  document.getElementById('desc-count').textContent = (t.descricao||'').length + '/200';
+  document.getElementById('f-email').value = t.email || '';
+  document.getElementById('f-whatsapp').value = t.whatsapp || '';
+  document.getElementById('f-todos').checked = false;
+  var depts = (t.departamentos||'').split(',').map(function(d){ return d.trim(); });
+  document.querySelectorAll('#dept-grid .dept-check-item input').forEach(function(inp){ inp.checked = depts.indexOf(inp.value) !== -1; });
+  var subs = (t.subsistemas_rh||'').split(',').map(function(d){ return d.trim(); });
+  document.querySelectorAll('.sub-rh-item input').forEach(function(inp){ inp.checked = subs.indexOf(inp.value) !== -1; });
+  var rhCb = document.querySelector('#dept-grid .dept-check-item input[value="RH"]');
+  var subSec = document.getElementById('sub-rh-section');
+  if (subSec) subSec.style.display = (rhCb && rhCb.checked) ? '' : 'none';
+  document.querySelector('.form-modal-title').textContent = 'Editar Fornecedor';
+  document.querySelector('.form-submit').textContent = 'Salvar Alterações';
+  document.getElementById('form-body').style.display = '';
+  document.getElementById('form-footer').style.display = '';
+  document.getElementById('form-success').style.display = 'none';
+  openFormModal();
+}
+
+function _resetForm() {
+  _editMode = false;
+  _editNomeOriginal = null;
+  document.getElementById('f-nome').value = '';
+  document.getElementById('f-cat').value = '';
+  document.getElementById('f-desc').value = '';
+  document.getElementById('desc-count').textContent = '0/200';
+  document.getElementById('f-email').value = '';
+  document.getElementById('f-whatsapp').value = '';
+  document.getElementById('f-todos').checked = false;
+  document.querySelectorAll('.dept-check-item input, .sub-rh-item input').forEach(function(inp){ inp.checked = false; });
+  var subSec = document.getElementById('sub-rh-section');
+  if (subSec) subSec.style.display = 'none';
+  document.querySelector('.form-modal-title').textContent = 'Acrescentar Fornecedor';
+  document.querySelector('.form-submit').textContent = 'Acrescentar Fornecedor';
+  document.querySelector('.form-success-title').textContent = 'Sugestão enviada!';
+  document.querySelector('.form-success-desc').textContent = 'Obrigado. O fornecedor será revisado e adicionado ao catálogo em breve.';
+  document.getElementById('form-body').style.display = '';
+  document.getElementById('form-footer').style.display = '';
+  document.getElementById('form-success').style.display = 'none';
 }
 
 /* ── Subsistemas RH: exibe só quando RH está marcado ── */
