@@ -10,11 +10,11 @@
  *
  *  ABA "Ferramentas":
  *    Col A  Timestamp | B Nome | C Categoria | D Descrição
- *    Col E  Departamentos | F Subsistemas RH | G Enviado Por
+ *    Col E  Departamentos | F Enviado Por | G Subsistemas RH
  *
  *  ABA "Parceiros":
  *    Col A  Timestamp | B Nome | C Categoria | D Descrição
- *    Col E  Departamentos | F Subsistemas RH | G Email | H WhatsApp | I Enviado Por
+ *    Col E  Departamentos | F Email | G WhatsApp | H Enviado Por | I Subsistemas RH
  *
  *  AÇÕES:
  *    GET  ?action=get                        → retorna aba Ferramentas (retrocompat.)
@@ -77,15 +77,19 @@ function lerRegistros(sheetName) {
     var nome = String(r[1] || '').trim();
     if (!nome) return;
     var obj = {
-      nome:           nome,
-      categoria:      String(r[2] || '').trim(),
-      descricao:      String(r[3] || '').trim(),
-      departamentos:  String(r[4] || '').trim(),
-      subsistemas_rh: String(r[5] || '').trim(),
+      nome:          nome,
+      categoria:     String(r[2] || '').trim(),
+      descricao:     String(r[3] || '').trim(),
+      departamentos: String(r[4] || '').trim(),
     };
     if (isParceiros) {
-      obj.email    = String(r[6] || '').trim();
-      obj.whatsapp = String(r[7] || '').trim();
+      obj.email          = String(r[5] || '').trim();
+      obj.whatsapp       = String(r[6] || '').trim();
+      // r[7] = Enviado Por (não retornado)
+      obj.subsistemas_rh = String(r[8] || '').trim();
+    } else {
+      // r[5] = Enviado Por (não retornado)
+      obj.subsistemas_rh = String(r[6] || '').trim();
     }
     result.push(obj);
   });
@@ -117,12 +121,12 @@ function adicionarRegistro(p) {
   var row;
 
   if (sheetName === 'Parceiros') {
-    row = [ts, nome, categoria, descricao, depto, subsRH,
+    row = [ts, nome, categoria, descricao, depto,
            String(p.email    || '').trim(),
            String(p.whatsapp || '').trim(),
-           enviado];
+           enviado, subsRH];
   } else {
-    row = [ts, nome, categoria, descricao, depto, subsRH, enviado];
+    row = [ts, nome, categoria, descricao, depto, enviado, subsRH];
   }
 
   sheet.appendRow(row);
@@ -163,12 +167,12 @@ function atualizarRegistro(p) {
   var ts  = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm:ss');
   var row;
   if (sheetName === 'Parceiros') {
-    row = [ts, nome, categoria, descricao, depto, subsRH,
+    row = [ts, nome, categoria, descricao, depto,
            String(p.email    || '').trim(),
            String(p.whatsapp || '').trim(),
-           enviado];
+           enviado, subsRH];
   } else {
-    row = [ts, nome, categoria, descricao, depto, subsRH, enviado];
+    row = [ts, nome, categoria, descricao, depto, enviado, subsRH];
   }
 
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
