@@ -10,18 +10,18 @@
  *
  *  ABA "Ferramentas":
  *    Col A  Timestamp | B Nome | C Categoria | D Descrição
- *    Col E  Departamentos | F Enviado Por
+ *    Col E  Departamentos | F Enviado Por | G Subsistemas RH
  *
  *  ABA "Parceiros":
  *    Col A  Timestamp | B Nome | C Categoria | D Descrição
- *    Col E  Departamentos | F Email | G WhatsApp | H Enviado Por
+ *    Col E  Departamentos | F Email | G WhatsApp | H Enviado Por | I Subsistemas RH
  *
  *  AÇÕES:
  *    GET  ?action=get                        → retorna aba Ferramentas (retrocompat.)
  *    GET  ?action=get&sheet=Parceiros        → retorna aba Parceiros
- *    POST { action:"add", nome, categoria, descricao, departamentos, enviado_por }
+ *    POST { action:"add", nome, categoria, descricao, departamentos, subsistemas_rh, enviado_por }
  *    POST { action:"add", sheet:"Parceiros", nome, categoria, descricao,
- *           departamentos, email, whatsapp, enviado_por }
+ *           departamentos, subsistemas_rh, email, whatsapp, enviado_por }
  * ══════════════════════════════════════════════════════════════════════════
  */
 
@@ -49,9 +49,8 @@ function doGet(e) {
 function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
-    if (body.action === 'add') {
-      return _json(adicionarRegistro(body));
-    }
+    if (body.action === 'add')    return _json(adicionarRegistro(body));
+    if (body.action === 'update') return _json(atualizarRegistro(body));
     return _json({ ok: false, message: 'acao_desconhecida: ' + body.action });
   } catch (err) {
     return _json({ ok: false, message: String(err) });
@@ -70,7 +69,7 @@ function lerRegistros(sheetName) {
   if (last < 2) return [];
 
   var isParceiros = (sheetName === 'Parceiros');
-  var numCols     = isParceiros ? 8 : 6;
+  var numCols     = isParceiros ? 9 : 7;
   var rows        = sheet.getRange(2, 1, last - 1, numCols).getValues();
   var result      = [];
 
@@ -84,8 +83,13 @@ function lerRegistros(sheetName) {
       departamentos: String(r[4] || '').trim(),
     };
     if (isParceiros) {
-      obj.email    = String(r[5] || '').trim();
-      obj.whatsapp = String(r[6] || '').trim();
+      obj.email          = String(r[5] || '').trim();
+      obj.whatsapp       = String(r[6] || '').trim();
+      // r[7] = Enviado Por (não retornado)
+      obj.subsistemas_rh = String(r[8] || '').trim();
+    } else {
+      // r[5] = Enviado Por (não retornado)
+      obj.subsistemas_rh = String(r[6] || '').trim();
     }
     result.push(obj);
   });
@@ -98,11 +102,12 @@ function lerRegistros(sheetName) {
 /* ────────────────────────────────────────────────── */
 function adicionarRegistro(p) {
   var sheetName = p.sheet || 'Ferramentas';
-  var nome      = String(p.nome        || '').trim();
-  var categoria = String(p.categoria   || '').trim();
-  var descricao = String(p.descricao   || '').trim();
-  var depto     = String(p.departamentos || '').trim();
-  var enviado   = String(p.enviado_por || '').trim();
+  var nome      = String(p.nome           || '').trim();
+  var categoria = String(p.categoria      || '').trim();
+  var descricao = String(p.descricao      || '').trim();
+  var depto     = String(p.departamentos  || '').trim();
+  var subsRH    = String(p.subsistemas_rh || '').trim();
+  var enviado   = String(p.enviado_por    || '').trim();
 
   if (!nome || !categoria || !descricao) {
     return { ok: false, message: 'Campos obrigatórios não preenchidos.' };
@@ -119,13 +124,59 @@ function adicionarRegistro(p) {
     row = [ts, nome, categoria, descricao, depto,
            String(p.email    || '').trim(),
            String(p.whatsapp || '').trim(),
-           enviado];
+           enviado, subsRH];
   } else {
-    row = [ts, nome, categoria, descricao, depto, enviado];
+    row = [ts, nome, categoria, descricao, depto, enviado, subsRH];
   }
 
   sheet.appendRow(row);
   return { ok: true, message: 'Registro adicionado com sucesso.' };
+}
+
+/* ────────────────────────────────────────────────── */
+/*  ATUALIZAR REGISTRO                                 */
+/* ────────────────────────────────────────────────── */
+function atualizarRegistro(p) {
+  var sheetName    = p.sheet || 'Ferramentas';
+  var nomeOriginal = String(p.nome_original  || '').trim();
+  var nome         = String(p.nome           || '').trim();
+  var categoria    = String(p.categoria      || '').trim();
+  var descricao    = String(p.descricao      || '').trim();
+  var depto        = String(p.departamentos  || '').trim();
+  var subsRH       = String(p.subsistemas_rh || '').trim();
+  var enviado      = String(p.enviado_por    || '').trim();
+
+  if (!nomeOriginal || !nome || !categoria || !descricao) {
+    return { ok: false, message: 'Campos obrigatórios não preenchidos.' };
+  }
+
+  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return { ok: false, message: 'Aba "' + sheetName + '" não encontrada.' };
+
+  var last = sheet.getLastRow();
+  if (last < 2) return { ok: false, message: 'Nenhum registro encontrado.' };
+
+  var data = sheet.getRange(2, 2, last - 1, 1).getValues();
+  var rowIndex = -1;
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i][0]).trim() === nomeOriginal) { rowIndex = i + 2; break; }
+  }
+  if (rowIndex === -1) return { ok: false, message: 'Registro "' + nomeOriginal + '" não encontrado.' };
+
+  var ts  = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm:ss');
+  var row;
+  if (sheetName === 'Parceiros') {
+    row = [ts, nome, categoria, descricao, depto,
+           String(p.email    || '').trim(),
+           String(p.whatsapp || '').trim(),
+           enviado, subsRH];
+  } else {
+    row = [ts, nome, categoria, descricao, depto, enviado, subsRH];
+  }
+
+  sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  return { ok: true, message: 'Registro atualizado com sucesso.' };
 }
 
 /* ────────────────────────────────────────────────── */
