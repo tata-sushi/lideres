@@ -752,15 +752,23 @@ function isTipoPag(t)   { return t.indexOf('pag') !== -1; }
 function isTipoPerd(t)  { return t.indexOf('perd') !== -1; }
 
 function getWeekSeries(semKey, rowFilter) {
-  var snap = (SNAPSHOTS[semKey] || []).filter(function(r) {
-    var t = r.tipo.toLowerCase();
-    if (isTipoPag(t) || isTipoPerd(t)) return false;
-    return rowFilter ? rowFilter(r) : true;
-  });
+  // Linhas da semana após filtro de unidade/depto
   var weekRows = ALL_ROWS.filter(function(r) {
     if (r.semKey !== semKey) return false;
     return rowFilter ? rowFilter(r) : true;
   });
+  // Snapshot "ativo": latest row não-pag/não-perd por colaborador.
+  // Antes o snapshot pegava a última linha de qualquer tipo, e em seguida
+  // excluíamos pag/perd — descartando o saldo de quem tivesse pag/perd como
+  // última linha da semana. Agora pulamos pag/perd na seleção do "latest".
+  var mapaColab = {};
+  weekRows.forEach(function(r) {
+    if (!r.nome) return;
+    var t = (r.tipo || '').toLowerCase();
+    if (isTipoPag(t) || isTipoPerd(t)) return;
+    if (!mapaColab[r.nome] || r.rowIndex > mapaColab[r.nome].rowIndex) mapaColab[r.nome] = r;
+  });
+  var snap = Object.values(mapaColab);
   var pos = snap.reduce(function(a,r) { return r.saldo > 0 ? a + r.saldo : a; }, 0);
   var neg = snap.reduce(function(a,r) { return r.saldo < 0 ? a + r.saldo : a; }, 0);
   var pagas = weekRows.reduce(function(a,r) {
