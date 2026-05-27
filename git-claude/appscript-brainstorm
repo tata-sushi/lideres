@@ -3,33 +3,34 @@
 // ══════════════════════════════════════════════════════════════════════════
 //
 //   Backend do brainstorm.html. Lê e escreve numa aba "Brainstorm" de uma
-//   planilha Google. Cada linha = uma palavra/frase enviada por um líder
-//   em uma sessão. Palavras duplicadas (mesma sessão + mesmo texto, case
-//   insensitive) incrementam o contador em vez de criar nova linha.
+//   planilha Google. Cada linha = uma palavra enviada por um líder numa sessão.
+//   Palavras duplicadas (mesma sessão + mesmo texto, case insensitive)
+//   incrementam o contador em vez de criar nova linha.
 //
-//   Planilha sugerida (criar nova ou anexar à existente):
-//     Nome da aba: "Brainstorm"
-//     Header (linha 1): SESSION | WORD | AUTHOR | TIMESTAMP | COUNT
+//   Colunas da planilha:
+//     SESSION | WORD | AUTHOR | TIMESTAMP | COUNT | DESCRICAO | CATEGORIA
 //
 //   Endpoints expostos via doGet:
-//     ?action=addWord&session=<sessao>&word=<texto>&author=<nome>
+//     ?action=addWord&session=<s>&word=<texto>&author=<nome>&descricao=<frase>&categoria=<cat>
 //        → adiciona palavra ou incrementa COUNT se já existe
-//     ?action=getWords&session=<sessao>
-//        → devolve [{ word, author, count }, ...] da sessão
-//     ?action=clearSession&session=<sessao>
+//     ?action=getWords&session=<s>
+//        → devolve [{ word, author, count, descricao, categoria }, ...]
+//     ?action=clearSession&session=<s>
 //        → apaga todas as linhas da sessão
 //
+//   Categorias aceitas: Emoções | Dores/Problemas | Causas | Comportamentos | Ações | Forças
+//
 //   Deploy:
-//     1. Crie (ou abra) uma planilha no Google Sheets
+//     1. Abra (ou crie) uma planilha no Google Sheets
 //     2. Extensões → Apps Script → cole este arquivo como Code.gs
 //     3. Salve o projeto
 //     4. Implantar → Nova implantação → Aplicativo da Web
 //        - Executar como: Eu
 //        - Quem tem acesso: Qualquer pessoa
-//     5. Copie a URL gerada e cole em config.url no brainstorm.html
+//     5. Copie a URL e cole em config.url no brainstorm.html
 //
-//   Ao editar o script depois: Implantar → Gerenciar implantações →
-//   edite a implantação ativa e selecione "Nova versão" antes de publicar.
+//   Ao editar depois: Implantar → Gerenciar implantações →
+//   edite a implantação ativa e selecione "Nova versão".
 //
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -41,10 +42,12 @@ function doGet(e) {
     const session = (e.parameter.session || 'default').trim();
 
     if (action === 'addWord') {
-      const word   = (e.parameter.word   || '').trim();
-      const author = (e.parameter.author || '').trim();
+      const word      = (e.parameter.word      || '').trim();
+      const author    = (e.parameter.author    || '').trim();
+      const descricao = (e.parameter.descricao || '').trim();
+      const categoria = (e.parameter.categoria || '').trim();
       if (!word) return ok({ status: 'ignored' });
-      addWord(session, word, author);
+      addWord(session, word, author, descricao, categoria);
       return ok({ status: 'ok' });
     }
 
@@ -74,14 +77,24 @@ function getSheet() {
   let sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);
-    sheet.appendRow(['SESSION', 'WORD', 'AUTHOR', 'TIMESTAMP', 'COUNT']);
-    sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
+    sheet.appendRow(['SESSION', 'WORD', 'AUTHOR', 'TIMESTAMP', 'COUNT', 'DESCRICAO', 'CATEGORIA']);
+    sheet.getRange(1, 1, 1, 7).setFontWeight('bold');
     sheet.setFrozenRows(1);
+  } else {
+    // Migração: adiciona colunas novas se a aba existia com o formato antigo
+    const lastCol = sheet.getLastColumn();
+    if (lastCol < 6) {
+      sheet.getRange(1, 6, 1, 2).setValues([['DESCRICAO', 'CATEGORIA']]);
+      sheet.getRange(1, 6, 1, 2).setFontWeight('bold');
+    } else if (lastCol < 7) {
+      sheet.getRange(1, 7).setValue('CATEGORIA');
+      sheet.getRange(1, 7).setFontWeight('bold');
+    }
   }
   return sheet;
 }
 
-function addWord(session, word, author) {
+function addWord(session, word, author, descricao, categoria) {
   const sheet = getSheet();
   const data  = sheet.getDataRange().getValues();
   const wordLower = word.toLowerCase();
@@ -96,7 +109,7 @@ function addWord(session, word, author) {
   }
 
   // Não existe → nova linha
-  sheet.appendRow([session, word, author, new Date().toISOString(), 1]);
+  sheet.appendRow([session, word, author, new Date().toISOString(), 1, descricao || '', categoria || '']);
 }
 
 function getWords(session) {
@@ -106,9 +119,11 @@ function getWords(session) {
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === session) {
       result.push({
-        word:   data[i][1],
-        author: data[i][2],
-        count:  parseInt(data[i][4], 10) || 1
+        word:      data[i][1],
+        author:    data[i][2],
+        count:     parseInt(data[i][4], 10) || 1,
+        descricao: data[i][5] || '',
+        categoria: data[i][6] || ''
       });
     }
   }
