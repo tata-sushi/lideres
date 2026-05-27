@@ -457,7 +457,10 @@
   .drawer-kpi-card-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--mid); }
   .drawer-kpi-card-number { font-family: 'DM Sans', sans-serif; font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
   .drawer-kpi-card-sub { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--soft); }
-  .drawer-footer { padding: 12px 16px 16px; flex-shrink: 0; background: var(--surface); border-top: 1px solid var(--line); }
+  .drawer-kpi-card-sub strong { font-family: 'DM Sans', sans-serif; font-weight: 700; color: var(--carbon); }
+  .drawer-sam-btn{display:flex;align-items:center;justify-content:center;width:100%;padding:10px 14px;background:var(--carbon);border:none;border-radius:4px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:#fff;cursor:pointer;text-decoration:none;transition:opacity .15s;}
+  .drawer-sam-btn:hover{opacity:.85;}
+  .drawer-footer { padding: 12px 16px 16px; flex-shrink: 0; background: var(--surface); }
   .drawer-footer-label { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--soft); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
   .drawer-footer-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
   .drawer-footer-person { display: flex; align-items: center; gap: 10px; }
@@ -654,18 +657,29 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="drawer-version">
         <div>
           <div class="drawer-version-label">Portal</div>
-          <div style="font-size:13px;font-weight:600;color:#fff;margin-top:2px;">Brainstorm RH</div>
+          <div style="font-size:13px;font-weight:600;color:#fff;margin-top:2px;">Governança de Processos</div>
         </div>
-        <div class="drawer-version-val">v1.0</div>
+        <div class="drawer-version-val">v3.2r</div>
       </div>
     </div>
     <div class="drawer-section">
       <div class="drawer-section-label">O que é</div>
-      <p class="drawer-about"><strong>Brainstorm</strong> é um canvas colaborativo em tempo real. Cada líder envia palavras ou frases curtas e o painel destaca o que está em "alta" — palavras com mais menções aparecem maiores, revelando a perspectiva coletiva da liderança.</p>
+      <p class="drawer-about"><strong>Governança de Processos</strong> é a maneira pela qual consolidamos as iniciativas da gestão de processos do TATÁ Sushi, com papéis, diretrizes e mecanismos que orientam como os processos devem ser definidos, executados, monitorados e aprimorados continuamente.</p>
     </div>
     <div class="drawer-section">
-      <div class="drawer-section-label">Como usar</div>
-      <p class="drawer-about">1. Configure a sessão e a URL do Apps Script no botão <strong>⚙</strong>.<br>2. Digite uma palavra ou frase curta (até 40 caracteres) e envie.<br>3. O canvas sincroniza a cada poucos segundos, agregando os envios de todos.<br>4. Use o botão <strong>✕</strong> para limpar a sessão quando terminar.</p>
+      <div class="drawer-section-label">Números</div>
+      <div class="drawer-kpi-grid">
+        <div class="drawer-kpi-card">
+          <span class="drawer-kpi-card-label">Seções</span>
+          <span class="drawer-kpi-card-number" id="drawer-kpi-secoes">7</span>
+          <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-pags">—</strong> pág / <strong id="drawer-kpi-dash">—</strong> dash</span>
+        </div>
+        <div class="drawer-kpi-card">
+          <span class="drawer-kpi-card-label">Unidades</span>
+          <span class="drawer-kpi-card-number" id="drawer-kpi-unidades">—</span>
+          <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-deptos">—</strong> depto / <strong id="drawer-kpi-colabs">—</strong> colab</span>
+        </div>
+      </div>
     </div>
     <div class="drawer-section">
       <div class="drawer-section-label">Sessão atual</div>
@@ -990,9 +1004,50 @@ function showToast(msg, type = '') {
 // ──────────────────────────────────────────────
 // DRAWER
 // ──────────────────────────────────────────────
+var _drawerKpisLoaded = false;
+function loadDrawerKPIs() {
+  if (_drawerKpisLoaded) return;
+  fetch('https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec?action=listColaboradores')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var unidades = new Set(), deptos = new Set();
+      data.colaboradores.forEach(function(c) {
+        if (c.unidade) unidades.add(c.unidade);
+        if (c.departamento) deptos.add(c.departamento);
+      });
+      document.getElementById('drawer-kpi-unidades').textContent = unidades.size;
+      document.getElementById('drawer-kpi-deptos').textContent   = deptos.size;
+      document.getElementById('drawer-kpi-colabs').textContent   = data.total;
+      _drawerKpisLoaded = true;
+    })
+    .catch(function() {});
+}
+var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
+var _drawerMetaLoaded = false;
+function loadDrawerMeta() {
+  if (_drawerMetaLoaded) return;
+  fetch(GITHUB_TREE_URL)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.tree) return;
+      var pages = 0, dashboards = 0;
+      data.tree.forEach(function(f) {
+        if (f.type !== 'blob' || !f.path.endsWith('.html')) return;
+        if (f.path.startsWith('compliance/kpis/')) { dashboards++; }
+        else if (f.path.startsWith('compliance/')) { pages++; }
+      });
+      var el = function(id) { return document.getElementById(id); };
+      if (el('drawer-kpi-pags')) el('drawer-kpi-pags').textContent = pages;
+      if (el('drawer-kpi-dash')) el('drawer-kpi-dash').textContent = dashboards;
+      _drawerMetaLoaded = true;
+    })
+    .catch(function() {});
+}
 function openDrawer() {
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawer-overlay').classList.add('open');
+  loadDrawerKPIs();
+  loadDrawerMeta();
 }
 function closeDrawer() {
   document.getElementById('drawer').classList.remove('open');
