@@ -281,6 +281,38 @@
     font-family: 'DM Mono', monospace;
     letter-spacing: 0.04em; margin-top: 2px;
   }
+  .cat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .cat-pill {
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg);
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .cat-pill:hover { border-color: var(--carbon); }
+  .cat-pill.selected { background: var(--carbon); border-color: var(--carbon); }
+  .cat-pill-name {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px; font-weight: 700;
+    color: var(--carbon);
+  }
+  .cat-pill.selected .cat-pill-name { color: var(--citric); }
+  .cat-pill-desc {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px; color: var(--soft);
+    letter-spacing: 0.03em;
+  }
+  .cat-pill.selected .cat-pill-desc { color: rgba(207,255,0,0.65); }
   @media (min-width: 768px) {
     .modal-overlay { align-items: center; }
     .modal { border-radius: 12px; max-height: 88vh; animation: modalIn 0.22s ease; }
@@ -498,6 +530,43 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         />
         <div class="field-hint">Até 40 caracteres. Envie palavras que representam o que está em "alta" pra você.</div>
       </div>
+
+      <div class="field-group" style="margin-top:16px;">
+        <label class="field-label">Descrição</label>
+        <input type="text" class="field-input" id="descInput"
+          placeholder="Em uma frase, o que você quer dizer com isso?"
+          maxlength="120" autocomplete="off"/>
+      </div>
+
+      <div class="field-group" style="margin-top:16px;">
+        <label class="field-label">Categoria</label>
+        <div class="cat-grid">
+          <button class="cat-pill" data-cat="Emoções" type="button" onclick="selectCat(this)">
+            <span class="cat-pill-name">Emoções</span>
+            <span class="cat-pill-desc">Como as pessoas se sentem</span>
+          </button>
+          <button class="cat-pill" data-cat="Dores/Problemas" type="button" onclick="selectCat(this)">
+            <span class="cat-pill-name">Dores/Problemas</span>
+            <span class="cat-pill-desc">O que está dificultando</span>
+          </button>
+          <button class="cat-pill" data-cat="Causas" type="button" onclick="selectCat(this)">
+            <span class="cat-pill-name">Causas</span>
+            <span class="cat-pill-desc">Por que isso acontece</span>
+          </button>
+          <button class="cat-pill" data-cat="Comportamentos" type="button" onclick="selectCat(this)">
+            <span class="cat-pill-name">Comportamentos</span>
+            <span class="cat-pill-desc">Como isso aparece na prática</span>
+          </button>
+          <button class="cat-pill" data-cat="Ações" type="button" onclick="selectCat(this)">
+            <span class="cat-pill-name">Ações</span>
+            <span class="cat-pill-desc">O que precisa ser feito</span>
+          </button>
+          <button class="cat-pill" data-cat="Forças" type="button" onclick="selectCat(this)">
+            <span class="cat-pill-name">Forças</span>
+            <span class="cat-pill-desc">O que deve ser valorizado</span>
+          </button>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <div class="modal-error" id="modal-error"></div>
@@ -597,6 +666,7 @@ const config = {
 
 
 let renderedWords = {};
+let selectedCat   = '';
 let pollTimer = null;
 let countdownTimer = null;
 let countdownSec = 0;
@@ -651,21 +721,41 @@ function closeWordModal() {
   document.getElementById('wordModal').classList.remove('open');
   document.body.style.overflow = '';
   document.getElementById('wordInput').value = '';
+  document.getElementById('descInput').value = '';
+  document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('selected'));
+  selectedCat = '';
+}
+function selectCat(btn) {
+  document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedCat = btn.dataset.cat;
 }
 
 // ──────────────────────────────────────────────
 // ENVIAR PALAVRA
 // ──────────────────────────────────────────────
 async function sendWord() {
-  const input = document.getElementById('wordInput');
-  const word = input.value.trim();
-  if (!word) return;
-
   const errEl = document.getElementById('modal-error');
+  errEl.classList.remove('show');
+
+  const word = document.getElementById('wordInput').value.trim();
+  const desc = document.getElementById('descInput').value.trim();
+
+  if (!word) {
+    errEl.textContent = 'Digite uma palavra ou frase curta.';
+    errEl.classList.add('show'); return;
+  }
+  if (!desc) {
+    errEl.textContent = 'Adicione uma descrição em uma frase.';
+    errEl.classList.add('show'); return;
+  }
+  if (!selectedCat) {
+    errEl.textContent = 'Selecione uma categoria.';
+    errEl.classList.add('show'); return;
+  }
   if (!config.url) {
     errEl.textContent = 'Endpoint não configurado.';
-    errEl.classList.add('show');
-    return;
+    errEl.classList.add('show'); return;
   }
 
   const btn   = document.getElementById('sendBtn');
@@ -674,17 +764,18 @@ async function sendWord() {
   btn.disabled = true;
   spin.style.display = 'block';
   label.textContent = 'Enviando…';
-  errEl.classList.remove('show');
 
   try {
     const params = new URLSearchParams({
-      action: 'addWord',
-      word: word,
-      author: getAuthor(),
-      session: config.session
+      action:    'addWord',
+      word:      word,
+      author:    getAuthor(),
+      session:   config.session,
+      descricao: desc,
+      categoria: selectedCat
     });
     await fetch(`${config.url}?${params}`, { method: 'GET', mode: 'no-cors' });
-    addWordToCanvas(word, 1, getAuthor(), 1);
+    addWordToCanvas(word, 1, getAuthor(), 1, desc, selectedCat);
     closeWordModal();
     showToast(`"${word}" enviado ✓`, 'success');
   } catch(e) {
@@ -752,7 +843,7 @@ function syncCanvas(words) {
   });
 
   const maxCount = words.reduce((m, w) => Math.max(m, w.count || 1), 1);
-  words.forEach(({ word, count, author }) => {
+  words.forEach(({ word, count, author, descricao, categoria }) => {
     const key = word.toLowerCase();
     if (renderedWords[key]) {
       if (renderedWords[key].count !== count) {
@@ -760,7 +851,7 @@ function syncCanvas(words) {
         updateWordSize(renderedWords[key].el, count, maxCount);
       }
     } else {
-      addWordToCanvas(word, count, author, maxCount);
+      addWordToCanvas(word, count, author, maxCount, descricao, categoria);
     }
   });
 
@@ -770,7 +861,7 @@ function syncCanvas(words) {
   document.getElementById('drawer-kpi-sends').textContent = total;
 }
 
-function addWordToCanvas(word, count, author, maxCount) {
+function addWordToCanvas(word, count, author, maxCount, descricao, categoria) {
   const key = word.toLowerCase();
   if (renderedWords[key] && renderedWords[key].el) return;
 
@@ -798,18 +889,38 @@ function addWordToCanvas(word, count, author, maxCount) {
   el.style.setProperty('--drift-dur', driftDur + 's');
   el.style.setProperty('--drift-delay', driftDelay + 's');
 
-  const padX = Math.max(cw * 0.32, 40);
-  const padY = Math.max(ch * 0.32, 40);
-  const x = padX + Math.random() * (cw - padX * 2);
-  const y = padY + Math.random() * (ch - padY * 2 - 40);
-  el.style.left = x + 'px';
-  el.style.top = y + 'px';
-
-  if (author) el.title = `por ${author}`;
-
+  // Append off-screen to measure real dimensions before positioning
+  el.style.left = '-9999px';
+  el.style.top  = '-9999px';
   canvas.appendChild(el);
+  const elW = el.offsetWidth;
+  const elH = el.offsetHeight;
 
-  renderedWords[key] = { count, el, x, y };
+  const GAP = 8;
+  let x = 0, y = 0;
+
+  for (let attempt = 0; attempt < 60; attempt++) {
+    // First 30 tries: strict 30% zone. After that: expand up to full canvas.
+    const spread = attempt < 30 ? 1 : 1 + (attempt - 30) / 30 * 1.8;
+    const padX = Math.max((cw * 0.35) / spread, 10);
+    const padY = Math.max((ch * 0.35) / spread, 10);
+    const tx = padX + Math.random() * Math.max(cw - padX * 2 - elW, 0);
+    const ty = padY + Math.random() * Math.max(ch - padY * 2 - elH - 40, 0);
+
+    const clash = Object.values(renderedWords).some(({ x: ox, y: oy, w: ow, h: oh }) =>
+      tx < ox + ow + GAP && tx + elW + GAP > ox &&
+      ty < oy + oh + GAP && ty + elH + GAP > oy
+    );
+
+    if (!clash || attempt === 59) { x = tx; y = ty; break; }
+  }
+
+  el.style.left = x + 'px';
+  el.style.top  = y + 'px';
+
+  el.title = [author && `por ${author}`, categoria, descricao].filter(Boolean).join(' · ');
+
+  renderedWords[key] = { count, el, x, y, w: elW, h: elH };
 }
 
 function updateWordSize(el, count, maxCount) {
