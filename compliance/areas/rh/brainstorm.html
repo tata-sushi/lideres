@@ -689,7 +689,7 @@ async function sendWord() {
       session: config.session
     });
     await fetch(`${config.url}?${params}`, { method: 'GET', mode: 'no-cors' });
-    addWordToCanvas(word, 1, getAuthor());
+    addWordToCanvas(word, 1, getAuthor(), 1);
     closeWordModal();
     showToast(`"${word}" enviado ✓`, 'success');
   } catch(e) {
@@ -756,15 +756,16 @@ function syncCanvas(words) {
     }
   });
 
+  const maxCount = words.reduce((m, w) => Math.max(m, w.count || 1), 1);
   words.forEach(({ word, count, author }) => {
     const key = word.toLowerCase();
     if (renderedWords[key]) {
       if (renderedWords[key].count !== count) {
         renderedWords[key].count = count;
-        updateWordSize(renderedWords[key].el, count, words.length);
+        updateWordSize(renderedWords[key].el, count, maxCount);
       }
     } else {
-      addWordToCanvas(word, count, author);
+      addWordToCanvas(word, count, author, maxCount);
     }
   });
 
@@ -774,7 +775,7 @@ function syncCanvas(words) {
   document.getElementById('drawer-kpi-sends').textContent = total;
 }
 
-function addWordToCanvas(word, count, author) {
+function addWordToCanvas(word, count, author, maxCount) {
   const key = word.toLowerCase();
   if (renderedWords[key] && renderedWords[key].el) return;
 
@@ -786,7 +787,7 @@ function addWordToCanvas(word, count, author) {
   el.className = 'word-item float';
   el.textContent = word;
 
-  const fontSize = calcFontSize(count, 20);
+  const fontSize = calcFontSize(count, maxCount || count || 1);
   el.style.fontSize = fontSize + 'px';
 
   const palette = PALETTES[Math.floor(Math.random() * PALETTES.length)];
@@ -804,9 +805,10 @@ function addWordToCanvas(word, count, author) {
   el.style.setProperty('--drift-dur', driftDur + 's');
   el.style.setProperty('--drift-delay', driftDelay + 's');
 
-  const margin = 80;
-  const x = margin + Math.random() * (cw - margin * 2);
-  const y = margin + Math.random() * (ch - margin * 2 - 60);
+  const padX = Math.max(cw * 0.22, 40);
+  const padY = Math.max(ch * 0.22, 40);
+  const x = padX + Math.random() * (cw - padX * 2);
+  const y = padY + Math.random() * (ch - padY * 2 - 40);
   el.style.left = x + 'px';
   el.style.top = y + 'px';
 
@@ -817,15 +819,16 @@ function addWordToCanvas(word, count, author) {
   renderedWords[key] = { count, el, x, y };
 }
 
-function updateWordSize(el, count, total) {
+function updateWordSize(el, count, maxCount) {
   if (!el) return;
-  el.style.fontSize = calcFontSize(count, total) + 'px';
+  el.style.fontSize = calcFontSize(count, maxCount) + 'px';
 }
 
-function calcFontSize(count, total) {
-  const min = 14, max = 52;
-  const ratio = total > 1 ? Math.min(count / total, 1) : 0.5;
-  return Math.round(min + (max - min) * Math.pow(ratio, 0.6));
+function calcFontSize(count, maxCount) {
+  const min = 13, max = 78;
+  if (!maxCount || maxCount <= 0) return Math.round((min + max) / 2);
+  const ratio = Math.min(count / maxCount, 1);
+  return Math.round(min + (max - min) * Math.pow(ratio, 0.75));
 }
 
 // ──────────────────────────────────────────────
