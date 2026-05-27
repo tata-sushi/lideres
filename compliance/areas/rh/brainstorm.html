@@ -198,24 +198,6 @@
     transition: width 1s linear;
   }
 
-  .empty-state {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    pointer-events: none;
-  }
-  .empty-icon { font-size: 40px; opacity: 0.3; }
-  .empty-text {
-    font-size: 14px;
-    color: rgba(53,56,63,0.3);
-    font-family: 'DM Mono', monospace;
-    letter-spacing: 0.06em;
-    text-align: center;
-  }
 
   /* ── INPUT BAR ── */
   .input-bar {
@@ -242,42 +224,33 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .word-input {
+  .add-word-btn {
     flex: 1;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 6px;
-    padding: 10px 14px;
-    color: var(--white);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 15px;
-    font-weight: 500;
-    outline: none;
-    transition: border-color 0.2s, background 0.2s;
-    caret-color: var(--citric);
-  }
-  .word-input::placeholder { color: rgba(255,255,255,0.25); }
-  .word-input:focus {
-    border-color: rgba(207,255,0,0.5);
-    background: rgba(255,255,255,0.09);
-  }
-  .send-btn {
     background: var(--citric);
     color: var(--carbon-dark);
     border: none;
     border-radius: 6px;
-    padding: 10px 20px;
+    padding: 10px 16px;
     font-family: 'DM Sans', sans-serif;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     cursor: pointer;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
     transition: all 0.15s;
-    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
   }
-  .send-btn:hover { background: #d9ff1a; transform: scale(1.03); }
-  .send-btn:active { transform: scale(0.97); }
-  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .add-word-btn:hover { background: #d9ff1a; }
+  .add-word-btn:active { transform: scale(0.98); }
+  .field-input--word {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    padding: 12px 14px;
+    caret-color: var(--citric);
+  }
 
   .config-btn {
     background: none;
@@ -473,9 +446,9 @@
     .header-title { font-size: 15px; }
     .header-session { display: none; }
     .header-user { font-size: 9px; padding: 0 8px; }
-    .send-btn { padding: 10px 14px; }
     .user-badge { display: none; }
     .input-bar { padding: 10px 12px; gap: 8px; }
+    .add-word-btn { font-size: 13px; padding: 10px 12px; }
   }
 </style>
 </head>
@@ -578,10 +551,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <!-- CANVAS -->
 <div class="canvas-wrap" id="canvas">
-  <div class="empty-state" id="emptyState">
-    <div class="empty-icon">💡</div>
-    <div class="empty-text">Nenhuma palavra ainda.<br>Comece digitando abaixo.</div>
-  </div>
   <div class="next-update" id="nextUpdate">
     <span>SYNC</span>
     <div class="update-bar"><div class="update-bar-fill" id="updateBarFill" style="width:100%"></div></div>
@@ -592,17 +561,37 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <!-- INPUT BAR -->
 <div class="input-bar">
   <span class="user-badge" id="userBadge">—</span>
-  <input
-    type="text"
-    class="word-input"
-    id="wordInput"
-    placeholder="Digite uma palavra ou frase..."
-    maxlength="40"
-    autocomplete="off"
-  />
-  <button class="send-btn" id="sendBtn" onclick="sendWord()">Enviar</button>
+  <button class="add-word-btn" onclick="openWordModal()">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Nova palavra
+  </button>
   <button class="clear-btn" title="Limpar canvas" onclick="confirmClear()">✕</button>
   <button class="config-btn" title="Configurações" onclick="openConfig()">⚙</button>
+</div>
+
+<!-- WORD MODAL -->
+<div class="modal-overlay" id="wordModal">
+  <div class="modal">
+    <div class="modal-title">// NOVA PALAVRA</div>
+
+    <div class="field-group">
+      <label class="field-label">Palavra ou frase curta</label>
+      <input
+        type="text"
+        class="field-input field-input--word"
+        id="wordInput"
+        placeholder="Ex: liderança, foco, inovação..."
+        maxlength="40"
+        autocomplete="off"
+      />
+      <div class="field-hint">Até 40 caracteres. Envie palavras que representam o que está em "alta" pra você.</div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeWordModal()">Cancelar</button>
+      <button class="btn-save" id="sendBtn" onclick="sendWord()">Enviar</button>
+    </div>
+  </div>
 </div>
 
 <!-- FOOTER -->
@@ -751,10 +740,25 @@ function getAuthor() {
 
   document.getElementById('wordInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') sendWord();
+    if (e.key === 'Escape') closeWordModal();
   });
 
   if (config.url) startPolling();
 })();
+
+// ──────────────────────────────────────────────
+// WORD MODAL
+// ──────────────────────────────────────────────
+function openWordModal() {
+  if (!config.url) { openConfig(); return; }
+  const modal = document.getElementById('wordModal');
+  modal.classList.add('open');
+  setTimeout(() => document.getElementById('wordInput').focus(), 50);
+}
+function closeWordModal() {
+  document.getElementById('wordModal').classList.remove('open');
+  document.getElementById('wordInput').value = '';
+}
 
 // ──────────────────────────────────────────────
 // CONFIG MODAL
@@ -808,16 +812,15 @@ async function sendWord() {
       session: config.session
     });
     await fetch(`${config.url}?${params}`, { method: 'GET', mode: 'no-cors' });
-    input.value = '';
     addWordToCanvas(word, 1, getAuthor());
     showToast(`"${word}" enviado ✓`, 'success');
+    closeWordModal();
   } catch(e) {
     showToast('Erro ao enviar. Verifique a URL.', 'error');
   }
 
   btn.disabled = false;
   btn.textContent = 'Enviar';
-  input.focus();
 }
 
 // ──────────────────────────────────────────────
@@ -887,7 +890,6 @@ function syncCanvas(words) {
     }
   });
 
-  document.getElementById('emptyState').style.display = words.length === 0 ? 'flex' : 'none';
   const total = words.reduce((s, w) => s + (w.count || 1), 0);
   document.getElementById('wordCount').textContent = `${words.length} palavras · ${total} envios`;
   document.getElementById('drawer-kpi-words').textContent = words.length;
@@ -933,7 +935,6 @@ function addWordToCanvas(word, count, author) {
   if (author) el.title = `por ${author}`;
 
   canvas.appendChild(el);
-  document.getElementById('emptyState').style.display = 'none';
 
   renderedWords[key] = { count, el, x, y };
 }
@@ -964,7 +965,6 @@ async function clearSession() {
     await fetch(`${config.url}?${params}`, { method: 'GET', mode: 'no-cors' });
     Object.values(renderedWords).forEach(({ el }) => el?.remove());
     renderedWords = {};
-    document.getElementById('emptyState').style.display = 'flex';
     document.getElementById('wordCount').textContent = '';
     document.getElementById('drawer-kpi-words').textContent = '0';
     document.getElementById('drawer-kpi-sends').textContent = '0';
