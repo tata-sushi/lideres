@@ -79,14 +79,11 @@
     border: 1px solid var(--border);
     border-radius: 4px;
     padding: 4px 10px;
-    cursor: pointer;
-    transition: all 0.2s;
     max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .session-name:hover { background: rgba(207,255,0,0.18); }
   .pulse-dot {
     width: 7px; height: 7px;
     background: var(--citric);
@@ -252,19 +249,6 @@
     caret-color: var(--citric);
   }
 
-  .config-btn {
-    background: none;
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 6px;
-    color: rgba(255,255,255,0.5);
-    font-size: 16px;
-    width: 38px; height: 38px;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.2s;
-    flex-shrink: 0;
-  }
-  .config-btn:hover { border-color: var(--citric); color: var(--citric); }
   .clear-btn {
     background: none;
     border: 1px solid rgba(255,80,80,0.2);
@@ -539,7 +523,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="header-session">
     <div class="pulse-dot"></div>
     <span class="session-label">SESSÃO</span>
-    <span class="session-name" id="sessionDisplay" onclick="openConfig()">—</span>
+    <span class="session-name" id="sessionDisplay">—</span>
   </div>
   <div class="header-right">
     <span class="header-user" id="header-user">—</span>
@@ -566,7 +550,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     Nova palavra
   </button>
   <button class="clear-btn" title="Limpar canvas" onclick="confirmClear()">✕</button>
-  <button class="config-btn" title="Configurações" onclick="openConfig()">⚙</button>
 </div>
 
 <!-- WORD MODAL -->
@@ -599,34 +582,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="footer-brand">TATÁ SUSHI &nbsp;|&nbsp; TATÁ POKE &nbsp;|&nbsp; 2016 – 2026</div>
   <div class="footer-updated" id="footerDate">Atualizado em —</div>
 </footer>
-
-<!-- CONFIG MODAL -->
-<div class="modal-overlay" id="configModal">
-  <div class="modal">
-    <div class="modal-title">// CONFIGURAÇÕES</div>
-
-    <div class="field-group">
-      <label class="field-label">Nome da sessão</label>
-      <input class="field-input" id="cfgSession" type="text" placeholder="Ex: Reunião Liderança – Mai 2026" maxlength="50"/>
-    </div>
-
-    <div class="field-group">
-      <label class="field-label">URL do Apps Script (Web App)</label>
-      <input class="field-input" id="cfgUrl" type="url" placeholder="https://script.google.com/macros/s/..."/>
-      <div class="field-hint">Cole a URL publicada do Apps Script (veja o script no fim do arquivo).</div>
-    </div>
-
-    <div class="field-group">
-      <label class="field-label">Intervalo de sync (segundos)</label>
-      <input class="field-input" id="cfgInterval" type="number" min="3" max="60" value="8"/>
-    </div>
-
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeConfig()">Cancelar</button>
-      <button class="btn-save" onclick="saveConfig()">Salvar</button>
-    </div>
-  </div>
-</div>
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
@@ -685,12 +640,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 // ──────────────────────────────────────────────
-// CONFIG & STATE
+// CONFIG — edite aqui quando tiver o Apps Script publicado
 // ──────────────────────────────────────────────
-let config = {
-  session: 'Brainstorm Geral',
-  url: '',
-  interval: 8
+const config = {
+  session:  'Brainstorm Geral',
+  url:      '',  // ex: 'https://script.google.com/macros/s/AKfycb.../exec'
+  interval: 8    // polling em segundos
 };
 
 // Paleta pra fundo branco — alterna entre carbon (escuro) e citric (destaque)
@@ -727,16 +682,8 @@ function getAuthor() {
   var mn = String(now.getMinutes()).padStart(2,'0');
   document.getElementById('footerDate').textContent = 'Atualizado: ' + dd + '/' + mm + '/' + yyyy + ', ' + hh + ':' + mn;
 
-  const saved = localStorage.getItem('brainstorm_config');
-  if (saved) {
-    try { config = { ...config, ...JSON.parse(saved) }; } catch(e) {}
-  }
-  applyConfig();
-
-  // Se não tem URL, abre config automaticamente
-  if (!config.url) {
-    setTimeout(openConfig, 400);
-  }
+  document.getElementById('userBadge').textContent      = getAuthor();
+  document.getElementById('sessionDisplay').textContent = config.session;
 
   document.getElementById('wordInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') sendWord();
@@ -750,7 +697,6 @@ function getAuthor() {
 // WORD MODAL
 // ──────────────────────────────────────────────
 function openWordModal() {
-  if (!config.url) { openConfig(); return; }
   const modal = document.getElementById('wordModal');
   modal.classList.add('open');
   setTimeout(() => document.getElementById('wordInput').focus(), 50);
@@ -761,44 +707,13 @@ function closeWordModal() {
 }
 
 // ──────────────────────────────────────────────
-// CONFIG MODAL
-// ──────────────────────────────────────────────
-function openConfig() {
-  document.getElementById('cfgSession').value  = config.session;
-  document.getElementById('cfgUrl').value      = config.url;
-  document.getElementById('cfgInterval').value = config.interval;
-  document.getElementById('configModal').classList.add('open');
-}
-function closeConfig() {
-  document.getElementById('configModal').classList.remove('open');
-}
-function saveConfig() {
-  const session  = document.getElementById('cfgSession').value.trim();
-  const url      = document.getElementById('cfgUrl').value.trim();
-  const interval = parseInt(document.getElementById('cfgInterval').value) || 8;
-
-  if (!url) { showToast('Cole a URL do Apps Script.', 'error'); return; }
-
-  config = { session: session || 'Brainstorm Geral', url, interval };
-  localStorage.setItem('brainstorm_config', JSON.stringify(config));
-  applyConfig();
-  closeConfig();
-  showToast('Configurações salvas ✓', 'success');
-  startPolling();
-}
-function applyConfig() {
-  document.getElementById('userBadge').textContent       = getAuthor();
-  document.getElementById('sessionDisplay').textContent  = config.session || '—';
-}
-
-// ──────────────────────────────────────────────
 // ENVIAR PALAVRA
 // ──────────────────────────────────────────────
 async function sendWord() {
   const input = document.getElementById('wordInput');
   const word = input.value.trim();
   if (!word) return;
-  if (!config.url) { openConfig(); return; }
+  if (!config.url) { showToast('Endpoint não configurado.', 'error'); return; }
 
   const btn = document.getElementById('sendBtn');
   btn.disabled = true;
