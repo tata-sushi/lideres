@@ -1,0 +1,124 @@
+// ══════════════════════════════════════════════════════════════════════════
+//   APPS SCRIPT — Brainstorm (canvas colaborativo de palavras em tempo real)
+// ══════════════════════════════════════════════════════════════════════════
+//
+//   Backend do brainstorm.html. Lê e escreve numa aba "Brainstorm" de uma
+//   planilha Google. Cada linha = uma palavra/frase enviada por um líder
+//   em uma sessão. Palavras duplicadas (mesma sessão + mesmo texto, case
+//   insensitive) incrementam o contador em vez de criar nova linha.
+//
+//   Planilha sugerida (criar nova ou anexar à existente):
+//     Nome da aba: "Brainstorm"
+//     Header (linha 1): SESSION | WORD | AUTHOR | TIMESTAMP | COUNT
+//
+//   Endpoints expostos via doGet:
+//     ?action=addWord&session=<sessao>&word=<texto>&author=<nome>
+//        → adiciona palavra ou incrementa COUNT se já existe
+//     ?action=getWords&session=<sessao>
+//        → devolve [{ word, author, count }, ...] da sessão
+//     ?action=clearSession&session=<sessao>
+//        → apaga todas as linhas da sessão
+//
+//   Deploy:
+//     1. Crie (ou abra) uma planilha no Google Sheets
+//     2. Extensões → Apps Script → cole este arquivo como Code.gs
+//     3. Salve o projeto
+//     4. Implantar → Nova implantação → Aplicativo da Web
+//        - Executar como: Eu
+//        - Quem tem acesso: Qualquer pessoa
+//     5. Copie a URL gerada e cole em config.url no brainstorm.html
+//
+//   Ao editar o script depois: Implantar → Gerenciar implantações →
+//   edite a implantação ativa e selecione "Nova versão" antes de publicar.
+//
+// ══════════════════════════════════════════════════════════════════════════
+
+const SHEET_NAME = 'Brainstorm';
+
+function doGet(e) {
+  try {
+    const action  = (e.parameter.action  || '').trim();
+    const session = (e.parameter.session || 'default').trim();
+
+    if (action === 'addWord') {
+      const word   = (e.parameter.word   || '').trim();
+      const author = (e.parameter.author || '').trim();
+      if (!word) return ok({ status: 'ignored' });
+      addWord(session, word, author);
+      return ok({ status: 'ok' });
+    }
+
+    if (action === 'getWords') {
+      return ok(getWords(session));
+    }
+
+    if (action === 'clearSession') {
+      clearSession(session);
+      return ok({ status: 'cleared' });
+    }
+
+    return ok({ status: 'unknown action' });
+  } catch (err) {
+    return ok({ status: 'error', message: String(err && err.message || err) });
+  }
+}
+
+function ok(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function getSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+    sheet.appendRow(['SESSION', 'WORD', 'AUTHOR', 'TIMESTAMP', 'COUNT']);
+    sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function addWord(session, word, author) {
+  const sheet = getSheet();
+  const data  = sheet.getDataRange().getValues();
+  const wordLower = word.toLowerCase();
+
+  // Procura existente (mesma sessão + mesma palavra) → incrementa COUNT
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === session && String(data[i][1]).toLowerCase() === wordLower) {
+      const current = parseInt(data[i][4], 10) || 1;
+      sheet.getRange(i + 1, 5).setValue(current + 1);
+      return;
+    }
+  }
+
+  // Não existe → nova linha
+  sheet.appendRow([session, word, author, new Date().toISOString(), 1]);
+}
+
+function getWords(session) {
+  const sheet = getSheet();
+  const data  = sheet.getDataRange().getValues();
+  const result = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === session) {
+      result.push({
+        word:   data[i][1],
+        author: data[i][2],
+        count:  parseInt(data[i][4], 10) || 1
+      });
+    }
+  }
+  return result;
+}
+
+function clearSession(session) {
+  const sheet = getSheet();
+  const data  = sheet.getDataRange().getValues();
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (data[i][0] === session) sheet.deleteRow(i + 1);
+  }
+}
