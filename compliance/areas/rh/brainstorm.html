@@ -798,18 +798,38 @@ function addWordToCanvas(word, count, author, maxCount) {
   el.style.setProperty('--drift-dur', driftDur + 's');
   el.style.setProperty('--drift-delay', driftDelay + 's');
 
-  const padX = Math.max(cw * 0.32, 40);
-  const padY = Math.max(ch * 0.32, 40);
-  const x = padX + Math.random() * (cw - padX * 2);
-  const y = padY + Math.random() * (ch - padY * 2 - 40);
+  // Append off-screen to measure real dimensions before positioning
+  el.style.left = '-9999px';
+  el.style.top  = '-9999px';
+  canvas.appendChild(el);
+  const elW = el.offsetWidth;
+  const elH = el.offsetHeight;
+
+  const GAP = 8;
+  let x = 0, y = 0;
+
+  for (let attempt = 0; attempt < 60; attempt++) {
+    // First 30 tries: strict 30% zone. After that: expand up to full canvas.
+    const spread = attempt < 30 ? 1 : 1 + (attempt - 30) / 30 * 1.8;
+    const padX = Math.max((cw * 0.35) / spread, 10);
+    const padY = Math.max((ch * 0.35) / spread, 10);
+    const tx = padX + Math.random() * Math.max(cw - padX * 2 - elW, 0);
+    const ty = padY + Math.random() * Math.max(ch - padY * 2 - elH - 40, 0);
+
+    const clash = Object.values(renderedWords).some(({ x: ox, y: oy, w: ow, h: oh }) =>
+      tx < ox + ow + GAP && tx + elW + GAP > ox &&
+      ty < oy + oh + GAP && ty + elH + GAP > oy
+    );
+
+    if (!clash || attempt === 59) { x = tx; y = ty; break; }
+  }
+
   el.style.left = x + 'px';
-  el.style.top = y + 'px';
+  el.style.top  = y + 'px';
 
   if (author) el.title = `por ${author}`;
 
-  canvas.appendChild(el);
-
-  renderedWords[key] = { count, el, x, y };
+  renderedWords[key] = { count, el, x, y, w: elW, h: elH };
 }
 
 function updateWordSize(el, count, maxCount) {
