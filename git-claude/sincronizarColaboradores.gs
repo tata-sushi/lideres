@@ -43,13 +43,13 @@ var PESSOAS_FIXAS = [
     idDepartment  : "16",
     admissionDate : "01/08/2016",
     idPersonBoss  : "",
-    idPersonRH    : "fixo_9",
+    idPersonRH    : "",
     nomeSuperior  : "",
     birthDate     : "10/05/1974",
     dismissalDate : ""
   },
   {
-    name          : "Leo Partel Young",
+    name          : "Leonardo Partel Young",
     registration  : "10",
     cargo         : "Diretor de Marketing",
     status        : 1,
@@ -58,9 +58,9 @@ var PESSOAS_FIXAS = [
     idDepartment  : "16",
     admissionDate : "01/08/2016",
     idPersonBoss  : "",
-    idPersonRH    : "fixo_10",
+    idPersonRH    : "",
     nomeSuperior  : "",
-    birthDate     : "",
+    birthDate     : "16/08/1985",
     dismissalDate : ""
   }
 ];
@@ -353,7 +353,7 @@ function parseMicrosoftDate(dateStr) {
 // ──────────────────────────────────────────────
 //  GRAVAR NA PLANILHA
 //
-//  A  Nome                 J  — (separador)
+//  A  Nome                 J  cargo_id (fórmula)
 //  B  Matrícula            K  ID Superior
 //  C  Cargo                L  ID Pessoa
 //  D  Status               M  Nome do Superior
@@ -373,7 +373,7 @@ function gravarNaPlanilha(pessoas) {
     "Nome", "Matrícula", "Cargo", "Status", "Unidade",
     "Departamento", "ID Centro de Custo", "ID Departamento",
     "Data de Admissão",
-    "",
+    "cargo_id",                                    // ← coluna J
     "ID Superior", "ID Pessoa", "Nome do Superior",
     "Data de Nascimento", "Data de Demissão"
   ];
@@ -382,6 +382,10 @@ function gravarNaPlanilha(pessoas) {
 
   sheet.getRange(1, 1, 1, 9)
     .setBackground("#1a73e8").setFontColor("#ffffff")
+    .setFontWeight("bold").setHorizontalAlignment("center");
+
+  sheet.getRange(1, 10, 1, 1)
+    .setBackground("#f57c00").setFontColor("#ffffff")
     .setFontWeight("bold").setHorizontalAlignment("center");
 
   sheet.getRange(1, 11, 1, 3)
@@ -406,11 +410,11 @@ function gravarNaPlanilha(pessoas) {
       toTitleCase(p.cargo)                      || "",  // C
       traduzirStatus(p.status, p.idPersonRH),           // D
       unidade,                                          // E
-      toTitleCase(p.departmentName)             || "",  // F
+      toTitleCase(p.departmentName)             || "",  // F Departamento
       idCC,                                             // G
       p.idDepartment                            || "",  // H
       p.admissionDate                           || "",  // I
-      "",                                               // J separador
+      "",                                               // J — sobrescrita pela fórmula
       p.idPersonBoss                            || "",  // K
       p.idPersonRH                              || "",  // L
       p.nomeSuperior                            || "",  // M
@@ -420,6 +424,11 @@ function gravarNaPlanilha(pessoas) {
   });
 
   sheet.getRange(2, 1, linhas.length, headers.length).setValues(linhas);
+
+  // ARRAYFORMULA na célula J2 — IF/TRIM funcionam em qualquer locale
+  sheet.getRange(2, 10).setFormula(
+    '=ARRAYFORMULA(IF(C2:C="";"";TRIM(C2:C)&"-"&TRIM(F2:F)&"-"&TRIM(E2:E)))'
+  );
 
   for (var i = 0; i < linhas.length; i++) {
     sheet.getRange(i + 2, 1, 1, headers.length)

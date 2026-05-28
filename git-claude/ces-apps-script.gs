@@ -17,8 +17,8 @@
  *   - "Cargos"    — descrições de cargo (1 linha por cargo+nível)
  *      A cargo_id | B cargo | C departamento | D unidade | E cbo |
  *      F lider_imediato | G niveis | H hierarquia | I objetivos |
- *      J responsabilidades | K formacao | L experiencia | M competencias |
- *      N cnh | O uniformes_epi
+ *      J responsabilidades | K formacao | L experiencia |
+ *      M comp_tec | N comp_comp | O uniformes | P epis
  *
  *   - "Obs"       — referências por loja
  *      A loja_nome | B salario_min | C piso_cct | D piso_tata |
@@ -195,8 +195,8 @@ function listCargos() {
       responsabilidades:String(r[9]  || '').trim(),
       formacao:         String(r[10] || '').trim(),
       experiencia:      String(r[11] || '').trim(),
-      competencias:     String(r[12] || '').trim(),
-      cnh:              String(r[13] || '').trim(),
+      comp_tec:         String(r[12] || '').trim(),
+      comp_comp:        String(r[13] || '').trim(),
       uniformes:        String(r[14] || '').trim(),
       epis:             String(r[15] || '').trim()
     });
@@ -235,9 +235,10 @@ function upsertCargo(body, isAdd) {
     String(body.responsabilidades || '').trim(),
     String(body.formacao || '').trim(),
     String(body.experiencia || '').trim(),
-    String(body.competencias || '').trim(),
-    String(body.cnh || '').trim(),
-    String(body.uniformes_epi || '').trim()
+    String(body.comp_tec || '').trim(),
+    String(body.comp_comp || '').trim(),
+    String(body.uniformes || '').trim(),
+    String(body.epis || '').trim()
   ];
   sh.getRange(targetRow, 1, 1, vals.length).setValues([vals]);
   return { ok:true, row:targetRow };
