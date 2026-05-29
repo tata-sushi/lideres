@@ -251,6 +251,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div id="cat-bars"></div>
   </div>
   <div class="chart-card">
+    <div class="chart-title">Status das Demandas</div>
+    <div class="chart-wrap"><canvas id="cStatus"></canvas></div>
+  </div>
+  <div class="chart-card">
     <div class="chart-title">Demandas por Mês</div>
     <div class="chart-wrap"><canvas id="cMeses"></canvas></div>
   </div>
@@ -431,6 +435,7 @@ function renderAll() {
   renderKPIs();
   renderFilters();
   renderCatBars();
+  try { renderChartStatus(); } catch(e) { console.warn('Erro ao renderizar status:', e); }
   try { renderChartMeses(); } catch(e) { console.warn('Erro ao renderizar gráfico:', e); }
   applyFilters();
   updateFooterDate();
@@ -550,6 +555,45 @@ function renderCatBars() {
       '<span class="cat-bar-count">' + p[1] + '</span>' +
     '</div>';
   }).join('');
+}
+
+function renderChartStatus() {
+  var labels = [];
+  var counts = [];
+  var colors = [];
+  var statusMap = {};
+  demandas.forEach(function(d) {
+    var s = d.status || 'Sem status';
+    statusMap[s] = (statusMap[s] || 0) + 1;
+  });
+  var palette = {
+    'Concluído': '#1A5C2A', 'Concluida': '#1A5C2A',
+    'Em andamento': '#1A3A5C',
+    'Pendente': '#7A4A00',
+    'Arquivado': '#888888'
+  };
+  Object.keys(statusMap).sort().forEach(function(s) {
+    labels.push(s);
+    counts.push(statusMap[s]);
+    var c = '#999999';
+    Object.keys(palette).forEach(function(k) {
+      if (s.toLowerCase().includes(k.toLowerCase())) c = palette[k];
+    });
+    colors.push(c);
+  });
+  var ctx = document.getElementById('cStatus').getContext('2d');
+  if (window._chartStatus) window._chartStatus.destroy();
+  window._chartStatus = new Chart(ctx, {
+    type: 'pie',
+    data: { labels: labels, datasets: [{ data: counts, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { family: 'DM Mono', size: 10 }, padding: 14 } },
+        tooltip: { callbacks: { label: function(c) { var total = c.dataset.data.reduce(function(a,b){return a+b;},0); return c.label + ': ' + c.raw + ' (' + Math.round(c.raw/total*100) + '%)'; } } }
+      }
+    }
+  });
 }
 
 function renderChartMeses() {
