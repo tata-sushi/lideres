@@ -78,7 +78,7 @@ function syncColaboradoresAtivos() {
     }
   }
 
-  // Adiciona novos colaboradores com colunas de exame vazias
+  // Adiciona novos colaboradores com colunas de exame vazias (col L é fórmula, fica vazia aqui)
   var novas = [];
   for (var mat in mapaAtivos) {
     if (!mapaAsos[mat]) {
@@ -94,53 +94,36 @@ function syncColaboradoresAtivos() {
 
   Logger.log('Sync concluído. Existentes: ' + Object.keys(mapaAsos).length + ' | Novos: ' + novas.length);
 
-  calcularProximosExames();
+  // Garante a fórmula que calcula a Próxima Realização (col L) no próprio sheet
+  garantirFormulaProxima();
 }
 
-function calcularProximosExames() {
+// ─────────────────────────────────────────────────────────────────────────────
+// Coluna L "Próxima Realização" calculada por FÓRMULA no próprio sheet.
+// = Último exame realizado (col J) + Periodicidade em dias (col I).
+// A fórmula recalcula sozinha sempre que J ou I mudam — não depende de rodar
+// o script de novo. Aceita J como data real ou texto dd/mm/aaaa.
+// ─────────────────────────────────────────────────────────────────────────────
+function garantirFormulaProxima() {
   var ASOS_ID = '1vRYt7Nz-RdeKdQOgflMNfQFK4-bweO7vVAda2WWgVzs';
   var ss = SpreadsheetApp.openById(ASOS_ID);
   var sheet = ss.getSheetByName('Controle_de_asos');
   if (!sheet) return;
 
-  var rows = sheet.getDataRange().getValues();
-  var header = rows[0];
-  var idxI = header.indexOf('Periodicidade');           // col I — número de dias
-  var idxJ = header.indexOf('Último exame realizado');  // col J — data do último exame
-  var idxL = header.indexOf('Próxima Realização');      // col L — será preenchida
-
-  var atualizados = 0;
-  for (var i = 1; i < rows.length; i++) {
-    var ultimoVal  = rows[i][idxJ];
-    var periodoVal = rows[i][idxI];
-    var periodo    = parseInt(periodoVal);
-
-    if (!ultimoVal || !String(ultimoVal).trim() || isNaN(periodo) || periodo <= 0) continue;
-
-    var d = (ultimoVal instanceof Date)
-      ? new Date(ultimoVal.getTime())
-      : parseDateBRgs(ultimoVal);
-
-    if (!d || isNaN(d.getTime())) continue;
-
-    d.setDate(d.getDate() + periodo);
-    var dd   = d.getDate(),    mm   = d.getMonth() + 1, yyyy = d.getFullYear();
-    var proximo = (dd < 10 ? '0' + dd : dd) + '/' + (mm < 10 ? '0' + mm : mm) + '/' + yyyy;
-
-    sheet.getRange(i + 1, idxL + 1).setValue(proximo);
-    atualizados++;
+  // Remove fórmula/spill anterior em L2 e limpa quaisquer valores estáticos
+  // antigos na coluna L para liberar o spill da nova fórmula.
+  sheet.getRange('L2').clearContent();
+  SpreadsheetApp.flush();
+  var lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    sheet.getRange(2, 12, lastRow - 1, 1).clearContent();
   }
 
-  Logger.log('Próximos exames calculados: ' + atualizados + ' linhas atualizadas.');
-}
+  var formula = '=ARRAYFORMULA(IF((LEN(I2:I)=0)+(LEN(J2:J)=0)+(LEN(A2:A)=0)>0,"",'
+              + 'TEXT(IF(ISNUMBER(J2:J),J2:J,IFERROR(DATEVALUE(J2:J),0))+I2:I,"dd/mm/yyyy")))';
+  sheet.getRange('L2').setFormula(formula);
 
-function parseDateBRgs(s) {
-  var str = String(s).trim();
-  var p   = str.split('/');
-  if (p.length === 3) {
-    return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
-  }
-  return null;
+  Logger.log('Fórmula de Próxima Realização garantida em L2 (' + lastRow + ' linhas).');
 }
 
 function doPost(e) {
@@ -154,58 +137,17 @@ function doPost(e) {
     var matIdx = rows[0].indexOf('Matrícula');
     for (var i = 1; i < rows.length; i++) {
       if (String(rows[i][matIdx]).trim() === String(data.matricula).trim()) {
-        sheet.getRange(i+1, 8).setValue(data.tipoExame    || '');
-        sheet.getRange(i+1, 9).setValue(data.periodicidade || '');
-        sheet.getRange(i+1, 10).setValue(data.ultimoExame  || '');
-        sheet.getRange(i+1, 11).setValue(data.realizaExame || '');
+        sheet.getRange(i+1, 8).setValue(data.tipoExame    || '');  // H Tipo de Exame
+        sheet.getRange(i+1, 9).setValue(data.periodicidade || '');  // I Periodicidade
+        sheet.getRange(i+1, 10).setValue(data.ultimoExame  || '');  // J Último exame
+        sheet.getRange(i+1, 11).setValue(data.realizaExame || '');  // K Realiza exame
 
-        // Calcula próxima realização a partir de ultimoExame + periodicidade (dias)
-        var proxima = data.proximaRealizacao || '';
-        if (!proxima && data.ultimoExame && data.periodicidade) {
-          var periodo = parseInt(data.periodicidade);
-          var d = parseDateBRgs(data.ultimoExame);
-          if (d && !isNaN(d.getTime()) && periodo > 0) {
-            d.setDate(d.getDate() + periodo);
-            var dd = d.getDate(), mm = d.getMonth()+1, yyyy = d.getFullYear();
-            proxima = (dd<10?'0'+dd:dd)+'/'+(mm<10?'0'+mm:mm)+'/'+yyyy;
-          }
-        }
-        sheet.getRange(i+1, 12).setValue(proxima);
-        return respond({ok: true, proximaRealizacao: proxima});
-      }
-    }
-    return respond({ok: false, error: 'Matricula nao encontrada: ' + data.matricula});
-  } catch(err) {
-    return respond({ok: false, error: err.message});
-  }
-}
-
-function doGet(e) {
-  return ContentService.createTextOutput('ASO API OK').setMimeType(ContentService.MimeType.TEXT);
-}
-
-function respond(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  try {
-    var data = JSON.parse(e.postData.contents);
-    var ASOS_ID = '1vRYt7Nz-RdeKdQOgflMNfQFK4-bweO7vVAda2WWgVzs';
-    var ss = SpreadsheetApp.openById(ASOS_ID);
-    var sheet = ss.getSheetByName('Controle_de_asos');
-    if (!sheet) return respond({ok: false, error: 'Aba não encontrada'});
-    var rows = sheet.getDataRange().getValues();
-    var matIdx = rows[0].indexOf('Matrícula');
-    for (var i = 1; i < rows.length; i++) {
-      if (String(rows[i][matIdx]).trim() === String(data.matricula).trim()) {
-        sheet.getRange(i+1, 8).setValue(data.tipoExame         || '');
-        sheet.getRange(i+1, 9).setValue(data.periodicidade      || '');
-        sheet.getRange(i+1, 10).setValue(data.ultimoExame       || '');
-        sheet.getRange(i+1, 11).setValue(data.realizaExame      || '');
-        sheet.getRange(i+1, 12).setValue(data.proximaRealizacao || '');
-        return respond({ok: true});
+        // Col L (Próxima Realização) é calculada pela fórmula no sheet.
+        // Garante a fórmula e devolve o valor já recalculado da linha.
+        garantirFormulaProxima();
+        SpreadsheetApp.flush();
+        var prox = sheet.getRange(i+1, 12).getValue();
+        return respond({ok: true, proximaRealizacao: prox});
       }
     }
     return respond({ok: false, error: 'Matricula nao encontrada: ' + data.matricula});
