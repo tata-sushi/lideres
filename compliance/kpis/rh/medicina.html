@@ -364,10 +364,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <thead>
           <tr>
             <th>Colaborador</th>
-            <th>Unidade</th>
-            <th>Departamento</th>
-            <th>Tipo de Exame</th>
-            <th>Próxima</th>
+            <th>Próximo Exame</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -746,14 +743,11 @@ function renderDashTable() {
     var isVencido = prox && prox < hoje;
     html += '<tr>' +
       '<td class="col-nome">' + escH(r.nome) + '</td>' +
-      '<td>' + escH(r.unidade || '—') + '</td>' +
-      '<td>' + escH(r.departamento || '—') + '</td>' +
-      '<td>' + escH(r.tipoExame || '—') + '</td>' +
       '<td class="col-proximo' + (isVencido ? ' vencido-date' : '') + '">' + proxStr + '</td>' +
       '<td><span class="status-badge s-' + slug + '">' + escH(statusLabel(slug)) + '</span></td>' +
       '</tr>';
   });
-  tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px">Nenhum dado</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px">Nenhum dado</td></tr>';
   if (moreWrap) {
     var rest = sorted.length - dashShown;
     if (rest > 0) {
@@ -891,31 +885,26 @@ function renderVencimentosMesMed() {
     if (realiza==='nao' || realiza==='não') return false;
     return passesCFMed(r, 'mes');
   });
-  var byMonth = {}, minD = null, maxD = null;
+  // Agrega: total por (mês,ano) — cada colaborador conta 1 para o mês de proximaRealizacao
+  var byMonth = {};
   src.forEach(function(r) {
     var d = parseDateBR(r.proximaRealizacao); if (!d) return;
-    var first = new Date(d.getFullYear(), d.getMonth(), 1);
-    var key = String(first.getMonth()+1).padStart(2,'0') + '/' + first.getFullYear();
+    var key = String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
     byMonth[key] = (byMonth[key] || 0) + 1;
-    if (!minD || first < minD) minD = first;
-    if (!maxD || first > maxD) maxD = first;
   });
-  if (!minD) {
-    if (_chartMedVenc) { _chartMedVenc.destroy(); _chartMedVenc = null; }
-    canvas.parentNode.innerHTML = '<div class="kpis-empty">Sem dados.</div>';
-    return;
-  }
-  // Garante que o mês atual entra no range
-  var hoje = new Date(); var hojeFirst = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  if (hojeFirst < minD) minD = hojeFirst;
-  if (hojeFirst > maxD) maxD = hojeFirst;
+  // Janela: mês atual + próximos 11 (12 meses ahead) — vencimentos futuros
+  var hoje = new Date();
   var labels = [], counts = [];
-  var cur = new Date(minD);
-  while (cur <= maxD) {
-    var key = String(cur.getMonth()+1).padStart(2,'0') + '/' + cur.getFullYear();
+  for (var i = 0; i < 12; i++) {
+    var d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+    var key = String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
     labels.push(key);
     counts.push(byMonth[key] || 0);
-    cur.setMonth(cur.getMonth() + 1);
+  }
+  if (!labels.length || counts.every(function(c){ return c === 0; })) {
+    if (_chartMedVenc) { _chartMedVenc.destroy(); _chartMedVenc = null; }
+    canvas.parentNode.innerHTML = '<div class="kpis-empty">Sem vencimentos nos próximos 12 meses.</div>';
+    return;
   }
   var bgColors = labels.map(function(my) {
     if (_cfMed.dim !== 'mes') return '#35383F';
