@@ -87,7 +87,7 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
 
 .s-vencido     { background: #FDEAEA; color: #7A1A1A; }
 .s-a-vencer    { background: #FFF4DC; color: #7A4A00; }
-.s-em-dia      { background: #E6F9EE; color: #1A5C35; }
+.s-valido      { background: #E6F9EE; color: #1A5C35; }
 .s-pendente    { background: #E8F0FA; color: #1A3A5C; }
 .s-dispensado  { background: #F0F0F0; color: #888; }
 .s-default     { background: #F0F0F0; color: #888; }
@@ -566,20 +566,18 @@ function formatDateBR(d) {
 // ─── Status do exame ──────────────────────────────────────────────────────────
 function calcStatusExame(r) {
   var realiza = norm((r.realizaExame||'').toLowerCase().trim());
-  if (realiza==='nao'||realiza==='nao') return 'dispensado';
-  var ultimo = parseDateBR(r.ultimoExame);
-  if (!ultimo) return 'pendente';
+  if (realiza==='nao'||realiza==='não') return 'dispensado';
+  var prox = proximoExameDate(r);
+  if (!prox) return 'pendente';
   var hoje = new Date(); hoje.setHours(0,0,0,0);
-  var proximo = new Date(ultimo.getTime());
-  proximo.setDate(proximo.getDate() + (r.periodicidade||0));
-  var dias = Math.floor((proximo - hoje) / 86400000);
-  if (dias < 0) return 'vencido';
-  if (dias <= 60) return 'a-vencer';
-  return 'em-dia';
+  var em30 = new Date(hoje.getTime() + 30 * 86400000);
+  if (prox < hoje) return 'vencido';
+  if (prox <= em30) return 'a-vencer';
+  return 'valido';
 }
 
 function statusLabel(slug) {
-  return {'vencido':'Vencido','a-vencer':'A vencer','em-dia':'Em dia','pendente':'Pendente','dispensado':'Dispensado'}[slug] || slug;
+  return {'vencido':'Vencido','a-vencer':'A vencer','valido':'Válido','pendente':'Pendente','dispensado':'Dispensado'}[slug] || slug;
 }
 
 function proximoExameDate(r) {
@@ -636,7 +634,7 @@ function renderFilters() {
   html += sel('Tipo de Exame','tipoExame',unique(exames.map(function(r){return r.tipoExame;})),f.tipoExame);
   var h2='<div class="filter-group"><label class="filter-label">Status</label><select class="filter-select" onchange="setFilter(\'status\',this.value)">';
   h2+='<option value="Todos"'+(f.status==='Todos'?' selected':'')+'>Todos</option>';
-  ['vencido','a-vencer','em-dia','pendente','dispensado'].forEach(function(s){
+  ['vencido','a-vencer','valido','pendente','dispensado'].forEach(function(s){
     h2+='<option value="'+s+'"'+(f.status===s?' selected':'')+'>'+statusLabel(s)+'</option>';
   });
   html += h2+'</select></div>';
@@ -665,7 +663,7 @@ function renderKpis() {
   });
   var vencidos = ativos.filter(function(r){return calcStatusExame(r)==='vencido';}).length;
   var aVencer  = ativos.filter(function(r){return calcStatusExame(r)==='a-vencer';}).length;
-  var emDia    = ativos.filter(function(r){return calcStatusExame(r)==='em-dia';}).length;
+  var validos  = ativos.filter(function(r){return calcStatusExame(r)==='valido';}).length;
   var pendente = ativos.filter(function(r){return calcStatusExame(r)==='pendente';}).length;
   function kpiCard(label, num, alert) {
     return '<div class="kpi-card'+(alert?' alert':'')+'">'+
@@ -675,8 +673,8 @@ function renderKpis() {
   }
   wrap.innerHTML =
     kpiCard('Vencidos', vencidos, vencidos > 0) +
-    kpiCard('A Vencer (60d)', aVencer, false) +
-    kpiCard('Em Dia', emDia, false) +
+    kpiCard('A Vencer (30d)', aVencer, false) +
+    kpiCard('Válidos', validos, false) +
     kpiCard('Pendentes', pendente, false);
 }
 
@@ -717,7 +715,7 @@ function renderDashTable() {
   var countEl = document.getElementById('dash-count');
   var moreWrap = document.getElementById('show-more-wrap');
   if (!tbody) return;
-  var ORDER = { vencido: 0, 'a-vencer': 1, pendente: 2, 'em-dia': 3, dispensado: 4 };
+  var ORDER = { vencido: 0, 'a-vencer': 1, pendente: 2, valido: 3, dispensado: 4 };
   var sorted = exames.slice().sort(function(a, b) {
     return (ORDER[calcStatusExame(a)]||0) - (ORDER[calcStatusExame(b)]||0);
   });
