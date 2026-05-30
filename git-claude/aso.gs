@@ -32,7 +32,7 @@ function syncColaboradoresAtivos() {
   var asosDados = sheetAsos.getDataRange().getValues();
   var asoHeader = [
     'Matrícula', 'Nome', 'Cargo', 'Departamento', 'Unidade', 'Data de Admissão', 'Status',
-    'Tipo de Exame', 'Periodicidade', 'Último exame realizado', 'Realiza exame'
+    'Tipo de Exame', 'Periodicidade', 'Último exame realizado', 'Realiza exame', 'Próxima Realização'
   ];
 
   if (asosDados.length === 0 || asosDados[0][0] === '') {
@@ -83,7 +83,7 @@ function syncColaboradoresAtivos() {
   for (var mat in mapaAtivos) {
     if (!mapaAsos[mat]) {
       var c = mapaAtivos[mat];
-      novas.push([c.matricula, c.nome, c.cargo, c.departamento, c.unidade, c.admissao, 'Ativo', '', '', '', 'Sim']);
+      novas.push([c.matricula, c.nome, c.cargo, c.departamento, c.unidade, c.admissao, 'Ativo', '', '', '', 'Sim', '']);
     }
   }
 

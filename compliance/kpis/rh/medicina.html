@@ -544,7 +544,7 @@ var state = {
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 function sheetURL() {
   return 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID
-       + '/values/' + encodeURIComponent(SHEET_EXAMES) + '!A:K'
+       + '/values/' + encodeURIComponent(SHEET_EXAMES) + '!A:L'
        + '?key=' + API_KEY;
 }
 
@@ -560,7 +560,7 @@ function rowToObj(headers, row) {
   return obj;
 }
 
-// Colunas: Matrícula | Nome | Cargo | Departamento | Unidade | Data de Admissão | Status | Tipo de Exame | Periodicidade | Último exame realizado | Realiza exame
+// Colunas: A:Matrícula | B:Nome | C:Cargo | D:Departamento | E:Unidade | F:Data de Admissão | G:Status | H:Tipo de Exame | I:Periodicidade | J:Último exame realizado | K:Realiza exame | L:Próxima Realização
 function normExame(obj) {
   function v() {
     for (var i=0; i<arguments.length; i++) {
@@ -569,17 +569,18 @@ function normExame(obj) {
     return '';
   }
   return {
-    matricula:    v('matricula'),
-    nome:         v('nome'),
-    cargo:        v('cargo'),
-    departamento: v('departamento'),
-    unidade:      v('unidade'),
-    admissao:     v('data_de_admissao','data_admissao','admissao'),
-    statusColab:  v('status'),
-    tipoExame:    v('tipo_de_exame','tipo_exame'),
-    periodicidade: parseInt(v('periodicidade')) || 0,
-    ultimoExame:  v('ultimo_exame_realizado','ultimo_exame'),
-    realizaExame: v('realiza_exame','realiza_exame_')
+    matricula:          v('matricula'),
+    nome:               v('nome'),
+    cargo:              v('cargo'),
+    departamento:       v('departamento'),
+    unidade:            v('unidade'),
+    admissao:           v('data_de_admissao','data_admissao','admissao'),
+    statusColab:        v('status'),
+    tipoExame:          v('tipo_de_exame','tipo_exame'),
+    periodicidade:      parseInt(v('periodicidade')) || 0,
+    ultimoExame:        v('ultimo_exame_realizado','ultimo_exame'),
+    realizaExame:       v('realiza_exame','realiza_exame_'),
+    proximaRealizacao:  v('proxima_realizacao','proxima_realizacao_')
   };
 }
 
@@ -646,6 +647,8 @@ function statusLabel(slug) {
 }
 
 function proximoExameDate(r) {
+  var proxL = parseDateBR(r.proximaRealizacao);
+  if (proxL) return proxL;
   var ultimo = parseDateBR(r.ultimoExame);
   if (!ultimo || !r.periodicidade) return null;
   var d = new Date(ultimo.getTime());
@@ -660,7 +663,17 @@ function hideLoading() { var el=document.getElementById('loading-overlay'); if(e
 // ─── Filtros ──────────────────────────────────────────────────────────────────
 function getFiltered() {
   var f = state.filters;
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var em30 = new Date(hoje.getTime() + 30 * 86400000);
   return exames.filter(function(r) {
+    // Base: Ativo + Realiza=Sim + (sem exame anterior OU col L dentro de 30 dias)
+    var realiza = norm((r.realizaExame||'').toLowerCase().trim());
+    if (realiza !== 'sim') return false;
+    if (norm((r.statusColab||'').toLowerCase().trim()) !== 'ativo') return false;
+    var semExame = !r.ultimoExame || !r.ultimoExame.trim();
+    var proxL = parseDateBR(r.proximaRealizacao);
+    if (!semExame && !(proxL && proxL <= em30)) return false;
+    // Filtros de UI
     if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
     if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
     if (f.tipoExame!=='Todos' && r.tipoExame!==f.tipoExame) return false;
