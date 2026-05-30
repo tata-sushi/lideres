@@ -76,6 +76,16 @@ body[data-view="kpis"] .main { padding-top: 0; }
 .bar-track { height: 18px; background: var(--bg); border-radius: 4px; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--carbon); border-radius: 4px; transition: width 0.4s ease; }
 .bar-val { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--carbon); text-align: right; }
+
+/* Tabela de colaboradores (padrão bancodehoras) */
+.table-wrap { overflow-x: auto; }
+.colab-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.colab-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--white); cursor: pointer; user-select: none; }
+.colab-table thead th:hover { color: var(--carbon); }
+.colab-table tbody td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid var(--border); }
+.colab-table tbody td:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.colab-table tbody tr:hover { background: #FAFAFA; }
+.colab-status { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; color: var(--carbon); }
 .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
 .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
 .kpi-number { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
@@ -399,6 +409,20 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="kpis-card">
       <div class="kpis-card-title">Experi&ecirc;ncias por Departamento</div>
       <div class="bar-list" id="barExperDepto"></div>
+    </div>
+    <div class="kpis-card">
+      <div class="kpis-card-title">Colaboradores <span id="colab-count-label" style="color:var(--muted);font-size:10px;margin-left:8px;font-family:'DM Mono',monospace;font-weight:500;letter-spacing:0.5px;"></span></div>
+      <div class="table-wrap">
+        <table class="colab-table">
+          <thead>
+            <tr>
+              <th onclick="toggleSortColab('nome')">Colaborador <span id="icon-colab-nome">↕</span></th>
+              <th onclick="toggleSortColab('status')">Status <span id="icon-colab-status">↕</span></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-colab-exp"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -923,6 +947,66 @@ function renderExperBars() {
   renderFunilExp();
   renderBarsBy('barExperUnidade', function(c) { return c.unidade; }, 'Sem unidade');
   renderBarsBy('barExperDepto',   function(c) { return c.departamento; }, 'Sem departamento');
+  renderColabTableExp();
+}
+
+// ── Tabela de colaboradores na aba KPIs ──
+var COLAB_TABLE_PAGE = 10;
+var _colabSortCol = 'nome';
+var _colabSortDir = 1;
+var _colabRows = [];
+var _colabShown = 10;
+var STATUS_PENDENTE = 'Pendente';
+
+function colabStatus(c) {
+  return (c.statusDevolutiva && c.statusDevolutiva.trim()) || STATUS_PENDENTE;
+}
+
+function toggleSortColab(col) {
+  if (_colabSortCol === col) { _colabSortDir = -_colabSortDir; }
+  else { _colabSortCol = col; _colabSortDir = 1; }
+  var arrow = _colabSortDir === 1 ? '↑' : '↓';
+  document.getElementById('icon-colab-nome').textContent   = _colabSortCol === 'nome'   ? arrow : '↕';
+  document.getElementById('icon-colab-status').textContent = _colabSortCol === 'status' ? arrow : '↕';
+  renderColabTableExp();
+}
+
+function renderColabTableExp() {
+  var all = window._allColabs || [];
+  _colabRows = all.slice().sort(function(a, b) {
+    var av = _colabSortCol === 'status' ? colabStatus(a) : (a.nome || '');
+    var bv = _colabSortCol === 'status' ? colabStatus(b) : (b.nome || '');
+    return _colabSortDir * av.localeCompare(bv, 'pt-BR');
+  });
+  _colabShown = COLAB_TABLE_PAGE;
+  var label = document.getElementById('colab-count-label');
+  if (label) label.textContent = '— ' + all.length + ' resultado' + (all.length !== 1 ? 's' : '');
+  renderColabTableRowsExp();
+}
+
+function renderColabTableRowsExp() {
+  var display = _colabRows.slice(0, _colabShown);
+  var html = display.map(function(c) {
+    return '<tr>' +
+      '<td>' + escH(c.nome || '—') + '</td>' +
+      '<td><span class="colab-status">' + escH(colabStatus(c)) + '</span></td>' +
+    '</tr>';
+  }).join('');
+  var resto = _colabRows.length - _colabShown;
+  if (resto > 0) {
+    var proximo = Math.min(COLAB_TABLE_PAGE, resto);
+    html += '<tr><td colspan="2" style="text-align:center;padding:10px">' +
+      '<button onclick="showMoreColabExp()" style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer">Ver mais (' + proximo + ')</button>' +
+    '</td></tr>';
+  }
+  var tbody = document.getElementById('tbody-colab-exp');
+  if (tbody) tbody.innerHTML = html ||
+    '<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Nenhum colaborador</td></tr>';
+}
+
+function showMoreColabExp() {
+  _colabShown += COLAB_TABLE_PAGE;
+  renderColabTableRowsExp();
 }
 
 function renderFunilExp() {
