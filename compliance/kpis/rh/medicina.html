@@ -216,6 +216,8 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
 .drawer-footer-role{font-family:"DM Mono",monospace;font-size:9px;color:var(--muted);letter-spacing:.04em;margin-top:1px}
 .header-plus{width:28px;height:28px;background:var(--carbon);border:none;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
 .header-plus svg{width:14px;height:14px;stroke:var(--citric);fill:none;stroke-width:2.5;stroke-linecap:round}
+.drawer-sam-btn{display:flex;align-items:center;justify-content:center;width:100%;padding:10px 14px;background:var(--carbon);border:none;border-radius:4px;font-family:"DM Mono",monospace;font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:#fff;cursor:pointer;text-decoration:none;transition:opacity .15s;}
+.drawer-sam-btn:hover{opacity:.85;}
 
 /* ── Tabela de Exames (aba KPI's) ── */
 .table-wrap { overflow-x: auto; }
@@ -431,6 +433,55 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<!-- Modal Atualizar Relação -->
+<div class="modal-overlay" id="modal-atualizar-overlay" onclick="if(event.target===this)closeAtualizarModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-header-info">
+        <div class="modal-section-title" style="margin-bottom:4px;">Atualizar Relação</div>
+      </div>
+      <button class="modal-close" onclick="closeAtualizarModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card-field">
+          <label class="filter-label" style="margin-bottom:4px;display:block">Matrícula</label>
+          <input class="modal-input" id="atualizar-matricula" type="text" placeholder="Ex: 0001"/>
+        </div>
+        <div class="card-field">
+          <label class="filter-label" style="margin-bottom:4px;display:block">Tipo de Exame</label>
+          <input class="modal-input" id="atualizar-tipo" type="text" placeholder="Ex: Admissional, Periódico..."/>
+        </div>
+        <div class="card-field">
+          <label class="filter-label" style="margin-bottom:4px;display:block">Periodicidade (dias)</label>
+          <input class="modal-input" id="atualizar-periodo" type="number" min="1" placeholder="Ex: 365"/>
+        </div>
+        <div class="card-field">
+          <label class="filter-label" style="margin-bottom:4px;display:block">Último exame realizado</label>
+          <input class="modal-input" id="atualizar-ultimo" type="text" placeholder="DD/MM/AAAA"/>
+        </div>
+        <div class="card-field">
+          <label class="filter-label" style="margin-bottom:4px;display:block">Realiza exame</label>
+          <select class="modal-select" id="atualizar-realiza">
+            <option value="Sim">Sim</option>
+            <option value="Não">Não</option>
+          </select>
+        </div>
+        <div class="card-field">
+          <label class="filter-label" style="margin-bottom:4px;display:block">Próxima Realização</label>
+          <input class="modal-input" id="atualizar-proxima" type="text" placeholder="DD/MM/AAAA"/>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="closeAtualizarModal()">Cancelar</button>
+      <button class="modal-btn modal-btn-save" id="atualizar-btn-save" onclick="saveAtualizar()">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- DRAWER -->
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
@@ -469,6 +520,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-deptos">—</strong> depto / <strong id="drawer-kpi-colabs">—</strong> colab</span>
         </div>
       </div>
+    </div>
+    <div class="drawer-section">
+      <div class="drawer-section-label">Ações</div>
+      <button class="drawer-sam-btn" onclick="closeDrawer(); openAtualizarModal();">Atualizar relação</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -1046,6 +1101,41 @@ function openDrawer() {
 function closeDrawer() {
   document.getElementById('drawer-overlay').classList.remove('open');
   document.getElementById('drawer').classList.remove('open');
+}
+
+function openAtualizarModal() {
+  ['matricula','tipo','periodo','ultimo','proxima'].forEach(function(id){
+    document.getElementById('atualizar-'+id).value = '';
+  });
+  document.getElementById('atualizar-realiza').value = 'Sim';
+  var btn = document.getElementById('atualizar-btn-save');
+  btn.textContent = 'Salvar'; btn.disabled = false;
+  document.getElementById('modal-atualizar-overlay').classList.add('active');
+}
+function closeAtualizarModal() {
+  document.getElementById('modal-atualizar-overlay').classList.remove('active');
+}
+function saveAtualizar() {
+  var matricula = document.getElementById('atualizar-matricula').value.trim();
+  if (!matricula) { alert('Informe a matrícula.'); return; }
+  var btn = document.getElementById('atualizar-btn-save');
+  btn.textContent = 'Salvando...'; btn.disabled = true;
+  var payload = {
+    action:            'atualizarRelacao',
+    matricula:         matricula,
+    tipoExame:         document.getElementById('atualizar-tipo').value,
+    periodicidade:     document.getElementById('atualizar-periodo').value,
+    ultimoExame:       document.getElementById('atualizar-ultimo').value,
+    realizaExame:      document.getElementById('atualizar-realiza').value,
+    proximaRealizacao: document.getElementById('atualizar-proxima').value
+  };
+  fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) })
+    .then(function(r){ return r.json(); })
+    .then(function(resp) {
+      if (resp.ok) { closeAtualizarModal(); loadAllData(); }
+      else { alert('Erro: ' + (resp.error || 'Falha ao salvar')); btn.textContent = 'Salvar'; btn.disabled = false; }
+    })
+    .catch(function(err){ alert('Erro de rede: ' + err.message); btn.textContent = 'Salvar'; btn.disabled = false; });
 }
 
 loadAllData();
