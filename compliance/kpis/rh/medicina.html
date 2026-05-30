@@ -529,9 +529,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <script>
 // ─── CONFIG DO GOOGLE SHEETS ─────────────────────────────────────────────────
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-var SHEET_ID     = '14UsviSQbpJBPUNW1cuvCDnem7IRknSHBcxZg6jnq7pk';
-var API_KEY      = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
-var SHEET_EXAMES = 'Controle_de_asos';
+var SHEET_ID  = '14UsviSQbpJBPUNW1cuvCDnem7IRknSHBcxZg6jnq7pk';
+var API_KEY   = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
+var SHEET_GID = 599344130; // GID da aba de controle de ASOs
+var _tabName  = null;      // descoberto dinamicamente pelo GID
 
 // ─── Estado ───────────────────────────────────────────────────────────────────
 var exames = [];
@@ -542,9 +543,13 @@ var state = {
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
-function sheetURL() {
+function metaURL() {
   return 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID
-       + '/values/' + encodeURIComponent(SHEET_EXAMES) + '!A:L'
+       + '?key=' + API_KEY + '&fields=sheets.properties';
+}
+function dataURL(tabName) {
+  return 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID
+       + '/values/' + encodeURIComponent(tabName) + '!A:L'
        + '?key=' + API_KEY;
 }
 
@@ -584,24 +589,47 @@ function normExame(obj) {
   };
 }
 
+function parseRows(data) {
+  if (data.error) { state.error = data.error.message; hideLoading(); render(); return; }
+  var rows = data.values || [];
+  if (rows.length < 2) { exames = []; hideLoading(); render(); return; }
+  var headers = rows[0];
+  exames = [];
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i].some(function(c){ return c && c.trim(); })) {
+      exames.push(normExame(rowToObj(headers, rows[i])));
+    }
+  }
+  hideLoading(); render();
+}
+
 function loadAllData() {
   state.loading = true; state.error = null;
   showLoading();
-  fetch(sheetURL())
+  if (_tabName) {
+    fetch(dataURL(_tabName))
+      .then(function(r){ return r.json(); })
+      .then(parseRows)
+      .catch(function(err){ state.error = err.message||'Erro de rede'; hideLoading(); render(); });
+    return;
+  }
+  // Descobre o nome real da aba pelo GID
+  fetch(metaURL())
     .then(function(r){ return r.json(); })
-    .then(function(data) {
-      if (data.error) { state.error = data.error.message; hideLoading(); render(); return; }
-      var rows = data.values || [];
-      if (rows.length < 2) { exames = []; hideLoading(); render(); return; }
-      var headers = rows[0];
-      exames = [];
-      for (var i = 1; i < rows.length; i++) {
-        if (rows[i].some(function(c){return c && c.trim();})) {
-          exames.push(normExame(rowToObj(headers, rows[i])));
+    .then(function(meta) {
+      if (meta.error) { state.error = meta.error.message; hideLoading(); render(); return; }
+      var sheets = meta.sheets || [];
+      for (var i = 0; i < sheets.length; i++) {
+        if (sheets[i].properties.sheetId === SHEET_GID) {
+          _tabName = sheets[i].properties.title;
+          break;
         }
       }
-      hideLoading(); render();
+      if (!_tabName) { state.error = 'Aba não encontrada (GID ' + SHEET_GID + ')'; hideLoading(); render(); return; }
+      return fetch(dataURL(_tabName));
     })
+    .then(function(r){ return r && r.json(); })
+    .then(function(data){ if (data) parseRows(data); })
     .catch(function(err){ state.error = err.message||'Erro de rede'; hideLoading(); render(); });
 }
 
