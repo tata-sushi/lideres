@@ -764,6 +764,7 @@ function showMoreDash() { dashShown += DASH_PAGE; renderDashTable(); }
 // ─── Filtros + Cross-filter da aba KPIs ───────────────────────────────────────
 var _medFiltroUnidade = 'Todas';
 var _medFiltroDepto   = 'Todos';
+var _medFiltroStatus  = 'Todos';
 var _cfMed = { dim: null, value: null };
 
 function _proxMYMed(r) {
@@ -775,6 +776,7 @@ function _proxMYMed(r) {
 function passesCFMed(r, exceptDim) {
   if (_medFiltroUnidade !== 'Todas' && exceptDim !== 'unidade' && r.unidade !== _medFiltroUnidade) return false;
   if (_medFiltroDepto   !== 'Todos' && exceptDim !== 'depto'   && r.departamento !== _medFiltroDepto) return false;
+  if (_medFiltroStatus  !== 'Todos' && exceptDim !== 'status'  && calcStatusExame(r) !== _medFiltroStatus) return false;
   if (_cfMed.dim && _cfMed.dim !== exceptDim) {
     if (_cfMed.dim === 'tipo') return (r.tipoExame || 'Sem tipo') === _cfMed.value;
     if (_cfMed.dim === 'mes')  return _proxMYMed(r) === _cfMed.value;
@@ -805,24 +807,38 @@ function renderMedFiltros() {
     var h = '<div class="filter-group"><label class="filter-label">'+label+'</label>'+
       '<select class="filter-select" onchange="'+onchange+'">'+
       '<option'+(val===allLabel?' selected':'')+'>'+allLabel+'</option>';
-    opts.forEach(function(o){ h+='<option value="'+escH(o)+'"'+(val===o?' selected':'')+'>'+escH(o)+'</option>'; });
+    opts.forEach(function(o){
+      var labelTxt = typeof o === 'object' ? o.label : o;
+      var v = typeof o === 'object' ? o.value : o;
+      h += '<option value="'+escH(v)+'"'+(val===v?' selected':'')+'>'+escH(labelTxt)+'</option>';
+    });
     return h+'</select></div>';
   }
+  var statusOpts = [
+    { value: 'vencido',  label: 'Vencido' },
+    { value: 'a-vencer', label: 'A vencer' },
+    { value: 'valido',   label: 'Válido' },
+    { value: 'pendente', label: 'Pendente' },
+    { value: 'dispensado', label: 'Dispensado' }
+  ];
   wrap.innerHTML =
     '<div class="filters-row">' +
       sel('Unidade', _medFiltroUnidade, unidades, 'Todas', "setMedFiltro('unidade',this.value)") +
       sel('Departamento', _medFiltroDepto, deptos, 'Todos', "setMedFiltro('depto',this.value)") +
+      sel('Status', _medFiltroStatus, statusOpts, 'Todos', "setMedFiltro('status',this.value)") +
     '</div>' +
     '<div class="filters-actions"><button class="btn-clear" onclick="clearMedFiltros()">Limpar filtros</button></div>';
 }
 function setMedFiltro(key, val) {
-  if (key === 'unidade') { _medFiltroUnidade = val; _medFiltroDepto = 'Todos'; }
-  else                    { _medFiltroDepto   = val; }
+  if (key === 'unidade')      { _medFiltroUnidade = val; _medFiltroDepto = 'Todos'; }
+  else if (key === 'depto')   { _medFiltroDepto   = val; }
+  else if (key === 'status')  { _medFiltroStatus  = val; }
   render();
 }
 function clearMedFiltros() {
   _medFiltroUnidade = 'Todas';
   _medFiltroDepto   = 'Todos';
+  _medFiltroStatus  = 'Todos';
   _cfMed = { dim: null, value: null };
   document.body.classList.remove('cf-active-med');
   render();
