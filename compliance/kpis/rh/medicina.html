@@ -567,22 +567,12 @@ function formatDateBR(d) {
 function calcStatusExame(r) {
   var realiza = norm((r.realizaExame||'').toLowerCase().trim());
   if (realiza==='nao'||realiza==='não') return 'dispensado';
+  var proxL = parseDateBR(r.proximaRealizacao);
+  if (!proxL) return 'pendente';
   var hoje = new Date(); hoje.setHours(0,0,0,0);
   var em30  = new Date(hoje.getTime() + 30 * 86400000);
-  // Preferência: col L (Próxima Realização) já calculada no sheet
-  var proxL = parseDateBR(r.proximaRealizacao);
-  if (proxL) {
-    if (proxL < hoje) return 'vencido';
-    if (proxL <= em30) return 'a-vencer';
-    return 'valido';
-  }
-  // Fallback: col J (Último exame) + col I (Periodicidade dias)
-  var ultimo = parseDateBR(r.ultimoExame);
-  if (!ultimo) return 'pendente';
-  var prox = new Date(ultimo.getTime());
-  prox.setDate(prox.getDate() + (r.periodicidade || 0));
-  if (prox < hoje) return 'vencido';
-  if (prox <= em30) return 'a-vencer';
+  if (proxL < hoje) return 'vencido';
+  if (proxL <= em30) return 'a-vencer';
   return 'valido';
 }
 
@@ -591,13 +581,7 @@ function statusLabel(slug) {
 }
 
 function proximoExameDate(r) {
-  var proxL = parseDateBR(r.proximaRealizacao);
-  if (proxL) return proxL;
-  var ultimo = parseDateBR(r.ultimoExame);
-  if (!ultimo || !r.periodicidade) return null;
-  var d = new Date(ultimo.getTime());
-  d.setDate(d.getDate() + r.periodicidade);
-  return d;
+  return parseDateBR(r.proximaRealizacao) || null;
 }
 
 // ─── Loading ──────────────────────────────────────────────────────────────────
@@ -614,9 +598,8 @@ function getFiltered() {
     var realiza = norm((r.realizaExame||'').toLowerCase().trim());
     if (realiza !== 'sim') return false;
     if (norm((r.statusColab||'').toLowerCase().trim()) !== 'ativo') return false;
-    var semExame = !r.ultimoExame || !r.ultimoExame.trim();
-    var proxL = proximoExameDate(r);
-    if (!semExame && !(proxL && proxL <= em30)) return false;
+    var proxL = parseDateBR(r.proximaRealizacao);
+    if (!(proxL && proxL <= em30)) return false;
     // Filtros de UI
     if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
     if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
