@@ -105,6 +105,11 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .bar-val { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--carbon); text-align: right; }
 .chart-wrap { position: relative; height: 220px; }
 
+/* Cross-filter (clique nos gráficos) */
+.cf-active-sol .bar-row:not(.cf-selected):not(.cf-related) { opacity: 0.45; }
+.bar-row.clickable { cursor: pointer; }
+.bar-row.cf-selected { outline: 2px solid var(--carbon); outline-offset: 2px; border-radius: 4px; }
+
 /* FILTERS */
 .filters-wrap {
   background: var(--surface);
@@ -1222,19 +1227,38 @@ function clearKpiFiltrosSol() {
   document.getElementById('kpi-sol-filtro-depto').value   = 'Todos';
   _kpiSolFiltroUnidade = 'Todas';
   _kpiSolFiltroDepto   = 'Todos';
+  _cfSol = { dim: null, value: null };
+  document.body.classList.remove('cf-active-sol');
+  updateKPIs();
+}
+
+// ── Cross-filter da aba KPIs (clique nos gráficos) ──
+var _cfSol = { dim: null, value: null };
+function passesCFSol(d, exceptDim) {
+  if (_kpiSolFiltroUnidade !== 'Todas' && exceptDim !== 'unidade' && d.unidade !== _kpiSolFiltroUnidade) return false;
+  if (_kpiSolFiltroDepto   !== 'Todos' && exceptDim !== 'depto'   && d.departamento !== _kpiSolFiltroDepto) return false;
+  if (_cfSol.dim && _cfSol.dim !== exceptDim) {
+    if (_cfSol.dim === 'unidade') return d.unidade === _cfSol.value;
+    if (_cfSol.dim === 'depto')   return d.departamento === _cfSol.value;
+    if (_cfSol.dim === 'mes')     return _dateToMYSol(d.abertura) === _cfSol.value;
+  }
+  return true;
+}
+function setCFSol(dim, value) {
+  if (_cfSol.dim === dim && _cfSol.value === value) {
+    _cfSol = { dim: null, value: null };
+  } else {
+    _cfSol = { dim: dim, value: value };
+  }
+  document.body.classList.toggle('cf-active-sol', _cfSol.dim !== null);
   updateKPIs();
 }
 
 function updateKPIs() {
   populateKpiFiltrosSol();
 
-  // Aba KPIs: parte da lista COMPLETA (DATA_FULL, sem o limite de 10 dias que
-  // recorta a aba Solicitações) e aplica só os filtros próprios desta aba
-  var src = DATA_FULL.filter(function(d) {
-    if (_kpiSolFiltroUnidade !== 'Todas' && d.unidade !== _kpiSolFiltroUnidade) return false;
-    if (_kpiSolFiltroDepto   !== 'Todos' && d.departamento !== _kpiSolFiltroDepto) return false;
-    return true;
-  });
+  // Para KPI cards: aplica filtros + cross-filter (sem exceção)
+  var src = DATA_FULL.filter(function(d) { return passesCFSol(d, null); });
 
   var total = src.length;
   var fin = src.filter(function(d){ return d.status_q === 'Finalizado'; }).length;
@@ -1247,17 +1271,28 @@ function updateKPIs() {
 
   document.getElementById('kpi-andamento').className = and === 0 ? 'kpi-value dash' : 'kpi-value';
 
-  renderSolBars(src);
+  renderSolBars();
 }
 
 function escHSol(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+function escAttrSol(s) { return escHSol(s).replace(/"/g,'&quot;').replace(/'/g,"\\'"); }
 
-function renderBarsBySol(elId, src, fieldFn, fallback) {
+function renderBarsBySol(elId, fieldFn, fallback, dim) {
   var el = document.getElementById(elId);
   if (!el) return;
+  // Fonte: aplica todos os filtros/CF EXCETO a própria dimensão
+  var src = DATA_FULL.filter(function(d) { return passesCFSol(d, dim); });
   if (!src.length) { el.innerHTML = '<div class="kpis-empty">Sem dados.</div>'; return; }
+  // Itens "relacionados" quando o CF ativo é de outra dimensão
+  var related = {};
+  if (_cfSol.dim && _cfSol.dim !== dim) {
+    src.forEach(function(d) {
+      var k = fieldFn(d) || fallback;
+      if (k) related[k] = true;
+    });
+  }
   var counts = {};
   src.forEach(function(d) {
     var k = fieldFn(d) || fallback;
@@ -1268,7 +1303,10 @@ function renderBarsBySol(elId, src, fieldFn, fallback) {
   var max = items.length ? items[0].total : 0;
   el.innerHTML = items.map(function(a) {
     var pct = max > 0 ? (a.total / max * 100).toFixed(1) : 0;
-    return '<div class="bar-row">' +
+    var isSel = dim && _cfSol.dim === dim && _cfSol.value === a.nome;
+    var extra = isSel ? ' cf-selected' : (related[a.nome] ? ' cf-related' : '');
+    var onclick = dim ? ' onclick="setCFSol(\'' + dim + '\',\'' + escAttrSol(a.nome) + '\')"' : '';
+    return '<div class="bar-row clickable' + extra + '"' + onclick + '>' +
       '<div class="bar-name">' + escHSol(a.nome) + '</div>' +
       '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
       '<div class="bar-val">' + a.total + '</div>' +
@@ -1276,10 +1314,10 @@ function renderBarsBySol(elId, src, fieldFn, fallback) {
   }).join('');
 }
 
-function renderSolBars(src) {
-  renderBarsBySol('barSolUnidade', src, function(d) { return d.unidade; },      'Sem unidade');
-  renderBarsBySol('barSolDepto',   src, function(d) { return d.departamento; }, 'Sem departamento');
-  renderChartCompetenciaSol(src);
+function renderSolBars() {
+  renderBarsBySol('barSolUnidade', function(d) { return d.unidade; },      'Sem unidade',      'unidade');
+  renderBarsBySol('barSolDepto',   function(d) { return d.departamento; }, 'Sem departamento', 'depto');
+  renderChartCompetenciaSol();
 }
 
 // Plugin: valores acima das barras (carbon)
@@ -1320,9 +1358,12 @@ function _dateToMYSol(s) {
 }
 
 var _chartSolCompetencia = null;
-function renderChartCompetenciaSol(src) {
+function renderChartCompetenciaSol() {
   var canvas = document.getElementById('chartSolCompetencia');
   if (!canvas || typeof Chart === 'undefined') return;
+
+  // Fonte: aplica todos os filtros/CF EXCETO a própria dimensão "mes"
+  var src = DATA_FULL.filter(function(d) { return passesCFSol(d, 'mes'); });
 
   // Agrega por MM/YYYY parseável de d.abertura
   var byMonth = {};
@@ -1354,13 +1395,18 @@ function renderChartCompetenciaSol(src) {
     counts.push(byMonth[key] || 0);
     cur.setMonth(cur.getMonth() + 1);
   }
+  // Cor de cada barra: se há CF em "mes", a selecionada fica carbon e as outras desbotam
+  var bgColors = labels.map(function(my) {
+    if (_cfSol.dim !== 'mes') return '#35383F';
+    return my === _cfSol.value ? '#35383F' : 'rgba(53,56,63,0.45)';
+  });
 
   if (_chartSolCompetencia) _chartSolCompetencia.destroy();
   _chartSolCompetencia = new Chart(canvas, {
     type: 'bar',
     data: { labels: labels, datasets: [{
       data: counts,
-      backgroundColor: '#35383F',
+      backgroundColor: bgColors,
       borderWidth: 0,
       borderRadius: 5,
       barPercentage: 0.6
@@ -1371,6 +1417,8 @@ function renderChartCompetenciaSol(src) {
       maintainAspectRatio: false,
       animation: false,
       layout: { padding: { top: 18 } },
+      onClick: function(e, els) { if (els.length) setCFSol('mes', labels[els[0].index]); },
+      onHover: function(e, els) { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
       scales: {
         x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 } } },
