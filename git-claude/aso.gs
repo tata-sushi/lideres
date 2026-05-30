@@ -93,6 +93,54 @@ function syncColaboradoresAtivos() {
   }
 
   Logger.log('Sync concluído. Existentes: ' + Object.keys(mapaAsos).length + ' | Novos: ' + novas.length);
+
+  calcularProximosExames();
+}
+
+function calcularProximosExames() {
+  var ASOS_ID = '1vRYt7Nz-RdeKdQOgflMNfQFK4-bweO7vVAda2WWgVzs';
+  var ss = SpreadsheetApp.openById(ASOS_ID);
+  var sheet = ss.getSheetByName('Controle_de_asos');
+  if (!sheet) return;
+
+  var rows = sheet.getDataRange().getValues();
+  var header = rows[0];
+  var idxI = header.indexOf('Periodicidade');           // col I — número de dias
+  var idxJ = header.indexOf('Último exame realizado');  // col J — data do último exame
+  var idxL = header.indexOf('Próxima Realização');      // col L — será preenchida
+
+  var atualizados = 0;
+  for (var i = 1; i < rows.length; i++) {
+    var ultimoVal  = rows[i][idxJ];
+    var periodoVal = rows[i][idxI];
+    var periodo    = parseInt(periodoVal);
+
+    if (!ultimoVal || !String(ultimoVal).trim() || isNaN(periodo) || periodo <= 0) continue;
+
+    var d = (ultimoVal instanceof Date)
+      ? new Date(ultimoVal.getTime())
+      : parseDateBRgs(ultimoVal);
+
+    if (!d || isNaN(d.getTime())) continue;
+
+    d.setDate(d.getDate() + periodo);
+    var dd   = d.getDate(),    mm   = d.getMonth() + 1, yyyy = d.getFullYear();
+    var proximo = (dd < 10 ? '0' + dd : dd) + '/' + (mm < 10 ? '0' + mm : mm) + '/' + yyyy;
+
+    sheet.getRange(i + 1, idxL + 1).setValue(proximo);
+    atualizados++;
+  }
+
+  Logger.log('Próximos exames calculados: ' + atualizados + ' linhas atualizadas.');
+}
+
+function parseDateBRgs(s) {
+  var str = String(s).trim();
+  var p   = str.split('/');
+  if (p.length === 3) {
+    return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+  }
+  return null;
 }
 
 function doPost(e) {
@@ -106,12 +154,24 @@ function doPost(e) {
     var matIdx = rows[0].indexOf('Matrícula');
     for (var i = 1; i < rows.length; i++) {
       if (String(rows[i][matIdx]).trim() === String(data.matricula).trim()) {
-        sheet.getRange(i+1, 8).setValue(data.tipoExame         || '');
-        sheet.getRange(i+1, 9).setValue(data.periodicidade      || '');
-        sheet.getRange(i+1, 10).setValue(data.ultimoExame       || '');
-        sheet.getRange(i+1, 11).setValue(data.realizaExame      || '');
-        sheet.getRange(i+1, 12).setValue(data.proximaRealizacao || '');
-        return respond({ok: true});
+        sheet.getRange(i+1, 8).setValue(data.tipoExame    || '');
+        sheet.getRange(i+1, 9).setValue(data.periodicidade || '');
+        sheet.getRange(i+1, 10).setValue(data.ultimoExame  || '');
+        sheet.getRange(i+1, 11).setValue(data.realizaExame || '');
+
+        // Calcula próxima realização a partir de ultimoExame + periodicidade (dias)
+        var proxima = data.proximaRealizacao || '';
+        if (!proxima && data.ultimoExame && data.periodicidade) {
+          var periodo = parseInt(data.periodicidade);
+          var d = parseDateBRgs(data.ultimoExame);
+          if (d && !isNaN(d.getTime()) && periodo > 0) {
+            d.setDate(d.getDate() + periodo);
+            var dd = d.getDate(), mm = d.getMonth()+1, yyyy = d.getFullYear();
+            proxima = (dd<10?'0'+dd:dd)+'/'+(mm<10?'0'+mm:mm)+'/'+yyyy;
+          }
+        }
+        sheet.getRange(i+1, 12).setValue(proxima);
+        return respond({ok: true, proximaRealizacao: proxima});
       }
     }
     return respond({ok: false, error: 'Matricula nao encontrada: ' + data.matricula});
