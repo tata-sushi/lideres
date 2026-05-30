@@ -202,11 +202,8 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
 .table-wrap { overflow-x: auto; background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); }
 .exam-table-header { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 12px; display: flex; align-items: baseline; gap: 8px; }
 .exam-table-header span { color: var(--muted); font-size: 10px; font-weight: 400; }
-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 10px 14px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); }
-thead th:nth-child(1) { width: 48%; }
-thead th:nth-child(2) { width: 28%; }
-thead th:nth-child(3) { width: 24%; }
+table { width: 100%; border-collapse: collapse; table-layout: auto; min-width: 780px; }
+thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 10px 14px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); white-space: nowrap; }
 tbody td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: #FAFAFA; }
@@ -337,8 +334,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <thead>
           <tr>
             <th>Colaborador</th>
-            <th>Status do Exame</th>
-            <th>Próxima Realização</th>
+            <th>Unidade</th>
+            <th>Departamento</th>
+            <th>Tipo de Exame</th>
+            <th>Period.</th>
+            <th>Último Exame</th>
+            <th>Próxima</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody id="tbody-exames"></tbody>
@@ -460,11 +462,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <script>
-// ─── CONFIG DO GOOGLE SHEETS ─────────────────────────────────────────────────
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-var SHEET_ID     = '1vRYt7Nz-RdeKdQOgflMNfQFK4-bweO7vVAda2WWgVzs';
-var API_KEY      = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
-var SHEET_EXAMES = 'Controle_de_asos';
 var SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbw2d8S-nsu0cvs5oPyRZTsXtYvBC_9B85IBkE8t5IGoAsoq2nEumkNGllhSdIGUoXnTbg/exec';
 
 // ─── Estado ───────────────────────────────────────────────────────────────────
@@ -476,20 +474,15 @@ var state = {
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
-function dataURL() {
-  return 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID
-       + '/values/' + encodeURIComponent(SHEET_EXAMES) + '!A:L'
-       + '?key=' + API_KEY;
-}
-
 function rowToObj(headers, row) {
   var obj = {};
   headers.forEach(function(h, i) {
+    var val = (row[i] !== null && row[i] !== undefined) ? String(row[i]) : '';
     obj[h.toLowerCase().trim()
          .replace(/[áàâã]/g,'a').replace(/[éê]/g,'e')
          .replace(/[í]/g,'i').replace(/[óôõ]/g,'o')
          .replace(/[ú]/g,'u').replace(/[ç]/g,'c')
-         .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'_')] = (row[i] || '').trim();
+         .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'_')] = val.trim();
   });
   return obj;
 }
@@ -519,7 +512,8 @@ function normExame(obj) {
 }
 
 function parseRows(data) {
-  if (data.error) { state.error = data.error.message; hideLoading(); render(); return; }
+  if (data.ok === false) { state.error = data.error || 'Erro no servidor'; hideLoading(); render(); return; }
+  if (data.error) { state.error = data.error.message || data.error; hideLoading(); render(); return; }
   var rows = data.values || [];
   if (rows.length < 2) { exames = []; hideLoading(); render(); return; }
   var headers = rows[0];
@@ -535,7 +529,7 @@ function parseRows(data) {
 function loadAllData() {
   state.loading = true; state.error = null;
   showLoading();
-  fetch(dataURL())
+  fetch(SCRIPT_URL + '?action=getData')
     .then(function(r){ return r.json(); })
     .then(parseRows)
     .catch(function(err){ state.error = err.message||'Erro de rede'; hideLoading(); render(); });
@@ -721,12 +715,19 @@ function renderDashTable() {
     var proxStr = prox ? formatDateBR(prox) : '—';
     var isVencido = prox && prox < hoje;
     html += '<tr>' +
-      '<td class="col-nome">' + escH(r.nome) + '</td>' +
-      '<td><span class="status-badge s-' + slug + '">' + escH(statusLabel(slug)) + '</span></td>' +
+      '<td class="col-nome">' + escH(r.nome) +
+        (r.matricula ? '<br><span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted)">#' + escH(r.matricula) + '</span>' : '') +
+      '</td>' +
+      '<td>' + escH(r.unidade || '—') + '</td>' +
+      '<td>' + escH(r.departamento || '—') + '</td>' +
+      '<td>' + escH(r.tipoExame || '—') + '</td>' +
+      '<td style="font-family:\'DM Mono\',monospace;font-size:11px;text-align:center">' + (r.periodicidade ? r.periodicidade + 'd' : '—') + '</td>' +
+      '<td class="col-proximo">' + escH(r.ultimoExame || '—') + '</td>' +
       '<td class="col-proximo' + (isVencido ? ' vencido-date' : '') + '">' + proxStr + '</td>' +
+      '<td><span class="status-badge s-' + slug + '">' + escH(statusLabel(slug)) + '</span></td>' +
       '</tr>';
   });
-  tbody.innerHTML = html || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px">Nenhum dado</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px">Nenhum dado</td></tr>';
   if (moreWrap) {
     var rest = sorted.length - dashShown;
     if (rest > 0) {
