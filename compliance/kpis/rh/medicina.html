@@ -197,6 +197,20 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
 .header-plus{width:28px;height:28px;background:var(--carbon);border:none;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
 .header-plus svg{width:14px;height:14px;stroke:var(--citric);fill:none;stroke-width:2.5;stroke-linecap:round}
 
+/* ── Tabela de Exames (aba KPI's) ── */
+.exam-table-wrap { padding: 14px 20px 80px; max-width: 800px; margin: 0 auto; }
+.table-wrap { overflow-x: auto; background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.exam-table-header { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 12px; display: flex; align-items: baseline; gap: 8px; }
+.exam-table-header span { color: var(--muted); font-size: 10px; font-weight: 400; }
+table { width: 100%; border-collapse: collapse; }
+thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 10px 14px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); }
+tbody td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: #FAFAFA; }
+.col-nome { font-weight: 600; color: var(--carbon); }
+.col-proximo { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); }
+.col-proximo.vencido-date { color: #7A1A1A; font-weight: 600; }
+
 /* LOADING OVERLAY — padrão único do portal (git-claude/readmeload.md) */
 .loading-overlay { display: none; position: fixed; inset: 0; background: rgba(255,255,255,.75); z-index: 500; align-items: center; justify-content: center; flex-direction: column; gap: 10px; }
 .loading-overlay.show { display: flex; }
@@ -310,30 +324,21 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 <div class="dash-filters-wrap" id="dash-filters-wrap"></div>
 <div class="dashboard" id="dashboard">
-  <div class="chart-card" id="chartCardFunil">
-    <div class="chart-title">Funil de Recrutamento 2026</div>
-    <div id="funil-rows" style="padding:4px 0 8px;"></div>
-  </div>
-  <div class="dash-subtabs">
-    <button class="dash-subtab active" id="dash-sub-entrevistas" type="button" onclick="setDashSrc('entrevistas')">Entrevistas</button>
-  </div>
-  <div class="chart-card" id="chartCard">
-    <div class="chart-title" id="chartTitle">Entrevistas por Mês</div>
-    <div class="chart-wrap"><canvas id="cRecrut"></canvas></div>
-  </div>
-  <div class="chart-card" id="chartCardStatus">
-    <div class="chart-title" id="chartTitleStatus">Status das Entrevistas</div>
-    <div class="status-table" id="statusTable"></div>
-  </div>
-  <div class="chart-card" id="chartCardRecrutador">
-    <div class="chart-title">Produtividade por Responsável</div>
-    <div id="recrutadorWrap"><canvas id="cRecrutador"></canvas></div>
-  </div>
-  <div class="ver-mais-wrap">
-    <a class="btn-ver-mais" href="/compliance/kpis/rh/recrutamento2.html">
-      Ver dashboard completo
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>
-    </a>
+  <div class="exam-table-wrap">
+    <div class="exam-table-header">Colaboradores <span id="dash-count"></span></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Colaborador</th>
+            <th>Status do Exame</th>
+            <th>Próxima Realização</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-exames"></tbody>
+      </table>
+    </div>
+    <div id="show-more-wrap" style="display:none;text-align:center;margin-top:12px;"></div>
   </div>
 </div>
 <div class="filters-wrap" id="filters-wrap"></div>
@@ -521,7 +526,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <script>
 // ─── CONFIG DO GOOGLE SHEETS ─────────────────────────────────────────────────
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-var SHEET_ID     = '1vRYt7Nz-RdeKdQOgflMNfQFK4-bweO7vVAda2WWgVzs';
+var SHEET_ID     = '14UsviSQbpJBPUNW1cuvCDnem7IRknSHBcxZg6jnq7pk';
 var API_KEY      = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
 var SHEET_EXAMES = 'Controle_de_asos';
 
@@ -745,9 +750,51 @@ function buildCard(r) {
     '</div></div>';
 }
 
+// ─── Tabela KPI's ─────────────────────────────────────────────────────────────
+var DASH_PAGE = 10;
+var dashShown = DASH_PAGE;
+
+function renderDashTable() {
+  var tbody  = document.getElementById('tbody-exames');
+  var countEl = document.getElementById('dash-count');
+  var moreWrap = document.getElementById('show-more-wrap');
+  if (!tbody) return;
+  var ORDER = { vencido: 0, 'a-vencer': 1, pendente: 2, 'em-dia': 3, dispensado: 4 };
+  var sorted = exames.slice().sort(function(a, b) {
+    return (ORDER[calcStatusExame(a)]||0) - (ORDER[calcStatusExame(b)]||0);
+  });
+  if (countEl) countEl.textContent = '— ' + sorted.length + ' colaborador(es)';
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var html = '';
+  sorted.slice(0, dashShown).forEach(function(r) {
+    var slug = calcStatusExame(r);
+    var prox = proximoExameDate(r);
+    var proxStr = prox ? formatDateBR(prox) : '—';
+    var isVencido = prox && prox < hoje;
+    html += '<tr>' +
+      '<td class="col-nome">' + escH(r.nome) + '</td>' +
+      '<td><span class="status-badge s-' + slug + '">' + escH(statusLabel(slug)) + '</span></td>' +
+      '<td class="col-proximo' + (isVencido ? ' vencido-date' : '') + '">' + proxStr + '</td>' +
+      '</tr>';
+  });
+  tbody.innerHTML = html || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px">Nenhum dado</td></tr>';
+  if (moreWrap) {
+    var rest = sorted.length - dashShown;
+    if (rest > 0) {
+      moreWrap.style.display = 'block';
+      moreWrap.innerHTML = '<button onclick="showMoreDash()" style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer">Ver mais (' + rest + ')</button>';
+    } else {
+      moreWrap.style.display = 'none';
+    }
+  }
+}
+
+function showMoreDash() { dashShown += DASH_PAGE; renderDashTable(); }
+
 // ─── Render ───────────────────────────────────────────────────────────────────
 function render() {
   renderKpis();
+  if (state.tab === 'dashboard') renderDashTable();
   if (state.tab === 'exames') {
     renderFilters();
     var filtered = getFiltered();
