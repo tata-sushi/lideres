@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Controle de Solicitações — TATÁ Sushi</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -102,6 +103,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .bar-track { height: 18px; background: var(--bg); border-radius: 4px; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--carbon); border-radius: 4px; transition: width 0.4s ease; }
 .bar-val { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--carbon); text-align: right; }
+.chart-wrap { position: relative; height: 220px; }
 
 /* FILTERS */
 .filters-wrap {
@@ -713,7 +715,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="kpis-card">
       <div class="kpis-card-title">Solicita&ccedil;&otilde;es por Compet&ecirc;ncia</div>
-      <div class="bar-list" id="barSolTipo"></div>
+      <div class="chart-wrap"><canvas id="chartSolCompetencia"></canvas></div>
     </div>
   </div>
   <div class="ver-mais-wrap">
@@ -1219,7 +1221,84 @@ function renderBarsBySol(elId, src, fieldFn, fallback) {
 function renderSolBars(src) {
   renderBarsBySol('barSolUnidade', src, function(d) { return d.unidade; },      'Sem unidade');
   renderBarsBySol('barSolDepto',   src, function(d) { return d.departamento; }, 'Sem departamento');
-  renderBarsBySol('barSolTipo',    src, function(d) { return d.tipo; },         'Sem competência');
+  renderChartCompetenciaSol(src);
+}
+
+// Plugin: valores acima das barras (carbon)
+var _solBarValuePlugin = {
+  id: 'solBarValueLabels',
+  afterDatasetsDraw: function(chart) {
+    var meta = chart.getDatasetMeta(0);
+    if (!meta.data) return;
+    var ctx = chart.ctx;
+    var data = chart.data.datasets[0].data;
+    ctx.save();
+    ctx.fillStyle = '#35383F';
+    ctx.font = '600 11px "DM Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    for (var i = 0; i < meta.data.length; i++) {
+      var v = data[i];
+      if (!v) continue;
+      ctx.fillText(v, meta.data[i].x, meta.data[i].y - 6);
+    }
+    ctx.restore();
+  }
+};
+
+function _parseDateBRSol(str) {
+  if (!str) return null;
+  str = str.toString().trim();
+  var m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+  m = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+  return null;
+}
+function _dateToMYSol(s) {
+  var d = _parseDateBRSol(s);
+  if (!d) return '';
+  return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+}
+
+var _chartSolCompetencia = null;
+function renderChartCompetenciaSol(src) {
+  var canvas = document.getElementById('chartSolCompetencia');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  // Últimos 12 meses até o mês atual
+  var hoje = new Date();
+  var labels = [], counts = [];
+  for (var i = 11; i >= 0; i--) {
+    var d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    var my = String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+    labels.push(my);
+    counts.push(src.filter(function(s){ return _dateToMYSol(s.abertura) === my; }).length);
+  }
+
+  if (_chartSolCompetencia) _chartSolCompetencia.destroy();
+  _chartSolCompetencia = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{
+      data: counts,
+      backgroundColor: '#35383F',
+      borderWidth: 0,
+      borderRadius: 5,
+      barPercentage: 0.6
+    }]},
+    plugins: [_solBarValuePlugin],
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      layout: { padding: { top: 18 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 } } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
+      }
+    }
+  });
 }
 
 // ─── MAPEAMENTO DAS COLUNAS DA PLANILHA ──────────────────────────────────────
