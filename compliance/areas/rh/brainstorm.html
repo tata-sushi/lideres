@@ -423,8 +423,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 (function() {
   document.documentElement.setAttribute('data-auth', 'pending');
   var PORTAL_URL    = 'https://lideres.tatasushi.tech/';
-  var PAGE_ID       = 'governanca-areas-organograma';
-  var PAGE_URL_FRAG = '/compliance/areas/organograma';
+  var PAGE_ID       = 'governanca-kpis-brainstorm';
+  var PAGE_URL_FRAG = '/compliance/areas/brainstorm';
   var session;
   try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
   if (!session || !session.displayName || !session.expiresAt || session.expiresAt < Date.now()) {
@@ -811,7 +811,7 @@ function addWordToCanvas(word, count, author, maxCount, descricao, categoria) {
   el.className = 'word-item float';
   el.textContent = word;
 
-  const fontSize = calcFontSize(count, maxCount || count || 1);
+  const fontSize = calcFontSize(count, maxCount || count || 1, cw);
   el.style.fontSize = fontSize + 'px';
 
   const opacity = (0.28 + 0.72 * Math.pow((count / (maxCount || 1)), 0.5)).toFixed(2);
@@ -837,13 +837,19 @@ function addWordToCanvas(word, count, author, maxCount, descricao, categoria) {
   const GAP = 8;
   let x = 0, y = 0;
 
+  const EDGE = 8;
+  const maxX = Math.max(cw - elW - EDGE, EDGE);
+  const maxY = Math.max(ch - elH - EDGE - 40, EDGE);
+
   for (let attempt = 0; attempt < 60; attempt++) {
     // First 30 tries: strict 30% zone. After that: expand up to full canvas.
     const spread = attempt < 30 ? 1 : 1 + (attempt - 30) / 30 * 1.8;
-    const padX = Math.max((cw * 0.35) / spread, 10);
-    const padY = Math.max((ch * 0.35) / spread, 10);
-    const tx = padX + Math.random() * Math.max(cw - padX * 2 - elW, 0);
-    const ty = padY + Math.random() * Math.max(ch - padY * 2 - elH - 40, 0);
+    const padX = Math.min(Math.max((cw * 0.35) / spread, EDGE), maxX);
+    const padY = Math.min(Math.max((ch * 0.35) / spread, EDGE), maxY);
+    let tx = padX + Math.random() * Math.max(maxX - padX * 2, 0);
+    let ty = padY + Math.random() * Math.max(maxY - padY * 2, 0);
+    tx = Math.min(Math.max(tx, EDGE), maxX);
+    ty = Math.min(Math.max(ty, EDGE), maxY);
 
     const clash = Object.values(renderedWords).some(({ x: ox, y: oy, w: ow, h: oh }) =>
       tx < ox + ow + GAP && tx + elW + GAP > ox &&
@@ -863,14 +869,19 @@ function addWordToCanvas(word, count, author, maxCount, descricao, categoria) {
 
 function updateWordSize(el, count, maxCount) {
   if (!el) return;
-  el.style.fontSize = calcFontSize(count, maxCount) + 'px';
+  const cw = document.getElementById('canvas').offsetWidth;
+  el.style.fontSize = calcFontSize(count, maxCount, cw) + 'px';
   el.style.opacity = (0.28 + 0.72 * Math.pow((count / (maxCount || 1)), 0.5)).toFixed(2);
 }
 
-function calcFontSize(count, maxCount) {
-  const min = 13, max = 78;
-  if (!maxCount || maxCount <= 0) return Math.round((min + max) / 2);
-  const ratio = Math.min(count / maxCount, 1);
+function calcFontSize(count, maxCount, canvasW) {
+  const min = 13;
+  // Cap max by viewport so even on narrow screens the biggest word fits
+  const max = Math.min(78, Math.max(28, (canvasW || 800) * 0.16));
+  // Require some real differentiation before words reach top size:
+  // when only a couple of unique words exist, scale conservatively
+  const effectiveMax = Math.max(maxCount || 1, 5);
+  const ratio = Math.min(count / effectiveMax, 1);
   return Math.round(min + (max - min) * Math.pow(ratio, 0.75));
 }
 
