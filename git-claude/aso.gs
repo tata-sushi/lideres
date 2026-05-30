@@ -1,12 +1,16 @@
 function syncColaboradoresAtivos() {
   var COLABORADORES_ID = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
-  var ASOS_ID = '1vRYt7Nz-RdeKdQOgflMNfQFK4-bweO7vVAda2WWgVzs';
+  var ASOS_ID = '14UsviSQbpJBPUNW1cuvCDnem7IRknSHBcxZg6jnq7pk';
 
   var ssColaboradores = SpreadsheetApp.openById(COLABORADORES_ID);
   var ssAsos = SpreadsheetApp.openById(ASOS_ID);
 
   var sheetColaboradores = ssColaboradores.getSheetByName('Colaboradores');
   var sheetAsos = ssAsos.getSheetByName('Controle_de_asos');
+
+  if (!sheetAsos) {
+    sheetAsos = ssAsos.insertSheet('Controle_de_asos');
+  }
 
   var dados = sheetColaboradores.getDataRange().getValues();
   var header = dados[0];
@@ -26,7 +30,10 @@ function syncColaboradoresAtivos() {
   });
 
   var asosDados = sheetAsos.getDataRange().getValues();
-  var asoHeader = ['Matrícula', 'Nome', 'Cargo', 'Departamento', 'Unidade', 'Data de Admissão', 'Status'];
+  var asoHeader = [
+    'Matrícula', 'Nome', 'Cargo', 'Departamento', 'Unidade', 'Data de Admissão', 'Status',
+    'Tipo de Exame', 'Periodicidade', 'Último exame realizado', 'Realiza exame'
+  ];
 
   if (asosDados.length === 0 || asosDados[0][0] === '') {
     sheetAsos.getRange(1, 1, 1, asoHeader.length).setValues([asoHeader]);
@@ -56,6 +63,7 @@ function syncColaboradoresAtivos() {
     };
   });
 
+  // Atualiza colaboradores existentes (apenas colunas A-G para preservar dados de exame em H-K)
   for (var mat in mapaAsos) {
     var rowIdx = mapaAsos[mat];
     var sheetRow = rowIdx + 1;
@@ -70,17 +78,18 @@ function syncColaboradoresAtivos() {
     }
   }
 
+  // Adiciona novos colaboradores com colunas de exame vazias
   var novas = [];
   for (var mat in mapaAtivos) {
     if (!mapaAsos[mat]) {
       var c = mapaAtivos[mat];
-      novas.push([c.matricula, c.nome, c.cargo, c.departamento, c.unidade, c.admissao, 'Ativo']);
+      novas.push([c.matricula, c.nome, c.cargo, c.departamento, c.unidade, c.admissao, 'Ativo', '', '', '', 'Sim']);
     }
   }
 
   if (novas.length > 0) {
     var ultimaLinha = sheetAsos.getLastRow() + 1;
-    sheetAsos.getRange(ultimaLinha, 1, novas.length, 7).setValues(novas);
+    sheetAsos.getRange(ultimaLinha, 1, novas.length, asoHeader.length).setValues(novas);
   }
 
   Logger.log('Sync concluído. Existentes: ' + Object.keys(mapaAsos).length + ' | Novos: ' + novas.length);
