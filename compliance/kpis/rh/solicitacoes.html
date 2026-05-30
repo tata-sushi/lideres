@@ -705,6 +705,23 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
   </div>
   <div class="kpis-detail">
+    <div class="filters-wrap" style="border:1px solid var(--border);border-radius:var(--radius);border-bottom:1px solid var(--border);">
+      <div class="filter-group">
+        <label class="filter-label">Unidade</label>
+        <select class="filter-select" id="kpi-sol-filtro-unidade" onchange="applyKpiFiltrosSol()">
+          <option>Todas</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Departamento</label>
+        <select class="filter-select" id="kpi-sol-filtro-depto" onchange="applyKpiFiltrosSol()">
+          <option>Todos</option>
+        </select>
+      </div>
+      <div class="filter-actions" style="margin-left:auto;">
+        <button class="btn-clear" onclick="clearKpiFiltrosSol()">Limpar filtros</button>
+      </div>
+    </div>
     <div class="kpis-card">
       <div class="kpis-card-title">Solicita&ccedil;&otilde;es por Unidade</div>
       <div class="bar-list" id="barSolUnidade"></div>
@@ -714,7 +731,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="bar-list" id="barSolDepto"></div>
     </div>
     <div class="kpis-card">
-      <div class="kpis-card-title">Solicita&ccedil;&otilde;es por Compet&ecirc;ncia</div>
+      <div class="kpis-card-title">Solicita&ccedil;&otilde;es por M&ecirc;s</div>
       <div class="chart-wrap"><canvas id="chartSolCompetencia"></canvas></div>
     </div>
   </div>
@@ -1169,14 +1186,61 @@ function renderCards() {
   grid.innerHTML = filtered.map(buildCard).join('');
 }
 
+// Filtros próprios da aba KPIs (não confundem com os filtros da aba Solicitações)
+var _kpiSolFiltroUnidade = 'Todas';
+var _kpiSolFiltroDepto   = 'Todos';
+
+function populateKpiFiltrosSol() {
+  var unidades = {}, deptos = {};
+  DATA.forEach(function(d) {
+    if (d.unidade) unidades[d.unidade] = 1;
+    if (d.departamento) deptos[d.departamento] = 1;
+  });
+  var unEl = document.getElementById('kpi-sol-filtro-unidade');
+  var deEl = document.getElementById('kpi-sol-filtro-depto');
+  if (unEl) {
+    var curU = unEl.value;
+    unEl.innerHTML = '<option>Todas</option>' + Object.keys(unidades).sort().map(function(u){
+      return '<option' + (u === curU ? ' selected' : '') + '>' + escHSol(u) + '</option>';
+    }).join('');
+  }
+  if (deEl) {
+    var curD = deEl.value;
+    deEl.innerHTML = '<option>Todos</option>' + Object.keys(deptos).sort().map(function(d){
+      return '<option' + (d === curD ? ' selected' : '') + '>' + escHSol(d) + '</option>';
+    }).join('');
+  }
+}
+function applyKpiFiltrosSol() {
+  _kpiSolFiltroUnidade = document.getElementById('kpi-sol-filtro-unidade').value;
+  _kpiSolFiltroDepto   = document.getElementById('kpi-sol-filtro-depto').value;
+  updateKPIs();
+}
+function clearKpiFiltrosSol() {
+  document.getElementById('kpi-sol-filtro-unidade').value = 'Todas';
+  document.getElementById('kpi-sol-filtro-depto').value   = 'Todos';
+  _kpiSolFiltroUnidade = 'Todas';
+  _kpiSolFiltroDepto   = 'Todos';
+  updateKPIs();
+}
+
 function updateKPIs() {
-  var src = filtered.length > 0 && (
+  populateKpiFiltrosSol();
+
+  // src: respeita filtros da aba Solicitações (se ativos) e filtros próprios da aba KPIs
+  var solFiltrosAtivos = (
     document.getElementById('f-solicitante').value !== 'Todos' ||
     document.getElementById('f-unidade').value !== 'Todos' ||
     document.getElementById('f-departamento').value !== 'Todos' ||
     document.getElementById('f-tipo').value !== 'Todos' ||
     document.getElementById('f-status').value !== 'Todos'
-  ) ? filtered : DATA;
+  );
+  var base = solFiltrosAtivos && filtered.length > 0 ? filtered : DATA;
+  var src = base.filter(function(d) {
+    if (_kpiSolFiltroUnidade !== 'Todas' && d.unidade !== _kpiSolFiltroUnidade) return false;
+    if (_kpiSolFiltroDepto   !== 'Todos' && d.departamento !== _kpiSolFiltroDepto) return false;
+    return true;
+  });
 
   var total = src.length;
   var fin = src.filter(function(d){ return d.status_q === 'Finalizado'; }).length;
@@ -1266,14 +1330,35 @@ function renderChartCompetenciaSol(src) {
   var canvas = document.getElementById('chartSolCompetencia');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  // Últimos 12 meses até o mês atual
+  // Agrega por MM/YYYY parseável de d.abertura
+  var byMonth = {};
+  var minD = null, maxD = null;
+  src.forEach(function(s) {
+    var d = _parseDateBRSol(s.abertura);
+    if (!d) return;
+    var key = String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+    byMonth[key] = (byMonth[key] || 0) + 1;
+    var first = new Date(d.getFullYear(), d.getMonth(), 1);
+    if (!minD || first < minD) minD = first;
+    if (!maxD || first > maxD) maxD = first;
+  });
+  if (!minD) {
+    if (_chartSolCompetencia) _chartSolCompetencia.destroy();
+    _chartSolCompetencia = null;
+    canvas.parentNode.innerHTML = '<div class="kpis-empty">Sem dados.</div>';
+    return;
+  }
+  // Estende a janela até hoje (mostra meses zerados também)
   var hoje = new Date();
+  var hojeFirst = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  if (hojeFirst > maxD) maxD = hojeFirst;
   var labels = [], counts = [];
-  for (var i = 11; i >= 0; i--) {
-    var d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-    var my = String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
-    labels.push(my);
-    counts.push(src.filter(function(s){ return _dateToMYSol(s.abertura) === my; }).length);
+  var cur = new Date(minD);
+  while (cur <= maxD) {
+    var key = String(cur.getMonth()+1).padStart(2,'0') + '/' + cur.getFullYear();
+    labels.push(key);
+    counts.push(byMonth[key] || 0);
+    cur.setMonth(cur.getMonth() + 1);
   }
 
   if (_chartSolCompetencia) _chartSolCompetencia.destroy();
