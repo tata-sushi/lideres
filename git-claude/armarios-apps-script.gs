@@ -169,7 +169,10 @@ function listarHistorico(n) {
 /*  REGISTRAR MOVIMENTAÇÃO                             */
 /* ────────────────────────────────────────────────── */
 function registrarMov(body) {
-  if (!body || !body.unidade || !body.num || !body.status) {
+  if (!body || !body.unidade || !body.num) {
+    return { ok: false, error: 'campos_obrigatorios_faltando' };
+  }
+  if (body.tipo !== 'incluir' && body.tipo !== 'excluir' && !body.status) {
     return { ok: false, error: 'campos_obrigatorios_faltando' };
   }
 
@@ -177,14 +180,41 @@ function registrarMov(body) {
   var sh = ss.getSheetByName(SHEET_ARMARIOS);
   var rows = sh.getDataRange().getValues();
 
-  _gravarArmario(sh, rows, body.unidade, body.num, body.status, body.colaborador, body.matricula, body.chave, body.obs);
+  if (body.tipo === 'incluir') {
+    // Verifica duplicidade
+    var unidadeIn = normIn(body.unidade);
+    var numStr    = String(body.num).trim();
+    for (var i = 1; i < rows.length; i++) {
+      if (normIn(rows[i][0]) === unidadeIn && String(rows[i][1]).trim() === numStr) {
+        return { ok: false, error: 'armario_ja_existe' };
+      }
+    }
+    var newRow = sh.getLastRow() + 1;
+    sh.getRange(newRow, 1).setValue(normOut(body.unidade));
+    sh.getRange(newRow, 2).setValue(body.num);
+    sh.getRange(newRow, 5).setValue('Liberado');
+  } else if (body.tipo === 'excluir') {
+    var unidadeIn2 = normIn(body.unidade);
+    var numStr2    = String(body.num).trim();
+    var targetRow  = -1;
+    for (var j = 1; j < rows.length; j++) {
+      if (normIn(rows[j][0]) === unidadeIn2 && String(rows[j][1]).trim() === numStr2) {
+        targetRow = j + 1;
+        break;
+      }
+    }
+    if (targetRow === -1) return { ok: false, error: 'armario_nao_encontrado' };
+    sh.deleteRow(targetRow);
+  } else {
+    _gravarArmario(sh, rows, body.unidade, body.num, body.status, body.colaborador, body.matricula, body.chave, body.obs);
 
-  // Se for troca, atualizar também o novo armário com status ocupado
-  if (body.tipo === 'trocar' && body.armarioNovo && body.armarioNovo.num) {
-    var rows2 = sh.getDataRange().getValues();
-    _gravarArmario(sh, rows2, body.unidade, body.armarioNovo.num, 'ocupado',
-                   body.armarioNovo.colaborador, body.armarioNovo.matricula,
-                   body.armarioNovo.chave, '');
+    // Se for troca, atualizar também o novo armário com status ocupado
+    if (body.tipo === 'trocar' && body.armarioNovo && body.armarioNovo.num) {
+      var rows2 = sh.getDataRange().getValues();
+      _gravarArmario(sh, rows2, body.unidade, body.armarioNovo.num, 'ocupado',
+                     body.armarioNovo.colaborador, body.armarioNovo.matricula,
+                     body.armarioNovo.chave, '');
+    }
   }
 
   // Registra histórico
@@ -196,6 +226,8 @@ function registrarMov(body) {
   }
 
   var tipoHist = body.tipoLabel || (
+    body.tipo === 'incluir' ? 'Inclusão' :
+    body.tipo === 'excluir' ? 'Exclusão' :
     body.status === 'livre'   ? 'Liberação' :
     body.status === 'ocupado' ? 'Ocupação'  :
     body.status === 'manut'   ? 'Manutenção':

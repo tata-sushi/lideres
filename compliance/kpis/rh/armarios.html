@@ -529,6 +529,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <option value="trocar">Trocar armário do colaborador</option>
           <option value="manut">Enviar para manutenção</option>
           <option value="liberar_manut">Liberar após manutenção</option>
+          <option value="incluir" class="opt-admin">Incluir novo armário</option>
+          <option value="excluir" class="opt-admin">Excluir armário</option>
         </select>
       </div>
     </div>
@@ -578,6 +580,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </div>
     </div>
 
+    <!-- Número do novo armário (só para Incluir) -->
+    <div class="m-meta" id="row-novo-num" style="display:none;padding-top:10px;grid-template-columns:1fr">
+      <div class="field">
+        <label>Nº do novo armário</label>
+        <input type="text" id="f-novo-num" placeholder="Ex: 21" autocomplete="off">
+      </div>
+    </div>
+
     <!-- Obs -->
     <div style="padding: 10px 20px 0">
       <div class="field">
@@ -590,7 +600,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="success-banner" id="success-banner">
       <div class="success-title">Movimentação registrada!</div>
       <div class="success-sub" id="success-sub">Dados gravados no Google Sheets.</div>
-      <button class="btn-recibo" onclick="imprimirTermo()" style="margin-top:10px;display:inline-flex;align-items:center;gap:5px;padding:6px 10px;background:var(--carbon);color:var(--citric);border:none;border-radius:6px;font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer">
+      <button class="btn-recibo" id="btn-recibo" onclick="imprimirTermo()" style="margin-top:10px;display:inline-flex;align-items:center;gap:5px;padding:6px 10px;background:var(--carbon);color:var(--citric);border:none;border-radius:6px;font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Gerar Termo para Assinatura
       </button>
@@ -1016,33 +1026,59 @@ function setUnitFilter(unit, btn) {
    ════════════════════════════════════════════════ */
 function onTipoChange() {
   var tipo = document.getElementById('f-tipo').value;
-  var rowColab = document.getElementById('row-colab');
-  var rowNovo  = document.getElementById('row-novo-armario');
-  var unidSel  = document.getElementById('f-unidade');
+  var rowColab   = document.getElementById('row-colab');
+  var rowNovo    = document.getElementById('row-novo-armario');
+  var rowNovoNum = document.getElementById('row-novo-num');
+  var unidSel    = document.getElementById('f-unidade');
+  var armSel     = document.getElementById('f-armario');
+  var armField   = armSel.closest('.field');
+  var armRow     = armSel.closest('.m-meta');
 
   // Reset
   document.getElementById('f-colab').value     = '';
   document.getElementById('f-matricula').value = '';
-  document.getElementById('f-armario').disabled = false;
+  document.getElementById('f-novo-num').value  = '';
+  armSel.disabled = false;
   document.getElementById('f-armario-novo').innerHTML = '<option value="">Selecione…</option>';
+  armRow.style.display = 'grid';
+  armField.style.display = '';
+  armRow.style.gridTemplateColumns = '';
 
   var isLider = currentUser && currentUser.type === 'lider' && currentUser.unit;
+  var isAdmin = currentUser && currentUser.type === 'admin';
 
-  if (tipo === 'manut' || tipo === 'liberar_manut') {
-    // Sem colab: unidade precisa ser escolhida pelo usuário (ou fixa no líder)
-    rowColab.style.display = 'none';
-    rowNovo.style.display  = 'none';
+  if (tipo === 'incluir') {
+    rowColab.style.display   = 'none';
+    rowNovo.style.display    = 'none';
+    rowNovoNum.style.display = 'grid';
+    // Mantém a linha (com unidade), esconde só o campo do armário
+    armField.style.display           = 'none';
+    armRow.style.gridTemplateColumns = '1fr';
+    unidSel.value    = isLider ? currentUser.unit : '';
+    unidSel.disabled = isLider;
+  } else if (tipo === 'excluir') {
+    rowColab.style.display   = 'none';
+    rowNovo.style.display    = 'none';
+    rowNovoNum.style.display = 'none';
+    unidSel.value    = isLider ? currentUser.unit : '';
+    unidSel.disabled = isLider;
+  } else if (tipo === 'manut' || tipo === 'liberar_manut') {
+    rowColab.style.display   = 'none';
+    rowNovo.style.display    = 'none';
+    rowNovoNum.style.display = 'none';
     if (isLider) { unidSel.value = currentUser.unit; unidSel.disabled = true; }
     else         { unidSel.value = ''; unidSel.disabled = false; }
   } else if (tipo === 'trocar') {
-    rowColab.style.display = 'grid';
-    rowNovo.style.display  = 'grid';
+    rowColab.style.display   = 'grid';
+    rowNovo.style.display    = 'grid';
+    rowNovoNum.style.display = 'none';
     unidSel.value = isLider ? currentUser.unit : '';
     unidSel.disabled = true;
   } else {
     // atribuir/recolher
-    rowColab.style.display = 'grid';
-    rowNovo.style.display  = 'none';
+    rowColab.style.display   = 'grid';
+    rowNovo.style.display    = 'none';
+    rowNovoNum.style.display = 'none';
     unidSel.value = isLider ? currentUser.unit : '';
     unidSel.disabled = true;
   }
@@ -1064,6 +1100,9 @@ function refreshArmarioList() {
   var lbl   = document.getElementById('label-armario');
   var isColabOp = (tipo === 'recolher' || tipo === 'trocar');
 
+  // Para 'incluir', o número é digitado — nada a popular aqui
+  if (tipo === 'incluir') return;
+
   // For non-colab ops, unit is required
   if (!unit && !isColabOp) {
     sel.innerHTML = '<option value="">Selecione a unidade primeiro…</option>';
@@ -1079,6 +1118,9 @@ function refreshArmarioList() {
   if (tipo === 'atribuir') {
     items = ARMARIOS.filter(function(a){ return a.unidade === unit && a.status === 'livre'; });
     labelText = 'Armário (livre)';
+  } else if (tipo === 'excluir') {
+    items = ARMARIOS.filter(function(a){ return a.unidade === unit; });
+    labelText = 'Armário a excluir';
   } else if (isColabOp) {
     if (!colab) {
       sel.innerHTML = '<option value="">Selecione o colaborador primeiro…</option>';
@@ -1241,12 +1283,20 @@ function openModal() {
   document.getElementById('btn-enviar').style.display = '';
   document.getElementById('modal-title').textContent  = 'Registrar Movimentação';
 
+  // Mostrar opções admin (Incluir/Excluir) só para admin
+  var isAdmin = currentUser && currentUser.type === 'admin';
+  document.querySelectorAll('#f-tipo .opt-admin').forEach(function(o){
+    o.style.display = isAdmin ? '' : 'none';
+    o.disabled = !isAdmin;
+  });
+
   // reset campos
   document.getElementById('f-tipo').value      = 'atribuir';
   document.getElementById('f-colab').value     = '';
   document.getElementById('f-matricula').value = '';
   document.getElementById('f-unidade').value   = '';
   document.getElementById('f-obs').value       = '';
+  document.getElementById('f-novo-num').value  = '';
   onTipoChange();
 
   carregarColaboradores().then(function(colabs) {
@@ -1281,6 +1331,76 @@ function doSubmit() {
   var mat     = document.getElementById('f-matricula').value.trim();
 
   if (!unidade) { showToast('Selecione a unidade.', true); return; }
+
+  // ── INCLUIR novo armário ──
+  if (tipo === 'incluir') {
+    if (currentUser && currentUser.type !== 'admin') { showToast('Sem permissão.', true); return; }
+    var novoNum = document.getElementById('f-novo-num').value.trim();
+    if (!novoNum) { showToast('Informe o nº do novo armário.', true); return; }
+    var dup = ARMARIOS.find(function(a){ return a.unidade === unidade && String(a.num).trim() === novoNum; });
+    if (dup) { showToast('Já existe armário ' + novoNum + ' em ' + unidade + '.', true); return; }
+
+    var payloadInc = {
+      tipo:        'incluir',
+      tipoLabel:   'Inclusão',
+      num:         novoNum,
+      unidade:     unidade,
+      status:      'livre',
+      colaborador: '',
+      matricula:   '',
+      obs:         document.getElementById('f-obs').value.trim(),
+      responsavel: currentUser ? currentUser.name : '',
+      data:        document.getElementById('f-data').value,
+      timestamp:   new Date().toISOString()
+    };
+
+    setLoad(true);
+
+    // Otimista: adiciona ao ARMARIOS local
+    var maxId = ARMARIOS.reduce(function(m,a){ return Math.max(m, a.id||0); }, 0);
+    var armNovoLocal = {
+      id: maxId + 1, unidade: unidade, num: novoNum,
+      status: 'livre', colaborador: '', matricula: '',
+      chave: '', obs: payloadInc.obs, updated: payloadInc.data
+    };
+    ARMARIOS.push(armNovoLocal);
+
+    _enviarPayload(payloadInc, armNovoLocal, null);
+    return;
+  }
+
+  // ── EXCLUIR armário ──
+  if (tipo === 'excluir') {
+    if (currentUser && currentUser.type !== 'admin') { showToast('Sem permissão.', true); return; }
+    if (!armId) { showToast('Selecione o armário.', true); return; }
+    var armDel = ARMARIOS.find(function(a){ return String(a.id) === String(armId); });
+    if (!armDel) { showToast('Armário não encontrado.', true); return; }
+    if (!confirm('Excluir definitivamente o armário ' + armDel.num + ' de ' + armDel.unidade + '?')) return;
+
+    var payloadDel = {
+      tipo:        'excluir',
+      tipoLabel:   'Exclusão',
+      id:          armId,
+      num:         armDel.num,
+      unidade:     armDel.unidade,
+      status:      'excluido',
+      colaborador: armDel.colaborador || '',
+      matricula:   armDel.matricula || '',
+      obs:         document.getElementById('f-obs').value.trim(),
+      responsavel: currentUser ? currentUser.name : '',
+      data:        document.getElementById('f-data').value,
+      timestamp:   new Date().toISOString()
+    };
+
+    setLoad(true);
+
+    // Otimista: remove do ARMARIOS local
+    ARMARIOS = ARMARIOS.filter(function(a){ return String(a.id) !== String(armId); });
+
+    _enviarPayload(payloadDel, armDel, null);
+    return;
+  }
+
   if (!armId)   { showToast('Selecione o armário.', true); return; }
 
   var arm = ARMARIOS.find(function(a){ return String(a.id) === String(armId); });
@@ -1355,6 +1475,10 @@ function doSubmit() {
     armNovo.updated     = payload.data;
   }
 
+  _enviarPayload(payload, arm, armNovo);
+}
+
+function _enviarPayload(payload, arm, armNovo) {
   if (GAS_URL_ARMARIO) {
     fetch(GAS_URL_ARMARIO, {
       method:  'POST',
@@ -1389,12 +1513,18 @@ function onSubmitOk(arm, payload, armNovo) {
 
   renderTudo();
   document.getElementById('success-banner').classList.add('show');
-  var sub = payload.tipo === 'trocar'
-    ? ('Troca: ' + arm.num + ' → ' + armNovo.num)
-    : (arm.num + ' → ' + payload.tipoLabel);
+  var sub;
+  if (payload.tipo === 'trocar')      sub = 'Troca: ' + arm.num + ' → ' + armNovo.num;
+  else if (payload.tipo === 'incluir') sub = 'Armário ' + arm.num + ' criado em ' + payload.unidade;
+  else if (payload.tipo === 'excluir') sub = 'Armário ' + arm.num + ' removido de ' + payload.unidade;
+  else                                  sub = arm.num + ' → ' + payload.tipoLabel;
   document.getElementById('success-sub').textContent = sub;
   document.getElementById('btn-enviar').style.display = 'none';
-  showToast('Movimentação registrada!', false);
+  // Recibo só faz sentido para atribuição
+  document.getElementById('btn-recibo').style.display = (payload.tipo === 'atribuir') ? '' : 'none';
+  var msg = (payload.tipo === 'incluir') ? 'Armário incluído!' :
+            (payload.tipo === 'excluir') ? 'Armário excluído!' : 'Movimentação registrada!';
+  showToast(msg, false);
 }
 
 /* ════════════════════════════════════════════════
