@@ -119,8 +119,9 @@ function garantirFormulaProxima() {
     sheet.getRange(2, 12, lastRow - 1, 1).clearContent();
   }
 
-  var formula = '=ARRAYFORMULA(IF((LEN(I2:I)=0)+(LEN(J2:J)=0)+(LEN(A2:A)=0)>0,"",'
-              + 'TEXT(IF(ISNUMBER(J2:J),J2:J,IFERROR(DATEVALUE(J2:J),0))+I2:I,"dd/mm/yyyy")))';
+  // Usa ; como separador (locale pt-BR). DATE(RIGHT/MID/LEFT) parseia texto dd/mm/yyyy.
+  var formula = '=ARRAYFORMULA(IF((I2:I="")+(J2:J="")+(A2:A="")>0;"";'
+              + 'TEXT(IF(ISNUMBER(J2:J);J2:J;DATE(RIGHT(J2:J;4);MID(J2:J;4;2);LEFT(J2:J;2)))+I2:I;"dd/mm/yyyy")))';
   sheet.getRange('L2').setFormula(formula);
 
   Logger.log('Fórmula de Próxima Realização garantida em L2 (' + lastRow + ' linhas).');
