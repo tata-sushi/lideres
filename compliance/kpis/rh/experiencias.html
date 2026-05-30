@@ -59,7 +59,15 @@ body:not([data-view="kpis"]) .kpis-wrap { display: none !important; }
 
 /* KPIs DETAIL VIEW */
 .kpis-detail { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
+@media (min-width: 768px) { .kpis-detail { max-width: 800px; margin-left: auto; margin-right: auto; } }
 .kpis-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+
+/* Cross-filter (padrão recrutamento/bancodehoras) */
+.cf-active-exp .bar-row:not(.cf-selected):not(.cf-related),
+.cf-active-exp .funil-row:not(.cf-selected),
+.cf-active-exp .colab-table tbody tr:not(.cf-related) { opacity: 0.45; }
+.bar-row.clickable, .funil-row.clickable, .colab-table tbody tr.clickable { cursor: pointer; }
+.bar-row.cf-selected, .funil-row.cf-selected { outline: 2px solid var(--carbon); outline-offset: 2px; border-radius: 4px; }
 .kpis-card-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); font-weight: 700; margin-bottom: 14px; text-align: center; }
 .kpis-card-title strong { font-family: 'DM Sans', sans-serif; color: var(--carbon); font-weight: 700; }
 .kpis-empty { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); padding: 8px 0; }
@@ -929,14 +937,25 @@ function setTab(tab) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function renderBarsBy(elId, fieldFn, fallback) {
+function renderBarsBy(elId, fieldFn, fallback, dim) {
   var el = document.getElementById(elId);
   if (!el) return;
   var all = window._allColabs || [];
   if (!all.length) { el.innerHTML = '<div class="kpis-empty">Sem dados.</div>'; return; }
 
+  // Quando há cross-filter ativo em outra dimensão, agrega só o subset filtrado
+  var src = all;
+  var related = {};
+  if (_cfExp.dim && _cfExp.dim !== dim) {
+    src = all.filter(function(c) { return passesCF(c, null); });
+    src.forEach(function(c) {
+      var k = fieldFn(c) || fallback;
+      if (k) related[k] = true;
+    });
+  }
+
   var counts = {};
-  all.forEach(function(c) {
+  src.forEach(function(c) {
     var k = fieldFn(c) || fallback;
     counts[k] = (counts[k] || 0) + 1;
   });
@@ -946,7 +965,10 @@ function renderBarsBy(elId, fieldFn, fallback) {
 
   el.innerHTML = items.map(function(a) {
     var pct = max > 0 ? (a.total / max * 100).toFixed(1) : 0;
-    return '<div class="bar-row">' +
+    var isSel = dim && _cfExp.dim === dim && _cfExp.value === a.nome;
+    var extra = isSel ? ' cf-selected' : (related[a.nome] ? ' cf-related' : '');
+    var onclick = dim ? ' onclick="setCFExp(\'' + dim + '\',\'' + escAttr(a.nome) + '\')"' : '';
+    return '<div class="bar-row clickable' + extra + '"' + onclick + '>' +
       '<div class="bar-name">' + escH(a.nome) + '</div>' +
       '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
       '<div class="bar-val">' + a.total + '</div>' +
@@ -954,10 +976,37 @@ function renderBarsBy(elId, fieldFn, fallback) {
   }).join('');
 }
 
+// ── Cross-filter (mesma ideia de recrutamento/bancodehoras) ──
+var _cfExp = { dim: null, value: null };
+function escAttr(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,"\\'"); }
+function passesFunilStage(c, idx) {
+  var s = c.statusDevolutiva || '';
+  if (idx === 0) return true;
+  if (idx === 1) return s === 'Av. 1º Período' || s === 'Av. 2º Período' || s === 'Não Efetivado 2º';
+  if (idx === 2) return s === 'Av. 2º Período';
+  return true;
+}
+function passesCF(c, exceptDim) {
+  if (!_cfExp.dim || _cfExp.dim === exceptDim) return true;
+  if (_cfExp.dim === 'funil')   return passesFunilStage(c, _cfExp.value);
+  if (_cfExp.dim === 'unidade') return (c.unidade || 'Sem unidade') === _cfExp.value;
+  if (_cfExp.dim === 'depto')   return (c.departamento || 'Sem departamento') === _cfExp.value;
+  return true;
+}
+function setCFExp(dim, value) {
+  if (_cfExp.dim === dim && _cfExp.value === value) {
+    _cfExp = { dim: null, value: null };
+  } else {
+    _cfExp = { dim: dim, value: value };
+  }
+  document.body.classList.toggle('cf-active-exp', _cfExp.dim !== null);
+  renderExperBars();
+}
+
 function renderExperBars() {
   renderFunilExp();
-  renderBarsBy('barExperUnidade', function(c) { return c.unidade; }, 'Sem unidade');
-  renderBarsBy('barExperDepto',   function(c) { return c.departamento; }, 'Sem departamento');
+  renderBarsBy('barExperUnidade', function(c) { return c.unidade; }, 'Sem unidade', 'unidade');
+  renderBarsBy('barExperDepto',   function(c) { return c.departamento; }, 'Sem departamento', 'depto');
   renderColabTableExp();
 }
 
@@ -967,10 +1016,13 @@ var _colabSortCol = 'nome';
 var _colabSortDir = 1;
 var _colabRows = [];
 var _colabShown = 10;
-var STATUS_PENDENTE = 'Pendente';
-
 function colabStatus(c) {
-  return (c.statusDevolutiva && c.statusDevolutiva.trim()) || STATUS_PENDENTE;
+  var s = (c.statusDevolutiva || '').trim();
+  if (!s)                       return 'Avaliação Pendente';
+  if (s === 'Av. 1º Período')   return 'Aprovado no 1º Período';
+  if (s === 'Av. 2º Período')   return 'Efetivado';
+  if (s === 'Não Efetivado 1º' || s === 'Não Efetivado 2º') return 'Não aprovado';
+  return s;
 }
 
 function toggleSortColab(col) {
@@ -983,7 +1035,7 @@ function toggleSortColab(col) {
 }
 
 function renderColabTableExp() {
-  var all = window._allColabs || [];
+  var all = (window._allColabs || []).filter(function(c) { return passesCF(c, null); });
   _colabRows = all.slice().sort(function(a, b) {
     var av = _colabSortCol === 'status' ? colabStatus(a) : (a.nome || '');
     var bv = _colabSortCol === 'status' ? colabStatus(b) : (b.nome || '');
@@ -1026,12 +1078,17 @@ function renderFunilExp() {
   var all = window._allColabs || [];
   if (!all.length) { el.innerHTML = '<div class="kpis-empty">Sem dados.</div>'; return; }
 
+  // Se houver CF em outra dimensão, conta sobre o subset filtrado
+  var src = _cfExp.dim && _cfExp.dim !== 'funil'
+    ? all.filter(function(c) { return passesCF(c, null); })
+    : all;
+
   var cnt = {};
-  all.forEach(function(c) {
+  src.forEach(function(c) {
     var s = c.statusDevolutiva || '';
     cnt[s] = (cnt[s] || 0) + 1;
   });
-  var total      = all.length;
+  var total      = src.length;
   var passou1    = (cnt['Av. 1º Período'] || 0) + (cnt['Av. 2º Período'] || 0) + (cnt['Não Efetivado 2º'] || 0);
   var efetivados = cnt['Av. 2º Período'] || 0;
 
@@ -1051,8 +1108,11 @@ function renderFunilExp() {
     var pctPrev = i === 0 ? null
       : (etapas[i-1].count > 0 ? Math.round(e.count / etapas[i-1].count * 100) : 0);
 
+    var isSel = _cfExp.dim === 'funil' && _cfExp.value === i;
     var row = document.createElement('div');
+    row.className = 'funil-row clickable' + (isSel ? ' cf-selected' : '');
     row.style.cssText = 'display:flex;align-items:center;margin-bottom:8px;border-radius:6px;padding:3px 0;';
+    row.onclick = (function(idx){ return function(){ setCFExp('funil', idx); }; })(i);
 
     var lbl = document.createElement('div');
     lbl.style.cssText = 'width:178px;box-sizing:border-box;flex-shrink:0;font-family:"DM Mono",monospace;font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:#35383F;text-align:right;padding-right:14px;line-height:1.4;';
