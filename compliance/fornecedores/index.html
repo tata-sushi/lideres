@@ -70,6 +70,25 @@ html, body { font-family:"DM Sans",sans-serif; background:var(--bg); color:var(-
 .tool-edit-btn { width:26px; height:26px; background:transparent; border:1px solid var(--border); border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--t3); transition:border-color .15s,color .15s; flex-shrink:0; }
 .tool-edit-btn:hover { border-color:var(--carbon); color:var(--t1); }
 .tool-edit-btn svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.tool-delete-btn { width:26px; height:26px; background:transparent; border:1px solid var(--border); border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--t3); transition:border-color .15s,color .15s; flex-shrink:0; }
+.tool-delete-btn:hover { border-color:#c0392b; color:#c0392b; }
+.tool-delete-btn svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+/* ── DELETE CONFIRM MODAL ── */
+.del-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:500; align-items:center; justify-content:center; padding:24px; }
+.del-modal-overlay.open { display:flex; }
+.del-modal { background:var(--white); border-radius:12px; width:100%; max-width:360px; padding:28px 24px 24px; text-align:center; animation:slideUp .2s ease both; }
+.del-modal-icon { width:44px; height:44px; background:#fdf0ee; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 14px; }
+.del-modal-icon svg { width:22px; height:22px; stroke:#c0392b; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.del-modal-title { font-size:16px; font-weight:700; color:var(--t1); margin-bottom:6px; }
+.del-modal-desc { font-size:13px; color:var(--t2); line-height:1.6; margin-bottom:20px; }
+.del-modal-name { font-weight:700; color:var(--t1); }
+.del-modal-btns { display:flex; gap:8px; }
+.del-modal-cancel { flex:1; height:38px; background:var(--bg); color:var(--t1); border:1px solid var(--border); border-radius:var(--r); font-family:"DM Mono",monospace; font-size:10px; font-weight:500; letter-spacing:0.5px; text-transform:uppercase; cursor:pointer; transition:border-color .15s; }
+.del-modal-cancel:hover { border-color:var(--carbon); }
+.del-modal-confirm { flex:1; height:38px; background:#c0392b; color:#fff; border:none; border-radius:var(--r); font-family:"DM Mono",monospace; font-size:10px; font-weight:500; letter-spacing:0.5px; text-transform:uppercase; cursor:pointer; transition:opacity .15s; }
+.del-modal-confirm:hover { opacity:.85; }
+.del-modal-confirm:disabled { opacity:.4; }
 .tool-row-desc { font-size:12px; color:var(--t2); line-height:1.55; margin-bottom:8px; }
 .contact-links { display:flex; flex-wrap:wrap; gap:12px; margin-top:9px; }
 .contact-link {
@@ -556,6 +575,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 <!-- ══ /FORM MODAL ══ -->
 
+<!-- ══ DELETE CONFIRM MODAL ══ -->
+<div class="del-modal-overlay" id="del-modal-overlay">
+  <div class="del-modal">
+    <div class="del-modal-icon">
+      <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+    </div>
+    <p class="del-modal-title">Excluir fornecedor?</p>
+    <p class="del-modal-desc">Você tem certeza que deseja excluir <span class="del-modal-name" id="del-modal-nome"></span>? Esta ação não pode ser desfeita.</p>
+    <div class="del-modal-btns">
+      <button class="del-modal-cancel" id="del-modal-cancel">Cancelar</button>
+      <button class="del-modal-confirm" id="del-modal-confirm">Excluir</button>
+    </div>
+  </div>
+</div>
+<!-- ══ /DELETE CONFIRM MODAL ══ -->
+
 <script>
 /* ══════════════════════════════════════
    CONFIG — substitua pela URL do Apps Script
@@ -628,8 +663,9 @@ function renderItems(data) {
         contactHtml = '<div class="contact-links">'+links+'</div>';
       }
       var editBtn = '<button class="tool-edit-btn" onclick="openEditForm(\''+itemId+'\')" title="Editar"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>';
+      var delBtn  = '<button class="tool-delete-btn" onclick="openDeleteConfirm(\''+itemId+'\')" title="Excluir"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>';
       return '<div class="tool-row">'
-        + '<div class="tool-row-top"><span class="tool-row-name">'+t.nome+'</span>'+editBtn+'</div>'
+        + '<div class="tool-row-top"><span class="tool-row-name">'+t.nome+'</span>'+editBtn+delBtn+'</div>'
         + (t.descricao ? '<p class="tool-row-desc">'+t.descricao+'</p>' : '')
         + (pillsHtml ? '<div class="dept-pills">'+pillsHtml+'</div>' : '')
         + contactHtml
@@ -865,6 +901,59 @@ function openEditForm(itemId) {
   document.getElementById('form-success').style.display = 'none';
   openFormModal();
 }
+
+/* ── Delete ── */
+var _deleteItemId = null;
+
+function openDeleteConfirm(itemId) {
+  var t = _itemsById[itemId];
+  if (!t) return;
+  _deleteItemId = itemId;
+  document.getElementById('del-modal-nome').textContent = '"' + t.nome + '"';
+  document.getElementById('del-modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDeleteConfirm() {
+  _deleteItemId = null;
+  document.getElementById('del-modal-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function confirmDelete() {
+  var t = _itemsById[_deleteItemId];
+  if (!t) return closeDeleteConfirm();
+
+  var btn = document.getElementById('del-modal-confirm');
+  btn.textContent = 'Excluindo...';
+  btn.disabled = true;
+
+  var session = window.__lideresSession;
+  if (!session) try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
+  var lider = (session && session.displayName) ? session.displayName : '';
+
+  var payload = { action: 'delete', sheet: SHEET_NAME, nome: t.nome, enviado_por: lider };
+
+  fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      closeDeleteConfirm();
+      if (d.ok) { loadItems(); }
+      else { alert('Erro ao excluir: ' + (d.message || 'Tente novamente.')); }
+    })
+    .catch(function() {
+      closeDeleteConfirm();
+      alert('Erro ao excluir. Tente novamente.');
+    });
+}
+
+(function() {
+  document.getElementById('del-modal-cancel').addEventListener('click', closeDeleteConfirm);
+  document.getElementById('del-modal-confirm').addEventListener('click', confirmDelete);
+  document.getElementById('del-modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeDeleteConfirm();
+  });
+})();
 
 function _resetForm() {
   _editMode = false;
