@@ -158,6 +158,28 @@ function doPost(e) {
 }
 
 function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) || '';
+  if (action === 'getData') {
+    try {
+      var ASOS_ID = '1vRYt7Nz-RdeKdQOgflMNfQFK4-bweO7vVAda2WWgVzs';
+      var ss = SpreadsheetApp.openById(ASOS_ID);
+      var sheet = ss.getSheetByName('Controle_de_asos');
+      if (!sheet) return respond({ ok: false, error: 'Aba não encontrada' });
+      var raw = sheet.getDataRange().getValues();
+      var rows = raw.map(function(row) {
+        return row.map(function(v) {
+          if (v instanceof Date) {
+            var dd = v.getDate(), mm = v.getMonth() + 1, yy = v.getFullYear();
+            return (dd < 10 ? '0' + dd : dd) + '/' + (mm < 10 ? '0' + mm : mm) + '/' + yy;
+          }
+          return (v === null || v === undefined) ? '' : String(v);
+        });
+      });
+      return respond({ ok: true, values: rows });
+    } catch(err) {
+      return respond({ ok: false, error: err.message });
+    }
+  }
   return ContentService.createTextOutput('ASO API OK').setMimeType(ContentService.MimeType.TEXT);
 }
 
