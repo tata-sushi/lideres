@@ -95,6 +95,40 @@ function syncColaboradoresAtivos() {
   Logger.log('Sync concluído. Existentes: ' + Object.keys(mapaAsos).length + ' | Novos: ' + novas.length);
 }
 
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var ASOS_ID = '1vRYt7Nz-RdeKdQOgflMNfQFK4-bweO7vVAda2WWgVzs';
+    var ss = SpreadsheetApp.openById(ASOS_ID);
+    var sheet = ss.getSheetByName('Controle_de_asos');
+    if (!sheet) return respond({ok: false, error: 'Aba não encontrada'});
+    var rows = sheet.getDataRange().getValues();
+    var matIdx = rows[0].indexOf('Matrícula');
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][matIdx]).trim() === String(data.matricula).trim()) {
+        sheet.getRange(i+1, 8).setValue(data.tipoExame         || '');
+        sheet.getRange(i+1, 9).setValue(data.periodicidade      || '');
+        sheet.getRange(i+1, 10).setValue(data.ultimoExame       || '');
+        sheet.getRange(i+1, 11).setValue(data.realizaExame      || '');
+        sheet.getRange(i+1, 12).setValue(data.proximaRealizacao || '');
+        return respond({ok: true});
+      }
+    }
+    return respond({ok: false, error: 'Matricula nao encontrada: ' + data.matricula});
+  } catch(err) {
+    return respond({ok: false, error: err.message});
+  }
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput('ASO API OK').setMimeType(ContentService.MimeType.TEXT);
+}
+
+function respond(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function criarTrigger() {
   ScriptApp.getProjectTriggers().forEach(function(t) {
     if (t.getHandlerFunction() === 'syncColaboradoresAtivos') {
