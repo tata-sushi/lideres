@@ -85,18 +85,12 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
 .candidate-contact { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); margin-top: 3px; display: flex; align-items: center; gap: 5px; }
 .status-badge { display: inline-flex; align-items: center; flex-shrink: 0; padding: 3px 9px; border-radius: 100px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; }
 
-.s-aguardando-devolutiva { background: #FFF4DC; color: #7A4A00; }
-.s-aguardando-entrevista { background: #E8F0FA; color: #1A3A5C; }
-.sf-aguardando-teste     { background: #E8F0FA; color: #1A3A5C; }
-.sf-aguardando-aprovacao { background: #FFF4DC; color: #7A4A00; }
-.sf-cancelado            { background: #FDEAEA; color: #7A1A1A; }
-.sf-nao-compareceu       { background: #FDEAEA; color: #7A1A1A; }
-.sf-contratado           { background: #35383F; color: #CFFF00; }
-.sf-nao-contratado       { background: #FDEAEA; color: #7A1A1A; }
-.s-aprovado-para-teste   { background: #35383F; color: #CFFF00; }
-.s-nao-selecionado       { background: #FDEAEA; color: #7A1A1A; }
-.s-nao-entrou            { background: #FDEAEA; color: #7A1A1A; }
-.s-default               { background: #F0F0F0; color: #888; }
+.s-vencido     { background: #FDEAEA; color: #7A1A1A; }
+.s-a-vencer    { background: #FFF4DC; color: #7A4A00; }
+.s-em-dia      { background: #E6F9EE; color: #1A5C35; }
+.s-pendente    { background: #E8F0FA; color: #1A3A5C; }
+.s-dispensado  { background: #F0F0F0; color: #888; }
+.s-default     { background: #F0F0F0; color: #888; }
 
 .card-body { padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
 .card-field { display: flex; flex-direction: column; gap: 1px; }
@@ -211,7 +205,7 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
-<body data-view="entrevistas">
+<body data-view="exames">
 
 <!-- ══ AUTH GATE — session guard (lideres) ══════════════════════ -->
 <style>
@@ -299,7 +293,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </button>
 </header>
 <div class="tabs">
-  <button class="tab-btn active" id="tab-entrevistas" onclick="setTab('entrevistas')">Entrevistas</button>
+  <button class="tab-btn active" id="tab-exames" onclick="setTab('exames')">Exames</button>
   <button class="tab-btn" id="tab-dashboard" onclick="setTab('dashboard')">KPI's</button>
 </div>
 <div class="kpis-wrap" id="kpis-wrap">
@@ -527,51 +521,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <script>
 // ─── CONFIG DO GOOGLE SHEETS ─────────────────────────────────────────────────
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-var SHEET_ID          = '14UsviSQbpJBPUNW1cuvCDnem7IRknSHBcxZg6jnq7pk';
-var API_KEY           = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
-var SHEET_ENTREVISTAS = 'CONTROLE DE ENTREVISTAS';
-var SHEET_TESTES      = 'CONTROLE DE TESTES';
-var APPS_SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbw-opeZERkGF-qKzt44UWv2alrwWoF3bBshzwADG3d9SIl5k19jGJ7Fs7A76EVJxKI/exec';
+var SHEET_ID     = '14UsviSQbpJBPUNW1cuvCDnem7IRknSHBcxZg6jnq7pk';
+var API_KEY      = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
+var SHEET_EXAMES = 'Controle_de_asos';
 
-// ─── Estado ──────────────────────────────────────────────────────────────────
-var isAdmin = (function(){ var p=(window.__lideresPerfil||''); return p==='admin'||p==='analista-rh'; })();
-(function lockVerMais(){
-  var btn = document.querySelector('.btn-ver-mais');
-  if (!btn || isAdmin) return;
-  btn.classList.add('locked');
-  btn.removeAttribute('href');
-  btn.removeAttribute('target');
-  btn.removeAttribute('rel');
-  btn.title = 'Acesso restrito ao perfil ADMIN';
-  btn.addEventListener('click', function(e){ e.preventDefault(); });
-  btn.innerHTML = 'Ver dashboard completo'
-    + ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">'
-    + '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
-})();
-var entrevistas = [];
-var testes = [];
-var _testeCache = [];
-var _entrevistaCache = [];
+// ─── Estado ───────────────────────────────────────────────────────────────────
+var exames = [];
 var state = {
-  tab: 'entrevistas',
-  dashSrc: 'entrevistas',
-  filters: { unidade: 'Todos', departamento: 'Todos', data: 'Todos', entrevistador: 'Todos', status: 'Todos' },
-  dashFilters: { unidade: 'Todos', departamento: 'Todos', periodo: 'Todos' },
-  loading: true,
-  error: null
+  tab: 'exames',
+  filters: { unidade: 'Todos', departamento: 'Todos', tipoExame: 'Todos', status: 'Todos' },
+  loading: true, error: null
 };
 
-var chartInst = null;
-var chartRecrutadorInst = null;
-var _cfMes = null;
-var _cfSelectedBarIdx = -1;
-var _cfFunilIdx = null;
-var _cfRecrutador = null;
-
-// ─── Fetch Sheets ─────────────────────────────────────────────────────────────
-function sheetURL(sheetName) {
+// ─── Fetch ────────────────────────────────────────────────────────────────────
+function sheetURL() {
   return 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID
-       + '/values/' + encodeURIComponent(sheetName + '!A:Z')
+       + '/values/' + encodeURIComponent(SHEET_EXAMES + '!A:K')
        + '?key=' + API_KEY;
 }
 
@@ -582,16 +547,13 @@ function rowToObj(headers, row) {
          .replace(/[áàâã]/g,'a').replace(/[éê]/g,'e')
          .replace(/[í]/g,'i').replace(/[óôõ]/g,'o')
          .replace(/[ú]/g,'u').replace(/[ç]/g,'c')
-         .replace(/\s+/g,'_')] = (row[i] || '').trim();
+         .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'_')] = (row[i] || '').trim();
   });
   return obj;
 }
 
-// Mapeia linha da aba CONTROLE DE ENTREVISTAS
-// Colunas: F1670 | NOME | CONTATO | ETENSÃO SALARI | UNIDADE | DEPARTAMENTO | CARGO | SELECIONADO | DATA DA ENTREVISTA | HORARIO | CPF | ...
-// A col F1670 é o recrutador (nome do recrutador está na col A)
-function normEntrevista(obj) {
-  // tenta várias grafias possíveis de cada campo
+// Colunas: Matrícula | Nome | Cargo | Departamento | Unidade | Data de Admissão | Status | Tipo de Exame | Periodicidade | Último exame realizado | Realiza exame
+function normExame(obj) {
   function v() {
     for (var i=0; i<arguments.length; i++) {
       if (obj[arguments[i]] !== undefined && obj[arguments[i]] !== '') return obj[arguments[i]];
@@ -599,1257 +561,230 @@ function normEntrevista(obj) {
     return '';
   }
   return {
-    recrutador:        v('responsavel','f1670','recrutador','nome_do_recrutador'),
-    nome:              v('nome','candidato','nome_candidato'),
-    contato:           v('contato','telefone','whatsapp','celular'),
-    pretensao:         v('etensao_salari','extensao_salarial','pretensao','pretensao_salarial','valor'),
-    unidade:           v('unidade'),
-    departamento:      v('departamento','depto'),
-    cargo:             v('cargo','vaga','funcao'),
-    selecionado:       v('selecionado'),
-    data:              v('data_da_entrevista','data_entrevista','data'),
-    horario:           v('horarios','horario','hora','horario_entrevista','horario_do_teste'),
-    status_entrevista: v('status_da_entrevista','status_entrevista','status','resultado','situacao'),
-    entrevistador:     v('entrevistador','entrevistadora'),
-    observacoes:       v('observacoes_das_entrevistas','observacoes','observacao','obs','feedback'),
-    status_final:      v('status_final','resultado_final','contratado'),
-    referencia:        v('tipo_de_referencia','tipo_referencia','referencia'),
-    id:                v('id'),
-    link:              v('link_feedback','link','url')
+    matricula:    v('matricula'),
+    nome:         v('nome'),
+    cargo:        v('cargo'),
+    departamento: v('departamento'),
+    unidade:      v('unidade'),
+    admissao:     v('data_de_admissao','data_admissao','admissao'),
+    statusColab:  v('status'),
+    tipoExame:    v('tipo_de_exame','tipo_exame'),
+    periodicidade: parseInt(v('periodicidade')) || 0,
+    ultimoExame:  v('ultimo_exame_realizado','ultimo_exame'),
+    realizaExame: v('realiza_exame','realiza_exame_')
   };
-}
-
-// Mapeia linha da aba CONTROLE DE TESTES
-// Colunas: NOME | CONTATO | UNIDADE | CARGO | MISE | DEPARTAMENTO | VALOR DA DIÁRIA | DIAS DE TESTE | HORÁRIO DO TESTE | STATUS | OBSERVAÇÕES
-function normTeste(obj) {
-  function v() {
-    for (var i=0; i<arguments.length; i++) {
-      if (obj[arguments[i]] !== undefined && obj[arguments[i]] !== '') return obj[arguments[i]];
-    }
-    return '';
-  }
-  return {
-    recrutador:        v('recrutador','mise','turno'),
-    nome:              v('nome','candidato'),
-    contato:           v('contato','telefone','whatsapp','celular'),
-    pretensao:         v('valor_da_diaria','valor_diaria','valor'),
-    unidade:           v('unidade'),
-    departamento:      v('departamento','depto'),
-    cargo:             v('cargo','funcao','vaga'),
-    selecionado:       '',
-    data:              v('dias_de_teste','data_teste','data'),
-    horario:           v('horario_do_teste','horario','hora'),
-    status_entrevista: v('status','resultado','situacao'),
-    entrevistador:     v('entrevistador','avaliador'),
-    observacoes:       v('observacoes','observacao','obs'),
-    status_final:      v('status','resultado','situacao'),
-    id:                v('id'),
-    link:              v('link_feedback','link','url')
-  };
-}
-
-function fetchSheet(sheetName, normFn, callback) {
-  fetch(sheetURL(sheetName))
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.error) { callback(null, data.error.message); return; }
-      var rows = data.values || [];
-      if (rows.length < 2) { callback([], null); return; }
-      var headers = rows[0];
-      var result = [];
-      for (var i = 1; i < rows.length; i++) {
-        if (rows[i].some(function(c){return c && c.trim();})) {
-          var obj = normFn(rowToObj(headers, rows[i]));
-          obj._linha = i + 1; // linha real na planilha (header = linha 1)
-          result.push(obj);
-        }
-      }
-      callback(result, null);
-    })
-    .catch(function(err) { callback(null, err.message || 'Erro de rede'); });
 }
 
 function loadAllData() {
   state.loading = true; state.error = null;
   showLoading();
-  var done = 0, errors = [];
-  fetchSheet(SHEET_ENTREVISTAS, normEntrevista, function(data, err) {
-    if (err) errors.push('Entrevistas: ' + err); else entrevistas = data || [];
-    if (++done === 2) finishLoad(errors);
-  });
-  fetchSheet(SHEET_TESTES, normTeste, function(data, err) {
-    if (err) errors.push('Testes: ' + err); else testes = data || [];
-    if (++done === 2) finishLoad(errors);
-  });
+  fetch(sheetURL())
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (data.error) { state.error = data.error.message; hideLoading(); render(); return; }
+      var rows = data.values || [];
+      if (rows.length < 2) { exames = []; hideLoading(); render(); return; }
+      var headers = rows[0];
+      exames = [];
+      for (var i = 1; i < rows.length; i++) {
+        if (rows[i].some(function(c){return c && c.trim();})) {
+          exames.push(normExame(rowToObj(headers, rows[i])));
+        }
+      }
+      hideLoading(); render();
+    })
+    .catch(function(err){ state.error = err.message||'Erro de rede'; hideLoading(); render(); });
 }
 
-function finishLoad(errors) {
-  state.loading = false;
-  state.error = errors.length ? errors.join(' | ') : null;
-  hideLoading();
-  render();
+// ─── Utilitários ──────────────────────────────────────────────────────────────
+function escH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-
-// ─── Utilitários ─────────────────────────────────────────────────────────────
+function norm(s) { return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,''); }
 function unique(arr) {
   var seen={}, out=[];
   arr.forEach(function(v){ if(v && !seen[v]){seen[v]=true;out.push(v);} });
   return out.sort();
 }
-function escH(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function norm(s) {
-  return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-}
-function slugStatus(s) {
-  if (!s) return 'default';
-  var l = norm(s.toLowerCase().trim());
-  if (l.indexOf('aguardando devolutiva')>=0) return 'aguardando-devolutiva';
-  if (l.indexOf('aguardando entrevista')>=0) return 'aguardando-entrevista';
-  if (l.indexOf('aprovado para teste')>=0)   return 'aprovado-para-teste';
-  if (l.indexOf('nao realizada')>=0) return 'nao-entrou';
-  if (l.indexOf('nao selecionado')>=0) return 'nao-selecionado';
-  if (l.indexOf('nao entrou')>=0) return 'nao-entrou';
-  return 'default';
-}
-function slugFinal(s) {
-  if (!s) return 'aguardando';
-  var l = norm(s.toLowerCase().trim());
-  if (l === 'contratado') return 'contratado';
-  if (l.indexOf('nao_contratado')>=0 || l.indexOf('nao contratado')>=0 || l.indexOf('nao compareceu')>=0 || l.indexOf('cancelado')>=0) return 'nao-contratado';
-  if (l.indexOf('aguardando')>=0) return 'aguardando';
-  return 'nao-contratado';
-}
-
-function slugTeste(s) {
-  if (!s) return 'aguardando-teste';
-  var l = norm(s.toLowerCase().trim());
-  if (l.indexOf('aguardando teste')>=0)     return 'aguardando-teste';
-  if (l.indexOf('aguardando aprovacao')>=0) return 'aguardando-aprovacao';
-  if (l.indexOf('cancelado')>=0)            return 'cancelado';
-  if (l.indexOf('nao compareceu')>=0) return 'nao-compareceu';
-  if (l === 'contratado')                   return 'contratado';
-  if (l.indexOf('nao contratado')>=0) return 'nao-contratado';
-  return 'nao-contratado';
-}
 function parseDateBR(s) {
   if (!s) return null;
   var p = s.trim().split('/');
-  if (p.length===3) {
-    return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
-  }
-  if (p.length===2) {
-    // formato DD/MM — usa o ano atual
-    var ano = new Date().getFullYear();
-    return new Date(ano, parseInt(p[1])-1, parseInt(p[0]));
-  }
+  if (p.length===3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
   return null;
 }
-function waLink(contato) {
-  var num = (contato||'').replace(/\D/g,'');
-  if (num.length>=10) { if(num[0]!=='5') num='55'+num; return 'https://wa.me/'+num; }
-  return '';
+function formatDateBR(d) {
+  if (!d) return '—';
+  var dd=d.getDate(), mm=d.getMonth()+1, yy=d.getFullYear();
+  return (dd<10?'0'+dd:dd)+'/'+(mm<10?'0'+mm:mm)+'/'+yy;
 }
-function phoneIcon() {
-  return '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+
+// ─── Status do exame ──────────────────────────────────────────────────────────
+function calcStatusExame(r) {
+  var realiza = norm((r.realizaExame||'').toLowerCase().trim());
+  if (realiza==='nao'||realiza==='nao') return 'dispensado';
+  var ultimo = parseDateBR(r.ultimoExame);
+  if (!ultimo) return 'pendente';
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var proximo = new Date(ultimo.getTime());
+  proximo.setDate(proximo.getDate() + (r.periodicidade||0));
+  var dias = Math.floor((proximo - hoje) / 86400000);
+  if (dias < 0) return 'vencido';
+  if (dias <= 60) return 'a-vencer';
+  return 'em-dia';
 }
-function contactHTML(c) {
-  var wa = waLink(c);
-  return wa
-    ? '<a href="'+wa+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;color:inherit;text-decoration:none;">'+phoneIcon()+escH(c)+'</a>'
-    : phoneIcon()+' '+escH(c||'');
+
+function statusLabel(slug) {
+  return {'vencido':'Vencido','a-vencer':'A vencer','em-dia':'Em dia','pendente':'Pendente','dispensado':'Dispensado'}[slug] || slug;
 }
+
+function proximoExameDate(r) {
+  var ultimo = parseDateBR(r.ultimoExame);
+  if (!ultimo || !r.periodicidade) return null;
+  var d = new Date(ultimo.getTime());
+  d.setDate(d.getDate() + r.periodicidade);
+  return d;
+}
+
+// ─── Loading ──────────────────────────────────────────────────────────────────
+function showLoading() { var el=document.getElementById('loading-overlay'); if(el) el.classList.add('show'); }
+function hideLoading() { var el=document.getElementById('loading-overlay'); if(el) el.classList.remove('show'); }
 
 // ─── Filtros ──────────────────────────────────────────────────────────────────
-function getSrc() { return state.tab==='entrevistas' ? entrevistas : testes; }
-
-function isHorarioZero(h) {
-  if (!h) return true;
-  var s = h.trim().replace(/\s/g,'');
-  return s==='' || s==='0' || s==='00' || s==='0:00' || s==='00:00' || s==='0:0';
-}
-
-function isValorZero(v) {
-  if (!v) return true;
-  var num = v.replace(/R\$\s*/i,'').replace(/\./g,'').replace(',','.');
-  return parseFloat(num) === 0 || isNaN(parseFloat(num));
-}
-
 function getFiltered() {
-  var src=getSrc(), f=state.filters;
-  var hoje=new Date(); hoje.setHours(0,0,0,0);
-  var dMin=new Date(hoje); dMin.setDate(dMin.getDate()-10);
-  var dMax=new Date(hoje); dMax.setDate(dMax.getDate()+10);
-  return src.filter(function(r) {
-    var d=parseDateBR(r.data);
-    if (d && (d<dMin||d>dMax)) return false;
-    if (state.tab==='entrevistas' && isHorarioZero(r.horario)) return false;
-    if (state.tab==='entrevistas') {
-      var st = norm((r.status_entrevista||'').toLowerCase().trim());
-      if (st.indexOf('nao entrou')>=0 || st.indexOf('nao realizada')>=0) return false;
-    }
-    if (state.tab==='testes' && isValorZero(r.pretensao)) return false;
+  var f = state.filters;
+  return exames.filter(function(r) {
     if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
     if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
-    if (f.data!=='Todos' && r.data!==f.data) return false;
-    if (f.entrevistador!=='Todos' && r.entrevistador!==f.entrevistador) return false;
-    if (f.status!=='Todos') {
-      var cmp = state.tab==='entrevistas' ? r.status_entrevista : r.status_final;
-      if (cmp!==f.status) return false;
-    }
+    if (f.tipoExame!=='Todos' && r.tipoExame!==f.tipoExame) return false;
+    if (f.status!=='Todos' && calcStatusExame(r)!==f.status) return false;
     return true;
   });
 }
 
-function getStatusOpts() {
-  var src=getSrc();
-  if (state.tab==='entrevistas') {
-    src = src.filter(function(r){
-      var st = norm((r.status_entrevista||'').toLowerCase().trim());
-      return st.indexOf('nao entrou')<0 && st.indexOf('nao realizada')<0;
-    });
-  }
-  return unique(src.map(function(r){ return state.tab==='entrevistas' ? r.status_entrevista : r.status_final; }));
-}
-
-// ─── Filtros do Dashboard (unidade, departamento, período) ───────────────────
-function applyDashFilters(rows) {
-  var f = state.dashFilters;
-  if (!f) return rows;
-  if (f.unidade==='Todos' && f.departamento==='Todos' && f.periodo==='Todos') return rows;
-  return rows.filter(function(r) {
-    if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
-    if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
-    if (f.periodo!=='Todos' && dataToMY(r.data)!==f.periodo) return false;
-    return true;
-  });
-}
-
-function getDashPeriodos() {
-  var srcAll = (entrevistas||[]).concat(testes||[]);
-  var seen = {}, out = [];
-  srcAll.forEach(function(r){
-    var my = dataToMY(r.data);
-    if (my && !seen[my]) { seen[my] = true; out.push(my); }
-  });
-  out.sort(function(a,b){
-    var pa = a.split('/'), pb = b.split('/');
-    return new Date(parseInt(pa[1]),parseInt(pa[0])-1,1) - new Date(parseInt(pb[1]),parseInt(pb[0])-1,1);
-  });
-  return out;
-}
-
-// ─── Loading / Error ──────────────────────────────────────────────────────────
-function showLoading() { document.getElementById('loading-overlay').classList.add('show'); }
-function hideLoading() { document.getElementById('loading-overlay').classList.remove('show'); }
-function showError(msg) {
-  document.getElementById('content').innerHTML =
-    '<div class="empty-state">' +
-    '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#7A1A1A" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
-    '<p style="color:#7A1A1A;margin-top:12px">Erro ao carregar dados</p>' +
-    '<p style="font-size:10px;opacity:.7;margin-top:6px;max-width:300px;text-align:center">'+escH(msg)+'</p>' +
-    '<p style="font-size:10px;opacity:.5;margin-top:6px">Verifique a API Key e se a planilha está pública</p>' +
-    '<button onclick="loadAllData()" style="margin-top:16px;padding:8px 18px;background:#35383F;color:#CFFF00;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-family:\'DM Mono\',monospace;letter-spacing:.5px;text-transform:uppercase">↻ Tentar novamente</button>' +
-    '</div>';
-}
-
-// ─── Filtros UI ───────────────────────────────────────────────────────────────
 function renderFilters() {
-  var src=getSrc(), f=state.filters, filtered=getFiltered();
+  var wrap = document.getElementById('filters-wrap');
+  if (!wrap) return;
+  var f = state.filters;
   function sel(label, key, opts, curVal) {
     var h='<div class="filter-group"><label class="filter-label">'+label+'</label><select class="filter-select" onchange="setFilter(\''+key+'\',this.value)">';
     h+='<option value="Todos"'+(curVal==='Todos'?' selected':'')+'>Todos</option>';
     opts.forEach(function(o){ h+='<option value="'+escH(o)+'"'+(curVal===o?' selected':'')+'>'+escH(o)+'</option>'; });
     return h+'</select></div>';
   }
-  var deptSrc = f.unidade==='Todos' ? src : src.filter(function(r){return r.unidade===f.unidade;});
-  var html='<div class="filters-row">';
-  html+=sel('Unidade','unidade',unique(src.map(function(r){return r.unidade;})),f.unidade);
-  html+=sel('Departamento','departamento',unique(deptSrc.map(function(r){return r.departamento;})),f.departamento);
-  // Só mostra datas dentro da janela de 10 dias
-  var hoje=new Date(); hoje.setHours(0,0,0,0);
-  var dMin=new Date(hoje); dMin.setDate(dMin.getDate()-10);
-  var dMax=new Date(hoje); dMax.setDate(dMax.getDate()+10);
-  var datasJanela = src.map(function(r){return r.data;}).filter(function(d){
-    var dt=parseDateBR(d);
-    return dt && dt>=dMin && dt<=dMax;
-  }).filter(function(d,i,arr){ return arr.indexOf(d)===i; }) // unique
-  .sort(function(a,b){
-    return parseDateBR(a)-parseDateBR(b); // crescente por data real
+  var deptSrc = f.unidade==='Todos' ? exames : exames.filter(function(r){return r.unidade===f.unidade;});
+  var filtered = getFiltered();
+  var html = '<div class="filters-row">';
+  html += sel('Unidade','unidade',unique(exames.map(function(r){return r.unidade;})),f.unidade);
+  html += sel('Departamento','departamento',unique(deptSrc.map(function(r){return r.departamento;})),f.departamento);
+  html += sel('Tipo de Exame','tipoExame',unique(exames.map(function(r){return r.tipoExame;})),f.tipoExame);
+  var h2='<div class="filter-group"><label class="filter-label">Status</label><select class="filter-select" onchange="setFilter(\'status\',this.value)">';
+  h2+='<option value="Todos"'+(f.status==='Todos'?' selected':'')+'>Todos</option>';
+  ['vencido','a-vencer','em-dia','pendente','dispensado'].forEach(function(s){
+    h2+='<option value="'+s+'"'+(f.status===s?' selected':'')+'>'+statusLabel(s)+'</option>';
   });
-  html+=sel('Data','data',datasJanela,f.data);
-  html+=sel('Entrevistador','entrevistador',unique(src.map(function(r){return r.entrevistador;})),f.entrevistador);
-  html+=sel('Status','status',getStatusOpts(),f.status);
-  html+='</div><div class="filters-actions"><button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>';
-  html+='<span class="results-count"><span>'+filtered.length+'</span> resultado(s)</span></div>';
-  document.getElementById('filters-wrap').innerHTML=html;
+  html += h2+'</select></div>';
+  html += '</div><div class="filters-actions"><button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>';
+  html += '<span class="results-count"><span>'+filtered.length+'</span> colaborador(es)</span></div>';
+  wrap.innerHTML = html;
 }
 
-function renderDashFilters() {
-  var wrap = document.getElementById('dash-filters-wrap');
-  if (!wrap) return;
-  var srcAll = (entrevistas||[]).concat(testes||[]);
-  var f = state.dashFilters;
-  function sel(label, key, opts, curVal) {
-    var h='<div class="filter-group"><label class="filter-label">'+label+'</label><select class="filter-select" onchange="setDashFilter(\''+key+'\',this.value)">';
-    h+='<option value="Todos"'+(curVal==='Todos'?' selected':'')+'>Todos</option>';
-    opts.forEach(function(o){ h+='<option value="'+escH(o)+'"'+(curVal===o?' selected':'')+'>'+escH(o)+'</option>'; });
-    return h+'</select></div>';
-  }
-  var deptSrc = f.unidade==='Todos' ? srcAll : srcAll.filter(function(r){return r.unidade===f.unidade;});
-  var html='<div class="filters-row">';
-  html+=sel('Unidade','unidade',unique(srcAll.map(function(r){return r.unidade;})),f.unidade);
-  html+=sel('Departamento','departamento',unique(deptSrc.map(function(r){return r.departamento;})),f.departamento);
-  html+=sel('Período','periodo',getDashPeriodos(),f.periodo);
-  html+='</div><div class="filters-actions"><button class="btn-clear" onclick="clearDashFilters()">Limpar filtros</button></div>';
-  wrap.innerHTML=html;
-}
-
-function setDashFilter(key, val) {
-  state.dashFilters[key] = val;
-  if (key==='unidade') state.dashFilters.departamento = 'Todos';
-  _cfMes = null;
-  _cfFunilIdx = null;
-  _cfRecrutador = null;
+function setFilter(key, val) {
+  state.filters[key] = val;
+  if (key==='unidade') state.filters.departamento = 'Todos';
   render();
 }
-
-function clearDashFilters() {
-  state.dashFilters = { unidade: 'Todos', departamento: 'Todos', periodo: 'Todos' };
-  _cfMes = null;
-  _cfFunilIdx = null;
-  _cfRecrutador = null;
+function clearFilters() {
+  state.filters = { unidade:'Todos', departamento:'Todos', tipoExame:'Todos', status:'Todos' };
   render();
-}
-
-// ─── Cards ────────────────────────────────────────────────────────────────────
-function cardEntrevista(r) {
-  var sf=slugStatus(r.status_entrevista), sfLabel=r.status_entrevista||'Sem status';
-  var horOk=r.horario&&r.horario!=='0:00'&&r.horario!=='0'&&r.horario!=='00:00';
-  var sfFinal=slugFinal(r.status_final);
-  var isAguardandoDev = r.status_entrevista && norm(r.status_entrevista.toLowerCase()).indexOf('aguardando devolutiva')>=0;
-  var footer='';
-  if (sfFinal==='contratado') {
-    footer='<div class="card-footer"><span class="check-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Contratado</span></div>';
-  } else if (isAguardandoDev) {
-    var idx=_entrevistaCache.length;
-    _entrevistaCache.push({nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,entrevistador:r.entrevistador,recrutador:r.recrutador,pretensao:r.pretensao});
-    footer='<div class="card-footer">'+'<div class="meta-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Devolutiva pendente</div>'+'<button class="btn-avaliar" onclick="abrirModalEntrevista('+idx+')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Enviar devolutiva</button>'+'</div>';
-  }
-  return '<div class="card">'+
-    '<div class="card-header"><div>'+
-    '<div class="candidate-name">'+escH(r.nome)+'</div>'+
-    '<div class="candidate-contact">'+contactHTML(r.contato)+'</div></div>'+
-    '<span class="status-badge s-'+sf+'">'+escH(sfLabel)+'</span></div>'+
-    '<div class="card-body">'+
-    '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+escH(r.unidade)+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Departamento</span><span class="field-value">'+escH(r.departamento)+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Cargo</span><span class="field-value">'+escH(r.cargo)+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Data</span><span class="field-value">'+escH(r.data)+(horOk?' · '+escH(r.horario):'')+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Entrevistador</span><span class="field-value">'+escH(r.entrevistador)+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Recrutador</span><span class="field-value">'+escH(r.recrutador)+'</span></div>'+
-    (isAdmin ? '<div class="card-field"><span class="field-label">Pretensão</span><span class="field-value">'+(r.pretensao && !isValorZero(r.pretensao) ? escH(r.pretensao) : 'Não informou')+'</span></div>' : '')+
-    '</div>'+footer+'</div>';
-}
-
-function cardTeste(r) {
-  var sf=slugTeste(r.status_final), sfLabel=r.status_final||'Aguardando';
-  var horOk=r.horario&&r.horario!=='0:00'&&r.horario!=='0'&&r.horario!=='00:00';
-  var isAguardandoAprov = sf==='aguardando-aprovacao' || (r.status_final && norm(r.status_final.toLowerCase()).indexOf('aguardando aprovacao')>=0);
-  var footer='';
-  if (sf==='contratado') {
-    footer='<div class="card-footer"><span class="check-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Contratado</span></div>';
-  } else if (isAguardandoAprov) {
-    var idx=_testeCache.length;
-    _testeCache.push({nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,turno:r.recrutador,valor:r.pretensao});
-    footer='<div class="card-footer">'+'<div class="meta-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Aguardando avaliação</div>'+'<button class="btn-avaliar" onclick="abrirModal('+idx+')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Avaliar teste</button>'+'</div>';
-  }
-  return '<div class="card">'+
-    '<div class="card-header"><div>'+
-    '<div class="candidate-name">'+escH(r.nome)+'</div>'+
-    '<div class="candidate-contact">'+contactHTML(r.contato)+'</div></div>'+
-    '<span class="status-badge sf-'+sf+'">'+escH(sfLabel)+'</span></div>'+
-    '<div class="card-body">'+
-    '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+escH(r.unidade)+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Departamento</span><span class="field-value">'+escH(r.departamento)+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Cargo</span><span class="field-value">'+escH(r.cargo)+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Data</span><span class="field-value">'+escH(r.data)+(horOk?' · '+escH(r.horario):'')+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Turno</span><span class="field-value">'+escH(r.recrutador)+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Valor Diária</span><span class="field-value">'+escH(r.pretensao)+'</span></div>'+
-    '</div>'+footer+'</div>';
-}
-
-function emptyState() {
-  return '<div class="empty-state"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#35383F" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg><p>Nenhum resultado encontrado</p><p style="margin-top:6px;font-size:10px;opacity:.6">Ajuste os filtros acima</p></div>';
 }
 
 // ─── KPIs ─────────────────────────────────────────────────────────────────────
-function getWeekRange() {
-  var hoje = new Date(); hoje.setHours(0,0,0,0);
-  var dia = hoje.getDay(); // 0=dom, 1=seg, ... 6=sab
-  var offsetSeg = (dia===0 ? -6 : 1-dia);
-  var seg = new Date(hoje); seg.setDate(seg.getDate()+offsetSeg);
-  var dom = new Date(seg); dom.setDate(dom.getDate()+6); dom.setHours(23,59,59,999);
-  return {seg:seg, dom:dom, hoje:hoje};
-}
-
-function contarSemana(rows, excluir) {
-  var w = getWeekRange();
-  var mesRef = w.hoje.getMonth(), anoRef = w.hoje.getFullYear();
-  var semana = 0, hoje = 0, mes = 0;
-  rows.forEach(function(r){
-    var d = parseDateBR(r.data);
-    if (!d) return;
-    if (excluir && excluir(r)) return;
-    if (d >= w.seg && d <= w.dom) semana++;
-    if (d.getTime() === w.hoje.getTime()) hoje++;
-    if (d.getMonth() === mesRef && d.getFullYear() === anoRef) mes++;
+function renderKpis() {
+  var wrap = document.getElementById('kpis-wrap');
+  if (!wrap) return;
+  var ativos = exames.filter(function(r){
+    var realiza = norm((r.realizaExame||'').toLowerCase().trim());
+    return realiza!=='nao' && realiza!=='não';
   });
-  return {semana:semana, hoje:hoje, mes:mes};
-}
-
-function renderKPIs() {
-  var e = contarSemana(applyDashFilters(entrevistas), function(r){ return isHorarioZero(r.horario); });
-  var t = contarSemana(applyDashFilters(testes), function(r){ return isValorZero(r.pretensao); });
-  document.getElementById('kpi-entrev-semana').textContent = e.semana;
-  document.getElementById('kpi-entrev-hoje').textContent = e.hoje;
-  document.getElementById('kpi-entrev-mes').textContent = e.mes;
-  document.getElementById('kpi-teste-semana').textContent = t.semana;
-  document.getElementById('kpi-teste-hoje').textContent = t.hoje;
-  document.getElementById('kpi-teste-mes').textContent = t.mes;
-}
-
-// ─── Gráfico (Chart.js) ───────────────────────────────────────────────────────
-function dataToMY(s) {
-  if (!s) return '';
-  var d = parseDateBR(s);
-  if (!d) return '';
-  return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
-}
-
-// Fonte do Dashboard: usa state.dashSrc (independente da aba ativa), aplica
-// apenas a exclusão de registros sem horário/valor; ignora filtros da lista
-// (que pertencem à aba Entrevistas/Testes).
-function getFilteredForChart() {
-  var src = applyDashFilters(state.dashSrc==='entrevistas' ? entrevistas : testes);
-  var rows;
-  if (_cfFunilIdx !== null) {
-    rows = _applyFunilFilter(src);
-  } else {
-    var base = src.filter(function(r) {
-      if (state.dashSrc==='entrevistas' && isHorarioZero(r.horario)) return false;
-      if (state.dashSrc==='testes' && isValorZero(r.pretensao)) return false;
-      return true;
-    });
-    rows = _applyFunilFilter(base);
+  var vencidos = ativos.filter(function(r){return calcStatusExame(r)==='vencido';}).length;
+  var aVencer  = ativos.filter(function(r){return calcStatusExame(r)==='a-vencer';}).length;
+  var emDia    = ativos.filter(function(r){return calcStatusExame(r)==='em-dia';}).length;
+  var pendente = ativos.filter(function(r){return calcStatusExame(r)==='pendente';}).length;
+  function kpiCard(label, num, alert) {
+    return '<div class="kpi-card'+(alert?' alert':'')+'">'+
+      '<span class="kpi-label">'+label+'</span>'+
+      '<span class="kpi-number">'+num+'</span>'+
+      '</div>';
   }
-  if (_cfRecrutador) rows = rows.filter(function(r){ return (r.recrutador||'').trim() === _cfRecrutador; });
-  return rows;
+  wrap.innerHTML =
+    kpiCard('Vencidos', vencidos, vencidos > 0) +
+    kpiCard('A Vencer (60d)', aVencer, false) +
+    kpiCard('Em Dia', emDia, false) +
+    kpiCard('Pendentes', pendente, false);
 }
 
-function getMonthDataRecrut(filt) {
-  var hoje = new Date();
-  var labels=[], counts=[], indexes=[];
-  for (var i=11; i>=0; i--) {
-    var d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
-    var my = String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
-    labels.push(my);
-    indexes.push(my);
-    counts.push(filt.filter(function(r){ return dataToMY(r.data)===my; }).length);
-  }
-  return {labels:labels, counts:counts, indexes:indexes};
-}
-
-var cfOutlinePlugin = {
-  id: 'cfOutline',
-  afterDatasetsDraw: function(chart) {
-    var sel = _cfSelectedBarIdx;
-    if (sel < 0) return;
-    var meta = chart.getDatasetMeta(0);
-    if (!meta.data || sel >= meta.data.length) return;
-    var bar = meta.data[sel];
-    var ctx = chart.ctx;
-    var x = bar.x - bar.width/2 - 4;
-    var y = bar.y - 4;
-    var w = bar.width + 8;
-    var h = bar.base - bar.y + 8;
-    ctx.save();
-    ctx.strokeStyle = '#35383F';
-    ctx.lineWidth = 2;
-    var r = 4;
-    ctx.beginPath();
-    ctx.moveTo(x+r, y);
-    ctx.lineTo(x+w-r, y);
-    ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-    ctx.lineTo(x+w, y+h-r);
-    ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-    ctx.lineTo(x+r, y+h);
-    ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-    ctx.lineTo(x, y+r);
-    ctx.quadraticCurveTo(x, y, x+r, y);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.restore();
-  }
-};
-
-var barValueLabelsPlugin = {
-  id: 'barValueLabels',
-  afterDatasetsDraw: function(chart) {
-    var meta = chart.getDatasetMeta(0);
-    if (!meta.data) return;
-    var ctx = chart.ctx;
-    var data = chart.data.datasets[0].data;
-    ctx.save();
-    ctx.fillStyle = '#35383F';
-    ctx.font = '600 11px "DM Mono", monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    for (var i = 0; i < meta.data.length; i++) {
-      var v = data[i];
-      if (!v) continue;
-      var bar = meta.data[i];
-      ctx.fillText(v, bar.x, bar.y - 6);
-    }
-    ctx.restore();
-  }
-};
-
-
-function renderChartRecrut() {
-  var canvas = document.getElementById('cRecrut');
-  if (!canvas || typeof Chart === 'undefined') return;
-  var md = getMonthDataRecrut(getFilteredForChart());
-  var labels=md.labels, counts=md.counts, indexes=md.indexes;
-  var bgColors = indexes.map(function(my){
-    return _cfMes!==null ? (my===_cfMes?'#35383F':'rgba(53,56,63,0.45)') : '#35383F';
-  });
-  _cfSelectedBarIdx = _cfMes ? indexes.indexOf(_cfMes) : -1;
-
-  if (chartInst) chartInst.destroy();
-  chartInst = new Chart(canvas, {
-    type:'bar',
-    data:{ labels:labels, datasets:[{
-      label: state.dashSrc==='entrevistas' ? 'Entrevistas' : 'Testes',
-      data:counts, backgroundColor:bgColors, borderWidth:0, borderRadius:5, barPercentage:0.6
-    }]},
-    plugins:[cfOutlinePlugin, barValueLabelsPlugin],
-    options:{
-      responsive:true, maintainAspectRatio:false, animation:false,
-      layout:{padding:{top:18}},
-      onClick:function(e,els){ if(els.length){ setCF(indexes[els[0].index]); } },
-      onHover:function(e,els){ if(e.native&&e.native.target){ e.native.target.style.cursor = els.length ? 'pointer' : 'default'; } },
-      plugins:{ legend:{display:false}, tooltip:{enabled:false} },
-      scales:{
-        x:{grid:{display:false}, border:{display:false}, ticks:{color:'#35383F', font:{family:'DM Mono', size:10}}},
-        y:{grid:{display:false}, border:{display:false}, ticks:{display:false}, beginAtZero:true}
-      }
-    }
-  });
-  document.getElementById('chartTitle').textContent = state.dashSrc==='entrevistas' ? 'Entrevistas por Mês' : 'Testes por Mês';
-}
-
-function statusFieldFor(r) {
-  return state.dashSrc === 'entrevistas' ? r.status_entrevista : r.status_final;
-}
-
-function getStatusData(filt) {
-  var rows = filt;
-  if (_cfMes) rows = rows.filter(function(r){ return dataToMY(r.data) === _cfMes; });
-  var counts = {};
-  rows.forEach(function(r) {
-    var s = (statusFieldFor(r) || '').trim() || 'Sem status';
-    counts[s] = (counts[s] || 0) + 1;
-  });
-  var entries = Object.keys(counts).map(function(k){ return [k, counts[k]]; });
-  entries.sort(function(a,b){ return b[1] - a[1]; });
-  return {
-    labels: entries.map(function(e){ return e[0]; }),
-    counts: entries.map(function(e){ return e[1]; })
-  };
-}
-
-function renderStatusTable() {
-  var el = document.getElementById('statusTable');
-  if (!el) return;
-  var sd = getStatusData(getFilteredForChart());
-  if (!sd.labels.length) {
-    el.innerHTML = '<div class="status-empty">Sem dados</div>';
-  } else {
-    el.innerHTML = sd.labels.map(function(label, i){
-      return '<div class="status-row"><span class="status-name">'+escH(label)+'</span><span class="status-count">'+sd.counts[i]+'</span></div>';
-    }).join('');
-  }
-  var base = state.dashSrc==='entrevistas' ? 'Status das Entrevistas' : 'Status dos Testes';
-  document.getElementById('chartTitleStatus').textContent = _cfMes ? (base + ' — ' + _cfMes) : base;
-}
-
-function renderChartRecrutador() {
-  var canvas = document.getElementById('cRecrutador');
-  if (!canvas || typeof Chart === 'undefined') return;
-  var entrevistasDash = applyDashFilters(entrevistas);
-  var testesDash      = applyDashFilters(testes);
-  var src = entrevistasDash.filter(_funilDentroPeriodo);
-  if (_cfMes) src = src.filter(function(r){ return dataToMY(r.data) === _cfMes; });
-  var counts = {};
-  src.forEach(function(r) {
-    var nome = (r.recrutador || '').trim();
-    if (!nome) return;
-    counts[nome] = (counts[nome] || 0) + 1;
-  });
-  var entries = Object.keys(counts).map(function(k){ return [k, counts[k]]; });
-  entries.sort(function(a,b){ return b[1] - a[1]; });
-  var labels = entries.map(function(e){ return e[0]; });
-  var data   = entries.map(function(e){ return e[1]; });
-
-  // Contratados por recrutador: cruza testes (status_final=contratado) com entrevistas pelo nome
-  var recrutadorMap = {};
-  entrevistasDash.filter(_funilDentroPeriodo).forEach(function(r) {
-    var k = norm((r.nome||'').toLowerCase().trim());
-    if (k && !recrutadorMap[k]) recrutadorMap[k] = (r.recrutador||'').trim();
-  });
-  var contratadosPorRec = {};
-  var contratadoSeen = {};
-  testesDash.filter(function(r) {
-    if (!_funilDentroPeriodo(r)) return false;
-    if (_cfMes && dataToMY(r.data) !== _cfMes) return false;
-    return norm((r.status_final||'').toLowerCase()) === 'contratado';
-  }).forEach(function(r) {
-    var k = norm((r.nome||'').toLowerCase().trim());
-    if (!k || contratadoSeen[k]) return;
-    contratadoSeen[k] = true;
-    var rec = recrutadorMap[k];
-    if (!rec) return;
-    contratadosPorRec[rec] = (contratadosPorRec[rec] || 0) + 1;
-  });
-  var palette = ['#1A1A1A','#363636','#525252','#6E6E6E','#8A8A8A','#A0A0A0','#B6B6B6','#C8C8C8','#D8D8D8','#E5E5E5'];
-  var bgColors = labels.map(function(lbl, i) {
-    var base = palette[i % palette.length];
-    if (_cfRecrutador && lbl !== _cfRecrutador) {
-      var r = parseInt(base.slice(1,3),16), g = parseInt(base.slice(3,5),16), b = parseInt(base.slice(5,7),16);
-      return 'rgba('+r+','+g+','+b+',0.25)';
-    }
-    return base;
-  });
-
-  var outsideLabelsPlugin = {
-    id: 'outsideLabels',
-    afterDatasetsDraw: function(chart) {
-      var ctx  = chart.ctx;
-      var meta = chart.getDatasetMeta(0);
-      var ds   = chart.data.datasets[0].data;
-      var lbls = chart.data.labels;
-      var bg   = chart.data.datasets[0].backgroundColor;
-      var tot  = ds.reduce(function(a,b){ return a+b; }, 0);
-      ctx.save();
-      meta.data.forEach(function(arc, i) {
-        var isFaded = _cfRecrutador && lbls[i] !== _cfRecrutador;
-        var midAngle = (arc.startAngle + arc.endAngle) / 2;
-        var cx = arc.x, cy = arc.y;
-        var outerR = arc.outerRadius;
-        var x1 = cx + Math.cos(midAngle) * (outerR + 5);
-        var y1 = cy + Math.sin(midAngle) * (outerR + 5);
-        var x2 = cx + Math.cos(midAngle) * (outerR + 22);
-        var y2 = cy + Math.sin(midAngle) * (outerR + 22);
-        var isRight = Math.cos(midAngle) >= 0;
-        var x3 = x2 + (isRight ? 14 : -14);
-        var y3 = y2;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.lineTo(x3, y3);
-        ctx.strokeStyle = bg[i] || '#666';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        var tx = x3 + (isRight ? 4 : -4);
-        ctx.textAlign = isRight ? 'left' : 'right';
-        var textColor = isFaded ? 'rgba(53,56,63,0.3)' : '#35383F';
-        var contratados = contratadosPorRec[lbls[i]] || 0;
-        ctx.fillStyle = textColor;
-        ctx.font = '700 10px "DM Mono", monospace';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(lbls[i], tx, y3 - 11);
-        ctx.font = '500 9px "DM Mono", monospace';
-        ctx.fillText(ds[i] + ' contatados', tx, y3);
-        ctx.fillText(contratados + ' contratados', tx, y3 + 11);
-      });
-      ctx.restore();
-    }
-  };
-
-  var wrap = document.getElementById('recrutadorWrap');
-  if (wrap) wrap.style.height = '320px';
-  if (chartRecrutadorInst) chartRecrutadorInst.destroy();
-  chartRecrutadorInst = new Chart(canvas, {
-    type: 'pie',
-    data: { labels: labels, datasets: [{ data: data, backgroundColor: bgColors, borderWidth: 2, borderColor: '#fff' }] },
-    plugins: [outsideLabelsPlugin],
-    options: {
-      responsive: true, maintainAspectRatio: false, animation: false,
-      layout: { padding: { left: 90, right: 90, top: 30, bottom: 30 } },
-      plugins: {
-        legend: { display: false },
-        tooltip: { enabled: false }
-      },
-      onClick: function(e, els) {
-        if (els.length) setCFRecrutador(labels[els[0].index]);
-      }
-    }
-  });
-}
-
-function setCF(my) {
-  if (_cfMes===my) { clearCF(); return; }
-  _cfMes = my;
-  renderFunil();
-  renderChartRecrut();
-  renderStatusTable();
-  renderChartRecrutador();
-}
-function clearCF() {
-  _cfMes = null;
-  renderFunil();
-  renderChartRecrut();
-  renderStatusTable();
-  renderChartRecrutador();
-}
-function setCFRecrutador(nome) {
-  if (_cfRecrutador === nome) { _cfRecrutador = null; }
-  else { _cfRecrutador = nome; _cfMes = null; _cfFunilIdx = null; }
-  renderFunil();
-  renderChartRecrut();
-  renderStatusTable();
-  renderChartRecrutador();
-}
-
-function setDashSrc(src) {
-  if (state.dashSrc===src) return;
-  state.dashSrc = src;
-  _cfMes = null;
-  _cfFunilIdx = null;
-  _cfRecrutador = null;
-  document.getElementById('dash-sub-entrevistas').classList.toggle('active', src==='entrevistas');
-  document.getElementById('dash-sub-testes').classList.toggle('active', src==='testes');
-  renderChartRecrut();
-  renderStatusTable();
-  renderFunil();
-  renderChartRecrutador();
-}
-
-// ─── Funil de Recrutamento ────────────────────────────────────────────────────
-var FUNIL_DATA_INICIO = new Date(2026, 0, 1);
-
-function _funilDentroPeriodo(r) {
-  var d = parseDateBR(r.data);
-  return d && d >= FUNIL_DATA_INICIO;
-}
-
-function buildFunnelData() {
-  var entrevistasBase = applyDashFilters(entrevistas).filter(_funilDentroPeriodo);
-  var testesBase      = applyDashFilters(testes).filter(_funilDentroPeriodo);
-  if (_cfMes) {
-    entrevistasBase = entrevistasBase.filter(function(r){ return dataToMY(r.data) === _cfMes; });
-    testesBase      = testesBase.filter(function(r){ return dataToMY(r.data) === _cfMes; });
-  }
-  if (_cfRecrutador) {
-    entrevistasBase = entrevistasBase.filter(function(r){ return (r.recrutador||'').trim() === _cfRecrutador; });
-    testesBase      = testesBase.filter(function(r){ return (r.recrutador||'').trim() === _cfRecrutador; });
-  }
-
-  var contatados = entrevistasBase.filter(function(r){
-    return r.nome && r.nome.trim();
-  });
-
-  var responderam = contatados.filter(function(r){
-    var s = norm((r.selecionado||'').toLowerCase());
-    return s === 'sim' || s === 'nao' || s === 'nao aceitou a proposta';
-  });
-
-  var agendadas = contatados.filter(function(r){
-    return norm((r.selecionado||'').toLowerCase()) === 'sim';
-  });
-
-  var realizadas = contatados.filter(function(r){
-    var s = norm((r.status_entrevista||'').toLowerCase());
-    return s === 'aprovado para teste' || s === 'nao selecionado';
-  });
-
-  var aprovados = contatados.filter(function(r){
-    return norm((r.status_entrevista||'').toLowerCase()) === 'aprovado para teste';
-  });
-
-  function _dedupeByNome(arr) {
-    var seen = {};
-    return arr.filter(function(r){
-      var k = norm((r.nome||'').toLowerCase().trim());
-      if (!k || seen[k]) return false;
-      seen[k] = true;
-      return true;
-    });
-  }
-
-  var testesAgendados = testesBase.filter(function(r){
-    return r.nome && r.nome.trim();
-  });
-  var testesAgendadosUnicos = _dedupeByNome(testesAgendados);
-
-  var testesRealizados = testesAgendados.filter(function(r){
-    var s = norm((r.status_final||'').toLowerCase());
-    return s === 'contratado' || s === 'nao contratado';
-  });
-  var testesRealizadosUnicos = _dedupeByNome(testesRealizados);
-
-  // Mapa nome → referencia (vem da aba entrevistas)
-  var refMap = {};
-  entrevistasBase.forEach(function(r){
-    var k = norm((r.nome||'').toLowerCase().trim());
-    if (!k || refMap[k]) return;
-    refMap[k] = norm((r.referencia||'').toLowerCase().trim());
-  });
-  // Referências aprovadas = testes realizados (únicos) - referências ruins
-  var refs = testesRealizadosUnicos.filter(function(r){
-    var k = norm((r.nome||'').toLowerCase().trim());
-    return refMap[k] !== 'ruim';
-  });
-
-  var contratadosFiltrados = testesAgendados.filter(function(r){
-    return norm((r.status_final||'').toLowerCase()) === 'contratado';
-  });
-  var contratadosUnicos = _dedupeByNome(contratadosFiltrados);
-
-  return [
-    { label: 'Candidatos contatados',      count: contatados.length             },
-    { label: 'Candidatos que responderam', count: responderam.length            },
-    { label: 'Entrevistas agendadas',      count: agendadas.length              },
-    { label: 'Entrevistas realizadas',     count: realizadas.length             },
-    { label: 'Aprovados na entrevista',    count: aprovados.length              },
-    { label: 'Testes agendados',           count: testesAgendadosUnicos.length  },
-    { label: 'Testes realizados',          count: testesRealizadosUnicos.length },
-    { label: 'Referências aprovadas',      count: refs.length                   },
-    { label: 'Contratações',               count: contratadosUnicos.length      }
-  ];
-}
-
-// Predicados por etapa do funil — usados para filtrar o gráfico mensal e a tabela
-// de status quando o usuário clica numa etapa.
-var _funilStagePredicates = [
-  { src: 'entrevistas', fn: function(r){ return !!(r.nome && r.nome.trim()); } },
-  { src: 'entrevistas', fn: function(r){
-      var s = norm((r.selecionado||'').toLowerCase());
-      return s === 'sim' || s === 'nao' || s === 'nao aceitou a proposta';
-    } },
-  { src: 'entrevistas', fn: function(r){ return norm((r.selecionado||'').toLowerCase()) === 'sim'; } },
-  { src: 'entrevistas', fn: function(r){
-      var s = norm((r.status_entrevista||'').toLowerCase());
-      return s === 'aprovado para teste' || s === 'nao selecionado';
-    } },
-  { src: 'entrevistas', fn: function(r){ return norm((r.status_entrevista||'').toLowerCase()) === 'aprovado para teste'; } },
-  { src: 'testes', fn: function(r){ return !!(r.nome && r.nome.trim()); }, dedupe: true },
-  { src: 'testes', fn: function(r){
-      var s = norm((r.status_final||'').toLowerCase());
-      return s === 'contratado' || s === 'nao contratado';
-    }, dedupe: true },
-  { src: 'testes', special: 'refs' },
-  { src: 'testes', fn: function(r){ return norm((r.status_final||'').toLowerCase()) === 'contratado'; }, dedupe: true }
-];
-
-function _applyFunilFilter(rows) {
-  if (_cfFunilIdx === null) return rows;
-  var stage = _funilStagePredicates[_cfFunilIdx];
-  if (!stage) return rows;
-  if (stage.src !== state.dashSrc) return rows;
-
-  var out;
-  if (stage.special === 'refs') {
-    var refMap = {};
-    applyDashFilters(entrevistas).filter(_funilDentroPeriodo).forEach(function(r){
-      var k = norm((r.nome||'').toLowerCase().trim());
-      if (!k || refMap[k]) return;
-      refMap[k] = norm((r.referencia||'').toLowerCase().trim());
-    });
-    var realizados = rows.filter(function(r){
-      if (!_funilDentroPeriodo(r)) return false;
-      var s = norm((r.status_final||'').toLowerCase());
-      return s === 'contratado' || s === 'nao contratado';
-    });
-    var seen = {};
-    out = realizados.filter(function(r){
-      var k = norm((r.nome||'').toLowerCase().trim());
-      if (!k || seen[k]) return false;
-      if (refMap[k] === 'ruim') return false;
-      seen[k] = true;
-      return true;
-    });
-  } else {
-    out = rows.filter(function(r){ return _funilDentroPeriodo(r) && stage.fn(r); });
-    if (stage.dedupe) {
-      var seen2 = {};
-      out = out.filter(function(r){
-        var k = norm((r.nome||'').toLowerCase().trim());
-        if (!k || seen2[k]) return false;
-        seen2[k] = true;
-        return true;
-      });
-    }
-  }
-  return out;
-}
-
-function setCFFunil(idx) {
-  if (_cfFunilIdx === idx) {
-    _cfFunilIdx = null;
-  } else {
-    _cfFunilIdx = idx;
-    _cfMes = null;
-    _cfRecrutador = null;
-    var stage = _funilStagePredicates[idx];
-    if (stage && stage.src !== state.dashSrc) {
-      state.dashSrc = stage.src;
-      var subEnt = document.getElementById('dash-sub-entrevistas');
-      if (subEnt) subEnt.classList.toggle('active', stage.src==='entrevistas');
-    }
-  }
-  renderFunil();
-  renderChartRecrut();
-  renderStatusTable();
-  renderChartRecrutador();
-}
-
-function renderFunil() {
-  var el = document.getElementById('funil-rows');
-  if (!el) return;
-
-  var etapas = buildFunnelData();
-  var base   = etapas[0].count || 1;
-  var hasSel = _cfFunilIdx !== null;
-
-  var containerW = el.clientWidth || (window.innerWidth - 40);
-  var trackPx    = Math.max(40, containerW - 178 - 48);
-
-  el.innerHTML = '';
-
-  etapas.forEach(function(e, i) {
-    var pctBase = e.count / base;
-    var pctPrev = i === 0
-      ? null
-      : (etapas[i-1].count > 0 ? Math.round(e.count / etapas[i-1].count * 100) : 0);
-    var faded = hasSel && _cfFunilIdx !== i;
-    var barColor = faded ? 'rgba(53,56,63,0.45)' : '#35383F';
-
-    var isSel = hasSel && !faded;
-    var row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;margin-bottom:8px;cursor:pointer;border-radius:6px;padding:3px 0;' +
-      (isSel ? 'box-shadow:0 0 0 2px var(--surface),0 0 0 4px #35383F;' : '');
-    row.onclick = function(){ setCFFunil(i); };
-
-    var lbl = document.createElement('div');
-    lbl.style.cssText = [
-      'width:178px',
-      'box-sizing:border-box',
-      'flex-shrink:0',
-      'font-family:"DM Mono",monospace',
-      'font-size:10px',
-      'letter-spacing:.6px',
-      'text-transform:uppercase',
-      'color:' + (faded ? 'rgba(53,56,63,0.55)' : '#35383F'),
-      'text-align:right',
-      'padding-right:14px',
-      'line-height:1.4'
-    ].join(';');
-    lbl.textContent = e.label;
-
-    var track = document.createElement('div');
-    track.style.cssText = 'flex:1;display:flex;justify-content:center;';
-
-    var barPx = Math.max(4, Math.round(pctBase * trackPx));
-    var bar   = document.createElement('div');
-    bar.style.cssText = [
-      'width:' + barPx + 'px',
-      'flex-shrink:0',
-      'background:' + barColor,
-      'border-radius:5px',
-      'height:34px',
-      'display:flex',
-      'align-items:center',
-      'justify-content:center'
-    ].join(';');
-
-    var num = document.createElement('span');
-    num.style.cssText = 'font-family:"DM Mono",monospace;font-size:11px;font-weight:600;color:#fff;text-shadow:0 0 4px rgba(0,0,0,0.85),0 0 8px rgba(0,0,0,0.5);';
-    num.textContent = e.count;
-
-    bar.appendChild(num);
-    track.appendChild(bar);
-
-    var pctEl = document.createElement('div');
-    pctEl.style.cssText = 'width:48px;box-sizing:border-box;flex-shrink:0;font-family:"DM Mono",monospace;font-size:11px;font-weight:700;color:' + (faded ? 'rgba(53,56,63,0.55)' : '#35383F') + ';text-align:left;padding-left:12px;';
-    pctEl.textContent = pctPrev !== null ? pctPrev + '%' : '';
-
-    row.appendChild(lbl);
-    row.appendChild(track);
-    row.appendChild(pctEl);
-    el.appendChild(row);
-  });
+// ─── Cards ────────────────────────────────────────────────────────────────────
+function buildCard(r) {
+  var slug = calcStatusExame(r);
+  var prox = proximoExameDate(r);
+  var proxStr = prox ? formatDateBR(prox) : '—';
+  return '<div class="card s-'+slug+'">'+
+    '<div class="card-header"><div>'+
+    '<div class="candidate-name">'+escH(r.nome)+'</div>'+
+    '<div class="candidate-contact">'+escH(r.cargo)+(r.matricula?' · #'+escH(r.matricula):'')+'</div>'+
+    '</div>'+
+    '<span class="status-badge s-'+slug+'">'+escH(statusLabel(slug))+'</span>'+
+    '</div>'+
+    '<div class="card-body">'+
+    '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+escH(r.unidade)+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Departamento</span><span class="field-value">'+escH(r.departamento)+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Tipo de Exame</span><span class="field-value">'+escH(r.tipoExame)+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Periodicidade</span><span class="field-value">'+(r.periodicidade?r.periodicidade+' dias':'—')+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Último Exame</span><span class="field-value">'+escH(r.ultimoExame||'—')+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Próximo Exame</span><span class="field-value">'+proxStr+'</span></div>'+
+    '</div></div>';
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 function render() {
-  if (state.loading) { showLoading(); return; }
-  if (state.error)   { showError(state.error); return; }
-  (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};document.getElementById('footer-date').textContent='Atualizado: '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());})();
-  if (state.tab === 'dashboard') {
-    renderKPIs();
-    renderDashFilters();
-    renderChartRecrut();
-    renderStatusTable();
-    renderFunil();
-    renderChartRecrutador();
-    return;
+  renderKpis();
+  if (state.tab === 'exames') {
+    renderFilters();
+    var filtered = getFiltered();
+    var content = document.getElementById('content');
+    if (!content) return;
+    if (state.error) {
+      content.innerHTML = '<div class="empty-state"><p style="color:#7A1A1A">Erro ao carregar dados</p><p style="font-size:11px;opacity:.7;margin-top:6px">'+escH(state.error)+'</p><button onclick="loadAllData()" style="margin-top:16px;padding:8px 18px;background:#35383F;color:#CFFF00;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-family:\'DM Mono\',monospace;text-transform:uppercase">↻ Tentar novamente</button></div>';
+    } else if (filtered.length === 0) {
+      content.innerHTML = '<div class="empty-state"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><p>Nenhum colaborador encontrado</p></div>';
+    } else {
+      content.innerHTML = '<div class="cards-grid">'+filtered.map(buildCard).join('')+'</div>';
+    }
   }
-  renderKPIs();
-  var filtered=getFiltered();
-  renderFilters();
-  var c=document.getElementById('content');
-  if (!filtered.length) { c.innerHTML=emptyState(); return; }
-  _testeCache=[];_entrevistaCache=[];
-  c.innerHTML=filtered.map(function(r){ return state.tab==='entrevistas'?cardEntrevista(r):cardTeste(r); }).join('');
 }
 
+// ─── Tab ──────────────────────────────────────────────────────────────────────
 function setTab(tab) {
-  state.tab=tab;
-  state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos'};
-  _cfMes=null;
-  _cfFunilIdx=null;
-  _cfRecrutador=null;
+  state.tab = tab;
   document.body.dataset.view = tab;
-  document.getElementById('tab-entrevistas').classList.toggle('active',tab==='entrevistas');
-  document.getElementById('tab-dashboard').classList.toggle('active',tab==='dashboard');
-  render();
-}
-function setFilter(key,val) {
-  state.filters[key]=val;
-  if(key==='unidade') state.filters.departamento='Todos';
-  render();
-}
-function clearFilters() {
-  state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos'};
+  var te = document.getElementById('tab-exames');
+  var td = document.getElementById('tab-dashboard');
+  if (te) te.classList.toggle('active', tab==='exames');
+  if (td) td.classList.toggle('active', tab==='dashboard');
   render();
 }
 
-// ─── Modal de Avaliação ──────────────────────────────────────────────────────
-var _modalTesteIdx = -1;
-
-function abrirModal(idx) {
-  _modalTesteIdx = idx;
-  var d = _testeCache[idx];
-  if (!d) return;
-  document.getElementById('modal-nome').textContent = d.nome || '';
-  document.getElementById('modal-contato').innerHTML = contactHTML(d.contato);
-  document.getElementById('modal-unidade').textContent = d.unidade || '';
-  document.getElementById('modal-departamento').textContent = d.departamento || '';
-  document.getElementById('modal-cargo').textContent = d.cargo || '';
-  var horOk = d.horario && d.horario!=='0:00' && d.horario!=='0' && d.horario!=='00:00';
-  document.getElementById('modal-data').textContent = (d.data||'') + (horOk ? ' · '+d.horario : '');
-  document.getElementById('modal-turno').textContent = d.turno || '';
-  document.getElementById('modal-valor').textContent = d.valor || '';
-  // reset form
-  document.getElementById('modal-avaliacao-status').value = '';
-  document.getElementById('modal-obs').value = '';
-  document.getElementById('modal-avaliacao').classList.add('active');
-  document.body.style.overflow = 'hidden';
-}
-
-function fecharModal() {
-  document.getElementById('modal-avaliacao').classList.remove('active');
-  document.body.style.overflow = '';
-}
-
-function salvarAvaliacao() {
-  var valor = document.getElementById('modal-avaliacao-status').value;
-  if (!valor) { alert('Selecione uma opção de avaliação.'); return; }
-  var obs = document.getElementById('modal-obs').value;
-  var d = _testeCache[_modalTesteIdx];
-  if (!d) { alert('Erro: dados do candidato não encontrados.'); return; }
-
-  if (!APPS_SCRIPT_URL) {
-    alert('URL do Apps Script não configurada.');
-    return;
-  }
-
-  var btnSalvar = document.querySelector('#modal-avaliacao .modal-btn-save');
-  btnSalvar.textContent = 'Salvando...';
-  btnSalvar.disabled = true;
-
-  var params = new URLSearchParams({
-    acao:    'avaliar-teste',
-    linha:   d.linha || '',
-    nome:    d.nome,
-    contato: d.contato,
-    status:  valor,
-    obs:     obs
-  });
-
-  fetch(APPS_SCRIPT_URL + '?' + params.toString())
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      btnSalvar.textContent = 'Salvar';
-      btnSalvar.disabled = false;
-      if (data.success) {
-        alert('Avaliação salva!\n\nCandidato: ' + d.nome + '\nStatus: ' + valor);
-        fecharModal();
-        loadAllData();
-      } else {
-        alert('Erro ao salvar:\n' + (data.message || 'resposta inválida'));
-      }
-    })
-    .catch(function(err) {
-      btnSalvar.textContent = 'Salvar';
-      btnSalvar.disabled = false;
-      alert('Erro de conexão:\n' + err.message);
-    });
-}
-
-// ─── Modal de Entrevista ─────────────────────────────────────────────────────
-var _modalEntrevistaIdx = -1;
-
-function abrirModalEntrevista(idx) {
-  _modalEntrevistaIdx = idx;
-  var d = _entrevistaCache[idx];
-  if (!d) return;
-  document.getElementById('modal-ent-nome').textContent = d.nome || '';
-  document.getElementById('modal-ent-contato').innerHTML = contactHTML(d.contato);
-  // reset form
-  document.getElementById('modal-ent-status').value = '';
-  document.getElementById('modal-ent-feedback').value = '';
-  document.getElementById('modal-ent-ref1-nome').value = '';
-  document.getElementById('modal-ent-ref1-tel').value = '';
-  document.getElementById('modal-ent-ref2-nome').value = '';
-  document.getElementById('modal-ent-ref2-tel').value = '';
-  document.getElementById('modal-entrevista').classList.add('active');
-  document.body.style.overflow = 'hidden';
-}
-
-function fecharModalEntrevista() {
-  document.getElementById('modal-entrevista').classList.remove('active');
-  document.body.style.overflow = '';
-}
-
-function salvarEntrevista() {
-  var status = document.getElementById('modal-ent-status').value;
-  if (!status) { alert('Selecione o status da entrevista.'); return; }
-  var feedback  = document.getElementById('modal-ent-feedback').value;
-  var ref1nome  = document.getElementById('modal-ent-ref1-nome').value.trim();
-  var ref1tel   = document.getElementById('modal-ent-ref1-tel').value.trim();
-  var ref2nome  = document.getElementById('modal-ent-ref2-nome').value.trim();
-  var ref2tel   = document.getElementById('modal-ent-ref2-tel').value.trim();
-
-  var d = _entrevistaCache[_modalEntrevistaIdx];
-  if (!d) { alert('Erro: dados do candidato não encontrados.'); return; }
-
-  var btnSalvar = document.querySelector('#modal-entrevista .modal-btn-save');
-  btnSalvar.textContent = 'Salvando...';
-  btnSalvar.disabled = true;
-
-  var params = new URLSearchParams({
-    acao:     'avaliar-entrevista',
-    linha:    d.linha || '',
-    nome:     d.nome,
-    contato:  d.contato,
-    status:   status,
-    feedback: feedback,
-    ref1nome: ref1nome,
-    ref1tel:  ref1tel,
-    ref2nome: ref2nome,
-    ref2tel:  ref2tel
-  });
-
-  fetch(APPS_SCRIPT_URL + '?' + params.toString())
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      btnSalvar.textContent = 'Enviar feedback';
-      btnSalvar.disabled = false;
-      if (data.success) {
-        alert('Devolutiva registrada!\n\nCandidato: ' + d.nome + '\nStatus: ' + status);
-        fecharModalEntrevista();
-        loadAllData();
-      } else {
-        alert('Erro ao salvar:\n' + (data.message || 'resposta inválida'));
-      }
-    })
-    .catch(function(err) {
-      btnSalvar.textContent = 'Enviar feedback';
-      btnSalvar.disabled = false;
-      alert('Erro de conexão:\n' + err.message);
-    });
-}
-
-// ─── DRAWER ──────────────────────────────────────────────────────────────────
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
-var _drawerKpisLoaded = false;
-function loadDrawerKPIs() {
-  if (_drawerKpisLoaded) return;
-  fetch(COLAB_URL + '?action=listColaboradores')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data.ok) return;
-      var colabs = data.colaboradores;
-      var unidades = new Set(colabs.map(function(c) { return c.unidade; }));
-      var deptos   = new Set(colabs.map(function(c) { return c.departamento; }));
-      document.getElementById('drawer-kpi-unidades').textContent = unidades.size;
-      document.getElementById('drawer-kpi-deptos').textContent   = deptos.size;
-      document.getElementById('drawer-kpi-colabs').textContent   = data.total;
-      _drawerKpisLoaded = true;
-    })
-    .catch(function() {});
-}
-
-var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
-var _drawerMetaLoaded = false;
-function loadDrawerMeta() {
-  if (_drawerMetaLoaded) return;
-  fetch(GITHUB_TREE_URL)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data.tree) return;
-      var tree = data.tree;
-      var pages = 0, dashboards = 0;
-      tree.forEach(function(f) {
-        if (f.type !== 'blob' || !f.path.endsWith('.html')) return;
-        if (f.path.startsWith('compliance/kpis/')) { dashboards++; }
-        else if (f.path.startsWith('compliance/')) { pages++; }
-      });
-      var el = function(id) { return document.getElementById(id); };
-      if (el('drawer-kpi-pags')) el('drawer-kpi-pags').textContent = pages;
-      if (el('drawer-kpi-dash')) el('drawer-kpi-dash').textContent = dashboards;
-      _drawerMetaLoaded = true;
-    })
-    .catch(function() {});
-}
+// ─── Drawer ───────────────────────────────────────────────────────────────────
 function openDrawer() {
-  loadDrawerMeta();
-  document.getElementById('drawer').classList.add('open');
   document.getElementById('drawer-overlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
-  loadDrawerKPIs();
+  document.getElementById('drawer').classList.add('open');
 }
 function closeDrawer() {
-  document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-overlay').classList.remove('open');
-  document.body.style.overflow = '';
+  document.getElementById('drawer').classList.remove('open');
 }
-document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDrawer(); });
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
 loadAllData();
-(function(){
-  var s = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'))}catch(e){return null}})();
-  if (s && s.displayName) {
-    var parts = s.displayName.trim().split(/\s+/);
-    var short = parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : parts[0];
-    var hu = document.getElementById('header-user'); if (hu) hu.textContent = short;
-  }
-})();
 </script>
 </body>
 </html>
