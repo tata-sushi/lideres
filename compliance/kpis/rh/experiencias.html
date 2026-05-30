@@ -389,6 +389,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   <div id="kpisView" class="kpis-detail">
     <div class="kpis-card">
+      <div class="kpis-card-title">Funil de Experi&ecirc;ncia</div>
+      <div id="funilExpRows" style="padding:4px 0 8px;"></div>
+    </div>
+    <div class="kpis-card">
       <div class="kpis-card-title">Experi&ecirc;ncias por Unidade</div>
       <div class="bar-list" id="barExperUnidade"></div>
     </div>
@@ -916,8 +920,72 @@ function renderBarsBy(elId, fieldFn, fallback) {
 }
 
 function renderExperBars() {
+  renderFunilExp();
   renderBarsBy('barExperUnidade', function(c) { return c.unidade; }, 'Sem unidade');
   renderBarsBy('barExperDepto',   function(c) { return c.departamento; }, 'Sem departamento');
+}
+
+function renderFunilExp() {
+  var el = document.getElementById('funilExpRows');
+  if (!el) return;
+  var all = window._allColabs || [];
+  if (!all.length) { el.innerHTML = '<div class="kpis-empty">Sem dados.</div>'; return; }
+
+  var cnt = {};
+  all.forEach(function(c) {
+    var s = c.statusDevolutiva || '';
+    cnt[s] = (cnt[s] || 0) + 1;
+  });
+  var total      = all.length;
+  var passou1    = (cnt['Av. 1º Período'] || 0) + (cnt['Av. 2º Período'] || 0) + (cnt['Não Efetivado 2º'] || 0);
+  var efetivados = cnt['Av. 2º Período'] || 0;
+
+  var etapas = [
+    { label: 'Candidatos em Experiência', count: total },
+    { label: 'Passaram da 1ª Fase',       count: passou1 },
+    { label: 'Efetivados',                count: efetivados }
+  ];
+
+  var base = etapas[0].count || 1;
+  var containerW = el.clientWidth || (window.innerWidth - 40);
+  var trackPx = Math.max(40, containerW - 178 - 48);
+
+  el.innerHTML = '';
+  etapas.forEach(function(e, i) {
+    var pctBase = e.count / base;
+    var pctPrev = i === 0 ? null
+      : (etapas[i-1].count > 0 ? Math.round(e.count / etapas[i-1].count * 100) : 0);
+
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;margin-bottom:8px;border-radius:6px;padding:3px 0;';
+
+    var lbl = document.createElement('div');
+    lbl.style.cssText = 'width:178px;box-sizing:border-box;flex-shrink:0;font-family:"DM Mono",monospace;font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:#35383F;text-align:right;padding-right:14px;line-height:1.4;';
+    lbl.textContent = e.label;
+
+    var track = document.createElement('div');
+    track.style.cssText = 'flex:1;display:flex;justify-content:center;';
+
+    var barPx = Math.max(4, Math.round(pctBase * trackPx));
+    var bar = document.createElement('div');
+    bar.style.cssText = 'width:' + barPx + 'px;flex-shrink:0;background:#35383F;border-radius:5px;height:34px;display:flex;align-items:center;justify-content:center;';
+
+    var num = document.createElement('span');
+    num.style.cssText = 'font-family:"DM Mono",monospace;font-size:11px;font-weight:600;color:#fff;text-shadow:0 0 4px rgba(0,0,0,0.85),0 0 8px rgba(0,0,0,0.5);';
+    num.textContent = e.count;
+
+    bar.appendChild(num);
+    track.appendChild(bar);
+
+    var pctEl = document.createElement('div');
+    pctEl.style.cssText = 'width:48px;box-sizing:border-box;flex-shrink:0;font-family:"DM Mono",monospace;font-size:11px;font-weight:700;color:#35383F;text-align:left;padding-left:12px;';
+    pctEl.textContent = pctPrev !== null ? pctPrev + '%' : '';
+
+    row.appendChild(lbl);
+    row.appendChild(track);
+    row.appendChild(pctEl);
+    el.appendChild(row);
+  });
 }
 
 // ── PERGUNTAS POR PERÍODO ──
