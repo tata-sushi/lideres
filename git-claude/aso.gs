@@ -1,6 +1,6 @@
 function syncColaboradoresAtivos() {
   var COLABORADORES_ID = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
-  var ASOS_ID = '14UsviSQbpJBPUNW1cuvCDnem7IRknSHBcxZg6jnq7pk';
+  var ASOS_ID = '1vRYt7Nz-RdeKdQOgflMNfQFK4-bweO7vVAda2WWgVzs';
 
   var ssColaboradores = SpreadsheetApp.openById(COLABORADORES_ID);
   var ssAsos = SpreadsheetApp.openById(ASOS_ID);
