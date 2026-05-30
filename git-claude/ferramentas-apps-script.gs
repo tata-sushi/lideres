@@ -51,6 +51,7 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     if (body.action === 'add')    return _json(adicionarRegistro(body));
     if (body.action === 'update') return _json(atualizarRegistro(body));
+    if (body.action === 'delete') return _json(excluirRegistro(body));
     return _json({ ok: false, message: 'acao_desconhecida: ' + body.action });
   } catch (err) {
     return _json({ ok: false, message: String(err) });
@@ -177,6 +178,33 @@ function atualizarRegistro(p) {
 
   sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
   return { ok: true, message: 'Registro atualizado com sucesso.' };
+}
+
+/* ────────────────────────────────────────────────── */
+/*  EXCLUIR REGISTRO                                   */
+/* ────────────────────────────────────────────────── */
+function excluirRegistro(p) {
+  var sheetName = p.sheet || 'Ferramentas';
+  var nome      = String(p.nome || '').trim();
+
+  if (!nome) return { ok: false, message: 'Nome não informado.' };
+
+  var ss    = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return { ok: false, message: 'Aba "' + sheetName + '" não encontrada.' };
+
+  var last = sheet.getLastRow();
+  if (last < 2) return { ok: false, message: 'Nenhum registro encontrado.' };
+
+  var data = sheet.getRange(2, 2, last - 1, 1).getValues();
+  var rowIndex = -1;
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i][0]).trim() === nome) { rowIndex = i + 2; break; }
+  }
+  if (rowIndex === -1) return { ok: false, message: 'Registro "' + nome + '" não encontrado.' };
+
+  sheet.deleteRow(rowIndex);
+  return { ok: true, message: 'Registro excluído com sucesso.' };
 }
 
 /* ────────────────────────────────────────────────── */
