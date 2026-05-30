@@ -88,6 +88,21 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 }
 .kpi-value.dash { color: var(--border); }
 
+/* KPIs DETAIL VIEW */
+.kpis-detail { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+@media (min-width: 768px) { .kpis-detail { max-width: 800px; margin-left: auto; margin-right: auto; } }
+.kpis-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+.kpis-card-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); font-weight: 700; margin-bottom: 14px; text-align: center; }
+.kpis-empty { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); padding: 8px 0; text-align: center; }
+
+/* Bar chart (padrão experiencias/bancodehoras) */
+.bar-list { display: flex; flex-direction: column; gap: 6px; }
+.bar-row { display: grid; grid-template-columns: 120px 1fr 56px; align-items: center; gap: 8px; }
+.bar-name { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--carbon); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-track { height: 18px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--carbon); border-radius: 4px; transition: width 0.4s ease; }
+.bar-val { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--carbon); text-align: right; }
+
 /* FILTERS */
 .filters-wrap {
   background: var(--surface);
@@ -687,6 +702,20 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <span class="kpi-value" id="kpi-pendentes">–</span>
     </div>
   </div>
+  <div class="kpis-detail">
+    <div class="kpis-card">
+      <div class="kpis-card-title">Solicita&ccedil;&otilde;es por Unidade</div>
+      <div class="bar-list" id="barSolUnidade"></div>
+    </div>
+    <div class="kpis-card">
+      <div class="kpis-card-title">Solicita&ccedil;&otilde;es por Departamento</div>
+      <div class="bar-list" id="barSolDepto"></div>
+    </div>
+    <div class="kpis-card">
+      <div class="kpis-card-title">Solicita&ccedil;&otilde;es por Compet&ecirc;ncia</div>
+      <div class="bar-list" id="barSolTipo"></div>
+    </div>
+  </div>
   <div class="ver-mais-wrap">
     <a class="btn-ver-mais" href="solicitacoes2.html" target="_blank" rel="noopener noreferrer">
       Ver dashboard completo
@@ -1157,6 +1186,40 @@ function updateKPIs() {
   document.getElementById('kpi-pendentes').textContent   = pen;
 
   document.getElementById('kpi-andamento').className = and === 0 ? 'kpi-value dash' : 'kpi-value';
+
+  renderSolBars(src);
+}
+
+function escHSol(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderBarsBySol(elId, src, fieldFn, fallback) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  if (!src.length) { el.innerHTML = '<div class="kpis-empty">Sem dados.</div>'; return; }
+  var counts = {};
+  src.forEach(function(d) {
+    var k = fieldFn(d) || fallback;
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  var items = Object.keys(counts).map(function(k){ return { nome: k, total: counts[k] }; });
+  items.sort(function(a, b) { return b.total - a.total; });
+  var max = items.length ? items[0].total : 0;
+  el.innerHTML = items.map(function(a) {
+    var pct = max > 0 ? (a.total / max * 100).toFixed(1) : 0;
+    return '<div class="bar-row">' +
+      '<div class="bar-name">' + escHSol(a.nome) + '</div>' +
+      '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="bar-val">' + a.total + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderSolBars(src) {
+  renderBarsBySol('barSolUnidade', src, function(d) { return d.unidade; },      'Sem unidade');
+  renderBarsBySol('barSolDepto',   src, function(d) { return d.departamento; }, 'Sem departamento');
+  renderBarsBySol('barSolTipo',    src, function(d) { return d.tipo; },         'Sem competência');
 }
 
 // ─── MAPEAMENTO DAS COLUNAS DA PLANILHA ──────────────────────────────────────
