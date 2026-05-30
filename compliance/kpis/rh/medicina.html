@@ -32,6 +32,26 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
 .chart-wrap { position: relative; height: 220px; }
 
+/* ── Dashboard cards (charts) ── */
+.kpis-detail { display: flex; flex-direction: column; gap: 14px; padding: 14px 20px 0; }
+@media (min-width: 768px) { .kpis-detail { max-width: 800px; margin-left: auto; margin-right: auto; padding: 14px 0 0; } }
+.kpis-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+.kpis-card-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); font-weight: 700; margin-bottom: 14px; text-align: center; }
+.kpis-empty { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); padding: 8px 0; text-align: center; }
+
+/* Bar chart (padrão experiencias/bancodehoras) */
+.bar-list { display: flex; flex-direction: column; gap: 6px; }
+.bar-row { display: grid; grid-template-columns: 140px 1fr 56px; align-items: center; gap: 8px; }
+.bar-name { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--carbon); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-track { height: 18px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--carbon); border-radius: 4px; transition: width 0.4s ease; }
+.bar-val { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--carbon); text-align: right; }
+
+/* Cross-filter (clique nos gráficos) */
+.cf-active-med .bar-row:not(.cf-selected):not(.cf-related) { opacity: 0.45; }
+.bar-row.clickable { cursor: pointer; }
+.bar-row.cf-selected { outline: 2px solid var(--carbon); outline-offset: 2px; border-radius: 4px; }
+
 .ver-mais-wrap { display: flex; justify-content: center; padding: 20px; background: var(--bg); }
 .btn-ver-mais { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 22px; background: var(--carbon); color: var(--citric); border: none; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; cursor: pointer; text-decoration: none; -webkit-tap-highlight-color: transparent; outline: none; }
 .btn-ver-mais:hover, .btn-ver-mais:focus, .btn-ver-mais:active, .btn-ver-mais:visited { color: var(--citric); background: var(--carbon); opacity: 1; }
@@ -327,6 +347,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 <div class="dash-filters-wrap" id="dash-filters-wrap"></div>
 <div class="dashboard" id="dashboard">
+  <div class="kpis-detail">
+    <div class="kpis-card">
+      <div class="kpis-card-title">Tipos de Exames</div>
+      <div class="bar-list" id="barMedTipos"></div>
+    </div>
+    <div class="kpis-card">
+      <div class="kpis-card-title">Exames que Vencem por M&ecirc;s</div>
+      <div class="chart-wrap"><canvas id="chartMedVencimentos"></canvas></div>
+    </div>
+  </div>
   <div class="exam-table-wrap">
     <div class="exam-table-header">Colaboradores <span id="dash-count"></span></div>
     <div class="table-wrap">
@@ -337,8 +367,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
             <th>Unidade</th>
             <th>Departamento</th>
             <th>Tipo de Exame</th>
-            <th>Period.</th>
-            <th>Último Exame</th>
             <th>Próxima</th>
             <th>Status</th>
           </tr>
@@ -646,7 +674,8 @@ function renderKpis() {
   if (!wrap) return;
   var ativos = exames.filter(function(r){
     var realiza = norm((r.realizaExame||'').toLowerCase().trim());
-    return realiza!=='nao' && realiza!=='não';
+    if (realiza==='nao' || realiza==='não') return false;
+    return passesCFMed(r, null);
   });
   var vencidos = ativos.filter(function(r){return calcStatusExame(r)==='vencido';}).length;
   var aVencer  = ativos.filter(function(r){return calcStatusExame(r)==='a-vencer';}).length;
@@ -703,7 +732,8 @@ function renderDashTable() {
   var moreWrap = document.getElementById('show-more-wrap');
   if (!tbody) return;
   var ORDER = { vencido: 0, 'a-vencer': 1, pendente: 2, valido: 3, dispensado: 4 };
-  var sorted = exames.slice().sort(function(a, b) {
+  var base = exames.filter(function(r){ return passesCFMed(r, null); });
+  var sorted = base.slice().sort(function(a, b) {
     return (ORDER[calcStatusExame(a)]||0) - (ORDER[calcStatusExame(b)]||0);
   });
   if (countEl) countEl.textContent = '— ' + sorted.length + ' colaborador(es)';
@@ -715,19 +745,15 @@ function renderDashTable() {
     var proxStr = prox ? formatDateBR(prox) : '—';
     var isVencido = prox && prox < hoje;
     html += '<tr>' +
-      '<td class="col-nome">' + escH(r.nome) +
-        (r.matricula ? '<br><span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted)">#' + escH(r.matricula) + '</span>' : '') +
-      '</td>' +
+      '<td class="col-nome">' + escH(r.nome) + '</td>' +
       '<td>' + escH(r.unidade || '—') + '</td>' +
       '<td>' + escH(r.departamento || '—') + '</td>' +
       '<td>' + escH(r.tipoExame || '—') + '</td>' +
-      '<td style="font-family:\'DM Mono\',monospace;font-size:11px;text-align:center">' + (r.periodicidade ? r.periodicidade + 'd' : '—') + '</td>' +
-      '<td class="col-proximo">' + escH(r.ultimoExame || '—') + '</td>' +
       '<td class="col-proximo' + (isVencido ? ' vencido-date' : '') + '">' + proxStr + '</td>' +
       '<td><span class="status-badge s-' + slug + '">' + escH(statusLabel(slug)) + '</span></td>' +
       '</tr>';
   });
-  tbody.innerHTML = html || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px">Nenhum dado</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px">Nenhum dado</td></tr>';
   if (moreWrap) {
     var rest = sorted.length - dashShown;
     if (rest > 0) {
@@ -741,10 +767,188 @@ function renderDashTable() {
 
 function showMoreDash() { dashShown += DASH_PAGE; renderDashTable(); }
 
+// ─── Filtros + Cross-filter da aba KPIs ───────────────────────────────────────
+var _medFiltroUnidade = 'Todas';
+var _medFiltroDepto   = 'Todos';
+var _cfMed = { dim: null, value: null };
+
+function _proxMYMed(r) {
+  var d = parseDateBR(r.proximaRealizacao);
+  if (!d) return '';
+  return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+}
+
+function passesCFMed(r, exceptDim) {
+  if (_medFiltroUnidade !== 'Todas' && exceptDim !== 'unidade' && r.unidade !== _medFiltroUnidade) return false;
+  if (_medFiltroDepto   !== 'Todos' && exceptDim !== 'depto'   && r.departamento !== _medFiltroDepto) return false;
+  if (_cfMed.dim && _cfMed.dim !== exceptDim) {
+    if (_cfMed.dim === 'tipo') return (r.tipoExame || 'Sem tipo') === _cfMed.value;
+    if (_cfMed.dim === 'mes')  return _proxMYMed(r) === _cfMed.value;
+  }
+  return true;
+}
+
+function setCFMed(dim, value) {
+  if (_cfMed.dim === dim && _cfMed.value === value) {
+    _cfMed = { dim: null, value: null };
+  } else {
+    _cfMed = { dim: dim, value: value };
+  }
+  document.body.classList.toggle('cf-active-med', _cfMed.dim !== null);
+  render();
+}
+
+function renderMedFiltros() {
+  var wrap = document.getElementById('dash-filters-wrap');
+  if (!wrap) return;
+  var unidades = unique(exames.map(function(r){ return r.unidade; }));
+  var deptos = unique(
+    exames
+      .filter(function(r){ return _medFiltroUnidade === 'Todas' || r.unidade === _medFiltroUnidade; })
+      .map(function(r){ return r.departamento; })
+  );
+  function sel(label, val, opts, allLabel, onchange) {
+    var h = '<div class="filter-group"><label class="filter-label">'+label+'</label>'+
+      '<select class="filter-select" onchange="'+onchange+'">'+
+      '<option'+(val===allLabel?' selected':'')+'>'+allLabel+'</option>';
+    opts.forEach(function(o){ h+='<option value="'+escH(o)+'"'+(val===o?' selected':'')+'>'+escH(o)+'</option>'; });
+    return h+'</select></div>';
+  }
+  wrap.innerHTML =
+    '<div class="filters-row">' +
+      sel('Unidade', _medFiltroUnidade, unidades, 'Todas', "setMedFiltro('unidade',this.value)") +
+      sel('Departamento', _medFiltroDepto, deptos, 'Todos', "setMedFiltro('depto',this.value)") +
+    '</div>' +
+    '<div class="filters-actions"><button class="btn-clear" onclick="clearMedFiltros()">Limpar filtros</button></div>';
+}
+function setMedFiltro(key, val) {
+  if (key === 'unidade') { _medFiltroUnidade = val; _medFiltroDepto = 'Todos'; }
+  else                    { _medFiltroDepto   = val; }
+  render();
+}
+function clearMedFiltros() {
+  _medFiltroUnidade = 'Todas';
+  _medFiltroDepto   = 'Todos';
+  _cfMed = { dim: null, value: null };
+  document.body.classList.remove('cf-active-med');
+  render();
+}
+
+// ── Gráfico Tipos de Exames (barras horizontais) ──
+function escAttrMed(s) { return escH(s).replace(/'/g,"\\'"); }
+function renderTiposExamesMed() {
+  var el = document.getElementById('barMedTipos');
+  if (!el) return;
+  var src = exames.filter(function(r){
+    var realiza = norm((r.realizaExame||'').toLowerCase().trim());
+    if (realiza==='nao' || realiza==='não') return false;
+    return passesCFMed(r, 'tipo');
+  });
+  if (!src.length) { el.innerHTML = '<div class="kpis-empty">Sem dados.</div>'; return; }
+  var related = {};
+  if (_cfMed.dim && _cfMed.dim !== 'tipo') {
+    src.forEach(function(r) { var k = r.tipoExame || 'Sem tipo'; if (k) related[k] = true; });
+  }
+  var counts = {};
+  src.forEach(function(r) { var k = r.tipoExame || 'Sem tipo'; counts[k] = (counts[k] || 0) + 1; });
+  var items = Object.keys(counts).map(function(k){ return { nome: k, total: counts[k] }; });
+  items.sort(function(a, b) { return b.total - a.total; });
+  var max = items.length ? items[0].total : 0;
+  el.innerHTML = items.map(function(a) {
+    var pct = max > 0 ? (a.total / max * 100).toFixed(1) : 0;
+    var isSel = _cfMed.dim === 'tipo' && _cfMed.value === a.nome;
+    var extra = isSel ? ' cf-selected' : (related[a.nome] ? ' cf-related' : '');
+    return '<div class="bar-row clickable' + extra + '" onclick="setCFMed(\'tipo\',\'' + escAttrMed(a.nome) + '\')">' +
+      '<div class="bar-name">' + escH(a.nome) + '</div>' +
+      '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="bar-val">' + a.total + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Gráfico Exames que Vencem por Mês (Chart.js vertical) ──
+var _chartMedVenc = null;
+var _medBarValuePlugin = {
+  id: 'medBarValueLabels',
+  afterDatasetsDraw: function(chart) {
+    var meta = chart.getDatasetMeta(0); if (!meta.data) return;
+    var ctx = chart.ctx, data = chart.data.datasets[0].data;
+    ctx.save();
+    ctx.fillStyle = '#35383F'; ctx.font = '600 11px "DM Mono", monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    for (var i = 0; i < meta.data.length; i++) {
+      var v = data[i]; if (!v) continue;
+      ctx.fillText(v, meta.data[i].x, meta.data[i].y - 6);
+    }
+    ctx.restore();
+  }
+};
+function renderVencimentosMesMed() {
+  var canvas = document.getElementById('chartMedVencimentos');
+  if (!canvas || typeof Chart === 'undefined') return;
+  var src = exames.filter(function(r){
+    var realiza = norm((r.realizaExame||'').toLowerCase().trim());
+    if (realiza==='nao' || realiza==='não') return false;
+    return passesCFMed(r, 'mes');
+  });
+  var byMonth = {}, minD = null, maxD = null;
+  src.forEach(function(r) {
+    var d = parseDateBR(r.proximaRealizacao); if (!d) return;
+    var first = new Date(d.getFullYear(), d.getMonth(), 1);
+    var key = String(first.getMonth()+1).padStart(2,'0') + '/' + first.getFullYear();
+    byMonth[key] = (byMonth[key] || 0) + 1;
+    if (!minD || first < minD) minD = first;
+    if (!maxD || first > maxD) maxD = first;
+  });
+  if (!minD) {
+    if (_chartMedVenc) { _chartMedVenc.destroy(); _chartMedVenc = null; }
+    canvas.parentNode.innerHTML = '<div class="kpis-empty">Sem dados.</div>';
+    return;
+  }
+  // Garante que o mês atual entra no range
+  var hoje = new Date(); var hojeFirst = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  if (hojeFirst < minD) minD = hojeFirst;
+  if (hojeFirst > maxD) maxD = hojeFirst;
+  var labels = [], counts = [];
+  var cur = new Date(minD);
+  while (cur <= maxD) {
+    var key = String(cur.getMonth()+1).padStart(2,'0') + '/' + cur.getFullYear();
+    labels.push(key);
+    counts.push(byMonth[key] || 0);
+    cur.setMonth(cur.getMonth() + 1);
+  }
+  var bgColors = labels.map(function(my) {
+    if (_cfMed.dim !== 'mes') return '#35383F';
+    return my === _cfMed.value ? '#35383F' : 'rgba(53,56,63,0.45)';
+  });
+  if (_chartMedVenc) _chartMedVenc.destroy();
+  _chartMedVenc = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ data: counts, backgroundColor: bgColors, borderWidth: 0, borderRadius: 5, barPercentage: 0.6 }]},
+    plugins: [_medBarValuePlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { top: 18 } },
+      onClick: function(e, els) { if (els.length) setCFMed('mes', labels[els[0].index]); },
+      onHover: function(e, els) { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 } } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
+      }
+    }
+  });
+}
+
 // ─── Render ───────────────────────────────────────────────────────────────────
 function render() {
   renderKpis();
-  if (state.tab === 'dashboard') renderDashTable();
+  if (state.tab === 'dashboard') {
+    renderMedFiltros();
+    renderTiposExamesMed();
+    renderVencimentosMesMed();
+    renderDashTable();
+  }
   if (state.tab === 'exames') {
     renderFilters();
     var filtered = getFiltered();
