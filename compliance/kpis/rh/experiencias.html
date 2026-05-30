@@ -78,10 +78,16 @@ body:not([data-view="kpis"]) .kpis-wrap { display: none !important; }
 
 /* KPI CARDS */
 .kpis-wrap { background: var(--white); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (min-width: 768px) { .kpis-wrap { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 768px) { .kpis-wrap { grid-template-columns: repeat(4, 1fr); max-width: 800px; margin: 0 auto; } }
 body[data-view="kpis"] .main { padding-top: 0; }
-body[data-view="kpis"] .kpis-wrap { margin: 0 -24px; }
-@media (max-width: 600px) { body[data-view="kpis"] .kpis-wrap { margin: 0 -12px; } }
+
+/* Bar chart (padrão bancodehoras) */
+.bar-list { display: flex; flex-direction: column; gap: 6px; }
+.bar-row { display: grid; grid-template-columns: 120px 1fr 56px; align-items: center; gap: 8px; }
+.bar-name { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--carbon); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-track { height: 18px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--carbon); border-radius: 4px; transition: width 0.4s ease; }
+.bar-val { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--carbon); text-align: right; }
 .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
 .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
 .kpi-number { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
@@ -401,6 +407,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="kpis-card">
       <div class="kpis-card-title">Funil de Experi&ecirc;ncia</div>
       <div class="funil" id="funilWrap"></div>
+    </div>
+    <div class="kpis-card">
+      <div class="kpis-card-title">Experi&ecirc;ncias por Unidade</div>
+      <div class="bar-list" id="barExperUnidade"></div>
     </div>
   </div>
 </div>
@@ -886,13 +896,14 @@ function renderKPIs() {
     '<div class="kpi-card"><span class="kpi-label">Prazos Criticos</span><span class="kpi-number">' + urgentes + '</span></div>';
 
   renderFunil();
+  renderExperUnidade();
 }
 
 function setTab(tab) {
   document.body.dataset.view = tab;
   document.getElementById('tab-experiencias').classList.toggle('active', tab === 'experiencias');
   document.getElementById('tab-kpis').classList.toggle('active', tab === 'kpis');
-  if (tab === 'kpis') renderFunil();
+  if (tab === 'kpis') { renderFunil(); renderExperUnidade(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -952,6 +963,31 @@ function renderFunil() {
       '</div>' +
       '<div class="funil-track"><div class="funil-fill" style="width:' + Math.max(2, pctEfetivado) + '%"></div></div>' +
     '</div>';
+}
+
+function renderExperUnidade() {
+  var el = document.getElementById('barExperUnidade');
+  if (!el) return;
+  var all = window._allColabs || [];
+  if (!all.length) { el.innerHTML = '<div class="kpis-empty">Sem dados.</div>'; return; }
+
+  var counts = {};
+  all.forEach(function(c) {
+    var u = c.unidade || 'Sem unidade';
+    counts[u] = (counts[u] || 0) + 1;
+  });
+  var items = Object.keys(counts).map(function(k) { return { nome: k, total: counts[k] }; });
+  items.sort(function(a, b) { return b.total - a.total; });
+  var max = items.length ? items[0].total : 0;
+
+  el.innerHTML = items.map(function(a) {
+    var pct = max > 0 ? (a.total / max * 100).toFixed(1) : 0;
+    return '<div class="bar-row">' +
+      '<div class="bar-name">' + escH(a.nome) + '</div>' +
+      '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="bar-val">' + a.total + '</div>' +
+    '</div>';
+  }).join('');
 }
 
 // ── PERGUNTAS POR PERÍODO ──
