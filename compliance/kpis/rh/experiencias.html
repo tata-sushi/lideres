@@ -408,6 +408,25 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 
   <div id="kpisView" class="kpis-detail">
+    <div class="filters-wrap" style="border:1px solid var(--border);border-radius:var(--radius);">
+      <div class="filters-row" style="grid-template-columns:1fr 1fr;">
+        <div class="filter-group">
+          <span class="filter-label">Unidade</span>
+          <select class="filter-select" id="kpi-filtro-unidade" onchange="applyKpiFiltros()">
+            <option>Todas</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">Departamento</span>
+          <select class="filter-select" id="kpi-filtro-depto" onchange="applyKpiFiltros()">
+            <option>Todos</option>
+          </select>
+        </div>
+      </div>
+      <div class="filters-actions">
+        <button class="btn-clear" onclick="clearKpiFiltros()">Limpar filtros</button>
+      </div>
+    </div>
     <div class="kpis-card">
       <div class="kpis-card-title">Funil de Experi&ecirc;ncia</div>
       <div id="funilExpRows" style="padding:4px 0 8px;"></div>
@@ -943,11 +962,11 @@ function renderBarsBy(elId, fieldFn, fallback, dim) {
   var all = window._allColabs || [];
   if (!all.length) { el.innerHTML = '<div class="kpis-empty">Sem dados.</div>'; return; }
 
-  // Quando há cross-filter ativo em outra dimensão, agrega só o subset filtrado
-  var src = all;
+  // Sempre aplica filtros de unidade/depto + CF (exceto a própria dimensão)
+  var src = all.filter(function(c) { return passesCF(c, dim); });
+  // Marca itens "relacionados" quando há CF em OUTRA dimensão (não nos selects, que filtram igualmente)
   var related = {};
   if (_cfExp.dim && _cfExp.dim !== dim) {
-    src = all.filter(function(c) { return passesCF(c, null); });
     src.forEach(function(c) {
       var k = fieldFn(c) || fallback;
       if (k) related[k] = true;
@@ -976,8 +995,47 @@ function renderBarsBy(elId, fieldFn, fallback, dim) {
   }).join('');
 }
 
-// ── Cross-filter (mesma ideia de recrutamento/bancodehoras) ──
+// ── Filtros (selects) + Cross-filter (cliques nos gráficos) ──
+var _kpiFiltroUnidade = 'Todas';
+var _kpiFiltroDepto   = 'Todos';
 var _cfExp = { dim: null, value: null };
+
+function populateKpiFiltros() {
+  var all = window._allColabs || [];
+  var unidades = {}, deptos = {};
+  all.forEach(function(c) {
+    if (c.unidade) unidades[c.unidade] = 1;
+    if (c.departamento) deptos[c.departamento] = 1;
+  });
+  var unEl = document.getElementById('kpi-filtro-unidade');
+  var deEl = document.getElementById('kpi-filtro-depto');
+  if (unEl) {
+    var curU = unEl.value;
+    unEl.innerHTML = '<option>Todas</option>' + Object.keys(unidades).sort().map(function(u){
+      return '<option' + (u === curU ? ' selected' : '') + '>' + escH(u) + '</option>';
+    }).join('');
+  }
+  if (deEl) {
+    var curD = deEl.value;
+    deEl.innerHTML = '<option>Todos</option>' + Object.keys(deptos).sort().map(function(d){
+      return '<option' + (d === curD ? ' selected' : '') + '>' + escH(d) + '</option>';
+    }).join('');
+  }
+}
+function applyKpiFiltros() {
+  _kpiFiltroUnidade = document.getElementById('kpi-filtro-unidade').value;
+  _kpiFiltroDepto   = document.getElementById('kpi-filtro-depto').value;
+  renderExperBars();
+}
+function clearKpiFiltros() {
+  document.getElementById('kpi-filtro-unidade').value = 'Todas';
+  document.getElementById('kpi-filtro-depto').value   = 'Todos';
+  _kpiFiltroUnidade = 'Todas';
+  _kpiFiltroDepto   = 'Todos';
+  _cfExp = { dim: null, value: null };
+  document.body.classList.remove('cf-active-exp');
+  renderExperBars();
+}
 function escAttr(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,"\\'"); }
 function passesFunilStage(c, idx) {
   var s = c.statusDevolutiva || '';
@@ -987,10 +1045,13 @@ function passesFunilStage(c, idx) {
   return true;
 }
 function passesCF(c, exceptDim) {
-  if (!_cfExp.dim || _cfExp.dim === exceptDim) return true;
-  if (_cfExp.dim === 'funil')   return passesFunilStage(c, _cfExp.value);
-  if (_cfExp.dim === 'unidade') return (c.unidade || 'Sem unidade') === _cfExp.value;
-  if (_cfExp.dim === 'depto')   return (c.departamento || 'Sem departamento') === _cfExp.value;
+  if (_kpiFiltroUnidade !== 'Todas' && exceptDim !== 'unidade' && c.unidade !== _kpiFiltroUnidade) return false;
+  if (_kpiFiltroDepto   !== 'Todos' && exceptDim !== 'depto'   && c.departamento !== _kpiFiltroDepto) return false;
+  if (_cfExp.dim && _cfExp.dim !== exceptDim) {
+    if (_cfExp.dim === 'funil')   return passesFunilStage(c, _cfExp.value);
+    if (_cfExp.dim === 'unidade') return (c.unidade || 'Sem unidade') === _cfExp.value;
+    if (_cfExp.dim === 'depto')   return (c.departamento || 'Sem departamento') === _cfExp.value;
+  }
   return true;
 }
 function setCFExp(dim, value) {
@@ -1004,6 +1065,7 @@ function setCFExp(dim, value) {
 }
 
 function renderExperBars() {
+  populateKpiFiltros();
   renderFunilExp();
   renderBarsBy('barExperUnidade', function(c) { return c.unidade; }, 'Sem unidade', 'unidade');
   renderBarsBy('barExperDepto',   function(c) { return c.departamento; }, 'Sem departamento', 'depto');
@@ -1078,10 +1140,8 @@ function renderFunilExp() {
   var all = window._allColabs || [];
   if (!all.length) { el.innerHTML = '<div class="kpis-empty">Sem dados.</div>'; return; }
 
-  // Se houver CF em outra dimensão, conta sobre o subset filtrado
-  var src = _cfExp.dim && _cfExp.dim !== 'funil'
-    ? all.filter(function(c) { return passesCF(c, null); })
-    : all;
+  // Sempre aplica filtros de unidade/depto + CF (exceto o próprio funil)
+  var src = all.filter(function(c) { return passesCF(c, 'funil'); });
 
   var cnt = {};
   src.forEach(function(c) {
