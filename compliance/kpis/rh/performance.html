@@ -572,46 +572,21 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <!-- COLABORADORES -->
   <div class="chart-block" style="margin-bottom: 32px;">
     <div class="chart-title-row">
-      <span class="chart-title-text">Colaboradores <span style="color:var(--t3);font-size:10px;font-weight:400;letter-spacing:0.05em;">— 47 RESULTADOS</span></span>
+      <span class="chart-title-text">Colaboradores <span id="colab-count-label" style="color:var(--t3);font-size:10px;font-weight:400;letter-spacing:0.05em;"></span></span>
     </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Colaborador ↕</th>
+            <th>Colaborador</th>
             <th style="text-align:right">Nota</th>
           </tr>
         </thead>
-        <tbody>
-          <tr>
-            <td><div class="colab-cell"><div class="colab-avatar">MC</div><div><div class="colab-name">Marcos Costa</div><div class="colab-role">Cozinheiro · Itaim</div></div></div></td>
-            <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">8,9</td>
-          </tr>
-          <tr>
-            <td><div class="colab-cell"><div class="colab-avatar">AF</div><div><div class="colab-name">Ana Ferreira</div><div class="colab-role">Atendimento · Pinheiros</div></div></div></td>
-            <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">8,6</td>
-          </tr>
-          <tr>
-            <td><div class="colab-cell"><div class="colab-avatar">RS</div><div><div class="colab-name">Rafael Santos</div><div class="colab-role">Barman · Itaim</div></div></div></td>
-            <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">7,8</td>
-          </tr>
-          <tr>
-            <td><div class="colab-cell"><div class="colab-avatar">JL</div><div><div class="colab-name">Juliana Lima</div><div class="colab-role">Caixa · House</div></div></div></td>
-            <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">9,1</td>
-          </tr>
-          <tr>
-            <td><div class="colab-cell"><div class="colab-avatar">PO</div><div><div class="colab-name">Pedro Oliveira</div><div class="colab-role">Delivery · Poke</div></div></div></td>
-            <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">8,2</td>
-          </tr>
-          <tr>
-            <td><div class="colab-cell"><div class="colab-avatar">CM</div><div><div class="colab-name">Carla Mendes</div><div class="colab-role">Gerente · Pinheiros</div></div></div></td>
-            <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">9,4</td>
-          </tr>
-        </tbody>
+        <tbody id="tbody-colabs"></tbody>
       </table>
     </div>
-    <div class="ver-mais-wrap">
-      <button class="btn-ver-mais">Ver mais (41)</button>
+    <div class="ver-mais-wrap" id="ver-mais-wrap-colabs" style="display:none;">
+      <button class="btn-ver-mais" id="btn-ver-mais-colabs" onclick="expandColabs()">Ver mais</button>
     </div>
   </div>
 
@@ -829,8 +804,69 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   else drawProdBars();
 })();
 
-// ─── Drawer ───────────────────────────────────────────────────────────────────
+// ─── Colaboradores — tabela ───────────────────────────────────────────────────
 var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
+var _allColabs = [];
+var _colabsShowing = 10;
+
+function _colabIniciais(nome) {
+  var p = (nome || '').trim().split(/\s+/);
+  return p.length > 1 ? (p[0][0] + p[p.length-1][0]).toUpperCase() : p[0].slice(0,2).toUpperCase();
+}
+
+function _renderColabRow(c) {
+  var ini  = c.iniciais || _colabIniciais(c.nome);
+  var role = [c.cargo, c.unidade].filter(Boolean).join(' · ');
+  var avatar = c.foto
+    ? '<div class="colab-avatar" style="overflow:hidden;padding:0;"><img src="' + c.foto + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.textContent=\'' + ini + '\'"/></div>'
+    : '<div class="colab-avatar">' + ini + '</div>';
+  return '<tr><td><div class="colab-cell">' + avatar + '<div><div class="colab-name">' + c.nome + '</div><div class="colab-role">' + role + '</div></div></div></td><td style="text-align:right;font-family:\'DM Mono\',monospace;font-weight:700;color:var(--t3);">—</td></tr>';
+}
+
+function _renderColabsTable(limit) {
+  var tbody = document.getElementById('tbody-colabs');
+  if (!tbody) return;
+  tbody.innerHTML = _allColabs.slice(0, limit).map(_renderColabRow).join('');
+}
+
+function expandColabs() {
+  _colabsShowing = _allColabs.length;
+  _renderColabsTable(_colabsShowing);
+  document.getElementById('ver-mais-wrap-colabs').style.display = 'none';
+}
+
+function carregarColaboradores() {
+  fetch(COLAB_URL + '?action=listColaboradores')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.ok) return;
+      _allColabs = data.colaboradores || [];
+      var total  = data.total || _allColabs.length;
+
+      var kpi = document.getElementById('kpi-total-colabs');
+      if (kpi) kpi.textContent = total;
+      var lbl = document.getElementById('colab-count-label');
+      if (lbl) lbl.textContent = '— ' + total + ' RESULTADOS';
+
+      _renderColabsTable(_colabsShowing);
+
+      if (_allColabs.length > _colabsShowing) {
+        var wrap = document.getElementById('ver-mais-wrap-colabs');
+        var btn  = document.getElementById('btn-ver-mais-colabs');
+        if (wrap) wrap.style.display = 'flex';
+        if (btn)  btn.textContent = 'Ver mais (' + (_allColabs.length - _colabsShowing) + ')';
+      }
+    })
+    .catch(function() {});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', carregarColaboradores);
+} else {
+  carregarColaboradores();
+}
+
+// ─── Drawer ───────────────────────────────────────────────────────────────────
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
