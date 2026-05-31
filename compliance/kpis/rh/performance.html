@@ -805,8 +805,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 })();
 
 // ─── Colaboradores — tabela ───────────────────────────────────────────────────
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
-var _allColabs = [];
+var COLAB_URL    = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
+var ORGANO_URL   = 'https://script.google.com/macros/s/AKfycbxUWUoOmv-Cn19-FjUJ18jYTu5G_embOGDaQDsgC4Jd8agVfgqs98Tbu3qlqa9e7tpu/exec';
+var _allColabs   = [];
 var _colabsShowing = 10;
 
 function _colabIniciais(nome) {
@@ -814,11 +815,19 @@ function _colabIniciais(nome) {
   return p.length > 1 ? (p[0][0] + p[p.length-1][0]).toUpperCase() : p[0].slice(0,2).toUpperCase();
 }
 
+function _flattenArvore(node, acc) {
+  acc = acc || [];
+  if (node && node.nome) acc.push(node);
+  (node.children || []).forEach(function(c) { _flattenArvore(c, acc); });
+  return acc;
+}
+
 function _renderColabRow(c) {
   var ini  = c.iniciais || _colabIniciais(c.nome);
   var role = [c.cargo, c.unidade].filter(Boolean).join(' · ');
+  var safeIni = ini.replace(/'/g, '');
   var avatar = c.foto
-    ? '<div class="colab-avatar" style="overflow:hidden;padding:0;"><img src="' + c.foto + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.textContent=\'' + ini + '\'"/></div>'
+    ? '<div class="colab-avatar" style="overflow:hidden;padding:0;"><img src="' + c.foto + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.innerHTML=\'' + safeIni + '\'"/></div>'
     : '<div class="colab-avatar">' + ini + '</div>';
   return '<tr><td><div class="colab-cell">' + avatar + '<div><div class="colab-name">' + c.nome + '</div><div class="colab-role">' + role + '</div></div></div></td><td style="text-align:right;font-family:\'DM Mono\',monospace;font-weight:700;color:var(--t3);">—</td></tr>';
 }
@@ -835,29 +844,43 @@ function expandColabs() {
   document.getElementById('ver-mais-wrap-colabs').style.display = 'none';
 }
 
+function _applyColabs(colabs, total) {
+  _allColabs = colabs;
+  var kpi = document.getElementById('kpi-total-colabs');
+  if (kpi) kpi.textContent = total;
+  var lbl = document.getElementById('colab-count-label');
+  if (lbl) lbl.textContent = '— ' + total + ' RESULTADOS';
+  _renderColabsTable(_colabsShowing);
+  if (_allColabs.length > _colabsShowing) {
+    var wrap = document.getElementById('ver-mais-wrap-colabs');
+    var btn  = document.getElementById('btn-ver-mais-colabs');
+    if (wrap) wrap.style.display = 'flex';
+    if (btn)  btn.textContent = 'Ver mais (' + (_allColabs.length - _colabsShowing) + ')';
+  }
+}
+
 function carregarColaboradores() {
-  fetch(COLAB_URL + '?action=listColaboradores')
+  // Busca a árvore do organograma (tem foto, iniciais, cargo, unidade)
+  fetch(ORGANO_URL)
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (!data.ok) return;
-      _allColabs = data.colaboradores || [];
-      var total  = data.total || _allColabs.length;
-
-      var kpi = document.getElementById('kpi-total-colabs');
-      if (kpi) kpi.textContent = total;
-      var lbl = document.getElementById('colab-count-label');
-      if (lbl) lbl.textContent = '— ' + total + ' RESULTADOS';
-
-      _renderColabsTable(_colabsShowing);
-
-      if (_allColabs.length > _colabsShowing) {
-        var wrap = document.getElementById('ver-mais-wrap-colabs');
-        var btn  = document.getElementById('btn-ver-mais-colabs');
-        if (wrap) wrap.style.display = 'flex';
-        if (btn)  btn.textContent = 'Ver mais (' + (_allColabs.length - _colabsShowing) + ')';
-      }
+      if (!data.arvore) throw new Error('sem arvore');
+      var colabs = _flattenArvore(data.arvore)
+        .concat(data.peers || [])
+        .filter(function(c) { return c.nome; })
+        .sort(function(a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+      _applyColabs(colabs, data.total || colabs.length);
     })
-    .catch(function() {});
+    .catch(function() {
+      // fallback: listColaboradores sem foto
+      fetch(COLAB_URL + '?action=listColaboradores')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.ok) return;
+          _applyColabs(data.colaboradores || [], data.total || 0);
+        })
+        .catch(function() {});
+    });
 }
 
 if (document.readyState === 'loading') {
