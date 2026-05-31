@@ -470,9 +470,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-header">
-      <div class="modal-header-info">
-        <div class="modal-section-title" style="margin-bottom:4px;">Atualizar Relação</div>
-      </div>
+      <div class="modal-title">Atualizar Relação</div>
       <button class="modal-close" onclick="closeAtualizarModal()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -480,20 +478,33 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="modal-body">
       <div style="display:flex;flex-direction:column;gap:12px;">
         <div class="card-field">
-          <label class="filter-label" style="margin-bottom:4px;display:block">Matrícula</label>
-          <input class="modal-input" id="atualizar-matricula" type="text" placeholder="Ex: 0001"/>
+          <label class="filter-label" style="margin-bottom:4px;display:block">Colaborador</label>
+          <select class="modal-select" id="atualizar-colab">
+            <option value="">— Selecione —</option>
+          </select>
         </div>
         <div class="card-field">
           <label class="filter-label" style="margin-bottom:4px;display:block">Tipo de Exame</label>
-          <input class="modal-input" id="atualizar-tipo" type="text" placeholder="Ex: Admissional, Periódico..."/>
+          <select class="modal-select" id="atualizar-tipo">
+            <option value="">— Selecione —</option>
+            <option value="Normal">Normal</option>
+            <option value="Complementar">Complementar</option>
+            <option value="Administrativo">Administrativo</option>
+            <option value="Especial">Especial</option>
+          </select>
         </div>
         <div class="card-field">
           <label class="filter-label" style="margin-bottom:4px;display:block">Periodicidade (dias)</label>
-          <input class="modal-input" id="atualizar-periodo" type="number" min="1" placeholder="Ex: 365"/>
+          <select class="modal-select" id="atualizar-periodo">
+            <option value="">— Selecione —</option>
+            <option value="180">180 dias</option>
+            <option value="360">360 dias</option>
+            <option value="720">720 dias</option>
+          </select>
         </div>
         <div class="card-field">
           <label class="filter-label" style="margin-bottom:4px;display:block">Último exame realizado</label>
-          <input class="modal-input" id="atualizar-ultimo" type="text" placeholder="DD/MM/AAAA"/>
+          <input class="modal-input" id="atualizar-ultimo" type="date"/>
         </div>
         <div class="card-field">
           <label class="filter-label" style="margin-bottom:4px;display:block">Realiza exame</label>
@@ -501,10 +512,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
             <option value="Sim">Sim</option>
             <option value="Não">Não</option>
           </select>
-        </div>
-        <div class="card-field">
-          <label class="filter-label" style="margin-bottom:4px;display:block">Próxima Realização</label>
-          <input class="modal-input" id="atualizar-proxima" type="text" placeholder="DD/MM/AAAA"/>
         </div>
       </div>
     </div>
@@ -1199,15 +1206,36 @@ function closeDrawer() {
   document.getElementById('drawer').classList.remove('open');
 }
 
+var _atualizarColabLoaded = false;
+function _loadAtualizarColabs() {
+  if (_atualizarColabLoaded) return;
+  fetch(COLAB_URL + '?action=listColaboradores')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.ok || !data.colaboradores) return;
+      var sel = document.getElementById('atualizar-colab');
+      data.colaboradores.forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = c.matricula || c.id || c.nome;
+        opt.textContent = c.nome;
+        sel.appendChild(opt);
+      });
+      _atualizarColabLoaded = true;
+    })
+    .catch(function() {});
+}
+
 function openAtualizarModal() {
-  ['matricula','tipo','periodo','ultimo','proxima'].forEach(function(id){
-    document.getElementById('atualizar-'+id).value = '';
-  });
+  document.getElementById('atualizar-colab').value = '';
+  document.getElementById('atualizar-tipo').value = '';
+  document.getElementById('atualizar-periodo').value = '';
+  document.getElementById('atualizar-ultimo').value = '';
   document.getElementById('atualizar-realiza').value = 'Sim';
   document.getElementById('atualizar-btn-save').disabled = false;
   document.getElementById('atualizar-btn-spin').style.display = 'none';
   document.getElementById('atualizar-btn-label').textContent = 'Salvar';
   document.getElementById('atualizar-modal-error').classList.remove('show');
+  _loadAtualizarColabs();
   document.getElementById('modal-atualizar-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -1216,10 +1244,10 @@ function closeAtualizarModal() {
   document.body.style.overflow = '';
 }
 function saveAtualizar() {
-  var matricula = document.getElementById('atualizar-matricula').value.trim();
+  var matricula = document.getElementById('atualizar-colab').value.trim();
   var errEl = document.getElementById('atualizar-modal-error');
   if (!matricula) {
-    errEl.textContent = 'Informe a matrícula.';
+    errEl.textContent = 'Selecione um colaborador.';
     errEl.classList.add('show');
     return;
   }
@@ -1228,14 +1256,15 @@ function saveAtualizar() {
   var label = document.getElementById('atualizar-btn-label');
   btn.disabled = true; spin.style.display = 'block'; label.textContent = 'Salvando…';
   errEl.classList.remove('show');
+  var ultimoRaw = document.getElementById('atualizar-ultimo').value;
+  var ultimoFmt = ultimoRaw ? (function(s){ var p=s.split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : s; })(ultimoRaw) : '';
   var payload = {
-    action:            'atualizarRelacao',
-    matricula:         matricula,
-    tipoExame:         document.getElementById('atualizar-tipo').value,
-    periodicidade:     document.getElementById('atualizar-periodo').value,
-    ultimoExame:       document.getElementById('atualizar-ultimo').value,
-    realizaExame:      document.getElementById('atualizar-realiza').value,
-    proximaRealizacao: document.getElementById('atualizar-proxima').value
+    action:        'atualizarRelacao',
+    matricula:     matricula,
+    tipoExame:     document.getElementById('atualizar-tipo').value,
+    periodicidade: document.getElementById('atualizar-periodo').value,
+    ultimoExame:   ultimoFmt,
+    realizaExame:  document.getElementById('atualizar-realiza').value
   };
   fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) })
     .then(function(r){ return r.json(); })
