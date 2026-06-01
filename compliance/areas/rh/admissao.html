@@ -1568,6 +1568,7 @@ function openDrawer() {
     { id: 'japona_termica',    nome: 'Termo de Resp. sobre Uso da Japona Térmica',         desc: 'Uso obrigatório da Japona Térmica ao acessar a câmara fria', sectionLabel: 'Termo de Responsabilidade sobre Uso da Japona Térmica',                                    singleSig: true, vias: 2 },
     { id: 'luva_termica',      nome: 'Termo de Resp. sobre Uso da Luva Térmica',           desc: 'Uso coletivo da Luva Térmica nas atividades com risco térmico', sectionLabel: 'Termo de Responsabilidade sobre Uso Coletivo de Luva Térmica',                          singleSig: true, vias: 2 },
     { id: 'epis_uniformes',    nome: 'Termo de Resp. Uniformes, EPI\'s e Limpeza',         desc: 'Uso obrigatório de uniformes e EPIs nas atividades',           sectionLabel: 'Termo de Responsabilidade — Uniformes, EPI\'s e Procedimentos de Limpeza',           singleSig: true, vias: 2 },
+    { id: 'lista_epis',        nome: 'Lista de Uniformes & EPIs por Departamento',           desc: 'Tabela de EPIs e uniformes do departamento selecionado', epiList: true },
     { id: 'marcacao_ponto',    nome: 'Termo de Resp. sobre a Marcação de Ponto',           desc: 'Responsabilidades sobre o registro de ponto',               sectionLabel: 'Termo de Responsabilidade sobre a Marcação de Ponto',                                      singleSig: true, vias: 2 },
     { id: 'camara_fria_nao',   nome: 'Termo de Resp. de Não Acesso à Câmara Fria',        desc: 'Ciência da proibição de acesso à câmara fria',      sectionLabel: 'Termo de Responsabilidade de Não Acesso à Câmara Fria',                                            singleSig: true, vias: 2 },
     { id: 'camara_fria_acesso',nome: 'Termo de Resp. sobre Acesso à Câmara Fria',         desc: 'Responsabilidades para colaboradores autorizados',  sectionLabel: 'Termo de Responsabilidade sobre Acesso à Câmara Fria',                                             singleSig: true, vias: 2 },
@@ -1644,19 +1645,21 @@ function openDrawer() {
     var list = document.getElementById('adm-doc-list');
     list.innerHTML = '';
     ADM_DOCS.forEach(function(doc) {
-      var hasCa = doc.id === 'japona_termica' || doc.id === 'luva_termica';
-      var caId  = doc.id === 'japona_termica' ? 'adm-ca' : 'adm-ca-luva';
-      var rowId = 'adm-ca-row-' + doc.id;
+      var hasCa  = doc.id === 'japona_termica' || doc.id === 'luva_termica';
+      var hasEpi = doc.id === 'lista_epis';
+      var caId   = doc.id === 'japona_termica' ? 'adm-ca' : 'adm-ca-luva';
+      var rowId  = 'adm-ca-row-' + doc.id;
 
       var item = document.createElement('div');
       item.className = 'adm-doc-item';
-      if (hasCa) item.style.cssText = 'flex-direction:column;align-items:stretch;';
+      if (hasCa || hasEpi) item.style.cssText = 'flex-direction:column;align-items:stretch;';
 
       var top = document.createElement('div');
       top.style.cssText = 'display:flex;align-items:flex-start;gap:10px;';
       top.innerHTML =
         '<input type="checkbox" id="admdoc_' + doc.id + '" value="' + doc.id + '"' +
-        (hasCa ? ' onchange="_admToggleCaInItem(\'' + rowId + '\',\'' + caId + '\',this.checked)"' : '') + '>' +
+        (hasCa  ? ' onchange="_admToggleCaInItem(\'' + rowId + '\',\'' + caId + '\',this.checked)"' : '') +
+        (hasEpi ? ' onchange="_admToggleEpiRow(this.checked)"' : '') + '>' +
         '<label for="admdoc_' + doc.id + '" style="cursor:pointer;flex:1;">' +
           '<div class="adm-doc-name">' + doc.nome + (doc.vias === 2 ? ' <span style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--t3);font-weight:400;">(2 vias)</span>' : '') + '</div>' +
         '</label>';
@@ -1673,6 +1676,16 @@ function openDrawer() {
         item.appendChild(caRow);
       }
 
+      if (hasEpi) {
+        var epiRow = document.createElement('div');
+        epiRow.id = 'adm-epi-row';
+        epiRow.style.cssText = 'display:none;margin-top:8px;padding-top:10px;border-top:1px solid var(--border);';
+        var opts = ADM_EPI_DEPTS.map(function(d){ return '<option value="'+d.page+'">'+d.label+'</option>'; }).join('');
+        epiRow.innerHTML = '<select id="adm-epi-depto" class="form-select" style="font-size:12px;" onclick="event.stopPropagation()">'+
+          '<option value="">— Selecione o departamento —</option>'+opts+'</select>';
+        item.appendChild(epiRow);
+      }
+
       list.appendChild(item);
     });
   }
@@ -1681,6 +1694,57 @@ function openDrawer() {
     var row = document.getElementById(rowId);
     if (row) row.style.display = checked ? 'flex' : 'none';
     if (!checked) { var inp = document.getElementById(inputId); if (inp) inp.value = ''; }
+  }
+
+  var ADM_EPI_DEPTS = [
+    { page: 3,  label: 'Cozinha' },
+    { page: 4,  label: 'Sushibar' },
+    { page: 5,  label: 'Peixaria' },
+    { page: 6,  label: 'Preparação' },
+    { page: 7,  label: 'Poke' },
+    { page: 8,  label: 'Serviços Gerais' },
+    { page: 9,  label: 'Delivery / Caixa' },
+    { page: 10, label: 'Salão' },
+    { page: 11, label: 'Bar' },
+    { page: 12, label: 'Estoque' },
+    { page: 13, label: 'Manutenção' },
+    { page: 14, label: 'Cozinha — TATÁ Poke' },
+    { page: 15, label: 'Delivery — TATÁ Poke' }
+  ];
+
+  function _admToggleEpiRow(checked) {
+    var row = document.getElementById('adm-epi-row');
+    if (row) row.style.display = checked ? 'block' : 'none';
+    if (!checked) { var s = document.getElementById('adm-epi-depto'); if (s) s.value = ''; }
+  }
+
+  var _admEpiPdfDoc = null;
+  function _admRenderEpiPage(pageNum, cb) {
+    function doRender(pdf) {
+      pdf.getPage(pageNum).then(function(page) {
+        var vp = page.getViewport({scale: 2});
+        var cv = document.createElement('canvas');
+        cv.width = vp.width; cv.height = vp.height;
+        page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise.then(function() {
+          cb(cv.toDataURL('image/jpeg', 0.92));
+        });
+      });
+    }
+    if (_admEpiPdfDoc) { doRender(_admEpiPdfDoc); return; }
+    function load() {
+      pdfjsLib.getDocument('uniformes-epis.pdf').promise.then(function(pdf) {
+        _admEpiPdfDoc = pdf; doRender(pdf);
+      });
+    }
+    if (!window.pdfjsLib) {
+      var sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      sc.onload = function() {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        load();
+      };
+      document.head.appendChild(sc);
+    } else { load(); }
   }
 
   function _admSetLoading(loading, label) {
@@ -1864,6 +1928,12 @@ function openDrawer() {
 
     _admSetLoading(true, 'Gerando…');
 
+    var _epiDocSel  = checked.find(function(cb){ return cb.value === 'lista_epis'; });
+    var _epiPageNum = _epiDocSel ? parseInt((document.getElementById('adm-epi-depto')||{}).value||0) : 0;
+    if (_epiDocSel && !_epiPageNum) {
+      _admSetLoading(false, 'Gerar PDF'); _admShowError('Selecione o departamento para a lista de EPIs.'); return;
+    }
+
     var selectedDocs = checked.map(function(cb) {
       return ADM_DOCS.find(function(d) { return d.id === cb.value; });
     });
@@ -2045,7 +2115,13 @@ function openDrawer() {
       '</div>';
     }
 
+    function _buildPages(epiImg) {
     var pages = selectedDocs.map(function(doc) {
+      if (doc.id === 'lista_epis') {
+        return '<div class="page" style="padding:0;overflow:hidden;">'+
+          '<img src="'+(epiImg||'')+'" style="width:100%;height:auto;display:block;">'+
+          '</div>';
+      }
       if (doc.id === 'checklist') {
         return _buildChecklistPage(colabNomeLimpo, colabData.matricula || '', colabUnidade, colabCargo, dataAdmissao || dataFmt, usuarioLogado);
       }
@@ -2149,6 +2225,13 @@ function openDrawer() {
 
     _admSetLoading(false, 'Gerar PDF');
     closeModalAdmissao();
+    } // end _buildPages
+
+    if (_epiDocSel) {
+      _admRenderEpiPage(_epiPageNum, function(img) { _buildPages(img); });
+    } else {
+      _buildPages(null);
+    }
   }
 
   /* ── HEADER USER ── */
