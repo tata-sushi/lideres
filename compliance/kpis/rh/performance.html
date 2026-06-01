@@ -448,8 +448,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
   <div class="kpi-card">
     <span class="kpi-label">Reclamações Trabalhistas</span>
-    <span class="kpi-number">5</span>
-    <span class="kpi-sub"><strong>2</strong> abertas / <strong>2</strong> encerradas</span>
+    <span class="kpi-number" id="kpi-reclam-total">—</span>
+    <span class="kpi-sub"><strong id="kpi-reclam-abertas">—</strong> abertas / <strong id="kpi-reclam-encerradas">—</strong> encerradas</span>
   </div>
 </div>
 
@@ -691,6 +691,63 @@ window.matchPerfRow = function(row, state) {
   if (state.depto   !== 'Todos' && d !== state.depto)   return false;
   return true;
 };
+
+// ─── Reclamações Trabalhistas — KPI ─────────────────────────────────────────
+(function() {
+  var RECL_URL = 'https://script.google.com/macros/s/AKfycbxEs6_B76XgPgy3qHR164Q1zpmDVgM5QA3G1AT1fPd27S26q5ZtcBmissxRwWR8iwUw/exec';
+  var RECL_RAW = [];
+
+  function isEncerrada(resultado) {
+    var s = (resultado || '').toLowerCase();
+    return s.indexOf('acordo') !== -1 || s.indexOf('procedente') !== -1 || s.indexOf('improcedente') !== -1;
+  }
+
+  function reclRender(state) {
+    state = state || { unidade:'Todos', depto:'Todos' };
+    var filtered = RECL_RAW.filter(function(p) {
+      if (state.unidade !== 'Todos' && (p.unidade || '') !== state.unidade) return false;
+      if (state.depto   !== 'Todos' && (p.departamento || '') !== state.depto) return false;
+      return true;
+    });
+    var total = filtered.length;
+    var enc = filtered.filter(function(p) { return isEncerrada(p.resultado); }).length;
+    var ab  = total - enc;
+    var elT = document.getElementById('kpi-reclam-total');
+    var elA = document.getElementById('kpi-reclam-abertas');
+    var elE = document.getElementById('kpi-reclam-encerradas');
+    if (elT) elT.textContent = total;
+    if (elA) elA.textContent = ab;
+    if (elE) elE.textContent = enc;
+  }
+
+  function loadReclamacoes() {
+    fetch(RECL_URL)
+      .then(function(r) { return r.json(); })
+      .then(function(json) {
+        var rows = [];
+        if (json.ok && Array.isArray(json.data))     rows = json.data;
+        else if (Array.isArray(json.processos))      rows = json.processos;
+        else if (Array.isArray(json.data))           rows = json.data;
+        else if (Array.isArray(json))                rows = json;
+        RECL_RAW = rows.map(function(r) {
+          return {
+            resultado:    r.resultado    || r.RESULTADO    || '',
+            unidade:      r.unidade      || r.UNIDADE      || '',
+            departamento: r.departamento || r.DEPARTAMENTO || ''
+          };
+        }).filter(function(p) {
+          // mantém apenas linhas com algum dado relevante
+          return p.resultado || p.unidade || p.departamento;
+        });
+        if (window.registerPerfRenderer) window.registerPerfRenderer(reclRender);
+        else reclRender(window.perfState);
+      })
+      .catch(function() {});
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadReclamacoes);
+  else loadReclamacoes();
+})();
 
 // ─── Banco de Horas — Positivos vs Negativos (dados reais) ───────────────────
 (function() {
