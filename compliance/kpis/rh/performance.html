@@ -494,10 +494,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <!-- TURNOVER -->
     <div class="chart-block">
       <div class="chart-title-row">
-        <span class="chart-title-text">Turnover — Evolução</span>
+        <span class="chart-title-text">Turnover — Demissional (mensal)</span>
       </div>
       <div class="chart-scroll">
-        <svg id="turnover-line-svg" viewBox="0 0 900 200" preserveAspectRatio="none" style="width:100%;height:200px;display:block;"></svg>
+        <svg id="turnover-line-svg" viewBox="0 0 900 240" preserveAspectRatio="none" style="width:100%;height:240px;display:block;"></svg>
       </div>
     </div>
 
@@ -917,47 +917,117 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   else loadAbsData();
 })();
 
-// ─── Turnover — gráfico de linha ─────────────────────────────────────────────
+// ─── Turnover — demissional mensal (dados reais) ────────────────────────────
 (function() {
-  var TV_DATA = [
-    { label: 'Jan', val: 3.2 },
-    { label: 'Fev', val: 2.8 },
-    { label: 'Mar', val: 4.1 },
-    { label: 'Abr', val: 3.5 },
-    { label: 'Mai', val: 2.6 }
-  ];
-  function drawTurnoverLine() {
+  var TV_SHEET_ID = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
+  var TV_GID      = '175063295';
+  var COL_ADM     = 8;  // I: Data de Admissão
+  var COL_DEM     = 14; // O: Data de Demissão
+  var MES_PT      = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+  function parseCSVLine(line) {
+    var res = [], cur = '', inQ = false;
+    for (var i = 0; i < line.length; i++) {
+      var ch = line[i];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { res.push(cur.trim()); cur = ''; }
+      else { cur += ch; }
+    }
+    res.push(cur.trim());
+    return res;
+  }
+
+  function parseDateBR(s) {
+    if (!s) return null;
+    var p = s.trim().split('/');
+    if (p.length !== 3) return null;
+    var d = new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function lastMonths(n) {
+    var ref = new Date();
+    var out = [];
+    for (var i = n - 1; i >= 0; i--) {
+      var d = new Date(ref.getFullYear(), ref.getMonth() - i, 1);
+      out.push({
+        label: MES_PT[d.getMonth()] + '/' + String(d.getFullYear()).slice(-2),
+        start: new Date(d.getFullYear(), d.getMonth(), 1),
+        end:   new Date(d.getFullYear(), d.getMonth()+1, 1)
+      });
+    }
+    return out;
+  }
+
+  function drawTurnoverLine(pontos) {
     var svg = document.getElementById('turnover-line-svg');
     if (!svg) return;
-    var W = 900, H = 200, H_PLOT = 168, pad = 32;
-    var n = TV_DATA.length;
-    var vals = TV_DATA.map(function(d) { return d.val; });
-    var minV = Math.max(0, Math.min.apply(null, vals) * 0.75);
-    var maxV = Math.max.apply(null, vals) * 1.18;
+    var W = 900, H = 240, H_PLOT = 200, pad = 24;
+    var n = pontos.length;
+    if (n < 2) { svg.innerHTML = ''; return; }
+    var vals = pontos.map(function(p) { return p.val; });
+    var minV = 0;
+    var maxV = Math.max.apply(null, vals);
+    if (maxV === 0) maxV = 1;
+    maxV = maxV * 1.20;
     var range = maxV - minV;
-    function sx(i) { return pad + i * ((W - pad * 2) / (n - 1)); }
+    function sx(i) { return pad + i * ((W - pad*2) / (n-1)); }
     function sy(v) { return pad + (1 - (v - minV) / range) * (H_PLOT - pad); }
     var c = '';
-    // Área preenchida sutil
-    var area = 'M ' + sx(0).toFixed(1) + ' ' + H_PLOT.toFixed(1);
-    TV_DATA.forEach(function(d, i) { area += ' L ' + sx(i).toFixed(1) + ' ' + sy(d.val).toFixed(1); });
-    area += ' L ' + sx(n - 1).toFixed(1) + ' ' + H_PLOT.toFixed(1) + ' Z';
+    // Área preenchida
+    var area = 'M ' + sx(0).toFixed(1) + ' ' + sy(0).toFixed(1);
+    pontos.forEach(function(p, i) { area += ' L ' + sx(i).toFixed(1) + ' ' + sy(p.val).toFixed(1); });
+    area += ' L ' + sx(n-1).toFixed(1) + ' ' + sy(0).toFixed(1) + ' Z';
     c += '<path d="' + area + '" fill="#35383F" opacity="0.08"/>';
     // Linha
-    c += '<path d="' + TV_DATA.map(function(d, i) { return (i === 0 ? 'M ' : 'L ') + sx(i).toFixed(1) + ' ' + sy(d.val).toFixed(1); }).join(' ') + '" fill="none" stroke="#35383F" stroke-width="2"/>';
+    c += '<path d="' + pontos.map(function(p, i) { return (i===0?'M ':'L ') + sx(i).toFixed(1) + ' ' + sy(p.val).toFixed(1); }).join(' ') + '" fill="none" stroke="#35383F" stroke-width="2"/>';
     // Pontos e valores
-    TV_DATA.forEach(function(d, i) {
-      c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(d.val).toFixed(1) + '" r="3.5" fill="#35383F"/>';
-      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (sy(d.val) - 9).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" font-weight="600">' + d.val.toFixed(1) + '%</text>';
+    pontos.forEach(function(p, i) {
+      c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(p.val).toFixed(1) + '" r="3" fill="#35383F"/>';
+      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (sy(p.val) - 8).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" font-weight="600">' + p.val.toFixed(1).replace('.', ',') + '%</text>';
     });
-    // Labels eixo X
-    TV_DATA.forEach(function(d, i) {
-      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (H - 4).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F">' + d.label + '</text>';
+    // Labels X
+    pontos.forEach(function(p, i) {
+      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F">' + p.label + '</text>';
     });
     svg.innerHTML = c;
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', drawTurnoverLine);
-  else drawTurnoverLine();
+
+  function loadTurnover() {
+    var url = 'https://docs.google.com/spreadsheets/d/' + TV_SHEET_ID + '/export?format=csv&gid=' + TV_GID;
+    fetch(url)
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function(csv) {
+        var lines = csv.split('\n');
+        var rows = [];
+        for (var i = 1; i < lines.length; i++) {
+          var line = lines[i].trim();
+          if (!line) continue;
+          var cols = parseCSVLine(line);
+          if (cols.length <= COL_ADM) continue;
+          var adm = parseDateBR(cols[COL_ADM]);
+          var dem = parseDateBR(cols[COL_DEM] || '');
+          if (!adm) continue;
+          rows.push({ adm: adm, dem: dem });
+        }
+        var pontos = lastMonths(12).map(function(m) {
+          var hc = 0, dems = 0;
+          rows.forEach(function(r) {
+            // Headcount no 1º dia do mês: admitido antes E (sem demissão OU demitido depois)
+            if (r.adm < m.start && (!r.dem || r.dem >= m.start)) hc++;
+            // Demissões durante o mês
+            if (r.dem && r.dem >= m.start && r.dem < m.end) dems++;
+          });
+          var taxa = hc > 0 ? (dems / hc) * 100 : 0;
+          return { label: m.label, val: taxa };
+        });
+        drawTurnoverLine(pontos);
+      })
+      .catch(function() {});
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadTurnover);
+  else loadTurnover();
 })();
 
 // ─── Produtividade — barras verticais ────────────────────────────────────────
