@@ -87,6 +87,15 @@
   .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
   .stack-cards { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
   /* KPI cards (padrão recrutamento) */
+  .filters-wrap { background: var(--white); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .filters-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .filter-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .filter-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--t2); }
+  .filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--r); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--t1); cursor: pointer; width: 100%; }
+  .filter-select:focus { outline: none; border-color: var(--carbon); }
+  .filters-actions { display: flex; align-items: center; justify-content: flex-end; padding-top: 2px; }
+  .btn-clear { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; color: var(--t3); background: none; border: none; cursor: pointer; padding: 4px 0; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
+  .btn-clear:hover { color: var(--carbon); }
   .kpis-wrap { background: var(--white); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
   .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--t2); }
@@ -409,6 +418,27 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <!-- HEADER substituído pelo padrão de governança (auth-gate + std header) -->
 
+<!-- FILTROS -->
+<div class="filters-wrap">
+  <div class="filters-row">
+    <div class="filter-group">
+      <label class="filter-label">Unidade</label>
+      <select class="filter-select" id="filtro-unidade" onchange="applyFilters()">
+        <option>Todos</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Departamento</label>
+      <select class="filter-select" id="filtro-depto" onchange="applyFilters()">
+        <option>Todos</option>
+      </select>
+    </div>
+  </div>
+  <div class="filters-actions">
+    <button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>
+  </div>
+</div>
+
 <!-- KPI BAR -->
 <div class="kpis-wrap">
   <div class="kpi-card">
@@ -619,6 +649,49 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   else populate();
 })();
 
+// ─── Estado global de filtros ────────────────────────────────────────────────
+window.perfState     = { unidade: 'Todos', depto: 'Todos' };
+window.perfRenderers = [];
+
+window.registerPerfRenderer = function(fn) {
+  window.perfRenderers.push(fn);
+  try { fn(window.perfState); } catch(e) {}
+};
+
+window.applyFilters = function() {
+  window.perfState.unidade = document.getElementById('filtro-unidade').value;
+  window.perfState.depto   = document.getElementById('filtro-depto').value;
+  window.perfRenderers.forEach(function(fn) { try { fn(window.perfState); } catch(e) {} });
+};
+
+window.clearFilters = function() {
+  window.perfState = { unidade: 'Todos', depto: 'Todos' };
+  var u = document.getElementById('filtro-unidade'); if (u) u.value = 'Todos';
+  var d = document.getElementById('filtro-depto');   if (d) d.value = 'Todos';
+  window.perfRenderers.forEach(function(fn) { try { fn(window.perfState); } catch(e) {} });
+};
+
+window.populateFilterOptions = function(unidades, deptos) {
+  function fill(id, opts) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    var cur = sel.value || 'Todos';
+    sel.innerHTML = '<option>Todos</option>' + opts.map(function(o) {
+      return '<option' + (o === cur ? ' selected' : '') + '>' + o + '</option>';
+    }).join('');
+  }
+  fill('filtro-unidade', unidades.slice().sort());
+  fill('filtro-depto',   deptos.slice().sort());
+};
+
+window.matchPerfRow = function(row, state) {
+  var u = (row.unidade || '').trim();
+  var d = (row.depto || row.departamento || '').trim();
+  if (state.unidade !== 'Todos' && u !== state.unidade) return false;
+  if (state.depto   !== 'Todos' && d !== state.depto)   return false;
+  return true;
+};
+
 // ─── Banco de Horas — Positivos vs Negativos (dados reais) ───────────────────
 (function() {
   var BH_SHEET_ID = '1oW3uXbig4B3gUQegxorxZghMnVrZcXk44AD08gx-cl0';
@@ -765,13 +838,27 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     svg.innerHTML = c;
   }
 
+  var BH_RAW = [];
+  function bhRender(state) {
+    state = state || { unidade:'Todos', depto:'Todos' };
+    BH_ROWS = BH_RAW.filter(function(r) {
+      if (state.unidade !== 'Todos' && r.unidade !== state.unidade) return false;
+      if (state.depto   !== 'Todos' && r.depto   !== state.depto)   return false;
+      return true;
+    });
+    buildSemanas();
+    buildSnapshots();
+    var pontos = BH_SEMANAS.map(getWeekSeries);
+    drawTwoLineChart('bh-pn-svg', pontos);
+  }
+
   function loadBHData() {
     var url = 'https://docs.google.com/spreadsheets/d/' + BH_SHEET_ID + '/export?format=csv&gid=0';
     fetch(url)
       .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
       .then(function(csv) {
         var lines = csv.split('\n');
-        BH_ROWS = [];
+        BH_RAW = [];
         for (var i = 1; i < lines.length; i++) {
           var line = lines[i].trim();
           if (!line) continue;
@@ -780,16 +867,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           var nome = (cols[BH_COL.COLABORADOR]||'').trim();
           if (!nome) continue;
           var saldo = parseFloat((cols[BH_COL.SALDO]||'0').replace(',','.')) || 0;
-          BH_ROWS.push({
+          BH_RAW.push({
             rowIndex: i, nome: nome, saldo: saldo,
             semKey: toSemKey((cols[BH_COL.DATA]||'').trim()),
-            tipo: (cols[BH_COL.TIPO]||'').trim()
+            tipo:    (cols[BH_COL.TIPO]||'').trim(),
+            depto:   (cols[BH_COL.DEPARTAMENTO]||'').trim(),
+            unidade: (cols[BH_COL.UNIDADE]||'').trim()
           });
         }
-        buildSemanas();
-        buildSnapshots();
-        var pontos = BH_SEMANAS.map(getWeekSeries);
-        drawTwoLineChart('bh-pn-svg', pontos);
+        if (window.registerPerfRenderer) window.registerPerfRenderer(bhRender);
+        else bhRender(window.perfState);
       })
       .catch(function() {});
   }
@@ -838,8 +925,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       return '';
     }
     return {
-      data:  v('data_falta','data','data_ausencia'),
-      tipo:  v('tipo de ausencia','tipo_de_ausencia','tipo','ausencia'),
+      data:    v('data_falta','data','data_ausencia'),
+      tipo:    v('tipo de ausencia','tipo_de_ausencia','tipo','ausencia'),
+      unidade: v('unidade'),
+      depto:   v('departamento','depto')
     };
   }
 
@@ -895,6 +984,17 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     if (el) el.innerHTML = html || '<span style="font-size:12px;color:var(--t3)">Sem dados</span>';
   }
 
+  var ABS_RAW = [];
+  function absRender(state) {
+    state = state || { unidade:'Todos', depto:'Todos' };
+    var filtered = ABS_RAW.filter(function(r) {
+      if (state.unidade !== 'Todos' && r.unidade !== state.unidade) return false;
+      if (state.depto   !== 'Todos' && r.depto   !== state.depto)   return false;
+      return true;
+    });
+    renderAbsMeses(filtered);
+  }
+
   function loadAbsData() {
     var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + ABS_SHEET_ID +
       '/values/' + encodeURIComponent(ABS_SHEET + '!A:H') + '?key=' + ABS_API_KEY;
@@ -905,10 +1005,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         var rows = data.values || [];
         if (rows.length < 2) return;
         var headers = rows[0];
-        var parsed = rows.slice(1).map(function(r) { return normRow(headers, r); })
+        ABS_RAW = rows.slice(1).map(function(r) { return normRow(headers, r); })
           .filter(function(r) { return r.data && !isFolga(r.tipo); });
-        renderAbsMeses(parsed);
-        renderAbsTipos(parsed);
+        if (window.registerPerfRenderer) window.registerPerfRenderer(absRender);
+        else absRender(window.perfState);
       })
       .catch(function() {});
   }
@@ -923,6 +1023,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   var TV_GID      = '175063295';
   var COL_ADM     = 8;  // I: Data de Admissão
   var COL_DEM     = 14; // O: Data de Demissão
+  var COL_UNI     = 4;  // E: Unidade
+  var COL_DEP     = 5;  // F: Departamento
   var MES_PT      = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
   function parseCSVLine(line) {
@@ -993,13 +1095,34 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     svg.innerHTML = c;
   }
 
+  var TV_RAW = [];
+  function tvRender(state) {
+    state = state || { unidade:'Todos', depto:'Todos' };
+    var rows = TV_RAW.filter(function(r) {
+      if (state.unidade !== 'Todos' && r.unidade !== state.unidade) return false;
+      if (state.depto   !== 'Todos' && r.depto   !== state.depto)   return false;
+      return true;
+    });
+    var pontos = lastMonths(12).map(function(m) {
+      var hc = 0, dems = 0;
+      rows.forEach(function(r) {
+        if (r.adm < m.start && (!r.dem || r.dem >= m.start)) hc++;
+        if (r.dem && r.dem >= m.start && r.dem < m.end) dems++;
+      });
+      var taxa = hc > 0 ? (dems / hc) * 100 : 0;
+      return { label: m.label, val: taxa };
+    });
+    drawTurnoverLine(pontos);
+  }
+
   function loadTurnover() {
     var url = 'https://docs.google.com/spreadsheets/d/' + TV_SHEET_ID + '/export?format=csv&gid=' + TV_GID;
     fetch(url)
       .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
       .then(function(csv) {
         var lines = csv.split('\n');
-        var rows = [];
+        TV_RAW = [];
+        var setU = {}, setD = {};
         for (var i = 1; i < lines.length; i++) {
           var line = lines[i].trim();
           if (!line) continue;
@@ -1008,20 +1131,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           var adm = parseDateBR(cols[COL_ADM]);
           var dem = parseDateBR(cols[COL_DEM] || '');
           if (!adm) continue;
-          rows.push({ adm: adm, dem: dem });
+          var uni = (cols[COL_UNI] || '').trim();
+          var dep = (cols[COL_DEP] || '').trim();
+          TV_RAW.push({ adm: adm, dem: dem, unidade: uni, depto: dep });
+          if (uni) setU[uni] = 1;
+          if (dep) setD[dep] = 1;
         }
-        var pontos = lastMonths(12).map(function(m) {
-          var hc = 0, dems = 0;
-          rows.forEach(function(r) {
-            // Headcount no 1º dia do mês: admitido antes E (sem demissão OU demitido depois)
-            if (r.adm < m.start && (!r.dem || r.dem >= m.start)) hc++;
-            // Demissões durante o mês
-            if (r.dem && r.dem >= m.start && r.dem < m.end) dems++;
-          });
-          var taxa = hc > 0 ? (dems / hc) * 100 : 0;
-          return { label: m.label, val: taxa };
-        });
-        drawTurnoverLine(pontos);
+        // Popula filtros a partir da planilha mestre de RH
+        if (window.populateFilterOptions) {
+          window.populateFilterOptions(Object.keys(setU), Object.keys(setD));
+        }
+        if (window.registerPerfRenderer) window.registerPerfRenderer(tvRender);
+        else tvRender(window.perfState);
       })
       .catch(function() {});
   }
@@ -1085,6 +1206,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 // ─── Colaboradores — tabela ───────────────────────────────────────────────────
 var COLAB_URL    = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var ORGANO_URL   = 'https://script.google.com/macros/s/AKfycbxUWUoOmv-Cn19-FjUJ18jYTu5G_embOGDaQDsgC4Jd8agVfgqs98Tbu3qlqa9e7tpu/exec';
+var _rawColabs   = [];
 var _allColabs   = [];
 var _colabsShowing = 10;
 
@@ -1122,18 +1244,35 @@ function expandColabs() {
   document.getElementById('ver-mais-wrap-colabs').style.display = 'none';
 }
 
-function _applyColabs(colabs, total) {
-  _allColabs = colabs;
+function _applyColabs(rawColabs) {
+  _rawColabs = rawColabs;
+  if (window.registerPerfRenderer) window.registerPerfRenderer(colabsRender);
+  else colabsRender(window.perfState);
+}
+
+function colabsRender(state) {
+  state = state || { unidade:'Todos', depto:'Todos' };
+  _allColabs = _rawColabs.filter(function(c) {
+    var u = (c.unidade || '').trim();
+    var d = (c.departamento || c.depto || '').trim();
+    if (state.unidade !== 'Todos' && u !== state.unidade) return false;
+    if (state.depto   !== 'Todos' && d !== state.depto)   return false;
+    return true;
+  });
+  _colabsShowing = 10;
+  var total = _allColabs.length;
   var kpi = document.getElementById('kpi-total-colabs');
   if (kpi) kpi.textContent = total;
   var lbl = document.getElementById('colab-count-label');
   if (lbl) lbl.textContent = '— ' + total + ' RESULTADOS';
   _renderColabsTable(_colabsShowing);
+  var wrap = document.getElementById('ver-mais-wrap-colabs');
+  var btn  = document.getElementById('btn-ver-mais-colabs');
   if (_allColabs.length > _colabsShowing) {
-    var wrap = document.getElementById('ver-mais-wrap-colabs');
-    var btn  = document.getElementById('btn-ver-mais-colabs');
     if (wrap) wrap.style.display = 'flex';
     if (btn)  btn.textContent = 'Ver mais (' + (_allColabs.length - _colabsShowing) + ')';
+  } else {
+    if (wrap) wrap.style.display = 'none';
   }
 }
 
@@ -1147,7 +1286,7 @@ function carregarColaboradores() {
         .concat(data.peers || [])
         .filter(function(c) { return c.nome; })
         .sort(function(a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
-      _applyColabs(colabs, data.total || colabs.length);
+      _applyColabs(colabs);
     })
     .catch(function() {
       // fallback: listColaboradores sem foto
@@ -1155,7 +1294,7 @@ function carregarColaboradores() {
         .then(function(r) { return r.json(); })
         .then(function(data) {
           if (!data.ok) return;
-          _applyColabs(data.colaboradores || [], data.total || 0);
+          _applyColabs(data.colaboradores || []);
         })
         .catch(function() {});
     });
