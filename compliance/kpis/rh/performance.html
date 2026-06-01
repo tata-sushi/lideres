@@ -96,10 +96,10 @@
   .filters-actions { display: flex; align-items: center; justify-content: flex-end; padding-top: 2px; }
   .btn-clear { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; color: var(--t3); background: none; border: none; cursor: pointer; padding: 4px 0; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
   .btn-clear:hover { color: var(--carbon); }
-  .kpis-wrap { background: var(--white); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpis-wrap { background: var(--white); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
   .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
   .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--t2); }
-  .kpi-number { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+  .kpi-number { font-size: 24px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
   .kpi-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--t3); }
   .kpi-sub strong { color: var(--carbon); font-weight: 600; }
 
@@ -451,6 +451,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <span class="kpi-number" id="kpi-reclam-total">—</span>
     <span class="kpi-sub"><strong id="kpi-reclam-abertas">—</strong> abertas / <strong id="kpi-reclam-encerradas">—</strong> encerradas</span>
   </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Custo Total</span>
+    <span class="kpi-number" id="kpi-custo-total">—</span>
+    <span class="kpi-sub">salário × 1,7</span>
+  </div>
 </div>
 
 <!-- MAIN -->
@@ -691,6 +696,33 @@ window.matchPerfRow = function(row, state) {
   if (state.depto   !== 'Todos' && d !== state.depto)   return false;
   return true;
 };
+
+// ─── Cargos & Salários (CES) — cache global de salários por cargo_id ─────────
+window.cesSalarios = {};
+window.cesReady    = false;
+window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); };
+
+(function() {
+  var CES_URL = 'https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec';
+  function loadCES() {
+    fetch(CES_URL + '?action=getAll')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.ok) return;
+        (data.salarios || []).forEach(function(s) {
+          if (s.cargo_id) window.cesSalarios[window.normCargoId(s.cargo_id)] = s;
+        });
+        window.cesReady = true;
+        // Re-render quem depende de salário (colabs/custo)
+        if (typeof window.colabsRender === 'function' && window.perfState) {
+          window.colabsRender(window.perfState);
+        }
+      })
+      .catch(function() {});
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadCES);
+  else loadCES();
+})();
 
 // ─── Reclamações Trabalhistas — KPI ─────────────────────────────────────────
 (function() {
@@ -1307,6 +1339,13 @@ function _applyColabs(rawColabs) {
   else colabsRender(window.perfState);
 }
 
+function _fmtCusto(v) {
+  if (!v) return 'R$ 0';
+  if (v >= 1e6) return 'R$ ' + (v/1e6).toFixed(2).replace('.',',') + ' mi';
+  if (v >= 1e3) return 'R$ ' + Math.round(v/1e3).toLocaleString('pt-BR') + ' mil';
+  return 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+}
+
 function colabsRender(state) {
   state = state || { unidade:'Todos', depto:'Todos' };
   _allColabs = _rawColabs.filter(function(c) {
@@ -1331,7 +1370,26 @@ function colabsRender(state) {
   } else {
     if (wrap) wrap.style.display = 'none';
   }
+  // Custo Total = soma de (salario_fixo × 1,7) por colaborador filtrado
+  var custoEl = document.getElementById('kpi-custo-total');
+  if (custoEl) {
+    if (!window.cesReady) {
+      custoEl.textContent = '…';
+    } else {
+      var soma = 0;
+      _allColabs.forEach(function(c) {
+        var cid = c.cargoId || c.cargo_id;
+        if (!cid) return;
+        var sal = window.cesSalarios[window.normCargoId(cid)];
+        if (!sal) return;
+        var fixo = parseFloat(String(sal.salario_fixo || '0').toString().replace(',','.')) || 0;
+        soma += fixo * 1.7;
+      });
+      custoEl.textContent = _fmtCusto(soma);
+    }
+  }
 }
+window.colabsRender = colabsRender;
 
 function carregarColaboradores() {
   // Busca a árvore do organograma (tem foto, iniciais, cargo, unidade)
