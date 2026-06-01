@@ -1001,6 +1001,23 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     .ft-pills { display:flex; flex-wrap:wrap; gap:5px; }
     .ft-pill { display:inline-flex; align-items:center; font-family:"DM Mono",monospace; font-size:10px; font-weight:500; letter-spacing:0.3px; white-space:nowrap; padding:3px 9px; border-radius:100px; background:#35383F; color:#CFFF00; }
     @media (min-width:768px) { .ft-accordion { padding:0 40px; max-width:1100px; margin:0 auto; } }
+    /* EPI VIEWER */
+    .epi-viewer{padding:0 16px 8px;max-width:860px;}
+    @media(min-width:768px){.epi-viewer{padding:0 40px 8px;max-width:1100px;margin:0 auto;}}
+    .epi-chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px;}
+    .epi-chip{display:inline-flex;align-items:center;padding:5px 13px;border-radius:100px;font-family:"DM Mono",monospace;font-size:10px;font-weight:500;letter-spacing:.3px;text-transform:uppercase;border:1px solid var(--border);background:var(--bg);color:var(--t2);cursor:pointer;transition:all .15s;white-space:nowrap;}
+    .epi-chip:hover{border-color:var(--carbon);color:var(--t1);}
+    .epi-chip.active{background:var(--carbon);color:var(--citric);border-color:var(--carbon);}
+    .epi-canvas-wrap{border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:var(--bg);min-height:220px;display:flex;align-items:center;justify-content:center;position:relative;}
+    .epi-placeholder{display:flex;flex-direction:column;align-items:center;gap:10px;padding:48px 24px;color:var(--t3);}
+    .epi-placeholder svg{width:32px;height:32px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;opacity:.5;}
+    .epi-placeholder span{font-family:"DM Mono",monospace;font-size:10px;letter-spacing:.6px;text-transform:uppercase;}
+    #epi-canvas{width:100%;height:auto;display:block;}
+    .epi-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);}
+    .epi-loading-inner{display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--t3);}
+    .epi-spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--carbon);border-radius:50%;animation:epiRot .7s linear infinite;}
+    .epi-loading-lbl{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:.6px;text-transform:uppercase;}
+    @keyframes epiRot{to{transform:rotate(360deg);}}
   </style>
 
   <!-- ══ PAPÉIS E RESPONSABILIDADES ══ -->
@@ -1354,6 +1371,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="info-box info-red-lt">
       <svg viewBox="0 0 24 24" width="13" height="13" style="stroke:#b93232;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-1px;flex-shrink:0;margin-right:6px;display:inline-block;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><strong>Avaliação exige feedback:</strong> Toda avaliação deve gerar devolutiva clara e tomada de decisão coerente.
+    </div>
+  </div>
+
+  <!-- ══ UNIFORMES & EPIs ══ -->
+  <div class="sec-div">Uniformes &amp; EPIs por Departamento</div>
+  <div class="epi-viewer">
+    <div class="epi-chips" id="epi-chips"></div>
+    <div class="epi-canvas-wrap" id="epi-canvas-wrap">
+      <div class="epi-placeholder" id="epi-placeholder">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span>Selecione um departamento</span>
+      </div>
+      <div class="epi-loading" id="epi-loading" style="display:none;">
+        <div class="epi-loading-inner"><div class="epi-spin"></div><span class="epi-loading-lbl">Carregando...</span></div>
+      </div>
+      <canvas id="epi-canvas" style="display:none;"></canvas>
     </div>
   </div>
 
@@ -2625,6 +2658,95 @@ function openDrawer() {
   }
 
   loadFtAdmissao();
+</script>
+
+<script>
+(function(){
+  var EPI_DEPTS = [
+    { label: "Cozinha",               page: 3 },
+    { label: "Sushibar",              page: 4 },
+    { label: "Peixaria",              page: 5 },
+    { label: "Preparação",            page: 6 },
+    { label: "Poke",                  page: 7 },
+    { label: "Serviços Gerais",       page: 8 },
+    { label: "Delivery / Caixa",      page: 9 },
+    { label: "Salão",                 page: 10 },
+    { label: "Bar",                   page: 11 },
+    { label: "Estoque",               page: 12 },
+    { label: "Manutenção",            page: 13 },
+    { label: "Cozinha — TATÁ Poke",   page: 14 },
+    { label: "Delivery — TATÁ Poke",  page: 15 }
+  ];
+
+  var _epiPdfDoc = null;
+  var _epiLoading = false;
+  var _epiActiveChip = null;
+  var PDF_URL = "uniformes-epis.pdf";
+
+  // Build chips
+  var chipsEl = document.getElementById("epi-chips");
+  EPI_DEPTS.forEach(function(d) {
+    var btn = document.createElement("button");
+    btn.className = "epi-chip";
+    btn.textContent = d.label;
+    btn.onclick = function() { _epiSelect(d, btn); };
+    chipsEl.appendChild(btn);
+  });
+
+  function _epiSelect(dept, chip) {
+    if (_epiLoading) return;
+    if (_epiActiveChip) _epiActiveChip.classList.remove("active");
+    _epiActiveChip = chip;
+    chip.classList.add("active");
+    _epiRenderPage(dept.page);
+  }
+
+  function _epiRenderPage(pageNum) {
+    var placeholder = document.getElementById("epi-placeholder");
+    var loadingEl   = document.getElementById("epi-loading");
+    var canvas      = document.getElementById("epi-canvas");
+    placeholder.style.display = "none";
+    canvas.style.display = "none";
+    loadingEl.style.display = "flex";
+    _epiLoading = true;
+
+    function doRender(pdf) {
+      pdf.getPage(pageNum).then(function(page) {
+        var wrap = document.getElementById("epi-canvas-wrap");
+        var scale = (wrap.clientWidth || 800) / page.getViewport({scale:1}).width;
+        var viewport = page.getViewport({scale: Math.max(scale, 1)});
+        canvas.width  = viewport.width;
+        canvas.height = viewport.height;
+        page.render({ canvasContext: canvas.getContext("2d"), viewport: viewport }).promise.then(function() {
+          loadingEl.style.display = "none";
+          canvas.style.display = "block";
+          _epiLoading = false;
+        });
+      });
+    }
+
+    if (_epiPdfDoc) { doRender(_epiPdfDoc); return; }
+
+    // Lazy-load pdf.js
+    if (!window.pdfjsLib) {
+      var s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+      s.onload = function() {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        pdfjsLib.getDocument(PDF_URL).promise.then(function(pdf) {
+          _epiPdfDoc = pdf;
+          doRender(pdf);
+        });
+      };
+      document.head.appendChild(s);
+    } else {
+      pdfjsLib.getDocument(PDF_URL).promise.then(function(pdf) {
+        _epiPdfDoc = pdf;
+        doRender(pdf);
+      });
+    }
+  }
+})();
 </script>
 
 <!-- LOADING -->
