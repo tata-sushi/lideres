@@ -487,10 +487,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <!-- BANCO DE HORAS — LINHA -->
     <div class="chart-block">
       <div class="chart-title-row">
-        <span class="chart-title-text">Banco de Horas — Evolução</span>
+        <span class="chart-title-text">Banco de Horas — Positivos vs Negativos</span>
       </div>
       <div class="chart-scroll">
-        <svg id="bh-line-svg" viewBox="0 0 900 200" preserveAspectRatio="none" style="width:100%;height:200px;display:block;"></svg>
+        <svg id="bh-pn-svg" viewBox="0 0 900 240" preserveAspectRatio="none" style="width:100%;height:240px;display:block;"></svg>
       </div>
     </div>
 
@@ -666,47 +666,183 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   else populate();
 })();
 
-// ─── Banco de Horas — gráfico de linha ───────────────────────────────────────
+// ─── Banco de Horas — Positivos vs Negativos (dados reais) ───────────────────
 (function() {
-  var BH_DATA = [
-    { label: 'Jan', val: 120 },
-    { label: 'Fev', val: 145 },
-    { label: 'Mar', val: 160 },
-    { label: 'Abr', val: 172 },
-    { label: 'Mai', val: 183 }
-  ];
-  function drawBHLine() {
-    var svg = document.getElementById('bh-line-svg');
-    if (!svg) return;
-    var W = 900, H = 200, H_PLOT = 168, pad = 32;
-    var n = BH_DATA.length;
-    var vals = BH_DATA.map(function(d) { return d.val; });
-    var minV = Math.min.apply(null, vals) * 0.82;
-    var maxV = Math.max.apply(null, vals) * 1.10;
-    var range = maxV - minV;
-    function sx(i) { return pad + i * ((W - pad * 2) / (n - 1)); }
-    function sy(v) { return pad + (1 - (v - minV) / range) * (H_PLOT - pad); }
-    var c = '';
-    // Área preenchida sutil
-    var area = 'M ' + sx(0).toFixed(1) + ' ' + H_PLOT.toFixed(1);
-    BH_DATA.forEach(function(d, i) { area += ' L ' + sx(i).toFixed(1) + ' ' + sy(d.val).toFixed(1); });
-    area += ' L ' + sx(n - 1).toFixed(1) + ' ' + H_PLOT.toFixed(1) + ' Z';
-    c += '<path d="' + area + '" fill="#35383F" opacity="0.08"/>';
-    // Linha
-    c += '<path d="' + BH_DATA.map(function(d, i) { return (i === 0 ? 'M ' : 'L ') + sx(i).toFixed(1) + ' ' + sy(d.val).toFixed(1); }).join(' ') + '" fill="none" stroke="#35383F" stroke-width="2"/>';
-    // Pontos e valores
-    BH_DATA.forEach(function(d, i) {
-      c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(d.val).toFixed(1) + '" r="3.5" fill="#35383F"/>';
-      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (sy(d.val) - 9).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" font-weight="600">+' + d.val + 'h</text>';
+  var BH_SHEET_ID = '1oW3uXbig4B3gUQegxorxZghMnVrZcXk44AD08gx-cl0';
+  var BH_COL = { DATA:0, MT:1, COLABORADOR:2, SALDO:3, STATUS:4, DEPARTAMENTO:5, UNIDADE:6, TIPO:7 };
+  var BH_ROWS = [], BH_SEMANAS = [], BH_SNAPSHOTS = {};
+
+  var FERIADOS = {
+    '2024-01-01':1,'2024-01-25':1,'2024-02-12':1,'2024-02-13':1,'2024-03-29':1,
+    '2024-04-21':1,'2024-05-01':1,'2024-05-30':1,'2024-07-09':1,'2024-09-07':1,
+    '2024-10-12':1,'2024-11-02':1,'2024-11-15':1,'2024-11-20':1,'2024-12-25':1,
+    '2025-01-01':1,'2025-01-25':1,'2025-03-03':1,'2025-03-04':1,'2025-04-18':1,
+    '2025-04-21':1,'2025-05-01':1,'2025-06-19':1,'2025-07-09':1,'2025-09-07':1,
+    '2025-10-12':1,'2025-11-02':1,'2025-11-15':1,'2025-11-20':1,'2025-12-25':1,
+    '2026-01-01':1,'2026-01-25':1,'2026-02-16':1,'2026-02-17':1,'2026-04-03':1,
+    '2026-04-21':1,'2026-05-01':1,'2026-06-04':1,'2026-07-09':1,'2026-09-07':1,
+    '2026-10-12':1,'2026-11-02':1,'2026-11-15':1,'2026-11-20':1,'2026-12-25':1
+  };
+
+  function bhHasHoliday(semKey) {
+    if (!semKey) return false;
+    var p = semKey.split('-');
+    if (p.length !== 3) return false;
+    var d = new Date(+p[0], +p[1]-1, +p[2]);
+    var diffToMon = (d.getDay() === 0) ? -6 : 1 - d.getDay();
+    var mon = new Date(d.getTime()); mon.setDate(d.getDate() + diffToMon);
+    for (var i = 0; i < 7; i++) {
+      var c = new Date(mon.getTime()); c.setDate(mon.getDate() + i);
+      var k = c.getFullYear() + '-' + String(c.getMonth()+1).padStart(2,'0') + '-' + String(c.getDate()).padStart(2,'0');
+      if (FERIADOS[k]) return true;
+    }
+    return false;
+  }
+
+  function toSemKey(s) {
+    if (!s) return '';
+    if (s.indexOf('/') !== -1) {
+      var p = s.split('/');
+      if (p.length === 3) return p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
+    }
+    return s;
+  }
+
+  function semKeyToLabel(k) {
+    var p = k.split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] : k;
+  }
+
+  function isTipoPag(t)  { return t.indexOf('pag')  !== -1; }
+  function isTipoPerd(t) { return t.indexOf('perd') !== -1; }
+
+  function parseCSVLine(line) {
+    var res = [], cur = '', inQ = false;
+    for (var i = 0; i < line.length; i++) {
+      var ch = line[i];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { res.push(cur.trim()); cur = ''; }
+      else { cur += ch; }
+    }
+    res.push(cur.trim());
+    return res;
+  }
+
+  function buildSemanas() {
+    var seen = {};
+    BH_ROWS.forEach(function(r) { if (r.semKey) seen[r.semKey] = 1; });
+    BH_SEMANAS = Object.keys(seen).sort().slice(-10);
+  }
+
+  function buildSnapshots() {
+    BH_SNAPSHOTS = {};
+    BH_SEMANAS.forEach(function(semKey) {
+      var mapa = {};
+      BH_ROWS.filter(function(r) { return r.semKey === semKey; }).forEach(function(r) {
+        if (!r.nome) return;
+        if (!mapa[r.nome] || r.rowIndex > mapa[r.nome].rowIndex) mapa[r.nome] = r;
+      });
+      BH_SNAPSHOTS[semKey] = Object.values(mapa);
     });
-    // Labels eixo X
-    BH_DATA.forEach(function(d, i) {
-      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (H - 4).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F">' + d.label + '</text>';
+  }
+
+  function getWeekSeries(semKey) {
+    var weekRows = BH_ROWS.filter(function(r) { return r.semKey === semKey; });
+    var mapa = {};
+    weekRows.forEach(function(r) {
+      if (!r.nome) return;
+      var t = (r.tipo || '').toLowerCase();
+      if (isTipoPag(t) || isTipoPerd(t)) return;
+      if (!mapa[r.nome] || r.rowIndex > mapa[r.nome].rowIndex) mapa[r.nome] = r;
+    });
+    var snap = Object.values(mapa);
+    var pos = snap.reduce(function(a, r) { return r.saldo > 0 ? a + r.saldo : a; }, 0);
+    var neg = snap.reduce(function(a, r) { return r.saldo < 0 ? a + r.saldo : a; }, 0);
+    return { semKey: semKey, label: semKeyToLabel(semKey), pos: pos, neg: neg };
+  }
+
+  function drawTwoLineChart(svgId, pontos) {
+    var svg = document.getElementById(svgId);
+    if (!svg) return;
+    var W = 900, H = 240, H_PLOT = 200, pad = 24;
+    var n = pontos.length;
+    if (n < 2) { svg.innerHTML = ''; return; }
+    var allV = [];
+    pontos.forEach(function(p) { allV.push(p.pos); allV.push(p.neg); });
+    var minV = Math.min.apply(null, allV), maxV = Math.max.apply(null, allV);
+    if (minV > 0) minV = 0;
+    if (maxV < 0) maxV = 0;
+    if (minV === maxV) maxV = minV + 1;
+    var pad18 = (maxV - minV) * 0.18;
+    minV -= pad18; maxV += pad18;
+    var range = maxV - minV;
+    function sx(i) { return pad + i * ((W - pad*2) / (n-1)); }
+    function sy(v) { return pad + (1 - (v - minV) / range) * (H_PLOT - pad); }
+    var hasZero = (minV <= 0 && maxV >= 0);
+    var baseY = hasZero ? sy(0) : H_PLOT;
+    var c = '';
+    if (hasZero) c += '<line x1="' + pad + '" y1="' + baseY.toFixed(1) + '" x2="' + (W-pad) + '" y2="' + baseY.toFixed(1) + '" stroke="#CCCCCC" stroke-width="1"/>';
+    // Linha positivos (carbon)
+    var area1 = 'M ' + sx(0).toFixed(1) + ' ' + baseY.toFixed(1);
+    pontos.forEach(function(p,i) { area1 += ' L ' + sx(i).toFixed(1) + ' ' + sy(p.pos).toFixed(1); });
+    area1 += ' L ' + sx(n-1).toFixed(1) + ' ' + baseY.toFixed(1) + ' Z';
+    c += '<path d="' + area1 + '" fill="#35383F" opacity="0.08"/>';
+    c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ')+sx(i).toFixed(1)+' '+sy(p.pos).toFixed(1); }).join(' ') + '" fill="none" stroke="#35383F" stroke-width="2"/>';
+    pontos.forEach(function(p,i) {
+      var hol = bhHasHoliday(p.semKey);
+      c += '<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(p.pos).toFixed(1)+'" r="3" fill="'+(hol?'#CFFF00':'#35383F')+'" stroke="#35383F" stroke-width="'+(hol?'1.5':'0')+'"/>';
+      c += '<text x="'+sx(i).toFixed(1)+'" y="'+(sy(p.pos)-8).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" font-weight="600">'+Math.round(p.pos)+'</text>';
+    });
+    // Linha negativos (cinza tracejado)
+    var area2 = 'M ' + sx(0).toFixed(1) + ' ' + baseY.toFixed(1);
+    pontos.forEach(function(p,i) { area2 += ' L ' + sx(i).toFixed(1) + ' ' + sy(p.neg).toFixed(1); });
+    area2 += ' L ' + sx(n-1).toFixed(1) + ' ' + baseY.toFixed(1) + ' Z';
+    c += '<path d="' + area2 + '" fill="#35383F" opacity="0.06"/>';
+    c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ')+sx(i).toFixed(1)+' '+sy(p.neg).toFixed(1); }).join(' ') + '" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="4,2"/>';
+    pontos.forEach(function(p,i) {
+      var hol = bhHasHoliday(p.semKey);
+      c += '<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(p.neg).toFixed(1)+'" r="3" fill="'+(hol?'#CFFF00':'#999')+'" stroke="#35383F" stroke-width="'+(hol?'1.5':'0')+'"/>';
+      c += '<text x="'+sx(i).toFixed(1)+'" y="'+(sy(p.neg)+15).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" font-weight="600">'+Math.round(Math.abs(p.neg))+'</text>';
+    });
+    // Labels X
+    pontos.forEach(function(p,i) {
+      var hol = bhHasHoliday(p.semKey);
+      c += '<text x="'+sx(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="'+(hol?'#AAAAAA':'#35383F')+'" font-weight="'+(hol?'600':'400')+'">'+p.label+'</text>';
     });
     svg.innerHTML = c;
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', drawBHLine);
-  else drawBHLine();
+
+  function loadBHData() {
+    var url = 'https://docs.google.com/spreadsheets/d/' + BH_SHEET_ID + '/export?format=csv&gid=0';
+    fetch(url)
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function(csv) {
+        var lines = csv.split('\n');
+        BH_ROWS = [];
+        for (var i = 1; i < lines.length; i++) {
+          var line = lines[i].trim();
+          if (!line) continue;
+          var cols = parseCSVLine(line);
+          if (cols.length < 4) continue;
+          var nome = (cols[BH_COL.COLABORADOR]||'').trim();
+          if (!nome) continue;
+          var saldo = parseFloat((cols[BH_COL.SALDO]||'0').replace(',','.')) || 0;
+          BH_ROWS.push({
+            rowIndex: i, nome: nome, saldo: saldo,
+            semKey: toSemKey((cols[BH_COL.DATA]||'').trim()),
+            tipo: (cols[BH_COL.TIPO]||'').trim()
+          });
+        }
+        buildSemanas();
+        buildSnapshots();
+        var pontos = BH_SEMANAS.map(getWeekSeries);
+        drawTwoLineChart('bh-pn-svg', pontos);
+      })
+      .catch(function() {});
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadBHData);
+  else loadBHData();
 })();
 
 // ─── Turnover — gráfico de linha ─────────────────────────────────────────────
