@@ -509,52 +509,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="chart-title-row">
         <span class="chart-title-text">Absenteísmo</span>
       </div>
-      <div class="chart-sub">Evolução mensal (%)</div>
-      <div class="abs-months" style="margin-bottom:20px;">
-        <div class="abs-bar-wrap">
-          <div class="abs-bar" style="height:60px"><div class="abs-bar-fill" style="height:30%"></div></div>
-          <span class="abs-bar-label">Jan</span>
-          <span class="abs-bar-val">1,8</span>
-        </div>
-        <div class="abs-bar-wrap">
-          <div class="abs-bar" style="height:60px"><div class="abs-bar-fill" style="height:40%"></div></div>
-          <span class="abs-bar-label">Fev</span>
-          <span class="abs-bar-val">2,4</span>
-        </div>
-        <div class="abs-bar-wrap">
-          <div class="abs-bar" style="height:60px"><div class="abs-bar-fill" style="height:50%"></div></div>
-          <span class="abs-bar-label">Mar</span>
-          <span class="abs-bar-val">3,0</span>
-        </div>
-        <div class="abs-bar-wrap">
-          <div class="abs-bar" style="height:60px"><div class="abs-bar-fill" style="height:57%"></div></div>
-          <span class="abs-bar-label">Abr</span>
-          <span class="abs-bar-val">3,4</span>
-        </div>
-        <div class="abs-bar-wrap">
-          <div class="abs-bar" style="height:60px"><div class="abs-bar-fill warn" style="height:70%"></div></div>
-          <span class="abs-bar-label">Mai</span>
-          <span class="abs-bar-val">4,2</span>
-        </div>
-      </div>
-      <div class="chart-sub">Detalhamento</div>
-      <div class="bar-list">
-        <div class="bar-row">
-          <div class="bar-name">Atestados</div>
-          <div class="bar-track"><div class="bar-fill" style="width:55%; background:var(--amber)"></div></div>
-          <div class="bar-val">2,3%</div>
-        </div>
-        <div class="bar-row">
-          <div class="bar-name">Faltas injustif.</div>
-          <div class="bar-track"><div class="bar-fill" style="width:30%; background:var(--red)"></div></div>
-          <div class="bar-val">1,2%</div>
-        </div>
-        <div class="bar-row">
-          <div class="bar-name">Atrasos</div>
-          <div class="bar-track"><div class="bar-fill" style="width:17%"></div></div>
-          <div class="bar-val">0,7%</div>
-        </div>
-      </div>
+      <div class="chart-sub">Evolução mensal — ausências</div>
+      <div class="abs-months" id="abs-months-bars" style="margin-bottom:20px;"></div>
+      <div class="chart-sub">Detalhamento por tipo</div>
+      <div class="bar-list" id="abs-tipo-list"></div>
     </div>
 
   </div><!-- /stack-cards -->
@@ -843,6 +801,120 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadBHData);
   else loadBHData();
+})();
+
+// ─── Absenteísmo — dados reais ───────────────────────────────────────────────
+(function() {
+  var ABS_SHEET_ID = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
+  var ABS_API_KEY  = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
+  var ABS_SHEET    = 'Ausências';
+
+  function parseDateBR(s) {
+    if (!s) return null;
+    var p = s.trim().split('/');
+    if (p.length === 3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+    return null;
+  }
+
+  function isFolga(tipo) {
+    var t = (tipo || '').toLowerCase();
+    return t.indexOf('folga') !== -1 || t.indexOf('banco de horas') !== -1 ||
+           t.indexOf('ferias') !== -1 || t.indexOf('férias') !== -1;
+  }
+
+  function slugTipo(tipo) {
+    var t = (tipo || '').toLowerCase();
+    if (t.indexOf('atestado') !== -1) return 'Atestados';
+    if (t.indexOf('suspens') !== -1)  return 'Suspensões';
+    if (t.indexOf('falta') !== -1)    return 'Faltas';
+    if (t.indexOf('licen') !== -1 || t.indexOf('afasta') !== -1) return 'Licenças';
+    return 'Outros';
+  }
+
+  function normRow(headers, row) {
+    var obj = {};
+    headers.forEach(function(h, i) {
+      obj[h.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g,'')] = (row[i] || '').trim();
+    });
+    function v() {
+      for (var i = 0; i < arguments.length; i++) {
+        if (obj[arguments[i]] !== undefined && obj[arguments[i]] !== '') return obj[arguments[i]];
+      }
+      return '';
+    }
+    return {
+      data:  v('data_falta','data','data_ausencia'),
+      tipo:  v('tipo de ausencia','tipo_de_ausencia','tipo','ausencia'),
+    };
+  }
+
+  function renderAbsMeses(rows) {
+    var counts = {};
+    rows.forEach(function(r) {
+      var dt = parseDateBR(r.data);
+      if (!dt) return;
+      var key = String(dt.getMonth()+1).padStart(2,'0') + '/' + String(dt.getFullYear()).slice(-2);
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    var labels = Object.keys(counts).sort(function(a, b) {
+      var pa = a.split('/'), pb = b.split('/');
+      return (pa[1] + pa[0]).localeCompare(pb[1] + pb[0]);
+    }).slice(-10);
+    var maxCount = Math.max.apply(null, labels.map(function(l) { return counts[l]; })) || 1;
+    var html = labels.map(function(l) {
+      var n   = counts[l];
+      var pct = Math.round((n / maxCount) * 100);
+      return '<div class="abs-bar-wrap">' +
+        '<div class="abs-bar" style="height:60px"><div class="abs-bar-fill" style="height:' + pct + '%"></div></div>' +
+        '<span class="abs-bar-label">' + l + '</span>' +
+        '<span class="abs-bar-val">' + n + '</span>' +
+      '</div>';
+    }).join('');
+    var el = document.getElementById('abs-months-bars');
+    if (el) el.innerHTML = html || '<span style="font-size:12px;color:var(--t3)">Sem dados</span>';
+  }
+
+  function renderAbsTipos(rows) {
+    var counts = {};
+    rows.forEach(function(r) {
+      var s = slugTipo(r.tipo);
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    var entries = Object.keys(counts).map(function(k) { return { nome: k, n: counts[k] }; });
+    entries.sort(function(a, b) { return b.n - a.n; });
+    var maxN = entries.length ? entries[0].n : 1;
+    var html = entries.map(function(e) {
+      var pct = Math.round((e.n / maxN) * 100);
+      return '<div class="bar-row">' +
+        '<div class="bar-name">' + e.nome + '</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="bar-val">' + e.n + '</div>' +
+      '</div>';
+    }).join('');
+    var el = document.getElementById('abs-tipo-list');
+    if (el) el.innerHTML = html || '<span style="font-size:12px;color:var(--t3)">Sem dados</span>';
+  }
+
+  function loadAbsData() {
+    var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + ABS_SHEET_ID +
+      '/values/' + encodeURIComponent(ABS_SHEET + '!A:H') + '?key=' + ABS_API_KEY;
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) return;
+        var rows = data.values || [];
+        if (rows.length < 2) return;
+        var headers = rows[0];
+        var parsed = rows.slice(1).map(function(r) { return normRow(headers, r); })
+          .filter(function(r) { return r.data && !isFolga(r.tipo); });
+        renderAbsMeses(parsed);
+        renderAbsTipos(parsed);
+      })
+      .catch(function() {});
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadAbsData);
+  else loadAbsData();
 })();
 
 // ─── Turnover — gráfico de linha ─────────────────────────────────────────────
