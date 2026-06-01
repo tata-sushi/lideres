@@ -1686,17 +1686,20 @@ function openDrawer() {
   }
 
   var _admEpiPdfDoc = null;
-  function _admRenderEpiPage(pageNum, cb) {
-    function doRender(pdf) {
-      pdf.getPage(pageNum).then(function(page) {
+  function _admRenderEpiPages(pageNums, cb) {
+    function renderOne(pdf, nums, results) {
+      if (!nums.length) { cb(results); return; }
+      pdf.getPage(nums[0]).then(function(page) {
         var vp = page.getViewport({scale: 2});
         var cv = document.createElement('canvas');
         cv.width = vp.width; cv.height = vp.height;
         page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise.then(function() {
-          cb(cv.toDataURL('image/jpeg', 0.92));
+          results.push(cv.toDataURL('image/jpeg', 0.92));
+          renderOne(pdf, nums.slice(1), results);
         });
       });
     }
+    function doRender(pdf) { renderOne(pdf, pageNums, []); }
     if (_admEpiPdfDoc) { doRender(_admEpiPdfDoc); return; }
     function load() {
       pdfjsLib.getDocument('uniformes-epis.pdf').promise.then(function(pdf) {
@@ -2082,12 +2085,14 @@ function openDrawer() {
       '</div>';
     }
 
-    function _buildPages(epiImg) {
+    function _buildPages(epiImgs) {
     var pages = selectedDocs.map(function(doc) {
       if (doc.id === 'lista_epis') {
-        return '<div class="page" style="padding:0;overflow:hidden;">'+
-          '<img src="'+(epiImg||'')+'" style="width:100%;height:auto;display:block;">'+
-          '</div>';
+        return (epiImgs||[]).map(function(src){
+          return '<div class="page" style="padding:0;overflow:hidden;">'+
+            '<img src="'+src+'" style="width:100%;height:auto;display:block;">'+
+            '</div>';
+        }).join('');
       }
       if (doc.id === 'checklist') {
         return _buildChecklistPage(colabNomeLimpo, colabData.matricula || '', colabUnidade, colabCargo, dataAdmissao || dataFmt, usuarioLogado);
@@ -2195,7 +2200,7 @@ function openDrawer() {
     } // end _buildPages
 
     if (_epiDocSel) {
-      _admRenderEpiPage(_epiPageNum, function(img) { _buildPages(img); });
+      _admRenderEpiPages([1, 2, _epiPageNum], function(imgs) { _buildPages(imgs); });
     } else {
       _buildPages(null);
     }
