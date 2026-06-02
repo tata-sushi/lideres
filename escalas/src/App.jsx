@@ -892,7 +892,7 @@ export default function EscalaPainel() {
       }).join('');
       const s=stats[c.id]||{horas:0};
       const par=idx%2===0?'':' class="epdf-row-alt"';
-      return `<tr${par}><td class="epdf-nome">${c.nome}</td><td class="epdf-fn">${c.funcao}</td>${tdDias}<td class="epdf-total">${fmtHoras(s.horas)}</td></tr>`;
+      return `<tr${par}><td class="epdf-nome">${c.nome}</td>${tdDias}<td class="epdf-total">${fmtHoras(s.horas)}</td></tr>`;
     }).join('');
     const tfDias=totaisDia.map(t=>`<td class="epdf-tf-cnt"><span class="epdf-tf-trab">${t.trab} trabalhando</span><br><span class="epdf-tf-folg">${t.folg} folgas</span></td>`).join('');
     let printDiv=document.getElementById('escala-pdf-print');
@@ -911,9 +911,9 @@ export default function EscalaPainel() {
         </div>
       </div>
       <table class="epdf-table">
-        <thead><tr><th class="epdf-th-nome">Colaborador</th><th class="epdf-th-fn">Função</th>${thDias}<th>Total</th></tr></thead>
+        <thead><tr><th class="epdf-th-nome">Colaborador</th>${thDias}<th>Total</th></tr></thead>
         <tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="2"></td>${tfDias}<td></td></tr></tfoot>
+        <tfoot><tr><td colspan="1"></td>${tfDias}<td></td></tr></tfoot>
       </table>`;
     const logoEl=document.getElementById('epdf-logo');
     logoEl.onload=()=>window.print();
