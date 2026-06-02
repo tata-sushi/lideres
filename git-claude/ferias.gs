@@ -289,26 +289,32 @@ function sincronizarFerias() {
 
       var chave = mt + '|' + fmtDateISO(iniAqui);
 
+      // Calcula período concessivo (reutilizado para nova linha e retroativo)
+      var iniConc = new Date(fimAqui);
+      iniConc.setDate(iniConc.getDate() + 1);
+      var fimConc = new Date(iniConc);
+      fimConc.setFullYear(fimConc.getFullYear() + 1);
+      fimConc.setDate(fimConc.getDate() - 1);
+
       if (!existentes[chave]) {
         var novaLinha = new Array(TOTAL_COLS).fill('');
         novaLinha[COL.MT]       = mt;
         novaLinha[COL.COLAB]    = colab.nome;
         novaLinha[COL.INI_AQUI] = fmtDateBR(iniAqui);
         novaLinha[COL.FIM_AQUI] = fmtDateBR(fimAqui);
-
-        // Período concessivo: CLT — 12 meses a partir do dia seguinte ao fim do aquisitivo
-        var iniConc = new Date(fimAqui);
-        iniConc.setDate(iniConc.getDate() + 1);
-        var fimConc = new Date(iniConc);
-        fimConc.setFullYear(fimConc.getFullYear() + 1);
-        fimConc.setDate(fimConc.getDate() - 1);
         novaLinha[COL.INI_CONC] = fmtDateBR(iniConc);
         novaLinha[COL.FIM_CONC] = fmtDateBR(fimConc);
-
         // G (DIREITO) — em branco, preenchimento manual
         linhasNovas.push({ mt: mt, iniAqui: iniAqui, dados: novaLinha });
+      } else {
+        // Linha existe — preenche concessivo retroativamente se ainda vazio
+        var linhaNr = existentes[chave];
+        var rowExist = feriasData[linhaNr - 1];
+        if (!rowExist[COL.INI_CONC] && !rowExist[COL.FIM_CONC]) {
+          shFerias.getRange(linhaNr, COL.INI_CONC + 1).setValue(fmtDateBR(iniConc));
+          shFerias.getRange(linhaNr, COL.FIM_CONC + 1).setValue(fmtDateBR(fimConc));
+        }
       }
-      // Se já existe → não toca (preserva concessivo preenchido)
 
       periodoIdx++;
 
