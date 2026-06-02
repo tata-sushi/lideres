@@ -839,6 +839,83 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<!-- Modal Cadastro de Férias -->
+<div class="overlay" id="overlay-ferias" onclick="if(event.target===this)closeFeriasModal()">
+  <div class="modal" id="modal-ferias">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-header-left">
+        <div class="modal-eyebrow">Controle de Solicitações · TATÁ Sushi</div>
+        <div class="modal-title">Cadastro de Férias</div>
+      </div>
+      <button class="modal-close" onclick="closeFeriasModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-row c2">
+        <div class="field">
+          <label>Data</label>
+          <input type="text" id="f-data" readonly style="background:var(--bg);color:var(--muted);cursor:default">
+        </div>
+        <div class="field">
+          <label>Colaborador</label>
+          <input type="text" id="f-colaborador" readonly style="background:var(--bg);color:var(--muted);cursor:default">
+        </div>
+      </div>
+      <div class="field-row c2">
+        <div class="field">
+          <label>Unidade</label>
+          <select id="f-unidade">
+            <option value="">Selecionar…</option>
+            <option>Itaim Bibi</option>
+            <option>Pinheiros</option>
+            <option>Poke - Pinheiros</option>
+            <option>TATÁ House</option>
+            <option>Administrativo</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Departamento</label>
+          <select id="f-departamento">
+            <option value="">Selecionar…</option>
+            <option>Administrativo</option>
+            <option>Bar</option>
+            <option>Caixa</option>
+            <option>Cozinha</option>
+            <option>Delivery</option>
+            <option>Estoque</option>
+            <option>Limpeza</option>
+            <option>Operação</option>
+            <option>Qualidade</option>
+            <option>Salão</option>
+            <option>Sushibar</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row c2">
+        <div class="field">
+          <label>Início das Férias</label>
+          <input type="text" id="f-inicio" placeholder="DD/MM/AAAA">
+        </div>
+        <div class="field">
+          <label>Fim das Férias</label>
+          <input type="text" id="f-fim" placeholder="DD/MM/AAAA">
+        </div>
+      </div>
+      <div class="field">
+        <label>Observações</label>
+        <textarea id="f-obs" placeholder="Informações adicionais…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeFeriasModal()">Cancelar</button>
+      <button class="btn-enviar" id="btn-enviar-ferias" onclick="enviarFerias()">
+        <span class="spin" id="spin-ferias"></span>
+        Enviar
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -884,6 +961,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
       <button class="drawer-sam-btn" onclick="closeDrawer(); openModal();">Nova Solicitação</button>
+      <button class="drawer-sam-btn" onclick="closeDrawer(); openFeriasModal();" style="margin-top:8px">Cadastro de Férias</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -997,6 +1075,66 @@ function openModal() {
 
 function closeModal() {
   document.getElementById('overlay').classList.remove('open');
+}
+
+function openFeriasModal() {
+  var now = new Date();
+  var pad = function(n){ return String(n).padStart(2,'0'); };
+  document.getElementById('f-data').value = pad(now.getDate()) + '/' + pad(now.getMonth()+1) + '/' + now.getFullYear();
+  if (currentUser) document.getElementById('f-colaborador').value = currentUser.name;
+  document.getElementById('f-unidade').value = '';
+  document.getElementById('f-departamento').value = '';
+  document.getElementById('f-inicio').value = '';
+  document.getElementById('f-fim').value = '';
+  document.getElementById('f-obs').value = '';
+  document.getElementById('btn-enviar-ferias').disabled = false;
+  document.getElementById('spin-ferias').style.display = 'none';
+  document.getElementById('overlay-ferias').classList.add('open');
+}
+
+function closeFeriasModal() {
+  document.getElementById('overlay-ferias').classList.remove('open');
+}
+
+function enviarFerias() {
+  var unidade = document.getElementById('f-unidade').value;
+  var departamento = document.getElementById('f-departamento').value;
+  var inicio = document.getElementById('f-inicio').value.trim();
+  var fim = document.getElementById('f-fim').value.trim();
+  if (!unidade || !departamento || !inicio || !fim) {
+    showToast('Preencha todos os campos obrigatórios', true);
+    return;
+  }
+  var btn = document.getElementById('btn-enviar-ferias');
+  btn.disabled = true;
+  document.getElementById('spin-ferias').style.display = 'inline-block';
+  var payload = {
+    action:       'cadastroFerias',
+    data:         document.getElementById('f-data').value,
+    colaborador:  currentUser ? currentUser.name : '',
+    unidade:      unidade,
+    departamento: departamento,
+    inicio:       inicio,
+    fim:          fim,
+    obs:          document.getElementById('f-obs').value.trim()
+  };
+  var params = Object.keys(payload).map(function(k) {
+    return encodeURIComponent(k) + '=' + encodeURIComponent(payload[k]);
+  }).join('&');
+  var GAS_URL = 'https://script.google.com/macros/s/AKfycbxYE3AIS5QisXhhG3fh3pqklXKAPbyppgJOO3kLyAa5roY94JKO7SHqg7iVfM8slx0/exec';
+  fetch(GAS_URL + '?' + params)
+    .then(function(r){ return r.json(); })
+    .then(function(res) {
+      btn.disabled = false;
+      document.getElementById('spin-ferias').style.display = 'none';
+      if (res && res.status === 'ok') {
+        showToast('Férias cadastradas com sucesso!');
+        closeFeriasModal();
+      } else {
+        showToast('Erro: ' + (res.message || 'Falha ao enviar'), true);
+      }
+    })
+    .catch(function(err){ btn.disabled = false; document.getElementById('spin-ferias').style.display = 'none'; showToast('Erro de rede', true); });
 }
 
 function bgClose(e) {
