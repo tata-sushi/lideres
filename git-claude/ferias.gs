@@ -290,13 +290,21 @@ function sincronizarFerias() {
       var chave = mt + '|' + fmtDateISO(iniAqui);
 
       if (!existentes[chave]) {
-        // Linha nova — só preenche colunas aquisitivas (A-D)
-        // Colunas E-O ficam em branco para preenchimento manual/pelo líder
         var novaLinha = new Array(TOTAL_COLS).fill('');
         novaLinha[COL.MT]       = mt;
         novaLinha[COL.COLAB]    = colab.nome;
         novaLinha[COL.INI_AQUI] = fmtDateBR(iniAqui);
         novaLinha[COL.FIM_AQUI] = fmtDateBR(fimAqui);
+
+        // Período concessivo: CLT — 12 meses a partir do dia seguinte ao fim do aquisitivo
+        var iniConc = new Date(fimAqui);
+        iniConc.setDate(iniConc.getDate() + 1);
+        var fimConc = new Date(iniConc);
+        fimConc.setFullYear(fimConc.getFullYear() + 1);
+        fimConc.setDate(fimConc.getDate() - 1);
+        novaLinha[COL.INI_CONC] = fmtDateBR(iniConc);
+        novaLinha[COL.FIM_CONC] = fmtDateBR(fimConc);
+
         // G (DIREITO) — em branco, preenchimento manual
         linhasNovas.push({ mt: mt, iniAqui: iniAqui, dados: novaLinha });
       }
