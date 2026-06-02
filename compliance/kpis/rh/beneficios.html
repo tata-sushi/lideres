@@ -240,7 +240,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <button class="nav-tab">Vale Transporte</button>
   <button class="nav-tab" onclick="setTab('empresa')">Aniversariantes de Empresa</button>
   <button class="nav-tab active" onclick="setTab('aniv')">Aniversariantes do Mês</button>
-  <button class="nav-tab">Assistência Médica</button>
+  <button class="nav-tab" onclick="setTab('assist')">Assistência Médica</button>
 </div>
 
 <!-- FILTER BAR -->
@@ -515,6 +515,9 @@ function fetchColaboradores() {
         mesNome: px.toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase(),
       });
     }).sort(function(a,b){ return a.proxAniv - b.proxAniv; });
+
+    // Assistência Médica (placeholder: usa admissão como referência até definir a fonte real)
+    DATA_MED = DATA_EMP.slice();
   });
 }
 
@@ -534,23 +537,37 @@ var TT = {
   padding: 12,
 };
 
-var selUni = 'Todos', selDepto = 'Todos', cfMes = null, cfMesEmp = null;
+var selUni = 'Todos', selDepto = 'Todos', cfMes = null, cfMesEmp = null, cfMesMed = null;
 var activeTab = 'aniv';
+var DATA_MED = [];
 var sKey = 'diasFaltando', sDir = 'asc';
 var chartInst = null;
 var PAGE_SIZE = 10;
 var tRows = [];
 
-function getActiveData() { return activeTab === 'aniv' ? DATA : DATA_EMP; }
-function getActiveCfMes() { return activeTab === 'aniv' ? cfMes : cfMesEmp; }
-function setActiveCfMes(v) { if (activeTab === 'aniv') cfMes = v; else cfMesEmp = v; }
+function getActiveData() {
+  if (activeTab === 'aniv') return DATA;
+  if (activeTab === 'empresa') return DATA_EMP;
+  return DATA_MED;
+}
+function getActiveCfMes() {
+  if (activeTab === 'aniv') return cfMes;
+  if (activeTab === 'empresa') return cfMesEmp;
+  return cfMesMed;
+}
+function setActiveCfMes(v) {
+  if (activeTab === 'aniv') cfMes = v;
+  else if (activeTab === 'empresa') cfMesEmp = v;
+  else cfMesMed = v;
+}
 
 function setTab(tab) {
   if (activeTab === tab) return;
   activeTab = tab;
   sKey = 'diasFaltando'; sDir = 'asc';
   document.querySelectorAll('.nav-tab').forEach(function(btn, i) {
-    btn.classList.toggle('active', (tab === 'aniv' && i === 2) || (tab === 'empresa' && i === 1));
+    var match = (tab === 'empresa' && i === 1) || (tab === 'aniv' && i === 2) || (tab === 'assist' && i === 3);
+    btn.classList.toggle('active', match);
   });
   var acm = getActiveCfMes();
   document.body.classList.toggle('cf-active', acm !== null);
@@ -610,7 +627,9 @@ function updateKPIs(filt) {
   var hoje_aniv = cfFilt.filter(function(d){ return d.diasFaltando===0; }).length;
   var semana = cfFilt.filter(function(d){ return d.diasFaltando > 0 && d.proxAniv <= weekEnd; }).length;
   var cf = activeCfMes !== null;
-  var label = activeTab === 'aniv' ? 'Aniversariantes do mês' : 'Aniversários de empresa';
+  var label = activeTab === 'aniv' ? 'Aniversariantes do mês'
+            : activeTab === 'empresa' ? 'Aniversários de empresa'
+            : 'Assistência médica';
 
   document.getElementById('kpiRow').innerHTML =
     '<div class="kpi-card">' +
@@ -646,7 +665,7 @@ function progBar(pct) {
 function rowHtml(d) {
   var activeCfMes = getActiveCfMes();
   var rowClass = activeCfMes !== null && d.mesAnivMY === activeCfMes ? 'cf-selected' : '';
-  var terceiro = activeTab === 'aniv' ? d.idade : d.anosEmpresa + ' ano(s)';
+  var terceiro = activeTab === 'aniv' ? d.idade : (d.anosEmpresa + ' ano(s)');
   return '<tr class="' + rowClass + '" onclick="setCF(\'' + d.mesAnivMY + '\')">' +
     '<td>' + d.nome + ' ' + statusBadge(d) + '</td>' +
     '<td>' + d.proxFormatado + '</td>' +
@@ -767,7 +786,7 @@ function renderChart(filt) {
   chartInst = new Chart(document.getElementById('cAniv'), {
     type: 'bar',
     data: { labels:labels, datasets:[{
-      label: activeTab === 'aniv' ? 'Aniversariantes' : 'Aniversários de empresa',
+      label: activeTab === 'aniv' ? 'Aniversariantes' : (activeTab === 'empresa' ? 'Aniversários de empresa' : 'Assistência médica'),
       data: counts,
       backgroundColor: bgColors,
       borderWidth: 0,
@@ -801,7 +820,10 @@ function updateAll() {
   updateKPIs(filt);
   renderChart(filt);
   renderTable(filt);
-  document.getElementById('chartTitle').textContent = activeTab === 'aniv' ? 'Aniversariantes por Mês' : 'Aniversários de Empresa por Mês';
+  document.getElementById('chartTitle').textContent =
+    activeTab === 'aniv' ? 'Aniversariantes por Mês'
+    : activeTab === 'empresa' ? 'Aniversários de Empresa por Mês'
+    : 'Assistência Médica por Mês';
   var th = document.getElementById('thTerceiro');
   if (th) {
     var terceiroKey = activeTab === 'aniv' ? 'idade' : 'anosEmpresa';
