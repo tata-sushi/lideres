@@ -378,55 +378,21 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <button class="mf-close" onclick="closeFeriasModal()">&times;</button>
     </div>
     <div class="mf-body">
-      <div class="mf-row">
-        <div class="mf-field">
-          <label class="mf-label">Data</label>
-          <input class="mf-input" id="f-data" type="text" readonly style="background:var(--bg);color:var(--muted);cursor:default">
-        </div>
-        <div class="mf-field">
-          <label class="mf-label">Colaborador</label>
-          <input class="mf-input" id="f-colaborador" type="text" readonly style="background:var(--bg);color:var(--muted);cursor:default">
-        </div>
+      <div class="mf-field">
+        <label class="mf-label">Colaborador</label>
+        <select class="mf-select" id="f-colaborador" onchange="onFColabChange()">
+          <option value="">Carregando…</option>
+        </select>
       </div>
-      <div class="mf-row">
-        <div class="mf-field">
-          <label class="mf-label">Unidade</label>
-          <select class="mf-select" id="f-unidade">
-            <option value="">Selecionar…</option>
-            <option>Itaim Bibi</option>
-            <option>Pinheiros</option>
-            <option>Poke - Pinheiros</option>
-            <option>TATÁ House</option>
-            <option>Administrativo</option>
-          </select>
-        </div>
-        <div class="mf-field">
-          <label class="mf-label">Departamento</label>
-          <select class="mf-select" id="f-departamento">
-            <option value="">Selecionar…</option>
-            <option>Administrativo</option>
-            <option>Bar</option>
-            <option>Caixa</option>
-            <option>Cozinha</option>
-            <option>Delivery</option>
-            <option>Estoque</option>
-            <option>Limpeza</option>
-            <option>Operação</option>
-            <option>Qualidade</option>
-            <option>Salão</option>
-            <option>Sushibar</option>
-          </select>
-        </div>
+      <div class="mf-field">
+        <label class="mf-label">Período Aquisitivo</label>
+        <select class="mf-select" id="f-periodo-aquisitivo" onchange="onFPeriodoChange()" disabled>
+          <option value="">Selecione o colaborador…</option>
+        </select>
       </div>
-      <div class="mf-row">
-        <div class="mf-field">
-          <label class="mf-label">Início das Férias</label>
-          <input class="mf-input" id="f-inicio" type="text" placeholder="DD/MM/AAAA">
-        </div>
-        <div class="mf-field">
-          <label class="mf-label">Fim das Férias</label>
-          <input class="mf-input" id="f-fim" type="text" placeholder="DD/MM/AAAA">
-        </div>
+      <div class="mf-field">
+        <label class="mf-label">Período Concessivo</label>
+        <input class="mf-input" id="f-periodo-concessivo" type="text" readonly style="background:var(--bg);color:var(--muted);cursor:default" placeholder="—">
       </div>
       <div class="mf-field">
         <label class="mf-label">Fracionamento</label>
@@ -444,6 +410,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
             <option>20+10 com abono</option>
           </optgroup>
         </select>
+      </div>
+      <div class="mf-row">
+        <div class="mf-field">
+          <label class="mf-label">Início das Férias</label>
+          <input class="mf-input" id="f-inicio" type="text" placeholder="DD/MM/AAAA">
+        </div>
+        <div class="mf-field">
+          <label class="mf-label">Fim das Férias</label>
+          <input class="mf-input" id="f-fim" type="text" placeholder="DD/MM/AAAA">
+        </div>
       </div>
       <div class="mf-field">
         <label class="mf-label">Observações</label>
@@ -508,6 +484,9 @@ function openDrawer(){
 function closeDrawer(){document.getElementById('drawer-overlay').classList.remove('open');document.getElementById('drawer').classList.remove('open');document.body.style.overflow='';}
 
 // ─── Modal Férias ─────────────────────────────────────────────────────────────
+var FERIAS_URL = 'https://script.google.com/macros/s/AKfycbxfdOSeQCVRQTYNGfuivGQZXYTmY9x2wfadr0vikOdCZo0Q5b0JXy3QzFuQJ4jh5GfIqQ/exec';
+var _feriasCache = [];
+
 function showFeriasToast(msg, isErr) {
   var t = document.getElementById('mf-toast');
   t.textContent = msg;
@@ -516,20 +495,81 @@ function showFeriasToast(msg, isErr) {
   setTimeout(function(){ t.style.display = 'none'; }, 3500);
 }
 
+function _isoToBR(iso) {
+  if (!iso) return '';
+  var p = iso.split('-');
+  return p.length === 3 ? p[2]+'/'+p[1]+'/'+p[0] : iso;
+}
+
 function openFeriasModal() {
-  var now = new Date();
-  var pad = function(n){ return String(n).padStart(2,'0'); };
-  document.getElementById('f-data').value = pad(now.getDate()) + '/' + pad(now.getMonth()+1) + '/' + now.getFullYear();
-  var s = window.__lideresSession || (function(){ try{ return JSON.parse(localStorage.getItem('lideres_session')); }catch(e){ return null; } })();
-  document.getElementById('f-colaborador').value = s && s.displayName ? s.displayName : '';
-  document.getElementById('f-unidade').value = '';
-  document.getElementById('f-departamento').value = '';
+  var selColab = document.getElementById('f-colaborador');
+  var selPer   = document.getElementById('f-periodo-aquisitivo');
+  selColab.innerHTML = '<option value="">Carregando…</option>';
+  selColab.disabled = true;
+  selPer.innerHTML = '<option value="">Selecione o colaborador…</option>';
+  selPer.disabled = true;
+  document.getElementById('f-periodo-concessivo').value = '';
+  document.getElementById('f-fracionamento').value = '';
   document.getElementById('f-inicio').value = '';
   document.getElementById('f-fim').value = '';
   document.getElementById('f-obs').value = '';
   document.getElementById('btn-enviar-ferias').disabled = false;
   document.getElementById('spin-ferias').style.display = 'none';
   document.getElementById('mf-overlay').classList.add('open');
+
+  fetch(FERIAS_URL + '?action=list')
+    .then(function(r){ return r.json(); })
+    .then(function(res) {
+      if (!res.ok) { showFeriasToast('Erro ao carregar lista de férias', true); return; }
+      _feriasCache = res.ferias || [];
+      var seen = {}, colabs = [];
+      _feriasCache.forEach(function(p) {
+        if (!seen[p.mt]) { seen[p.mt] = true; colabs.push({mt: p.mt, nome: p.nome}); }
+      });
+      colabs.sort(function(a,b){ return a.nome.localeCompare(b.nome, 'pt-BR'); });
+      selColab.innerHTML = '<option value="">Selecionar…</option>';
+      colabs.forEach(function(c) {
+        var o = document.createElement('option');
+        o.value = c.mt; o.textContent = c.nome;
+        selColab.appendChild(o);
+      });
+      selColab.disabled = false;
+    })
+    .catch(function(){ showFeriasToast('Erro de rede ao carregar férias', true); });
+}
+
+function onFColabChange() {
+  var mt = document.getElementById('f-colaborador').value;
+  var selPer = document.getElementById('f-periodo-aquisitivo');
+  document.getElementById('f-periodo-concessivo').value = '';
+  if (!mt) {
+    selPer.innerHTML = '<option value="">Selecione o colaborador…</option>';
+    selPer.disabled = true;
+    return;
+  }
+  var periodos = _feriasCache.filter(function(p){ return p.mt === mt; });
+  periodos.sort(function(a,b){ return a.ini_aqui < b.ini_aqui ? -1 : 1; });
+  selPer.innerHTML = '<option value="">Selecionar período…</option>';
+  periodos.forEach(function(p) {
+    var o = document.createElement('option');
+    o.value = p.ini_aqui;
+    o.textContent = _isoToBR(p.ini_aqui) + ' → ' + _isoToBR(p.fim_aqui);
+    selPer.appendChild(o);
+  });
+  selPer.disabled = false;
+}
+
+function onFPeriodoChange() {
+  var mt = document.getElementById('f-colaborador').value;
+  var iniAqui = document.getElementById('f-periodo-aquisitivo').value;
+  var concEl = document.getElementById('f-periodo-concessivo');
+  if (!mt || !iniAqui) { concEl.value = ''; return; }
+  var matches = _feriasCache.filter(function(p){ return p.mt === mt && p.ini_aqui === iniAqui; });
+  var p = matches.length ? matches[0] : null;
+  if (!p) { concEl.value = ''; return; }
+  concEl.value = (p.ini_conc && p.fim_conc)
+    ? _isoToBR(p.ini_conc) + ' → ' + _isoToBR(p.fim_conc)
+    : 'Não calculado';
 }
 
 function closeFeriasModal() {
@@ -537,40 +577,40 @@ function closeFeriasModal() {
 }
 
 function enviarFerias() {
-  var unidade = document.getElementById('f-unidade').value;
-  var departamento = document.getElementById('f-departamento').value;
-  var inicio = document.getElementById('f-inicio').value.trim();
-  var fim = document.getElementById('f-fim').value.trim();
-  if (!unidade || !departamento || !inicio || !fim) {
+  var mt      = document.getElementById('f-colaborador').value;
+  var iniAqui = document.getElementById('f-periodo-aquisitivo').value;
+  var frac    = document.getElementById('f-fracionamento').value;
+  var inicio  = document.getElementById('f-inicio').value.trim();
+  var fim     = document.getElementById('f-fim').value.trim();
+  if (!mt || !iniAqui || !frac || !inicio || !fim) {
     showFeriasToast('Preencha todos os campos obrigatórios', true);
     return;
   }
   var btn = document.getElementById('btn-enviar-ferias');
   btn.disabled = true;
   document.getElementById('spin-ferias').style.display = 'inline-block';
+  function toISO(br) {
+    var p = br.split('/');
+    return p.length === 3 ? p[2]+'-'+p[1]+'-'+p[0] : br;
+  }
   var payload = {
-    action:       'cadastroFerias',
-    data:         document.getElementById('f-data').value,
-    colaborador:  document.getElementById('f-colaborador').value,
-    unidade:      unidade,
-    departamento: departamento,
-    inicio:       inicio,
-    fim:          fim,
-    obs:          document.getElementById('f-obs').value.trim()
+    action: 'save', mt: mt, ini_aqui: iniAqui,
+    frac: frac, ini1: toISO(inicio), fim1: toISO(fim),
+    obs: document.getElementById('f-obs').value.trim()
   };
-  var params = Object.keys(payload).map(function(k){
-    return encodeURIComponent(k) + '=' + encodeURIComponent(payload[k]);
-  }).join('&');
-  var GAS_URL = 'https://script.google.com/macros/s/AKfycbxYE3AIS5QisXhhG3fh3pqklXKAPbyppgJOO3kLyAa5roY94JKO7SHqg7iVfM8slx0/exec';
-  fetch(GAS_URL + '?' + params)
+  fetch(FERIAS_URL, { method: 'POST', body: JSON.stringify(payload) })
     .then(function(r){ return r.json(); })
-    .then(function(res){
+    .then(function(res) {
       btn.disabled = false;
       document.getElementById('spin-ferias').style.display = 'none';
-      if (res && res.status === 'ok') { showFeriasToast('Férias cadastradas com sucesso!'); closeFeriasModal(); }
-      else { showFeriasToast('Erro: ' + (res.message || 'Falha ao enviar'), true); }
+      if (res && res.ok) { showFeriasToast('Férias registradas com sucesso!'); closeFeriasModal(); }
+      else { showFeriasToast('Erro: ' + (res.erro || 'Falha ao enviar'), true); }
     })
-    .catch(function(){ btn.disabled = false; document.getElementById('spin-ferias').style.display = 'none'; showFeriasToast('Erro de rede', true); });
+    .catch(function(){
+      btn.disabled = false;
+      document.getElementById('spin-ferias').style.display = 'none';
+      showFeriasToast('Erro de rede', true);
+    });
 }
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeDrawer();});
 </script>
