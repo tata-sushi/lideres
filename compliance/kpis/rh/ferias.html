@@ -966,23 +966,35 @@ function getMonthData(filt) {
   return {labels:labels, counts:counts, indexes:indexes};
 }
 
-function updateKPIs(filt) {
-  var activeCfMes = getActiveCfMes();
-  var defaultMY = String(hoje.getMonth()+1).padStart(2,'0') + '/' + hoje.getFullYear();
-  var mesRef = activeCfMes !== null ? activeCfMes : defaultMY;
-  var cfFilt = filt.filter(function(d){ return d.mesAnivMY === mesRef; });
-  var total = cfFilt.length;
-  var hoje_aniv = cfFilt.filter(function(d){ return d.diasFaltando===0; }).length;
-  var semana = cfFilt.filter(function(d){ return d.diasFaltando > 0 && d.proxAniv <= weekEnd; }).length;
-  var cf = activeCfMes !== null;
-  var label = activeTab === 'aniv' ? 'Aniversariantes do mês' : 'Aniversários de empresa';
+function updateKPIs() {
+  var hojeKpi = new Date(); hojeKpi.setHours(0,0,0,0);
+  var d60 = new Date(hojeKpi); d60.setDate(d60.getDate() + 60);
 
+  var total    = _feriasCache.length;
+  var agend    = _feriasCache.filter(function(p){ return !!p.ini1; }).length;
+  var vencendo = _feriasCache.filter(function(p){
+    if (p.ini1) return false;
+    var fc = p.fim_conc ? new Date(p.fim_conc + 'T00:00:00') : null;
+    return fc && fc >= hojeKpi && fc <= d60;
+  }).length;
+  var vencidas = _feriasCache.filter(function(p){
+    if (p.ini1) return false;
+    var fc = p.fim_conc ? new Date(p.fim_conc + 'T00:00:00') : null;
+    return fc && fc < hojeKpi;
+  }).length;
+
+  function card(label, val, sub) {
+    return '<div class="kpi-card"><div class="kpi-label">'+label+'</div>'
+      +'<div class="kpi-value">'+val+'</div>'
+      +(sub?'<div class="kpi-sub">'+sub+'</div>':'')+'</div>';
+  }
   document.getElementById('kpiRow').innerHTML =
-    '<div class="kpi-card">' +
-      '<div class="kpi-label">' + label + '</div>' +
-      '<div class="kpi-value">' + total + '</div>' +
-      '<div class="kpi-sub"><strong>' + hoje_aniv + '</strong> hoje / <strong>' + semana + '</strong> na semana</div>' +
-    '</div>';
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">'
+    + card('Períodos', total, '')
+    + card('Agendadas', agend, total ? Math.round(agend/total*100)+'%' : '—')
+    + card('Vencendo ≤60d', vencendo, vencendo ? '<strong>atenção</strong>' : 'ok')
+    + card('Vencidas', vencidas, vencidas ? '<strong>crítico</strong>' : 'ok')
+    + '</div>';
 }
 
 function doSort(key) {
@@ -1115,43 +1127,41 @@ var cfOutlinePlugin = {
   }
 };
 
-function renderChart(filt) {
-  var activeCfMes = getActiveCfMes();
-  var md = getMonthData(filt);
-  var labels=md.labels, counts=md.counts, indexes=md.indexes;
-  var bgColors = indexes.map(function(my) {
-    return activeCfMes!==null ? (my===activeCfMes?'#35383F':'rgba(53,56,63,0.45)') : '#35383F';
-  });
-  _cfSelectedBarIdx = -1;
-  if (activeCfMes !== null) {
-    for (var i = 0; i < indexes.length; i++) {
-      if (indexes[i] === activeCfMes) { _cfSelectedBarIdx = i; break; }
-    }
+function renderChart() {
+  var hojeChart = new Date(); hojeChart.setHours(0,0,0,0);
+  var labels = [], counts = [];
+  for (var i = 0; i < 12; i++) {
+    var d = new Date(hojeChart.getFullYear(), hojeChart.getMonth() + i, 1);
+    var m = d.getMonth(), y = d.getFullYear();
+    labels.push(MESES_PT[m] + '/' + String(y).slice(2));
+    var cnt = 0;
+    _feriasCache.forEach(function(p) {
+      ['ini1','ini2','ini3'].forEach(function(k){
+        if (!p[k]) return;
+        var pd = new Date(p[k] + 'T00:00:00');
+        if (pd.getMonth() === m && pd.getFullYear() === y) cnt++;
+      });
+    });
+    counts.push(cnt);
   }
   if (chartInst) chartInst.destroy();
   chartInst = new Chart(document.getElementById('cAniv'), {
     type: 'bar',
-    data: { labels:labels, datasets:[{
-      label: activeTab === 'aniv' ? 'Aniversariantes' : 'Aniversários de empresa',
+    data: { labels: labels, datasets: [{
+      label: 'Férias',
       data: counts,
-      backgroundColor: bgColors,
+      backgroundColor: '#35383F',
       borderWidth: 0,
       borderRadius: 5,
       barPercentage: 0.6,
     }]},
-    plugins: [cfOutlinePlugin, barValueLabelsPlugin],
+    plugins: [barValueLabelsPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
       layout: { padding: { top: 18 } },
-      onClick: function(e, els) {
-        if (els.length) { setCF(indexes[els[0].index]); }
-      },
-      plugins: {
-        legend: {display:false},
-        tooltip: {enabled:false},
-      },
+      plugins: { legend:{display:false}, tooltip:{enabled:false} },
       scales: {
         x: { grid:{color:'rgba(53,56,63,0.06)'}, ticks:{color:'#35383F',font:{family:'DM Mono',size:10}}, border:{color:'rgba(53,56,63,0.1)'} },
         y: { grid:{color:'rgba(53,56,63,0.06)'}, ticks:{color:'#9CA3AF',font:{family:'DM Mono',size:10},stepSize:1}, border:{color:'rgba(53,56,63,0.1)'}, beginAtZero:true }
@@ -1161,23 +1171,34 @@ function renderChart(filt) {
 }
 
 function updateAll() {
-  var activeCfMes = getActiveCfMes();
   var filt = getFilt();
-  updateKPIs(filt);
-  renderChart(filt);
+  updateKPIs();
+  renderChart();
   renderTable(filt);
-  document.getElementById('chartTitle').textContent = activeTab === 'aniv' ? 'Aniversariantes por Mês' : 'Aniversários de Empresa por Mês';
+  document.getElementById('chartTitle').textContent = 'Férias Agendadas por Mês';
   var th = document.getElementById('thTerceiro');
   if (th) {
     var terceiroKey = activeTab === 'aniv' ? 'idade' : 'anosEmpresa';
-    th.innerHTML = (activeTab === 'aniv' ? 'Idade' : 'Anos emp.');
+    th.innerHTML = activeTab === 'aniv' ? 'Idade' : 'Anos emp.';
     th.setAttribute('onclick', 'doSort(\'' + terceiroKey + '\')');
   }
 }
 
-fetchColaboradores().then(function() {
+function fetchFeriasOnStart() {
+  return fetch(FERIAS_URL + '?action=list')
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if (!res.ok) return;
+      _feriasCache = (res.ferias || []).filter(function(p){
+        return MT_EXCLUIDOS.indexOf(String(p.mt).trim()) === -1;
+      });
+    })
+    .catch(function(){});
+}
+
+Promise.all([fetchColaboradores(), fetchFeriasOnStart()]).then(function() {
   UNIDADES = ['Todos'].concat(Array.from(new Set(DATA.map(function(d){return d.unidade;}))).sort());
-  DEPTOS = ['Todos'].concat(Array.from(new Set(DATA.map(function(d){return d.depto;}))).sort());
+  DEPTOS   = ['Todos'].concat(Array.from(new Set(DATA.map(function(d){return d.depto;}))).sort());
 
   var fU = document.getElementById('fUnidade');
   fU.innerHTML = '';
