@@ -489,6 +489,8 @@ function closeDrawer(){document.getElementById('drawer-overlay').classList.remov
 var FERIAS_URL = 'https://script.google.com/macros/s/AKfycbxfdOSeQCVRQTYNGfuivGQZXYTmY9x2wfadr0vikOdCZo0Q5b0JXy3QzFuQJ4jh5GfIqQ/exec';
 var _feriasCache = [];
 var _colabsMap = {}; // mt → { unidade, departamento }
+var _concIni = null; // YYYY-MM-DD — início do período concessivo selecionado
+var _concFim = null; // YYYY-MM-DD — fim do período concessivo selecionado
 
 function showFeriasToast(msg, isErr) {
   var t = document.getElementById('mf-toast');
@@ -515,6 +517,7 @@ function openFeriasModal() {
   document.getElementById('f-colab-info-row').style.display = 'none';
   document.getElementById('f-colab-unidade').value = '';
   document.getElementById('f-colab-departamento').value = '';
+  _concIni = null; _concFim = null;
   document.getElementById('toggle-abono-sim').classList.remove('active');
   document.getElementById('toggle-abono-nao').classList.remove('active');
   document.getElementById('f-fracionamento-wrap').style.display = 'none';
@@ -564,6 +567,7 @@ function onFColabChange() {
   var selPer = document.getElementById('f-periodo-aquisitivo');
   document.getElementById('f-periodo-concessivo').value = '';
   var infoRow = document.getElementById('f-colab-info-row');
+  _concIni = null; _concFim = null;
   if (!mt) {
     selPer.innerHTML = '<option value="">Selecione o colaborador…</option>';
     selPer.disabled = true;
@@ -596,9 +600,11 @@ function onFPeriodoChange() {
   if (!mt || !iniAqui) { concEl.value = ''; return; }
   var matches = _feriasCache.filter(function(p){ return p.mt === mt && p.ini_aqui === iniAqui; });
   var p = matches.length ? matches[0] : null;
-  if (!p) { concEl.value = ''; return; }
-  concEl.value = (p.ini_conc && p.fim_conc)
-    ? _isoToBR(p.ini_conc) + ' → ' + _isoToBR(p.fim_conc)
+  if (!p) { concEl.value = ''; _concIni = null; _concFim = null; return; }
+  _concIni = p.ini_conc || null;
+  _concFim = p.fim_conc || null;
+  concEl.value = (_concIni && _concFim)
+    ? _isoToBR(_concIni) + ' → ' + _isoToBR(_concFim)
     : 'Não calculado';
 }
 
@@ -650,7 +656,10 @@ function onFFracChange() {
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
       + '<div class="mf-field" style="margin:0">'
       + '<label class="mf-label">Início</label>'
-      + '<input class="mf-input" id="f-ini-' + n + '" type="date" onchange="calcFimPeriodo(' + n + ',' + d + ')">'
+      + '<input class="mf-input" id="f-ini-' + n + '" type="date"'
+      + (_concIni ? ' min="' + _concIni + '"' : '')
+      + (_concFim ? ' max="' + _concFim + '"' : '')
+      + ' onchange="calcFimPeriodo(' + n + ',' + d + ')">'
       + '</div>'
       + '<div class="mf-field" style="margin:0">'
       + '<label class="mf-label">Término</label>'
@@ -662,12 +671,27 @@ function onFFracChange() {
 }
 
 function calcFimPeriodo(n, dias) {
-  var val = document.getElementById('f-ini-' + n).value; // YYYY-MM-DD
-  var el  = document.getElementById('f-fim-' + n);
+  var iniEl = document.getElementById('f-ini-' + n);
+  var el    = document.getElementById('f-fim-' + n);
+  var val   = iniEl.value; // YYYY-MM-DD
   if (!val || val.length < 10) { el.value = ''; return; }
   var d = new Date(val + 'T00:00:00');
   if (isNaN(d.getTime())) { el.value = ''; return; }
+
+  // Valida início dentro do período concessivo
+  if (_concIni && d < new Date(_concIni + 'T00:00:00')) {
+    showFeriasToast('Início do Período ' + n + ' é anterior ao período concessivo (' + _isoToBR(_concIni) + ')', true);
+    iniEl.value = ''; el.value = ''; return;
+  }
+
   d.setDate(d.getDate() + dias - 1);
+
+  // Valida fim dentro do período concessivo
+  if (_concFim && d > new Date(_concFim + 'T00:00:00')) {
+    showFeriasToast('Término do Período ' + n + ' ultrapassa o período concessivo (' + _isoToBR(_concFim) + ')', true);
+    iniEl.value = ''; el.value = ''; return;
+  }
+
   var pad = function(x){ return String(x).padStart(2,'0'); };
   el.value = pad(d.getDate()) + '/' + pad(d.getMonth()+1) + '/' + d.getFullYear();
 }
@@ -688,14 +712,36 @@ function enviarFerias() {
   var abono = document.getElementById('toggle-abono-sim').classList.contains('active') ? 'Sim' : 'Não';
   var obs   = (document.getElementById('f-obs').value || '').trim();
   var payload = { action: 'save', mt: mt, ini_aqui: iniAqui, frac: frac, abono: abono, obs: obs };
+  var concI = _concIni ? new Date(_concIni + 'T00:00:00') : null;
+  var concF = _concFim ? new Date(_concFim + 'T00:00:00') : null;
   for (var i = 1; i <= dias.length; i++) {
     var iniEl = document.getElementById('f-ini-' + i);
     if (!iniEl || !iniEl.value.trim()) {
       showFeriasToast('Preencha a data de início do Período ' + i, true);
       return;
     }
+    var iniD = new Date(iniEl.value.trim() + 'T00:00:00');
+    if (concI && iniD < concI) {
+      showFeriasToast('Período ' + i + ': início anterior ao período concessivo (' + _isoToBR(_concIni) + ')', true);
+      return;
+    }
+    if (concF && iniD > concF) {
+      showFeriasToast('Período ' + i + ': início após o período concessivo (' + _isoToBR(_concFim) + ')', true);
+      return;
+    }
+    var fimRaw = (document.getElementById('f-fim-' + i)||{value:''}).value.trim();
+    if (fimRaw && concF) {
+      var fp = fimRaw.split('/');
+      if (fp.length === 3) {
+        var fimD = new Date(+fp[2], +fp[1]-1, +fp[0]);
+        if (fimD > concF) {
+          showFeriasToast('Período ' + i + ': término após o período concessivo (' + _isoToBR(_concFim) + ')', true);
+          return;
+        }
+      }
+    }
     payload['ini' + i] = toISO(iniEl.value.trim());
-    payload['fim' + i] = toISO((document.getElementById('f-fim-' + i)||{value:''}).value.trim());
+    payload['fim' + i] = toISO(fimRaw);
   }
   var btn = document.getElementById('btn-enviar-ferias');
   btn.disabled = true;
