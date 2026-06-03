@@ -87,6 +87,12 @@ function actionList(params) {
     if (!row[COL.MT] && !row[COL.COLAB]) continue;
     // pula matrículas excluídas
     if (MT_EXCLUIDOS.indexOf(String(row[COL.MT] || '').trim()) !== -1) continue;
+    // pula período aquisitivo ainda não encerrado (direito não adquirido)
+    var fimAquiDate = toDate(row[COL.FIM_AQUI]);
+    if (fimAquiDate) {
+      var hojeList = new Date(); hojeList.setHours(0,0,0,0);
+      if (fimAquiDate > hojeList) continue;
+    }
 
     ferias.push({
       _linha:    i + 1, // linha real na planilha (1-indexed, inclui header)
@@ -255,8 +261,12 @@ function sincronizarFerias() {
     var dRow = feriasData[d];
     var dMt  = String(dRow[COL.MT] || '').trim();
     if (!dMt) continue;
+    var dFimAqui = toDate(dRow[COL.FIM_AQUI]);
     if (!ativos[dMt]) {
       // Colaborador não está mais ativo → remove linha inteira
+      shFerias.deleteRow(d + 1);
+    } else if (dFimAqui && dFimAqui > hoje) {
+      // Período aquisitivo ainda em curso → remove linha criada prematuramente
       shFerias.deleteRow(d + 1);
     }
   }
@@ -295,6 +305,9 @@ function sincronizarFerias() {
       var fimAqui = new Date(iniAqui);
       fimAqui.setFullYear(fimAqui.getFullYear() + 1);
       fimAqui.setDate(fimAqui.getDate() - 1);
+
+      // Período aquisitivo ainda não encerrado? Para de gerar (direito não adquirido)
+      if (fimAqui > hoje) break;
 
       var chave = mt + '|' + fmtDateISO(iniAqui);
 
