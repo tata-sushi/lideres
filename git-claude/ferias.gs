@@ -151,7 +151,7 @@ function actionSave(body) {
   setCellIfValue(sheet, row, COL.FIM_P2  + 1, parseDate(body.fim2));
   setCellIfValue(sheet, row, COL.INI_P3  + 1, parseDate(body.ini3));
   setCellIfValue(sheet, row, COL.FIM_P3  + 1, parseDate(body.fim3));
-  setCellIfValue(sheet, row, COL.OBS     + 1, body.obs || '');
+  setCellIfValue(sheet, row, COL.OBS     + 1, body.abono || '');
 
   SpreadsheetApp.flush();
   return { ok: true, linha: row };
