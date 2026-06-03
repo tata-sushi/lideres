@@ -113,7 +113,7 @@ function actionList(params) {
 
 // ───────────────────────────────────────────────────────────────────
 //  ACTION: SAVE — grava períodos concessivos em uma linha existente
-//  Recebe: { mt, frac, ini_conc, fim_conc, ini1, fim1, ini2, fim2, ini3, fim3, obs }
+//  Recebe: { mt, frac, ini_conc, fim_conc, ini1, fim1, ini2, fim2, ini3, fim3, abono, obs }
 //  Nunca cria linha nova — apenas preenche colunas E-O de uma linha
 //  já existente (criada pela sincronização)
 // ───────────────────────────────────────────────────────────────────
@@ -156,7 +156,10 @@ function actionSave(body) {
   setCellIfValue(sheet, row, COL.FIM_P2  + 1, parseDate(body.fim2));
   setCellIfValue(sheet, row, COL.INI_P3  + 1, parseDate(body.ini3));
   setCellIfValue(sheet, row, COL.FIM_P3  + 1, parseDate(body.fim3));
-  setCellIfValue(sheet, row, COL.OBS     + 1, body.abono || '');
+  var _abono  = String(body.abono || '').trim();
+  var _obsExtra = String(body.obs  || '').trim();
+  var _obsCell  = _abono && _obsExtra ? _abono + ' — ' + _obsExtra : (_abono || _obsExtra);
+  sheet.getRange(row, COL.OBS + 1).setValue(_obsCell);
 
   SpreadsheetApp.flush();
   return { ok: true, linha: row };
