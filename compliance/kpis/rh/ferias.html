@@ -371,7 +371,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </aside>
 
 <!-- Modal Cadastro de Férias -->
-<div class="mf-overlay" id="mf-overlay" onclick="if(event.target===this)closeFeriasModal()">
+<div class="mf-overlay" id="mf-overlay">
   <div class="mf-modal">
     <div class="mf-handle"></div>
     <div class="mf-header">
@@ -386,6 +386,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <select class="mf-select" id="f-colaborador" onchange="onFColabChange()">
           <option value="">Carregando…</option>
         </select>
+      </div>
+      <div class="mf-row" id="f-colab-info-row" style="display:none">
+        <div class="mf-field" style="margin:0">
+          <label class="mf-label">Unidade</label>
+          <input class="mf-input" id="f-colab-unidade" type="text" readonly style="background:var(--bg);color:var(--muted);cursor:default" placeholder="—">
+        </div>
+        <div class="mf-field" style="margin:0">
+          <label class="mf-label">Departamento</label>
+          <input class="mf-input" id="f-colab-departamento" type="text" readonly style="background:var(--bg);color:var(--muted);cursor:default" placeholder="—">
+        </div>
       </div>
       <div class="mf-field">
         <label class="mf-label">Período Aquisitivo</label>
@@ -478,6 +488,7 @@ function closeDrawer(){document.getElementById('drawer-overlay').classList.remov
 // ─── Modal Férias ─────────────────────────────────────────────────────────────
 var FERIAS_URL = 'https://script.google.com/macros/s/AKfycbxfdOSeQCVRQTYNGfuivGQZXYTmY9x2wfadr0vikOdCZo0Q5b0JXy3QzFuQJ4jh5GfIqQ/exec';
 var _feriasCache = [];
+var _colabsMap = {}; // mt → { unidade, departamento }
 
 function showFeriasToast(msg, isErr) {
   var t = document.getElementById('mf-toast');
@@ -501,6 +512,9 @@ function openFeriasModal() {
   selPer.innerHTML = '<option value="">Selecione o colaborador…</option>';
   selPer.disabled = true;
   document.getElementById('f-periodo-concessivo').value = '';
+  document.getElementById('f-colab-info-row').style.display = 'none';
+  document.getElementById('f-colab-unidade').value = '';
+  document.getElementById('f-colab-departamento').value = '';
   document.getElementById('toggle-abono-sim').classList.remove('active');
   document.getElementById('toggle-abono-nao').classList.remove('active');
   document.getElementById('f-fracionamento-wrap').style.display = 'none';
@@ -529,6 +543,18 @@ function openFeriasModal() {
         selColab.appendChild(o);
       });
       selColab.disabled = false;
+      // Fetch unidade/departamento from colabs
+      fetch(COLAB_URL + '?action=listColaboradores')
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+          if (!d.ok) return;
+          _colabsMap = {};
+          (d.colaboradores || []).forEach(function(c) {
+            var key = String(c.mt || c.matricula || '').trim();
+            if (key) _colabsMap[key] = { unidade: c.unidade || '', departamento: c.departamento || '' };
+          });
+        })
+        .catch(function(){});
     })
     .catch(function(){ showFeriasToast('Erro de rede ao carregar férias', true); });
 }
@@ -537,11 +563,20 @@ function onFColabChange() {
   var mt = document.getElementById('f-colaborador').value;
   var selPer = document.getElementById('f-periodo-aquisitivo');
   document.getElementById('f-periodo-concessivo').value = '';
+  var infoRow = document.getElementById('f-colab-info-row');
   if (!mt) {
     selPer.innerHTML = '<option value="">Selecione o colaborador…</option>';
     selPer.disabled = true;
+    infoRow.style.display = 'none';
+    document.getElementById('f-colab-unidade').value = '';
+    document.getElementById('f-colab-departamento').value = '';
     return;
   }
+  // Populate unidade/departamento
+  var info = _colabsMap[mt] || {};
+  document.getElementById('f-colab-unidade').value = info.unidade || '—';
+  document.getElementById('f-colab-departamento').value = info.departamento || '—';
+  infoRow.style.display = '';
   var periodos = _feriasCache.filter(function(p){ return p.mt === mt; });
   periodos.sort(function(a,b){ return a.ini_aqui < b.ini_aqui ? -1 : 1; });
   selPer.innerHTML = '<option value="">Selecionar período…</option>';
@@ -591,9 +626,12 @@ function setAbono(sim) {
 
 function parseFrac(val) {
   if (!val) return [];
+  var comAbono = /\s+com\s+/i.test(val);
   var clean = val.replace(/\s+com\s+.*$/i, '').trim();
-  return clean.split('+').map(function(n){ return parseInt(n.trim(), 10); })
-              .filter(function(n){ return !isNaN(n) && n > 0; });
+  var all = clean.split('+').map(function(n){ return parseInt(n.trim(), 10); })
+                .filter(function(n){ return !isNaN(n) && n > 0; });
+  // Com abono: só o período de férias (1º valor); os dias restantes são a venda
+  return comAbono ? [all[0]] : all;
 }
 
 function onFFracChange() {
@@ -612,7 +650,7 @@ function onFFracChange() {
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
       + '<div class="mf-field" style="margin:0">'
       + '<label class="mf-label">Início</label>'
-      + '<input class="mf-input" id="f-ini-' + n + '" type="text" placeholder="DD/MM/AAAA" oninput="calcFimPeriodo(' + n + ',' + d + ')">'
+      + '<input class="mf-input" id="f-ini-' + n + '" type="date" onchange="calcFimPeriodo(' + n + ',' + d + ')">'
       + '</div>'
       + '<div class="mf-field" style="margin:0">'
       + '<label class="mf-label">Término</label>'
@@ -624,12 +662,10 @@ function onFFracChange() {
 }
 
 function calcFimPeriodo(n, dias) {
-  var val = document.getElementById('f-ini-' + n).value.trim();
+  var val = document.getElementById('f-ini-' + n).value; // YYYY-MM-DD
   var el  = document.getElementById('f-fim-' + n);
   if (!val || val.length < 10) { el.value = ''; return; }
-  var parts = val.split('/');
-  if (parts.length !== 3 || parts[2].length < 4) { el.value = ''; return; }
-  var d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+  var d = new Date(val + 'T00:00:00');
   if (isNaN(d.getTime())) { el.value = ''; return; }
   d.setDate(d.getDate() + dias - 1);
   var pad = function(x){ return String(x).padStart(2,'0'); };
