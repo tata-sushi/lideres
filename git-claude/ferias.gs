@@ -31,6 +31,9 @@ var COL = {
 
 var TOTAL_COLS = 15;
 
+// Matrículas excluídas da tabela de férias (diretoria)
+var MT_EXCLUIDOS = ['8', '9', '10'];
+
 // ───────────────────────────────────────────────────────────────────
 //  ENTRY POINT — Web App
 // ───────────────────────────────────────────────────────────────────
@@ -82,6 +85,8 @@ function actionList(params) {
     var row = data[i];
     // pula linha vazia
     if (!row[COL.MT] && !row[COL.COLAB]) continue;
+    // pula matrículas excluídas
+    if (MT_EXCLUIDOS.indexOf(String(row[COL.MT] || '').trim()) !== -1) continue;
 
     ferias.push({
       _linha:    i + 1, // linha real na planilha (1-indexed, inclui header)
@@ -219,6 +224,7 @@ function sincronizarFerias() {
     var admRaw = row[I_ADM];
 
     if (!mt || !nome) continue;
+    if (MT_EXCLUIDOS.indexOf(mt) !== -1) continue;
     var ativo = status.indexOf('ativo') !== -1 && status.indexOf('inativo') === -1;
     if (!ativo) continue;
 
