@@ -579,6 +579,16 @@ export default function EscalaPainel() {
   const [novoDepto, setNovoDepto] = useState('Salão');
   const [filtroUnidade, setFiltroUnidade] = useState(()=>localStorage.getItem('esc_fUnidade')||'Todos');
   const [filtroDepto, setFiltroDepto] = useState(()=>localStorage.getItem('esc_fDepto')||'Todos');
+  const [liderNome, setLiderNome] = useState(()=>{
+    try {
+      const s = JSON.parse(localStorage.getItem('lideres_session')||'null');
+      if (s && s.displayName) {
+        const parts = s.displayName.trim().split(/\s+/);
+        return parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : parts[0];
+      }
+    } catch(e) {}
+    return '';
+  });
   const [horarioAberto, setHorarioAberto] = useState(false);
   const [gradeAberta, setGradeAberta] = useState(false);
   const [tabelaAberta, setTabelaAberta] = useState(false);
@@ -1095,16 +1105,19 @@ export default function EscalaPainel() {
       `}</style>
 
       {/* HEADER */}
-      <header style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px',display:'flex',alignItems:'center',gap:14,position:'sticky',top:0,zIndex:100}}>
+      <header style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'10px 16px',display:'flex',alignItems:'center',gap:10,position:'sticky',top:0,zIndex:100,height:60}}>
         <img src={LOGO_SRC} alt="TATÁ Sushi" style={{width:40,height:40,objectFit:'contain',flexShrink:0}}/>
-        <div style={{flex:1}}>
-          <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Escalas</div>
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-          {/* status "loading" agora é exibido pelo .loading-overlay */}
+        <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Escalas</div>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0,marginLeft:'auto'}}>
           {syncStatus==='error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red}}>✗ Erro ao salvar</span>}
           {syncStatus==='load-error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red}}>✗ Erro ao carregar</span>}
           {syncStatus==='saved'&&!pendente&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.green}}>✓ Salvo</span>}
+          {liderNome && (
+            <span style={{fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:500,letterSpacing:'0.5px',textTransform:'uppercase',color:T.carbon,background:T.bg,border:`1px solid ${T.border}`,borderRadius:4,padding:'0 10px',height:28,display:'inline-flex',alignItems:'center',whiteSpace:'nowrap',flexShrink:0}}>{liderNome}</span>
+          )}
+          <button onClick={()=>window.location.href='https://lideres.tatasushi.tech/'} title="Voltar ao Portal" style={{width:28,height:28,background:T.carbon,border:'none',borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0}}>
+            <svg viewBox="0 0 24 24" style={{width:14,height:14,stroke:T.citric,fill:'none',strokeWidth:2.5,strokeLinecap:'round'}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
         </div>
       </header>
 
