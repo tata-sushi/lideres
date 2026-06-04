@@ -580,14 +580,24 @@ export default function EscalaPainel() {
   const [filtroUnidade, setFiltroUnidade] = useState(()=>localStorage.getItem('esc_fUnidade')||'Todos');
   const [filtroDepto, setFiltroDepto] = useState(()=>localStorage.getItem('esc_fDepto')||'Todos');
   const [liderNome, setLiderNome] = useState(()=>{
+    let displayName = '';
     try {
-      const s = JSON.parse(localStorage.getItem('lideres_session')||'null');
-      if (s && s.displayName) {
-        const parts = s.displayName.trim().split(/\s+/);
-        return parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : parts[0];
+      const params = new URLSearchParams(window.location.search);
+      const fromUrl = params.get('u');
+      if (fromUrl) {
+        displayName = fromUrl;
+        localStorage.setItem('esc_liderNome', fromUrl);
+      } else {
+        displayName = localStorage.getItem('esc_liderNome') || '';
+      }
+      if (!displayName) {
+        const s = JSON.parse(localStorage.getItem('lideres_session')||'null');
+        if (s && s.displayName) displayName = s.displayName;
       }
     } catch(e) {}
-    return '';
+    if (!displayName) return '';
+    const parts = displayName.trim().split(/\s+/);
+    return parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : parts[0];
   });
   const [horarioAberto, setHorarioAberto] = useState(false);
   const [gradeAberta, setGradeAberta] = useState(false);
