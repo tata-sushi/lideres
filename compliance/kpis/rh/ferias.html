@@ -1619,10 +1619,19 @@ function fetchFeriasOnStart() {
     .catch(function(){});
 }
 
-Promise.all([fetchColaboradores(), fetchFeriasOnStart()]).then(function() {
+var _colabsReady = false, _feriasReady = false;
+
+function _tryRender() {
+  if (_feriasReady && _pageTab === 'devolutivas') renderDevolutivas();
+  if (_colabsReady && _feriasReady) {
+    if (_pageTab === 'kpis') updateAll();
+  }
+}
+
+fetchColaboradores().then(function() {
+  _colabsReady = true;
   UNIDADES = ['Todos'].concat(Array.from(new Set(DATA.map(function(d){return d.unidade;}))).sort());
   DEPTOS   = ['Todos'].concat(Array.from(new Set(DATA.map(function(d){return d.depto;}))).sort());
-
   var fU = document.getElementById('fUnidade');
   fU.innerHTML = '';
   UNIDADES.forEach(function(u) {
@@ -1631,13 +1640,16 @@ Promise.all([fetchColaboradores(), fetchFeriasOnStart()]).then(function() {
     opt.textContent = u === 'Todos' ? 'Todas as unidades' : u;
     fU.appendChild(opt);
   });
-
   buildFilters();
-  updateAll();
+  _tryRender();
 }).catch(function(err) {
-  console.error('Erro ao carregar dados:', err);
-  document.getElementById('tBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Erro ao carregar dados da planilha</td></tr>';
+  console.error('Erro ao carregar colaboradores:', err);
 });
+
+fetchFeriasOnStart().then(function() {
+  _feriasReady = true;
+  _tryRender();
+}).catch(function(){});
 
 (function(){
   var s = window.__lideresSession ||
