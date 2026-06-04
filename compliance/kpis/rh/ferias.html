@@ -131,7 +131,7 @@
   .dev-card-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
   .dev-card-value { font-size: 12px; color: var(--carbon); font-weight: 500; }
   .dev-card-footer { border-top: 1px solid var(--border); padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #FAFAFA; }
-  .dev-meta-pill { display: flex; align-items: center; gap: 5px; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--carbon); }
+  .dev-meta-pill { display: flex; align-items: center; gap: 6px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--carbon); }
   .dev-btn-registrar { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: var(--carbon); color: var(--citric); border: none; border-radius: 6px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; cursor: pointer; text-transform: uppercase; transition: opacity 0.15s; white-space: nowrap; }
   .dev-btn-registrar:hover { opacity: 0.85; }
   .dev-btn-registrar:disabled { opacity: 0.35; cursor: not-allowed; }
@@ -418,7 +418,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="mf-handle"></div>
     <div class="mf-header">
       <div>
-        <div class="mf-eyebrow">RH</div>
         <div class="mf-title">Validar Direito de Férias</div>
       </div>
       <button class="mf-close" onclick="closeValidarModal()">×</button>
@@ -440,6 +439,42 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="mf-footer">
       <button class="mf-btn-cancel" onclick="closeValidarModal()">Cancelar</button>
       <button class="mf-btn-submit" id="validar-btn-confirmar" disabled onclick="confirmValidarModal()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- APROVAR MODAL -->
+<div class="mf-overlay" id="aprovar-modal-overlay" onclick="if(event.target===this)closeAprovarModal()">
+  <div class="mf-modal" style="max-width:480px">
+    <div class="mf-handle"></div>
+    <div class="mf-header">
+      <div><div class="mf-title">Aprovar Férias</div></div>
+      <button class="mf-close" onclick="closeAprovarModal()">×</button>
+    </div>
+    <div class="mf-body">
+      <div id="aprovar-modal-nome" style="font-size:15px;font-weight:700;color:var(--carbon);text-transform:uppercase;letter-spacing:-.1px;margin-bottom:14px"></div>
+      <div style="background:#FAFAFA;border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px 16px">
+        <div>
+          <div class="mf-label">Período Aquisitivo</div>
+          <div id="aprovar-aqui" style="font-size:13px;color:var(--carbon);font-weight:500;margin-top:3px"></div>
+        </div>
+        <div>
+          <div class="mf-label">Período Concessivo</div>
+          <div id="aprovar-conc" style="font-size:13px;color:var(--carbon);font-weight:500;margin-top:3px"></div>
+        </div>
+        <div>
+          <div class="mf-label">Fracionamento</div>
+          <div id="aprovar-frac" style="font-size:13px;color:var(--carbon);font-weight:500;margin-top:3px"></div>
+        </div>
+        <div>
+          <div class="mf-label">Abono</div>
+          <div id="aprovar-abono" style="font-size:13px;color:var(--carbon);font-weight:500;margin-top:3px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="mf-footer">
+      <button class="mf-btn-cancel" onclick="closeAprovarModal()">Cancelar</button>
+      <button class="mf-btn-submit" id="aprovar-btn-confirmar" onclick="confirmAprovarModal()">Aprovar</button>
     </div>
   </div>
 </div>
@@ -1381,25 +1416,55 @@ function confirmValidarModal() {
   .catch(function(err) { btn.textContent = 'Confirmar'; btn.disabled = false; alert('Erro: ' + err.message); });
 }
 
+var _aprovarData = null;
+
 function aprovarFerias(mt, iniAqui) {
-  if (!confirm('Confirma a aprovação das férias?')) return;
+  _aprovarData = { mt: mt, ini_aqui: iniAqui };
+  var p = _devCache.filter(function(x) { return String(x.mt) === String(mt); })[0] || {};
+  document.getElementById('aprovar-modal-nome').textContent = p.nome || ('MT ' + mt);
+  var aqui = (_isoToBR(p.ini_aqui) || '—') + ' → ' + (_isoToBR(p.fim_aqui) || '—');
+  var conc  = (_isoToBR(p.ini_conc) || '—') + ' → ' + (_isoToBR(p.fim_conc) || '—');
+  var obs = (p.obs || '').trim();
+  var abono = obs.match(/^(Sim|Não)/i) ? obs.match(/^(Sim|Não)/i)[1] : '—';
+  document.getElementById('aprovar-aqui').textContent  = aqui;
+  document.getElementById('aprovar-conc').textContent  = conc;
+  document.getElementById('aprovar-frac').textContent  = p.frac || '—';
+  document.getElementById('aprovar-abono').textContent = abono;
+  document.getElementById('aprovar-btn-confirmar').textContent = 'Aprovar';
+  document.getElementById('aprovar-btn-confirmar').disabled = false;
+  document.getElementById('aprovar-modal-overlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAprovarModal() {
+  document.getElementById('aprovar-modal-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+  _aprovarData = null;
+}
+
+function confirmAprovarModal() {
+  if (!_aprovarData) return;
+  var btn = document.getElementById('aprovar-btn-confirmar');
+  btn.textContent = 'Aprovando...';
+  btn.disabled = true;
   fetch(FERIAS_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'aprovar', mt: mt, ini_aqui: iniAqui })
+    body: JSON.stringify({ action: 'aprovar', mt: _aprovarData.mt, ini_aqui: _aprovarData.ini_aqui })
   })
   .then(function(r) { return r.json(); })
   .then(function(res) {
     if (res.ok) {
-      _feriasCache.forEach(function(x) {
-        if (String(x.mt) === String(mt)) x.aprovado = 'Sim';
-      });
+      var vMt = _aprovarData.mt;
+      _feriasCache.forEach(function(x) { if (String(x.mt) === String(vMt)) x.aprovado = 'Sim'; });
+      closeAprovarModal();
       renderDevolutivas();
     } else {
+      btn.textContent = 'Aprovar'; btn.disabled = false;
       alert('Erro ao aprovar: ' + (res.erro || 'resposta inválida'));
     }
   })
-  .catch(function(err) { alert('Erro: ' + err.message); });
+  .catch(function(err) { btn.textContent = 'Aprovar'; btn.disabled = false; alert('Erro: ' + err.message); });
 }
 
 function setPageTab(tab) {
