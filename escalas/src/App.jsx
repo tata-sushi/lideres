@@ -1195,11 +1195,16 @@ export default function EscalaPainel() {
           <div style={{marginBottom:18}}>
             <div style={{fontFamily:'DM Mono,monospace',fontSize:9,fontWeight:500,letterSpacing:'.16em',textTransform:'uppercase',color:T.muted,marginBottom:10,display:'flex',alignItems:'center',gap:8}}>Números<span style={{flex:1,height:1,background:T.border}}/></div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-              {[{label:'Seções',num:7,sub:`${drawerKpis.pags} pág / ${drawerKpis.dash} dash`},{label:'Unidades',num:drawerKpis.unidades,sub:`${drawerKpis.deptos} depto / ${drawerKpis.colabs} colab`}].map(c=>(
+              {[
+                {label:'Seções',num:7,parts:[drawerKpis.pags,' pág / ',drawerKpis.dash,' dash']},
+                {label:'Unidades',num:drawerKpis.unidades,parts:[drawerKpis.deptos,' depto / ',drawerKpis.colabs,' colab']}
+              ].map(c=>(
                 <div key={c.label} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:'12px 10px',display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
                   <span style={{fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:500,letterSpacing:'.06em',textTransform:'uppercase',color:T.mid}}>{c.label}</span>
                   <span style={{fontFamily:'DM Sans,sans-serif',fontSize:28,fontWeight:700,color:T.carbon,lineHeight:1,letterSpacing:'-1px'}}>{c.num}</span>
-                  <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.carbon}}>{c.sub}</span>
+                  <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>
+                    <strong style={{fontFamily:'DM Sans,sans-serif',fontWeight:700,color:T.carbon}}>{c.parts[0]}</strong>{c.parts[1]}<strong style={{fontFamily:'DM Sans,sans-serif',fontWeight:700,color:T.carbon}}>{c.parts[2]}</strong>{c.parts[3]}
+                  </span>
                 </div>
               ))}
             </div>
