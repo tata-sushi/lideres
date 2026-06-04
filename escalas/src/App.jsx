@@ -579,6 +579,26 @@ export default function EscalaPainel() {
   const [novoDepto, setNovoDepto] = useState('Salão');
   const [filtroUnidade, setFiltroUnidade] = useState(()=>localStorage.getItem('esc_fUnidade')||'Todos');
   const [filtroDepto, setFiltroDepto] = useState(()=>localStorage.getItem('esc_fDepto')||'Todos');
+  const [liderNome, setLiderNome] = useState(()=>{
+    let displayName = '';
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const fromUrl = params.get('u');
+      if (fromUrl) {
+        displayName = fromUrl;
+        localStorage.setItem('esc_liderNome', fromUrl);
+      } else {
+        displayName = localStorage.getItem('esc_liderNome') || '';
+      }
+      if (!displayName) {
+        const s = JSON.parse(localStorage.getItem('lideres_session')||'null');
+        if (s && s.displayName) displayName = s.displayName;
+      }
+    } catch(e) {}
+    if (!displayName) return '';
+    const parts = displayName.trim().split(/\s+/);
+    return parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : parts[0];
+  });
   const [horarioAberto, setHorarioAberto] = useState(false);
   const [gradeAberta, setGradeAberta] = useState(false);
   const [tabelaAberta, setTabelaAberta] = useState(false);
@@ -586,11 +606,43 @@ export default function EscalaPainel() {
   const [mapaCalorAberto, setMapaCalorAberto] = useState(false);
   const [diaGradeIdx, setDiaGradeIdx] = useState(0);
   const [ehMobile, setEhMobile] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerKpis, setDrawerKpis] = useState({unidades:'—',deptos:'—',colabs:'—',pags:'—',dash:'—'});
+  const [drawerKpisLoaded, setDrawerKpisLoaded] = useState(false);
+  const [drawerMetaLoaded, setDrawerMetaLoaded] = useState(false);
 
   const key = semanaKey(semanaAtual);
 
   useEffect(()=>{ localStorage.setItem('esc_fUnidade', filtroUnidade); },[filtroUnidade]);
   useEffect(()=>{ localStorage.setItem('esc_fDepto', filtroDepto); },[filtroDepto]);
+
+  useEffect(()=>{
+    if (!drawerOpen) return;
+    if (!drawerKpisLoaded) {
+      fetch('https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec?action=listColaboradores')
+        .then(r=>r.json()).then(data=>{
+          if (!data.ok) return;
+          const us = new Set(data.colaboradores.map(c=>c.unidade));
+          const ds = new Set(data.colaboradores.map(c=>c.departamento));
+          setDrawerKpis(k=>({...k, unidades:us.size, deptos:ds.size, colabs:data.total}));
+          setDrawerKpisLoaded(true);
+        }).catch(()=>{});
+    }
+    if (!drawerMetaLoaded) {
+      fetch('https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1')
+        .then(r=>r.json()).then(data=>{
+          if (!data.tree) return;
+          let pags=0, dash=0;
+          data.tree.forEach(f=>{
+            if (f.type!=='blob'||!f.path.endsWith('.html')) return;
+            if (f.path.startsWith('compliance/kpis/')) dash++;
+            else if (f.path.startsWith('compliance/')) pags++;
+          });
+          setDrawerKpis(k=>({...k, pags, dash}));
+          setDrawerMetaLoaded(true);
+        }).catch(()=>{});
+    }
+  },[drawerOpen]);
 
   useEffect(()=>{
     const fn = ()=>setEhMobile(window.innerWidth<900);
@@ -892,7 +944,7 @@ export default function EscalaPainel() {
       }).join('');
       const s=stats[c.id]||{horas:0};
       const par=idx%2===0?'':' class="epdf-row-alt"';
-      return `<tr${par}><td class="epdf-nome">${c.nome}</td><td class="epdf-fn">${c.funcao}</td>${tdDias}<td class="epdf-total">${fmtHoras(s.horas)}</td></tr>`;
+      return `<tr${par}><td class="epdf-nome">${c.nome}</td>${tdDias}<td class="epdf-total">${fmtHoras(s.horas)}</td></tr>`;
     }).join('');
     const tfDias=totaisDia.map(t=>`<td class="epdf-tf-cnt"><span class="epdf-tf-trab">${t.trab} trabalhando</span><br><span class="epdf-tf-folg">${t.folg} folgas</span></td>`).join('');
     let printDiv=document.getElementById('escala-pdf-print');
@@ -911,9 +963,9 @@ export default function EscalaPainel() {
         </div>
       </div>
       <table class="epdf-table">
-        <thead><tr><th class="epdf-th-nome">Colaborador</th><th class="epdf-th-fn">Função</th>${thDias}<th>Total</th></tr></thead>
+        <thead><tr><th class="epdf-th-nome">Colaborador</th>${thDias}<th>Total</th></tr></thead>
         <tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="2"></td>${tfDias}<td></td></tr></tfoot>
+        <tfoot><tr><td colspan="1"></td>${tfDias}<td></td></tr></tfoot>
       </table>`;
     const logoEl=document.getElementById('epdf-logo');
     logoEl.onload=()=>window.print();
@@ -1095,18 +1147,81 @@ export default function EscalaPainel() {
       `}</style>
 
       {/* HEADER */}
-      <header style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px',display:'flex',alignItems:'center',gap:14,position:'sticky',top:0,zIndex:100}}>
+      <header style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'10px 16px',display:'flex',alignItems:'center',gap:10,position:'sticky',top:0,zIndex:100,height:60}}>
         <img src={LOGO_SRC} alt="TATÁ Sushi" style={{width:40,height:40,objectFit:'contain',flexShrink:0}}/>
-        <div style={{flex:1}}>
-          <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Escalas</div>
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-          {/* status "loading" agora é exibido pelo .loading-overlay */}
+        <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Escalas</div>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0,marginLeft:'auto'}}>
           {syncStatus==='error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red}}>✗ Erro ao salvar</span>}
           {syncStatus==='load-error'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.red}}>✗ Erro ao carregar</span>}
           {syncStatus==='saved'&&!pendente&&<span style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.green}}>✓ Salvo</span>}
+          {liderNome && (
+            <span style={{fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:500,letterSpacing:'0.5px',textTransform:'uppercase',color:T.carbon,background:T.bg,border:`1px solid ${T.border}`,borderRadius:4,padding:'0 10px',height:28,display:'inline-flex',alignItems:'center',whiteSpace:'nowrap',flexShrink:0}}>{liderNome}</span>
+          )}
+          <button onClick={()=>setDrawerOpen(true)} title="Sobre" style={{width:28,height:28,background:T.carbon,border:'none',borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0}}>
+            <svg viewBox="0 0 24 24" style={{width:14,height:14,stroke:T.citric,fill:'none',strokeWidth:2.5,strokeLinecap:'round'}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
         </div>
       </header>
+
+      {/* DRAWER SOBRE */}
+      {drawerOpen && <div onClick={()=>setDrawerOpen(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.3)',zIndex:300}}/>}
+      <div style={{position:'fixed',top:0,right:0,width:'88%',maxWidth:340,height:'100%',background:T.surface,zIndex:301,transform:drawerOpen?'translateX(0)':'translateX(100%)',transition:'transform .28s cubic-bezier(.4,0,.2,1)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'-4px 0 24px rgba(0,0,0,.12)'}}>
+        {/* header */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 16px',height:52,borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:500,letterSpacing:'.14em',textTransform:'uppercase',color:T.text}}>Sobre</span>
+          <button onClick={()=>setDrawerOpen(false)} style={{width:28,height:28,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}>
+            <svg viewBox="0 0 24 24" style={{width:13,height:13,stroke:T.mid,fill:'none',strokeWidth:2,strokeLinecap:'round'}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        {/* body */}
+        <div style={{flex:1,overflowY:'auto',padding:'14px 16px 10px'}}>
+          {/* Versão */}
+          <div style={{marginBottom:18}}>
+            <div style={{fontFamily:'DM Mono,monospace',fontSize:9,fontWeight:500,letterSpacing:'.16em',textTransform:'uppercase',color:T.muted,marginBottom:10,display:'flex',alignItems:'center',gap:8}}>Versão atual<span style={{flex:1,height:1,background:T.border}}/></div>
+            <div style={{background:T.carbon,borderRadius:6,padding:'14px 16px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div>
+                <div style={{fontFamily:'DM Mono,monospace',fontSize:9,letterSpacing:'.12em',textTransform:'uppercase',color:'rgba(255,255,255,.4)'}}>Portal</div>
+                <div style={{fontSize:13,fontWeight:600,color:'#fff',marginTop:2}}>Governança de Processos</div>
+              </div>
+              <div style={{fontFamily:'DM Mono,monospace',fontSize:20,fontWeight:300,color:T.citric,letterSpacing:'.04em'}}>v3.2r</div>
+            </div>
+          </div>
+          {/* O que é */}
+          <div style={{marginBottom:18}}>
+            <div style={{fontFamily:'DM Mono,monospace',fontSize:9,fontWeight:500,letterSpacing:'.16em',textTransform:'uppercase',color:T.muted,marginBottom:10,display:'flex',alignItems:'center',gap:8}}>O que é<span style={{flex:1,height:1,background:T.border}}/></div>
+            <p style={{fontSize:13,lineHeight:1.7,color:T.mid}}><strong>Governança de Processos</strong> é a maneira pela qual consolidamos as iniciativas da gestão de processos do TATÁ Sushi, com papéis, diretrizes e mecanismos que orientam como os processos devem ser definidos, executados, monitorados e aprimorados continuamente.</p>
+          </div>
+          {/* Números */}
+          <div style={{marginBottom:18}}>
+            <div style={{fontFamily:'DM Mono,monospace',fontSize:9,fontWeight:500,letterSpacing:'.16em',textTransform:'uppercase',color:T.muted,marginBottom:10,display:'flex',alignItems:'center',gap:8}}>Números<span style={{flex:1,height:1,background:T.border}}/></div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+              {[
+                {label:'Seções',num:7,parts:[drawerKpis.pags,' pág / ',drawerKpis.dash,' dash']},
+                {label:'Unidades',num:drawerKpis.unidades,parts:[drawerKpis.deptos,' depto / ',drawerKpis.colabs,' colab']}
+              ].map(c=>(
+                <div key={c.label} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:'12px 10px',display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+                  <span style={{fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:500,letterSpacing:'.06em',textTransform:'uppercase',color:T.mid}}>{c.label}</span>
+                  <span style={{fontFamily:'DM Sans,sans-serif',fontSize:28,fontWeight:700,color:T.carbon,lineHeight:1,letterSpacing:'-1px'}}>{c.num}</span>
+                  <span style={{fontFamily:'DM Mono,monospace',fontSize:10,color:T.muted}}>
+                    <strong style={{fontFamily:'DM Sans,sans-serif',fontWeight:700,color:T.carbon}}>{c.parts[0]}</strong>{c.parts[1]}<strong style={{fontFamily:'DM Sans,sans-serif',fontWeight:700,color:T.carbon}}>{c.parts[2]}</strong>{c.parts[3]}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        {/* footer */}
+        <div style={{padding:'12px 16px 16px',flexShrink:0,background:T.surface}}>
+          <div style={{fontFamily:'DM Mono,monospace',fontSize:9,fontWeight:500,letterSpacing:'.16em',textTransform:'uppercase',color:T.muted,marginBottom:10,display:'flex',alignItems:'center',gap:8}}>Responsável<span style={{flex:1,height:1,background:T.border}}/></div>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{width:32,height:32,borderRadius:'50%',background:T.carbon,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:500,color:T.citric,flexShrink:0}}>VC</div>
+            <div>
+              <div style={{fontSize:13,fontWeight:600,color:T.text}}>Victor Carvalho</div>
+              <div style={{fontFamily:'DM Mono,monospace',fontSize:9,color:T.muted,letterSpacing:'.04em',marginTop:1}}>Gestão &amp; Inovação</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* FILTROS */}
       <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px'}}>
