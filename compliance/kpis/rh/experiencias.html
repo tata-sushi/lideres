@@ -696,38 +696,44 @@ function parseLinha(row) {
 
 // ── Carregamento via API ──
 function carregarDados() {
-  var err = document.getElementById('errorState');
-  if (err) { err.style.display = 'none'; err.innerHTML = ''; }
+  var errEl = document.getElementById('errorState');
+  if (errEl) { errEl.style.display = 'none'; errEl.innerHTML = ''; }
   setLoading(true);
   var url = 'https://sheets.googleapis.com/v4/spreadsheets/' +
     SHEETS_CONFIG.spreadsheetId + '/values/' +
     encodeURIComponent(SHEETS_CONFIG.range) +
     '?key=' + SHEETS_CONFIG.apiKey;
 
-  fetch(url)
+  var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = setTimeout(function() { if (controller) controller.abort(); }, 15000);
+
+  fetch(url, controller ? { signal: controller.signal } : {})
     .then(function(r) {
-      if (!r.ok) return r.json().then(function(e) { throw new Error(e.error && e.error.message || 'HTTP ' + r.status); });
+      clearTimeout(timer);
+      if (!r.ok) return r.text().then(function(t) {
+        var msg;
+        try { var j = JSON.parse(t); msg = j.error && j.error.message; } catch(e) {}
+        throw new Error(msg || 'HTTP ' + r.status);
+      });
       return r.json();
     })
     .then(function(data) {
       var rows = data.values || [];
       var rawList = rows.map(function(row, i) {
         var c = parseLinha(row);
-        if (c) c.rowIndex = i + 2; // +1 zero-based, +1 header row
+        if (c) c.rowIndex = i + 2;
         return c;
       }).filter(Boolean);
       window._allColabs = rawList;
       colaboradores = rawList.slice();
       if (colaboradores.length === 0) {
-        setError('Nenhum colaborador encontrado na planilha.<br>Verifique se a aba é "Sheet1" e se há dados a partir da linha 2.');
+        setError('Nenhum colaborador encontrado na planilha. Verifique a aba "admissões".');
         return;
       }
-      // Ocultar colaboradores encerrados no 1º ou 2º período
       var statusOcultos = ['Não Efetivado 1º', 'Não Efetivado 2º', 'Av. 2º Período'];
       colaboradores = colaboradores.filter(function(c) {
         return statusOcultos.indexOf(c.statusDevolutiva) === -1;
       });
-      // Popular feedbacks com base no STATUS_DEVOLUTIVA da planilha
       feedbacks = {};
       colaboradores.forEach(function(c) {
         var s = c.statusDevolutiva;
@@ -739,8 +745,12 @@ function carregarDados() {
       document.getElementById('mainContent').style.display = 'block';
       renderCards();
     })
-    .catch(function(err) {
-      setError(err.message || 'Verifique a API Key e se a planilha está pública.');
+    .catch(function(e) {
+      clearTimeout(timer);
+      var msg = e.name === 'AbortError'
+        ? 'Tempo esgotado — verifique a conexão e tente novamente.'
+        : (e.message || 'Verifique a API Key e se a planilha está pública.');
+      setError(msg);
     });
 }
 
