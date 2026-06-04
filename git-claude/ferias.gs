@@ -319,6 +319,8 @@ function sincronizarFerias() {
   }
 
   // ── 3. Remover inativos ───────────────────────────────────────
+  var hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
   // Percorre de baixo para cima para não deslocar índices
   for (var d = feriasData.length - 1; d >= 1; d--) {
     var dRow = feriasData[d];
@@ -376,9 +378,6 @@ function sincronizarFerias() {
   }
 
   // ── 4. Para cada ativo, calcular períodos aquisitivos ─────────
-  var hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-
   var linhasNovas = []; // [ array com TOTAL_COLS valores ]
 
   Object.keys(ativos).forEach(function(mt) {
