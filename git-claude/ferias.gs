@@ -290,6 +290,36 @@ function sincronizarFerias() {
     existentes[f2Mt + '|' + f2Ini] = f2 + 1;
   }
 
+  // ── 3.5. Truncar períodos CLT que sobrepõem a data de início PJ ──
+  // Para cada MT com override, ajusta a linha cujo fimAqui cai no override ou depois:
+  //   fimAqui  → overrideDate - 1 dia
+  //   iniConc  → overrideDate
+  //   fimConc  → overrideDate + 1 ano - 1 dia
+  // Idempotente: após a primeira execução fimAqui já fica < overrideDate → condição não dispara.
+  for (var i = feriasData.length - 1; i >= 1; i--) {
+    var oRow = feriasData[i];
+    var oMt  = String(oRow[COL.MT] || '').trim();
+    if (!INICIO_FERIAS_OVERRIDE[oMt]) continue;
+
+    var overrideDate = new Date(INICIO_FERIAS_OVERRIDE[oMt] + 'T00:00:00');
+    var oIniAqui = toDate(oRow[COL.INI_AQUI]);
+    var oFimAqui = toDate(oRow[COL.FIM_AQUI]);
+    if (!oIniAqui || !oFimAqui) continue;
+
+    if (oIniAqui < overrideDate && oFimAqui >= overrideDate) {
+      var diaAntes = new Date(overrideDate);
+      diaAntes.setDate(diaAntes.getDate() - 1);
+      var novoIniConc = new Date(overrideDate);
+      var novoFimConc = new Date(overrideDate);
+      novoFimConc.setFullYear(novoFimConc.getFullYear() + 1);
+      novoFimConc.setDate(novoFimConc.getDate() - 1);
+
+      shFerias.getRange(i + 1, COL.FIM_AQUI + 1).setValue(fmtDateBR(diaAntes));
+      shFerias.getRange(i + 1, COL.INI_CONC + 1).setValue(fmtDateBR(novoIniConc));
+      shFerias.getRange(i + 1, COL.FIM_CONC + 1).setValue(fmtDateBR(novoFimConc));
+    }
+  }
+
   // ── 4. Para cada ativo, calcular períodos aquisitivos ─────────
   var hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
