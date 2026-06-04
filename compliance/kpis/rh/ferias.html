@@ -670,6 +670,14 @@ var _feriasCache = [];
 var _colabsMap = {}; // mt → { unidade, departamento }
 var _concIni = null; // YYYY-MM-DD — início do período concessivo selecionado
 var _concFim = null; // YYYY-MM-DD — fim do período concessivo selecionado
+
+function _minIniFerias() {
+  var pad = function(x){ return String(x).padStart(2,'0'); };
+  var d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate() + 60);
+  var min60 = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+  if (!_concIni) return min60;
+  return _concIni > min60 ? _concIni : min60;
+}
 var MT_EXCLUIDOS = ['8', '9', '10']; // diretoria — não aparece na tabela de férias
 
 function showFeriasToast(msg, isErr) {
@@ -843,7 +851,7 @@ function onFFracChange() {
       + '<div class="mf-field" style="margin:0">'
       + '<label class="mf-label">Início</label>'
       + '<input class="mf-input" id="f-ini-' + n + '" type="date"'
-      + (_concIni ? ' min="' + _concIni + '"' : '')
+      + ' min="' + _minIniFerias() + '"'
       + (_concFim ? ' max="' + _concFim + '"' : '')
       + ' onchange="calcFimPeriodo(' + n + ',' + d + ')">'
       + '</div>'
@@ -864,9 +872,11 @@ function calcFimPeriodo(n, dias) {
   var d = new Date(val + 'T00:00:00');
   if (isNaN(d.getTime())) { el.value = ''; return; }
 
-  // Valida início dentro do período concessivo
-  if (_concIni && d < new Date(_concIni + 'T00:00:00')) {
-    showFeriasToast('Início do Período ' + n + ' é anterior ao período concessivo (' + _isoToBR(_concIni) + ')', true);
+  // Valida mínimo: max(concessivo, hoje+60d)
+  var _minIni = new Date(_minIniFerias() + 'T00:00:00');
+  if (d < _minIni) {
+    var _minIniStr = _isoToBR(_minIniFerias());
+    showFeriasToast('Período ' + n + ': início deve ser a partir de ' + _minIniStr + ' (60 dias a partir de hoje)', true);
     iniEl.value = ''; el.value = ''; return;
   }
 
@@ -907,8 +917,9 @@ function enviarFerias() {
       return;
     }
     var iniD = new Date(iniEl.value.trim() + 'T00:00:00');
-    if (concI && iniD < concI) {
-      showFeriasToast('Período ' + i + ': início anterior ao período concessivo (' + _isoToBR(_concIni) + ')', true);
+    var minIni = new Date(_minIniFerias() + 'T00:00:00');
+    if (iniD < minIni) {
+      showFeriasToast('Período ' + i + ': início deve ser a partir de ' + _isoToBR(_minIniFerias()) + ' (60 dias a partir de hoje)', true);
       return;
     }
     if (concF && iniD > concF) {
