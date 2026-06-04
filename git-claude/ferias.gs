@@ -27,9 +27,10 @@ var COL = {
   FIM_P2:    12,  // M — Termino Periodo 2
   FIM_P3:    13,  // N — Termino Periodo 3
   OBS:       14,  // O — Observação
+  APROVADO:  15,  // P — Aprovado (RH)
 };
 
-var TOTAL_COLS = 15;
+var TOTAL_COLS = 16;
 
 // Matrículas excluídas da tabela de férias (diretoria)
 var MT_EXCLUIDOS = ['8', '9', '10'];
@@ -68,8 +69,10 @@ function doPost(e) {
   try {
     body = JSON.parse(e.postData.contents);
     var action = body.action || 'save';
-    if (action === 'save')   result = actionSave(body);
-    else if (action === 'update') result = actionUpdate(body);
+    if (action === 'save')       result = actionSave(body);
+    else if (action === 'update')  result = actionUpdate(body);
+    else if (action === 'validar') result = actionValidar(body);
+    else if (action === 'aprovar') result = actionAprovar(body);
     else result = { ok: false, erro: 'Ação desconhecida: ' + action };
   } catch (err) {
     result = { ok: false, erro: err.message };
@@ -118,7 +121,8 @@ function actionList(params) {
       fim1:      fmtDateOut(row[COL.FIM_P1]),
       fim2:      fmtDateOut(row[COL.FIM_P2]),
       fim3:      fmtDateOut(row[COL.FIM_P3]),
-      obs:       String(row[COL.OBS]   || ''),
+      obs:       String(row[COL.OBS]      || ''),
+      aprovado:  String(row[COL.APROVADO] || ''),
     });
   }
 
@@ -208,6 +212,57 @@ function actionDelete(params) {
 
   // Limpa colunas E → O
   sheet.getRange(targetRow, COL.INI_CONC + 1, 1, TOTAL_COLS - COL.INI_CONC).clearContent();
+  SpreadsheetApp.flush();
+  return { ok: true, linha: targetRow };
+}
+
+// ───────────────────────────────────────────────────────────────────
+//  ACTION: VALIDAR — preenche o Direito de Férias (coluna G) de uma linha
+//  Recebe: { mt, ini_aqui, direito }
+// ───────────────────────────────────────────────────────────────────
+function actionValidar(body) {
+  var sheet = getSheetFerias();
+  var data  = sheet.getDataRange().getValues();
+  var mt    = String(body.mt || '').trim();
+  var iniAqui = String(body.ini_aqui || '').trim();
+
+  var targetRow = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][COL.MT] || '').trim() !== mt) continue;
+    if (iniAqui && fmtDateOut(data[i][COL.INI_AQUI]) !== iniAqui) continue;
+    targetRow = i + 1;
+    break;
+  }
+  if (targetRow === -1) return { ok: false, erro: 'Linha não encontrada para MT ' + mt };
+
+  var valor = String(body.direito || '').trim();
+  if (!valor) return { ok: false, erro: 'Valor de direito não informado' };
+
+  sheet.getRange(targetRow, COL.DIREITO + 1).setValue(valor);
+  SpreadsheetApp.flush();
+  return { ok: true, linha: targetRow };
+}
+
+// ───────────────────────────────────────────────────────────────────
+//  ACTION: APROVAR — preenche a coluna P (Aprovado) de uma linha
+//  Recebe: { mt, ini_aqui }
+// ───────────────────────────────────────────────────────────────────
+function actionAprovar(body) {
+  var sheet = getSheetFerias();
+  var data  = sheet.getDataRange().getValues();
+  var mt    = String(body.mt || '').trim();
+  var iniAqui = String(body.ini_aqui || '').trim();
+
+  var targetRow = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][COL.MT] || '').trim() !== mt) continue;
+    if (iniAqui && fmtDateOut(data[i][COL.INI_AQUI]) !== iniAqui) continue;
+    targetRow = i + 1;
+    break;
+  }
+  if (targetRow === -1) return { ok: false, erro: 'Linha não encontrada para MT ' + mt };
+
+  sheet.getRange(targetRow, COL.APROVADO + 1).setValue('Sim');
   SpreadsheetApp.flush();
   return { ok: true, linha: targetRow };
 }
