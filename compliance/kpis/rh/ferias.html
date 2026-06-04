@@ -970,17 +970,20 @@ function updateKPIs() {
   var hojeKpi = new Date(); hojeKpi.setHours(0,0,0,0);
   var d60 = new Date(hojeKpi); d60.setDate(d60.getDate() + 60);
 
-  var total    = _feriasCache.length;
-  var agend    = _feriasCache.filter(function(p){ return !!p.ini1; }).length;
-  var vencendo = _feriasCache.filter(function(p){
+  // Sem agendamento: concessivo existe mas ini1 vazio
+  var semAgend = _feriasCache.filter(function(p){ return !p.ini1; }).length;
+
+  // Vencendo em 60d: fim_conc dentro de 60 dias e sem ini1
+  var vencendo60 = _feriasCache.filter(function(p){
     if (p.ini1) return false;
     var fc = p.fim_conc ? new Date(p.fim_conc + 'T00:00:00') : null;
     return fc && fc >= hojeKpi && fc <= d60;
   }).length;
-  var vencidas = _feriasCache.filter(function(p){
-    if (p.ini1) return false;
-    var fc = p.fim_conc ? new Date(p.fim_conc + 'T00:00:00') : null;
-    return fc && fc < hojeKpi;
+
+  // Agendadas futuras: ini1 preenchido e ini1 > hoje
+  var agendFutura = _feriasCache.filter(function(p){
+    if (!p.ini1) return false;
+    return new Date(p.ini1 + 'T00:00:00') > hojeKpi;
   }).length;
 
   function card(label, val, sub) {
@@ -989,11 +992,10 @@ function updateKPIs() {
       +(sub?'<div class="kpi-sub">'+sub+'</div>':'')+'</div>';
   }
   document.getElementById('kpiRow').innerHTML =
-    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">'
-    + card('Períodos', total, '')
-    + card('Agendadas', agend, total ? Math.round(agend/total*100)+'%' : '—')
-    + card('Vencendo ≤60d', vencendo, vencendo ? '<strong>atenção</strong>' : 'ok')
-    + card('Vencidas', vencidas, vencidas ? '<strong>crítico</strong>' : 'ok')
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">'
+    + card('Sem agendamento', semAgend, 'concessivo em aberto')
+    + card('Vencendo em 60 dias', vencendo60, semAgend ? '<strong>sem data programada</strong>' : 'ok')
+    + card('Férias agendadas', agendFutura, 'datas futuras')
     + '</div>';
 }
 
@@ -1175,7 +1177,7 @@ function updateAll() {
   updateKPIs();
   renderChart();
   renderTable(filt);
-  document.getElementById('chartTitle').textContent = 'Férias Agendadas por Mês';
+  document.getElementById('chartTitle').textContent = 'Férias Agendadas para os próximos meses';
   var th = document.getElementById('thTerceiro');
   if (th) {
     var terceiroKey = activeTab === 'aniv' ? 'idade' : 'anosEmpresa';
