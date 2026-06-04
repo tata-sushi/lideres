@@ -34,6 +34,14 @@ var TOTAL_COLS = 15;
 // Matrículas excluídas da tabela de férias (diretoria)
 var MT_EXCLUIDOS = ['8', '9', '10'];
 
+// Override de data-base para colaboradores que trocaram de regime (ex: CLT → PJ).
+// Períodos aquisitivos a partir dessas datas são gerados com a nova base.
+// Histórico anterior é preservado (linhas já existentes não são removidas).
+var INICIO_FERIAS_OVERRIDE = {
+  '24174': '2026-03-01', // Carlos Mateus Silva De Oliveira — início PJ
+  '3':     '2026-02-01', // Ana Cristina Alves De Macedo — início PJ
+};
+
 // ───────────────────────────────────────────────────────────────────
 //  ENTRY POINT — Web App
 // ───────────────────────────────────────────────────────────────────
@@ -293,7 +301,13 @@ function sincronizarFerias() {
     var adm   = new Date(colab.admissao);
     adm.setHours(0, 0, 0, 0);
 
-    // Calcula todos os períodos aquisitivos desde admissão
+    // Se o colaborador mudou de regime (ex: CLT → PJ), usa a nova data-base
+    if (INICIO_FERIAS_OVERRIDE[mt]) {
+      var overrideDate = new Date(INICIO_FERIAS_OVERRIDE[mt] + 'T00:00:00');
+      if (overrideDate > adm) adm = overrideDate;
+    }
+
+    // Calcula todos os períodos aquisitivos desde admissão (ou override)
     var periodoIdx = 0;
     while (true) {
       var iniAqui = new Date(adm);
