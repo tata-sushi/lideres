@@ -295,15 +295,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 
   <div class="table-card" id="tableCard">
-    <div class="chart-title">Relação de Colaboradores <span class="table-count" id="tCount"></span></div>
+    <div class="chart-title">Férias Programadas <span class="table-count" id="tCount"></span></div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
             <th onclick="doSort('nome')">Colaborador</th>
-            <th onclick="doSort('proxAniv')">Próx. Aniversário</th>
-            <th id="thTerceiro" onclick="doSort('idade')">Idade</th>
-            <th onclick="doSort('pct')">Progresso</th>
+            <th onclick="doSort('ini1')">Início</th>
+            <th onclick="doSort('fim1')">Término</th>
+            <th onclick="doSort('frac')">Fração</th>
           </tr>
         </thead>
         <tbody id="tBody"></tbody>
@@ -912,7 +912,7 @@ var TT = {
 
 var selUni = 'Todos', selDepto = 'Todos', cfMes = null, cfMesEmp = null;
 var activeTab = 'empresa';
-var sKey = 'diasFaltando', sDir = 'asc';
+var sKey = 'ini1', sDir = 'asc';
 var chartInst = null;
 var PAGE_SIZE = 10;
 var tRows = [];
@@ -933,9 +933,13 @@ function buildFilters() {
 }
 
 function getFilt() {
-  return getActiveData().filter(function(d) {
-    if (selUni!=='Todos' && d.unidade!==selUni) return false;
-    if (selDepto!=='Todos' && d.depto!==selDepto) return false;
+  var hojeF = new Date(); hojeF.setHours(0,0,0,0);
+  return _feriasCache.filter(function(p) {
+    if (!p.ini1) return false;
+    if (new Date(p.ini1 + 'T00:00:00') < hojeF) return false;
+    var info = _colabsMap[String(p.mt)] || {};
+    if (selUni !== 'Todos' && info.unidade !== selUni) return false;
+    if (selDepto !== 'Todos' && info.departamento !== selDepto) return false;
     return true;
   });
 }
@@ -1023,14 +1027,11 @@ function progBar(pct) {
 }
 
 function rowHtml(d) {
-  var activeCfMes = getActiveCfMes();
-  var rowClass = activeCfMes !== null && d.mesAnivMY === activeCfMes ? 'cf-selected' : '';
-  var terceiro = activeTab === 'aniv' ? d.idade : d.anosEmpresa + ' ano(s)';
-  return '<tr class="' + rowClass + '" onclick="setCF(\'' + d.mesAnivMY + '\')">' +
-    '<td>' + d.nome + ' ' + statusBadge(d) + '</td>' +
-    '<td>' + d.proxFormatado + '</td>' +
-    '<td>' + terceiro + '</td>' +
-    '<td>' + progBar(d.pct) + '</td>' +
+  return '<tr>' +
+    '<td>' + d.nome + '</td>' +
+    '<td>' + _isoToBR(d.ini1) + '</td>' +
+    '<td>' + _isoToBR(d.fim1) + '</td>' +
+    '<td>' + (d.frac || '—') + '</td>' +
     '</tr>';
 }
 
@@ -1051,22 +1052,16 @@ function loadMore() {
 }
 
 function renderTable(filt) {
-  var activeCfMes = getActiveCfMes();
-  var sorted = filt.slice().sort(function(a,b) {
-    if (activeCfMes !== null) {
-      var am = a.mesAnivMY === activeCfMes;
-      var bm = b.mesAnivMY === activeCfMes;
-      if (am !== bm) return am ? -1 : 1;
-    }
-    var va=a[sKey], vb=b[sKey];
-    if (typeof va==='string') return sDir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
-    return sDir==='asc'?(va>vb?1:-1):(va<vb?1:-1);
+  var sorted = filt.slice().sort(function(a, b) {
+    var va = a[sKey], vb = b[sKey];
+    if (typeof va === 'string') return sDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    return sDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
   });
-  document.getElementById('tCount').textContent = '— ' + filt.length + ' colaborador' + (filt.length !== 1 ? 'es' : '');
+  document.getElementById('tCount').textContent = '— ' + filt.length + ' férias';
   document.getElementById('tBody').innerHTML = '';
   document.getElementById('btnMore').hidden = true;
   if (!filt.length) {
-    document.getElementById('tBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Nenhum colaborador encontrado</td></tr>';
+    document.getElementById('tBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Nenhuma férias programada encontrada</td></tr>';
     return;
   }
   tRows = sorted;
@@ -1178,12 +1173,6 @@ function updateAll() {
   renderChart();
   renderTable(filt);
   document.getElementById('chartTitle').textContent = 'Férias Agendadas para os próximos meses';
-  var th = document.getElementById('thTerceiro');
-  if (th) {
-    var terceiroKey = activeTab === 'aniv' ? 'idade' : 'anosEmpresa';
-    th.innerHTML = activeTab === 'aniv' ? 'Idade' : 'Anos emp.';
-    th.setAttribute('onclick', 'doSort(\'' + terceiroKey + '\')');
-  }
 }
 
 function fetchFeriasOnStart() {
