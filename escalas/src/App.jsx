@@ -1157,10 +1157,7 @@ export default function EscalaPainel() {
           {liderNome && (
             <span style={{fontFamily:'DM Mono,monospace',fontSize:10,fontWeight:500,letterSpacing:'0.5px',textTransform:'uppercase',color:T.carbon,background:T.bg,border:`1px solid ${T.border}`,borderRadius:4,padding:'0 10px',height:28,display:'inline-flex',alignItems:'center',whiteSpace:'nowrap',flexShrink:0}}>{liderNome}</span>
           )}
-          <button onClick={()=>setDrawerOpen(true)} title="Sobre" style={{width:28,height:28,background:T.bg,border:`1px solid ${T.border}`,borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0}}>
-            <svg viewBox="0 0 24 24" style={{width:14,height:14,stroke:T.carbon,fill:'none',strokeWidth:2,strokeLinecap:'round'}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          </button>
-          <button onClick={()=>window.location.href='https://lideres.tatasushi.tech/'} title="Voltar ao Portal" style={{width:28,height:28,background:T.carbon,border:'none',borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0}}>
+          <button onClick={()=>setDrawerOpen(true)} title="Sobre" style={{width:28,height:28,background:T.carbon,border:'none',borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0}}>
             <svg viewBox="0 0 24 24" style={{width:14,height:14,stroke:T.citric,fill:'none',strokeWidth:2.5,strokeLinecap:'round'}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
         </div>
