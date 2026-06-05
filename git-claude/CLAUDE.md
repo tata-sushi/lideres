@@ -109,7 +109,21 @@ color: #ff8a8a;
 - Chip ativo: `onclick="location.href='destino.html'" style="cursor:pointer"`
 - Chip building: classe `building` + `<span class="ac-chip-badge">…alerta…</span>`, sem hover escuro nem opacidade reduzida
 
-## 6. Fluxo padrão ao publicar mudanças
+## 6. Loading overlay padrão (NÃO REMOVER)
+
+Toda página que faça `fetch` de dados (Apps Script, Sheets API, etc.) **deve usar** o `.loading-overlay` padrão documentado em `git-claude/readmeload.md`. Página-modelo: `compliance/kpis/manutencao/index.html`.
+
+**Regras invioláveis ao editar páginas existentes:**
+
+- **Não remover** o `<div class="loading-overlay" id="loading-overlay">` antes do `<footer>` / `</body>`.
+- **Não substituir** o CSS `.loading-overlay` por loaders próprios (`.loading-state`, `.loading-spinner`, `.tools-loading`, `#loading-screen`, etc.).
+- **Não trocar** o texto "Carregando dados..." por placeholders dentro do `#content` ou de containers de seção (`#ft-accordion-*`, `dev-empty`, etc.).
+- **Não remover** as chamadas `showLoading()` / `hideLoading()` ao mexer em `loadData()`, `loadFt*()`, `carregarDados()`, etc. Se adicionar novo fetch, ligue o overlay no início e o `.finally(hideLoading)`.
+- **Não adicionar** IIFE residual que injete `<div>Carregando...</div>` dentro de containers — o overlay padrão já cobre o estado.
+
+Se a página ainda não tiver o overlay, aplicar conforme o readme — não inventar variações.
+
+## 7. Fluxo padrão ao publicar mudanças
 
 1. Editar arquivos
 2. `git commit` com mensagem descritiva
