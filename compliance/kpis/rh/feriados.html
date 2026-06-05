@@ -56,6 +56,19 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
 .chart-wrap { position: relative; height: 240px; }
 #dashboard { padding: 14px 20px 80px; display: flex; flex-direction: column; gap: 14px; }
+/* Tabela ANALÍTICO (mesmo padrão do absenteismo) */
+.colab-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.colab-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 6px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); cursor: pointer; user-select: none; white-space: nowrap; }
+.colab-table thead th:hover { color: var(--carbon); }
+.colab-table tbody td { padding: 8px 6px; font-size: 13px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.colab-table tbody tr { transition: background 0.1s; }
+.colab-table tbody tr:hover { background: #FAFAFA; }
+.colab-table th:nth-child(1), .colab-table td:nth-child(1) { width: 46%; }
+.colab-table th:nth-child(2), .colab-table td:nth-child(2) { width: 18%; text-align: center; }
+.colab-table th:nth-child(3), .colab-table td:nth-child(3) { width: 18%; text-align: center; }
+.colab-table th:nth-child(4), .colab-table td:nth-child(4) { width: 18%; text-align: center; }
+.colab-cell-num { font-family: 'DM Mono', monospace; font-weight: 600; color: var(--carbon); }
+.colab-cell-zero { font-family: 'DM Mono', monospace; color: var(--muted); }
 
 .status-table { padding: 4px 0; }
 .status-head { display: grid; grid-template-columns: 1fr 56px 56px 56px 56px; align-items: center; gap: 6px; padding: 6px 4px; border-bottom: 1px solid var(--border); }
@@ -332,6 +345,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="chart-card">
     <div class="chart-title">Decisões por Feriado</div>
     <div class="status-table" id="rows-decisoes"></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Anal&iacute;tico <span id="colab-count-label" style="color:var(--muted);font-size:10px;margin-left:8px;font-weight:500;"></span></div>
+    <div class="table-wrap" style="overflow-x:auto;">
+      <table class="colab-table">
+        <thead>
+          <tr>
+            <th onclick="toggleColabSort('nome')">Colaborador <span id="colab-icon-nome">↕</span></th>
+            <th onclick="toggleColabSort('feriados')">Feriados <span id="colab-icon-feriados">↕</span></th>
+            <th onclick="toggleColabSort('horas')">Horas <span id="colab-icon-horas">↓</span></th>
+            <th onclick="toggleColabSort('pendentes')">Pendentes <span id="colab-icon-pendentes">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-colab"></tbody>
+      </table>
+    </div>
   </div>
 </main>
 
@@ -1074,11 +1103,92 @@ function renderDecisoesTable(grupos) {
   el.innerHTML = html;
 }
 
+// ── Tabela Analítico ─────────────────────────────────────────────────────────
+var COLAB_PAGE_FER = 10;
+var _colabSortColFer = 'horas';
+var _colabSortDirFer = -1;
+var _colabRowsFer = [];
+var _colabShownFer = 10;
+
+function buildColabRowsFer() {
+  var src = getFilteredAll();
+  var by = {};
+  src.forEach(function(d) {
+    var nome = (d.nome || '').trim();
+    if (!nome) return;
+    if (!by[nome]) by[nome] = { nome: nome, feriados: 0, horas: 0, pendentes: 0 };
+    by[nome].feriados++;
+    by[nome].horas += parseHoras(d.horas);
+    if (!isDecidido(d)) by[nome].pendentes++;
+  });
+  return Object.keys(by).map(function(k){ return by[k]; });
+}
+
+function toggleColabSort(col) {
+  if (_colabSortColFer === col) { _colabSortDirFer = -_colabSortDirFer; }
+  else { _colabSortColFer = col; _colabSortDirFer = (col === 'nome') ? 1 : -1; }
+  var icons = { nome:'↕', feriados:'↕', horas:'↕', pendentes:'↕' };
+  icons[_colabSortColFer] = _colabSortDirFer === -1 ? '↓' : '↑';
+  ['nome','feriados','horas','pendentes'].forEach(function(k) {
+    var el = document.getElementById('colab-icon-' + k);
+    if (el) el.textContent = icons[k];
+  });
+  _colabShownFer = COLAB_PAGE_FER;
+  renderColabRowsFer();
+}
+
+function renderColabTableFer() {
+  _colabRowsFer = buildColabRowsFer();
+  _colabShownFer = COLAB_PAGE_FER;
+  var lbl = document.getElementById('colab-count-label');
+  if (lbl) lbl.textContent = '— ' + _colabRowsFer.length + ' resultado' + (_colabRowsFer.length !== 1 ? 's' : '');
+  renderColabRowsFer();
+}
+
+function renderColabRowsFer() {
+  var sorted = _colabRowsFer.slice().sort(function(a,b) {
+    if (_colabSortColFer === 'nome') return _colabSortDirFer * (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+    return _colabSortDirFer * ((b[_colabSortColFer] || 0) - (a[_colabSortColFer] || 0));
+  });
+  var display = sorted.slice(0, _colabShownFer);
+  function cellNum(n) {
+    var cls = (n > 0) ? 'colab-cell-num' : 'colab-cell-zero';
+    return '<td class="' + cls + '">' + n + '</td>';
+  }
+  function cellHoras(h) {
+    var cls = (h > 0) ? 'colab-cell-num' : 'colab-cell-zero';
+    return '<td class="' + cls + '">' + formatHoras(h) + '</td>';
+  }
+  var html = display.map(function(r) {
+    return '<tr>' +
+      '<td>' + escH(r.nome) + '</td>' +
+      cellNum(r.feriados) +
+      cellHoras(r.horas) +
+      cellNum(r.pendentes) +
+      '</tr>';
+  }).join('');
+  var resto = sorted.length - _colabShownFer;
+  if (resto > 0) {
+    var proximo = Math.min(COLAB_PAGE_FER, resto);
+    html += '<tr><td colspan="4" style="text-align:center;padding:10px;border-bottom:none">' +
+      '<button onclick="showMoreColabFer()" style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer">Ver mais (' + proximo + ')</button>' +
+      '</td></tr>';
+  }
+  document.getElementById('tbody-colab').innerHTML = html ||
+    '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Nenhum resultado</td></tr>';
+}
+
+function showMoreColabFer() {
+  _colabShownFer += COLAB_PAGE_FER;
+  renderColabRowsFer();
+}
+
 function renderDashboard() {
   var grupos = aggregarPorFeriado(getFilteredForChart());
   renderChartColab();
   renderChartHoras();
   renderDecisoesTable(grupos);
+  renderColabTableFer();
 }
 
 // ─── RENDER ───────────────────────────────────────────────────────────────────
