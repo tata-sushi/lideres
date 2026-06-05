@@ -390,9 +390,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <thead>
           <tr>
             <th onclick="doSort('nome')">Colaborador</th>
-            <th onclick="doSort('ini1')">Início</th>
-            <th onclick="doSort('fim1')">Término</th>
-            <th onclick="doSort('frac')">Dias</th>
+            <th onclick="doSort('ini')">Início</th>
+            <th onclick="doSort('fim')">Término</th>
+            <th onclick="doSort('dias')">Dias</th>
           </tr>
         </thead>
         <tbody id="tBody"></tbody>
@@ -1150,7 +1150,7 @@ function clearFeriasFilters() {
   updateAll();
 }
 var activeTab = 'empresa';
-var sKey = 'ini1', sDir = 'asc';
+var sKey = 'ini', sDir = 'asc';
 var chartInst = null;
 var PAGE_SIZE = 10;
 var tRows = [];
@@ -1280,18 +1280,35 @@ function progBar(pct) {
     '</div>';
 }
 
-function _totalDias(d) {
-  if (!d.frac) return '—';
-  var nums = String(d.frac).split('+').map(function(x){ return parseInt(x.trim(), 10) || 0; });
-  var total = nums.reduce(function(a, b){ return a + b; }, 0);
-  return total || '—';
+// Dias inclusive entre 2 datas ISO (yyyy-mm-dd); fallback caso frac vier vazio
+function _daysBetweenIso(iso1, iso2) {
+  if (!iso1 || !iso2) return 0;
+  var d1 = new Date(iso1 + 'T00:00:00'), d2 = new Date(iso2 + 'T00:00:00');
+  return Math.max(0, Math.round((d2 - d1) / 86400000) + 1);
+}
+// Expande uma colaboradora em 1..3 linhas (uma por período)
+function _expandPeriodos(d) {
+  var nums = d.frac ? String(d.frac).split('+').map(function(x){ return parseInt(x.trim(), 10) || 0; }) : [];
+  var pares = [['ini1','fim1'], ['ini2','fim2'], ['ini3','fim3']];
+  var out = [];
+  pares.forEach(function(p, i) {
+    if (!d[p[0]]) return;
+    out.push({
+      nome: d.nome,
+      mt:   d.mt,
+      ini:  d[p[0]],
+      fim:  d[p[1]],
+      dias: nums[i] || _daysBetweenIso(d[p[0]], d[p[1]])
+    });
+  });
+  return out;
 }
 function rowHtml(d) {
   return '<tr>' +
     '<td>' + d.nome + '</td>' +
-    '<td>' + _isoToBR(d.ini1) + '</td>' +
-    '<td>' + _isoToBR(d.fim1) + '</td>' +
-    '<td>' + _totalDias(d) + '</td>' +
+    '<td>' + _isoToBR(d.ini) + '</td>' +
+    '<td>' + _isoToBR(d.fim) + '</td>' +
+    '<td>' + (d.dias || '—') + '</td>' +
     '</tr>';
 }
 
@@ -1312,15 +1329,18 @@ function loadMore() {
 }
 
 function renderTable(filt) {
-  var sorted = filt.slice().sort(function(a, b) {
+  // Expande cada colab em N linhas (1 por período de férias)
+  var expanded = [];
+  filt.forEach(function(d){ expanded.push.apply(expanded, _expandPeriodos(d)); });
+  var sorted = expanded.slice().sort(function(a, b) {
     var va = a[sKey], vb = b[sKey];
     if (typeof va === 'string') return sDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
     return sDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
   });
-  document.getElementById('tCount').textContent = '— ' + filt.length + ' resultado' + (filt.length !== 1 ? 's' : '');
+  document.getElementById('tCount').textContent = '— ' + sorted.length + ' resultado' + (sorted.length !== 1 ? 's' : '');
   document.getElementById('tBody').innerHTML = '';
   document.getElementById('btnMore').hidden = true;
-  if (!filt.length) {
+  if (!sorted.length) {
     document.getElementById('tBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Nenhuma férias programada encontrada</td></tr>';
     return;
   }
