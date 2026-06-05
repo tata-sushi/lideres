@@ -305,6 +305,14 @@ body {
   transition: height 1s cubic-bezier(0.16,1,0.3,1);
 }
 
+/* Cross-filter — clique numa coluna filtra o dash; fade só na chart que tem seleção */
+.size-col { cursor: pointer; }
+.size-col.cf-selected .size-bar { outline: 2px solid var(--carbon); outline-offset: 2px; }
+.size-col.cf-selected .size-num,
+.size-col.cf-selected .size-lbl { color: var(--carbon); font-weight: 700; }
+.size-cols:has(.cf-selected) .size-col:not(.cf-selected) .size-bar { background: rgba(53,56,63,0.45); }
+.size-cols:has(.cf-selected) .size-col:not(.cf-selected) .size-num { color: var(--muted); }
+
 /* Valor logo acima da barra — DM Mono carbon bold */
 .size-num { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--carbon); }
 .size-lbl { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); }
@@ -1257,6 +1265,14 @@ function toggleAlertBody() {
 /* ══ UNIT FILTER ══ */
 var activeUnitFilter = 'all';
 var activeItemFilter = null;
+var activeSizeFilter = null;
+
+function setSizeFilter(size) {
+  activeSizeFilter = (activeSizeFilter === size) ? null : size;
+  document.body.classList.toggle('cf-active-size', activeSizeFilter !== null);
+  renderDash();
+  recalcSizes();
+}
 
 function setUnitFilter(unit, btn) {
   activeUnitFilter = unit;
@@ -1342,7 +1358,8 @@ function buildSizes(id, data) {
   var max = Math.max.apply(null, data.map(function(s){return s.q;}));
   if (!max) max = 1;
   el.innerHTML = data.map(function(s){
-    return '<div class="size-col">' +
+    var sel = (activeSizeFilter === s.l) ? ' cf-selected' : '';
+    return '<div class="size-col'+sel+'" onclick="setSizeFilter(\''+escAttr(s.l)+'\')">' +
       '<div class="size-bar-wrap">' +
         '<div class="size-num">'+s.q+'</div>' +
         '<div class="size-bar" style="height:0" data-h="'+(s.q/max*100).toFixed(1)+'px"></div>' +
@@ -2023,6 +2040,9 @@ function recalcData() {
   (HISTORICO || []).forEach(function(r) {
     var itemName = r.item;
     if (!itemName) return;
+
+    // Cross-filter por tamanho
+    if (activeSizeFilter && String(r.tamanho || '').trim() !== activeSizeFilter) return;
 
     var qty   = r.quantidade || 0;
     var valor = Math.abs(r.custo_unit || 0) * qty;
