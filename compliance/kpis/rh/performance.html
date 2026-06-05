@@ -1130,27 +1130,63 @@ window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); 
   else loadAbsData();
 })();
 
-// ─── Exames Ocupacionais — status ───────────────────────────────────────────
+// ─── Exames Ocupacionais — status (mesma lógica de medicina.html) ────────────
 (function() {
   var EXAMES_URL = 'https://script.google.com/macros/s/AKfycbw2d8S-nsu0cvs5oPyRZTsXtYvBC_9B85IBkE8t5IGoAsoq2nEumkNGllhSdIGUoXnTbg/exec';
 
-  function parseDateBR(s) {
-    if (!s) return null;
-    var p = String(s).trim().split('/');
-    if (p.length !== 3) return null;
-    var d = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
-    return isNaN(d.getTime()) ? null : d;
+  // Mesmo rowToObj de medicina.html (substituição explícita de acentos)
+  function rowToObj(headers, row) {
+    var obj = {};
+    headers.forEach(function(h, i) {
+      var val = (row[i] !== null && row[i] !== undefined) ? String(row[i]) : '';
+      obj[h.toLowerCase().trim()
+           .replace(/[áàâã]/g,'a').replace(/[éê]/g,'e')
+           .replace(/[í]/g,'i').replace(/[óôõ]/g,'o')
+           .replace(/[ú]/g,'u').replace(/[ç]/g,'c')
+           .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'_')] = val.trim();
+    });
+    return obj;
   }
 
-  function calcStatus(r) {
-    var realiza = (r.realizaExame || '').toLowerCase().trim();
-    if (realiza === 'nao' || realiza === 'não') return 'dispensado';
+  // Mesmos campos de normExame de medicina.html
+  // Colunas: A:Matrícula B:Nome C:Cargo D:Departamento E:Unidade F:Admissão G:Status H:TipoExame I:Periodicidade J:ÚltimoExame K:RealizaExame L:PróximaRealização
+  function normExame(obj) {
+    function v() {
+      for (var i = 0; i < arguments.length; i++) {
+        if (obj[arguments[i]] !== undefined && obj[arguments[i]] !== '') return obj[arguments[i]];
+      }
+      return '';
+    }
+    return {
+      statusColab:       v('status'),
+      unidade:           v('unidade'),
+      departamento:      v('departamento'),
+      realizaExame:      v('realiza_exame','realiza_exame_','realiza'),
+      proximaRealizacao: v('proxima_realizacao','proxima_realizacao_','data_do_proximo_exame','data_proximo_exame','proximo_exame')
+    };
+  }
+
+  function parseDateBR(s) {
+    if (!s) return null;
+    var p = s.trim().split('/');
+    if (p.length === 3) return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+    return null;
+  }
+
+  function normStr(s) {
+    return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  // Mesma calcStatusExame de medicina.html
+  function calcStatusExame(r) {
+    var realiza = normStr((r.realizaExame || '').toLowerCase().trim());
+    if (realiza === 'nao' || realiza === 'nao') return 'dispensado';
     var prox = parseDateBR(r.proximaRealizacao);
     if (!prox) return 'pendente';
     var hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     var em30 = new Date(hoje.getTime() + 30 * 86400000);
-    if (prox < hoje)   return 'vencido';
-    if (prox <= em30)  return 'a-vencer';
+    if (prox < hoje)  return 'vencido';
+    if (prox <= em30) return 'a-vencer';
     return 'valido';
   }
 
@@ -1165,20 +1201,22 @@ window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); 
 
   function examesRender(state) {
     state = state || { unidade: 'Todos', depto: 'Todos' };
+    // Filtra por unidade/depto + apenas ativos que realizam exame (igual medicina.html)
     var filtered = EXAMES_RAW.filter(function(r) {
-      if (state.unidade !== 'Todos' && r.unidade !== state.unidade) return false;
-      if (state.depto   !== 'Todos' && r.depto   !== state.depto)   return false;
+      if (normStr((r.statusColab || '').toLowerCase().trim()) !== 'ativo') return false;
+      if (normStr((r.realizaExame || '').toLowerCase().trim()) !== 'sim')  return false;
+      if (state.unidade !== 'Todos' && r.unidade !== state.unidade)        return false;
+      if (state.depto   !== 'Todos' && r.departamento !== state.depto)     return false;
       return true;
     });
     var counts = { valido: 0, 'a-vencer': 0, vencido: 0, pendente: 0 };
     filtered.forEach(function(r) {
-      var s = calcStatus(r);
+      var s = calcStatusExame(r);
       if (counts[s] !== undefined) counts[s]++;
     });
     var el = document.getElementById('exames-status-list');
     if (!el) return;
-    var total = filtered.length;
-    if (!total) {
+    if (!filtered.length) {
       el.innerHTML = '<div class="exam-status-empty">Sem dados</div>';
       return;
     }
@@ -1198,31 +1236,25 @@ window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); 
     fetch(EXAMES_URL + '?action=getData')
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        var rows = data.data || data.rows || data || [];
-        if (!Array.isArray(rows) || rows.length < 2) {
+        // medicina.html usa data.values
+        if (data.ok === false || data.error) {
           var el = document.getElementById('exames-status-list');
           if (el) el.innerHTML = '<div class="exam-status-empty">Sem dados</div>';
           return;
         }
+        var rows = data.values || [];
+        if (rows.length < 2) {
+          var el2 = document.getElementById('exames-status-list');
+          if (el2) el2.innerHTML = '<div class="exam-status-empty">Sem dados</div>';
+          return;
+        }
         var headers = rows[0];
-        EXAMES_RAW = rows.slice(1).map(function(row) {
-          var obj = {};
-          headers.forEach(function(h, i) {
-            obj[String(h || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '')] = String(row[i] || '').trim();
-          });
-          function v() {
-            for (var i = 0; i < arguments.length; i++) {
-              if (obj[arguments[i]] !== undefined && obj[arguments[i]] !== '') return obj[arguments[i]];
-            }
-            return '';
+        EXAMES_RAW = [];
+        for (var i = 1; i < rows.length; i++) {
+          if (rows[i].some(function(c) { return c && String(c).trim(); })) {
+            EXAMES_RAW.push(normExame(rowToObj(headers, rows[i])));
           }
-          return {
-            unidade:            v('unidade'),
-            depto:              v('departamento', 'depto'),
-            realizaExame:       v('realiza_exame', 'realiza_exame_', 'realiza'),
-            proximaRealizacao:  v('proxima_realizacao', 'proxima_realizacao_', 'data_do_proximo_exame', 'data_proximo_exame', 'proximo_exame')
-          };
-        });
+        }
         if (window.registerPerfRenderer) window.registerPerfRenderer(examesRender);
         else examesRender(window.perfState);
       })
