@@ -65,7 +65,7 @@
   /* TABLE CARD (padrão bancodehoras) */
   .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); padding: 16px; display: flex; flex-direction: column; overflow: hidden; }
   .table-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 16px; text-align: center; }
-  .table-count { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-left: 8px; font-weight: normal; text-transform: none; letter-spacing: 0; }
+  .table-count { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-left: 8px; font-weight: 500; }
   .btn-more { display: block; margin: 14px auto 0; background: transparent; border: 1px solid var(--border); padding: 8px 14px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--carbon); cursor: pointer; border-radius: 6px; }
   .btn-more:hover { border-color: var(--carbon); }
   .table-wrap { overflow-x: auto; }
@@ -505,20 +505,42 @@ function fetchColaboradores() {
       });
     }).sort(function(a,b){ return a.proxAniv - b.proxAniv; });
 
+    // Aniversários de Empresa: próximo marco real (6 meses OU N anos completos)
     DATA_EMP = COLABORADORES.filter(function(c){ return c.admissao; }).map(function(c) {
       var a = c.admissao;
-      var px = proxAniversario(a.dia, a.mes);
+      var admDate = new Date(a.ano, a.mes - 1, a.dia);
+      var hojeMid = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+      var px, origin, label;
+      // 6 meses (uma única vez, antes de completar 1 ano)
+      var seis = new Date(admDate); seis.setMonth(seis.getMonth() + 6);
+      if (seis >= hojeMid) {
+        px = seis; origin = admDate; label = '6 meses';
+      } else {
+        // Próximo aniversário anual (>= 1 ano de empresa)
+        var thisYearAniv = new Date(hoje.getFullYear(), a.mes - 1, a.dia);
+        if (thisYearAniv < hojeMid) thisYearAniv = new Date(hoje.getFullYear() + 1, a.mes - 1, a.dia);
+        var nYears = thisYearAniv.getFullYear() - a.ano;
+        if (nYears < 1) return null;
+        px = thisYearAniv;
+        origin = new Date(a.ano + nYears - 1, a.mes - 1, a.dia);
+        label = nYears + (nYears === 1 ? ' ano' : ' anos');
+      }
+      var total = px - origin;
+      var passed = hoje - origin;
+      var pct = total > 0 ? Math.max(0, Math.min(100, Math.round(passed / total * 100))) : 100;
+      var diasFalt = Math.ceil((px - hoje) / 86400000);
       return Object.assign({}, c, {
         proxAniv: px,
-        diasFaltando: diasFaltando(a.dia, a.mes),
-        pct: pctAniversario(a.dia, a.mes),
+        diasFaltando: diasFalt,
+        pct: pct,
         anosEmpresa: idadeCalc(a.ano),
+        proxMarco: label,
         proxFormatado: px.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}),
         mesAniv: px.getMonth(),
         mesAnivMY: String(px.getMonth()+1).padStart(2,'0') + '/' + px.getFullYear(),
         mesNome: px.toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase(),
       });
-    }).sort(function(a,b){ return a.proxAniv - b.proxAniv; });
+    }).filter(Boolean).sort(function(a,b){ return a.proxAniv - b.proxAniv; });
 
     // Assistência Médica: ativos que ainda vão completar 6 meses de empresa
     DATA_MED = COLABORADORES.filter(function(c){ return c.admissao; }).map(function(c) {
@@ -728,7 +750,7 @@ function renderTable(filt) {
     if (typeof va==='string') return sDir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
     return sDir==='asc'?(va>vb?1:-1):(va<vb?1:-1);
   });
-  document.getElementById('tCount').textContent = '— ' + filt.length + ' colaborador' + (filt.length !== 1 ? 'es' : '');
+  document.getElementById('tCount').textContent = '— ' + filt.length + ' resultado' + (filt.length !== 1 ? 's' : '');
   document.getElementById('tBody').innerHTML = '';
   document.getElementById('btnMore').hidden = true;
   if (!filt.length) {
