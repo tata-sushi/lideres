@@ -52,16 +52,19 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .kpi-sub strong { color: var(--carbon); font-weight: 600; }
 
 /* CHART CARDS */
-.chart-card { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px 16px; display: flex; flex-direction: column; }
+.chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px 16px; display: flex; flex-direction: column; }
 .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
 .chart-wrap { position: relative; height: 240px; }
+#dashboard { padding: 14px 20px 80px; display: flex; flex-direction: column; gap: 14px; }
 
 .status-table { padding: 4px 0; }
 .status-head { display: grid; grid-template-columns: 1fr 56px 56px 56px 56px; align-items: center; gap: 6px; padding: 6px 4px; border-bottom: 1px solid var(--border); }
 .status-head-cell { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); text-align: center; }
 .status-head-cell:first-child { text-align: left; }
-.status-row { display: grid; grid-template-columns: 1fr 56px 56px 56px 56px; align-items: center; gap: 6px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+.status-row { display: grid; grid-template-columns: 1fr 56px 56px 56px 56px; align-items: center; gap: 6px; padding: 10px 4px; border-bottom: 1px solid var(--border); transition: background 0.15s; }
 .status-row:last-child { border-bottom: none; }
+.status-row:hover { background: #FAFAFA; }
+.status-row.cf-selected { background: #FAFAFA; box-shadow: inset 4px 0 0 0 var(--carbon); }
 .status-name { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); min-width: 0; }
 .status-num { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 600; color: var(--carbon); text-align: center; font-variant-numeric: tabular-nums; }
 .status-num.zero { color: #CCC; font-weight: 400; }
@@ -192,8 +195,7 @@ body:not([data-view="kpis"]) #kpis-strip-kpis { display: none; }
   .content { max-width: 800px; margin: 0 auto; padding: 24px 32px 80px; }
   .filters-wrap { max-width: 800px; margin: 0 auto; }
   .kpis-wrap { max-width: 800px; margin: 0 auto; }
-  .chart-card { max-width: 800px; margin: 0 auto; width: 100%; }
-  #dashboard { padding-bottom: 80px; }
+  #dashboard { max-width: 800px; margin-left: auto; margin-right: auto; padding: 14px 0 80px; }
   .filters-row { grid-template-columns: 1fr 1fr 1fr; }
   .card-body { grid-template-columns: repeat(3, 1fr); }
   .modal-overlay { align-items: center; }
@@ -478,10 +480,14 @@ var state = {
   modalFeriado: null,   // feriado temporário selecionado no modal
   filters: { unidade: 'Todos', departamento: 'Todos' }
 };
-var _chartColabSel = null;
-var _chartHorasSel = null;
+var _cfFeriado = null;       // id do feriado selecionado (cross-filter unificado)
 var _chartColabInst = null;
 var _chartHorasInst = null;
+
+function setCfFeriado(fid) {
+  _cfFeriado = (_cfFeriado === fid) ? null : fid;
+  render();
+}
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 function escH(s) {
@@ -658,6 +664,17 @@ function getFiltered() {
   });
 }
 function getFilteredAll() {
+  var src = getDadosFeriado();
+  var f = state.filters;
+  return src.filter(function(d) {
+    if (f.unidade !== 'Todos' && d.unidade !== f.unidade) return false;
+    if (f.departamento !== 'Todos' && d.depto !== f.departamento) return false;
+    if (_cfFeriado && d.feriado !== _cfFeriado) return false;
+    return true;
+  });
+}
+// Fonte dos charts e tabela "Decisões": ignora cfFeriado para sempre exibir todos os feriados
+function getFilteredForChart() {
   var src = getDadosFeriado();
   var f = state.filters;
   return src.filter(function(d) {
@@ -936,18 +953,18 @@ function renderChartColab() {
   var canvas = document.getElementById('chart-colab');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  var grupos = aggregarPorFeriado(getFilteredAll());
+  var grupos = aggregarPorFeriado(getFilteredForChart());
   var ativos = grupos.filter(function(g){ return g.total > 0; });
 
   if (_chartColabInst) { _chartColabInst.destroy(); _chartColabInst = null; }
-  if (!ativos.length) { _chartColabSel = null; return; }
-  if (_chartColabSel !== null && _chartColabSel >= ativos.length) _chartColabSel = null;
+  if (!ativos.length) return;
 
   var labels = ativos.map(function(g){ return g.nome; });
   var counts = ativos.map(function(g){ return Object.keys(g.nomes).length; });
-  var bgColors = counts.map(function(_, i) {
-    if (_chartColabSel === null) return '#35383F';
-    return _chartColabSel === i ? '#35383F' : 'rgba(53,56,63,0.45)';
+  var ids    = ativos.map(function(g){ return g.id; });
+  var bgColors = ids.map(function(id) {
+    if (_cfFeriado === null) return '#35383F';
+    return _cfFeriado === id ? '#35383F' : 'rgba(53,56,63,0.45)';
   });
 
   _chartColabInst = new Chart(canvas, {
@@ -962,13 +979,7 @@ function renderChartColab() {
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       layout: { padding: { top: 18 } },
-      onClick: function(e, els) {
-        if (els.length) {
-          var idx = els[0].index;
-          _chartColabSel = (_chartColabSel === idx) ? null : idx;
-          renderChartColab();
-        }
-      },
+      onClick: function(e, els) { if (els.length) setCfFeriado(ids[els[0].index]); },
       onHover: function(e, els) {
         if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default';
       },
@@ -988,19 +999,19 @@ function renderChartHoras() {
   var canvas = document.getElementById('chart-horas');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  var grupos = aggregarPorFeriado(getFilteredAll());
+  var grupos = aggregarPorFeriado(getFilteredForChart());
   var ativos = grupos.filter(function(g){ return g.total > 0; });
 
   if (_chartHorasInst) { _chartHorasInst.destroy(); _chartHorasInst = null; }
-  if (!ativos.length) { _chartHorasSel = null; return; }
-  if (_chartHorasSel !== null && _chartHorasSel >= ativos.length) _chartHorasSel = null;
+  if (!ativos.length) return;
 
   var labels = ativos.map(function(g){ return g.nome; });
   var values = ativos.map(function(g){ return Math.round(g.totalHoras * 100) / 100; });
   var formatted = ativos.map(function(g){ return formatHoras(g.totalHoras); });
-  var bgColors = values.map(function(_, i) {
-    if (_chartHorasSel === null) return '#35383F';
-    return _chartHorasSel === i ? '#35383F' : 'rgba(53,56,63,0.45)';
+  var ids    = ativos.map(function(g){ return g.id; });
+  var bgColors = ids.map(function(id) {
+    if (_cfFeriado === null) return '#35383F';
+    return _cfFeriado === id ? '#35383F' : 'rgba(53,56,63,0.45)';
   });
 
   _chartHorasInst = new Chart(canvas, {
@@ -1016,13 +1027,7 @@ function renderChartHoras() {
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       layout: { padding: { top: 18 } },
-      onClick: function(e, els) {
-        if (els.length) {
-          var idx = els[0].index;
-          _chartHorasSel = (_chartHorasSel === idx) ? null : idx;
-          renderChartHoras();
-        }
-      },
+      onClick: function(e, els) { if (els.length) setCfFeriado(ids[els[0].index]); },
       onHover: function(e, els) {
         if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default';
       },
@@ -1057,7 +1062,8 @@ function renderDecisoesTable(grupos) {
     '<div class="status-head-cell">Total</div>' +
   '</div>';
   html += ativos.map(function(g) {
-    return '<div class="status-row">' +
+    var sel = _cfFeriado === g.id ? ' cf-selected' : '';
+    return '<div class="status-row' + sel + '" onclick="setCfFeriado(\'' + escH(g.id) + '\')" style="cursor:pointer">' +
       '<span class="status-name">' + escH(g.nome) + '</span>' +
       num(g.pendente) +
       num(g.folga) +
@@ -1069,7 +1075,7 @@ function renderDecisoesTable(grupos) {
 }
 
 function renderDashboard() {
-  var grupos = aggregarPorFeriado(getFilteredAll());
+  var grupos = aggregarPorFeriado(getFilteredForChart());
   renderChartColab();
   renderChartHoras();
   renderDecisoesTable(grupos);
@@ -1140,6 +1146,7 @@ function setFilter(key, val) {
 function clearFilters() {
   state.feriadoAtivo = null;
   state.filters = { unidade: 'Todos', departamento: 'Todos' };
+  _cfFeriado = null;
   render();
 }
 
