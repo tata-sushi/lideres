@@ -931,6 +931,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="modal-row"><span>Tempo de casa</span><span id="mTempoCasa">—</span></div>
     <div class="modal-row"><span>Aniversário</span><span id="mAniversario">—</span></div>
     <div class="modal-row"><span>Armário</span><span id="mArmario">—</span></div>
+    <div class="modal-row"><span>Próximo exame</span><span id="mProxExame">—</span></div>
     <div class="modal-actions">
       <button class="modal-btn-cargo" onclick="abrirDescricaoCargo()">DESC. DO CARGO</button>
       <button class="modal-btn-cargo" onclick="abrirRemuneracao()">REMUNERAÇÃO</button>
@@ -1037,6 +1038,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   var CES_URL  = 'https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec';
   // Armários — mesma base usada em /compliance/kpis/rh/armarios.html
   var ARMARIO_URL = 'https://script.google.com/macros/s/AKfycbxD9BwHYMh44Zzob_94BKUgoetxhRxm7s7_cYncnQkCYpPrwhzpIO0t3ihSpY72Amxp-A/exec';
+  // Medicina ocupacional — mesma base usada em /compliance/kpis/rh/medicina.html
+  var MEDICINA_URL = 'https://script.google.com/macros/s/AKfycbw2d8S-nsu0cvs5oPyRZTsXtYvBC_9B85IBkE8t5IGoAsoq2nEumkNGllhSdIGUoXnTbg/exec';
 
   // Aba "Salarios" → sub-modal REMUNERAÇÃO  |  Aba "Cargos" → sub-modal DESC. DO CARGO
   var _cesSalarios = {};
@@ -1045,6 +1048,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   // Armários indexados por matrícula e por nome do colaborador
   var _armariosByMatricula = {};
   var _armariosByNome      = {};
+
+  // Próximo exame (medicina) indexado por matrícula e por nome
+  var _exameByMatricula = {};
+  var _exameByNome      = {};
 
   var arvore = null;
   var nodeMap = {};
@@ -1117,6 +1124,63 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var byMat = n.matricula ? _armariosByMatricula[normMat(n.matricula)] : null;
     if (byMat) return byMat;
     return n.nome ? (_armariosByNome[normNome(n.nome)] || null) : null;
+  }
+
+  // ============================================
+  // CARREGAR PRÓXIMO EXAME (mesma base de medicina.html)
+  // ============================================
+  // normaliza cabeçalho da planilha → chave (igual a medicina.html)
+  function _headerKey(h) {
+    return String(h || '').toLowerCase().trim()
+      .replace(/[áàâã]/g, 'a').replace(/[éê]/g, 'e')
+      .replace(/[í]/g, 'i').replace(/[óôõ]/g, 'o')
+      .replace(/[ú]/g, 'u').replace(/[ç]/g, 'c')
+      .replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '_');
+  }
+
+  function carregarExames() {
+    fetch(MEDICINA_URL + '?action=getData')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var rows = (data && data.values) || [];
+        if (rows.length < 2) return;
+        var headers = rows[0].map(_headerKey);
+        function col() {  // retorna índice da 1ª chave existente
+          for (var i = 0; i < arguments.length; i++) {
+            var idx = headers.indexOf(arguments[i]);
+            if (idx !== -1) return idx;
+          }
+          return -1;
+        }
+        var iMat   = col('matricula');
+        var iNome  = col('nome');
+        var iProx  = col('proxima_realizacao', 'data_do_proximo_exame', 'data_proximo_exame', 'proximo_exame');
+        var iReal  = col('realiza_exame', 'realiza');
+        for (var r = 1; r < rows.length; r++) {
+          var row = rows[r];
+          if (!row || !row.some(function(c) { return c && String(c).trim(); })) continue;
+          var rec = {
+            proxima: iProx !== -1 ? String(row[iProx] || '').trim() : '',
+            realiza: iReal !== -1 ? String(row[iReal] || '').trim() : ''
+          };
+          var mat = iMat !== -1 ? String(row[iMat] || '').trim() : '';
+          var nm  = iNome !== -1 ? String(row[iNome] || '').trim() : '';
+          if (mat) _exameByMatricula[normMat(mat)] = rec;
+          if (nm)  _exameByNome[normNome(nm)] = rec;
+        }
+      })
+      .catch(function() {});
+  }
+
+  // Texto do próximo exame para o colaborador
+  function proximoExameDoColaborador(n) {
+    if (!n) return '—';
+    var rec = (n.matricula && _exameByMatricula[normMat(n.matricula)]) ||
+              (n.nome && _exameByNome[normNome(n.nome)]) || null;
+    if (!rec) return '—';
+    var realiza = normNome(rec.realiza);
+    if (realiza === 'nao') return 'Dispensado';
+    return rec.proxima || '—';
   }
 
   function showError(msg) {
@@ -1954,6 +2018,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.getElementById('mDepto').textContent = n.departamento || '—';
     var arm = armarioDoColaborador(n);
     document.getElementById('mArmario').textContent = arm ? (arm.num + (arm.unidade ? ' · ' + arm.unidade : '')) : '—';
+    document.getElementById('mProxExame').textContent = proximoExameDoColaborador(n);
     document.getElementById('mLider').textContent = n._parent ? n._parent.nome : '—';
     var equipeTotal = (function total(x) {
       if (!x.children) return 0;
@@ -2194,6 +2259,7 @@ window.openDrawer = function() {
   carregarDados();
   carregarCES();
   carregarArmarios();
+  carregarExames();
 
 })();
 </script>
