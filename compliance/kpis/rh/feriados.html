@@ -353,7 +353,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <thead>
           <tr>
             <th onclick="toggleColabSort('nome')">Colaborador <span id="colab-icon-nome">↕</span></th>
-            <th onclick="toggleColabSort('horas')">Horas <span id="colab-icon-horas">↓</span></th>
+            <th onclick="toggleColabSort('feriados')">Feriados <span id="colab-icon-feriados">↓</span></th>
             <th onclick="toggleColabSort('folga')">Folga <span id="colab-icon-folga">↕</span></th>
             <th onclick="toggleColabSort('pagamento')">Pagamento <span id="colab-icon-pagamento">↕</span></th>
           </tr>
@@ -1104,7 +1104,7 @@ function renderDecisoesTable(grupos) {
 
 // ── Tabela Analítico ─────────────────────────────────────────────────────────
 var COLAB_PAGE_FER = 10;
-var _colabSortColFer = 'horas';
+var _colabSortColFer = 'feriados';
 var _colabSortDirFer = -1;
 var _colabRowsFer = [];
 var _colabShownFer = 10;
@@ -1115,21 +1115,24 @@ function buildColabRowsFer() {
   src.forEach(function(d) {
     var nome = (d.nome || '').trim();
     if (!nome) return;
-    if (!by[nome]) by[nome] = { nome: nome, horas: 0, folga: 0, pagamento: 0 };
-    by[nome].horas += parseHoras(d.horas);
+    if (!by[nome]) by[nome] = { nome: nome, _setFer: {}, feriados: 0, folga: 0, pagamento: 0 };
+    if (d.feriado && !by[nome]._setFer[d.feriado]) {
+      by[nome]._setFer[d.feriado] = true;
+      by[nome].feriados++;
+    }
     var dec = norm(d.decisao || '');
     if (dec === 'folga') by[nome].folga++;
     else if (dec.indexOf('pag') >= 0) by[nome].pagamento++;
   });
-  return Object.keys(by).map(function(k){ return by[k]; });
+  return Object.keys(by).map(function(k){ var r = by[k]; delete r._setFer; return r; });
 }
 
 function toggleColabSort(col) {
   if (_colabSortColFer === col) { _colabSortDirFer = -_colabSortDirFer; }
   else { _colabSortColFer = col; _colabSortDirFer = (col === 'nome') ? 1 : -1; }
-  var icons = { nome:'↕', horas:'↕', folga:'↕', pagamento:'↕' };
+  var icons = { nome:'↕', feriados:'↕', folga:'↕', pagamento:'↕' };
   icons[_colabSortColFer] = _colabSortDirFer === -1 ? '↓' : '↑';
-  ['nome','horas','folga','pagamento'].forEach(function(k) {
+  ['nome','feriados','folga','pagamento'].forEach(function(k) {
     var el = document.getElementById('colab-icon-' + k);
     if (el) el.textContent = icons[k];
   });
@@ -1155,14 +1158,10 @@ function renderColabRowsFer() {
     var cls = (n > 0) ? 'colab-cell-num' : 'colab-cell-zero';
     return '<td class="' + cls + '">' + n + '</td>';
   }
-  function cellHoras(h) {
-    var cls = (h > 0) ? 'colab-cell-num' : 'colab-cell-zero';
-    return '<td class="' + cls + '">' + formatHoras(h) + '</td>';
-  }
   var html = display.map(function(r) {
     return '<tr>' +
       '<td>' + escH(r.nome) + '</td>' +
-      cellHoras(r.horas) +
+      cellNum(r.feriados) +
       cellNum(r.folga) +
       cellNum(r.pagamento) +
       '</tr>';
