@@ -240,6 +240,8 @@ thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; 
 tbody td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: #FAFAFA; }
+tbody tr.cf-selected { background: #FAFAFA; box-shadow: inset 4px 0 0 0 var(--carbon); }
+tbody tr.cf-selected td { color: var(--carbon); font-weight: 600; }
 .col-nome { font-weight: 600; color: var(--carbon); }
 .col-proximo { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); }
 .col-proximo.vencido-date { color: #7A1A1A; font-weight: 600; }
@@ -823,7 +825,9 @@ function renderDashTable() {
   var moreWrap = document.getElementById('show-more-wrap');
   if (!tbody) return;
   var ORDER = { vencido: 0, 'a-vencer': 1, pendente: 2, valido: 3, dispensado: 4 };
-  var base = exames.filter(function(r){ return passesCFMed(r, null); });
+  // Lista todos os colabs ignorando o cf-colab (assim a tabela continua mostrando
+  // todos pra permitir trocar a seleção); demais filtros ainda valem.
+  var base = exames.filter(function(r){ return passesCFMed(r, 'colab'); });
   var sorted = base.slice().sort(function(a, b) {
     return (ORDER[calcStatusExame(a)]||0) - (ORDER[calcStatusExame(b)]||0);
   });
@@ -835,7 +839,9 @@ function renderDashTable() {
     var prox = proximoExameDate(r);
     var proxStr = prox ? formatDateBR(prox) : '—';
     var isVencido = prox && prox < hoje;
-    html += '<tr>' +
+    var key = _colabKey(r);
+    var sel = (_cfMed.dim === 'colab' && _cfMed.value === key) ? ' class="cf-selected"' : '';
+    html += '<tr' + sel + ' style="cursor:pointer" onclick="setCFMed(\'colab\',\'' + escAttrMed(key) + '\')">' +
       '<td class="col-nome">' + escH(r.nome) + '</td>' +
       '<td class="col-proximo' + (isVencido ? ' vencido-date' : '') + '">' + proxStr + '</td>' +
       '<td><span class="status-badge m-' + slug + '">' + escH(statusLabel(slug)) + '</span></td>' +
@@ -867,13 +873,15 @@ function _proxMYMed(r) {
   return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
 }
 
+function _colabKey(r) { return (r.matricula || r.nome || '').toString().trim(); }
 function passesCFMed(r, exceptDim) {
   if (_medFiltroUnidade !== 'Todas' && exceptDim !== 'unidade' && r.unidade !== _medFiltroUnidade) return false;
   if (_medFiltroDepto   !== 'Todos' && exceptDim !== 'depto'   && r.departamento !== _medFiltroDepto) return false;
   if (_medFiltroStatus  !== 'Todos' && exceptDim !== 'status'  && calcStatusExame(r) !== _medFiltroStatus) return false;
   if (_cfMed.dim && _cfMed.dim !== exceptDim) {
-    if (_cfMed.dim === 'tipo') return (r.tipoExame || 'Sem tipo') === _cfMed.value;
-    if (_cfMed.dim === 'mes')  return _proxMYMed(r) === _cfMed.value;
+    if (_cfMed.dim === 'tipo')  return (r.tipoExame || 'Sem tipo') === _cfMed.value;
+    if (_cfMed.dim === 'mes')   return _proxMYMed(r) === _cfMed.value;
+    if (_cfMed.dim === 'colab') return _colabKey(r) === _cfMed.value;
   }
   return true;
 }
