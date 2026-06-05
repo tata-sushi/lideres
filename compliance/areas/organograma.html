@@ -925,6 +925,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="modal-row"><span>Matrícula</span><span id="mId">—</span></div>
     <div class="modal-row"><span>Unidade</span><span id="mUnit">—</span></div>
     <div class="modal-row"><span>Departamento</span><span id="mDepto">—</span></div>
+    <div class="modal-row"><span>Armário</span><span id="mArmario">—</span></div>
     <div class="modal-row" id="mEquipeRow" style="display:none"><span>Liderados</span><span id="mEquipe">—</span></div>
     <div class="modal-row"><span>Líder</span><span id="mLider">—</span></div>
     <div class="modal-row"><span>Tempo de casa</span><span id="mTempoCasa">—</span></div>
@@ -1033,10 +1034,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   // ============================================
   var ENDPOINT = 'https://script.google.com/macros/s/AKfycbxUWUoOmv-Cn19-FjUJ18jYTu5G_embOGDaQDsgC4Jd8agVfgqs98Tbu3qlqa9e7tpu/exec';
   var CES_URL  = 'https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec';
+  // Armários — mesma base usada em /compliance/kpis/rh/armarios.html
+  var ARMARIO_URL = 'https://script.google.com/macros/s/AKfycbxD9BwHYMh44Zzob_94BKUgoetxhRxm7s7_cYncnQkCYpPrwhzpIO0t3ihSpY72Amxp-A/exec';
 
   // Aba "Salarios" → sub-modal REMUNERAÇÃO  |  Aba "Cargos" → sub-modal DESC. DO CARGO
   var _cesSalarios = {};
   var _cesCargos   = {};
+
+  // Armários indexados por matrícula e por nome do colaborador
+  var _armariosByMatricula = {};
+  var _armariosByNome      = {};
 
   var arvore = null;
   var nodeMap = {};
@@ -1076,6 +1083,39 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         });
       })
       .catch(function() {});
+  }
+
+  // ============================================
+  // CARREGAR ARMÁRIOS (mesma base de armarios.html)
+  // ============================================
+  function normNome(s) {
+    return String(s || '')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')  // remove acentos
+      .trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+  function normMat(s) {
+    return String(s || '').trim().toLowerCase();
+  }
+
+  function carregarArmarios() {
+    fetch(ARMARIO_URL + '?action=armarios')
+      .then(function(r) { return r.json(); })
+      .then(function(lista) {
+        (lista || []).forEach(function(a) {
+          if (!a || !a.num) return;
+          if (a.matricula) _armariosByMatricula[normMat(a.matricula)] = a;
+          if (a.colaborador) _armariosByNome[normNome(a.colaborador)] = a;
+        });
+      })
+      .catch(function() {});
+  }
+
+  // Retorna o armário do colaborador (por matrícula ou nome) ou null
+  function armarioDoColaborador(n) {
+    if (!n) return null;
+    var byMat = n.matricula ? _armariosByMatricula[normMat(n.matricula)] : null;
+    if (byMat) return byMat;
+    return n.nome ? (_armariosByNome[normNome(n.nome)] || null) : null;
   }
 
   function showError(msg) {
@@ -1902,6 +1942,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.getElementById('mId').textContent = n.matricula || n.id;
     document.getElementById('mUnit').textContent = n.unidade || 'Administrativo';
     document.getElementById('mDepto').textContent = n.departamento || '—';
+    var arm = armarioDoColaborador(n);
+    document.getElementById('mArmario').textContent = arm ? (arm.num + (arm.unidade ? ' · ' + arm.unidade : '')) : '—';
     document.getElementById('mLider').textContent = n._parent ? n._parent.nome : '—';
     var equipeTotal = (function total(x) {
       if (!x.children) return 0;
@@ -2140,6 +2182,7 @@ window.openDrawer = function() {
 
   carregarDados();
   carregarCES();
+  carregarArmarios();
 
 })();
 </script>
