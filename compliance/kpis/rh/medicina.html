@@ -187,7 +187,7 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
 .footer-date { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.4); }
 
 @media (min-width: 768px) {
-  .content { max-width: 800px; margin: 0 auto; padding: 24px 32px 80px; }
+  .content { max-width: 800px; margin: 0 auto; padding: 24px 0 80px; }
   .filters-wrap { max-width: 800px; margin: 0 auto; }
   .dash-filters-wrap { max-width: 800px; margin: 0 auto; }
   .kpis-wrap { max-width: 800px; margin: 0 auto; }
@@ -240,6 +240,8 @@ thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; 
 tbody td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: #FAFAFA; }
+tbody tr.cf-selected { background: #FAFAFA; box-shadow: inset 4px 0 0 0 var(--carbon); }
+tbody tr.cf-selected td { color: var(--carbon); font-weight: 600; }
 .col-nome { font-weight: 600; color: var(--carbon); }
 .col-proximo { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); }
 .col-proximo.vencido-date { color: #7A1A1A; font-weight: 600; }
@@ -360,7 +362,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </button>
 </div>
 <div class="tabs">
-  <button class="tab-btn active" id="tab-exames" onclick="setTab('exames')">Exames Pendentes</button>
+  <button class="tab-btn active" id="tab-exames" onclick="setTab('exames')">Pend&ecirc;ncias</button>
   <button class="tab-btn" id="tab-dashboard" onclick="setTab('dashboard')">KPI's</button>
 </div>
 <div class="kpis-wrap" id="kpis-wrap">
@@ -379,7 +381,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="dashboard" id="dashboard">
   <div class="kpis-detail">
     <div class="kpis-card">
-      <div class="kpis-card-title">Exames a Vencer por M&ecirc;s</div>
+      <div class="kpis-card-title">Exames vencendo nos pr&oacute;ximos meses</div>
       <div class="chart-wrap"><canvas id="chartMedVencimentos"></canvas></div>
     </div>
     <div class="kpis-card">
@@ -387,7 +389,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="bar-list" id="barMedTipos"></div>
     </div>
     <div class="kpis-card">
-      <div class="kpis-card-title">Colaboradores <span id="dash-count" style="font-family:'DM Mono',monospace;font-weight:500;color:var(--muted);letter-spacing:0.5px;"></span></div>
+      <div class="kpis-card-title">Anal&iacute;tico <span id="dash-count" style="font-family:'DM Mono',monospace;font-weight:500;color:var(--muted);letter-spacing:0.5px;"></span></div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -823,7 +825,9 @@ function renderDashTable() {
   var moreWrap = document.getElementById('show-more-wrap');
   if (!tbody) return;
   var ORDER = { vencido: 0, 'a-vencer': 1, pendente: 2, valido: 3, dispensado: 4 };
-  var base = exames.filter(function(r){ return passesCFMed(r, null); });
+  // Lista todos os colabs ignorando o cf-colab (assim a tabela continua mostrando
+  // todos pra permitir trocar a seleção); demais filtros ainda valem.
+  var base = exames.filter(function(r){ return passesCFMed(r, 'colab'); });
   var sorted = base.slice().sort(function(a, b) {
     return (ORDER[calcStatusExame(a)]||0) - (ORDER[calcStatusExame(b)]||0);
   });
@@ -835,7 +839,9 @@ function renderDashTable() {
     var prox = proximoExameDate(r);
     var proxStr = prox ? formatDateBR(prox) : '—';
     var isVencido = prox && prox < hoje;
-    html += '<tr>' +
+    var key = _colabKey(r);
+    var sel = (_cfMed.dim === 'colab' && _cfMed.value === key) ? ' class="cf-selected"' : '';
+    html += '<tr' + sel + ' style="cursor:pointer" onclick="setCFMed(\'colab\',\'' + escAttrMed(key) + '\')">' +
       '<td class="col-nome">' + escH(r.nome) + '</td>' +
       '<td class="col-proximo' + (isVencido ? ' vencido-date' : '') + '">' + proxStr + '</td>' +
       '<td><span class="status-badge m-' + slug + '">' + escH(statusLabel(slug)) + '</span></td>' +
@@ -867,13 +873,15 @@ function _proxMYMed(r) {
   return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
 }
 
+function _colabKey(r) { return (r.matricula || r.nome || '').toString().trim(); }
 function passesCFMed(r, exceptDim) {
   if (_medFiltroUnidade !== 'Todas' && exceptDim !== 'unidade' && r.unidade !== _medFiltroUnidade) return false;
   if (_medFiltroDepto   !== 'Todos' && exceptDim !== 'depto'   && r.departamento !== _medFiltroDepto) return false;
   if (_medFiltroStatus  !== 'Todos' && exceptDim !== 'status'  && calcStatusExame(r) !== _medFiltroStatus) return false;
   if (_cfMed.dim && _cfMed.dim !== exceptDim) {
-    if (_cfMed.dim === 'tipo') return (r.tipoExame || 'Sem tipo') === _cfMed.value;
-    if (_cfMed.dim === 'mes')  return _proxMYMed(r) === _cfMed.value;
+    if (_cfMed.dim === 'tipo')  return (r.tipoExame || 'Sem tipo') === _cfMed.value;
+    if (_cfMed.dim === 'mes')   return _proxMYMed(r) === _cfMed.value;
+    if (_cfMed.dim === 'colab') return _colabKey(r) === _cfMed.value;
   }
   return true;
 }
