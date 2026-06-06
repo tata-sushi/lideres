@@ -44,6 +44,8 @@ function doGet(e) {
   if (action === 'listColaboradores') {
     var unidade = (e.parameter.unidade || '').toString();
     result = listarColaboradores(unidade);
+  } else if (action === 'listHistorico') {
+    result = listarHistorico();
   } else {
     result = { ok: false, erro: 'Ação desconhecida: ' + action };
   }
@@ -111,6 +113,32 @@ function listarColaboradores(unidadeFiltro) {
       colaboradores: colaboradores
     };
 
+  } catch (err) {
+    return { ok: false, erro: err.toString() };
+  }
+}
+
+// ── Lista histórico de todos os colaboradores (ativos + inativos) com datas ──
+// Usado pelo absenteismo.html para calcular headcount ativo por mês (denominador do %)
+function listarHistorico() {
+  try {
+    var ss    = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(ABA_COL);
+    if (!sheet) return { ok: false, erro: 'Aba "' + ABA_COL + '" não encontrada.' };
+    var dados = sheet.getDataRange().getValues();
+    if (dados.length < 2) return { ok: true, total: 0, colaboradores: [] };
+    var colaboradores = [];
+    for (var i = 1; i < dados.length; i++) {
+      var row      = dados[i];
+      var nome     = String(row[0] || '').trim();
+      var matricula = String(row[1] || '').trim();
+      if (!nome || !matricula) continue;
+      var admissao = _isoDate(row[8]);   // col I — Data de Admissão
+      var demissao = _isoDate(row[14]);  // col O — Data de Demissão
+      if (!admissao) continue;
+      colaboradores.push({ admissao: admissao, demissao: demissao || null });
+    }
+    return { ok: true, total: colaboradores.length, colaboradores: colaboradores };
   } catch (err) {
     return { ok: false, erro: err.toString() };
   }

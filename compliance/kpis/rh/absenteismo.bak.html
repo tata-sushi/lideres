@@ -911,8 +911,6 @@ var barValueLabelsPlugin = {
   id: 'barValueLabels',
   afterDatasetsDraw: function(chart) {
     var ctx = chart.ctx;
-    var bvlOpts = chart.options.plugins && chart.options.plugins.barValueLabels;
-    var fmt = (bvlOpts && bvlOpts.formatter) || function(v) { return String(v); };
     var horizontal = chart.options && chart.options.indexAxis === 'y';
     chart.data.datasets.forEach(function(ds, dsIdx) {
       var meta = chart.getDatasetMeta(dsIdx);
@@ -925,11 +923,11 @@ var barValueLabelsPlugin = {
         if (horizontal) {
           ctx.textAlign = 'left';
           ctx.textBaseline = 'middle';
-          ctx.fillText(fmt(val), bar.x + 6, bar.y);
+          ctx.fillText(String(val), bar.x + 6, bar.y);
         } else {
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillText(fmt(val), bar.x, bar.y - 4);
+          ctx.fillText(String(val), bar.x, bar.y - 4);
         }
         ctx.restore();
       });
@@ -958,44 +956,6 @@ function classifyTipoAusencia(tipo) {
   // Suspensão (disciplinar) — qualquer "suspens" que não seja de contrato
   if (t.indexOf('suspens') !== -1) return 'suspensao';
   return null;
-}
-
-// ─── HEADCOUNT / % ABSENTEÍSMO ────────────────────────────────────────────────
-function workingDaysInMonth(year, month) {
-  // Conta seg–sáb (escala 6x1 restaurante)
-  var count = 0, d = new Date(year, month, 1);
-  while (d.getMonth() === month) {
-    if (d.getDay() !== 0) count++;
-    d.setDate(d.getDate() + 1);
-  }
-  return count;
-}
-function headcountInMonth(year, month, colabs) {
-  var first = new Date(year, month, 1);
-  var last  = new Date(year, month + 1, 0);
-  first.setHours(0, 0, 0, 0);
-  last.setHours(23, 59, 59, 999);
-  return colabs.filter(function(c) {
-    if (!c.admissao) return false;
-    var adm = new Date(c.admissao);
-    if (isNaN(adm.getTime()) || adm > last) return false;
-    if (c.demissao) {
-      var dem = new Date(c.demissao);
-      if (!isNaN(dem.getTime()) && dem < first) return false;
-    }
-    return true;
-  }).length;
-}
-function loadColabHistorico() {
-  fetch(COLAB_URL + '?action=listHistorico')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.ok && data.colaboradores) {
-        _colabsHistorico = data.colaboradores;
-        if (state.tab === 'todos') renderChartAusenciasMes();
-      }
-    })
-    .catch(function() {});
 }
 
 // Estado e helpers da tabela de colaboradores
@@ -1092,24 +1052,7 @@ function renderChartAusenciasMes() {
     var pa = a.split('/'), pb = b.split('/');
     return (pa[1]+pa[0]).localeCompare(pb[1]+pb[0]);
   });
-  var usePercent = _colabsHistorico !== null && _colabsHistorico.length > 0;
-  var data, fmt;
-  if (usePercent) {
-    data = labels.map(function(l) {
-      var parts = l.split('/');
-      var mo  = parseInt(parts[0], 10) - 1;
-      var yr  = 2000 + parseInt(parts[1], 10);
-      var hc  = headcountInMonth(yr, mo, _colabsHistorico);
-      var wd  = workingDaysInMonth(yr, mo);
-      var den = hc * wd;
-      var pct = den > 0 ? counts[l] / den * 100 : 0;
-      return Math.round(pct * 10) / 10;
-    });
-    fmt = function(v) { return v.toFixed(1) + '%'; };
-  } else {
-    data = labels.map(function(l){ return counts[l]; });
-    fmt = function(v) { return String(v); };
-  }
+  var data = labels.map(function(l){ return counts[l]; });
   var bg = labels.map(function(l) {
     return _cfMes === null ? '#35383F' : (l === _cfMes ? '#35383F' : 'rgba(53,56,63,0.45)');
   });
@@ -1123,14 +1066,14 @@ function renderChartAusenciasMes() {
       layout: { padding: { top: 18 } },
       onClick: function(e, els) { if (els.length) setCF('mes', labels[els[0].index]); },
       onHover: function(e, els) { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
-      plugins: { legend: { display: false }, tooltip: { enabled: false }, barValueLabels: { formatter: fmt } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
       scales: {
         x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 } } },
         y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
       }
     }
   });
-  document.getElementById('chartTitleMes').textContent = usePercent ? 'Absenteísmo por Mês (%)' : 'Absenteísmo por Mês';
+  document.getElementById('chartTitleMes').textContent = 'Absenteísmo por Mês';
 }
 
 function renderStatusTipos() {
@@ -1271,7 +1214,6 @@ document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeDra
 })();
 
 loadData();
-loadColabHistorico();
 </script>
 </body>
 </html>
