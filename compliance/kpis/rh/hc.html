@@ -301,10 +301,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </header>
 
 <div class="tabs">
-  <button class="tab-btn active" id="tab-pendentes" onclick="setTab('pendentes')">Pendências</button>
-  <button class="tab-btn" id="tab-todos" onclick="setTab('todos')">KPI's</button>
+  <button class="tab-btn active" id="tab-programado" onclick="setTab('programado')">Programado</button>
+  <button class="tab-btn" id="tab-dashboard" onclick="setTab('dashboard')">KPI's</button>
 </div>
 
+<div id="kpi-section"></div>
 
 <div class="filters-wrap" id="filters-wrap"></div>
 <main class="content" id="content"></main>
@@ -313,34 +314,32 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <div class="dashboard" id="dashboard">
   <div class="chart-card">
-    <div class="chart-title" id="chartTitleMes">Headcount por Mês</div>
-    <div class="chart-wrap"><canvas id="cAusMes"></canvas></div>
+    <div class="chart-title">Total por Unidade</div>
+    <div class="chart-wrap"><canvas id="cHCUnidade"></canvas></div>
   </div>
   <div class="chart-card">
-    <div class="chart-title" id="chartTitleUnidade">Headcount por Unidade</div>
-    <div class="bar-list" id="barAusUnidade"></div>
+    <div class="chart-title">Composição por Tipo</div>
+    <div class="chart-wrap"><canvas id="cHCTipo"></canvas></div>
   </div>
   <div class="chart-card">
-    <div class="chart-title" id="chartTitleDepto">Headcount por Departamento</div>
-    <div class="bar-list" id="barAusDepto"></div>
+    <div class="chart-title">Por Departamento</div>
+    <div class="bar-list" id="barHCDepto"></div>
   </div>
   <div class="chart-card">
-    <div class="chart-title" id="chartTitleTipos">Tipos de Headcount</div>
-    <div class="status-table" id="statusTipos"></div>
-  </div>
-  <div class="chart-card">
-    <div class="chart-title">Analítico <span id="colab-count-label" style="color:var(--muted);font-size:10px;margin-left:8px;font-weight:500;"></span></div>
+    <div class="chart-title">Analítico por Unidade</div>
     <div class="table-wrap">
-      <table class="colab-table">
+      <table class="colab-table" style="table-layout:auto">
         <thead>
           <tr>
-            <th onclick="toggleColabSort('nome')">Colaborador <span id="colab-icon-nome">↕</span></th>
-            <th onclick="toggleColabSort('faltas')" style="text-align:center">Faltas <span id="colab-icon-faltas">↓</span></th>
-            <th onclick="toggleColabSort('justificadas')" style="text-align:center">Justificadas <span id="colab-icon-justificadas">↕</span></th>
-            <th onclick="toggleColabSort('suspensao')" style="text-align:center">Suspensão <span id="colab-icon-suspensao">↕</span></th>
+            <th>Unidade</th>
+            <th style="text-align:center">Total</th>
+            <th style="text-align:center">Líderes</th>
+            <th style="text-align:center">Especialistas</th>
+            <th style="text-align:center">Auxiliares</th>
+            <th style="text-align:center">Apr+Est</th>
           </tr>
         </thead>
-        <tbody id="tbody-colab"></tbody>
+        <tbody id="tbody-analitico"></tbody>
       </table>
     </div>
   </div>
@@ -359,35 +358,51 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <!-- DRAWER -->
 <!-- MODAL DEVOLUTIVA -->
-<div class="modal-overlay" id="modal-dev-overlay" onclick="handleModalDevClick(event)">
+<div class="modal-overlay" id="modal-hc-overlay" onclick="if(event.target===this)fecharModalHC()">
   <div class="modal-box">
     <div class="modal-handle"></div>
     <div class="modal-header">
-      <div class="modal-title">Registrar Devolutiva</div>
-      <button onclick="fecharModalDev()" style="width:26px;height:26px;background:var(--bg);border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+      <div class="modal-title">Editar Headcount</div>
+      <button onclick="fecharModalHC()" style="width:26px;height:26px;background:var(--bg);border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
     <div class="modal-body">
-      <div id="modal-dev-nome" style="font-size:15px;font-weight:700;color:var(--carbon);text-transform:uppercase;letter-spacing:-0.1px;line-height:1.3;"></div>
-      <div id="modal-dev-info" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:0.3px;margin-top:-8px;"></div>
+      <div id="modal-hc-titulo" style="font-size:15px;font-weight:700;color:var(--carbon);text-transform:uppercase;letter-spacing:-0.1px;line-height:1.3;"></div>
       <div>
-        <div class="modal-field-label">Justificativa</div>
-        <select class="modal-select" id="modal-dev-select" onchange="onModalSelectChange()">
-          <option value="">Selecione...</option>
-          <option>Atestado Médico</option>
-          <option>Banco de Horas</option>
-          <option>Falta</option>
-          <option>Folga</option>
-          <option>Folga Aniversário</option>
-          <option>Folga Feriado</option>
-          <option>Trabalhou, mas esqueceu de registrar o ponto</option>
+        <div class="modal-field-label">Escala</div>
+        <select class="modal-select" id="modal-hc-escala">
+          <option value="">—</option>
+          <option value="6x1">6x1</option>
+          <option value="5x2">5x2</option>
         </select>
+      </div>
+      <div class="filters-row">
+        <div class="filter-group">
+          <label class="modal-field-label">Líder</label>
+          <input type="number" min="0" class="filter-select" id="modal-hc-lider" style="padding:9px 12px">
+        </div>
+        <div class="filter-group">
+          <label class="modal-field-label">Especialista</label>
+          <input type="number" min="0" class="filter-select" id="modal-hc-esp" style="padding:9px 12px">
+        </div>
+        <div class="filter-group">
+          <label class="modal-field-label">Auxiliares</label>
+          <input type="number" min="0" class="filter-select" id="modal-hc-aux" style="padding:9px 12px">
+        </div>
+        <div class="filter-group">
+          <label class="modal-field-label">Aprendizes</label>
+          <input type="number" min="0" class="filter-select" id="modal-hc-apr" style="padding:9px 12px">
+        </div>
+        <div class="filter-group">
+          <label class="modal-field-label">Estagiários</label>
+          <input type="number" min="0" class="filter-select" id="modal-hc-est" style="padding:9px 12px">
+        </div>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn-modal-cancelar" onclick="fecharModalDev()">Cancelar</button>
-      <button class="btn-modal-confirmar" id="btn-modal-confirmar" onclick="confirmarModalDev()" disabled>Confirmar</button>
+      <button class="btn-modal-cancelar" onclick="fecharModalHC()">Cancelar</button>
+      <button class="btn-modal-confirmar" id="btn-hc-confirmar" onclick="confirmarModalHC()">Confirmar</button>
     </div>
   </div>
 </div>
@@ -444,705 +459,295 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <script>
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
-var SHEET_ID   = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
-var API_KEY    = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
-var SHEET_NAME = 'Headcount';  // nome da aba na planilha
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxSgSedQXD_iaOhBTY_JzMCw-5__EiLMXEB5veoEZHcUgGR0K1ChoL7PBibahUoSH2g/exec';
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+var SHEET_ID      = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
+var API_KEY       = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
+var SHEET_NAME    = 'hc_programado';
+var HC_SCRIPT_URL = ''; // URL do Apps Script após deploy
 
-// ─── USUÁRIO LOGADO ───────────────────────────────────────────────────────────
+// ─── USUÁRIO ──────────────────────────────────────────────────────────────────
 var __nomeResponsavel = (function() {
-  try {
-    var s = JSON.parse(localStorage.getItem('lideres_session') || '{}');
-    return (s && s.displayName) || '';
-  } catch(e) { return ''; }
+  try { var s = JSON.parse(localStorage.getItem('lideres_session')||'{}'); return (s&&s.displayName)||''; }
+  catch(e) { return ''; }
 })();
 
 // ─── ESTADO ───────────────────────────────────────────────────────────────────
 var dados = [];
-var state = {
-  tab: 'pendentes',
-  filters:     { unidade: 'Todos', departamento: 'Todos', tipo: 'Todos' },
-  dashFilters: { unidade: 'Todos', departamento: 'Todos', dataIni: '', dataFim: '' }
-};
+var state = { tab: 'programado', filtroUnidade: 'Todos', dashFilters: { unidade: 'Todos' } };
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
-function escH(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function norm(s) {
-  return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-}
-function unique(arr) {
-  var seen = {}, out = [];
-  arr.forEach(function(v){ if(v && !seen[v]){seen[v]=true;out.push(v);} });
-  return out.sort();
-}
-function parseDateBR(s) {
-  if (!s) return null;
-  var p = s.trim().split('/');
-  if (p.length === 3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
-  return null;
-}
-function formatDateBR(s) {
-  var d = parseDateBR(s);
-  if (!d) return s || '—';
-  return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
-}
+function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function norm(s) { return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
+function unique(arr) { var seen={},out=[]; arr.forEach(function(v){if(v&&!seen[v]){seen[v]=true;out.push(v);}}); return out.sort(); }
 
-// ─── TIPO AUSÊNCIA → BADGE ────────────────────────────────────────────────────
-function slugTipo(tipo) {
-  var t = norm(tipo);
-  if (t.indexOf('atestado') >= 0) return 'atestado';
-  if (t.indexOf('suspensao') >= 0 || t.indexOf('suspensão') >= 0) return 'suspensao';
-  if (t.indexOf('falta') >= 0) return 'falta';
-  if (t.indexOf('folga') >= 0 || t.indexOf('licen') >= 0 || t.indexOf('afasta') >= 0) return 'justificado';
-  return 'default';
-}
-function badgeTipo(tipo) {
-  var s = slugTipo(tipo);
-  return '<span class="status-badge s-' + s + '">' + escH(tipo || 'Ausência') + '</span>';
-}
-
-// ─── DEVOLUTIVA BADGE / SELECT ────────────────────────────────────────────────
-var JUSTIFICATIVAS = [
-  '',
-  'Atestado Médico',
-  'Banco de horas',
-  'Falta',
-  'Folga',
-  'Folga Aniversário',
-  'Folga Feriado',
-  'Trabalhou, mas esqueceu de registar o ponto'
-];
-
-function isFolga(d) {
-  var t = (d.tipo || '').toLowerCase();
-  return t.indexOf('folga') !== -1 || t.indexOf('banco de horas') !== -1 || t.indexOf('ferias') !== -1 || t.indexOf('férias') !== -1;
-}
-// "Trabalhou, mas esqueceu de bater/registrar o ponto" não é absenteísmo
-function isTrabalhouSemBater(d) {
-  var t = (d.tipo || '').toLowerCase();
-  return t.indexOf('trabalh') !== -1;
-}
-function isJustificado(d) {
-  if (isFolga(d)) return true;
-  return d.devolutiva && d.devolutiva.trim() !== '';
-}
-
-// ─── FETCH SHEETS ─────────────────────────────────────────────────────────────
+// ─── FETCH ────────────────────────────────────────────────────────────────────
 function sheetURL() {
   return 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID
-    + '/values/' + encodeURIComponent(SHEET_NAME + '!A:H')
+    + '/values/' + encodeURIComponent(SHEET_NAME + '!A:I')
     + '?key=' + API_KEY;
-}
-function rowToObj(headers, row) {
-  var obj = {};
-  headers.forEach(function(h, i) {
-    obj[norm(h)] = (row[i] || '').trim();
-  });
-  return obj;
-}
-function normRow(obj) {
-  function v() {
-    for (var i=0; i<arguments.length; i++) {
-      if (obj[arguments[i]] !== undefined && obj[arguments[i]] !== '') return obj[arguments[i]];
-    }
-    return '';
-  }
-  return {
-    mt:         v('mt','matricula','mat'),
-    nome:       v('colaborador','nome','funcionario'),
-    unidade:    v('unidade'),
-    depto:      v('departamento','depto'),
-    data:       v('data_falta','data','data_ausencia'),
-    tipo:       v('tipo de ausencia','tipo_de_ausencia','tipo','ausencia'),
-    status:     v('status'),
-    devolutiva: v('devolutiva','justificativa','obs')
-  };
 }
 function showLoading() { document.getElementById('loading-overlay').classList.add('show'); }
 function hideLoading() { document.getElementById('loading-overlay').classList.remove('show'); }
+
 function loadData() {
   showLoading();
   fetch(sheetURL())
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
+    .then(function(r){ return r.json(); })
+    .then(function(data){
       hideLoading();
       if (data.error) { showError(data.error.message); return; }
       var rows = data.values || [];
-      if (rows.length < 2) { dados = []; render(); return; }
-      var headers = rows[0];
+      if (rows.length < 2) { dados=[]; render(); return; }
+      var headers = rows[0].map(norm);
       dados = [];
       for (var i = 1; i < rows.length; i++) {
-        if (rows[i].some(function(c){ return c && c.trim(); })) {
-          var obj = normRow(rowToObj(headers, rows[i]));
-          obj._linha = i + 1;
-          dados.push(obj);
-        }
+        var r = rows[i];
+        if (!r[0] && !r[1]) continue;
+        var obj = { row_index: i + 1 };
+        headers.forEach(function(h, j){ obj[h] = r[j] !== undefined ? String(r[j]) : ''; });
+        obj.lider        = parseInt(obj.lider)        || 0;
+        obj.especialista = parseInt(obj.especialista) || 0;
+        obj.auxiliares   = parseInt(obj.auxiliares)   || 0;
+        obj.aprendizes   = parseInt(obj.aprendizes)   || 0;
+        obj.estagiarios  = parseInt(obj.estagiarios)  || 0;
+        obj.total        = parseInt(obj.total)         || 0;
+        dados.push(obj);
       }
       render();
-      if (state.tab === 'todos') renderDashboard();
+      renderKPIs();
     })
-    .catch(function(err) { hideLoading(); showError(err.message || 'Erro de rede'); });
+    .catch(function(err){ hideLoading(); showError(err.message||'Erro de rede'); });
 }
 function showError(msg) {
   document.getElementById('content').innerHTML =
-    '<div class="empty-state">' +
-    '<p style="color:var(--red)">Erro ao carregar dados</p>' +
-    '<p style="font-size:10px;opacity:.6;margin-top:8px">' + escH(msg) + '</p>' +
-    '<button onclick="loadData()" style="margin-top:16px;padding:8px 18px;background:var(--carbon);color:var(--citric);border:none;border-radius:6px;font-size:11px;cursor:pointer;font-family:\'DM Mono\',monospace;letter-spacing:.5px;text-transform:uppercase">↻ Tentar novamente</button>' +
-    '</div>';
+    '<div class="empty-state"><p style="color:var(--red)">Erro ao carregar dados</p>' +
+    '<p style="font-size:10px;opacity:.6;margin-top:8px">'+escH(msg)+'</p>' +
+    '<button onclick="loadData()" style="margin-top:16px;padding:8px 18px;background:var(--carbon);color:var(--citric);border:none;border-radius:6px;font-size:11px;cursor:pointer;font-family:\'DM Mono\',monospace;letter-spacing:.5px;text-transform:uppercase">↻ Tentar novamente</button></div>';
 }
 
-// ─── FILTROS ──────────────────────────────────────────────────────────────────
+// ─── KPIS ─────────────────────────────────────────────────────────────────────
+function renderKPIs() {
+  var tot=0,lid=0,esp=0,aux=0,apr=0,est=0;
+  dados.forEach(function(d){ tot+=d.total;lid+=d.lider;esp+=d.especialista;aux+=d.auxiliares;apr+=d.aprendizes;est+=d.estagiarios; });
+  var el = document.getElementById('kpi-section');
+  if (!el) return;
+  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--border);">' +
+    kpiC('Total',tot) + kpiC('Líderes',lid) + kpiC('Especialistas',esp) +
+    kpiC('Auxiliares',aux) + kpiC('Aprendizes',apr) + kpiC('Estagiários',est) +
+    '</div>';
+}
+function kpiC(label,val) {
+  return '<div class="kpi-card"><span class="kpi-label">'+label+'</span><span class="kpi-number">'+val+'</span></div>';
+}
+
+// ─── FILTROS (lista) ──────────────────────────────────────────────────────────
 function getFiltered() {
-  var f = state.filters;
-  return dados.filter(function(d) {
-    if (state.tab === 'pendentes') {
-      if (isJustificado(d)) return false;
-      if ((d.status || '').trim() !== 'Ativo') return false;
-      if (classifyTipoAusencia(d.tipo) !== 'faltas') return false;
-    }
-    if (f.unidade !== 'Todos' && d.unidade !== f.unidade) return false;
-    if (f.departamento !== 'Todos' && d.depto !== f.departamento) return false;
-    if (f.tipo !== 'Todos' && d.tipo !== f.tipo) return false;
-    return true;
-  });
+  if (state.filtroUnidade==='Todos') return dados;
+  return dados.filter(function(d){ return d.unidade===state.filtroUnidade; });
 }
 function renderFilters() {
-  var f = state.filters;
+  var unidades = unique(dados.map(function(d){ return d.unidade; }));
   var filtrados = getFiltered();
-  function sel(label, key, opts, cur) {
-    var h = '<div class="filter-group"><label class="filter-label">' + label + '</label>';
-    h += '<select class="filter-select" onchange="setFilter(\'' + key + '\',this.value)">';
-    h += '<option value="Todos"' + (cur==='Todos'?' selected':'') + '>Todos</option>';
-    opts.forEach(function(o){
-      h += '<option value="' + escH(o) + '"' + (cur===o?' selected':'') + '>' + escH(o) + '</option>';
-    });
-    return h + '</select></div>';
-  }
-  var deptSrc = f.unidade === 'Todos' ? dados : dados.filter(function(d){ return d.unidade === f.unidade; });
-  var html = '<div class="filters-row">';
-  html += sel('Unidade', 'unidade', unique(dados.map(function(d){ return d.unidade; })), f.unidade);
-  html += sel('Departamento', 'departamento', unique(deptSrc.map(function(d){ return d.depto; })), f.departamento);
-  html += sel('Tipo de Ausência', 'tipo', unique(dados.map(function(d){ return d.tipo; })), f.tipo);
-  html += '</div>';
-  html += '<div class="filters-actions">';
-  html += '<button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>';
-  html += '<span class="results-count"><span>' + filtrados.length + '</span> registro(s)</span>';
-  html += '</div>';
+  var html = '<div class="filters-row"><div class="filter-group"><label class="filter-label">Unidade</label>';
+  html += '<select class="filter-select" onchange="setFiltroUnidade(this.value)">';
+  html += '<option value="Todos"'+(state.filtroUnidade==='Todos'?' selected':'')+'>Todos</option>';
+  unidades.forEach(function(u){ html+='<option value="'+escH(u)+'"'+(state.filtroUnidade===u?' selected':'')+'>'+escH(u)+'</option>'; });
+  html += '</select></div></div>';
+  html += '<div class="filters-actions"><button class="btn-clear" onclick="setFiltroUnidade(\'Todos\')">Limpar filtros</button>';
+  html += '<span class="results-count"><span>'+filtrados.length+'</span> registro(s)</span></div>';
   document.getElementById('filters-wrap').innerHTML = html;
 }
-
+function setFiltroUnidade(val) { state.filtroUnidade=val; render(); }
 
 // ─── CARDS ────────────────────────────────────────────────────────────────────
-function cardAbsencia(d, idx) {
-  var justif = isJustificado(d);
-  var footer;
-  if (justif) {
-    footer = '<div class="card-footer">' +
-      '<span class="check-ok">' +
-        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>' +
-        ' ' + escH(d.devolutiva) +
-      '</span>' +
-    '</div>';
-  } else {
-    footer = '<div class="card-footer">' +
-      '<div class="meta-pill">' +
-        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
-        ' Aguardando devolutiva' +
-      '</div>' +
-      '<button class="btn-registrar" onclick="abrirModalDev(' + idx + ')">' +
-        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
-        ' Enviar devolutiva' +
-      '</button>' +
-    '</div>';
-  }
-
-  return '<div class="card" id="card-' + idx + '">' +
-    '<div class="card-header">' +
-      '<div>' +
-        '<div class="candidate-name">' + escH(d.nome) + '</div>' +
-      '</div>' +
-      badgeTipo(d.tipo) +
-    '</div>' +
-    '<div class="card-body">' +
-      '<div class="card-field"><span class="field-label">Data</span><span class="field-value">' + escH(formatDateBR(d.data)) + '</span></div>' +
-      '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">' + escH(d.unidade) + '</span></div>' +
-      '<div class="card-field"><span class="field-label">Departamento</span><span class="field-value">' + escH(d.depto) + '</span></div>' +
-    '</div>' +
-    footer +
-  '</div>';
-}
-
-// ─── MODAL DEVOLUTIVA ─────────────────────────────────────────────────────────
 var _filteredCache = [];
-var _modalIdx = null;
-
-function abrirModalDev(idx) {
-  var d = _filteredCache[idx];
-  if (!d) return;
-  _modalIdx = idx;
-  document.getElementById('modal-dev-nome').textContent = d.nome;
-  document.getElementById('modal-dev-info').textContent = formatDateBR(d.data) + (d.unidade ? ' · ' + d.unidade : '') + (d.depto ? ' · ' + d.depto : '');
-  var sel = document.getElementById('modal-dev-select');
-  sel.value = '';
-  var btn = document.getElementById('btn-modal-confirmar');
-  btn.disabled = true;
-  document.getElementById('modal-dev-overlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
+function cardHC(d, idx) {
+  var escala = d.escala || '—';
+  var hasScript = HC_SCRIPT_URL !== '';
+  return '<div class="card" id="card-'+idx+'">' +
+    '<div class="card-header"><div><div class="candidate-name">'+escH(d.departamento||'')+'</div>' +
+    '<div class="candidate-mt">'+escH(d.unidade||'')+'</div></div>' +
+    '<span class="status-badge s-default">'+escH(escala)+'</span></div>' +
+    '<div class="card-body">' +
+      '<div class="card-field"><span class="field-label">Líder</span><span class="field-value">'+d.lider+'</span></div>' +
+      '<div class="card-field"><span class="field-label">Especialista</span><span class="field-value">'+d.especialista+'</span></div>' +
+      '<div class="card-field"><span class="field-label">Auxiliares</span><span class="field-value">'+d.auxiliares+'</span></div>' +
+      '<div class="card-field"><span class="field-label">Aprendizes</span><span class="field-value">'+d.aprendizes+'</span></div>' +
+      '<div class="card-field"><span class="field-label">Estagiários</span><span class="field-value">'+d.estagiarios+'</span></div>' +
+    '</div>' +
+    '<div class="card-footer"><span class="meta-pill">Total: <strong style="margin-left:4px;color:var(--carbon)">'+d.total+'</strong></span>' +
+    (hasScript ? '<button class="btn-registrar" onclick="abrirModalHC('+idx+')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar</button>' : '') +
+    '</div></div>';
 }
 
-function fecharModalDev() {
-  document.getElementById('modal-dev-overlay').classList.remove('open');
-  document.body.style.overflow = '';
-  _modalIdx = null;
-}
-
-function handleModalDevClick(e) {
-  if (e.target === document.getElementById('modal-dev-overlay')) fecharModalDev();
-}
-
-function onModalSelectChange() {
-  var val = document.getElementById('modal-dev-select').value;
-  document.getElementById('btn-modal-confirmar').disabled = !val;
-}
-
-function confirmarModalDev() {
-  if (_modalIdx === null) return;
-  var d = _filteredCache[_modalIdx];
-  if (!d) return;
-  var valor = document.getElementById('modal-dev-select').value;
-  if (!valor) return;
-
-  var btn = document.getElementById('btn-modal-confirmar');
-  btn.textContent = 'Salvando...';
-  btn.disabled = true;
-
-  var params = new URLSearchParams({
-    acao:        'devolutiva-ausencia',
-    linha:       d._linha || '',
-    nome:        d.nome,
-    mt:          d.mt,
-    data:        d.data,
-    devolutiva:  valor,
-    responsavel: __nomeResponsavel
-  });
-
-  fetch(APPS_SCRIPT_URL + '?' + params.toString())
-    .then(function(r){ return r.json(); })
-    .then(function(res){
-      if (res.success) {
-        d.devolutiva = valor;
-        d.tipo = valor;
-        var idx = _modalIdx;
-        fecharModalDev();
-        var cardEl = document.getElementById('card-' + idx);
-        if (cardEl) {
-          var newDiv = document.createElement('div');
-          newDiv.innerHTML = cardAbsencia(d, idx);
-          cardEl.replaceWith(newDiv.firstChild);
-        }
-        renderFilters();
-      } else {
-        btn.textContent = 'Confirmar';
-        btn.disabled = false;
-        alert('Erro ao salvar:\n' + (res.message || 'resposta inválida'));
-      }
-    })
-    .catch(function(err){
-      btn.textContent = 'Confirmar';
-      btn.disabled = false;
-      alert('Erro de conexão:\n' + err.message);
-    });
-}
-
-// ─── RENDER ───────────────────────────────────────────────────────────────────
+// ─── RENDER LISTA ─────────────────────────────────────────────────────────────
 function render() {
-  var _el = document.getElementById('footer-date');
-  if (_el) { var _n = new Date(), _p = function(x){return String(x).padStart(2,'0')}; _el.textContent = 'Atualizado: ' + _p(_n.getDate()) + '/' + _p(_n.getMonth()+1) + '/' + _n.getFullYear() + ', ' + _p(_n.getHours()) + ':' + _p(_n.getMinutes()) + ':' + _p(_n.getSeconds()); }
-  var filtrados = getFiltered();
-  _filteredCache = filtrados;
+  var el=document.getElementById('footer-date');
+  if(el){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};el.textContent='Atualizado: '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());}
   renderFilters();
+  _filteredCache = getFiltered();
   var c = document.getElementById('content');
-  if (!filtrados.length) {
-    c.innerHTML = '<div class="empty-state">' +
-      '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#35383F" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>' +
-      '<p style="margin-top:12px">' + (state.tab === 'pendentes' ? 'Nenhuma falta pendente' : 'Nenhum resultado') + '</p>' +
-      '</div>';
-    return;
-  }
-  c.innerHTML = filtrados.map(function(d, i){ return cardAbsencia(d, i); }).join('');
+  if (!_filteredCache.length) { c.innerHTML='<div class="empty-state"><p>Nenhum registro encontrado</p></div>'; return; }
+  c.innerHTML = _filteredCache.map(function(d,i){ return cardHC(d,i); }).join('');
 }
 
 function setTab(tab) {
   state.tab = tab;
-  state.filters     = { unidade: 'Todos', departamento: 'Todos', tipo: 'Todos' };
-  state.dashFilters = { unidade: 'Todos', departamento: 'Todos', dataIni: '', dataFim: '' };
-  document.getElementById('tab-pendentes').classList.toggle('active', tab === 'pendentes');
-  document.getElementById('tab-todos').classList.toggle('active', tab === 'todos');
-  if (tab === 'todos') {
-    document.body.setAttribute('data-view', 'dashboard');
-    render();
+  document.getElementById('tab-programado').classList.toggle('active', tab==='programado');
+  document.getElementById('tab-dashboard').classList.toggle('active', tab==='dashboard');
+  if (tab==='dashboard') {
+    document.body.setAttribute('data-view','dashboard');
     renderDashboard();
   } else {
     document.body.removeAttribute('data-view');
-    clearCF();
     render();
   }
 }
 
-// ─── DASHBOARD (KPI's tab) ────────────────────────────────────────────────────
-var _cfMes = null, _cfTipo = null, _cfUnidade = null, _cfDepto = null;
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
 var _charts = {};
+function renderDashboard() {
+  renderDashFilters();
+  var src = getDashData();
 
-function setCF(dim, value) {
-  var key = '_cf' + dim.charAt(0).toUpperCase() + dim.slice(1);
-  if (window[key] === value) { window[key] = null; }
-  else { window[key] = value; }
-  var anyActive = (_cfMes !== null || _cfTipo !== null || _cfUnidade !== null || _cfDepto !== null);
-  document.body.classList.toggle('cf-active', anyActive);
-  renderDashboard();
+  var unidades = unique(src.map(function(d){return d.unidade;}));
+  var totPorUnidade = unidades.map(function(u){ return src.filter(function(d){return d.unidade===u;}).reduce(function(a,d){return a+d.total;},0); });
+  renderBarChart('cHCUnidade', unidades, totPorUnidade);
+
+  var tipos = ['Líder','Especialista','Auxiliares','Aprendizes','Estagiários'];
+  var totPorTipo = [
+    src.reduce(function(a,d){return a+d.lider;},0),
+    src.reduce(function(a,d){return a+d.especialista;},0),
+    src.reduce(function(a,d){return a+d.auxiliares;},0),
+    src.reduce(function(a,d){return a+d.aprendizes;},0),
+    src.reduce(function(a,d){return a+d.estagiarios;},0)
+  ];
+  renderBarChart('cHCTipo', tipos, totPorTipo);
+
+  renderBarList('barHCDepto', src);
+  renderTabelaAnalitica(src);
 }
-function clearCF() {
-  _cfMes = null; _cfTipo = null; _cfUnidade = null; _cfDepto = null;
-}
-function rowMatchesCF(d, exceptDim) {
-  if (exceptDim !== 'mes' && _cfMes !== null) {
-    var dt = parseDateBR(d.data);
-    if (!dt) return false;
-    var my = String(dt.getMonth()+1).padStart(2,'0') + '/' + String(dt.getFullYear()).slice(-2);
-    if (my !== _cfMes) return false;
-  }
-  if (exceptDim !== 'tipo' && _cfTipo !== null) {
-    if ((d.tipo || '').trim() !== _cfTipo) return false;
-  }
-  if (exceptDim !== 'unidade' && _cfUnidade !== null) {
-    if ((d.unidade || '').trim() !== _cfUnidade) return false;
-  }
-  if (exceptDim !== 'depto' && _cfDepto !== null) {
-    if ((d.depto || '').trim() !== _cfDepto) return false;
-  }
-  return true;
-}
-function ctxFor(dim) {
+function getDashData() {
   var df = state.dashFilters;
-  return dados.filter(function(d) {
-    if (isFolga(d)) return false;
-    if (isTrabalhouSemBater(d)) return false;
-    if (!rowMatchesCF(d, dim)) return false;
-    if (df.unidade !== 'Todos' && d.unidade !== df.unidade) return false;
-    if (df.departamento !== 'Todos' && d.depto !== df.departamento) return false;
-    if (df.dataIni) {
-      var dt = parseDateBR(d.data);
-      var ini = parseDateBR(df.dataIni.split('-').reverse().join('/'));
-      if (dt && ini && dt < ini) return false;
-    }
-    if (df.dataFim) {
-      var dt2 = parseDateBR(d.data);
-      var fim = parseDateBR(df.dataFim.split('-').reverse().join('/'));
-      if (dt2 && fim && dt2 > fim) return false;
-    }
-    return true;
-  });
+  return dados.filter(function(d){ return !df.unidade||df.unidade==='Todos'||d.unidade===df.unidade; });
 }
-
-// ─── FILTROS DO DASHBOARD ─────────────────────────────────────────────────────
 function renderDashFilters() {
   var df = state.dashFilters;
-  var unidades = unique(dados.map(function(d){ return d.unidade; })).filter(Boolean).sort();
-  var deptoSrc = df.unidade === 'Todos' ? dados : dados.filter(function(d){ return d.unidade === df.unidade; });
-  var deptos   = unique(deptoSrc.map(function(d){ return d.depto; })).filter(Boolean).sort();
-
-  function sel(label, key, opts, cur) {
-    var h = '<div class="filter-group"><label class="filter-label">' + label + '</label>';
-    h += '<select class="filter-select" onchange="setDashFilter(\'' + key + '\',this.value)">';
-    h += '<option value="Todos"' + (cur==='Todos'?' selected':'') + '>Todos</option>';
-    opts.forEach(function(o){ h += '<option value="' + escH(o) + '"' + (cur===o?' selected':'') + '>' + escH(o) + '</option>'; });
-    return h + '</select></div>';
-  }
-  function dateInput(label, key, val) {
-    return '<div class="filter-group"><label class="filter-label">' + label + '</label>' +
-      '<input type="date" class="filter-date" value="' + escH(val) + '" onchange="setDashFilter(\'' + key + '\',this.value)"></div>';
-  }
-
-  var total = dados.filter(function(d) {
-    if (isFolga(d)) return false;
-    if (isTrabalhouSemBater(d)) return false;
-    if (df.unidade !== 'Todos' && d.unidade !== df.unidade) return false;
-    if (df.departamento !== 'Todos' && d.depto !== df.departamento) return false;
-    if (df.dataIni) { var dt = parseDateBR(d.data); var ini = parseDateBR(df.dataIni.split('-').reverse().join('/')); if (dt && ini && dt < ini) return false; }
-    if (df.dataFim) { var dt2 = parseDateBR(d.data); var fim = parseDateBR(df.dataFim.split('-').reverse().join('/')); if (dt2 && fim && dt2 > fim) return false; }
-    return true;
-  }).length;
-
-  var html = '<div class="filters-row">' +
-    sel('Unidade', 'unidade', unidades, df.unidade) +
-    sel('Departamento', 'departamento', deptos, df.departamento) +
-  '</div>';
-  html += '<div class="date-row">' +
-    dateInput('De', 'dataIni', df.dataIni) +
-    dateInput('Até', 'dataFim', df.dataFim) +
-  '</div>';
-  html += '<div class="filters-actions">';
-  html += '<button class="btn-clear" onclick="clearDashFilters()">Limpar filtros</button>';
-  html += '<span class="results-count"><span>' + total + '</span> registro(s)</span>';
-  html += '</div>';
+  var unidades = unique(dados.map(function(d){return d.unidade;}));
+  var html = '<div class="filters-row"><div class="filter-group"><label class="filter-label">Unidade</label>';
+  html += '<select class="filter-select" onchange="setDashFilter(\'unidade\',this.value)">';
+  html += '<option value="Todos"'+(df.unidade==='Todos'?' selected':'')+'>Todos</option>';
+  unidades.forEach(function(u){ html+='<option value="'+escH(u)+'"'+(df.unidade===u?' selected':'')+'>'+escH(u)+'</option>'; });
+  html += '</select></div></div>';
+  var tot = getDashData().reduce(function(a,d){return a+d.total;},0);
+  html += '<div class="filters-actions"><span class="results-count"><span>'+tot+'</span> colaboradores</span></div>';
   document.getElementById('dash-filters').innerHTML = html;
 }
+function setDashFilter(key,val) { state.dashFilters[key]=val; renderDashboard(); }
 
-function setDashFilter(key, val) {
-  state.dashFilters[key] = val;
-  if (key === 'unidade') state.dashFilters.departamento = 'Todos';
-  renderDashFilters();
-  renderDashboard();
-}
-
-function clearDashFilters() {
-  state.dashFilters = { unidade: 'Todos', departamento: 'Todos', dataIni: '', dataFim: '' };
-  renderDashFilters();
-  renderDashboard();
-}
-
-// Plugin Chart.js: rótulos numéricos no topo de cada barra (carbon, sem cor)
-var barValueLabelsPlugin = {
-  id: 'barValueLabels',
-  afterDatasetsDraw: function(chart) {
-    var ctx = chart.ctx;
-    var horizontal = chart.options && chart.options.indexAxis === 'y';
-    chart.data.datasets.forEach(function(ds, dsIdx) {
-      var meta = chart.getDatasetMeta(dsIdx);
-      meta.data.forEach(function(bar, i) {
-        var val = ds.data[i];
-        if (val === null || val === undefined) return;
-        ctx.save();
-        ctx.fillStyle = '#35383F';
-        ctx.font = '600 11px DM Mono, monospace';
-        if (horizontal) {
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(String(val), bar.x + 6, bar.y);
-        } else {
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          ctx.fillText(String(val), bar.x, bar.y - 4);
-        }
-        ctx.restore();
-      });
-    });
-  }
-};
-
-function renderDashboard() {
-  if (typeof Chart === 'undefined') return;
-  renderDashFilters();
-  renderChartAusenciasMes();
-  renderStatusTipos();
-  renderChartUnidade();
-  renderChartDepto();
-  renderColabTable();
-}
-
-// Classifica o tipo da ausência em uma das três categorias da tabela
-function classifyTipoAusencia(tipo) {
-  var t = (tipo || '').toLowerCase().trim();
-  if (!t) return null;
-  if (t.indexOf('falta') !== -1) return 'faltas';
-  // Justificadas: licença, afastamento, atestado, suspensão de contrato
-  if (t.indexOf('licen') !== -1 || t.indexOf('afasta') !== -1 || t.indexOf('atest') !== -1 ||
-      (t.indexOf('suspens') !== -1 && t.indexOf('contrato') !== -1)) return 'justificadas';
-  // Suspensão (disciplinar) — qualquer "suspens" que não seja de contrato
-  if (t.indexOf('suspens') !== -1) return 'suspensao';
-  return null;
-}
-
-// Estado e helpers da tabela de colaboradores
-var _colabSortCol = 'faltas';
-var _colabSortDir = -1;
-var _colabRows = [];
-var _colabShown = 10;
-var COLAB_PAGE = 10;
-
-function buildColabRows() {
-  var src = ctxFor('colab'); // respeita o cross-filter ativo (não cf de colaborador, que não existe nessa view)
-  var by = {};
-  src.forEach(function(d) {
-    var cat = classifyTipoAusencia(d.tipo);
-    if (!cat) return;
-    var nome = (d.colaborador || d.nome || '').trim();
-    if (!nome) return;
-    if (!by[nome]) by[nome] = { nome: nome, faltas: 0, justificadas: 0, suspensao: 0, total: 0 };
-    by[nome][cat]++;
-    by[nome].total++;
-  });
-  return Object.keys(by).map(function(k) { return by[k]; });
-}
-
-function toggleColabSort(col) {
-  if (_colabSortCol === col) { _colabSortDir = -_colabSortDir; }
-  else { _colabSortCol = col; _colabSortDir = (col === 'nome') ? 1 : -1; }
-  var icons = { nome:'↕', faltas:'↕', justificadas:'↕', suspensao:'↕' };
-  icons[_colabSortCol] = _colabSortDir === -1 ? '↓' : '↑';
-  ['nome','faltas','justificadas','suspensao'].forEach(function(k) {
-    var el = document.getElementById('colab-icon-' + k);
-    if (el) el.textContent = icons[k];
-  });
-  _colabShown = COLAB_PAGE;
-  renderColabRows();
-}
-
-function renderColabTable() {
-  _colabRows = buildColabRows();
-  _colabShown = COLAB_PAGE;
-  var lbl = document.getElementById('colab-count-label');
-  if (lbl) lbl.textContent = '— ' + _colabRows.length + ' resultado' + (_colabRows.length !== 1 ? 's' : '');
-  renderColabRows();
-}
-
-function renderColabRows() {
-  var sorted = _colabRows.slice().sort(function(a,b) {
-    if (_colabSortCol === 'nome') return _colabSortDir * (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
-    return _colabSortDir * ((b[_colabSortCol] || 0) - (a[_colabSortCol] || 0));
-  });
-  var display = sorted.slice(0, _colabShown);
-  function cellNum(n) {
-    var cls = (n > 0) ? 'colab-cell-num' : 'colab-cell-zero';
-    return '<td class="' + cls + '">' + n + '</td>';
-  }
-  var html = display.map(function(r) {
-    return '<tr>' +
-      '<td>' + escH(r.nome) + '</td>' +
-      cellNum(r.faltas) +
-      cellNum(r.justificadas) +
-      cellNum(r.suspensao) +
-      '</tr>';
-  }).join('');
-  var resto = sorted.length - _colabShown;
-  if (resto > 0) {
-    var proximo = Math.min(COLAB_PAGE, resto);
-    html += '<tr><td colspan="4" style="text-align:center;padding:10px;border-bottom:none">' +
-      '<button onclick="showMoreColab()" style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer">Ver mais (' + proximo + ')</button>' +
-      '</td></tr>';
-  }
-  document.getElementById('tbody-colab').innerHTML = html ||
-    '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Nenhum resultado</td></tr>';
-}
-
-function showMoreColab() {
-  _colabShown += COLAB_PAGE;
-  renderColabRows();
-}
-
-
-function renderChartAusenciasMes() {
-  var canvas = document.getElementById('cAusMes');
-  if (!canvas) return;
-  var src = ctxFor('mes');
-  // Agrega por MM/YY
-  var counts = {};
-  src.forEach(function(d) {
-    var dt = parseDateBR(d.data);
-    if (!dt) return;
-    var my = String(dt.getMonth()+1).padStart(2,'0') + '/' + String(dt.getFullYear()).slice(-2);
-    counts[my] = (counts[my] || 0) + 1;
-  });
-  var labels = Object.keys(counts).sort(function(a,b) {
-    var pa = a.split('/'), pb = b.split('/');
-    return (pa[1]+pa[0]).localeCompare(pb[1]+pb[0]);
-  });
-  var data = labels.map(function(l){ return counts[l]; });
-  var bg = labels.map(function(l) {
-    return _cfMes === null ? '#35383F' : (l === _cfMes ? '#35383F' : 'rgba(53,56,63,0.45)');
-  });
-  if (_charts.mes) _charts.mes.destroy();
-  _charts.mes = new Chart(canvas, {
+function renderBarChart(canvasId, labels, values) {
+  var ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  if (_charts[canvasId]) { _charts[canvasId].destroy(); }
+  _charts[canvasId] = new Chart(ctx, {
     type: 'bar',
-    data: { labels: labels, datasets: [{ data: data, backgroundColor: bg, borderWidth: 0, borderRadius: 5, barPercentage: 0.6 }] },
-    plugins: [barValueLabelsPlugin],
+    data: { labels: labels, datasets: [{ data: values, backgroundColor: '#35383F', borderRadius: 4 }] },
     options: {
-      responsive: true, maintainAspectRatio: false, animation: false,
-      layout: { padding: { top: 18 } },
-      onClick: function(e, els) { if (els.length) setCF('mes', labels[els[0].index]); },
-      onHover: function(e, els) { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
       scales: {
-        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 } } },
-        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
+        x: { grid: { display: false }, ticks: { font: { family:'DM Mono', size:10 } } },
+        y: { beginAtZero: true, grid: { color:'#E2E2E2' }, ticks: { font: { family:'DM Mono', size:10 }, stepSize:1 } }
       }
     }
   });
-  document.getElementById('chartTitleMes').textContent = 'Headcount por Mês';
 }
-
-function renderStatusTipos() {
-  var el = document.getElementById('statusTipos');
+function renderBarList(elId, src) {
+  var el = document.getElementById(elId);
   if (!el) return;
-  var src = ctxFor('tipo');
-  var counts = {};
-  src.forEach(function(d) {
-    var t = (d.tipo || '').trim() || 'Sem tipo';
-    counts[t] = (counts[t] || 0) + 1;
-  });
-  var entries = Object.keys(counts).map(function(k){ return [k, counts[k]]; });
-  entries.sort(function(a,b){ return b[1] - a[1]; });
-  if (!entries.length) {
-    el.innerHTML = '<div class="status-empty">Sem dados</div>';
-    return;
-  }
-  el.innerHTML = entries.map(function(e) {
-    var sel = (_cfTipo === e[0]) ? ' cf-selected' : '';
-    return '<div class="status-row' + sel + '" onclick="setCF(\'tipo\', ' + JSON.stringify(e[0]).replace(/"/g,'&quot;') + ')">' +
-      '<span class="status-name">' + escH(e[0]) + '</span>' +
-      '<span class="status-count">' + e[1] + '</span>' +
-      '</div>';
-  }).join('');
-  document.getElementById('chartTitleTipos').textContent = 'Tipos de Headcount';
+  var grouped = {};
+  src.forEach(function(d){ var k=d.departamento||''; grouped[k]=(grouped[k]||0)+d.total; });
+  var items = Object.keys(grouped).map(function(k){return{name:k,val:grouped[k]};}).sort(function(a,b){return b.val-a.val;});
+  var max = items.length ? items[0].val : 1;
+  el.innerHTML = items.map(function(it){
+    return '<div class="bar-row"><div class="bar-name">'+escH(it.name)+'</div>' +
+      '<div class="bar-track"><div class="bar-fill" style="width:'+Math.round(it.val/max*100)+'%"></div></div>' +
+      '<div class="bar-val">'+it.val+'</div></div>';
+  }).join('') || '<div class="bar-empty">Sem dados</div>';
 }
-
-// Bar list HTML/CSS (estilo bancodehoras — Saldo por Departamento)
-function renderBarsByDim(dim, listId, titleId, baseTitle) {
-  var el = document.getElementById(listId);
+function renderTabelaAnalitica(src) {
+  var el = document.getElementById('tbody-analitico');
   if (!el) return;
-  var src = ctxFor(dim);
-  var counts = {};
-  src.forEach(function(d) {
-    var k = (d[dim === 'depto' ? 'depto' : dim] || '').trim();
-    if (!k) return;
-    counts[k] = (counts[k] || 0) + 1;
-  });
-  var entries = Object.keys(counts).map(function(k){ return [k, counts[k]]; });
-  entries.sort(function(a,b){ return b[1] - a[1]; });
-  var max = entries.length ? entries[0][1] : 0;
-  var cfKey = '_cf' + dim.charAt(0).toUpperCase() + dim.slice(1);
-  var cfVal = window[cfKey];
-  if (!entries.length) {
-    el.innerHTML = '<div class="bar-empty">Sem dados</div>';
-  } else {
-    el.innerHTML = entries.map(function(e) {
-      var nome = e[0], val = e[1];
-      var pct = max > 0 ? (val / max * 100).toFixed(1) : 0;
-      var sel = (cfVal === nome) ? ' cf-selected' : '';
-      return '<div class="bar-row' + sel + '" onclick="setCF(\'' + dim + '\',' + JSON.stringify(nome).replace(/"/g,'&quot;') + ')">' +
-        '<div class="bar-name">' + escH(nome) + '</div>' +
-        '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
-        '<div class="bar-val">' + val + '</div>' +
-      '</div>';
-    }).join('');
-  }
-  document.getElementById(titleId).textContent = baseTitle;
+  var unidades = unique(src.map(function(d){return d.unidade;}));
+  el.innerHTML = unidades.map(function(u){
+    var rows = src.filter(function(d){return d.unidade===u;});
+    var tot=rows.reduce(function(a,d){return a+d.total;},0);
+    var lid=rows.reduce(function(a,d){return a+d.lider;},0);
+    var esp=rows.reduce(function(a,d){return a+d.especialista;},0);
+    var aux=rows.reduce(function(a,d){return a+d.auxiliares;},0);
+    var apr=rows.reduce(function(a,d){return a+d.aprendizes;},0);
+    var est=rows.reduce(function(a,d){return a+d.estagiarios;},0);
+    return '<tr><td>'+escH(u)+'</td><td class="colab-cell-num">'+tot+'</td>' +
+      '<td class="colab-cell-num">'+lid+'</td><td class="colab-cell-num">'+esp+'</td>' +
+      '<td class="colab-cell-num">'+aux+'</td><td class="colab-cell-num">'+(apr+est)+'</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="colab-cell-zero" style="padding:16px;text-align:center">Sem dados</td></tr>';
 }
 
-function renderChartUnidade() { renderBarsByDim('unidade', 'barAusUnidade', 'chartTitleUnidade', 'Headcount por Unidade'); }
-function renderChartDepto()   { renderBarsByDim('depto',   'barAusDepto',   'chartTitleDepto',   'Headcount por Departamento'); }
-function setFilter(key, val) {
-  state.filters[key] = val;
-  if (key === 'unidade') state.filters.departamento = 'Todos';
-  render();
+// ─── MODAL EDITAR HC ─────────────────────────────────────────────────────────
+var _modalData = null;
+function abrirModalHC(idx) {
+  if (!HC_SCRIPT_URL) return;
+  var d = _filteredCache[idx];
+  if (!d) return;
+  _modalData = d;
+  document.getElementById('modal-hc-titulo').textContent = (d.departamento||'') + ' · ' + (d.unidade||'');
+  document.getElementById('modal-hc-escala').value = d.escala || '';
+  document.getElementById('modal-hc-lider').value  = d.lider;
+  document.getElementById('modal-hc-esp').value    = d.especialista;
+  document.getElementById('modal-hc-aux').value    = d.auxiliares;
+  document.getElementById('modal-hc-apr').value    = d.aprendizes;
+  document.getElementById('modal-hc-est').value    = d.estagiarios;
+  document.getElementById('modal-hc-overlay').classList.add('open');
+  document.body.style.overflow='hidden';
 }
-function clearFilters() {
-  state.filters = { unidade: 'Todos', departamento: 'Todos', tipo: 'Todos' };
-  render();
+function fecharModalHC() {
+  document.getElementById('modal-hc-overlay').classList.remove('open');
+  document.body.style.overflow='';
+  _modalData = null;
+}
+function confirmarModalHC() {
+  if (!_modalData||!HC_SCRIPT_URL) return;
+  var btn = document.getElementById('btn-hc-confirmar');
+  btn.textContent='Salvando...'; btn.disabled=true;
+  var lider        = parseInt(document.getElementById('modal-hc-lider').value)||0;
+  var especialista = parseInt(document.getElementById('modal-hc-esp').value)||0;
+  var auxiliares   = parseInt(document.getElementById('modal-hc-aux').value)||0;
+  var aprendizes   = parseInt(document.getElementById('modal-hc-apr').value)||0;
+  var estagiarios  = parseInt(document.getElementById('modal-hc-est').value)||0;
+  var payload = {
+    action:'updateHC', row_index:_modalData.row_index,
+    unidade:_modalData.unidade, departamento:_modalData.departamento,
+    escala: document.getElementById('modal-hc-escala').value,
+    lider:lider, especialista:especialista, auxiliares:auxiliares,
+    aprendizes:aprendizes, estagiarios:estagiarios,
+    responsavel:__nomeResponsavel
+  };
+  fetch(HC_SCRIPT_URL, { method:'POST', body: JSON.stringify(payload) })
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if (res.ok) {
+        Object.assign(_modalData, {
+          escala:payload.escala, lider:lider, especialista:especialista,
+          auxiliares:auxiliares, aprendizes:aprendizes, estagiarios:estagiarios,
+          total:lider+especialista+auxiliares+aprendizes+estagiarios
+        });
+        fecharModalHC(); render(); renderKPIs();
+      } else {
+        btn.textContent='Confirmar'; btn.disabled=false;
+        alert('Erro ao salvar:\n'+(res.error||'resposta inválida'));
+      }
+    })
+    .catch(function(err){ btn.textContent='Confirmar'; btn.disabled=false; alert('Erro de conexão:\n'+err.message); });
 }
 
 // ─── DRAWER ───────────────────────────────────────────────────────────────────
@@ -1150,46 +755,41 @@ var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
-  fetch(COLAB_URL + '?action=listColaboradores')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data.ok) return;
-      var colabs = data.colaboradores;
-      var unidades = new Set(colabs.map(function(c) { return c.unidade; }));
-      var deptos   = new Set(colabs.map(function(c) { return c.departamento; }));
-      document.getElementById('drawer-kpi-unidades').textContent = unidades.size;
-      document.getElementById('drawer-kpi-deptos').textContent   = deptos.size;
-      document.getElementById('drawer-kpi-colabs').textContent   = data.total;
-      _drawerKpisLoaded = true;
-    })
-    .catch(function() {});
+  fetch(COLAB_URL+'?action=listColaboradores')
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(!data.ok) return;
+      var colabs=data.colaboradores;
+      var unidades=new Set(colabs.map(function(c){return c.unidade;}));
+      var deptos=new Set(colabs.map(function(c){return c.departamento;}));
+      document.getElementById('drawer-kpi-unidades').textContent=unidades.size;
+      document.getElementById('drawer-kpi-deptos').textContent=deptos.size;
+      document.getElementById('drawer-kpi-colabs').textContent=data.total;
+      _drawerKpisLoaded=true;
+    }).catch(function(){});
 }
-
-var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
-var _drawerMetaLoaded = false;
+var GITHUB_TREE_URL='https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
+var _drawerMetaLoaded=false;
 function loadDrawerMeta() {
   if (_drawerMetaLoaded) return;
   fetch(GITHUB_TREE_URL)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data.tree) return;
-      var tree = data.tree;
-      var pages = 0, dashboards = 0;
-      tree.forEach(function(f) {
-        if (f.type !== 'blob' || !f.path.endsWith('.html')) return;
-        if (f.path.startsWith('compliance/kpis/')) { dashboards++; }
-        else if (f.path.startsWith('compliance/')) { pages++; }
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(!data.tree) return;
+      var pages=0,dashboards=0;
+      data.tree.forEach(function(f){
+        if(f.type!=='blob'||!f.path.endsWith('.html')) return;
+        if(f.path.startsWith('compliance/kpis/')) dashboards++;
+        else if(f.path.startsWith('compliance/')) pages++;
       });
-      var el = function(id) { return document.getElementById(id); };
-      if (el('drawer-kpi-pags')) el('drawer-kpi-pags').textContent = pages;
-      if (el('drawer-kpi-dash')) el('drawer-kpi-dash').textContent = dashboards;
-      _drawerMetaLoaded = true;
-    })
-    .catch(function() {});
+      var el=function(id){return document.getElementById(id);};
+      if(el('drawer-kpi-pags')) el('drawer-kpi-pags').textContent=pages;
+      if(el('drawer-kpi-dash')) el('drawer-kpi-dash').textContent=dashboards;
+      _drawerMetaLoaded=true;
+    }).catch(function(){});
 }
 function openDrawer() {
-  loadDrawerMeta();
-  loadDrawerKPIs();
+  loadDrawerMeta(); loadDrawerKPIs();
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawer-overlay').classList.add('open');
   document.body.style.overflow='hidden';
@@ -1199,19 +799,18 @@ function closeDrawer() {
   document.getElementById('drawer-overlay').classList.remove('open');
   document.body.style.overflow='';
 }
-document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeDrawer(); fecharModalDev(); } });
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer();fecharModalHC();}});
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 (function(){
-  var s = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'));}catch(e){return null;}}());
-  if (s && s.displayName) {
-    var parts = s.displayName.trim().split(/\s+/);
-    var abbr = parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : parts[0];
-    var hu = document.getElementById('header-user');
-    if (hu) hu.textContent = abbr;
+  var s=window.__lideresSession||(function(){try{return JSON.parse(localStorage.getItem('lideres_session'));}catch(e){return null;}}());
+  if(s&&s.displayName){
+    var parts=s.displayName.trim().split(/\s+/);
+    var abbr=parts.length>1?parts[0]+' '+parts[parts.length-1]:parts[0];
+    var hu=document.getElementById('header-user');
+    if(hu) hu.textContent=abbr;
   }
 })();
-
 loadData();
 </script>
 </body>
