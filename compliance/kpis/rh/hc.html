@@ -793,14 +793,38 @@ function classifyCargoTipo(cargo) {
 }
 
 function carregarCruzamento() {
-  if (_colabs !== null) { renderCruzamento(); return; }
+  if (_colabs !== null && _vagasData !== null) { renderCruzamento(); return; }
   document.getElementById('cruzamento-content').innerHTML =
-    '<div class="empty-state"><div style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--carbon);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px"></div><p>Carregando colaboradores...</p></div>';
-  fetch(COLAB_URL2 + '?action=listColaboradores')
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if (!data.ok) throw new Error(data.erro||'Erro ao carregar');
-      _colabs = data.colaboradores || [];
+    '<div class="empty-state"><div style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--carbon);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px"></div><p>Carregando...</p></div>';
+  var pColabs = _colabs !== null
+    ? Promise.resolve(_colabs)
+    : fetch(COLAB_URL2 + '?action=listColaboradores').then(function(r){ return r.json(); }).then(function(data){
+        if (!data.ok) throw new Error(data.erro||'Erro ao carregar colaboradores');
+        return data.colaboradores || [];
+      });
+  var pVagas = _vagasData !== null
+    ? Promise.resolve(_vagasData)
+    : fetch('https://sheets.googleapis.com/v4/spreadsheets/' + VAGAS_SHEET_ID
+        + '/values/' + encodeURIComponent(VAGAS_SHEET_NAME + '!A:O')
+        + '?key=' + API_KEY)
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        var rows = data.values || [];
+        if (rows.length < 2) return [];
+        var hdrs = rows[0];
+        var out = [];
+        for (var i = 1; i < rows.length; i++) {
+          if (!rows[i].some(function(c){ return c && c.trim(); })) continue;
+          var obj = {};
+          hdrs.forEach(function(h,j){ obj[norm(h).replace(/\s+/g,'_')] = (rows[i][j]||'').trim(); });
+          out.push({ unidade: obj.unidade||'', departamento: obj.departamento||'', status: obj.status_da_vaga||'' });
+        }
+        return out;
+      });
+  Promise.all([pColabs, pVagas])
+    .then(function(res){
+      _colabs = res[0];
+      if (_vagasData === null) _vagasData = res[1];
       renderCruzamento();
     })
     .catch(function(err){
@@ -824,6 +848,16 @@ function renderCruzFiltros() {
 }
 
 function setCruzFiltro(val) { _cruzFiltroUnidade=val; renderCruzamento(); }
+
+function vagasEmAberto(unidade, departamento) {
+  if (!_vagasData) return 0;
+  return _vagasData.filter(function(v) {
+    if (v.unidade !== unidade) return false;
+    if (v.departamento !== departamento) return false;
+    var s = norm(v.status);
+    return s === 'aberta' || s.indexOf('andamento') >= 0;
+  }).length;
+}
 
 function renderCruzamento() {
   if (!dados.length || !_colabs) return;
@@ -856,7 +890,7 @@ function renderCruzamento() {
     html+='<div class="cruz-card-header"><span>'+escH(u)+'</span>';
     html+='<span class="cruz-totals">Prog: '+totProg+' &nbsp;·&nbsp; Real: '+totReal+' &nbsp;·&nbsp; <span class="'+gCls+'">'+gStr+'</span></span></div>';
     html+='<div style="overflow-x:auto"><table class="cruz-table"><thead><tr>';
-    html+='<th>Departamento</th><th>Prog</th><th>Real</th><th>Diff</th>';
+    html+='<th>Departamento</th><th>Prog</th><th>Real</th><th>Diff</th><th>Em R&amp;S</th>';
     html+='<th>Líder</th><th>Esp.</th><th>Aux.</th><th>Apr.</th><th>Est.</th>';
     html+='</tr></thead><tbody>';
     rows.forEach(function(prog){
@@ -867,6 +901,8 @@ function renderCruzamento() {
       html+='<tr><td>'+escH(prog.departamento)+'</td>';
       html+='<td>'+prog.total+'</td><td>'+real.total+'</td>';
       html+='<td class="'+dCls+'">'+(d>0?'+':'')+d+'</td>';
+      var vc=vagasEmAberto(prog.unidade,prog.departamento);
+      html+='<td style="text-align:center">'+(vc>0?'<strong style="color:#b08a00">'+vc+'</strong>':'<span style="color:var(--muted)">—</span>')+'</td>';
       html+='<td>'+real.lider+'/'+prog.lider+'</td>';
       html+='<td>'+real.especialista+'/'+prog.especialista+'</td>';
       html+='<td>'+real.auxiliares+'/'+prog.auxiliares+'</td>';
