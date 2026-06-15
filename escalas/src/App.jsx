@@ -9,7 +9,7 @@ const T = {
   bg:       '#F4F4F4',
   surface:  '#FFFFFF',
   carbon:   '#35383F',
-  citric:   '#CFFF00',
+  citric:   '#70ff41',
   text:     '#111111',
   mid:      '#555555',
   muted:    '#999999',
