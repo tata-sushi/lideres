@@ -161,6 +161,24 @@ body.cf-active .bar-row:not(.cf-selected):not(.cf-related) { opacity: 0.45; }
 body[data-view="dashboard"] .filters-wrap,
 body[data-view="dashboard"] #content { display: none; }
 body:not([data-view="dashboard"]) #dashboard { display: none; }
+body:not([data-view="cruzamento"]) #cruzamento { display: none; }
+body[data-view="cruzamento"] .filters-wrap,
+body[data-view="cruzamento"] #content,
+body[data-view="cruzamento"] #kpi-section { display: none; }
+.cruzamento-section { padding: 14px 20px 80px; display: flex; flex-direction: column; gap: 14px; }
+.cruz-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.cruz-card-header { padding: 10px 14px; background: var(--carbon); color: var(--citric); font-family: "DM Mono", monospace; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+.cruz-totals { font-size: 10px; color: rgba(207,255,0,.7); font-weight: 400; }
+.cruz-table { width: 100%; border-collapse: collapse; }
+.cruz-table th { font-family: "DM Mono", monospace; font-size: 9px; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); padding: 7px 10px; text-align: center; border-bottom: 2px solid var(--border); background: var(--bg); }
+.cruz-table th:first-child { text-align: left; }
+.cruz-table td { padding: 8px 10px; font-size: 12px; border-bottom: 1px solid var(--border); text-align: center; font-family: "DM Mono", monospace; font-variant-numeric: tabular-nums; }
+.cruz-table td:first-child { text-align: left; font-family: "DM Sans", sans-serif; font-size: 13px; font-weight: 500; color: var(--carbon); }
+.cruz-table tr:last-child td { border-bottom: none; }
+.cruz-diff-pos { color: var(--green); font-weight: 700; }
+.cruz-diff-neg { color: var(--red); font-weight: 700; }
+.cruz-diff-zer { color: var(--muted); }
+@media (min-width: 768px) { .cruzamento-section { max-width: 900px; margin: 0 auto; padding: 14px 0 80px; } }
 body:not([data-view="dashboard"]) #dash-filters { display: none; }
 #dash-filters { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
 .filter-date { appearance: none; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); width: 100%; transition: border-color 0.15s; cursor: pointer; }
@@ -303,6 +321,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="tabs">
   <button class="tab-btn active" id="tab-programado" onclick="setTab('programado')">Programado</button>
   <button class="tab-btn" id="tab-dashboard" onclick="setTab('dashboard')">KPI's</button>
+  <button class="tab-btn" id="tab-cruzamento" onclick="setTab('cruzamento')">Cruzamento</button>
 </div>
 
 <div id="kpi-section"></div>
@@ -343,6 +362,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </table>
     </div>
   </div>
+</div>
+
+<div class="cruzamento-section" id="cruzamento">
+  <div id="cruzamento-filters" style="background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;margin:-14px -20px 14px;"></div>
+  <div id="cruzamento-content"></div>
 </div>
 
 <!-- LOADING -->
@@ -595,13 +619,118 @@ function setTab(tab) {
   state.tab = tab;
   document.getElementById('tab-programado').classList.toggle('active', tab==='programado');
   document.getElementById('tab-dashboard').classList.toggle('active', tab==='dashboard');
+  document.getElementById('tab-cruzamento').classList.toggle('active', tab==='cruzamento');
   if (tab==='dashboard') {
     document.body.setAttribute('data-view','dashboard');
     renderDashboard();
+  } else if (tab==='cruzamento') {
+    document.body.setAttribute('data-view','cruzamento');
+    carregarCruzamento();
   } else {
     document.body.removeAttribute('data-view');
     render();
   }
+}
+
+// ─── CRUZAMENTO HC REAL × PROGRAMADO ─────────────────────────────────────────
+var COLAB_URL2 = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
+var _colabs = null;
+var _cruzFiltroUnidade = 'Todos';
+
+function classifyCargoTipo(cargo) {
+  var c = (cargo||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if (/lider|supervisor|maitre|chef|encarregado/.test(c)) return 'lider';
+  if (/aprendiz|menor aprendiz/.test(c)) return 'aprendizes';
+  if (/estagia/.test(c)) return 'estagiarios';
+  if (/especialista|sushiman|confeiteiro|sr|senior/.test(c)) return 'especialista';
+  return 'auxiliares';
+}
+
+function carregarCruzamento() {
+  if (_colabs !== null) { renderCruzamento(); return; }
+  document.getElementById('cruzamento-content').innerHTML =
+    '<div class="empty-state"><div style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--carbon);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px"></div><p>Carregando colaboradores...</p></div>';
+  fetch(COLAB_URL2 + '?action=listColaboradores')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (!data.ok) throw new Error(data.erro||'Erro ao carregar');
+      _colabs = data.colaboradores || [];
+      renderCruzamento();
+    })
+    .catch(function(err){
+      document.getElementById('cruzamento-content').innerHTML =
+        '<div class="empty-state"><p style="color:var(--red)">'+escH(err.message)+'</p>' +
+        '<button onclick="_colabs=null;carregarCruzamento()" style="margin-top:12px;padding:8px 16px;background:var(--carbon);color:var(--citric);border:none;border-radius:6px;font-size:11px;cursor:pointer;font-family:'DM Mono',monospace;text-transform:uppercase">↻ Tentar novamente</button></div>';
+    });
+}
+
+function renderCruzFiltros() {
+  var unidades = unique(dados.map(function(d){return d.unidade;}));
+  var html = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">';
+  html += '<div class="filter-group" style="flex:1;min-width:160px;max-width:260px"><label class="filter-label">Unidade</label>';
+  html += '<select class="filter-select" onchange="setCruzFiltro(this.value)">';
+  html += '<option value="Todos"'+(_cruzFiltroUnidade==='Todos'?' selected':'')+'>Todos</option>';
+  unidades.forEach(function(u){ html+='<option value="'+escH(u)+'"'+(_cruzFiltroUnidade===u?' selected':'')+'>'+escH(u)+'</option>'; });
+  html += '</select></div>';
+  html += '<button class="btn-clear" onclick="_colabs=null;carregarCruzamento()" style="white-space:nowrap;margin-top:16px">↻ Atualizar Real</button>';
+  html += '</div>';
+  document.getElementById('cruzamento-filters').innerHTML = html;
+}
+
+function setCruzFiltro(val) { _cruzFiltroUnidade=val; renderCruzamento(); }
+
+function renderCruzamento() {
+  if (!dados.length || !_colabs) return;
+  renderCruzFiltros();
+
+  // Agrupar real por unidade+departamento+tipo
+  var realMap = {};
+  _colabs.forEach(function(c) {
+    var u=(c.unidade||'').trim(), d=(c.departamento||'').trim();
+    if (!u||!d) return;
+    var key=u+'|||'+d;
+    if (!realMap[key]) realMap[key]={unidade:u,departamento:d,lider:0,especialista:0,auxiliares:0,aprendizes:0,estagiarios:0,total:0};
+    realMap[key][classifyCargoTipo(c.cargo)]++;
+    realMap[key].total++;
+  });
+
+  var srcProg = _cruzFiltroUnidade==='Todos' ? dados : dados.filter(function(d){return d.unidade===_cruzFiltroUnidade;});
+  var unidades = unique(srcProg.map(function(d){return d.unidade;}));
+
+  var html = '';
+  unidades.forEach(function(u) {
+    var rows = srcProg.filter(function(d){return d.unidade===u;});
+    var totProg = rows.reduce(function(a,d){return a+d.total;},0);
+    var totReal = rows.reduce(function(a,d){var k=d.unidade+'|||'+d.departamento;return a+((realMap[k]&&realMap[k].total)||0);},0);
+    var gap=totReal-totProg;
+    var gCls=gap>0?'cruz-diff-pos':gap<0?'cruz-diff-neg':'cruz-diff-zer';
+    var gStr=gap>0?'+'+gap:String(gap);
+
+    html+='<div class="cruz-card">';
+    html+='<div class="cruz-card-header"><span>'+escH(u)+'</span>';
+    html+='<span class="cruz-totals">Prog: '+totProg+' &nbsp;·&nbsp; Real: '+totReal+' &nbsp;·&nbsp; <span class="'+gCls+'">'+gStr+'</span></span></div>';
+    html+='<div style="overflow-x:auto"><table class="cruz-table"><thead><tr>';
+    html+='<th>Departamento</th><th>Prog</th><th>Real</th><th>Diff</th>';
+    html+='<th>Líder</th><th>Esp.</th><th>Aux.</th><th>Apr.</th><th>Est.</th>';
+    html+='</tr></thead><tbody>';
+    rows.forEach(function(prog){
+      var key=prog.unidade+'|||'+prog.departamento;
+      var real=realMap[key]||{lider:0,especialista:0,auxiliares:0,aprendizes:0,estagiarios:0,total:0};
+      var d=real.total-prog.total;
+      var dCls=d>0?'cruz-diff-pos':d<0?'cruz-diff-neg':'cruz-diff-zer';
+      html+='<tr><td>'+escH(prog.departamento)+'</td>';
+      html+='<td>'+prog.total+'</td><td>'+real.total+'</td>';
+      html+='<td class="'+dCls+'">'+(d>0?'+':'')+d+'</td>';
+      html+='<td>'+real.lider+'/'+prog.lider+'</td>';
+      html+='<td>'+real.especialista+'/'+prog.especialista+'</td>';
+      html+='<td>'+real.auxiliares+'/'+prog.auxiliares+'</td>';
+      html+='<td>'+real.aprendizes+'/'+prog.aprendizes+'</td>';
+      html+='<td>'+real.estagiarios+'/'+prog.estagiarios+'</td></tr>';
+    });
+    html+='</tbody></table></div></div>';
+  });
+
+  document.getElementById('cruzamento-content').innerHTML = html||'<div class="empty-state"><p>Nenhum dado</p></div>';
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
