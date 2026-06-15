@@ -8,7 +8,7 @@ import { carregarEscala, salvarEscala, carregarColaboradores, carregarFerias, sa
 const T = {
   bg:       '#F4F4F4',
   surface:  '#FFFFFF',
-  carbon:   '#53585f',
+  carbon:   '#35383F',
   citric:   '#70ff41',
   text:     '#111111',
   mid:      '#555555',
@@ -48,7 +48,7 @@ const DIAS_META = [
 const FUNCOES = ['Maître','Chefe de Fila','Garçom','Cumim','Aprendiz','Sommelier','Host','Barman','Auxiliar','Outro'];
 
 const CORES_POOL = [
-  '#53585f','#2A6B35','#2A4A7A','#8B2A1A','#6B2E5F',
+  '#35383F','#2A6B35','#2A4A7A','#8B2A1A','#6B2E5F',
   '#2C5F6B','#8B4A1A','#4A6B2A','#6B2A3C','#4A3A6B',
 ];
 
@@ -1126,7 +1126,7 @@ export default function EscalaPainel() {
           .epdf-header-right{text-align:right;font-size:10px;color:#444;line-height:1.7;flex-shrink:0;}
           .epdf-meta-line{font-size:10px;}
           .epdf-table{width:100%;border-collapse:collapse;font-size:9.5px;margin-bottom:10px;}
-          .epdf-table thead tr{background:#53585f!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+          .epdf-table thead tr{background:#35383F!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
           .epdf-table th{padding:6px 5px;color:#fff!important;font-size:9px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;text-align:center;}
           .epdf-th-nome{text-align:left;width:130px;}
           .epdf-th-fn{text-align:left;width:90px;}
