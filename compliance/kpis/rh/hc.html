@@ -186,10 +186,6 @@ body[data-view="cruzamento"] #kpi-section { display: none; }
 .cruz-diff-zer { color: var(--muted); }
 @media (min-width: 768px) { .cruzamento-section { max-width: 900px; margin: 0 auto; padding: 14px 0 80px; } }
 body:not([data-view="dashboard"]) #dash-filters { display: none; }
-body:not([data-view="vagas"]) #vagas-section { display: none !important; }
-body[data-view="vagas"] .filters-wrap,
-body[data-view="vagas"] #content,
-body[data-view="vagas"] #kpi-section { display: none; }
 /* órfãos da antiga aba Programado — nunca exibir */
 #filters-wrap, #content { display: none !important; }
 .sv-aberta       { background: #E8F0FA; color: #1A3A5C; }
@@ -338,7 +334,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="tabs">
   <button class="tab-btn active" id="tab-dashboard" onclick="setTab('dashboard')">KPI's</button>
   <button class="tab-btn" id="tab-cruzamento" onclick="setTab('cruzamento')">Analítico</button>
-  <button class="tab-btn" id="tab-vagas" onclick="setTab('vagas')">Vagas</button>
 </div>
 
 <div id="kpi-section"></div>
@@ -346,7 +341,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="filters-wrap" id="filters-wrap"></div>
 <main class="content" id="content"></main>
 
-<div id="dash-filters"></div>
 
 <div class="dashboard" id="dashboard">
   <div class="chart-card">
@@ -370,22 +364,17 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <tr>
             <th onclick="toggleAnaliticoSort('unidade')">Unidade <span id="anali-icon-unidade">↕</span></th>
             <th style="text-align:center" onclick="toggleAnaliticoSort('total')">Total <span id="anali-icon-total">↓</span></th>
-            <th style="text-align:center" onclick="toggleAnaliticoSort('lider')">Líderes <span id="anali-icon-lider">↕</span></th>
+            <th style="text-align:center" onclick="toggleAnaliticoSort('lider')">Lideranças <span id="anali-icon-lider">↕</span></th>
             <th style="text-align:center" onclick="toggleAnaliticoSort('especialista')">Especialistas <span id="anali-icon-especialista">↕</span></th>
             <th style="text-align:center" onclick="toggleAnaliticoSort('auxiliares')">Auxiliares <span id="anali-icon-auxiliares">↕</span></th>
-            <th style="text-align:center" onclick="toggleAnaliticoSort('aprendizes')">Aprendiz <span id="anali-icon-aprendizes">↕</span></th>
-            <th style="text-align:center" onclick="toggleAnaliticoSort('estagiarios')">Estágio <span id="anali-icon-estagiarios">↕</span></th>
+            <th style="text-align:center" onclick="toggleAnaliticoSort('aprendizes')">Aprendizes <span id="anali-icon-aprendizes">↕</span></th>
+            <th style="text-align:center" onclick="toggleAnaliticoSort('estagiarios')">Estagiários <span id="anali-icon-estagiarios">↕</span></th>
           </tr>
         </thead>
         <tbody id="tbody-analitico"></tbody>
       </table>
     </div>
   </div>
-</div>
-
-<div id="vagas-section" style="padding:14px 20px;display:flex;flex-direction:column;gap:10px;padding-bottom:80px;">
-  <div id="vagas-filters" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:10px;"></div>
-  <div id="vagas-content"></div>
 </div>
 
 <div class="cruzamento-section" id="cruzamento">
@@ -673,13 +662,9 @@ function setTab(tab) {
   state.tab = tab;
   document.getElementById('tab-dashboard').classList.toggle('active', tab==='dashboard');
   document.getElementById('tab-cruzamento').classList.toggle('active', tab==='cruzamento');
-  document.getElementById('tab-vagas').classList.toggle('active', tab==='vagas');
   if (tab==='cruzamento') {
     document.body.setAttribute('data-view','cruzamento');
     carregarCruzamento();
-  } else if (tab==='vagas') {
-    document.body.setAttribute('data-view','vagas');
-    loadVagas();
   } else {
     document.body.setAttribute('data-view','dashboard');
     renderDashboard();
@@ -690,129 +675,6 @@ function setTab(tab) {
 var VAGAS_SHEET_ID   = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
 var VAGAS_SHEET_NAME = 'CONTROLE DE VAGAS ABERTAS';
 var _vagasData   = null;
-var _vagasFiltros = { unidade: 'Todos', departamento: 'Todos', status: 'Todos' };
-
-function loadVagas() {
-  if (_vagasData !== null) { renderVagas(); return; }
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + VAGAS_SHEET_ID
-    + '/values/' + encodeURIComponent(VAGAS_SHEET_NAME + '!A:O')
-    + '?key=' + API_KEY;
-  document.getElementById('vagas-content').innerHTML =
-    '<div class="empty-state"><div style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--carbon);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px"></div><p>Carregando vagas...</p></div>';
-  fetch(url)
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if (data.error) { document.getElementById('vagas-content').innerHTML='<div class="empty-state"><p style="color:var(--red)">'+escH(data.error.message)+'</p></div>'; return; }
-      var rows = data.values || [];
-      if (rows.length < 2) { _vagasData=[]; renderVagas(); return; }
-      var hdrs = rows[0];
-      _vagasData = [];
-      for (var i = 1; i < rows.length; i++) {
-        if (!rows[i].some(function(c){ return c && c.trim(); })) continue;
-        var obj = {};
-        hdrs.forEach(function(h,j){ obj[norm(h).replace(/\s+/g,'_')] = (rows[i][j]||'').trim(); });
-        _vagasData.push({
-          data:                   obj.data_da_solicitacao || '',
-          unidade:                obj.unidade || '',
-          departamento:           obj.departamento || '',
-          cargo:                  obj.cargo || '',
-          escala:                 obj.escala || '',
-          horario:                obj.horario || '',
-          colaborador_anterior:   obj.colaborador_anterior || '',
-          colaborador_contratado: obj.colaborador_contratado || '',
-          data_contratacao:       obj.data_da_contratacao || '',
-          status:                 obj.status_da_vaga || '',
-          lider:                  obj.lider_responsavel || '',
-          observacao:             obj.observacao || ''
-        });
-      }
-      renderVagas();
-    })
-    .catch(function(err){
-      document.getElementById('vagas-content').innerHTML =
-        '<div class="empty-state"><p style="color:var(--red)">'+escH(err.message||'Erro de rede')+'</p>' +
-        '<button onclick="(_vagasData=null,loadVagas())" style="margin-top:12px;padding:8px 16px;background:var(--carbon);color:var(--citric);border:none;border-radius:6px;font-size:11px;cursor:pointer;font-family:\'DM Mono\',monospace;text-transform:uppercase">↻ Tentar novamente</button></div>';
-    });
-}
-
-function slugVaga(s) {
-  if (!s) return 'default';
-  var l = norm(s);
-  if (l === 'aberta') return 'aberta';
-  if (l.indexOf('andamento') >= 0 || l.indexOf('em aberto') >= 0) return 'em-andamento';
-  if (l === 'fechada') return 'fechada';
-  if (l.indexOf('cancelad') >= 0) return 'cancelada';
-  return 'default';
-}
-
-function getVagasFiltradas() {
-  var f = _vagasFiltros;
-  return (_vagasData||[]).filter(function(d){
-    if (f.unidade !== 'Todos' && d.unidade !== f.unidade) return false;
-    if (f.departamento !== 'Todos' && d.departamento !== f.departamento) return false;
-    if (f.status !== 'Todos' && d.status !== f.status) return false;
-    return true;
-  });
-}
-
-function renderVagasFiltros() {
-  var f = _vagasFiltros, src = _vagasData||[];
-  function sel(label, key, opts, cur) {
-    var h = '<div class="filter-group"><label class="filter-label">'+label+'</label><select class="filter-select" onchange="setVagasFiltro(\''+key+'\',this.value)"><option value="Todos"'+(cur==='Todos'?' selected':'')+'>Todos</option>';
-    opts.forEach(function(o){ h += '<option value="'+escH(o)+'"'+(cur===o?' selected':'')+'>'+escH(o)+'</option>'; });
-    return h + '</select></div>';
-  }
-  var depSrc = f.unidade === 'Todos' ? src : src.filter(function(d){ return d.unidade===f.unidade; });
-  var filtradas = getVagasFiltradas();
-  var html = '<div class="filters-row">';
-  html += sel('Unidade',      'unidade',      unique(src.map(function(d){return d.unidade;})),      f.unidade);
-  html += sel('Departamento', 'departamento', unique(depSrc.map(function(d){return d.departamento;})), f.departamento);
-  html += sel('Status',       'status',       unique(src.map(function(d){return d.status;})),       f.status);
-  html += '</div><div class="filters-actions"><button class="btn-clear" onclick="clearVagasFiltros()">Limpar filtros</button>';
-  html += '<span class="results-count"><span>'+filtradas.length+'</span> vaga(s)</span></div>';
-  document.getElementById('vagas-filters').innerHTML = html;
-}
-
-function cardVaga(d) {
-  var sv = slugVaga(d.status);
-  var footer = d.colaborador_contratado
-    ? '<div class="card-footer"><span class="check-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> '+escH(d.colaborador_contratado)+'</span></div>'
-    : '';
-  var body = '<div class="card-body">';
-  body += '<div class="card-field"><span class="field-label">Solicitação</span><span class="field-value">'+escH(d.data)+'</span></div>';
-  body += '<div class="card-field"><span class="field-label">Departamento</span><span class="field-value">'+escH(d.departamento)+'</span></div>';
-  if (d.lider)                body += '<div class="card-field"><span class="field-label">Líder</span><span class="field-value">'+escH(d.lider)+'</span></div>';
-  if (d.escala)               body += '<div class="card-field"><span class="field-label">Escala</span><span class="field-value">'+escH(d.escala)+'</span></div>';
-  if (d.horario)              body += '<div class="card-field"><span class="field-label">Horário</span><span class="field-value">'+escH(d.horario)+'</span></div>';
-  if (d.colaborador_anterior) body += '<div class="card-field"><span class="field-label">Colaborador anterior</span><span class="field-value">'+escH(d.colaborador_anterior)+'</span></div>';
-  if (d.data_contratacao)     body += '<div class="card-field"><span class="field-label">Data contratação</span><span class="field-value">'+escH(d.data_contratacao)+'</span></div>';
-  if (d.observacao)           body += '<div class="card-field" style="grid-column:1/-1"><span class="field-label">Obs</span><span class="field-value">'+escH(d.observacao)+'</span></div>';
-  body += '</div>';
-  return '<div class="card"><div class="card-header"><div>' +
-    '<div class="candidate-name">'+escH(d.cargo)+'</div>' +
-    '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted);margin-top:2px;">'+escH(d.unidade)+'</div>' +
-    '</div><span class="status-badge sv-'+sv+'">'+escH(d.status||'Sem status')+'</span></div>'+body+footer+'</div>';
-}
-
-function renderVagas() {
-  renderVagasFiltros();
-  var filtradas = getVagasFiltradas();
-  var el = document.getElementById('vagas-content');
-  if (!filtradas.length) { el.innerHTML='<div class="empty-state"><p>Nenhuma vaga encontrada</p></div>'; return; }
-  el.innerHTML = filtradas.map(cardVaga).join('');
-}
-
-function setVagasFiltro(key, val) {
-  _vagasFiltros[key] = val;
-  if (key === 'unidade') _vagasFiltros.departamento = 'Todos';
-  renderVagas();
-}
-
-function clearVagasFiltros() {
-  _vagasFiltros = { unidade: 'Todos', departamento: 'Todos', status: 'Todos' };
-  renderVagas();
-}
-
 // ─── CRUZAMENTO HC REAL × PROGRAMADO ─────────────────────────────────────────
 var COLAB_URL2 = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _colabs = null;
@@ -955,7 +817,6 @@ function renderCruzamento() {
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 var _charts = {};
 function renderDashboard() {
-  renderDashFilters();
   var src = getDashData();
 
   var unidades = unique(src.map(function(d){return d.unidade;}));
@@ -1067,8 +928,9 @@ function toggleAnaliticoSort(col) {
 function renderTabelaAnalitica(src) {
   var el = document.getElementById('tbody-analitico');
   if (!el) return;
-  var cols = ['unidade','total','lider','especialista','auxiliares','aprendizes','estagiarios'];
-  cols.forEach(function(c){var ic=document.getElementById('anali-icon-'+c);if(ic)ic.textContent='↕';});
+  ['unidade','total','lider','especialista','auxiliares','aprendizes','estagiarios'].forEach(function(c){
+    var ic=document.getElementById('anali-icon-'+c); if(ic) ic.textContent='↕';
+  });
   var ic=document.getElementById('anali-icon-'+_analiticoSortCol);
   if(ic) ic.textContent = _analiticoSortDir===-1?'↓':'↑';
   var unidades = unique(src.map(function(d){return d.unidade;}));
@@ -1085,8 +947,8 @@ function renderTabelaAnalitica(src) {
     };
   });
   rows.sort(function(a,b){
-    if (_analiticoSortCol === 'unidade') return _analiticoSortDir * (a.unidade||'').localeCompare(b.unidade||'','pt-BR');
-    return _analiticoSortDir * (b[_analiticoSortCol] - a[_analiticoSortCol]);
+    if (_analiticoSortCol==='unidade') return _analiticoSortDir*(a.unidade||'').localeCompare(b.unidade||'','pt-BR');
+    return _analiticoSortDir*(b[_analiticoSortCol]-a[_analiticoSortCol]);
   });
   el.innerHTML = rows.map(function(r){
     return '<tr><td>'+escH(r.unidade)+'</td><td class="colab-cell-num">'+r.total+'</td>' +
