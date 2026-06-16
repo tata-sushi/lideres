@@ -353,8 +353,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
   <div class="chart-card">
     <div class="chart-title">Composição por Tipo</div>
-    <div class="chart-wrap"><canvas id="cHCTipo"></canvas></div>
+    <div class="status-table" id="statusHCTipo"></div>
   </div>
+
   <div class="chart-card">
     <div class="chart-title">Por Departamento</div>
     <div class="bar-list" id="barHCDepto"></div>
@@ -534,10 +535,17 @@ function hideLoading() { document.getElementById('loading-overlay').classList.re
 
 function loadData() {
   showLoading();
-  fetch(sheetURL())
-    .then(function(r){ return r.json(); })
-    .then(function(data){
+  var pDados = fetch(sheetURL()).then(function(r){ return r.json(); });
+  var pColabs = _colabs !== null
+    ? Promise.resolve(_colabs)
+    : fetch(COLAB_URL2 + '?action=listColaboradores')
+        .then(function(r){ return r.json(); })
+        .then(function(data){ _colabs = (data.ok && data.colaboradores) ? data.colaboradores : []; return _colabs; })
+        .catch(function(){ _colabs = []; return []; });
+  Promise.all([pDados, pColabs])
+    .then(function(results){
       hideLoading();
+      var data = results[0];
       if (data.error) { showError(data.error.message); return; }
       var rows = data.values || [];
       if (rows.length < 2) { dados=[]; render(); return; }
@@ -571,13 +579,29 @@ function showError(msg) {
 
 // ─── KPIS ─────────────────────────────────────────────────────────────────────
 function renderKPIs() {
-  var tot=0,lid=0,esp=0,aux=0,apr=0,est=0;
-  dados.forEach(function(d){ tot+=d.total;lid+=d.lider;esp+=d.especialista;aux+=d.auxiliares;apr+=d.aprendizes;est+=d.estagiarios; });
   var el = document.getElementById('kpi-section');
   if (!el) return;
+  var hcReal = _colabs !== null ? _colabs.length : null;
+  var excedentes = 0, falta = 0;
+  if (_colabs && _colabs.length && dados.length) {
+    var realTotMap = {};
+    _colabs.forEach(function(c) {
+      var key = (c.unidade||'').trim() + '|||' + (c.departamento||'').trim();
+      if (key === '|||') return;
+      realTotMap[key] = (realTotMap[key]||0) + 1;
+    });
+    dados.forEach(function(prog) {
+      var key = prog.unidade + '|||' + prog.departamento;
+      var diff = (realTotMap[key]||0) - prog.total;
+      if (diff > 0) excedentes += diff;
+      else if (diff < 0) falta += (-diff);
+    });
+  }
+  var loaded = _colabs !== null;
   el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--border);">' +
-    kpiC('Total',tot) + kpiC('Líderes',lid) + kpiC('Especialistas',esp) +
-    kpiC('Auxiliares',aux) + kpiC('Aprendizes',apr) + kpiC('Estagiários',est) +
+    kpiC('HC Real', loaded ? String(hcReal) : '—') +
+    '<div class="kpi-card"><span class="kpi-label">Excedentes</span><span class="kpi-number" style="color:var(--green)">' + (loaded ? excedentes : '—') + '</span></div>' +
+    '<div class="kpi-card"><span class="kpi-label">Falta de Efetivo</span><span class="kpi-number" style="color:var(--red)">' + (loaded ? falta : '—') + '</span></div>' +
     '</div>';
 }
 function kpiC(label,val) {
@@ -911,15 +935,7 @@ function renderDashboard() {
   var totPorUnidade = unidades.map(function(u){ return src.filter(function(d){return d.unidade===u;}).reduce(function(a,d){return a+d.total;},0); });
   renderBarChart('cHCUnidade', unidades, totPorUnidade);
 
-  var tipos = ['Líder','Especialista','Auxiliares','Aprendizes','Estagiários'];
-  var totPorTipo = [
-    src.reduce(function(a,d){return a+d.lider;},0),
-    src.reduce(function(a,d){return a+d.especialista;},0),
-    src.reduce(function(a,d){return a+d.auxiliares;},0),
-    src.reduce(function(a,d){return a+d.aprendizes;},0),
-    src.reduce(function(a,d){return a+d.estagiarios;},0)
-  ];
-  renderBarChart('cHCTipo', tipos, totPorTipo);
+  renderTipoList(src);
 
   renderBarList('barHCDepto', src);
   renderTabelaAnalitica(src);
@@ -942,23 +958,64 @@ function renderDashFilters() {
 }
 function setDashFilter(key,val) { state.dashFilters[key]=val; renderDashboard(); }
 
+var barValueLabelsPlugin = {
+  id: 'barValueLabels',
+  afterDatasetsDraw: function(chart) {
+    var ctx = chart.ctx;
+    chart.data.datasets.forEach(function(ds, dsIdx) {
+      var meta = chart.getDatasetMeta(dsIdx);
+      meta.data.forEach(function(bar, i) {
+        var val = ds.data[i];
+        if (val === null || val === undefined) return;
+        ctx.save();
+        ctx.fillStyle = '#35383F';
+        ctx.font = '600 11px DM Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(String(val), bar.x, bar.y - 4);
+        ctx.restore();
+      });
+    });
+  }
+};
+
 function renderBarChart(canvasId, labels, values) {
   var ctx = document.getElementById(canvasId);
   if (!ctx) return;
   if (_charts[canvasId]) { _charts[canvasId].destroy(); }
   _charts[canvasId] = new Chart(ctx, {
     type: 'bar',
-    data: { labels: labels, datasets: [{ data: values, backgroundColor: '#35383F', borderRadius: 4 }] },
+    data: { labels: labels, datasets: [{ data: values, backgroundColor: '#35383F', borderRadius: 5, barPercentage: 0.6 }] },
+    plugins: [barValueLabelsPlugin],
     options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { top: 18 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
       scales: {
-        x: { grid: { display: false }, ticks: { font: { family:'DM Mono', size:10 } } },
-        y: { beginAtZero: true, grid: { color:'#E2E2E2' }, ticks: { font: { family:'DM Mono', size:10 }, stepSize:1 } }
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 } } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
       }
     }
   });
 }
+function renderTipoList(src) {
+  var el = document.getElementById('statusHCTipo');
+  if (!el) return;
+  var tipos = [
+    { label: 'Líderes',      val: src.reduce(function(a,d){return a+d.lider;},0) },
+    { label: 'Especialistas',val: src.reduce(function(a,d){return a+d.especialista;},0) },
+    { label: 'Auxiliares',   val: src.reduce(function(a,d){return a+d.auxiliares;},0) },
+    { label: 'Aprendizes',   val: src.reduce(function(a,d){return a+d.aprendizes;},0) },
+    { label: 'Estagiários',  val: src.reduce(function(a,d){return a+d.estagiarios;},0) }
+  ];
+  el.innerHTML = tipos.map(function(t) {
+    return '<div class="status-row">' +
+      '<span class="status-name">' + escH(t.label) + '</span>' +
+      '<span class="status-count">' + t.val + '</span>' +
+    '</div>';
+  }).join('');
+}
+
 function renderBarList(elId, src) {
   var el = document.getElementById(elId);
   if (!el) return;
