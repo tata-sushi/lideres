@@ -361,17 +361,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="bar-list" id="barHCDepto"></div>
   </div>
   <div class="chart-card">
-    <div class="chart-title">Analítico por Unidade</div>
+    <div class="chart-title">Analítico</div>
     <div class="table-wrap">
       <table class="colab-table" style="table-layout:auto">
         <thead>
           <tr>
-            <th>Unidade</th>
-            <th style="text-align:center">Total</th>
-            <th style="text-align:center">Líderes</th>
-            <th style="text-align:center">Especialistas</th>
-            <th style="text-align:center">Auxiliares</th>
-            <th style="text-align:center">Apr+Est</th>
+            <th onclick="toggleAnaliticoSort('unidade')">Unidade <span id="anali-icon-unidade">↕</span></th>
+            <th style="text-align:center" onclick="toggleAnaliticoSort('total')">Total <span id="anali-icon-total">↓</span></th>
+            <th style="text-align:center" onclick="toggleAnaliticoSort('lider')">Líderes <span id="anali-icon-lider">↕</span></th>
+            <th style="text-align:center" onclick="toggleAnaliticoSort('especialista')">Especialistas <span id="anali-icon-especialista">↕</span></th>
+            <th style="text-align:center" onclick="toggleAnaliticoSort('auxiliares')">Auxiliares <span id="anali-icon-auxiliares">↕</span></th>
+            <th style="text-align:center" onclick="toggleAnaliticoSort('aprendizes')">Aprendiz <span id="anali-icon-aprendizes">↕</span></th>
+            <th style="text-align:center" onclick="toggleAnaliticoSort('estagiarios')">Estágio <span id="anali-icon-estagiarios">↕</span></th>
           </tr>
         </thead>
         <tbody id="tbody-analitico"></tbody>
@@ -603,11 +604,11 @@ function renderKPIs() {
   var pctFalt = (loaded && totProg > 0) ? Math.round(falta      / totProg * 100) : null;
   el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--border);">' +
     '<div class="kpi-card"><span class="kpi-label">HC Real</span><span class="kpi-number">'+(loaded?hcReal:'—')+'</span>' +
-      '<span class="kpi-sub">prog <strong>'+totProg+'</strong></span></div>' +
+      '<span class="kpi-sub">programado: <strong>'+totProg+'</strong></span></div>' +
     '<div class="kpi-card"><span class="kpi-label">Excedentes</span><span class="kpi-number">'+(loaded?excedentes:'—')+'</span>' +
-      (pctExc!==null?'<span class="kpi-sub"><strong>'+pctExc+'%</strong> do prog</span>':'') + '</div>' +
+      (pctExc!==null?'<span class="kpi-sub"><strong>'+pctExc+'%</strong> do programado</span>':'') + '</div>' +
     '<div class="kpi-card"><span class="kpi-label">Falta de Efetivo</span><span class="kpi-number">'+(loaded?falta:'—')+'</span>' +
-      (pctFalt!==null?'<span class="kpi-sub"><strong>'+pctFalt+'%</strong> do prog</span>':'') + '</div>' +
+      (pctFalt!==null?'<span class="kpi-sub"><strong>'+pctFalt+'%</strong> do programado</span>':'') + '</div>' +
     '</div>';
 }
 function kpiC(label,val) {
@@ -888,12 +889,7 @@ function renderCruzamento() {
   });
 
   var srcProg = dados;
-  var ORDEM_UNIDADES = ['Itaim', 'Pinheiros', 'Poke - Pinheiros', 'Tatá House', 'Administrativo'];
-  var unidades = unique(srcProg.map(function(d){return d.unidade;})).sort(function(a,b){
-    var ia = ORDEM_UNIDADES.indexOf(a), ib = ORDEM_UNIDADES.indexOf(b);
-    if (ia < 0) ia = 999; if (ib < 0) ib = 999;
-    return ia - ib;
-  });
+  var unidades = unique(srcProg.map(function(d){return d.unidade;}));
 
   var html = '';
   unidades.forEach(function(u) {
@@ -956,7 +952,8 @@ function renderDashboard() {
 
   var unidades = unique(src.map(function(d){return d.unidade;}));
   var totPorUnidade = unidades.map(function(u){ return src.filter(function(d){return d.unidade===u;}).reduce(function(a,d){return a+d.total;},0); });
-  renderBarChart('cHCUnidade', unidades, totPorUnidade);
+  var idxSorted = totPorUnidade.map(function(_,i){return i;}).sort(function(a,b){return totPorUnidade[b]-totPorUnidade[a];});
+  renderBarChart('cHCUnidade', idxSorted.map(function(i){return unidades[i];}), idxSorted.map(function(i){return totPorUnidade[i];}));
 
   renderTipoList(src);
 
@@ -1052,22 +1049,43 @@ function renderBarList(elId, src) {
       '<div class="bar-val">'+it.val+'</div></div>';
   }).join('') || '<div class="bar-empty">Sem dados</div>';
 }
+var _analiticoSortCol = 'total';
+var _analiticoSortDir = -1;
+function toggleAnaliticoSort(col) {
+  if (_analiticoSortCol === col) { _analiticoSortDir = -_analiticoSortDir; }
+  else { _analiticoSortCol = col; _analiticoSortDir = col === 'unidade' ? 1 : -1; }
+  renderTabelaAnalitica(getDashData());
+}
 function renderTabelaAnalitica(src) {
   var el = document.getElementById('tbody-analitico');
   if (!el) return;
+  var cols = ['unidade','total','lider','especialista','auxiliares','aprendizes','estagiarios'];
+  cols.forEach(function(c){var ic=document.getElementById('anali-icon-'+c);if(ic)ic.textContent='↕';});
+  var ic=document.getElementById('anali-icon-'+_analiticoSortCol);
+  if(ic) ic.textContent = _analiticoSortDir===-1?'↓':'↑';
   var unidades = unique(src.map(function(d){return d.unidade;}));
-  el.innerHTML = unidades.map(function(u){
-    var rows = src.filter(function(d){return d.unidade===u;});
-    var tot=rows.reduce(function(a,d){return a+d.total;},0);
-    var lid=rows.reduce(function(a,d){return a+d.lider;},0);
-    var esp=rows.reduce(function(a,d){return a+d.especialista;},0);
-    var aux=rows.reduce(function(a,d){return a+d.auxiliares;},0);
-    var apr=rows.reduce(function(a,d){return a+d.aprendizes;},0);
-    var est=rows.reduce(function(a,d){return a+d.estagiarios;},0);
-    return '<tr><td>'+escH(u)+'</td><td class="colab-cell-num">'+tot+'</td>' +
-      '<td class="colab-cell-num">'+lid+'</td><td class="colab-cell-num">'+esp+'</td>' +
-      '<td class="colab-cell-num">'+aux+'</td><td class="colab-cell-num">'+(apr+est)+'</td></tr>';
-  }).join('') || '<tr><td colspan="6" class="colab-cell-zero" style="padding:16px;text-align:center">Sem dados</td></tr>';
+  var rows = unidades.map(function(u){
+    var rs = src.filter(function(d){return d.unidade===u;});
+    return {
+      unidade: u,
+      total:        rs.reduce(function(a,d){return a+d.total;},0),
+      lider:        rs.reduce(function(a,d){return a+d.lider;},0),
+      especialista: rs.reduce(function(a,d){return a+d.especialista;},0),
+      auxiliares:   rs.reduce(function(a,d){return a+d.auxiliares;},0),
+      aprendizes:   rs.reduce(function(a,d){return a+d.aprendizes;},0),
+      estagiarios:  rs.reduce(function(a,d){return a+d.estagiarios;},0)
+    };
+  });
+  rows.sort(function(a,b){
+    if (_analiticoSortCol === 'unidade') return _analiticoSortDir * (a.unidade||'').localeCompare(b.unidade||'','pt-BR');
+    return _analiticoSortDir * (b[_analiticoSortCol] - a[_analiticoSortCol]);
+  });
+  el.innerHTML = rows.map(function(r){
+    return '<tr><td>'+escH(r.unidade)+'</td><td class="colab-cell-num">'+r.total+'</td>' +
+      '<td class="colab-cell-num">'+r.lider+'</td><td class="colab-cell-num">'+r.especialista+'</td>' +
+      '<td class="colab-cell-num">'+r.auxiliares+'</td><td class="colab-cell-num">'+r.aprendizes+'</td>' +
+      '<td class="colab-cell-num">'+r.estagiarios+'</td></tr>';
+  }).join('') || '<tr><td colspan="7" class="colab-cell-zero" style="padding:16px;text-align:center">Sem dados</td></tr>';
 }
 
 // ─── MODAL EDITAR HC ─────────────────────────────────────────────────────────
