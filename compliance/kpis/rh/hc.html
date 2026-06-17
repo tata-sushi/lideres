@@ -352,6 +352,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-title">Turnover por Unidade</div>
     <div class="chart-wrap"><canvas id="cHCTurnover"></canvas></div>
   </div>
+  <div class="chart-card chart-card-full">
+    <div class="chart-title">Turnover Mensal</div>
+    <div style="overflow-x:auto"><svg id="hc-turnover-line" viewBox="0 0 900 200" preserveAspectRatio="none" style="width:100%;height:200px;display:block;"></svg></div>
+  </div>
   <div class="chart-card">
     <div class="chart-title">Cargos</div>
     <div class="status-table" id="statusHCTipo"></div>
@@ -884,6 +888,7 @@ function renderDashboard() {
   renderBarChart('cHCUnidade', idxSorted.map(function(i){return unidades[i];}), idxSorted.map(function(i){return totPorUnidade[i];}));
 
   renderTurnoverChart();
+  renderTurnoverMonthlyChart();
   renderTipoList(src);
 
   renderBarList('barHCDepto', src);
@@ -985,6 +990,7 @@ function loadTurnoverData() {
       _tvData.push({adm:adm, dem:dem, unidade:uni});
     }
     renderTurnoverChart();
+    renderTurnoverMonthlyChart();
   }).catch(function(){});
 }
 function renderTurnoverChart() {
@@ -1030,6 +1036,48 @@ function renderTurnoverChart() {
       }
     }
   });
+}
+
+function renderTurnoverMonthlyChart() {
+  if (!_tvData) return;
+  var svg = document.getElementById('hc-turnover-line');
+  if (!svg) return;
+  var MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var now = new Date();
+  var pontos = [];
+  for (var i = 11; i >= 0; i--) {
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    var inicio = new Date(d.getFullYear(), d.getMonth(), 1);
+    var fim    = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    var hc = 0, dems = 0;
+    _tvData.forEach(function(r) {
+      if (r.adm < inicio && (!r.dem || r.dem >= inicio)) hc++;
+      if (r.dem && r.dem >= inicio && r.dem < fim) dems++;
+    });
+    pontos.push({ label: MES[d.getMonth()]+'/'+String(d.getFullYear()).slice(-2), val: hc > 0 ? Math.round(dems/hc*1000)/10 : 0 });
+  }
+  var W=900, H=200, HPLOT=160, pad=24;
+  var vals = pontos.map(function(p){return p.val;});
+  var maxV = Math.max.apply(null, vals) || 1;
+  maxV *= 1.25;
+  var n = pontos.length;
+  function sx(i){ return pad + i*((W-pad*2)/(n-1)); }
+  function sy(v){ return pad + (1 - v/maxV)*(HPLOT-pad); }
+  var c = '';
+  // área
+  var area='M '+sx(0).toFixed(1)+' '+sy(0).toFixed(1);
+  pontos.forEach(function(p,i){ area+=' L '+sx(i).toFixed(1)+' '+sy(p.val).toFixed(1); });
+  area+=' L '+sx(n-1).toFixed(1)+' '+sy(0).toFixed(1)+' Z';
+  c+='<path d="'+area+'" fill="#35383F" opacity="0.08"/>';
+  // linha
+  c+='<path d="'+pontos.map(function(p,i){return(i===0?'M ':'L ')+sx(i).toFixed(1)+' '+sy(p.val).toFixed(1);}).join(' ')+'" fill="none" stroke="#35383F" stroke-width="2"/>';
+  // pontos + labels
+  pontos.forEach(function(p,i){
+    c+='<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(p.val).toFixed(1)+'" r="3" fill="#35383F"/>';
+    c+='<text x="'+sx(i).toFixed(1)+'" y="'+(sy(p.val)-8).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" font-weight="600">'+p.val.toFixed(1).replace('.',',')+' %</text>';
+    c+='<text x="'+sx(i).toFixed(1)+'" y="'+(H-4)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="10" fill="#999">'+p.label+'</text>';
+  });
+  svg.innerHTML = c;
 }
 
 var barValueLabelsPlugin = {
