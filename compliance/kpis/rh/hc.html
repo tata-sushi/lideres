@@ -348,6 +348,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-wrap"><canvas id="cHCUnidade"></canvas></div>
   </div>
   <div class="chart-card">
+    <div class="chart-title">Contratos</div>
+    <div class="chart-wrap" style="height:200px"><canvas id="cHCContratos"></canvas></div>
+  </div>
+  <div class="chart-card">
     <div class="chart-title">Cargos</div>
     <div class="status-table" id="statusHCTipo"></div>
   </div>
@@ -855,10 +859,54 @@ function renderDashboard() {
   var idxSorted = totPorUnidade.map(function(_,i){return i;}).sort(function(a,b){return totPorUnidade[b]-totPorUnidade[a];});
   renderBarChart('cHCUnidade', idxSorted.map(function(i){return unidades[i];}), idxSorted.map(function(i){return totPorUnidade[i];}));
 
+  renderContratosChart();
   renderTipoList(src);
 
   renderBarList('barHCDepto', src);
   renderTabelaAnalitica(src);
+}
+function renderContratosChart() {
+  if (!_colabs || !_colabs.length) return;
+  var ORDEM = ['Itaim', 'Pinheiros', 'Poke - Pinheiros', 'Tatá House', 'Administrativo'];
+  var map = {};
+  _colabs.forEach(function(c) {
+    var u = (c.unidade||'').trim();
+    if (!u) return;
+    var mat = parseInt(c.matricula);
+    var isPJ = !isNaN(mat) && mat < 100;
+    if (!map[u]) map[u] = { clt: 0, pj: 0 };
+    if (isPJ) map[u].pj++; else map[u].clt++;
+  });
+  var labels = Object.keys(map).sort(function(a, b) {
+    var ia = ORDEM.indexOf(a), ib = ORDEM.indexOf(b);
+    if (ia < 0) ia = 999; if (ib < 0) ib = 999;
+    return ia - ib;
+  });
+  var ctx = document.getElementById('cHCContratos');
+  if (!ctx) return;
+  if (_charts['cHCContratos']) _charts['cHCContratos'].destroy();
+  _charts['cHCContratos'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'CLT', data: labels.map(function(u){ return map[u].clt; }), backgroundColor: '#35383F', borderRadius: 3 },
+        { label: 'PJ',  data: labels.map(function(u){ return map[u].pj;  }), backgroundColor: '#CFFF00', borderRadius: 3 }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { font: { family: 'DM Mono', size: 10 }, color: '#35383F', boxWidth: 12, padding: 16 } },
+        tooltip: { enabled: true }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { font: { family: 'DM Mono', size: 9 }, color: '#35383F' } },
+        y: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { font: { family: 'DM Mono', size: 10 }, color: '#35383F' } }
+      }
+    }
+  });
 }
 function getDashData() {
   var df = state.dashFilters;
