@@ -851,8 +851,26 @@ function renderCruzamento() {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 var _charts = {};
+function getColabsAggregated() {
+  if (!_colabs || !_colabs.length) return [];
+  var SOCIOS = 3;
+  var map = {};
+  var sociosVisto = 0;
+  _colabs.forEach(function(c) {
+    var mat = parseInt(c.matricula);
+    if (!isNaN(mat) && mat < 100 && sociosVisto < SOCIOS) { sociosVisto++; return; }
+    var u = (c.unidade||'').trim(), d = (c.departamento||'').trim();
+    if (!u || !d) return;
+    var key = u + '|||' + d;
+    if (!map[key]) map[key] = { unidade: u, departamento: d, lider: 0, especialista: 0, auxiliares: 0, aprendizes: 0, estagiarios: 0, total: 0 };
+    map[key][classifyCargoTipo(c.cargo)]++;
+    map[key].total++;
+  });
+  return Object.keys(map).map(function(k){ return map[k]; });
+}
 function renderDashboard() {
-  var src = getDashData();
+  var src = getColabsAggregated();
+  if (!src.length) src = getDashData(); // fallback enquanto _colabs carrega
 
   var unidades = unique(src.map(function(d){return d.unidade;}));
   var totPorUnidade = unidades.map(function(u){ return src.filter(function(d){return d.unidade===u;}).reduce(function(a,d){return a+d.total;},0); });
@@ -1018,7 +1036,7 @@ var _analiticoSortDir = -1;
 function toggleAnaliticoSort(col) {
   if (_analiticoSortCol === col) { _analiticoSortDir = -_analiticoSortDir; }
   else { _analiticoSortCol = col; _analiticoSortDir = col === 'unidade' ? 1 : -1; }
-  renderTabelaAnalitica(getDashData());
+  var _src = getColabsAggregated(); renderTabelaAnalitica(_src.length ? _src : getDashData());
 }
 function renderTabelaAnalitica(src) {
   var el = document.getElementById('tbody-analitico');
