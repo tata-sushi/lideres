@@ -26,7 +26,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .header-plus svg { width: 14px; height: 14px; stroke: var(--citric); fill: none; stroke-width: 2.5; stroke-linecap: round; }
 
 /* TABS */
-.tabs { display: flex; overflow-x: auto; background: var(--surface); border-bottom: 2px solid var(--border); scrollbar-width: none; -ms-overflow-style: none; }
+.tabs { display: flex; overflow-x: auto; background: var(--surface); border-bottom: 2px solid var(--border); scrollbar-width: none; -ms-overflow-style: none; padding-left: 8px; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab-btn { flex: 0 0 auto; min-width: max-content; white-space: nowrap; padding: 16px 24px; border: none; background: transparent; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); cursor: pointer; transition: all 0.18s; border-bottom: 2px solid transparent; margin-bottom: -2px; }
 .tab-btn:hover { color: var(--carbon); background: var(--bg); }
@@ -160,6 +160,8 @@ body.cf-active .bar-row:not(.cf-selected):not(.cf-related) { opacity: 0.45; }
 @media (min-width: 768px) { .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px 24px 80px; } }
 @media (min-width: 768px) { .dashboard .chart-card-full { grid-column: 1 / -1; } }
 @media (min-width: 768px) { .dashboard .chart-card-span2 { grid-row: span 2; } }
+@media (min-width: 768px) { .dashboard .chart-card-span3 { grid-row: span 3; } }
+@media (min-width: 768px) { .dashboard .chart-card { min-width: 0; overflow: hidden; min-height: 260px; } }
 body[data-view="dashboard"] .filters-wrap,
 body[data-view="dashboard"] #content { display: none; }
 body:not([data-view="dashboard"]) #dashboard { display: none; }
@@ -354,10 +356,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="bar-list" id="barHCDepto"></div>
   </div>
   <div class="chart-card">
-    <div class="chart-title">Variação de Cargos</div>
-    <div class="status-table" id="statusHCTipo"></div>
-  </div>
-  <div class="chart-card chart-card-full">
     <div class="chart-title">Analítico</div>
     <div class="table-wrap">
       <table class="colab-table" style="table-layout:auto">
@@ -373,6 +371,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           </tr>
         </thead>
         <tbody id="tbody-analitico"></tbody>
+        <tfoot id="tfoot-analitico"></tfoot>
       </table>
     </div>
   </div>
@@ -381,8 +380,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-wrap"><canvas id="cHCTurnover"></canvas></div>
   </div>
   <div class="chart-card">
+    <div class="chart-title">Turnover Analítico</div>
+    <div class="table-wrap" id="turnover-analytic"></div>
+  </div>
+  <div class="chart-card chart-card-full">
     <div class="chart-title">Turnover Mensal</div>
-    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><svg id="hc-turnover-line" viewBox="0 0 900 200" preserveAspectRatio="none" style="min-width:700px;width:100%;height:200px;display:block;"></svg></div>
+    <svg id="hc-turnover-line" style="width:100%;height:240px;display:block;"></svg>
   </div>
 </div>
 
@@ -889,7 +892,6 @@ function renderDashboard() {
 
   renderTurnoverChart();
   renderTurnoverMonthlyChart();
-  renderTipoList(src);
 
   renderBarList('barHCDepto', src);
   renderTabelaAnalitica(src);
@@ -975,7 +977,7 @@ function parseTvDate(s) {
   return isNaN(d.getTime())?null:d;
 }
 function loadTurnoverData() {
-  if (_tvData) { renderTurnoverChart(); renderTurnoverMonthlyChart(); return; }
+  if (_tvData) { renderTurnoverChart(); renderTurnoverMonthlyChart(); renderTurnoverAnalyticTable(); return; }
   var url='https://docs.google.com/spreadsheets/d/1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw/export?format=csv&gid=175063295';
   fetch(url).then(function(r){return r.text();}).then(function(csv){
     var lines=csv.split('\n');
@@ -991,11 +993,15 @@ function loadTurnoverData() {
     }
     renderTurnoverChart();
     renderTurnoverMonthlyChart();
+    renderTurnoverAnalyticTable();
   }).catch(function(){});
 }
 function renderTurnoverChart() {
   if (!_tvData) return;
   var ANOS = [2023, 2024, 2025, 2026];
+  var anoAtual = new Date().getFullYear();
+  var SOCIOS = 3;
+  var hcAtual = (_colabs && _colabs.length) ? _colabs.length - SOCIOS : null;
   var labels = ANOS.map(String);
   var values = ANOS.map(function(ano) {
     var inicio = new Date(ano, 0, 1);
@@ -1005,6 +1011,7 @@ function renderTurnoverChart() {
       if (r.adm < inicio && (!r.dem || r.dem >= inicio)) hc++;
       if (r.dem && r.dem >= inicio && r.dem < fim) dems++;
     });
+    if (ano === anoAtual && hcAtual !== null) hc = hcAtual;
     return hc > 0 ? Math.round(dems / hc * 1000) / 10 : 0;
   });
   var ctx=document.getElementById('cHCTurnover');
@@ -1045,7 +1052,7 @@ function renderTurnoverMonthlyChart() {
   var MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var now = new Date();
   var pontos = [];
-  for (var i = 11; i >= 0; i--) {
+  for (var i = 23; i >= 0; i--) {
     var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     var inicio = new Date(d.getFullYear(), d.getMonth(), 1);
     var fim    = new Date(d.getFullYear(), d.getMonth() + 1, 1);
@@ -1056,13 +1063,15 @@ function renderTurnoverMonthlyChart() {
     });
     pontos.push({ label: MES[d.getMonth()]+'/'+String(d.getFullYear()).slice(-2), val: hc > 0 ? Math.round(dems/hc*1000)/10 : 0 });
   }
-  var W=900, H=200, HPLOT=160, pad=24;
+  var W = Math.round(svg.getBoundingClientRect().width) || 900;
+  var H=240, H_PLOT=200, pad=24;
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
   var vals = pontos.map(function(p){return p.val;});
   var maxV = Math.max.apply(null, vals) || 1;
   maxV *= 1.25;
   var n = pontos.length;
   function sx(i){ return pad + i*((W-pad*2)/(n-1)); }
-  function sy(v){ return pad + (1 - v/maxV)*(HPLOT-pad); }
+  function sy(v){ return pad + (1 - v/maxV)*(H_PLOT-pad); }
   var c = '';
   // área
   var area='M '+sx(0).toFixed(1)+' '+sy(0).toFixed(1);
@@ -1073,11 +1082,58 @@ function renderTurnoverMonthlyChart() {
   c+='<path d="'+pontos.map(function(p,i){return(i===0?'M ':'L ')+sx(i).toFixed(1)+' '+sy(p.val).toFixed(1);}).join(' ')+'" fill="none" stroke="#35383F" stroke-width="2"/>';
   // pontos + labels
   pontos.forEach(function(p,i){
-    c+='<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(p.val).toFixed(1)+'" r="3" fill="#35383F"/>';
-    c+='<text x="'+sx(i).toFixed(1)+'" y="'+(sy(p.val)-8).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" font-weight="600">'+p.val.toFixed(1).replace('.',',')+' %</text>';
-    c+='<text x="'+sx(i).toFixed(1)+'" y="'+(H-4)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="10" fill="#999">'+p.label+'</text>';
+    c+='<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(p.val).toFixed(1)+'" r="4" fill="#35383F"/>';
+    c+='<text x="'+sx(i).toFixed(1)+'" y="'+(sy(p.val)-10).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" font-weight="600">'+p.val.toFixed(1).replace('.',',')+'%</text>';
+    c+='<text x="'+sx(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#AAAAAA">'+p.label+'</text>';
   });
   svg.innerHTML = c;
+}
+
+function renderTurnoverAnalyticTable() {
+  if (!_tvData) return;
+  var el = document.getElementById('turnover-analytic');
+  if (!el) return;
+  var ANOS = [2023, 2024, 2025, 2026];
+  var anoAtual = new Date().getFullYear();
+  var SOCIOS = 3;
+  var hcAtual = (_colabs && _colabs.length) ? _colabs.length - SOCIOS : null;
+  var rows = ANOS.map(function(ano) {
+    var inicio = new Date(ano, 0, 1);
+    var fim    = new Date(ano + 1, 0, 1);
+    var adm  = _tvData.filter(function(r){ return r.adm >= inicio && r.adm < fim; }).length;
+    var dem  = _tvData.filter(function(r){ return r.dem && r.dem >= inicio && r.dem < fim; }).length;
+    var hcFinal = (ano === anoAtual && hcAtual !== null)
+      ? hcAtual
+      : _tvData.filter(function(r){ return r.adm < fim && (!r.dem || r.dem >= fim); }).length;
+    var hcBase = (ano === anoAtual && hcAtual !== null)
+      ? hcAtual
+      : _tvData.filter(function(r){ return r.adm < inicio && (!r.dem || r.dem >= inicio); }).length;
+    var turnover = hcBase > 0 ? Math.round(dem / hcBase * 1000) / 10 : 0;
+    return { ano: ano, adm: adm, dem: dem, hcFinal: hcFinal, turnover: turnover };
+  });
+  var html = '<table class="colab-table" style="table-layout:auto"><thead><tr>';
+  html += '<th>Ano</th>';
+  html += '<th style="text-align:center">Admitidos</th>';
+  html += '<th style="text-align:center">Demitidos</th>';
+  html += '<th style="text-align:center">HC Final</th>';
+  html += '<th style="text-align:center">Crescimento</th>';
+  html += '<th style="text-align:center">Turnover</th>';
+  html += '</tr></thead><tbody>';
+  rows.forEach(function(r, i) {
+    var prevFinal = i > 0 ? rows[i-1].hcFinal : null;
+    var cresc = prevFinal ? Math.round((r.hcFinal - prevFinal) / prevFinal * 100) : 0;
+    var crescStr = i === 0 ? '—' : (cresc > 0 ? '+' : '') + cresc + '%';
+    html += '<tr>';
+    html += '<td style="font-weight:700;font-family:DM Mono,monospace">' + r.ano + '</td>';
+    html += '<td style="text-align:center">' + r.adm + '</td>';
+    html += '<td style="text-align:center">' + r.dem + '</td>';
+    html += '<td style="text-align:center">' + r.hcFinal + '</td>';
+    html += '<td style="text-align:center">' + crescStr + '</td>';
+    html += '<td style="text-align:center">' + r.turnover.toFixed(1).replace('.',',') + '%</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
 }
 
 var barValueLabelsPlugin = {
@@ -1206,6 +1262,16 @@ function renderTabelaAnalitica(src) {
       '<td class="colab-cell-num">'+r.auxiliares+'</td><td class="colab-cell-num">'+r.aprendizes+'</td>' +
       '<td class="colab-cell-num">'+r.estagiarios+'</td></tr>';
   }).join('') || '<tr><td colspan="7" class="colab-cell-zero" style="padding:16px;text-align:center">Sem dados</td></tr>';
+  var tf = document.getElementById('tfoot-analitico');
+  if (tf && rows.length) {
+    var tot = { total:0, lider:0, especialista:0, auxiliares:0, aprendizes:0, estagiarios:0 };
+    rows.forEach(function(r){ ['total','lider','especialista','auxiliares','aprendizes','estagiarios'].forEach(function(k){ tot[k]+=r[k]; }); });
+    tf.innerHTML = '<tr style="font-weight:700;border-top:2px solid var(--border)">' +
+      '<td>Total</td><td class="colab-cell-num">'+tot.total+'</td>' +
+      '<td class="colab-cell-num">'+tot.lider+'</td><td class="colab-cell-num">'+tot.especialista+'</td>' +
+      '<td class="colab-cell-num">'+tot.auxiliares+'</td><td class="colab-cell-num">'+tot.aprendizes+'</td>' +
+      '<td class="colab-cell-num">'+tot.estagiarios+'</td></tr>';
+  }
 }
 
 // ─── MODAL EDITAR HC ─────────────────────────────────────────────────────────
