@@ -987,24 +987,19 @@ function loadTurnoverData() {
   }).catch(function(){});
 }
 function renderTurnoverChart() {
-  if (!_tvData || !_colabs) return;
-  var now=new Date();
-  var inicio=new Date(now.getFullYear(), now.getMonth()-11, 1);
-  var demMap={};
-  _tvData.forEach(function(r){
-    if (!r.dem||r.dem<inicio) return;
-    if (r.unidade) demMap[r.unidade]=(demMap[r.unidade]||0)+1;
+  if (!_tvData) return;
+  var ANOS = [2023, 2024, 2025, 2026];
+  var labels = ANOS.map(String);
+  var values = ANOS.map(function(ano) {
+    var inicio = new Date(ano, 0, 1);
+    var fim    = new Date(ano + 1, 0, 1);
+    var hc = 0, dems = 0;
+    _tvData.forEach(function(r) {
+      if (r.adm < inicio && (!r.dem || r.dem >= inicio)) hc++;
+      if (r.dem && r.dem >= inicio && r.dem < fim) dems++;
+    });
+    return hc > 0 ? Math.round(dems / hc * 1000) / 10 : 0;
   });
-  var hcMap={};
-  _colabs.forEach(function(c){
-    var u=(c.unidade||'').trim(); if (!u) return;
-    hcMap[u]=(hcMap[u]||0)+1;
-  });
-  var unidades=Object.keys(hcMap);
-  var rates=unidades.map(function(u){ return hcMap[u]>0 ? Math.round((demMap[u]||0)/hcMap[u]*1000)/10 : 0; });
-  var idx=rates.map(function(_,i){return i;}).sort(function(a,b){return rates[b]-rates[a];});
-  var labels=idx.map(function(i){return unidades[i];});
-  var values=idx.map(function(i){return rates[i];});
   var ctx=document.getElementById('cHCTurnover');
   if (!ctx) return;
   if (_charts['cHCTurnover']) _charts['cHCTurnover'].destroy();
@@ -1020,11 +1015,9 @@ function renderTurnoverChart() {
       });
     });
   }};
-  var ABBREV={'Administrativo':'Admin.','Poke - Pinheiros':['Poke','Pinheiros'],'Tatá House':['Tatá','House']};
-  var wLabels=labels.map(function(l){ return ABBREV[l]||l; });
   _charts['cHCTurnover']=new Chart(ctx,{
     type:'bar',
-    data:{labels:wLabels,datasets:[{data:values,backgroundColor:'#35383F',borderRadius:5,barPercentage:0.6}]},
+    data:{labels:labels,datasets:[{data:values,backgroundColor:'#35383F',borderRadius:5,barPercentage:0.6}]},
     plugins:[pctPlugin],
     options:{
       responsive:true,maintainAspectRatio:false,animation:false,
