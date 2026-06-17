@@ -386,6 +386,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-title">Turnover Mensal</div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><svg id="hc-turnover-line" viewBox="0 0 900 240" style="width:900px;height:240px;display:block;"></svg></div>
   </div>
+  <div class="chart-card chart-card-full">
+    <div class="chart-title">Turnover Analítico</div>
+    <div class="table-wrap" id="turnover-analytic"></div>
+  </div>
 </div>
 
 <div class="cruzamento-section" id="cruzamento">
@@ -977,7 +981,7 @@ function parseTvDate(s) {
   return isNaN(d.getTime())?null:d;
 }
 function loadTurnoverData() {
-  if (_tvData) { renderTurnoverChart(); renderTurnoverMonthlyChart(); return; }
+  if (_tvData) { renderTurnoverChart(); renderTurnoverMonthlyChart(); renderTurnoverAnalyticTable(); return; }
   var url='https://docs.google.com/spreadsheets/d/1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw/export?format=csv&gid=175063295';
   fetch(url).then(function(r){return r.text();}).then(function(csv){
     var lines=csv.split('\n');
@@ -993,6 +997,7 @@ function loadTurnoverData() {
     }
     renderTurnoverChart();
     renderTurnoverMonthlyChart();
+    renderTurnoverAnalyticTable();
   }).catch(function(){});
 }
 function renderTurnoverChart() {
@@ -1080,6 +1085,56 @@ function renderTurnoverMonthlyChart() {
     c+='<text x="'+sx(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#AAAAAA">'+p.label+'</text>';
   });
   svg.innerHTML = c;
+}
+
+function renderTurnoverAnalyticTable() {
+  if (!_tvData) return;
+  var el = document.getElementById('turnover-analytic');
+  if (!el) return;
+  var ANOS = [2023, 2024, 2025, 2026];
+  var rows = ANOS.map(function(ano) {
+    var inicio = new Date(ano, 0, 1);
+    var fim    = new Date(ano + 1, 0, 1);
+    var adm  = _tvData.filter(function(r){ return r.adm >= inicio && r.adm < fim; }).length;
+    var dem  = _tvData.filter(function(r){ return r.dem && r.dem >= inicio && r.dem < fim; }).length;
+    var hcFinal = _tvData.filter(function(r){ return r.adm < fim && (!r.dem || r.dem >= fim); }).length;
+    var hcBase  = _tvData.filter(function(r){ return r.adm < inicio && (!r.dem || r.dem >= inicio); }).length;
+    var hcSum = 0;
+    for (var m = 0; m < 12; m++) {
+      var ms = new Date(ano, m, 1);
+      hcSum += _tvData.filter(function(r){ return r.adm < ms && (!r.dem || r.dem >= ms); }).length;
+    }
+    var hcMedio  = Math.round(hcSum / 12);
+    var turnover = hcBase > 0 ? Math.round(dem / hcBase * 1000) / 10 : 0;
+    return { ano: ano, adm: adm, dem: dem, hcMedio: hcMedio, hcFinal: hcFinal, hcBase: hcBase, turnover: turnover };
+  });
+  var html = '<table class="colab-table" style="table-layout:auto"><thead><tr>';
+  html += '<th>Ano</th>';
+  html += '<th style="text-align:center">Admitidos</th>';
+  html += '<th style="text-align:center">Demitidos</th>';
+  html += '<th style="text-align:center">HC Médio</th>';
+  html += '<th style="text-align:center">HC Final</th>';
+  html += '<th style="text-align:center">Crescimento</th>';
+  html += '<th style="text-align:center">Turnover</th>';
+  html += '</tr></thead><tbody>';
+  rows.forEach(function(r, i) {
+    var prevFinal = i > 0 ? rows[i-1].hcFinal : null;
+    var cresc = prevFinal ? Math.round((r.hcFinal - prevFinal) / prevFinal * 100) : 0;
+    var crescStr = i === 0 ? '—' : (cresc > 0 ? '+' : '') + cresc + '%';
+    var crescColor = i === 0 ? 'var(--muted)' : cresc > 0 ? 'var(--green)' : cresc < 0 ? 'var(--red)' : 'var(--muted)';
+    var tvColor = r.turnover >= 15 ? 'var(--red)' : r.turnover >= 8 ? 'var(--amber)' : 'var(--green)';
+    html += '<tr>';
+    html += '<td style="font-weight:700;font-family:DM Mono,monospace">' + r.ano + '</td>';
+    html += '<td style="text-align:center;color:var(--green);font-weight:600">' + r.adm + '</td>';
+    html += '<td style="text-align:center;color:var(--red);font-weight:600">' + r.dem + '</td>';
+    html += '<td style="text-align:center">' + r.hcMedio + '</td>';
+    html += '<td style="text-align:center;font-weight:600">' + r.hcFinal + '</td>';
+    html += '<td style="text-align:center;color:' + crescColor + ';font-weight:600">' + crescStr + '</td>';
+    html += '<td style="text-align:center;color:' + tvColor + ';font-weight:600">' + r.turnover.toFixed(1).replace('.',',') + '%</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
 }
 
 var barValueLabelsPlugin = {
