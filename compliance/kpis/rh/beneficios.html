@@ -463,8 +463,14 @@ function parseDateBR(str) {
 function fetchColaboradores() {
   var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID +
     '/values/' + encodeURIComponent(SHEET_TAB) + '?key=' + API_KEY;
-  return fetch(url).then(function(r){ return r.json(); }).then(function(json) {
-    if (!json.values || json.values.length < 2) { console.error('Sem dados na planilha'); return; }
+  return fetch(url)
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(json) {
+    if (json.error) throw new Error('API: ' + (json.error.message || json.error.status || 'Erro desconhecido'));
+    if (!json.values || json.values.length < 2) { console.warn('Planilha vazia ou sem dados'); return; }
     var headers = json.values[0];
     var iNome = 0;   // A - Nome
     var iStatus = 3;  // D - Status
@@ -766,7 +772,13 @@ function renderTable(filt) {
   document.getElementById('tBody').innerHTML = '';
   document.getElementById('btnMore').hidden = true;
   if (!filt.length) {
-    document.getElementById('tBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Nenhum colaborador encontrado</td></tr>';
+    var emptyMsg = 'Nenhum colaborador encontrado';
+    if (COLABORADORES.length === 0) {
+      emptyMsg = 'Aguardando dados da planilha...';
+    } else if (activeTab !== 'aniv' && getActiveData().length === 0) {
+      emptyMsg = 'Datas de admissão não disponíveis na planilha';
+    }
+    document.getElementById('tBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">' + emptyMsg + '</td></tr>';
     return;
   }
   tRows = sorted;
@@ -909,7 +921,15 @@ fetchColaboradores().then(function() {
   updateAll();
 }).catch(function(err) {
   console.error('Erro ao carregar dados:', err);
-  document.getElementById('tBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Erro ao carregar dados da planilha</td></tr>';
+  var msg = err && err.message ? err.message : 'Erro desconhecido';
+  document.getElementById('kpiRow').innerHTML =
+    '<div class="kpi-card">' +
+      '<div class="kpi-label">Erro ao carregar</div>' +
+      '<div class="kpi-value" style="font-size:14px;letter-spacing:0;color:#b00">—</div>' +
+      '<div class="kpi-sub">' + msg + '</div>' +
+    '</div>';
+  document.getElementById('tBody').innerHTML =
+    '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Erro ao carregar dados: ' + msg + '</td></tr>';
 });
 
 (function(){
