@@ -165,6 +165,7 @@ body.cf-active .bar-row:not(.cf-selected):not(.cf-related) { opacity: 0.45; }
 body[data-view="dashboard"] .filters-wrap,
 body[data-view="dashboard"] #content { display: none; }
 body:not([data-view="dashboard"]) #dashboard { display: none; }
+body:not([data-view="dashboard"]) #dash-filters { display: none; }
 body:not([data-view="cruzamento"]) #cruzamento { display: none; }
 body[data-view="cruzamento"] .filters-wrap,
 body[data-view="cruzamento"] #content,
@@ -341,6 +342,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <div id="kpi-section"></div>
+
+<div id="dash-filters"></div>
 
 <div class="filters-wrap" id="filters-wrap"></div>
 <main class="content" id="content"></main>
@@ -521,7 +524,7 @@ var __nomeResponsavel = (function() {
 
 // ─── ESTADO ───────────────────────────────────────────────────────────────────
 var dados = [];
-var state = { tab: 'dashboard', filtroUnidade: 'Todos', dashFilters: { unidade: 'Todos' } };
+var state = { tab: 'dashboard', filtroUnidade: 'Todos', dashFilters: { unidade: 'Todos', departamento: 'Todos' } };
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -883,9 +886,49 @@ function getColabsAggregated() {
   });
   return Object.keys(map).map(function(k){ return map[k]; });
 }
-function renderDashboard() {
+function getDashSrc() {
   var src = getColabsAggregated();
-  if (!src.length) src = getDashData(); // fallback enquanto _colabs carrega
+  if (!src.length) src = getDashData();
+  return src;
+}
+function getDashFiltered() {
+  var df = state.dashFilters;
+  var src = getDashSrc();
+  if (df.unidade && df.unidade !== 'Todos') src = src.filter(function(d){ return d.unidade === df.unidade; });
+  if (df.departamento && df.departamento !== 'Todos') src = src.filter(function(d){ return d.departamento === df.departamento; });
+  return src;
+}
+function setDashFilter(field, val) {
+  state.dashFilters[field] = val;
+  if (field === 'unidade') state.dashFilters.departamento = 'Todos';
+  renderDashboard();
+}
+function renderDashFilters() {
+  var el = document.getElementById('dash-filters');
+  if (!el) return;
+  var df = state.dashFilters;
+  var allSrc = getDashSrc();
+  var unidades = unique(allSrc.map(function(d){ return d.unidade; })).sort();
+  var deptoSrc = (df.unidade !== 'Todos') ? allSrc.filter(function(d){ return d.unidade === df.unidade; }) : allSrc;
+  var deptos = unique(deptoSrc.map(function(d){ return d.departamento; })).sort();
+  var selU = '<select class="filter-select" onchange="setDashFilter(\'unidade\',this.value)">' +
+    '<option value="Todos"'+(df.unidade==='Todos'?' selected':'')+'>Todos</option>' +
+    unidades.map(function(u){ return '<option value="'+escH(u)+'"'+(df.unidade===u?' selected':'')+'>'+escH(u)+'</option>'; }).join('') + '</select>';
+  var selD = '<select class="filter-select" onchange="setDashFilter(\'departamento\',this.value)">' +
+    '<option value="Todos"'+(df.departamento==='Todos'?' selected':'')+'>Todos</option>' +
+    deptos.map(function(d){ return '<option value="'+escH(d)+'"'+(df.departamento===d?' selected':'')+'>'+escH(d)+'</option>'; }).join('') + '</select>';
+  var hasFilter = df.unidade !== 'Todos' || df.departamento !== 'Todos';
+  el.innerHTML = '<div style="background:var(--surface);border-bottom:1px solid var(--border);padding:10px 20px;">' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+    '<div class="filter-group"><label class="filter-label">Unidade</label>'+selU+'</div>' +
+    '<div class="filter-group"><label class="filter-label">Departamento</label>'+selD+'</div>' +
+    '</div>' +
+    (hasFilter ? '<div style="margin-top:8px"><button class="btn-clear" onclick="setDashFilter(\'unidade\',\'Todos\')">Limpar filtros</button></div>' : '') +
+    '</div>';
+}
+function renderDashboard() {
+  renderDashFilters();
+  var src = getDashFiltered();
 
   var unidades = unique(src.map(function(d){return d.unidade;}));
   var totPorUnidade = unidades.map(function(u){ return src.filter(function(d){return d.unidade===u;}).reduce(function(a,d){return a+d.total;},0); });
