@@ -1019,10 +1019,20 @@ function parseTvCSV(line) {
 }
 function parseTvDate(s) {
   if (!s) return null;
-  var p=s.trim().split('/');
-  if (p.length!==3) return null;
-  var d=new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0]));
-  return isNaN(d.getTime())?null:d;
+  var t=s.trim();
+  var p=t.split('/');
+  if (p.length===3) {
+    // DD/MM/YYYY
+    var d=new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0]));
+    return isNaN(d.getTime())?null:d;
+  }
+  // Try ISO YYYY-MM-DD
+  var q=t.split('-');
+  if (q.length>=3) {
+    var d2=new Date(parseInt(q[0]),parseInt(q[1])-1,parseInt(q[2]));
+    return isNaN(d2.getTime())?null:d2;
+  }
+  return null;
 }
 function loadTurnoverData() {
   if (_tvData) { renderTurnoverChart(); renderTurnoverMonthlyChart(); renderTurnoverAnalyticTable(); return; }
@@ -1030,14 +1040,28 @@ function loadTurnoverData() {
   fetch(url).then(function(r){return r.text();}).then(function(csv){
     var lines=csv.split('\n');
     _tvData=[];
+    // Detect column indices from header row; fall back to known positions
+    var hdrs=parseTvCSV(lines[0]||'');
+    function colIdx(keywords, fallback) {
+      var kw=keywords.map(function(k){return k.toLowerCase();});
+      for (var h=0;h<hdrs.length;h++) {
+        var hh=hdrs[h].toLowerCase();
+        if (kw.every(function(k){return hh.indexOf(k)!==-1;})) return h;
+      }
+      return fallback;
+    }
+    var iAdm=colIdx(['admiss'],8);
+    var iDem=colIdx(['demiss'],14);
+    var iUni=colIdx(['unidade'],4);
+    var iDep=colIdx(['departamento'],5);
     for (var i=1;i<lines.length;i++) {
       var ln=lines[i].trim(); if (!ln) continue;
       var cols=parseTvCSV(ln);
-      var adm=parseTvDate(cols[8]);
-      var dem=parseTvDate(cols[14]||'');
+      var adm=parseTvDate(cols[iAdm]);
+      var dem=parseTvDate(cols[iDem]||'');
       if (!adm) continue;
-      var uni=(cols[4]||'').trim();
-      var dep=(cols[5]||'').trim();
+      var uni=(cols[iUni]||'').trim();
+      var dep=(cols[iDep]||'').trim();
       _tvData.push({adm:adm, dem:dem, unidade:uni, departamento:dep});
     }
     renderTurnoverChart();
