@@ -119,6 +119,10 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .bar-empty { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); padding: 12px 0; text-align: center; text-transform: uppercase; letter-spacing: 0.5px; }
 body.cf-active .bar-row:not(.cf-selected):not(.cf-related) { opacity: 0.45; }
 .bar-row.cf-selected { outline: 2px solid var(--carbon); outline-offset: 4px; border-radius: 4px; }
+#tbody-analitico tr { cursor: pointer; }
+#tbody-analitico tr.cf-selected { background: #FAFAFA; box-shadow: inset 4px 0 0 0 var(--carbon); }
+#tbody-analitico tr.cf-selected td { color: var(--carbon); font-weight: 600; }
+body.cf-active #tbody-analitico tr:not(.cf-selected) { opacity: 0.45; }
 .status-table { padding: 4px 0; }
 .status-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
 .status-row:last-child { border-bottom: none; }
@@ -905,6 +909,8 @@ function getDashFiltered() {
 function setDashFilter(field, val) {
   state.dashFilters[field] = val;
   if (field === 'unidade') state.dashFilters.departamento = 'Todos';
+  var hasFilter = state.dashFilters.unidade !== 'Todos' || state.dashFilters.departamento !== 'Todos';
+  document.body.classList.toggle('cf-active', hasFilter);
   renderDashboard();
 }
 function renderDashFilters() {
@@ -1232,6 +1238,40 @@ var barValueLabelsPlugin = {
   }
 };
 
+// Outline em volta da barra selecionada (cross-filter)
+var cfOutlinePlugin = {
+  id: 'cfOutline',
+  afterDatasetsDraw: function(chart) {
+    var sel = chart.canvas && chart.canvas._cfSelectedIdx;
+    if (sel === undefined || sel < 0) return;
+    var meta = chart.getDatasetMeta(0);
+    if (!meta.data || sel >= meta.data.length) return;
+    var bar = meta.data[sel];
+    var ctx = chart.ctx;
+    var x = bar.x - bar.width/2 - 4;
+    var y = bar.y - 4;
+    var w = bar.width + 8;
+    var h = bar.base - bar.y + 8;
+    ctx.save();
+    ctx.strokeStyle = '#35383F';
+    ctx.lineWidth = 2;
+    var r = 4;
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.lineTo(x+w-r, y);
+    ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+    ctx.lineTo(x+w, y+h-r);
+    ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+    ctx.lineTo(x+r, y+h);
+    ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+    ctx.lineTo(x, y+r);
+    ctx.quadraticCurveTo(x, y, x+r, y);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
 function renderBarChart(canvasId, labels, values) {
   var ctx = document.getElementById(canvasId);
   if (!ctx) return;
@@ -1246,13 +1286,27 @@ function renderBarChart(canvasId, labels, values) {
     var mid = Math.ceil(words.length / 2);
     return [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
   });
+  var selUni = (state.dashFilters && state.dashFilters.unidade) || 'Todos';
+  var bgColors = labels.map(function(l) {
+    if (selUni === 'Todos') return '#35383F';
+    return l === selUni ? '#35383F' : 'rgba(53,56,63,0.45)';
+  });
   _charts[canvasId] = new Chart(ctx, {
     type: 'bar',
-    data: { labels: wrappedLabels, datasets: [{ data: values, backgroundColor: '#35383F', borderRadius: 5, barPercentage: 0.6 }] },
-    plugins: [barValueLabelsPlugin],
+    data: { labels: wrappedLabels, datasets: [{ data: values, backgroundColor: bgColors, borderRadius: 5, barPercentage: 0.6 }] },
+    plugins: [barValueLabelsPlugin, cfOutlinePlugin],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       layout: { padding: { top: 18 } },
+      onClick: function(e, els) {
+        if (!els.length) return;
+        var label = labels[els[0].index];
+        var current = (state.dashFilters && state.dashFilters.unidade) || 'Todos';
+        setDashFilter('unidade', current === label ? 'Todos' : label);
+      },
+      onHover: function(e, els) {
+        if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default';
+      },
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
       scales: {
         x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 9 }, maxRotation: 0, minRotation: 0, autoSkip: false } },
@@ -1260,6 +1314,7 @@ function renderBarChart(canvasId, labels, values) {
       }
     }
   });
+  ctx._cfSelectedIdx = selUni === 'Todos' ? -1 : labels.indexOf(selUni);
 }
 function renderTipoList(src) {
   var el = document.getElementById('statusHCTipo');
@@ -1286,11 +1341,24 @@ function renderBarList(elId, src) {
   src.forEach(function(d){ var k=d.departamento||''; grouped[k]=(grouped[k]||0)+d.total; });
   var items = Object.keys(grouped).map(function(k){return{name:k,val:grouped[k]};}).sort(function(a,b){return b.val-a.val;});
   var max = items.length ? items[0].val : 1;
+  var selDepto = (state.dashFilters && state.dashFilters.departamento) || 'Todos';
   el.innerHTML = items.map(function(it){
-    return '<div class="bar-row"><div class="bar-name">'+escH(it.name)+'</div>' +
+    var sel = it.name === selDepto ? ' cf-selected' : '';
+    return '<div class="bar-row' + sel + '" onclick="onBarDeptoClick(' + JSON.stringify(it.name).replace(/"/g,'&quot;') + ')">' +
+      '<div class="bar-name">'+escH(it.name)+'</div>' +
       '<div class="bar-track"><div class="bar-fill" style="width:'+Math.round(it.val/max*100)+'%"></div></div>' +
       '<div class="bar-val">'+it.val+'</div></div>';
   }).join('') || '<div class="bar-empty">Sem dados</div>';
+}
+
+function onBarDeptoClick(name) {
+  var cur = (state.dashFilters && state.dashFilters.departamento) || 'Todos';
+  setDashFilter('departamento', cur === name ? 'Todos' : name);
+}
+
+function onAnaliticoRowClick(uni) {
+  var cur = (state.dashFilters && state.dashFilters.unidade) || 'Todos';
+  setDashFilter('unidade', cur === uni ? 'Todos' : uni);
 }
 var _cruzSortCol = 'departamento';
 var _cruzSortDir = 1;
@@ -1331,8 +1399,11 @@ function renderTabelaAnalitica(src) {
     if (_analiticoSortCol==='unidade') return _analiticoSortDir*(a.unidade||'').localeCompare(b.unidade||'','pt-BR');
     return _analiticoSortDir*(b[_analiticoSortCol]-a[_analiticoSortCol]);
   });
+  var selUni = (state.dashFilters && state.dashFilters.unidade) || 'Todos';
   el.innerHTML = rows.map(function(r){
-    return '<tr><td>'+escH(r.unidade)+'</td><td class="colab-cell-num">'+r.total+'</td>' +
+    var sel = r.unidade === selUni ? ' class="cf-selected"' : '';
+    return '<tr' + sel + ' onclick="onAnaliticoRowClick(' + JSON.stringify(r.unidade).replace(/"/g,'&quot;') + ')">' +
+      '<td>'+escH(r.unidade)+'</td><td class="colab-cell-num">'+r.total+'</td>' +
       '<td class="colab-cell-num">'+r.lider+'</td><td class="colab-cell-num">'+r.especialista+'</td>' +
       '<td class="colab-cell-num">'+r.auxiliares+'</td><td class="colab-cell-num">'+r.aprendizes+'</td>' +
       '<td class="colab-cell-num">'+r.estagiarios+'</td></tr>';
