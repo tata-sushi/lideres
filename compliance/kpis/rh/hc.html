@@ -991,6 +991,23 @@ function getDashData() {
 
 // ─── TURNOVER ─────────────────────────────────────────────────────────────────
 var _tvData = null;
+function getTvFiltered() {
+  if (!_tvData) return [];
+  var u = state.dashFilters.unidade;
+  if (!u || u === 'Todos') return _tvData;
+  return _tvData.filter(function(r){ return r.unidade === u; });
+}
+function getHcAtualFiltered() {
+  if (!_colabs || !_colabs.length) return null;
+  var SOCIOS = 3;
+  var u = state.dashFilters.unidade;
+  if (!u || u === 'Todos') return _colabs.length - SOCIOS;
+  return _colabs.filter(function(c){
+    var mat = parseInt(c.matricula);
+    if (!isNaN(mat) && mat < 100) return false;
+    return (c.unidade||'').trim() === u;
+  }).length;
+}
 function parseTvCSV(line) {
   var res=[], cur='', inQ=false;
   for (var i=0;i<line.length;i++) {
@@ -1030,16 +1047,16 @@ function loadTurnoverData() {
 }
 function renderTurnoverChart() {
   if (!_tvData) return;
+  var tv = getTvFiltered();
   var ANOS = [2023, 2024, 2025, 2026];
   var anoAtual = new Date().getFullYear();
-  var SOCIOS = 3;
-  var hcAtual = (_colabs && _colabs.length) ? _colabs.length - SOCIOS : null;
+  var hcAtual = getHcAtualFiltered();
   var labels = ANOS.map(String);
   var values = ANOS.map(function(ano) {
     var inicio = new Date(ano, 0, 1);
     var fim    = new Date(ano + 1, 0, 1);
     var hc = 0, dems = 0;
-    _tvData.forEach(function(r) {
+    tv.forEach(function(r) {
       if (r.adm < inicio && (!r.dem || r.dem >= inicio)) hc++;
       if (r.dem && r.dem >= inicio && r.dem < fim) dems++;
     });
@@ -1079,6 +1096,7 @@ function renderTurnoverChart() {
 
 function renderTurnoverMonthlyChart() {
   if (!_tvData) return;
+  var tv = getTvFiltered();
   var svg = document.getElementById('hc-turnover-line');
   if (!svg) return;
   var MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -1089,7 +1107,7 @@ function renderTurnoverMonthlyChart() {
     var inicio = new Date(d.getFullYear(), d.getMonth(), 1);
     var fim    = new Date(d.getFullYear(), d.getMonth() + 1, 1);
     var hc = 0, dems = 0;
-    _tvData.forEach(function(r) {
+    tv.forEach(function(r) {
       if (r.adm < inicio && (!r.dem || r.dem >= inicio)) hc++;
       if (r.dem && r.dem >= inicio && r.dem < fim) dems++;
     });
@@ -1123,23 +1141,23 @@ function renderTurnoverMonthlyChart() {
 
 function renderTurnoverAnalyticTable() {
   if (!_tvData) return;
+  var tv = getTvFiltered();
   var el = document.getElementById('turnover-analytic');
   if (!el) return;
   var ANOS = [2023, 2024, 2025, 2026];
   var anoAtual = new Date().getFullYear();
-  var SOCIOS = 3;
-  var hcAtual = (_colabs && _colabs.length) ? _colabs.length - SOCIOS : null;
+  var hcAtual = getHcAtualFiltered();
   var rows = ANOS.map(function(ano) {
     var inicio = new Date(ano, 0, 1);
     var fim    = new Date(ano + 1, 0, 1);
-    var adm  = _tvData.filter(function(r){ return r.adm >= inicio && r.adm < fim; }).length;
-    var dem  = _tvData.filter(function(r){ return r.dem && r.dem >= inicio && r.dem < fim; }).length;
+    var adm  = tv.filter(function(r){ return r.adm >= inicio && r.adm < fim; }).length;
+    var dem  = tv.filter(function(r){ return r.dem && r.dem >= inicio && r.dem < fim; }).length;
     var hcFinal = (ano === anoAtual && hcAtual !== null)
       ? hcAtual
-      : _tvData.filter(function(r){ return r.adm < fim && (!r.dem || r.dem >= fim); }).length;
+      : tv.filter(function(r){ return r.adm < fim && (!r.dem || r.dem >= fim); }).length;
     var hcBase = (ano === anoAtual && hcAtual !== null)
       ? hcAtual
-      : _tvData.filter(function(r){ return r.adm < inicio && (!r.dem || r.dem >= inicio); }).length;
+      : tv.filter(function(r){ return r.adm < inicio && (!r.dem || r.dem >= inicio); }).length;
     var turnover = hcBase > 0 ? Math.round(dem / hcBase * 1000) / 10 : 0;
     return { ano: ano, adm: adm, dem: dem, hcFinal: hcFinal, turnover: turnover };
   });
