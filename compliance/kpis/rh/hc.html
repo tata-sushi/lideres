@@ -587,13 +587,13 @@ function showError(msg) {
 function renderKPIs() {
   var el = document.getElementById('kpi-section');
   if (!el) return;
-  var SOCIOS = 3; // sócios não entram no HC operacional
-  var hcReal = _colabs !== null ? _colabs.length - SOCIOS : null;
+  var hcReal = _colabs !== null ? _colabs.filter(function(c){ return !isExcluded(c.matricula); }).length : null;
   var totProg = dados.reduce(function(a,d){ return a+d.total; }, 0);
   var excedentes = 0, falta = 0;
   if (_colabs && _colabs.length && dados.length) {
     var realTotMap = {};
     _colabs.forEach(function(c) {
+      if (isExcluded(c.matricula)) return;
       var key = (c.unidade||'').trim() + '|||' + (c.departamento||'').trim();
       if (key === '|||') return;
       realTotMap[key] = (realTotMap[key]||0) + 1;
@@ -609,10 +609,10 @@ function renderKPIs() {
   var clt = 0, pj = 0;
   if (loaded) {
     _colabs.forEach(function(c) {
+      if (isExcluded(c.matricula)) return;
       var mat = parseInt(c.matricula);
       if (!isNaN(mat) && mat < 100) pj++; else clt++;
     });
-    pj -= 3; // deduz sócios do PJ (matrícula < 100)
   }
   el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--border);">' +
     '<div class="kpi-card"><span class="kpi-label">HC Atual</span><span class="kpi-number">'+(loaded?hcReal:'—')+'</span>' +
@@ -696,6 +696,12 @@ var _vagasData   = null;
 // ─── CRUZAMENTO HC REAL × PROGRAMADO ─────────────────────────────────────────
 var COLAB_URL2 = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _colabs = null;
+// Matrículas excluídas de TODAS as análises (sócios)
+var EXCLUDED_MATS = [1, 9, 10];
+function isExcluded(matricula) {
+  var m = parseInt(matricula);
+  return !isNaN(m) && EXCLUDED_MATS.indexOf(m) !== -1;
+}
 function classifyCargoTipo(cargo) {
   var c = (cargo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   if (/estagia/.test(c))                                       return 'estagiarios';
@@ -765,6 +771,7 @@ function renderCruzamento() {
   // Agrupar real por unidade+departamento+tipo
   var realMap = {};
   _colabs.forEach(function(c) {
+    if (isExcluded(c.matricula)) return;
     var u=(c.unidade||'').trim(), d=(c.departamento||'').trim();
     if (!u||!d) return;
     var key=u+'|||'+d;
@@ -869,12 +876,9 @@ function renderCruzamento() {
 var _charts = {};
 function getColabsAggregated() {
   if (!_colabs || !_colabs.length) return [];
-  var SOCIOS = 3;
   var map = {};
-  var sociosVisto = 0;
   _colabs.forEach(function(c) {
-    var mat = parseInt(c.matricula);
-    if (!isNaN(mat) && mat < 100 && sociosVisto < SOCIOS) { sociosVisto++; return; }
+    if (isExcluded(c.matricula)) return;
     var u = (c.unidade||'').trim(), d = (c.departamento||'').trim();
     if (!u || !d) return;
     var key = u + '|||' + d;
@@ -944,6 +948,7 @@ function renderContratosChart() {
   var ORDEM = ['Itaim', 'Pinheiros', 'Poke - Pinheiros', 'Tatá House', 'Administrativo'];
   var map = {};
   _colabs.forEach(function(c) {
+    if (isExcluded(c.matricula)) return;
     var u = (c.unidade||'').trim();
     if (!u) return;
     var mat = parseInt(c.matricula);
@@ -1050,25 +1055,22 @@ function loadTurnoverData() {
       }
       return fallback;
     }
+    var iMat=colIdx(['matr'],0);
     var iAdm=colIdx(['admiss'],8);
     var iDem=colIdx(['demiss'],14);
     var iUni=colIdx(['unidade'],4);
     var iDep=colIdx(['departamento'],5);
-    console.log('[TV] headers('+hdrs.length+'):', hdrs.map(function(h,i){return i+':'+h;}).join(' | '));
-    console.log('[TV] iAdm='+iAdm+' iDem='+iDem+' iUni='+iUni+' iDep='+iDep);
-    var firstRow=null;
     for (var i=1;i<lines.length;i++) {
       var ln=lines[i].trim(); if (!ln) continue;
       var cols=parseTvCSV(ln);
+      if (isExcluded(cols[iMat])) continue;
       var adm=parseTvDate(cols[iAdm]);
       var dem=parseTvDate(cols[iDem]||'');
       if (!adm) continue;
-      if (!firstRow) { firstRow=true; console.log('[TV] first row cols:', cols.map(function(c,i){return i+':'+JSON.stringify(c);}).join(' | ')); }
       var uni=(cols[iUni]||'').trim();
       var dep=(cols[iDep]||'').trim();
       _tvData.push({adm:adm, dem:dem, unidade:uni, departamento:dep});
     }
-    console.log('[TV] parsed='+_tvData.length+' withDem='+_tvData.filter(function(r){return r.dem!==null;}).length);
     renderTurnoverChart();
     renderTurnoverMonthlyChart();
     renderTurnoverAnalyticTable();
