@@ -1171,8 +1171,21 @@ function statusFieldFor(r) {
 function getStatusData(filt) {
   var rows = filt;
   if (_cfMes) rows = rows.filter(function(r){ return dataToMY(r.data) === _cfMes; });
-  var counts = {};
+  // Conta contatos únicos: não repete o mesmo contato. Mantém o registro mais
+  // recente (por data) de cada contato para definir o status contabilizado.
+  var byContato = {};
   rows.forEach(function(r) {
+    var key = (r.contato || '').replace(/\D/g, '');
+    if (!key) key = norm((r.nome || '').toLowerCase().trim());
+    if (!key) key = '__linha_' + r._linha;
+    var prev = byContato[key];
+    if (!prev) { byContato[key] = r; return; }
+    var dr = parseDateBR(r.data), dp = parseDateBR(prev.data);
+    if (dr && (!dp || dr.getTime() >= dp.getTime())) byContato[key] = r;
+  });
+  var counts = {};
+  Object.keys(byContato).forEach(function(key) {
+    var r = byContato[key];
     var s = (statusFieldFor(r) || '').trim() || 'Sem status';
     counts[s] = (counts[s] || 0) + 1;
   });
