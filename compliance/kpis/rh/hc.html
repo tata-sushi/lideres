@@ -392,6 +392,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-title">Turnover Mensal</div>
     <svg id="hc-turnover-line" style="width:100%;height:260px;display:block;"></svg>
   </div>
+  <div class="chart-card chart-card-full">
+    <div class="chart-title">Entradas e Saídas — Últimas 30 Semanas</div>
+    <div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;">
+      <svg id="hc-weekly-evolution" style="width:1080px;height:260px;display:block;"></svg>
+    </div>
+  </div>
 </div>
 
 <div class="cruzamento-section" id="cruzamento">
@@ -945,6 +951,7 @@ function renderDashboard() {
   renderTurnoverChart();
   renderTurnoverMonthlyChart();
   renderTurnoverAnalyticTable();
+  renderWeeklyEvolutionChart();
 
   renderBarList('barHCDepto', src);
   renderTabelaAnalitica(src);
@@ -1046,7 +1053,7 @@ function parseTvDate(s) {
   return null;
 }
 function loadTurnoverData() {
-  if (_tvData) { renderTurnoverChart(); renderTurnoverMonthlyChart(); renderTurnoverAnalyticTable(); return; }
+  if (_tvData) { renderTurnoverChart(); renderTurnoverMonthlyChart(); renderTurnoverAnalyticTable(); renderWeeklyEvolutionChart(); return; }
   var url='https://docs.google.com/spreadsheets/d/1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw/export?format=csv&gid=175063295';
   fetch(url).then(function(r){return r.text();}).then(function(csv){
     var lines=csv.split('\n');
@@ -1080,6 +1087,7 @@ function loadTurnoverData() {
     renderTurnoverChart();
     renderTurnoverMonthlyChart();
     renderTurnoverAnalyticTable();
+    renderWeeklyEvolutionChart();
   }).catch(function(){});
 }
 function renderTurnoverChart() {
@@ -1213,6 +1221,69 @@ function renderTurnoverAnalyticTable() {
   });
   html += '</tbody></table>';
   el.innerHTML = html;
+}
+
+function renderWeeklyEvolutionChart() {
+  if (!_tvData) return;
+  var tv = getTvFiltered();
+  var svg = document.getElementById('hc-weekly-evolution');
+  if (!svg) return;
+  var W=1080, H=260, padL=36, padR=20, padTop=34, padBot=28;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  // Build 30 weeks (Mon–Sun) going back from current week
+  var now=new Date(); now.setHours(0,0,0,0);
+  var dow=(now.getDay()+6)%7; // 0=Mon
+  var weeks=[];
+  for (var i=29;i>=0;i--) {
+    var ws=new Date(now); ws.setDate(now.getDate()-dow-i*7);
+    var we=new Date(ws); we.setDate(ws.getDate()+7);
+    var adm=0, dem=0;
+    tv.forEach(function(r){
+      if (r.adm>=ws&&r.adm<we) adm++;
+      if (r.dem&&r.dem>=ws&&r.dem<we) dem++;
+    });
+    var dd=ws.getDate(), mm=ws.getMonth()+1;
+    weeks.push({label:(dd<10?'0':'')+dd+'/'+(mm<10?'0':'')+mm, adm:adm, dem:dem});
+  }
+  var maxV=Math.max.apply(null,weeks.map(function(w){return Math.max(w.adm,w.dem);}))||1;
+  var plotW=W-padL-padR, plotH=H-padTop-padBot, n=weeks.length;
+  function sx(i){return padL+i*plotW/(n-1);}
+  function sy(v){return padTop+plotH-(v/maxV)*plotH;}
+  var c='';
+  // Baseline
+  c+='<line x1="'+padL+'" y1="'+(padTop+plotH)+'" x2="'+(W-padR)+'" y2="'+(padTop+plotH)+'" stroke="#E8E8E8" stroke-width="1"/>';
+  // Área admissões
+  var aA='M '+sx(0).toFixed(1)+' '+sy(weeks[0].adm).toFixed(1);
+  weeks.forEach(function(w,i){aA+=' L '+sx(i).toFixed(1)+' '+sy(w.adm).toFixed(1);});
+  aA+=' L '+sx(n-1).toFixed(1)+' '+(padTop+plotH)+' L '+padL+' '+(padTop+plotH)+' Z';
+  c+='<path d="'+aA+'" fill="#35383F" opacity="0.07"/>';
+  // Área demissões
+  var aD='M '+sx(0).toFixed(1)+' '+sy(weeks[0].dem).toFixed(1);
+  weeks.forEach(function(w,i){aD+=' L '+sx(i).toFixed(1)+' '+sy(w.dem).toFixed(1);});
+  aD+=' L '+sx(n-1).toFixed(1)+' '+(padTop+plotH)+' L '+padL+' '+(padTop+plotH)+' Z';
+  c+='<path d="'+aD+'" fill="#AAAAAA" opacity="0.15"/>';
+  // Linha admissões
+  c+='<path d="'+weeks.map(function(w,i){return(i===0?'M ':'L ')+sx(i).toFixed(1)+' '+sy(w.adm).toFixed(1);}).join(' ')+'" fill="none" stroke="#35383F" stroke-width="2"/>';
+  // Linha demissões
+  c+='<path d="'+weeks.map(function(w,i){return(i===0?'M ':'L ')+sx(i).toFixed(1)+' '+sy(w.dem).toFixed(1);}).join(' ')+'" fill="none" stroke="#AAAAAA" stroke-width="2"/>';
+  // Pontos + labels de valor + labels do eixo X
+  weeks.forEach(function(w,i){
+    var showX=(i%5===0)||i===n-1;
+    // Admissões
+    c+='<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(w.adm).toFixed(1)+'" r="3" fill="#35383F"/>';
+    if (w.adm>0) c+='<text x="'+sx(i).toFixed(1)+'" y="'+(sy(w.adm)-6).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">'+w.adm+'</text>';
+    // Demissões
+    c+='<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(w.dem).toFixed(1)+'" r="3" fill="#AAAAAA"/>';
+    if (w.dem>0) c+='<text x="'+sx(i).toFixed(1)+'" y="'+(sy(w.dem)-6).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA" font-weight="600">'+w.dem+'</text>';
+    // Eixo X
+    if (showX) c+='<text x="'+sx(i).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">'+w.label+'</text>';
+  });
+  // Legenda
+  c+='<rect x="'+padL+'" y="10" width="16" height="3" fill="#35383F" rx="1"/>';
+  c+='<text x="'+(padL+20)+'" y="15" font-family="DM Mono,monospace" font-size="9" fill="#35383F">Admissões</text>';
+  c+='<rect x="'+(padL+88)+'" y="10" width="16" height="3" fill="#AAAAAA" rx="1"/>';
+  c+='<text x="'+(padL+108)+'" y="15" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">Demissões</text>';
+  svg.innerHTML=c;
 }
 
 var barValueLabelsPlugin = {
