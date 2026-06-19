@@ -1228,7 +1228,7 @@ function renderWeeklyEvolutionChart() {
   var tv = getTvFiltered();
   var svg = document.getElementById('hc-weekly-evolution');
   if (!svg) return;
-  var W=1080, H=260, padL=36, padR=20, padTop=34, padBot=28;
+  var W=1080, H=260, padL=28, padR=16, padTop=34, padBot=28;
   svg.setAttribute('viewBox','0 0 '+W+' '+H);
   // Build 30 weeks (Mon–Sun) going back from current week
   var now=new Date(); now.setHours(0,0,0,0);
@@ -1247,42 +1247,39 @@ function renderWeeklyEvolutionChart() {
   }
   var maxV=Math.max.apply(null,weeks.map(function(w){return Math.max(w.adm,w.dem);}))||1;
   var plotW=W-padL-padR, plotH=H-padTop-padBot, n=weeks.length;
-  function sx(i){return padL+i*plotW/(n-1);}
-  function sy(v){return padTop+plotH-(v/maxV)*plotH;}
+  var groupW=plotW/n;
+  var barW=Math.max(4, groupW*0.38);
+  var gap=Math.max(1, groupW*0.05);
+  function gx(i){ return padL+i*groupW+groupW/2; } // center of group
+  function barY(v){ return padTop+plotH-(v/maxV)*plotH; }
   var c='';
   // Baseline
   c+='<line x1="'+padL+'" y1="'+(padTop+plotH)+'" x2="'+(W-padR)+'" y2="'+(padTop+plotH)+'" stroke="#E8E8E8" stroke-width="1"/>';
-  // Área admissões
-  var aA='M '+sx(0).toFixed(1)+' '+sy(weeks[0].adm).toFixed(1);
-  weeks.forEach(function(w,i){aA+=' L '+sx(i).toFixed(1)+' '+sy(w.adm).toFixed(1);});
-  aA+=' L '+sx(n-1).toFixed(1)+' '+(padTop+plotH)+' L '+padL+' '+(padTop+plotH)+' Z';
-  c+='<path d="'+aA+'" fill="#35383F" opacity="0.07"/>';
-  // Área demissões
-  var aD='M '+sx(0).toFixed(1)+' '+sy(weeks[0].dem).toFixed(1);
-  weeks.forEach(function(w,i){aD+=' L '+sx(i).toFixed(1)+' '+sy(w.dem).toFixed(1);});
-  aD+=' L '+sx(n-1).toFixed(1)+' '+(padTop+plotH)+' L '+padL+' '+(padTop+plotH)+' Z';
-  c+='<path d="'+aD+'" fill="#AAAAAA" opacity="0.15"/>';
-  // Linha admissões
-  c+='<path d="'+weeks.map(function(w,i){return(i===0?'M ':'L ')+sx(i).toFixed(1)+' '+sy(w.adm).toFixed(1);}).join(' ')+'" fill="none" stroke="#35383F" stroke-width="2"/>';
-  // Linha demissões
-  c+='<path d="'+weeks.map(function(w,i){return(i===0?'M ':'L ')+sx(i).toFixed(1)+' '+sy(w.dem).toFixed(1);}).join(' ')+'" fill="none" stroke="#AAAAAA" stroke-width="2"/>';
-  // Pontos + labels de valor + labels do eixo X
+  // Grouped bars + labels
   weeks.forEach(function(w,i){
-    var showX=(i%5===0)||i===n-1;
-    // Admissões
-    c+='<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(w.adm).toFixed(1)+'" r="3" fill="#35383F"/>';
-    if (w.adm>0) c+='<text x="'+sx(i).toFixed(1)+'" y="'+(sy(w.adm)-6).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#35383F" font-weight="600">'+w.adm+'</text>';
-    // Demissões
-    c+='<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(w.dem).toFixed(1)+'" r="3" fill="#AAAAAA"/>';
-    if (w.dem>0) c+='<text x="'+sx(i).toFixed(1)+'" y="'+(sy(w.dem)-6).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA" font-weight="600">'+w.dem+'</text>';
-    // Eixo X
-    if (showX) c+='<text x="'+sx(i).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">'+w.label+'</text>';
+    var cx=gx(i);
+    var xA=cx-gap/2-barW;
+    var xD=cx+gap/2;
+    var hA=(w.adm/maxV)*plotH, hD=(w.dem/maxV)*plotH;
+    var yA=padTop+plotH-hA, yD=padTop+plotH-hD;
+    // Barra admissões (escura)
+    if (hA>0) {
+      c+='<rect x="'+xA.toFixed(1)+'" y="'+yA.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+hA.toFixed(1)+'" fill="#35383F" rx="2"/>';
+      c+='<text x="'+(xA+barW/2).toFixed(1)+'" y="'+(yA-3).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#35383F" font-weight="600">'+w.adm+'</text>';
+    }
+    // Barra demissões (cinza)
+    if (hD>0) {
+      c+='<rect x="'+xD.toFixed(1)+'" y="'+yD.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+hD.toFixed(1)+'" fill="#AAAAAA" rx="2"/>';
+      c+='<text x="'+(xD+barW/2).toFixed(1)+'" y="'+(yD-3).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#888" font-weight="600">'+w.dem+'</text>';
+    }
+    // Eixo X (a cada 5 semanas + última)
+    if (i%5===0||i===n-1) c+='<text x="'+cx.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">'+w.label+'</text>';
   });
   // Legenda
-  c+='<rect x="'+padL+'" y="10" width="16" height="3" fill="#35383F" rx="1"/>';
-  c+='<text x="'+(padL+20)+'" y="15" font-family="DM Mono,monospace" font-size="9" fill="#35383F">Admissões</text>';
-  c+='<rect x="'+(padL+88)+'" y="10" width="16" height="3" fill="#AAAAAA" rx="1"/>';
-  c+='<text x="'+(padL+108)+'" y="15" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">Demissões</text>';
+  c+='<rect x="'+padL+'" y="10" width="10" height="10" fill="#35383F" rx="2"/>';
+  c+='<text x="'+(padL+14)+'" y="19" font-family="DM Mono,monospace" font-size="9" fill="#35383F">Admissões</text>';
+  c+='<rect x="'+(padL+82)+'" y="10" width="10" height="10" fill="#AAAAAA" rx="2"/>';
+  c+='<text x="'+(padL+96)+'" y="19" font-family="DM Mono,monospace" font-size="9" fill="#888">Demissões</text>';
   svg.innerHTML=c;
 }
 
