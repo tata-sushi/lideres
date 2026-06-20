@@ -885,6 +885,33 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<!-- ══ MODAL EXPORTAR CSV PROCESSAMENTO ═════════════════════════════════ -->
+<div class="modal-overlay" id="modal-export-proc">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div>
+        <div class="modal-eyebrow">Processamento</div>
+        <div class="modal-title">Exportar CSV</div>
+      </div>
+      <button class="modal-close" onclick="fecharModalExportProc()">✕</button>
+    </div>
+    <div class="modal-body" style="gap:14px;">
+      <div class="fg">
+        <label class="flbl">Data do pedido</label>
+        <input type="date" class="fctrl" id="export-proc-data">
+      </div>
+      <p style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6;">
+        Gera um CSV com todos os pedidos realizados na data selecionada: data, fornecedor, produto e quantidade.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="fecharModalExportProc()">Cancelar</button>
+      <button class="modal-btn modal-btn-confirm" onclick="exportarCSVProcessamento()">Baixar CSV</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL RELATÓRIO RECEBIMENTOS ═════════════════════════════════════ -->
 <div class="modal-overlay" id="modal-rel-receb">
   <div class="modal" style="max-width:360px;">
@@ -1799,7 +1826,15 @@ function renderAba(aba) {
     container.innerHTML = html;
     return;
   }
-  container.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px;">' +
+  var extraBtn = aba === 'processamento'
+    ? '<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">' +
+        '<button class="btn-ver" onclick="abrirModalExportProc()" style="gap:6px;">' +
+          '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
+          ' Exportar CSV' +
+        '</button>' +
+      '</div>'
+    : '';
+  container.innerHTML = extraBtn + '<div style="display:flex;flex-direction:column;gap:12px;">' +
     lista.map(function(o) { return cardHTML(o, aba); }).join('') + '</div>';
 }
 
@@ -2493,6 +2528,55 @@ function updateKPIs() {
   set('kpi-recebidos-total', recebidosTotal);
   set('kpi-aguard-compra',   aguardCompra);
   set('kpi-aguard-receb',    aguardReceb);
+}
+
+// ── MODAL EXPORTAR CSV PROCESSAMENTO ─────────────────────────────────────────
+function abrirModalExportProc() {
+  var inp = document.getElementById('export-proc-data');
+  if (!inp.value) inp.value = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-export-proc').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function fecharModalExportProc() {
+  document.getElementById('modal-export-proc').classList.remove('active');
+  document.body.style.overflow = '';
+}
+function exportarCSVProcessamento() {
+  var dataISO = document.getElementById('export-proc-data').value;
+  if (!dataISO) { toast('Selecione uma data.'); return; }
+  var dataBR = (function(d){ var p = d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; })(dataISO);
+
+  var linhas = [['Data do Pedido', 'Pedido', 'Fornecedor', 'Produto', 'Quantidade']];
+
+  ORDERS.forEach(function(o) {
+    if (toISO(o.raw && o.raw.dataSolicitacao) !== dataISO) return;
+    var dataPedido = o.data || dataBR;
+    var pedidoId   = o.idDisplay || ('#' + o.id);
+    o.itensList.forEach(function(it) {
+      var forn = it.fornecedor || (o.raw && o.raw.fornecedor) || '—';
+      linhas.push([dataPedido, pedidoId, forn, it.nome, String(it.qty || '')]);
+    });
+  });
+
+  if (linhas.length <= 1) { toast('Nenhum pedido encontrado em ' + dataBR + '.'); return; }
+
+  var csv = linhas.map(function(row) {
+    return row.map(function(v) {
+      var s = String(v == null ? '' : v);
+      return s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1
+        ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(',');
+  }).join('\r\n');
+
+  var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url;
+  a.download = 'pedidos-' + dataISO + '.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  fecharModalExportProc();
+  toast('CSV gerado: ' + (linhas.length - 1) + ' item(s).');
 }
 
 // ── MODAL RELATÓRIO RECEBIMENTOS ─────────────────────────────────────────────
