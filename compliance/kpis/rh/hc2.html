@@ -1896,20 +1896,23 @@ function parseAlignLine(line) {
   res.push(cur.trim());
   return res;
 }
-function parseAlignSheet(csv, fields) {
+function parseAlignSheet(csv, fieldMap) {
   var lines=csv.split('\n'), out=[];
   if (lines.length<2) return out;
   var nrm=function(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();};
   var hdrs=parseAlignLine(lines[0]).map(nrm);
   var idx={};
-  fields.forEach(function(f){
-    for(var h=0;h<hdrs.length;h++){if(hdrs[h].indexOf(f)>=0){idx[f]=h;return;}}
+  fieldMap.forEach(function(fm){
+    for(var ki=0;ki<fm.kw.length;ki++){
+      for(var h=0;h<hdrs.length;h++){if(hdrs[h].indexOf(fm.kw[ki])>=0){idx[fm.key]=h;return;}}
+    }
+    idx[fm.key]=fm.fb;
   });
   for(var i=1;i<lines.length;i++){
     var ln=lines[i].trim(); if(!ln) continue;
     var cols=parseAlignLine(ln);
     var obj={};
-    fields.forEach(function(f){obj[f]=(idx[f]!==undefined?(cols[idx[f]]||''):'').trim();});
+    fieldMap.forEach(function(fm){obj[fm.key]=(idx[fm.key]!==undefined?(cols[idx[fm.key]]||''):'').trim();});
     out.push(obj);
   }
   return out;
@@ -1928,8 +1931,15 @@ function loadAlinhamentosData() {
   var urlT='https://docs.google.com/spreadsheets/d/'+ALIGN_SHEET_ID+'/export?format=csv&gid=735774123';
   Promise.all([fetch(urlD).then(function(r){return r.text();}),fetch(urlT).then(function(r){return r.text();})])
   .then(function(results){
-    _alignDemandas=parseAlignSheet(results[0],['data','assunto','status']);
-    _alignTransc  =parseAlignSheet(results[1],['data','conteudo']);
+    _alignDemandas=parseAlignSheet(results[0],[
+      {key:'data',    kw:['data'],                                          fb:0},
+      {key:'assunto', kw:['assunto','pauta','tema','reuniao','topico','descri','subject'], fb:1},
+      {key:'status',  kw:['status','situac','estado'],                      fb:2}
+    ]);
+    _alignTransc=parseAlignSheet(results[1],[
+      {key:'data',     kw:['data'],                          fb:0},
+      {key:'conteudo', kw:['conteud','transcri','texto','content','anotac'], fb:1}
+    ]);
     if (!_alignDate&&_alignDemandas.length){
       var ds=_alignDemandas.map(function(r){return r.data;}).filter(Boolean);
       _alignDate=sortAlignDates(ds)[0]||null;
