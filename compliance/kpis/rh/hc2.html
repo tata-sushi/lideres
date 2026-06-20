@@ -168,7 +168,8 @@ body.cf-active #tbody-analitico tr:not(.cf-selected) { opacity: 0.45; }
 @media (min-width: 768px) { .dashboard .chart-card-full { grid-column: 1 / -1; } }
 @media (min-width: 768px) { .dashboard .chart-card-span2 { grid-row: span 2; } }
 @media (min-width: 768px) { .dashboard .chart-card-span3 { grid-row: span 3; } }
-@media (min-width: 768px) { .dashboard .chart-card { min-width: 0; overflow: hidden; min-height: 260px; } }
+@media (min-width: 768px) { .dashboard .chart-card { min-width: 0; min-height: 260px; } }
+.chart-scroll-wrap { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
 body:not([data-view="indicadores"]) #dashboard { display: none; }
 body:not([data-view="alinhamentos"]) #alinhamentos { display: none; }
 .cruzamento-section { padding: 14px 20px 80px; display: flex; flex-direction: column; gap: 14px; }
@@ -380,19 +381,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="dashboard" id="dashboard">
   <div class="chart-card chart-card-full">
     <div class="chart-title">Movimentações</div>
-    <svg id="hc-weekly-evolution" style="width:100%;height:auto;display:block;"></svg>
+    <div class="chart-scroll-wrap"><svg id="hc-weekly-evolution" style="height:auto;display:block;"></svg></div>
   </div>
   <div class="chart-card chart-card-full">
     <div class="chart-title">Atestados por Semana</div>
-    <svg id="hc-atestados-weekly" style="width:100%;height:auto;display:block;"></svg>
+    <div class="chart-scroll-wrap"><svg id="hc-atestados-weekly" style="height:auto;display:block;"></svg></div>
   </div>
   <div class="chart-card chart-card-full">
     <div class="chart-title">Banco de Horas</div>
-    <svg id="hc-banco-horas-line" style="width:100%;height:auto;display:block;"></svg>
+    <div class="chart-scroll-wrap"><svg id="hc-banco-horas-line" style="height:auto;display:block;"></svg></div>
   </div>
   <div class="chart-card chart-card-full">
     <div class="chart-title">Testes Realizados</div>
-    <svg id="hc-testes-weekly" style="width:100%;height:auto;display:block;"></svg>
+    <div class="chart-scroll-wrap"><svg id="hc-testes-weekly" style="height:auto;display:block;"></svg></div>
   </div>
 </div>
 
@@ -1102,9 +1103,7 @@ function loadRecrutamentoData() {
 function renderTestesChart() {
   var svg = document.getElementById('hc-testes-weekly');
   if (!svg || !_recrutData) return;
-  var W=1080, H=280, padL=20, padR=16, padTop=30, padBot=56;
-  svg.setAttribute('viewBox','0 0 '+W+' '+H);
-  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  var H=280, padL=20, padR=16, padTop=30, padBot=56;
   var now=new Date(); now.setHours(0,0,0,0);
   var dow=(now.getDay()+6)%7;
   var weeks=[];
@@ -1117,9 +1116,13 @@ function renderTestesChart() {
     weeks.push({label:(dd<10?'0':'')+dd+'/'+(mm<10?'0':'')+mm, re:re});
   }
   var maxV=Math.max.apply(null,weeks.map(function(w){return w.re;}))||1;
-  var plotW=W-padL-padR, plotH=H-padTop-padBot, n=weeks.length;
-  var groupW=plotW/n;
+  var n=weeks.length, groupW=24;
+  var W=padL+padR+n*groupW;
+  var plotW=W-padL-padR, plotH=H-padTop-padBot;
   var barW=Math.max(3,groupW*0.65);
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.setAttribute('width', W);
+  svg.setAttribute('preserveAspectRatio','xMinYMid meet');
   function bx(i){ return padL+i*groupW+groupW/2-barW/2; }
   var baseline=padTop+plotH;
   var c='';
@@ -1206,17 +1209,20 @@ function renderBancoHorasChart() {
     return { label: label, pos: Math.round(pos * 10)/10, neg: Math.round(neg * 10)/10 };
   });
 
-  var W=1080, H=280, padL=20, padR=16, padTop=24, padBot=56;
+  var H=280, padL=20, padR=16, padTop=24, padBot=56;
+  var n = weeks.length;
+  var fixedSpacing = 24;
+  var W = padL + padR + Math.max(1, n - 1) * fixedSpacing;
+  var spacing = fixedSpacing;
   svg.setAttribute('viewBox','0 0 '+W+' '+H);
-  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  svg.setAttribute('width', W);
+  svg.setAttribute('preserveAspectRatio','xMinYMid meet');
 
   var maxV = Math.max.apply(null, weeks.map(function(w){ return Math.max(w.pos, w.neg); })) || 1;
 
   var plotW = W - padL - padR;
   var plotH = H - padTop - padBot;
   var baseline = padTop + plotH;
-  var n = weeks.length;
-  var spacing = plotW / (n - 1 || 1);
 
   function px(i) { return padL + i * spacing; }
   function py(v) { return baseline - (v / maxV) * plotH; }
@@ -1298,9 +1304,7 @@ function renderAtestadosChart() {
   var svg = document.getElementById('hc-atestados-weekly');
   if (!svg) return;
   if (!_absData) return;
-  var W=1080, H=260, padL=20, padR=16, padTop=24, padBot=56;
-  svg.setAttribute('viewBox','0 0 '+W+' '+H);
-  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  var H=260, padL=20, padR=16, padTop=24, padBot=56;
   var now=new Date(); now.setHours(0,0,0,0);
   var dow=(now.getDay()+6)%7;
   var weeks=[];
@@ -1315,9 +1319,13 @@ function renderAtestadosChart() {
     weeks.push({label:(dd<10?'0':'')+dd+'/'+(mm<10?'0':'')+mm, count:count});
   }
   var maxV=Math.max.apply(null,weeks.map(function(w){return w.count;}))||1;
-  var plotW=W-padL-padR, plotH=H-padTop-padBot, n=weeks.length;
-  var groupW=plotW/n;
+  var n=weeks.length, groupW=24;
+  var W=padL+padR+n*groupW;
+  var plotW=W-padL-padR, plotH=H-padTop-padBot;
   var barW=Math.max(3,groupW*0.65);
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.setAttribute('width', W);
+  svg.setAttribute('preserveAspectRatio','xMinYMid meet');
   function bx(i){ return padL+i*groupW+groupW/2-barW/2; }
   var baseline=padTop+plotH;
   var c='';
@@ -1512,9 +1520,7 @@ function renderWeeklyEvolutionChart() {
   var tv = getTvFiltered();
   var svg = document.getElementById('hc-weekly-evolution');
   if (!svg) return;
-  var W=1080, H=280, padL=20, padR=16, padTop=24, padBot=56;
-  svg.setAttribute('viewBox','0 0 '+W+' '+H);
-  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  var H=280, padL=20, padR=16, padTop=24, padBot=56;
   var now=new Date(); now.setHours(0,0,0,0);
   var dow=(now.getDay()+6)%7;
   var weeks=[];
@@ -1529,9 +1535,13 @@ function renderWeeklyEvolutionChart() {
     var dd=ws.getDate(), mm=ws.getMonth()+1;
     weeks.push({label:(dd<10?'0':'')+dd+'/'+(mm<10?'0':'')+mm, adm:adm, dem:dem});
   }
-  var plotW=W-padL-padR, plotH=H-padTop-padBot, n=weeks.length;
-  var groupW=plotW/n;
+  var n=weeks.length, groupW=24;
+  var W=padL+padR+n*groupW;
+  var plotW=W-padL-padR, plotH=H-padTop-padBot;
   var barW=Math.max(3, groupW*0.65);
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.setAttribute('width', W);
+  svg.setAttribute('preserveAspectRatio','xMinYMid meet');
   function bx(i){ return padL+i*groupW+groupW/2-barW/2; }
   var baseline=padTop+plotH;
   var c='';
