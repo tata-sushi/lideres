@@ -885,6 +885,33 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<!-- ══ MODAL RELATÓRIO RECEBIMENTOS ═════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-rel-receb">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div>
+        <div class="modal-eyebrow">Recebimentos</div>
+        <div class="modal-title">Relatório por Data</div>
+      </div>
+      <button class="modal-close" onclick="fecharModalRelReceb()">✕</button>
+    </div>
+    <div class="modal-body" style="gap:14px;">
+      <div class="fg">
+        <label class="flbl">Data de recebimento</label>
+        <input type="date" class="fctrl" id="rel-receb-data">
+      </div>
+      <p style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6;">
+        Gera um PDF com todos os pedidos recebidos na data selecionada, incluindo fornecedor, itens, valores e quem recebeu.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="fecharModalRelReceb()">Cancelar</button>
+      <button class="modal-btn modal-btn-confirm" onclick="gerarRelatorioRecebimentos()">Gerar PDF</button>
+    </div>
+  </div>
+</div>
+
 <!-- Recibo (oculto, usado para gerar PDFs via window.print) -->
 <div id="recibo"></div>
 
@@ -1753,7 +1780,13 @@ function renderAba(aba) {
     return;
   }
   if (aba === 'entregas') {
-    var html = '<div style="display:flex;flex-direction:column;gap:12px;">';
+    var html = '<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">' +
+      '<button class="btn-ver" onclick="abrirModalRelReceb()" style="gap:6px;">' +
+        '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
+        ' Relatório por data' +
+      '</button>' +
+    '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:12px;">';
     lista.forEach(function(o) {
       if (o.fornecedores) {
         o.fornecedores.forEach(function(f, fi) {
@@ -2460,6 +2493,127 @@ function updateKPIs() {
   set('kpi-recebidos-total', recebidosTotal);
   set('kpi-aguard-compra',   aguardCompra);
   set('kpi-aguard-receb',    aguardReceb);
+}
+
+// ── MODAL RELATÓRIO RECEBIMENTOS ─────────────────────────────────────────────
+function abrirModalRelReceb() {
+  var inp = document.getElementById('rel-receb-data');
+  if (!inp.value) inp.value = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-rel-receb').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function fecharModalRelReceb() {
+  document.getElementById('modal-rel-receb').classList.remove('active');
+  document.body.style.overflow = '';
+}
+function gerarRelatorioRecebimentos() {
+  var dataISO = document.getElementById('rel-receb-data').value;
+  if (!dataISO) { toast('Selecione uma data.'); return; }
+  var dataBR  = (function(d){ var p = d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; })(dataISO);
+
+  // Coleta todos os grupos de fornecedor recebidos na data
+  var linhas = [];
+  ORDERS.forEach(function(o) {
+    (o.fornecedores || []).forEach(function(forn) {
+      if (forn.status !== 'b-concluido') return;
+      var dr = toISO(forn.dataReceb || (o.raw && o.raw.dataRecebimento));
+      if (dr !== dataISO) return;
+      linhas.push({ order: o, forn: forn });
+    });
+    // pedidos sem grupo de fornecedores (recebidos diretos)
+    if (!o.fornecedores && (o.status === 'b-concluido' || o.status === 'b-conferido')) {
+      var dr2 = toISO(o.raw && o.raw.dataRecebimento);
+      if (dr2 === dataISO) linhas.push({ order: o, forn: null });
+    }
+  });
+
+  if (linhas.length === 0) { toast('Nenhum recebimento encontrado em ' + dataBR + '.'); return; }
+
+  var unidadeTxt = UNIDADE || '—';
+  var grandTotal = 0;
+  var secoes = '';
+
+  linhas.forEach(function(item, i) {
+    var o    = item.order;
+    var forn = item.forn;
+    var raw  = o.raw || {};
+    var fornNome   = forn ? forn.nome : (raw.fornecedor || '—');
+    var nf         = raw.notaFiscal   || '—';
+    var quem       = raw.recebidoPor  || '—';
+    var dataEmis   = fmtDataBR(raw.dataCompra) || '—';
+    var dataVenc   = fmtDataBR(raw.dataVencimento) || '—';
+    var itens      = forn ? forn.itens : o.itensList;
+    var subTotal   = 0;
+
+    var rowsHtml = '';
+    (itens || []).forEach(function(it) {
+      var qty   = it.qty || it.qtdComprada || 0;
+      var vlUnit= it.vlPedido || 0;
+      var total = qty * vlUnit;
+      subTotal += total;
+      rowsHtml +=
+        '<tr>' +
+          '<td>' + (it.nome || '—') + '</td>' +
+          '<td class="center">' + (it.un || '—') + '</td>' +
+          '<td class="r">' + qty + '</td>' +
+          '<td class="r">' + (vlUnit ? 'R$ ' + vlUnit.toLocaleString('pt-BR', {minimumFractionDigits:2}) : '—') + '</td>' +
+          '<td class="r">' + (total ? 'R$ ' + total.toLocaleString('pt-BR', {minimumFractionDigits:2}) : '—') + '</td>' +
+        '</tr>';
+    });
+    grandTotal += subTotal;
+
+    secoes +=
+      '<div class="rp-section">' + (i+1) + '. Pedido ' + (o.idDisplay || ('#'+o.id)) + '</div>' +
+      '<div class="rp-intro">' +
+        '<div class="rp-intro-nome">' +
+          '<span class="rp-intro-label">Fornecedor:</span><span class="rp-linha">' + fornNome + '</span>' +
+          '<span class="rp-intro-label" style="margin-left:16px">NF:</span><span class="rp-linha">' + nf + '</span>' +
+          '<span class="rp-intro-label" style="margin-left:16px">Emissão NF:</span><span class="rp-linha">' + dataEmis + '</span>' +
+        '</div>' +
+        '<div class="rp-intro-nome">' +
+          '<span class="rp-intro-label">Recebido por:</span><span class="rp-linha">' + quem + '</span>' +
+          '<span class="rp-intro-label" style="margin-left:16px">Vencimento:</span><span class="rp-linha">' + dataVenc + '</span>' +
+          '<span class="rp-intro-label" style="margin-left:16px">Categorias:</span><span class="rp-linha">' + (o.cats.join(', ') || '—') + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<table class="rp-table"><thead><tr>' +
+        '<th>Produto</th><th class="center">Un.</th><th class="r">Qtd</th><th class="r">Vl. Unit</th><th class="r">Total</th>' +
+      '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+      '<div class="rp-totais" style="margin-bottom:18px;">' +
+        '<span><span class="rp-totais-lbl">Subtotal</span><span class="rp-totais-val">R$ ' + subTotal.toLocaleString('pt-BR', {minimumFractionDigits:2}) + '</span></span>' +
+      '</div>';
+  });
+
+  var html =
+    '<div class="rp-header">' +
+      '<img id="rp-logo-rel" class="rp-logo-img" alt="TATÁ Sushi">' +
+      '<div class="rp-header-center">' +
+        '<div class="rp-title-main">Relatório de Recebimentos</div>' +
+        '<div class="rp-subtitle">' + dataBR + '</div>' +
+      '</div>' +
+      '<div class="rp-header-right">' +
+        '<div class="rp-meta-line">Unidade: <strong>' + unidadeTxt + '</strong></div>' +
+        '<div class="rp-meta-line">Emitido em: ' + new Date().toLocaleString('pt-BR') + '</div>' +
+        '<div class="rp-meta-line">' + linhas.length + ' recebimento' + (linhas.length !== 1 ? 's' : '') + '</div>' +
+      '</div>' +
+    '</div>' +
+    secoes +
+    '<div class="rp-grand">' +
+      '<span class="rp-grand-label">Total Geral</span>' +
+      '<span class="rp-grand-value">R$ ' + grandTotal.toLocaleString('pt-BR', {minimumFractionDigits:2}) + '</span>' +
+    '</div>';
+
+  document.getElementById('recibo').innerHTML = html;
+  fecharModalRelReceb();
+  var logoSrc = (document.querySelector('.logo-img') || {}).src || '';
+  var logoEl  = document.getElementById('rp-logo-rel');
+  if (logoEl && logoSrc) {
+    logoEl.onload  = function(){ window.print(); };
+    logoEl.onerror = function(){ window.print(); };
+    logoEl.src = logoSrc;
+  } else {
+    setTimeout(function(){ window.print(); }, 100);
+  }
 }
 
 // ── PDF GENERATORS ─────────────────────────────────────────────────────────────
