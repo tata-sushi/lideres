@@ -1049,14 +1049,11 @@ function renderBancoHorasChart() {
     return { label: label, pos: Math.round(pos * 10)/10, neg: Math.round(neg * 10)/10 };
   });
 
-  var W=1080, H=280, padL=44, padR=16, padTop=24, padBot=56;
+  var W=1080, H=280, padL=20, padR=16, padTop=24, padBot=56;
   svg.setAttribute('viewBox','0 0 '+W+' '+H);
   svg.setAttribute('preserveAspectRatio','xMidYMid meet');
 
   var maxV = Math.max.apply(null, weeks.map(function(w){ return Math.max(w.pos, w.neg); })) || 1;
-  // Round up to nice number
-  var step = Math.pow(10, Math.floor(Math.log(maxV/4)/Math.LN10));
-  var niceMax = Math.ceil(maxV / step) * step;
 
   var plotW = W - padL - padR;
   var plotH = H - padTop - padBot;
@@ -1065,18 +1062,9 @@ function renderBancoHorasChart() {
   var spacing = plotW / (n - 1 || 1);
 
   function px(i) { return padL + i * spacing; }
-  function py(v) { return baseline - (v / niceMax) * plotH; }
+  function py(v) { return baseline - (v / maxV) * plotH; }
 
   var c = '';
-
-  // Horizontal gridlines + Y labels
-  var gridSteps = 4;
-  for (var g = 0; g <= gridSteps; g++) {
-    var gv = niceMax * g / gridSteps;
-    var gy = py(gv);
-    c += '<line x1="'+padL+'" y1="'+gy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+gy.toFixed(1)+'" stroke="#F0F0F0" stroke-width="1"/>';
-    c += '<text x="'+(padL-4)+'" y="'+(gy+4).toFixed(1)+'" text-anchor="end" font-family="DM Mono,monospace" font-size="8" fill="#AAAAAA">'+Math.round(gv)+'</text>';
-  }
 
   // Baseline
   c += '<line x1="'+padL+'" y1="'+baseline+'" x2="'+(W-padR)+'" y2="'+baseline+'" stroke="#E8E8E8" stroke-width="1"/>';
@@ -1086,13 +1074,10 @@ function renderBancoHorasChart() {
     return weeks.map(function(w, i) { return px(i).toFixed(1) + ',' + py(w[key]).toFixed(1); }).join(' ');
   }
 
-  // Positive area fill (subtle)
+  // Area fills (subtle)
   var posPoints = weeks.map(function(w,i){ return px(i).toFixed(1)+','+py(w.pos).toFixed(1); }).join(' ');
-  var areaPos = 'M '+px(0).toFixed(1)+','+baseline+' L '+posPoints.split(' ').map(function(pt,i){ return (i===0?'':'')+pt; }).join(' L ') + ' L '+px(n-1).toFixed(1)+','+baseline+' Z';
-  // Simple area via polygon
   var polyPos = px(0).toFixed(1)+','+baseline+' '+posPoints+' '+px(n-1).toFixed(1)+','+baseline;
   var polyNeg = px(0).toFixed(1)+','+baseline+' '+buildLine('neg')+' '+px(n-1).toFixed(1)+','+baseline;
-
   c += '<polygon points="'+polyPos+'" fill="#35383F" fill-opacity="0.07"/>';
   c += '<polygon points="'+polyNeg+'" fill="#AAAAAA" fill-opacity="0.10"/>';
 
@@ -1100,12 +1085,14 @@ function renderBancoHorasChart() {
   c += '<polyline points="'+buildLine('pos')+'" fill="none" stroke="#35383F" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
   c += '<polyline points="'+buildLine('neg')+'" fill="none" stroke="#AAAAAA" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
 
-  // Dots + X labels
+  // Dots + values + X labels
   weeks.forEach(function(w, i) {
-    var x = px(i), yp = py(w.pos), yn = py(w.neg), cx = x;
+    var x = px(i), yp = py(w.pos), yn = py(w.neg);
     c += '<circle cx="'+x.toFixed(1)+'" cy="'+yp.toFixed(1)+'" r="3" fill="#35383F"/>';
+    if (w.pos > 0) c += '<text x="'+x.toFixed(1)+'" y="'+(yp-6).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="7" fill="#35383F" font-weight="700">'+Math.round(w.pos)+'</text>';
     c += '<circle cx="'+x.toFixed(1)+'" cy="'+yn.toFixed(1)+'" r="3" fill="#AAAAAA"/>';
-    c += '<text transform="translate('+cx.toFixed(1)+','+(baseline+6)+') rotate(45)" text-anchor="start" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">'+w.label+'</text>';
+    if (w.neg > 0) c += '<text x="'+x.toFixed(1)+'" y="'+(yn+12).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="7" fill="#888" font-weight="700">'+Math.round(w.neg)+'</text>';
+    c += '<text transform="translate('+x.toFixed(1)+','+(baseline+6)+') rotate(45)" text-anchor="start" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">'+w.label+'</text>';
   });
 
   // Legend
