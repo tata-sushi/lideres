@@ -33,7 +33,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .tab-btn.active { background: var(--carbon); color: var(--citric); border-bottom-color: var(--carbon); }
 
 /* KPIS */
-.kpis-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
 .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
 .kpi-number { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
@@ -366,19 +365,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="tabs">
   <button class="tab-btn active" id="tab-indicadores" onclick="setTab('indicadores')">Indicadores</button>
   <button class="tab-btn" id="tab-alinhamentos" onclick="setTab('alinhamentos')">Alinhamentos</button>
-</div>
-
-<div class="kpis-wrap">
-  <div class="kpi-card">
-    <span class="kpi-label">Entrevistas na semana</span>
-    <span class="kpi-number" id="kpi-hc2-entrev-semana">—</span>
-    <span class="kpi-sub"><strong id="kpi-hc2-entrev-hoje">0</strong> hoje / <strong id="kpi-hc2-entrev-mes">0</strong> mês</span>
-  </div>
-  <div class="kpi-card">
-    <span class="kpi-label">Testes na semana</span>
-    <span class="kpi-number" id="kpi-hc2-teste-semana">—</span>
-    <span class="kpi-sub"><strong id="kpi-hc2-teste-hoje">0</strong> hoje / <strong id="kpi-hc2-teste-mes">0</strong> mês</span>
-  </div>
 </div>
 
 <div class="dashboard" id="dashboard">
@@ -1900,67 +1886,6 @@ loadTurnoverData();
 loadAbsenteismoData();
 loadBancoHorasData();
 loadRecrutamentoData();
-loadHc2KPIData();
-
-// ─── KPI WRAP (Entrevistas + Testes) ─────────────────────────────────────────
-var _kpiEntrev = null;
-var _kpiTestes = null;
-
-function _kpiWeekRange() {
-  var hoje = new Date(); hoje.setHours(0,0,0,0);
-  var d = hoje.getDay(), off = (d===0?-6:1-d);
-  var seg = new Date(hoje); seg.setDate(seg.getDate()+off);
-  var dom = new Date(seg); dom.setDate(dom.getDate()+6); dom.setHours(23,59,59,999);
-  return {seg:seg, dom:dom, hoje:hoje};
-}
-function _kpiParseDate(s) {
-  if(!s) return null;
-  var p=String(s).split('/');
-  if(p.length<2) return null;
-  var dt=new Date(p[2]?parseInt(p[2]):new Date().getFullYear(), parseInt(p[1])-1, parseInt(p[0]));
-  dt.setHours(0,0,0,0); return isNaN(dt)?null:dt;
-}
-function _kpiCount(rows) {
-  var w=_kpiWeekRange(), mR=w.hoje.getMonth(), yR=w.hoje.getFullYear(), s=0, h=0, m=0;
-  rows.forEach(function(r){
-    var d=_kpiParseDate(r.data); if(!d) return;
-    if(d>=w.seg&&d<=w.dom) s++;
-    if(d.getTime()===w.hoje.getTime()) h++;
-    if(d.getMonth()===mR&&d.getFullYear()===yR) m++;
-  });
-  return {semana:s, hoje:h, mes:m};
-}
-function _kpiSet(id, val) { var el=document.getElementById(id); if(el) el.textContent=val; }
-function renderHc2KPIs() {
-  if(_kpiEntrev===null && _kpiTestes===null) return;
-  var e=_kpiEntrev?_kpiCount(_kpiEntrev):{semana:'—',hoje:0,mes:0};
-  var t=_kpiTestes?_kpiCount(_kpiTestes):{semana:'—',hoje:0,mes:0};
-  _kpiSet('kpi-hc2-entrev-semana', e.semana);
-  _kpiSet('kpi-hc2-entrev-hoje',   e.hoje);
-  _kpiSet('kpi-hc2-entrev-mes',    e.mes);
-  _kpiSet('kpi-hc2-teste-semana',  t.semana);
-  _kpiSet('kpi-hc2-teste-hoje',    t.hoje);
-  _kpiSet('kpi-hc2-teste-mes',     t.mes);
-}
-function loadHc2KPIData() {
-  var base='https://sheets.googleapis.com/v4/spreadsheets/'+RECRUT_SHEET_ID+'/values/';
-  var key='?key='+RECRUT_API_KEY;
-  function fetchSheet(name, cb) {
-    fetch(base+encodeURIComponent(name+'!A:Z')+key)
-      .then(function(r){return r.json();})
-      .then(function(j){
-        var rows=j.values||[], hdrs=rows[0]||[];
-        var nrm=function(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();};
-        var hN=hdrs.map(nrm), iData=-1;
-        for(var i=0;i<hN.length;i++){if(hN[i].indexOf('data')>=0){iData=i;break;}}
-        var out=[];
-        for(var r=1;r<rows.length;r++){out.push({data:(iData>=0?(rows[r][iData]||''):'')});}
-        cb(out);
-      }).catch(function(){cb([]);});
-  }
-  fetchSheet('CONTROLE DE ENTREVISTAS', function(d){_kpiEntrev=d; renderHc2KPIs();});
-  fetchSheet('CONTROLE DE TESTES',      function(d){_kpiTestes=d; renderHc2KPIs();});
-}
 
 // ─── ALINHAMENTOS ────────────────────────────────────────────────────────────
 var _alignDemandas = null;
