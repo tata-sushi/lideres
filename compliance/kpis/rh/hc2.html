@@ -1223,7 +1223,6 @@ function renderWeeklyEvolutionChart() {
   if (!svg) return;
   var W=1080, H=300, padL=20, padR=16, padTop=30, padBot=60;
   svg.setAttribute('viewBox','0 0 '+W+' '+H);
-  // Build 30 weeks (Mon–Sun) going back from current week
   var now=new Date(); now.setHours(0,0,0,0);
   var dow=(now.getDay()+6)%7;
   var weeks=[];
@@ -1238,34 +1237,36 @@ function renderWeeklyEvolutionChart() {
     var dd=ws.getDate(), mm=ws.getMonth()+1;
     weeks.push({label:(dd<10?'0':'')+dd+'/'+(mm<10?'0':'')+mm, adm:adm, dem:dem});
   }
-  var maxV=Math.max.apply(null,weeks.map(function(w){return Math.max(w.adm,w.dem);}))||1;
+  var maxV=Math.max.apply(null,weeks.map(function(w){return w.adm+w.dem;}))||1;
   var plotW=W-padL-padR, plotH=H-padTop-padBot, n=weeks.length;
   var groupW=plotW/n;
-  var barW=Math.max(4, groupW*0.42);
-  var gap=Math.max(1, groupW*0.04);
-  function gx(i){ return padL+i*groupW+groupW/2; }
+  var barW=Math.max(4, groupW*0.65);
+  function bx(i){ return padL+i*groupW+groupW/2-barW/2; }
   var baseline=padTop+plotH;
   var c='';
-  // Baseline
   c+='<line x1="'+padL+'" y1="'+baseline+'" x2="'+(W-padR)+'" y2="'+baseline+'" stroke="#E8E8E8" stroke-width="1"/>';
-  // Bars
   weeks.forEach(function(w,i){
-    var cx=gx(i);
-    var xA=cx-gap/2-barW, xD=cx+gap/2;
+    var total=w.adm+w.dem;
     var hA=(w.adm/maxV)*plotH, hD=(w.dem/maxV)*plotH;
-    var yA=baseline-hA, yD=baseline-hD;
+    var x=bx(i);
+    // Admitidos (base da pilha — dark)
     if (hA>0) {
-      c+='<rect x="'+xA.toFixed(1)+'" y="'+yA.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+hA.toFixed(1)+'" fill="#35383F" rx="1"/>';
-      c+='<text x="'+(xA+barW/2).toFixed(1)+'" y="'+(yA-3).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#35383F" font-weight="700">'+w.adm+'</text>';
+      var yA=baseline-hA;
+      c+='<rect x="'+x.toFixed(1)+'" y="'+yA.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+hA.toFixed(1)+'" fill="#35383F" rx="1"/>';
     }
+    // Demitidos (topo da pilha — gray)
     if (hD>0) {
-      c+='<rect x="'+xD.toFixed(1)+'" y="'+yD.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+hD.toFixed(1)+'" fill="#AAAAAA" rx="1"/>';
-      c+='<text x="'+(xD+barW/2).toFixed(1)+'" y="'+(yD-3).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#888" font-weight="700">'+w.dem+'</text>';
+      var yD=baseline-hA-hD;
+      c+='<rect x="'+x.toFixed(1)+'" y="'+yD.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+hD.toFixed(1)+'" fill="#AAAAAA" rx="1"/>';
     }
-    // Label rotacionado DD/MM em todos os grupos
+    // Valor total acima da barra
+    if (total>0) {
+      var yTop=baseline-hA-hD;
+      c+='<text x="'+(x+barW/2).toFixed(1)+'" y="'+(yTop-3).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#35383F" font-weight="700">'+total+'</text>';
+    }
+    var cx=x+barW/2;
     c+='<text transform="translate('+cx.toFixed(1)+','+(baseline+6)+') rotate(45)" text-anchor="start" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">'+w.label+'</text>';
   });
-  // Legenda com círculos
   var ly=H-6;
   c+='<circle cx="'+(padL+4)+'" cy="'+(ly-3)+'" r="4" fill="#35383F"/>';
   c+='<text x="'+(padL+12)+'" y="'+ly+'" font-family="DM Mono,monospace" font-size="9" fill="#35383F">Admitidos</text>';
