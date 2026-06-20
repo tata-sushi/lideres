@@ -347,6 +347,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-title">Atestados por Semana</div>
     <svg id="hc-atestados-weekly" style="width:100%;height:auto;display:block;"></svg>
   </div>
+  <div class="chart-card chart-card-full">
+    <div class="chart-title">Banco de Horas</div>
+    <svg id="hc-banco-horas-line" style="width:100%;height:auto;display:block;"></svg>
+  </div>
 </div>
 
 <!-- LOADING -->
@@ -881,6 +885,7 @@ function renderDashFilters() {
 function renderDashboard() {
   renderWeeklyEvolutionChart();
   renderAtestadosChart();
+  renderBancoHorasChart();
 }
 function renderContratosChart() {
   if (!_colabs || !_colabs.length) return;
@@ -978,6 +983,141 @@ function parseTvDate(s) {
   }
   return null;
 }
+var _bhData = null;
+var BH_SHEET_ID = '1oW3uXbig4B3gUQegxorxZghMnVrZcXk44AD08gx-cl0';
+
+function parseBhCSVLine(line) {
+  var result = [], cur = '', inQ = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
+    if (ch === '"') { inQ = !inQ; continue; }
+    if (ch === ',' && !inQ) { result.push(cur.trim()); cur = ''; continue; }
+    cur += ch;
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+function loadBancoHorasData() {
+  if (_bhData) { renderBancoHorasChart(); return; }
+  var url = 'https://docs.google.com/spreadsheets/d/' + BH_SHEET_ID + '/export?format=csv&gid=0';
+  fetch(url).then(function(r){ return r.text(); }).then(function(csv){
+    _bhData = [];
+    var lines = csv.split('\n');
+    for (var i = 1; i < lines.length; i++) {
+      var ln = lines[i].trim(); if (!ln) continue;
+      var cols = parseBhCSVLine(ln);
+      if (cols.length < 4) continue;
+      var dataStr = (cols[0]||'').trim();
+      var nome = (cols[2]||'').trim();
+      var saldo = parseFloat((cols[3]||'0').replace(',','.')) || 0;
+      var semKey = '';
+      if (dataStr.indexOf('/') >= 0) {
+        var p = dataStr.split('/');
+        if (p.length === 3) semKey = p[2] + '-' + (p[1].length<2?'0':'')+p[1] + '-' + (p[0].length<2?'0':'')+p[0];
+      } else { semKey = dataStr; }
+      if (!semKey || !nome) continue;
+      _bhData.push({ semKey: semKey, nome: nome, saldo: saldo, rowIdx: i });
+    }
+    renderBancoHorasChart();
+  }).catch(function(){ _bhData = []; renderBancoHorasChart(); });
+}
+
+function renderBancoHorasChart() {
+  var svg = document.getElementById('hc-banco-horas-line');
+  if (!svg || !_bhData) return;
+
+  // Unique weeks sorted → last 30
+  var seenKeys = {};
+  _bhData.forEach(function(r){ if (r.semKey) seenKeys[r.semKey] = 1; });
+  var allKeys = Object.keys(seenKeys).sort();
+  var weekKeys = allKeys.slice(-30);
+  if (!weekKeys.length) { svg.innerHTML = ''; return; }
+
+  // Build weekly snapshots (latest row per employee per week)
+  var weeks = weekKeys.map(function(key) {
+    var mapaColab = {};
+    _bhData.forEach(function(r) {
+      if (r.semKey !== key) return;
+      if (!mapaColab[r.nome] || r.rowIdx > mapaColab[r.nome].rowIdx) mapaColab[r.nome] = r;
+    });
+    var rows = Object.keys(mapaColab).map(function(k){ return mapaColab[k]; });
+    var pos = 0, neg = 0;
+    rows.forEach(function(r){ if (r.saldo > 0) pos += r.saldo; else if (r.saldo < 0) neg += Math.abs(r.saldo); });
+    var p = key.split('-');
+    var label = p.length === 3 ? p[2] + '/' + p[1] : key;
+    return { label: label, pos: Math.round(pos * 10)/10, neg: Math.round(neg * 10)/10 };
+  });
+
+  var W=1080, H=280, padL=44, padR=16, padTop=24, padBot=56;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+
+  var maxV = Math.max.apply(null, weeks.map(function(w){ return Math.max(w.pos, w.neg); })) || 1;
+  // Round up to nice number
+  var step = Math.pow(10, Math.floor(Math.log(maxV/4)/Math.LN10));
+  var niceMax = Math.ceil(maxV / step) * step;
+
+  var plotW = W - padL - padR;
+  var plotH = H - padTop - padBot;
+  var baseline = padTop + plotH;
+  var n = weeks.length;
+  var spacing = plotW / (n - 1 || 1);
+
+  function px(i) { return padL + i * spacing; }
+  function py(v) { return baseline - (v / niceMax) * plotH; }
+
+  var c = '';
+
+  // Horizontal gridlines + Y labels
+  var gridSteps = 4;
+  for (var g = 0; g <= gridSteps; g++) {
+    var gv = niceMax * g / gridSteps;
+    var gy = py(gv);
+    c += '<line x1="'+padL+'" y1="'+gy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+gy.toFixed(1)+'" stroke="#F0F0F0" stroke-width="1"/>';
+    c += '<text x="'+(padL-4)+'" y="'+(gy+4).toFixed(1)+'" text-anchor="end" font-family="DM Mono,monospace" font-size="8" fill="#AAAAAA">'+Math.round(gv)+'</text>';
+  }
+
+  // Baseline
+  c += '<line x1="'+padL+'" y1="'+baseline+'" x2="'+(W-padR)+'" y2="'+baseline+'" stroke="#E8E8E8" stroke-width="1"/>';
+
+  // Build polyline points
+  function buildLine(key) {
+    return weeks.map(function(w, i) { return px(i).toFixed(1) + ',' + py(w[key]).toFixed(1); }).join(' ');
+  }
+
+  // Positive area fill (subtle)
+  var posPoints = weeks.map(function(w,i){ return px(i).toFixed(1)+','+py(w.pos).toFixed(1); }).join(' ');
+  var areaPos = 'M '+px(0).toFixed(1)+','+baseline+' L '+posPoints.split(' ').map(function(pt,i){ return (i===0?'':'')+pt; }).join(' L ') + ' L '+px(n-1).toFixed(1)+','+baseline+' Z';
+  // Simple area via polygon
+  var polyPos = px(0).toFixed(1)+','+baseline+' '+posPoints+' '+px(n-1).toFixed(1)+','+baseline;
+  var polyNeg = px(0).toFixed(1)+','+baseline+' '+buildLine('neg')+' '+px(n-1).toFixed(1)+','+baseline;
+
+  c += '<polygon points="'+polyPos+'" fill="#35383F" fill-opacity="0.07"/>';
+  c += '<polygon points="'+polyNeg+'" fill="#AAAAAA" fill-opacity="0.10"/>';
+
+  // Lines
+  c += '<polyline points="'+buildLine('pos')+'" fill="none" stroke="#35383F" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+  c += '<polyline points="'+buildLine('neg')+'" fill="none" stroke="#AAAAAA" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+
+  // Dots + X labels
+  weeks.forEach(function(w, i) {
+    var x = px(i), yp = py(w.pos), yn = py(w.neg), cx = x;
+    c += '<circle cx="'+x.toFixed(1)+'" cy="'+yp.toFixed(1)+'" r="3" fill="#35383F"/>';
+    c += '<circle cx="'+x.toFixed(1)+'" cy="'+yn.toFixed(1)+'" r="3" fill="#AAAAAA"/>';
+    c += '<text transform="translate('+cx.toFixed(1)+','+(baseline+6)+') rotate(45)" text-anchor="start" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">'+w.label+'</text>';
+  });
+
+  // Legend
+  var ly = H - 6;
+  c += '<circle cx="'+(padL+4)+'" cy="'+(ly-3)+'" r="4" fill="#35383F"/>';
+  c += '<text x="'+(padL+12)+'" y="'+ly+'" font-family="DM Mono,monospace" font-size="9" fill="#35383F">Positivo (h)</text>';
+  c += '<circle cx="'+(padL+90)+'" cy="'+(ly-3)+'" r="4" fill="#AAAAAA"/>';
+  c += '<text x="'+(padL+98)+'" y="'+ly+'" font-family="DM Mono,monospace" font-size="9" fill="#888">Negativo (h)</text>';
+
+  svg.innerHTML = c;
+}
+
 var _absData = null;
 var ABSENTE_API_KEY = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
 var ABSENTE_SHEET_ID = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
@@ -1610,6 +1750,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer
 document.body.setAttribute('data-view','dashboard');
 loadTurnoverData();
 loadAbsenteismoData();
+loadBancoHorasData();
 </script>
 </body>
 </html>
