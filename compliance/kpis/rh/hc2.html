@@ -343,6 +343,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-title">Rotatividade</div>
     <svg id="hc-weekly-evolution" style="width:100%;height:auto;display:block;"></svg>
   </div>
+  <div class="chart-card chart-card-full">
+    <div class="chart-title">Atestados por Semana</div>
+    <svg id="hc-atestados-weekly" style="width:100%;height:auto;display:block;"></svg>
+  </div>
 </div>
 
 <!-- LOADING -->
@@ -876,6 +880,7 @@ function renderDashFilters() {
 }
 function renderDashboard() {
   renderWeeklyEvolutionChart();
+  renderAtestadosChart();
 }
 function renderContratosChart() {
   if (!_colabs || !_colabs.length) return;
@@ -973,6 +978,83 @@ function parseTvDate(s) {
   }
   return null;
 }
+var _absData = null;
+var ABSENTE_API_KEY = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
+var ABSENTE_SHEET_ID = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
+
+function loadAbsenteismoData() {
+  if (_absData) { renderAtestadosChart(); return; }
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + ABSENTE_SHEET_ID
+    + '/values/' + encodeURIComponent('Ausências!A:H')
+    + '?key=' + ABSENTE_API_KEY;
+  fetch(url).then(function(r){ return r.json(); }).then(function(data){
+    var rows = data.values || [];
+    _absData = [];
+    if (rows.length < 2) { renderAtestadosChart(); return; }
+    var headers = rows[0];
+    function norm(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
+    function v(obj){ for(var i=1;i<arguments.length;i++){ if(obj[arguments[i]]!==undefined&&obj[arguments[i]]!=='') return obj[arguments[i]]; } return ''; }
+    for (var i=1; i<rows.length; i++) {
+      if (!rows[i].some(function(c){ return c && c.trim(); })) continue;
+      var obj = {};
+      headers.forEach(function(h,j){ obj[norm(h)] = (rows[i][j]||'').trim(); });
+      var tipo = v(obj,'tipo de ausencia','tipo_de_ausencia','tipo','ausencia');
+      var dataStr = v(obj,'data_falta','data','data_ausencia');
+      var p = (dataStr||'').trim().split('/');
+      var dt = p.length===3 ? new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])) : null;
+      if (!dt || isNaN(dt.getTime())) continue;
+      var slugTipo = norm(tipo).indexOf('atestado') >= 0 ? 'atestado' : 'outro';
+      _absData.push({ dt: dt, tipo: slugTipo });
+    }
+    renderAtestadosChart();
+  }).catch(function(){ _absData = []; renderAtestadosChart(); });
+}
+
+function renderAtestadosChart() {
+  var svg = document.getElementById('hc-atestados-weekly');
+  if (!svg) return;
+  if (!_absData) return;
+  var W=1080, H=260, padL=20, padR=16, padTop=24, padBot=56;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  var now=new Date(); now.setHours(0,0,0,0);
+  var dow=(now.getDay()+6)%7;
+  var weeks=[];
+  for (var i=29;i>=0;i--) {
+    var ws=new Date(now); ws.setDate(now.getDate()-dow-i*7);
+    var we=new Date(ws); we.setDate(ws.getDate()+7);
+    var count=0;
+    _absData.forEach(function(r){
+      if (r.tipo==='atestado' && r.dt>=ws && r.dt<we) count++;
+    });
+    var dd=ws.getDate(), mm=ws.getMonth()+1;
+    weeks.push({label:(dd<10?'0':'')+dd+'/'+(mm<10?'0':'')+mm, count:count});
+  }
+  var maxV=Math.max.apply(null,weeks.map(function(w){return w.count;}))||1;
+  var plotW=W-padL-padR, plotH=H-padTop-padBot, n=weeks.length;
+  var groupW=plotW/n;
+  var barW=Math.max(4,groupW*0.65);
+  function bx(i){ return padL+i*groupW+groupW/2-barW/2; }
+  var baseline=padTop+plotH;
+  var c='';
+  c+='<line x1="'+padL+'" y1="'+baseline+'" x2="'+(W-padR)+'" y2="'+baseline+'" stroke="#E8E8E8" stroke-width="1"/>';
+  weeks.forEach(function(w,i){
+    var h=(w.count/maxV)*plotH;
+    var x=bx(i), cx=x+barW/2;
+    if (h>0) {
+      var y=baseline-h;
+      c+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" fill="#35383F" rx="1"/>';
+      if (h>=12) {
+        c+='<text x="'+cx.toFixed(1)+'" y="'+(y+h/2+4).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#FFFFFF" font-weight="700">'+w.count+'</text>';
+      } else {
+        c+='<text x="'+cx.toFixed(1)+'" y="'+(y-3).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#35383F" font-weight="700">'+w.count+'</text>';
+      }
+    }
+    c+='<text transform="translate('+cx.toFixed(1)+','+(baseline+6)+') rotate(45)" text-anchor="start" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">'+w.label+'</text>';
+  });
+  svg.innerHTML=c;
+}
+
 function loadTurnoverData() {
   if (_tvData) { renderWeeklyEvolutionChart(); return; }
   var url='https://docs.google.com/spreadsheets/d/1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw/export?format=csv&gid=175063295';
@@ -1527,6 +1609,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer
 })();
 document.body.setAttribute('data-view','dashboard');
 loadTurnoverData();
+loadAbsenteismoData();
 </script>
 </body>
 </html>
