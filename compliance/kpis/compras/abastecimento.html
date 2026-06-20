@@ -249,7 +249,7 @@ textarea.fctrl { resize: vertical; min-height: 70px; font-family: 'DM Sans', san
 .cat-item-sub { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
 .cat-sub-line { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cat-sub-lbl { color: var(--mid); }
-.cat-col-nome { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-col-nome { flex: 1; min-width: 0; font-size: 13px; white-space: normal; word-break: break-word; line-height: 1.35; }
 .cat-col-nome.hdr { font-family: 'DM Mono', monospace; font-size: 8.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
 .cat-col-num { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); width: 60px; text-align: center; flex-shrink: 0; white-space: nowrap; }
 .cat-col-num.hdr { font-family: 'DM Mono', monospace; font-size: 8.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
@@ -1093,12 +1093,14 @@ async function pedidoParaUI(p) {
     return itens.map(function(it) {
       var catLabel = (CATALOGO[it.categoriaKey] && CATALOGO[it.categoriaKey].label) || it.categoriaKey;
       var qty = ((s.aba === 'entregas' || s.aba === 'conferencia') && it.qtdComprada) ? Number(it.qtdComprada) : Number(it.qtdSolicitada) || 0;
+      var catProd = (CATALOGO[it.categoriaKey] && CATALOGO[it.categoriaKey].produtos.find(function(prod){ return prod.nome === it.produtoNome; })) || {};
       return {
         cat:         catLabel,
         nome:        it.produtoNome,
         un:          it.unidade,
         qty:         qty,
         vlPedido:    0,
+        fornecedor:  it.fornecedor || catProd.fornecedor || '',
         qtdComprada: Number(it.qtdComprada) || 0,
         qtdRecebida: Number(it.qtdRecebida) || 0
       };
@@ -1239,7 +1241,22 @@ document.addEventListener('DOMContentLoaded', async function() {
   await carregarUsuario(session);
   carregarCatalogo();
   carregarPedidos();
+  carregarRecebedores();
 });
+
+// ── RECEBEDORES — carrega da base de colaboradores (ponto) ────────────────────
+async function carregarRecebedores() {
+  try {
+    var res = await fetch(COLAB_URL + '?action=listColaboradores');
+    var data = await res.json();
+    if (data.ok && data.colaboradores && data.colaboradores.length) {
+      RECEBEDORES = data.colaboradores
+        .map(function(c) { return c.nome; })
+        .filter(function(n) { return !!n; })
+        .sort(function(a, b) { return a.localeCompare(b, 'pt-BR'); });
+    }
+  } catch(e) { /* mantém lista padrão */ }
+}
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
 function setTab(t) {
@@ -1597,7 +1614,7 @@ function ordenaPorDataDesc(a, b) {
 }
 
 // ── FILTROS GLOBAIS ───────────────────────────────────────────────────────────
-var pageFilters = { unidade: 'Todos', departamento: 'Todos', categoria: 'Todos', status: 'Todos', dataPedido: '', dataEntrega: '', dataReceb: '', dataVenc: '' };
+var pageFilters = { unidade: 'Todos', departamento: 'Todos', categoria: 'Todos', status: 'Todos', fornecedor: 'Todos', dataPedido: '', dataEntrega: '', dataReceb: '', dataVenc: '' };
 
 function toISO(raw) {
   if (!raw) return '';
@@ -1633,6 +1650,11 @@ function aplicarFiltros(lista) {
     if (f.departamento !== 'Todos' && d !== f.departamento) return false;
     if (f.categoria !== 'Todos' && o.cats.indexOf(f.categoria) === -1) return false;
     if (f.status !== 'Todos' && o.status !== f.status) return false;
+    if (f.fornecedor !== 'Todos') {
+      var hasForn = (o.fornecedores || []).some(function(fn) { return fn.nome === f.fornecedor; }) ||
+                    String((o.raw && o.raw.fornecedor) || '').split(',').map(function(s){return s.trim();}).indexOf(f.fornecedor) !== -1;
+      if (!hasForn) return false;
+    }
     if (f.dataPedido && toISO(o.raw && o.raw.dataSolicitacao)  !== f.dataPedido) return false;
     if (f.dataEntrega && toISO(o.raw && o.raw.dataEntregaPrevista) !== f.dataEntrega) return false;
     if (f.dataReceb   && toISO(o.raw && o.raw.dataRecebimento)     !== f.dataReceb)   return false;
@@ -1678,11 +1700,13 @@ function renderFilters() {
   }
 
   var filtered = aplicarFiltros(base.sort(ordenaPorDataDesc));
+  var fornecedoresOpts = getFornecedores().filter(function(f) { return f !== 'Outro'; });
   var html = '<div class="filters-row">' +
     sel('Unidade',      'unidade',      unidades, pageFilters.unidade)      +
     sel('Departamento', 'departamento', deptos,   pageFilters.departamento) +
     sel('Categoria',    'categoria',    cats,     pageFilters.categoria)    +
     sel('Status',       'status',       statusOpts, pageFilters.status, true) +
+    sel('Fornecedor',   'fornecedor',   fornecedoresOpts, pageFilters.fornecedor) +
   '</div>' +
   '<div class="filters-row-dates">' +
     dateInput('Data do Pedido',      'dataPedido') +
@@ -1705,7 +1729,7 @@ function setFilter(key, value) {
 }
 
 function clearFilters() {
-  pageFilters = { unidade: 'Todos', departamento: 'Todos', categoria: 'Todos', status: 'Todos', dataPedido: '', dataEntrega: '', dataReceb: '', dataVenc: '' };
+  pageFilters = { unidade: 'Todos', departamento: 'Todos', categoria: 'Todos', status: 'Todos', fornecedor: 'Todos', dataPedido: '', dataEntrega: '', dataReceb: '', dataVenc: '' };
   renderFilters();
   renderAll();
 }
@@ -1732,8 +1756,12 @@ function renderAba(aba) {
   if (aba === 'entregas') {
     var html = '<div style="display:flex;flex-direction:column;gap:12px;">';
     lista.forEach(function(o) {
-      if (o.fornecedores) { o.fornecedores.forEach(function(f, fi) { html += fornCardHTML(o, f, fi); }); }
-      else { html += cardHTML(o, 'entregas'); }
+      if (o.fornecedores) {
+        o.fornecedores.forEach(function(f, fi) {
+          if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
+          html += fornCardHTML(o, f, fi);
+        });
+      } else { html += cardHTML(o, 'entregas'); }
     });
     html += '</div>';
     container.innerHTML = html;
@@ -2065,9 +2093,8 @@ function renderConferencia() {
   if (carregando) { container.innerHTML = ''; return; }
 
   // Filtra pedidos com aba='conferencia' (status recebido aguardando conferência)
-  var lista = ORDERS.filter(function(o) {
-    return o.aba === 'conferencia';
-  });
+  var base = ORDERS.filter(function(o) { return o.aba === 'conferencia'; });
+  var lista = aplicarFiltros(base);
 
   if (lista.length === 0) {
     container.innerHTML = '<div class="empty"><div class="empty-icon">✓</div><p>Nenhum pedido aguardando conferência.</p></div>';
