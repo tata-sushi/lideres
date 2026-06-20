@@ -276,9 +276,9 @@ body:not([data-view="alinhamentos"]) #alinhamentos { display: none; }
 .align-badge-pendente { background: #FFF4DC; color: #7A4A00; }
 .align-badge-andamento { background: #E8F0FA; color: #1A3A5C; }
 .align-badge-outro { background: var(--bg); color: var(--muted); }
-.align-transcricao { margin: 14px 20px 80px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
-.align-transcricao .chart-title { margin-bottom: 14px; }
-.align-conteudo { font-size: 13px; line-height: 1.75; color: var(--carbon); white-space: pre-wrap; }
+.align-transcricao { margin: 14px 20px 80px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; max-height: 680px; }
+#align-conteudo { overflow-y: auto; flex: 1; }
+.align-conteudo { font-size: 13px; line-height: 1.75; color: var(--carbon); white-space: pre-wrap; padding: 12px 16px 16px; border-bottom: 1px solid var(--border); }
 .align-conteudo-empty { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; text-align: center; padding: 24px 0; }
 
 /* LOADING OVERLAY — padrão único do portal (git-claude/readmeload.md) */
@@ -409,8 +409,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
   </div>
   <div class="align-transcricao">
-    <div class="chart-title">Alinhamentos</div>
-    <div id="align-conteudo"><p class="align-conteudo-empty">Selecione uma data na lista ao lado</p></div>
+    <div class="align-left-header">Alinhamentos</div>
+    <div id="align-conteudo"></div>
   </div>
 </div>
 
@@ -2062,11 +2062,27 @@ function renderAlignStatusChart(){
 }
 function renderAlignConteudo(){
   var el=document.getElementById('align-conteudo'); if(!el) return;
-  if(!_alignTransc||!_transcDate){el.innerHTML='<p class="align-conteudo-empty">Sem alinhamento registrado</p>';return;}
-  var row=null;
-  for(var i=0;i<_alignTransc.length;i++){if(_alignTransc[i].data===_transcDate){row=_alignTransc[i];break;}}
-  if(!row||!row.conteudo){el.innerHTML='<p class="align-conteudo-empty">Sem alinhamento registrado para esta data</p>';return;}
-  el.innerHTML='<div class="align-conteudo">'+escH(row.conteudo)+'</div>';
+  if(!_alignTransc||!_alignTransc.length){el.innerHTML='<p class="align-conteudo-empty">Sem dados</p>';return;}
+  var seen={}, dates=[];
+  _alignTransc.forEach(function(r){if(r.data&&!seen[r.data]){seen[r.data]=true;dates.push(r.data);}});
+  dates=sortAlignDates(dates);
+  var byDate={};
+  _alignTransc.forEach(function(r){if(r.data&&r.conteudo)byDate[r.data]=r.conteudo;});
+  var open=_transcDate||dates[0];
+  var html='';
+  dates.forEach(function(date){
+    var isOpen=date===open;
+    html+='<div class="align-date-row'+(isOpen?' open':'')+'" onclick="transcSelectDate(\''+date.replace(/'/g,"\\'")+'\')">';
+    html+='<span class="align-date-toggle">'+(isOpen?'&minus;':'+')+'</span>';
+    html+='<span class="align-date-label">'+escH(date)+'</span>';
+    html+='</div>';
+    if(isOpen&&byDate[date]) html+='<div class="align-conteudo">'+escH(byDate[date])+'</div>';
+  });
+  el.innerHTML=html||'<p class="align-conteudo-empty">Sem dados</p>';
+}
+function transcSelectDate(date){
+  _transcDate=(_transcDate===date)?null:date;
+  renderAlignConteudo();
 }
 </script>
 </body>
