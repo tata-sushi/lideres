@@ -245,6 +245,14 @@ body:not([data-view="alinhamentos"]) #alinhamentos { display: none; }
 }
 
 /* ALINHAMENTOS */
+.bar-list { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
+.bar-row { display: grid; grid-template-columns: 140px 1fr 36px; align-items: center; gap: 8px; padding: 2px 0; border-radius: 4px; }
+.bar-row:hover { background: #FAFAFA; }
+.bar-name { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--carbon); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-track { height: 18px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--carbon); border-radius: 4px; }
+.bar-val { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--carbon); text-align: right; }
+.bar-empty { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); padding: 12px 0; text-align: center; text-transform: uppercase; letter-spacing: 0.5px; }
 .align-layout { padding: 14px 20px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 768px) { .align-layout { grid-template-columns: 1fr; } }
 .align-left { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-y: auto; max-height: 520px; }
@@ -384,7 +392,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="align-right">
       <div class="chart-card">
         <div class="chart-title">Demandas</div>
-        <svg id="align-demandas-chart" style="width:100%;height:auto;display:block;"></svg>
+        <div id="align-demandas-chart" class="bar-list"></div>
       </div>
       <div class="chart-card">
         <div class="chart-title">Status dos assuntos</div>
@@ -1985,36 +1993,23 @@ function alignSelectDate(date){
   renderAlinhamentos();
 }
 function renderAlignDemandasChart(){
-  var svg=document.getElementById('align-demandas-chart'); if(!svg||!_alignDemandas) return;
+  var el=document.getElementById('align-demandas-chart'); if(!el||!_alignDemandas) return;
   var src=_alignDate?_alignDemandas.filter(function(r){return r.data===_alignDate;}):_alignDemandas;
   var counts={};
   src.forEach(function(r){if(r.demanda)counts[r.demanda]=(counts[r.demanda]||0)+1;});
-  var items=Object.keys(counts).map(function(k){return{label:k,n:counts[k]};}).sort(function(a,b){return b.n-a.n;}).slice(0,20);
+  var items=Object.keys(counts).map(function(k){return{label:k,n:counts[k]};}).sort(function(a,b){return b.n-a.n;});
   if(!items.length){
-    svg.setAttribute('viewBox','0 0 760 60');
-    svg.innerHTML='<text x="380" y="35" text-anchor="middle" font-family="DM Mono,monospace" font-size="10" fill="#AAAAAA">'+(
-      _alignDate?'Sem demandas para esta data':'Selecione uma data'
-    )+'</text>';
+    el.innerHTML='<div class="bar-empty">'+(_alignDate?'Sem demandas para esta data':'Selecione uma data')+'</div>';
     return;
   }
-  var MAX_LBL=22;
-  function trunc(s){return s.length>MAX_LBL?s.slice(0,MAX_LBL-1)+'…':s;}
-  var W=760,H=220,padL=10,padR=10,padTop=22,padBot=96;
-  svg.setAttribute('viewBox','0 0 '+W+' '+H);
-  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
-  var n=items.length, maxV=items[0].n;
-  var plotW=W-padL-padR, plotH=H-padTop-padBot;
-  var gW=plotW/n, bW=Math.min(60,Math.max(8,gW*0.72));
-  function bx(i){return padL+i*gW+gW/2-bW/2;}
-  var base=padTop+plotH, c='';
-  c+='<line x1="'+padL+'" y1="'+base+'" x2="'+(W-padR)+'" y2="'+base+'" stroke="#E8E8E8" stroke-width="1"/>';
-  items.forEach(function(it,i){
-    var h=Math.max(2,(it.n/maxV)*plotH), x=bx(i), cx=x+bW/2;
-    c+='<rect x="'+x.toFixed(1)+'" y="'+(base-h).toFixed(1)+'" width="'+bW.toFixed(1)+'" height="'+h.toFixed(1)+'" fill="#35383F" rx="1"/>';
-    c+='<text x="'+cx.toFixed(1)+'" y="'+(base-h-3).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="7" fill="#35383F" font-weight="700">'+it.n+'</text>';
-    c+='<text transform="translate('+cx.toFixed(1)+','+(base+5)+') rotate(45)" text-anchor="start" font-family="DM Mono,monospace" font-size="8" fill="#AAAAAA">'+escH(trunc(it.label))+'</text>';
-  });
-  svg.innerHTML=c;
+  var max=items[0].n;
+  el.innerHTML=items.map(function(it){
+    return '<div class="bar-row">'+
+      '<div class="bar-name">'+escH(it.label)+'</div>'+
+      '<div class="bar-track"><div class="bar-fill" style="width:'+Math.round(it.n/max*100)+'%"></div></div>'+
+      '<div class="bar-val">'+it.n+'</div>'+
+    '</div>';
+  }).join('');
 }
 function renderAlignStatusChart(){
   var svg=document.getElementById('align-status-chart'); if(!svg||!_alignDemandas) return;
