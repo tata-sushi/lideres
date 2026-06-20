@@ -992,7 +992,7 @@ var _recrutData = null;
 var RECRUT_SHEET_ID = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
 var RECRUT_API_KEY  = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
 
-function normStr(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
+function normRec(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
 
 function loadRecrutamentoData() {
   if (_recrutData) { renderTestesChart(); return; }
@@ -1003,25 +1003,33 @@ function loadRecrutamentoData() {
     _recrutData = [];
     var rows = data.values || [];
     if (rows.length < 2) { renderTestesChart(); return; }
-    var headers = rows[0].map(normStr);
-    function col(keys) {
-      for (var k=0;k<keys.length;k++) { var idx=headers.indexOf(normStr(keys[k])); if (idx>=0) return idx; }
+    var headers = rows[0].map(normRec);
+    // substring match: finds first header containing any of the keywords
+    function col(keywords) {
+      for (var k=0; k<keywords.length; k++) {
+        var kw = normRec(keywords[k]);
+        for (var h=0; h<headers.length; h++) {
+          if (headers[h].indexOf(kw) !== -1) return h;
+        }
+      }
       return -1;
     }
     var iNome   = col(['nome','candidato']);
-    var iData   = col(['dias_de_teste','data_teste','data']);
+    var iData   = col(['dias de teste','data teste','data']);
     var iStatus = col(['status','resultado','situacao']);
     for (var i=1; i<rows.length; i++) {
       var r = rows[i];
-      var nome = (r[iNome>=0?iNome:1]||'').trim();
+      var nome = (iNome>=0 ? r[iNome] : r[1] || '').trim();
       if (!nome) continue;
-      var dataStr = (r[iData>=0?iData:0]||'').trim();
+      var dataStr = (iData>=0 ? r[iData] : r[0] || '').trim();
       var p = dataStr.split('/');
+      if (p.length < 2) continue;
       var yr = p.length===3 ? parseInt(p[2]) : new Date().getFullYear();
-      var dt = p.length>=2 ? new Date(yr, parseInt(p[1])-1, parseInt(p[0])) : null;
-      if (!dt || isNaN(dt.getTime())) continue;
-      var sf = normStr(r[iStatus>=0?iStatus:0]||'');
-      var realizado = sf==='contratado' || sf.indexOf('nao contratado')>=0;
+      var dt = new Date(yr, parseInt(p[1])-1, parseInt(p[0]));
+      if (isNaN(dt.getTime())) continue;
+      var sf = normRec(iStatus>=0 ? r[iStatus] || '' : '');
+      // realizado = teste aconteceu (contratado OU não contratado), excluindo não compareceu/cancelado
+      var realizado = sf.indexOf('contrat') >= 0;
       _recrutData.push({ dt: dt, realizado: realizado });
     }
     renderTestesChart();
