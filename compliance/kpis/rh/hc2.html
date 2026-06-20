@@ -34,6 +34,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
 /* KPIS */
 .kpis-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 20px; display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+body[data-view="indicadores"] .kpis-wrap { display: none; }
 .kpis-wrap .kpi-label { white-space: nowrap; }
 .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
 .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
@@ -1898,10 +1899,10 @@ loadRecrutamentoData();
 loadAlinhamentosData();
 
 // ─── ALINHAMENTOS ────────────────────────────────────────────────────────────
-var _alignDemandas = null;
-var _alignTransc   = null;
-var _alignDate     = null;
-var _transcDate    = null;
+var _alignDemandas   = null;
+var _alignTransc     = null;
+var _alignOpenDates  = null;
+var _transcOpenDates = null;
 
 function parseCsvRows(csv) {
   var rows=[], cur='', inQ=false;
@@ -1973,13 +1974,15 @@ function loadAlinhamentosData() {
       {key:'data',     kw:['data'],                          fb:0},
       {key:'conteudo', kw:['conteud','transcri','texto','content','anotac','descri','nota','observ','ata','minuta','registro'], fb:1}
     ]);
-    if (!_alignDate&&_alignDemandas.length){
-      var ds=_alignDemandas.map(function(r){return r.data;}).filter(Boolean);
-      _alignDate=sortAlignDates(ds)[0]||null;
+    if (!_alignOpenDates&&_alignDemandas.length){
+      var ds=sortAlignDates(_alignDemandas.map(function(r){return r.data;}).filter(Boolean));
+      var seenD={};ds=ds.filter(function(d){return seenD[d]?false:(seenD[d]=true);});
+      _alignOpenDates=ds.slice(0,5);
     }
-    if (!_transcDate&&_alignTransc.length){
-      var ts=_alignTransc.map(function(r){return r.data;}).filter(function(d){return d;});
-      _transcDate=sortAlignDates(ts)[0]||null;
+    if (!_transcOpenDates&&_alignTransc.length){
+      var ts=sortAlignDates(_alignTransc.map(function(r){return r.data;}).filter(Boolean));
+      var seenT={};ts=ts.filter(function(d){return seenT[d]?false:(seenT[d]=true);});
+      _transcOpenDates=ts.slice(0,1);
     }
     renderAlinhamentos();
   }).catch(function(){_alignDemandas=null;_alignTransc=null;});
@@ -2002,10 +2005,9 @@ function renderAlignTree(){
   var groups={};
   _alignDemandas.forEach(function(r){if(r.data){if(!groups[r.data])groups[r.data]=[];groups[r.data].push(r);}});
   var dates=sortAlignDates(Object.keys(groups));
-  var top5=dates.slice(0,5);
   var html='';
   dates.forEach(function(date){
-    var items=groups[date], isOpen=top5.indexOf(date)>=0;
+    var items=groups[date], isOpen=_alignOpenDates&&_alignOpenDates.indexOf(date)>=0;
     html+='<div class="align-date-row'+(isOpen?' open':'')+'" onclick="alignSelectDate(\''+date.replace(/'/g,"\\'")+'\')">';
     html+='<span class="align-date-toggle">'+(isOpen?'&minus;':'+')+'</span>';
     html+='<span class="align-date-label">'+escH(date)+'</span>';
@@ -2018,8 +2020,10 @@ function renderAlignTree(){
   el.innerHTML=html||'<p class="align-conteudo-empty">Sem dados</p>';
 }
 function alignSelectDate(date){
-  _alignDate=(_alignDate===date)?null:date;
-  renderAlinhamentos();
+  if(!_alignOpenDates) _alignOpenDates=[];
+  var idx=_alignOpenDates.indexOf(date);
+  if(idx>=0) _alignOpenDates.splice(idx,1); else _alignOpenDates.push(date);
+  renderAlignTree();
 }
 function renderAlignDemandasChart(){
   var el=document.getElementById('align-demandas-chart'); if(!el||!_alignDemandas) return;
@@ -2049,7 +2053,7 @@ function renderAlignStatusChart(){
   });
   var total=cts['Concluído']+cts['Pendente']+cts['Em Andamento'];
   if(!total){el.innerHTML='';return;}
-  var keys=['Concluído','Pendente','Em Andamento'];
+  var keys=['Concluído','Em Andamento','Pendente'];
   el.innerHTML=keys.map(function(k){
     var n=cts[k];
     var pct=total?(n/total*100).toFixed(1)+'%':'—';
@@ -2068,10 +2072,10 @@ function renderAlignConteudo(){
   dates=sortAlignDates(dates);
   var byDate={};
   _alignTransc.forEach(function(r){if(r.data&&r.conteudo)byDate[r.data]=r.conteudo;});
-  var open=_transcDate||dates[0];
+  var open=_transcOpenDates||[];
   var html='';
   dates.forEach(function(date){
-    var isOpen=date===open;
+    var isOpen=open.indexOf(date)>=0;
     html+='<div class="align-date-row'+(isOpen?' open':'')+'" onclick="transcSelectDate(\''+date.replace(/'/g,"\\'")+'\')">';
     html+='<span class="align-date-toggle">'+(isOpen?'&minus;':'+')+'</span>';
     html+='<span class="align-date-label">'+escH(date)+'</span>';
@@ -2081,7 +2085,9 @@ function renderAlignConteudo(){
   el.innerHTML=html||'<p class="align-conteudo-empty">Sem dados</p>';
 }
 function transcSelectDate(date){
-  _transcDate=(_transcDate===date)?null:date;
+  if(!_transcOpenDates) _transcOpenDates=[];
+  var idx=_transcOpenDates.indexOf(date);
+  if(idx>=0) _transcOpenDates.splice(idx,1); else _transcOpenDates.push(date);
   renderAlignConteudo();
 }
 </script>
