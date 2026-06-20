@@ -169,6 +169,14 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
   .filters-row { grid-template-columns: 1fr 1fr 1fr; }
   .card-body { grid-template-columns: repeat(3, 1fr); }
 }
+@media (max-width: 767px) {
+  .kpis-wrap { padding: 14px 20px; margin-bottom: 0; }
+  .dash-filters-wrap { padding: 14px 20px; margin-bottom: 12px; }
+  .filters-wrap { padding: 14px 20px; margin-bottom: 12px; }
+  .chart-card { margin: 0 12px 14px; }
+  .dash-subtabs { margin: 14px 12px; }
+  .content { padding: 0 12px 80px; }
+}
 
 /* ── DRAWER ── */
 .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:300;opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s}
@@ -388,8 +396,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <select class="modal-select" id="modal-avaliacao-status" style="margin-top:8px;">
           <option value="">Selecione o status</option>
           <option value="Contratado">Contratado</option>
-          <option value="Agendar 2° teste">Agendar 2° teste</option>
-          <option value="Agendar 3° teste">Agendar 3° teste</option>
+          <option value="Agendar outro teste">Agendar outro teste</option>
           <option value="Não contratado">Não contratado</option>
           <option value="Não compareceu">Não compareceu</option>
           <option value="Cancelado">Cancelado</option>
@@ -434,8 +441,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </div>
       <hr class="modal-divider">
       <div>
-        <div class="modal-section-title">Feedback</div>
-        <textarea class="modal-textarea" id="modal-ent-feedback" placeholder="Descreva o resultado da entrevista, pontos positivos, negativos ou observações relevantes..." style="min-height:100px;"></textarea>
+        <div class="modal-section-title">Feedback <span style="color:#c0392b;">*</span></div>
+        <textarea class="modal-textarea" id="modal-ent-feedback" required placeholder="Descreva o resultado da entrevista, pontos positivos, negativos ou observações relevantes..." style="min-height:100px;"></textarea>
       </div>
       <hr class="modal-divider">
       <div>
@@ -1164,8 +1171,21 @@ function statusFieldFor(r) {
 function getStatusData(filt) {
   var rows = filt;
   if (_cfMes) rows = rows.filter(function(r){ return dataToMY(r.data) === _cfMes; });
-  var counts = {};
+  // Conta contatos únicos: não repete o mesmo contato. Mantém o registro mais
+  // recente (por data) de cada contato para definir o status contabilizado.
+  var byContato = {};
   rows.forEach(function(r) {
+    var key = (r.contato || '').replace(/\D/g, '');
+    if (!key) key = norm((r.nome || '').toLowerCase().trim());
+    if (!key) key = '__linha_' + r._linha;
+    var prev = byContato[key];
+    if (!prev) { byContato[key] = r; return; }
+    var dr = parseDateBR(r.data), dp = parseDateBR(prev.data);
+    if (dr && (!dp || dr.getTime() >= dp.getTime())) byContato[key] = r;
+  });
+  var counts = {};
+  Object.keys(byContato).forEach(function(key) {
+    var r = byContato[key];
     var s = (statusFieldFor(r) || '').trim() || 'Sem status';
     counts[s] = (counts[s] || 0) + 1;
   });
@@ -1748,7 +1768,8 @@ function fecharModalEntrevista() {
 function salvarEntrevista() {
   var status = document.getElementById('modal-ent-status').value;
   if (!status) { alert('Selecione o status da entrevista.'); return; }
-  var feedback  = document.getElementById('modal-ent-feedback').value;
+  var feedback  = document.getElementById('modal-ent-feedback').value.trim();
+  if (!feedback) { alert('Preencha o feedback da entrevista.'); return; }
   var ref1nome  = document.getElementById('modal-ent-ref1-nome').value.trim();
   var ref1tel   = document.getElementById('modal-ent-ref1-tel').value.trim();
   var ref2nome  = document.getElementById('modal-ent-ref2-nome').value.trim();
