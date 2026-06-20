@@ -392,9 +392,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <svg id="hc-turnover-line" style="width:100%;height:260px;display:block;"></svg>
   </div>
   <div class="chart-card chart-card-full">
-    <div class="chart-title">Entradas e Saídas — Últimas 30 Semanas</div>
+    <div class="chart-title">Turnover</div>
     <div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;">
-      <svg id="hc-weekly-evolution" style="width:1080px;height:260px;display:block;"></svg>
+      <svg id="hc-weekly-evolution" style="width:1080px;height:300px;display:block;"></svg>
     </div>
   </div>
 </div>
@@ -1221,11 +1221,11 @@ function renderWeeklyEvolutionChart() {
   var tv = getTvFiltered();
   var svg = document.getElementById('hc-weekly-evolution');
   if (!svg) return;
-  var W=1080, H=260, padL=28, padR=16, padTop=34, padBot=28;
+  var W=1080, H=300, padL=20, padR=16, padTop=30, padBot=60;
   svg.setAttribute('viewBox','0 0 '+W+' '+H);
   // Build 30 weeks (Mon–Sun) going back from current week
   var now=new Date(); now.setHours(0,0,0,0);
-  var dow=(now.getDay()+6)%7; // 0=Mon
+  var dow=(now.getDay()+6)%7;
   var weeks=[];
   for (var i=29;i>=0;i--) {
     var ws=new Date(now); ws.setDate(now.getDate()-dow-i*7);
@@ -1235,47 +1235,42 @@ function renderWeeklyEvolutionChart() {
       if (r.adm>=ws&&r.adm<we) adm++;
       if (r.dem&&r.dem>=ws&&r.dem<we) dem++;
     });
-    // ISO week number
-    var tmp=new Date(ws.getTime()); tmp.setDate(tmp.getDate()+3-((tmp.getDay()+6)%7));
-    var w1=new Date(tmp.getFullYear(),0,4);
-    var wn=1+Math.round(((tmp-w1)/86400000-3+(w1.getDay()+6)%7)/7);
-    weeks.push({label:'S'+(wn<10?'0':'')+wn, adm:adm, dem:dem});
+    var dd=ws.getDate(), mm=ws.getMonth()+1;
+    weeks.push({label:(dd<10?'0':'')+dd+'/'+(mm<10?'0':'')+mm, adm:adm, dem:dem});
   }
   var maxV=Math.max.apply(null,weeks.map(function(w){return Math.max(w.adm,w.dem);}))||1;
   var plotW=W-padL-padR, plotH=H-padTop-padBot, n=weeks.length;
   var groupW=plotW/n;
-  var barW=Math.max(4, groupW*0.38);
-  var gap=Math.max(1, groupW*0.05);
-  function gx(i){ return padL+i*groupW+groupW/2; } // center of group
-  function barY(v){ return padTop+plotH-(v/maxV)*plotH; }
+  var barW=Math.max(4, groupW*0.42);
+  var gap=Math.max(1, groupW*0.04);
+  function gx(i){ return padL+i*groupW+groupW/2; }
+  var baseline=padTop+plotH;
   var c='';
   // Baseline
-  c+='<line x1="'+padL+'" y1="'+(padTop+plotH)+'" x2="'+(W-padR)+'" y2="'+(padTop+plotH)+'" stroke="#E8E8E8" stroke-width="1"/>';
-  // Grouped bars + labels
+  c+='<line x1="'+padL+'" y1="'+baseline+'" x2="'+(W-padR)+'" y2="'+baseline+'" stroke="#E8E8E8" stroke-width="1"/>';
+  // Bars
   weeks.forEach(function(w,i){
     var cx=gx(i);
-    var xA=cx-gap/2-barW;
-    var xD=cx+gap/2;
+    var xA=cx-gap/2-barW, xD=cx+gap/2;
     var hA=(w.adm/maxV)*plotH, hD=(w.dem/maxV)*plotH;
-    var yA=padTop+plotH-hA, yD=padTop+plotH-hD;
-    // Barra admissões (escura)
+    var yA=baseline-hA, yD=baseline-hD;
     if (hA>0) {
-      c+='<rect x="'+xA.toFixed(1)+'" y="'+yA.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+hA.toFixed(1)+'" fill="#35383F" rx="2"/>';
-      c+='<text x="'+(xA+barW/2).toFixed(1)+'" y="'+(yA-3).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#35383F" font-weight="600">'+w.adm+'</text>';
+      c+='<rect x="'+xA.toFixed(1)+'" y="'+yA.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+hA.toFixed(1)+'" fill="#35383F" rx="1"/>';
+      c+='<text x="'+(xA+barW/2).toFixed(1)+'" y="'+(yA-3).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#35383F" font-weight="700">'+w.adm+'</text>';
     }
-    // Barra demissões (cinza)
     if (hD>0) {
-      c+='<rect x="'+xD.toFixed(1)+'" y="'+yD.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+hD.toFixed(1)+'" fill="#AAAAAA" rx="2"/>';
-      c+='<text x="'+(xD+barW/2).toFixed(1)+'" y="'+(yD-3).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#888" font-weight="600">'+w.dem+'</text>';
+      c+='<rect x="'+xD.toFixed(1)+'" y="'+yD.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+hD.toFixed(1)+'" fill="#AAAAAA" rx="1"/>';
+      c+='<text x="'+(xD+barW/2).toFixed(1)+'" y="'+(yD-3).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#888" font-weight="700">'+w.dem+'</text>';
     }
-    // Eixo X (a cada 5 semanas + última)
-    if (i%5===0||i===n-1) c+='<text x="'+cx.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">'+w.label+'</text>';
+    // Label rotacionado DD/MM em todos os grupos
+    c+='<text transform="translate('+cx.toFixed(1)+','+(baseline+6)+') rotate(45)" text-anchor="start" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">'+w.label+'</text>';
   });
-  // Legenda
-  c+='<rect x="'+padL+'" y="10" width="10" height="10" fill="#35383F" rx="2"/>';
-  c+='<text x="'+(padL+14)+'" y="19" font-family="DM Mono,monospace" font-size="9" fill="#35383F">Admissões</text>';
-  c+='<rect x="'+(padL+82)+'" y="10" width="10" height="10" fill="#AAAAAA" rx="2"/>';
-  c+='<text x="'+(padL+96)+'" y="19" font-family="DM Mono,monospace" font-size="9" fill="#888">Demissões</text>';
+  // Legenda com círculos
+  var ly=H-6;
+  c+='<circle cx="'+(padL+4)+'" cy="'+(ly-3)+'" r="4" fill="#35383F"/>';
+  c+='<text x="'+(padL+12)+'" y="'+ly+'" font-family="DM Mono,monospace" font-size="9" fill="#35383F">Admitidos</text>';
+  c+='<circle cx="'+(padL+76)+'" cy="'+(ly-3)+'" r="4" fill="#AAAAAA"/>';
+  c+='<text x="'+(padL+84)+'" y="'+ly+'" font-family="DM Mono,monospace" font-size="9" fill="#888">Demitidos</text>';
   svg.innerHTML=c;
 }
 
