@@ -351,6 +351,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-title">Banco de Horas</div>
     <svg id="hc-banco-horas-line" style="width:100%;height:auto;display:block;"></svg>
   </div>
+  <div class="chart-card chart-card-full">
+    <div class="chart-title">Testes Realizados</div>
+    <svg id="hc-testes-weekly" style="width:100%;height:auto;display:block;"></svg>
+  </div>
 </div>
 
 <!-- LOADING -->
@@ -886,6 +890,7 @@ function renderDashboard() {
   renderWeeklyEvolutionChart();
   renderAtestadosChart();
   renderBancoHorasChart();
+  renderTestesChart();
 }
 function renderContratosChart() {
   if (!_colabs || !_colabs.length) return;
@@ -983,6 +988,93 @@ function parseTvDate(s) {
   }
   return null;
 }
+var _recrutData = null;
+var RECRUT_SHEET_ID = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
+var RECRUT_API_KEY  = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
+
+function normStr(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
+
+function loadRecrutamentoData() {
+  if (_recrutData) { renderTestesChart(); return; }
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + RECRUT_SHEET_ID
+    + '/values/' + encodeURIComponent('CONTROLE DE TESTES!A:Z')
+    + '?key=' + RECRUT_API_KEY;
+  fetch(url).then(function(r){ return r.json(); }).then(function(data){
+    _recrutData = [];
+    var rows = data.values || [];
+    if (rows.length < 2) { renderTestesChart(); return; }
+    var headers = rows[0].map(normStr);
+    function col(keys) {
+      for (var k=0;k<keys.length;k++) { var idx=headers.indexOf(normStr(keys[k])); if (idx>=0) return idx; }
+      return -1;
+    }
+    var iNome   = col(['nome','candidato']);
+    var iData   = col(['dias_de_teste','data_teste','data']);
+    var iStatus = col(['status','resultado','situacao']);
+    for (var i=1; i<rows.length; i++) {
+      var r = rows[i];
+      var nome = (r[iNome>=0?iNome:1]||'').trim();
+      if (!nome) continue;
+      var dataStr = (r[iData>=0?iData:0]||'').trim();
+      var p = dataStr.split('/');
+      var yr = p.length===3 ? parseInt(p[2]) : new Date().getFullYear();
+      var dt = p.length>=2 ? new Date(yr, parseInt(p[1])-1, parseInt(p[0])) : null;
+      if (!dt || isNaN(dt.getTime())) continue;
+      var sf = normStr(r[iStatus>=0?iStatus:0]||'');
+      var realizado = sf==='contratado' || sf.indexOf('nao contratado')>=0;
+      _recrutData.push({ dt: dt, realizado: realizado });
+    }
+    renderTestesChart();
+  }).catch(function(){ _recrutData = []; renderTestesChart(); });
+}
+
+function renderTestesChart() {
+  var svg = document.getElementById('hc-testes-weekly');
+  if (!svg || !_recrutData) return;
+  var W=1080, H=280, padL=20, padR=16, padTop=30, padBot=56;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  var now=new Date(); now.setHours(0,0,0,0);
+  var dow=(now.getDay()+6)%7;
+  var weeks=[];
+  for (var i=29;i>=0;i--) {
+    var ws=new Date(now); ws.setDate(now.getDate()-dow-i*7);
+    var we=new Date(ws); we.setDate(ws.getDate()+7);
+    var ag=0, re=0;
+    _recrutData.forEach(function(r){ if(r.dt>=ws&&r.dt<we){ ag++; if(r.realizado) re++; } });
+    var dd=ws.getDate(), mm=ws.getMonth()+1;
+    weeks.push({label:(dd<10?'0':'')+dd+'/'+(mm<10?'0':'')+mm, ag:ag, re:re});
+  }
+  var maxV=Math.max.apply(null,weeks.map(function(w){return w.ag;}))||1;
+  var plotW=W-padL-padR, plotH=H-padTop-padBot, n=weeks.length;
+  var groupW=plotW/n;
+  var barW=Math.max(4,groupW*0.65);
+  function bx(i){ return padL+i*groupW+groupW/2-barW/2; }
+  var baseline=padTop+plotH;
+  var c='';
+  c+='<line x1="'+padL+'" y1="'+baseline+'" x2="'+(W-padR)+'" y2="'+baseline+'" stroke="#E8E8E8" stroke-width="1"/>';
+  weeks.forEach(function(w,i){
+    var h=(w.ag/maxV)*plotH, x=bx(i), cx=x+barW/2;
+    if (h>0) c+='<rect x="'+x.toFixed(1)+'" y="'+(baseline-h).toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" fill="#35383F" rx="1"/>';
+    if (w.ag>0) {
+      var yL=Math.max(padTop+11,(baseline-h-4));
+      if (w.ag===w.re) {
+        c+='<text x="'+cx.toFixed(1)+'" y="'+yL.toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="#35383F" font-weight="700">'+w.ag+'</text>';
+      } else {
+        c+='<text x="'+(cx-2).toFixed(1)+'" y="'+yL.toFixed(1)+'" text-anchor="end" font-family="DM Mono,monospace" font-size="8" fill="#FFFFFF" font-weight="700">'+w.ag+'</text>';
+        c+='<text x="'+(cx+2).toFixed(1)+'" y="'+yL.toFixed(1)+'" text-anchor="start" font-family="DM Mono,monospace" font-size="8" fill="#CFFF00" font-weight="700">'+w.re+'</text>';
+      }
+    }
+    c+='<text transform="translate('+cx.toFixed(1)+','+(baseline+6)+') rotate(45)" text-anchor="start" font-family="DM Mono,monospace" font-size="9" fill="#AAAAAA">'+w.label+'</text>';
+  });
+  var ly=H-6;
+  c+='<circle cx="'+(padL+4)+'" cy="'+(ly-3)+'" r="4" fill="#35383F"/>';
+  c+='<text x="'+(padL+12)+'" y="'+ly+'" font-family="DM Mono,monospace" font-size="9" fill="#35383F">Agendados</text>';
+  c+='<circle cx="'+(padL+86)+'" cy="'+(ly-3)+'" r="4" fill="#4A90D9"/>';
+  c+='<text x="'+(padL+94)+'" y="'+ly+'" font-family="DM Mono,monospace" font-size="9" fill="#4A90D9">Realizados</text>';
+  svg.innerHTML=c;
+}
+
 var _bhData = null;
 var BH_SHEET_ID = '1oW3uXbig4B3gUQegxorxZghMnVrZcXk44AD08gx-cl0';
 
@@ -1738,6 +1830,7 @@ document.body.setAttribute('data-view','dashboard');
 loadTurnoverData();
 loadAbsenteismoData();
 loadBancoHorasData();
+loadRecrutamentoData();
 </script>
 </body>
 </html>
