@@ -1183,7 +1183,7 @@ export default function EscalaPainel() {
                 <div style={{fontFamily:'DM Mono,monospace',fontSize:9,letterSpacing:'.12em',textTransform:'uppercase',color:'rgba(255,255,255,.4)'}}>Portal</div>
                 <div style={{fontSize:13,fontWeight:600,color:'#fff',marginTop:2}}>Governança de Processos</div>
               </div>
-              <div style={{fontFamily:'DM Mono,monospace',fontSize:20,fontWeight:300,color:T.citric,letterSpacing:'.04em'}}>v3.2r</div>
+              <div style={{fontFamily:'DM Mono,monospace',fontSize:20,fontWeight:300,color:T.citric,letterSpacing:'.04em'}}>v4.0</div>
             </div>
           </div>
           {/* O que é */}
