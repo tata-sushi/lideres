@@ -228,6 +228,10 @@ body {
 .info-label { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
 .info-value { font-size: 13px; color: var(--carbon); font-weight: 500; }
 .info-value.empty { color: var(--muted); font-style: italic; font-weight: 400; }
+.info-actions { display: none; padding: 0 20px 4px; }
+.info-actions.show { display: block; }
+.btn-reimprimir { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 11px 14px; background: var(--carbon); color: var(--citric); border: none; border-radius: 6px; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; transition: opacity 0.15s; }
+.btn-reimprimir:hover { opacity: 0.85; }
 
 /* empty state */
 .empty-state { text-align: center; padding: 24px 0; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -650,6 +654,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="info-value" id="info-obs">—</div>
       </div>
     </div>
+    <div class="info-actions" id="info-actions">
+      <button class="btn-reimprimir" id="btn-reimprimir" onclick="reimprimirTermo(_infoArmId)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Reimprimir Termo (2ª via)
+      </button>
+    </div>
   </div>
 </div>
 
@@ -673,7 +683,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <div class="drawer-version-label">Portal</div>
           <div style="font-size:13px;font-weight:600;color:#fff;margin-top:2px;">Governança de Processos</div>
         </div>
-        <div class="drawer-version-val">v3.2r</div>
+        <div class="drawer-version-val">v4.0</div>
       </div>
     </div>
     <div class="drawer-section">
@@ -1184,9 +1194,12 @@ function refreshArmarioList() {
 /* ════════════════════════════════════════════════
    INFO ARMÁRIO — consultivo (clique no mapa)
    ════════════════════════════════════════════════ */
+var _infoArmId = null;
+
 function editarArmario(id) {
   var a = ARMARIOS.find(function(x){ return x.id === id; });
   if (!a) return;
+  _infoArmId = id;
 
   var badgeLabels = { livre:'Livre', ocupado:'Ocupado', manut:'Manutenção', bloq:'Bloqueado' };
   document.getElementById('info-num').textContent = 'Armário ' + a.num;
@@ -1217,6 +1230,9 @@ function editarArmario(id) {
   } else {
     obsRow.style.display = 'none';
   }
+
+  // Reimprimir termo (2ª via) — só para armário ocupado com colaborador
+  document.getElementById('info-actions').classList.toggle('show', !!a.colaborador);
 
   document.getElementById('info-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -1535,10 +1551,20 @@ var _lastPayload = null;
 var _lastArm     = null;
 
 function imprimirTermo() {
-  var p   = _lastPayload;
-  var arm = _lastArm;
-  if (!p || !arm) { showToast('Registre uma movimentação primeiro.', true); return; }
+  if (!_lastPayload || !_lastArm) { showToast('Registre uma movimentação primeiro.', true); return; }
+  _gerarTermo(_lastPayload, _lastArm);
+}
 
+/* Reimprime (2ª via) o termo de um armário já ocupado — chamado pelo modal de consulta */
+function reimprimirTermo(id) {
+  var a = ARMARIOS.find(function(x){ return x.id === id; });
+  if (!a) return;
+  if (!a.colaborador) { showToast('Armário sem colaborador para emitir termo.', true); return; }
+  closeInfo();
+  _gerarTermo({ unidade: a.unidade, colaborador: a.colaborador, matricula: a.matricula }, a);
+}
+
+function _gerarTermo(p, arm) {
   var dataObj = new Date();
   var meses   = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
   var dataExtenso = dataObj.getDate() + ' de ' + meses[dataObj.getMonth()] + ' de ' + dataObj.getFullYear();
