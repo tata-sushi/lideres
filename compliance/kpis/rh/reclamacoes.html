@@ -61,18 +61,13 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .table-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
 .table-card .chart-title .count-label { color: var(--muted); font-size: 10px; margin-left: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.6px; }
 
-/* COLUMN ADJUSTER */
-.tbl-toolbar { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 6px; position: relative; }
-.btn-cols { display: inline-flex; align-items: center; gap: 6px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.6px; text-transform: uppercase; color: var(--carbon); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
-.btn-cols:hover { border-color: var(--carbon); }
-.btn-cols svg { width: 11px; height: 11px; }
-.cols-pop { position: absolute; top: 32px; right: 0; min-width: 200px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); padding: 10px; z-index: 50; display: none; }
-.cols-pop.open { display: block; }
-.cols-pop .cols-title { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
-.cols-pop label { display: flex; align-items: center; gap: 8px; padding: 5px 4px; font-size: 12px; color: var(--carbon); cursor: pointer; border-radius: 4px; }
-.cols-pop label:hover { background: var(--bg); }
-.cols-pop input[type="checkbox"] { accent-color: var(--carbon); cursor: pointer; }
+/* COLUMN RESIZER */
 .table-wrap { overflow-x: auto; }
+.tbl { table-layout: fixed; }
+.tbl thead th { position: relative; overflow: hidden; text-overflow: ellipsis; }
+.tbl thead th .col-resizer { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; user-select: none; }
+.tbl thead th .col-resizer:hover, .tbl thead th .col-resizer.dragging { background: var(--carbon); opacity: 0.25; }
+body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none !important; }
 .tbl { width: 100%; border-collapse: collapse; }
 .tbl thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 6px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); white-space: nowrap; cursor: pointer; user-select: none; }
 .tbl thead th:hover { color: var(--carbon); }
@@ -347,13 +342,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="table-section">
   <div class="table-card">
     <div class="chart-title">Analítico <span class="count-label" id="tbl-count-label"></span></div>
-    <div class="tbl-toolbar">
-      <button type="button" class="btn-cols" id="btn-cols" onclick="toggleColsPop(event)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
-        Colunas
-      </button>
-      <div class="cols-pop" id="cols-pop"></div>
-    </div>
     <div class="table-wrap">
       <table class="tbl" id="tbl-main">
         <thead>
@@ -817,7 +805,6 @@ function renderTable(list) {
       + '</tr>';
   }
   tbody.innerHTML = html;
-  if (typeof applyColsState === 'function') applyColsState();
   var remaining = displayedRows.length - visibleCount;
   if (remaining > 0) {
     var proximo = Math.min(PAGE_SIZE, remaining);
@@ -1133,77 +1120,77 @@ function salvarNovoProcesso() {
     });
 }
 
-// ─── Column adjuster ─────────────────────────────────────────────────────────
-var COL_OPTIONS = [
-  { key: 'reclamante',    label: 'Reclamante',    locked: true },
-  { key: 'notificacao',   label: 'Notificação' },
-  { key: 'audiencia',     label: 'Audiência' },
-  { key: 'unidade',       label: 'Unidade' },
-  { key: 'departamento',  label: 'Departamento' },
-  { key: 'valorCausa',    label: 'Valor da Causa' },
-  { key: 'valorQuitacao', label: 'Valor Quitação' },
-  { key: 'resultado',     label: 'Status' },
-  { key: 'resolucao',     label: 'Resolução' },
-  { key: 'acao',          label: 'Ações', locked: true }
-];
-var COLS_STORAGE_KEY = 'reclamacoes_cols_hidden_v1';
-var _colsHidden = {};
+// ─── Column resizer ──────────────────────────────────────────────────────────
+var COLS_WIDTH_KEY = 'reclamacoes_cols_width_v1';
+var _colsWidth = {};
 
-function loadColsState() {
+function loadColsWidth() {
   try {
-    var raw = localStorage.getItem(COLS_STORAGE_KEY);
-    if (raw) _colsHidden = JSON.parse(raw) || {};
-  } catch (e) { _colsHidden = {}; }
+    var raw = localStorage.getItem(COLS_WIDTH_KEY);
+    if (raw) _colsWidth = JSON.parse(raw) || {};
+  } catch (e) { _colsWidth = {}; }
 }
-
-function saveColsState() {
-  try { localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(_colsHidden)); } catch (e) {}
+function saveColsWidth() {
+  try { localStorage.setItem(COLS_WIDTH_KEY, JSON.stringify(_colsWidth)); } catch (e) {}
 }
-
-function applyColsState() {
+function applyColsWidth() {
   var tbl = document.getElementById('tbl-main');
   if (!tbl) return;
-  COL_OPTIONS.forEach(function(c) {
-    var hidden = !!_colsHidden[c.key] && !c.locked;
-    var sels = tbl.querySelectorAll('[data-col="' + c.key + '"]');
-    for (var i = 0; i < sels.length; i++) sels[i].style.display = hidden ? 'none' : '';
+  Object.keys(_colsWidth).forEach(function(key) {
+    var w = _colsWidth[key];
+    if (!w) return;
+    var th = tbl.querySelector('thead th[data-col="' + key + '"]');
+    if (th) th.style.width = w + 'px';
   });
 }
 
-function renderColsPop() {
-  var pop = document.getElementById('cols-pop');
-  if (!pop) return;
-  var html = '<div class="cols-title">Mostrar / esconder colunas</div>';
-  COL_OPTIONS.forEach(function(c) {
-    if (c.locked) return;
-    var checked = !_colsHidden[c.key] ? ' checked' : '';
-    html += '<label><input type="checkbox" data-col-toggle="' + c.key + '"' + checked + '> ' + c.label + '</label>';
-  });
-  pop.innerHTML = html;
-  pop.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
-    cb.addEventListener('change', function() {
-      var key = cb.getAttribute('data-col-toggle');
-      _colsHidden[key] = !cb.checked;
-      saveColsState();
-      applyColsState();
-    });
-  });
+function setupColResizers() {
+  var tbl = document.getElementById('tbl-main');
+  if (!tbl) return;
+  var ths = tbl.querySelectorAll('thead th[data-col]');
+  for (var i = 0; i < ths.length; i++) {
+    var th = ths[i];
+    if (th.querySelector('.col-resizer')) continue;
+    var key = th.getAttribute('data-col');
+    if (key === 'acao') continue;
+    var handle = document.createElement('span');
+    handle.className = 'col-resizer';
+    handle.setAttribute('data-col-resize', key);
+    handle.addEventListener('mousedown', onResizerMouseDown);
+    handle.addEventListener('click', function(e) { e.stopPropagation(); });
+    th.appendChild(handle);
+  }
 }
 
-function toggleColsPop(e) {
-  if (e) e.stopPropagation();
-  var pop = document.getElementById('cols-pop');
-  if (!pop) return;
-  pop.classList.toggle('open');
+var _resizeState = null;
+function onResizerMouseDown(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var handle = e.currentTarget;
+  var th = handle.parentNode;
+  var key = handle.getAttribute('data-col-resize');
+  _resizeState = { key: key, th: th, startX: e.clientX, startW: th.offsetWidth, handle: handle };
+  handle.classList.add('dragging');
+  document.body.classList.add('col-resizing');
+  document.addEventListener('mousemove', onResizerMouseMove);
+  document.addEventListener('mouseup', onResizerMouseUp);
 }
-
-document.addEventListener('click', function(e) {
-  var pop = document.getElementById('cols-pop');
-  var btn = document.getElementById('btn-cols');
-  if (!pop || !pop.classList.contains('open')) return;
-  if (pop.contains(e.target) || (btn && btn.contains(e.target))) return;
-  pop.classList.remove('open');
-});
+function onResizerMouseMove(e) {
+  if (!_resizeState) return;
+  var delta = e.clientX - _resizeState.startX;
+  var w = Math.max(40, _resizeState.startW + delta);
+  _resizeState.th.style.width = w + 'px';
+  _colsWidth[_resizeState.key] = w;
+}
+function onResizerMouseUp() {
+  if (!_resizeState) return;
+  _resizeState.handle.classList.remove('dragging');
+  document.body.classList.remove('col-resizing');
+  document.removeEventListener('mousemove', onResizerMouseMove);
+  document.removeEventListener('mouseup', onResizerMouseUp);
+  _resizeState = null;
+  saveColsWidth();
+}
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
@@ -1223,8 +1210,9 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('footer-date').textContent =
     'Atualizado: ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ', ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
 
-  loadColsState();
-  renderColsPop();
+  loadColsWidth();
+  setupColResizers();
+  applyColsWidth();
   updateAnoSelect();
   loadData();
 });
