@@ -1113,22 +1113,37 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="epc-resp-grp">
           <div class="epc-resp-title">Pela entrega do EPI</div>
           <div class="epc-meta">
-            <div class="field"><label>Nome</label><input type="text" id="epc-resp-ent-nome"></div>
-            <div class="field"><label>Cargo / Função</label><input type="text" id="epc-resp-ent-cargo"></div>
+            <div class="field">
+              <label>Nome</label>
+              <select id="epc-resp-ent-nome" onchange="onEpcRespChange('ent')">
+                <option value="">— Selecione —</option>
+              </select>
+            </div>
+            <div class="field"><label>Cargo / Função</label><input type="text" id="epc-resp-ent-cargo" placeholder="Auto-preenche"></div>
           </div>
         </div>
         <div class="epc-resp-grp">
           <div class="epc-resp-title">Pela retirada / troca</div>
           <div class="epc-meta">
-            <div class="field"><label>Nome</label><input type="text" id="epc-resp-ret-nome"></div>
-            <div class="field"><label>Cargo / Função</label><input type="text" id="epc-resp-ret-cargo"></div>
+            <div class="field">
+              <label>Nome</label>
+              <select id="epc-resp-ret-nome" onchange="onEpcRespChange('ret')">
+                <option value="">— Selecione —</option>
+              </select>
+            </div>
+            <div class="field"><label>Cargo / Função</label><input type="text" id="epc-resp-ret-cargo" placeholder="Auto-preenche"></div>
           </div>
         </div>
         <div class="epc-resp-grp">
           <div class="epc-resp-title">Pela coleta, limpeza e liberação para uso</div>
           <div class="epc-meta">
-            <div class="field"><label>Nome</label><input type="text" id="epc-resp-col-nome"></div>
-            <div class="field"><label>Cargo / Função</label><input type="text" id="epc-resp-col-cargo"></div>
+            <div class="field">
+              <label>Nome</label>
+              <select id="epc-resp-col-nome" onchange="onEpcRespChange('col')">
+                <option value="">— Selecione —</option>
+              </select>
+            </div>
+            <div class="field"><label>Cargo / Função</label><input type="text" id="epc-resp-col-cargo" placeholder="Auto-preenche"></div>
           </div>
         </div>
       </div>
@@ -2305,6 +2320,39 @@ var EPC_UNIDADES = {
 };
 var EPC_CONDS = ['Boa','Regular','Danificado','Higienizado','Sujo'];
 
+var _epcColabMap = {};
+function _epcPopulateColabSelects(colabs) {
+  _epcColabMap = {};
+  var ids = ['epc-resp-ent-nome','epc-resp-ret-nome','epc-resp-col-nome'];
+  var sorted = (colabs || []).slice().sort(function(a,b){
+    return String(a.nome||'').localeCompare(String(b.nome||''), 'pt-BR');
+  });
+  ids.forEach(function(id){
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    var current = sel.value;
+    sel.innerHTML = '<option value="">— Selecione —</option>';
+    sorted.forEach(function(c){
+      if (!c || !c.nome) return;
+      _epcColabMap[c.nome] = c;
+      var opt = document.createElement('option');
+      opt.value = c.nome;
+      opt.textContent = c.nome;
+      sel.appendChild(opt);
+    });
+    if (current) sel.value = current;
+  });
+}
+
+function onEpcRespChange(key) {
+  var sel = document.getElementById('epc-resp-'+key+'-nome');
+  var cargo = document.getElementById('epc-resp-'+key+'-cargo');
+  if (!sel || !cargo) return;
+  var c = _epcColabMap[sel.value];
+  if (c) cargo.value = c.cargo || c.departamento || '';
+  else cargo.value = '';
+}
+
 function openModalEpiColetivo() {
   var ov = document.getElementById('epc-overlay');
   if (!ov) return;
@@ -2333,6 +2381,11 @@ function openModalEpiColetivo() {
   if (sel) {
     sel.value = (activeUnitFilter && activeUnitFilter !== 'all') ? activeUnitFilter : '';
     onEpcUnidadeChange();
+  }
+
+  // Popular selects de colaboradores
+  if (typeof carregarColaboradores === 'function') {
+    carregarColaboradores().then(_epcPopulateColabSelects).catch(function(){});
   }
 
   _epcShowError('');
