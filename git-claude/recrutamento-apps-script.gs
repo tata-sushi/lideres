@@ -46,13 +46,12 @@ function avaliarTeste(e) {
     if (!sheet) return respostaJSON(false, 'Aba não encontrada');
 
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var colStatus = -1, colObs = -1, colVagaVinculada = -1;
+    var colStatus = -1, colObs = -1;
 
     for (var i = 0; i < headers.length; i++) {
       var h = normalizarHeader(headers[i].toString());
       if (h === 'status' || h === 'resultado' || h === 'situacao') colStatus = i;
       if (h.indexOf('observa') >= 0 || h === 'obs') colObs = i;
-      if (h.indexOf('vaga') >= 0 && h.indexOf('vincul') >= 0) colVagaVinculada = i;
     }
 
     if (colStatus === -1)
@@ -86,8 +85,9 @@ function avaliarTeste(e) {
     }
 
     sheet.getRange(targetRow, colStatus + 1).setValue(status);
-    if (colObs >= 0 && obs) sheet.getRange(targetRow, colObs + 1).setValue(obs);
-    if (colVagaVinculada >= 0 && vagaVinculada) sheet.getRange(targetRow, colVagaVinculada + 1).setValue(vagaVinculada);
+    var textoObs = obs;
+    if (vagaVinculada) textoObs = textoObs ? textoObs + ' (' + vagaVinculada + ')' : vagaVinculada;
+    if (colObs >= 0 && textoObs) sheet.getRange(targetRow, colObs + 1).setValue(textoObs);
 
     return respostaJSON(true, 'Status atualizado com sucesso');
 
