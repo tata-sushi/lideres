@@ -206,9 +206,12 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .vaga-table-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
 .vaga-table-count { color: var(--muted); font-size: 10px; margin-left: 8px; font-weight: 500; letter-spacing: 0.5px; }
 .vaga-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.vaga-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 6px; text-align: center; border-bottom: 2px solid var(--carbon); background: var(--surface); white-space: nowrap; cursor: pointer; user-select: none; }
+.vaga-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 6px; text-align: center; border-bottom: 2px solid var(--carbon); background: var(--surface); white-space: nowrap; cursor: pointer; user-select: none; position: relative; }
 .vaga-table thead th:hover { color: var(--carbon); }
 .vaga-table thead th:last-child { cursor: default; }
+.vt-col-resizer { position: absolute; right: 0; top: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 2; }
+.vt-col-resizer::after { content: ''; position: absolute; right: 1px; top: 20%; width: 2px; height: 60%; background: transparent; border-radius: 2px; transition: background 0.15s; }
+.vaga-table thead th:hover .vt-col-resizer::after, .vt-col-resizer.resizing::after { background: var(--border); }
 .vaga-table tbody td { padding: 8px 6px; font-size: 13px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--carbon); text-align: center; }
 .vaga-table tbody td:first-child { white-space: normal; }
 .vaga-table tbody tr { transition: background 0.1s; }
@@ -1354,6 +1357,38 @@ function renderVagasTableRows() {
   tbody.innerHTML = html || '<tr><td colspan="'+cols+'" style="text-align:center;color:var(--muted);padding:24px;font-family:\'DM Mono\',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Nenhum resultado</td></tr>';
 }
 
+function _initVagaColResizers() {
+  var table = document.querySelector('.vaga-table');
+  if (!table) return;
+  var ths = table.querySelectorAll('thead th');
+  ths.forEach(function(th, i) {
+    if (i === ths.length - 1 && isAdmin) return; // não redimensiona coluna de ações
+    var handle = document.createElement('div');
+    handle.className = 'vt-col-resizer';
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var startX = e.pageX;
+      var startW = th.offsetWidth;
+      handle.classList.add('resizing');
+      document.body.style.cursor = 'col-resize';
+      function onMove(e) {
+        var newW = Math.max(40, startW + e.pageX - startX);
+        th.style.width = newW + 'px';
+      }
+      function onUp() {
+        handle.classList.remove('resizing');
+        document.body.style.cursor = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    th.appendChild(handle);
+  });
+}
+
 function showMoreVagas() {
   _vagaShown += VAGA_PAGE;
   renderVagasTableRows();
@@ -2344,6 +2379,7 @@ function render() {
     var cardsHtml = filtered.map(cardVaga).join('');
     c.innerHTML = '<div class="vagas-cards-wrap">'+cardsHtml+'</div>' + renderVagasTableHtml(filtered);
     renderVagasTableRows();
+    _initVagaColResizers();
   } else {
     c.innerHTML=filtered.map(function(r){
       return state.tab==='entrevistas'?cardEntrevista(r):cardTeste(r);
