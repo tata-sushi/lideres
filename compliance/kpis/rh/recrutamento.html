@@ -201,8 +201,12 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 /* ── VAGAS TABLE ── */
 .vaga-table-wrap { display: none; overflow-x: auto; }
 .vagas-cards-wrap { display: contents; }
+.vaga-table-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
+.vaga-table-count { color: var(--muted); font-size: 10px; margin-left: 8px; font-weight: 500; letter-spacing: 0.5px; }
 .vaga-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.vaga-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 6px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); white-space: nowrap; }
+.vaga-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 6px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); white-space: nowrap; cursor: pointer; user-select: none; }
+.vaga-table thead th:hover { color: var(--carbon); }
+.vaga-table thead th:last-child { cursor: default; }
 .vaga-table thead th:first-child { padding-left: 0; }
 .vaga-table tbody td { padding: 8px 6px; font-size: 13px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--carbon); }
 .vaga-table tbody td:first-child { padding-left: 0; white-space: normal; }
@@ -1203,19 +1207,47 @@ function cardVaga(r) {
 var VAGA_PAGE = 10;
 var _vagaShown = VAGA_PAGE;
 var _vagaRows = [];
+var _vagaSortCol = 'cargo';
+var _vagaSortDir = 1;
+
+function _vagaSortedRows() {
+  return _vagaRows.slice().sort(function(a, b) {
+    var av = ((a[_vagaSortCol] || '') + '').toLowerCase();
+    var bv = ((b[_vagaSortCol] || '') + '').toLowerCase();
+    if (av < bv) return -_vagaSortDir;
+    if (av > bv) return _vagaSortDir;
+    return 0;
+  });
+}
+
+function toggleVagaSort(col) {
+  if (_vagaSortCol === col) { _vagaSortDir = -_vagaSortDir; }
+  else { _vagaSortCol = col; _vagaSortDir = 1; }
+  var base = { cargo:'↕', escala:'↕', horario:'↕', data:'↕', lider:'↕' };
+  base[_vagaSortCol] = _vagaSortDir === 1 ? '↑' : '↓';
+  ['cargo','escala','horario','data','lider'].forEach(function(k) {
+    var el = document.getElementById('vi-'+k); if (el) el.textContent = base[k];
+  });
+  _vagaShown = VAGA_PAGE;
+  renderVagasTableRows();
+}
 
 function renderVagasTableHtml(rows) {
   _vagaRows = rows;
   _vagaShown = VAGA_PAGE;
+  _vagaSortCol = 'cargo';
+  _vagaSortDir = 1;
+  var n = rows.length;
+  var countLabel = n + ' vaga' + (n !== 1 ? 's' : '');
   return '<div class="vaga-table-wrap">'+
-    '<table class="vaga-table">'+
-    '<thead><tr>'+
-    '<th>Cargo</th>'+
-    '<th>Escala</th>'+
-    '<th>Horário</th>'+
-    '<th>Data de Abertura</th>'+
-    '<th>Líder responsável</th>'+
-    '<th style="text-align:center">Status</th>'+
+    '<div class="vaga-table-title">Vagas abertas <span class="vaga-table-count">— '+countLabel+'</span></div>'+
+    '<table class="vaga-table"><thead><tr>'+
+    '<th onclick="toggleVagaSort(\'cargo\')">Cargo <span id="vi-cargo">↓</span></th>'+
+    '<th onclick="toggleVagaSort(\'escala\')">Escala <span id="vi-escala">↕</span></th>'+
+    '<th onclick="toggleVagaSort(\'horario\')">Horário <span id="vi-horario">↕</span></th>'+
+    '<th onclick="toggleVagaSort(\'data\')">Data de Abertura <span id="vi-data">↕</span></th>'+
+    '<th onclick="toggleVagaSort(\'lider\')">Líder responsável <span id="vi-lider">↕</span></th>'+
+    '<th style="text-align:center;cursor:default">Status</th>'+
     '</tr></thead>'+
     '<tbody id="tbody-vagas"></tbody>'+
     '</table></div>';
@@ -1224,7 +1256,8 @@ function renderVagasTableHtml(rows) {
 function renderVagasTableRows() {
   var tbody = document.getElementById('tbody-vagas');
   if (!tbody) return;
-  var display = _vagaRows.slice(0, _vagaShown);
+  var sorted = _vagaSortedRows();
+  var display = sorted.slice(0, _vagaShown);
   var html = display.map(function(r) {
     var sf = slugVagaStatus(r.status);
     var sub = [r.departamento, r.unidade].filter(Boolean).join(' · ');
@@ -1237,7 +1270,7 @@ function renderVagasTableRows() {
       '<td style="text-align:center"><span class="status-badge sf-'+sf+'">'+escH(r.status || 'Sem status')+'</span></td>'+
       '</tr>';
   }).join('');
-  var resto = _vagaRows.length - _vagaShown;
+  var resto = sorted.length - _vagaShown;
   if (resto > 0) {
     var prox = Math.min(VAGA_PAGE, resto);
     html += '<tr><td colspan="6" style="text-align:center;padding:10px;border-bottom:none">'+
