@@ -5,17 +5,30 @@
 var SHEET_ID   = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
 var SHEET_NAME = 'CONTROLE DE VAGAS ABERTAS';
 
-// Cabeçalhos (normalizados) → campo do payload
-// Colunas não listadas aqui são preservadas no updateVaga e deixadas em branco no addVaga
+// Colunas com validador (índice 1-based)
+var COL_UNIDADE      = 2;
+var COL_DEPARTAMENTO = 3;
+var COL_STATUS       = 12;
+
+var UNIDADES    = ['Administrativo', 'Itaim', 'Pinheiros', 'Tatá House', 'Poke - Pinheiros'];
+var DEPTOS      = ['Bar','Caixa','Comercial','Compra','Cozinha','Delivery','Estoque',
+                   'Financeiro','Limpeza','Manutenção','Operação','Peixaria','Poke',
+                   'Qualidade','RH','Salão','Sushibar','Cozinha - Refeitório'];
+var STATUS_OPTS = ['Aberta', 'Fechada'];
+
+// Cabeçalhos normalizados → campo do payload
 var FIELD_MAP = {
-  'data_da_solicitacao': 'data',
-  'unidade':             'unidade',
-  'departamento':        'departamento',
-  'cargo':               'cargo',
-  'escala':              'escala',
-  'horario':             'horario',
-  'status_da_vaga':      'status',
-  'lider_responsavel':   'lider'
+  'data_da_solicitacao':  'data',
+  'unidade':              'unidade',
+  'departamento':         'departamento',
+  'cargo':                'cargo',
+  'escala':               'escala',
+  'horario':              'horario',
+  'salario_fixo':         'salario_fixo',
+  'salario_bruto':        'salario_bruto',
+  'colaborador_anterior': 'colaborador_anterior',
+  'status_da_vaga':       'status',
+  'lider_responsavel':    'lider'
 };
 
 function doGet(e) { return handle(e.parameter); }
@@ -33,12 +46,18 @@ function handle(p) {
     var sheet = ss.getSheetByName(SHEET_NAME);
     if (!sheet) return out.setContent(JSON.stringify({ ok: false, error: 'Aba não encontrada' }));
 
-    var lastCol  = sheet.getLastColumn();
-    var headers  = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(normKey);
+    var lastCol = sheet.getLastColumn();
+    var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(normKey);
+
+    // Data automática se não enviada
+    if (!p.data) {
+      p.data = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy');
+    }
 
     if (p.action === 'addVaga') {
       var emptyBase = new Array(headers.length).fill('');
       sheet.appendRow(buildRow(headers, p, emptyBase));
+      applyValidations(sheet, sheet.getLastRow());
       return out.setContent(JSON.stringify({ ok: true }));
 
     } else if (p.action === 'updateVaga') {
@@ -48,6 +67,7 @@ function handle(p) {
       }
       var existing = sheet.getRange(rowIdx, 1, 1, headers.length).getValues()[0];
       sheet.getRange(rowIdx, 1, 1, headers.length).setValues([buildRow(headers, p, existing)]);
+      applyValidations(sheet, rowIdx);
       return out.setContent(JSON.stringify({ ok: true }));
 
     } else {
@@ -57,6 +77,21 @@ function handle(p) {
   } catch (err) {
     return out.setContent(JSON.stringify({ ok: false, error: err.toString() }));
   }
+}
+
+function applyValidations(sheet, rowIdx) {
+  var rule;
+  rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(UNIDADES, true).setAllowInvalid(false).build();
+  sheet.getRange(rowIdx, COL_UNIDADE).setDataValidation(rule);
+
+  rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(DEPTOS, true).setAllowInvalid(false).build();
+  sheet.getRange(rowIdx, COL_DEPARTAMENTO).setDataValidation(rule);
+
+  rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(STATUS_OPTS, true).setAllowInvalid(false).build();
+  sheet.getRange(rowIdx, COL_STATUS).setDataValidation(rule);
 }
 
 // Normaliza cabeçalho: minúsculas, sem acentos, espaços → _
