@@ -86,7 +86,7 @@ function avaliarTeste(e) {
 
     sheet.getRange(targetRow, colStatus + 1).setValue(status);
     var textoObs = obs;
-    if (vagaVinculada) textoObs = textoObs ? textoObs + ' (' + vagaVinculada + ')' : vagaVinculada;
+    if (vagaVinculada) textoObs = textoObs ? textoObs + ' (para vaga ' + vagaVinculada + ')' : '(para vaga ' + vagaVinculada + ')';
     if (colObs >= 0 && textoObs) sheet.getRange(targetRow, colObs + 1).setValue(textoObs);
 
     return respostaJSON(true, 'Status atualizado com sucesso');
@@ -150,7 +150,7 @@ function avaliarEntrevista(e) {
 
     sheet.getRange(targetRow, colStatus + 1).setValue(status);
     var textoObs = feedback;
-    if (vagaVinculada) textoObs = textoObs ? textoObs + ' (' + vagaVinculada + ')' : vagaVinculada;
+    if (vagaVinculada) textoObs = textoObs ? textoObs + ' (para vaga ' + vagaVinculada + ')' : '(para vaga ' + vagaVinculada + ')';
     if (colObs >= 0 && textoObs) sheet.getRange(targetRow, colObs + 1).setValue(textoObs);
 
     // Monta contatos de referência
