@@ -122,13 +122,12 @@ function avaliarEntrevista(e) {
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     var cab = headers.map(function(h) { return h.toString().trim().toUpperCase(); });
 
-    var colNome          = cab.indexOf('NOME');
-    var colContato       = cab.indexOf('CONTATO');
-    var colStatus        = cab.indexOf('STATUS DA ENTREVISTA');
-    var colObs           = cab.indexOf('OBSERVAÇÕES DAS ENTREVISTAS');
-    var colContRef       = cab.indexOf('CONTATO DE REFERÊNCIA');
-    var colVagaVinculada = cab.indexOf('VAGA VINCULADA');
-    var colDataHora      = cab.indexOf('FEEDBACK_ENVIADO_EM');
+    var colNome     = cab.indexOf('NOME');
+    var colContato  = cab.indexOf('CONTATO');
+    var colStatus   = cab.indexOf('STATUS DA ENTREVISTA');
+    var colObs      = cab.indexOf('OBSERVAÇÕES DAS ENTREVISTAS');
+    var colContRef  = cab.indexOf('CONTATO DE REFERÊNCIA');
+    var colDataHora = cab.indexOf('FEEDBACK_ENVIADO_EM');
 
     if (colStatus === -1) return respostaJSON(false, 'Coluna STATUS DA ENTREVISTA não encontrada');
 
@@ -150,8 +149,9 @@ function avaliarEntrevista(e) {
     }
 
     sheet.getRange(targetRow, colStatus + 1).setValue(status);
-    if (colObs >= 0 && feedback) sheet.getRange(targetRow, colObs + 1).setValue(feedback);
-    if (colVagaVinculada >= 0 && vagaVinculada) sheet.getRange(targetRow, colVagaVinculada + 1).setValue(vagaVinculada);
+    var textoObs = feedback;
+    if (vagaVinculada) textoObs = textoObs ? textoObs + ' (' + vagaVinculada + ')' : vagaVinculada;
+    if (colObs >= 0 && textoObs) sheet.getRange(targetRow, colObs + 1).setValue(textoObs);
 
     // Monta contatos de referência
     function juntarContato(nome, tel) {
