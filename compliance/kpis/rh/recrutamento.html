@@ -1257,6 +1257,9 @@ function cardVaga(r) {
     (r.horario ? '<div class="card-field"><span class="field-label">Horário</span><span class="field-value">'+escH(r.horario)+'</span></div>' : '<div class="card-field"></div>')+
     (r.data ? '<div class="card-field"><span class="field-label">Data de Abertura</span><span class="field-value">'+escH(fmtDateBR(r.data))+'</span></div>' : '<div class="card-field"></div>')+
     (r.lider ? '<div class="card-field"><span class="field-label">Líder responsável</span><span class="field-value">'+escH(r.lider)+'</span></div>' : '<div class="card-field"></div>')+
+    (isAdmin && r.colaborador_anterior ? '<div class="card-field"><span class="field-label">Colaborador Ant.</span><span class="field-value">'+escH(r.colaborador_anterior)+'</span></div>' : (isAdmin ? '<div class="card-field"></div>' : ''))+
+    (isAdmin && r.salario_fixo ? '<div class="card-field"><span class="field-label">Sal. Fixo</span><span class="field-value" style="font-family:\'DM Mono\',monospace;font-size:11px">'+_fmtMoney(r.salario_fixo)+'</span></div>' : (isAdmin ? '<div class="card-field"></div>' : ''))+
+    (isAdmin && r.salario_bruto ? '<div class="card-field"><span class="field-label">Sal. Bruto</span><span class="field-value" style="font-family:\'DM Mono\',monospace;font-size:11px">'+_fmtMoney(r.salario_bruto)+'</span></div>' : (isAdmin ? '<div class="card-field"></div>' : ''))+
     '</div></div>';
 }
 
@@ -1279,10 +1282,10 @@ function _vagaSortedRows() {
 function toggleVagaSort(col) {
   if (_vagaSortCol === col) { _vagaSortDir = -_vagaSortDir; }
   else { _vagaSortCol = col; _vagaSortDir = 1; }
-  var base = { cargo:'↕', departamento:'↕', unidade:'↕', escala:'↕', horario:'↕', data:'↕', lider:'↕' };
+  var base = { cargo:'↕', departamento:'↕', unidade:'↕', escala:'↕', horario:'↕', data:'↕', lider:'↕', colaborador_anterior:'↕' };
   base[_vagaSortCol] = _vagaSortDir === 1 ? '↑' : '↓';
-  ['cargo','departamento','unidade','escala','horario','data','lider'].forEach(function(k) {
-    var el = document.getElementById('vi-'+k); if (el) el.textContent = base[k];
+  ['cargo','departamento','unidade','escala','horario','data','lider','colaborador'].forEach(function(k) {
+    var el = document.getElementById('vi-'+k); if (el) el.textContent = base[k === 'colaborador' ? 'colaborador_anterior' : k];
   });
   _vagaShown = VAGA_PAGE;
   renderVagasTableRows();
@@ -1295,18 +1298,22 @@ function renderVagasTableHtml(rows) {
   _vagaSortDir = 1;
   var n = rows.length;
   var countLabel = n + ' vaga' + (n !== 1 ? 's' : '');
+  var wA = isAdmin; // admin widths differ
   return '<div class="vaga-table-wrap">'+
     '<div class="vaga-table-title">Vagas abertas <span class="vaga-table-count">— '+countLabel+'</span></div>'+
     '<table class="vaga-table"><thead><tr>'+
-    '<th onclick="toggleVagaSort(\'data\')">Data de Abertura <span id="vi-data">↕</span></th>'+
-    '<th onclick="toggleVagaSort(\'unidade\')">Unidade <span id="vi-unidade">↕</span></th>'+
-    '<th onclick="toggleVagaSort(\'departamento\')">Departamento <span id="vi-departamento">↕</span></th>'+
-    '<th onclick="toggleVagaSort(\'cargo\')">Cargo <span id="vi-cargo">↓</span></th>'+
-    '<th onclick="toggleVagaSort(\'escala\')">Escala <span id="vi-escala">↕</span></th>'+
-    '<th onclick="toggleVagaSort(\'horario\')">Horário <span id="vi-horario">↕</span></th>'+
-    '<th onclick="toggleVagaSort(\'lider\')">Líder responsável <span id="vi-lider">↕</span></th>'+
-    '<th style="cursor:default">Status</th>'+
-    (isAdmin ? '<th style="cursor:default"></th>' : '')+
+    '<th style="width:'+(wA?'8%':'14%')+'" onclick="toggleVagaSort(\'data\')">Data <span id="vi-data">↕</span></th>'+
+    '<th style="width:'+(wA?'8%':'12%')+'" onclick="toggleVagaSort(\'unidade\')">Unidade <span id="vi-unidade">↕</span></th>'+
+    '<th style="width:'+(wA?'8%':'11%')+'" onclick="toggleVagaSort(\'departamento\')">Departamento <span id="vi-departamento">↕</span></th>'+
+    '<th style="width:'+(wA?'9%':'13%')+'" onclick="toggleVagaSort(\'cargo\')">Cargo <span id="vi-cargo">↓</span></th>'+
+    '<th style="width:'+(wA?'6%':'8%')+'" onclick="toggleVagaSort(\'escala\')">Escala <span id="vi-escala">↕</span></th>'+
+    '<th style="width:'+(wA?'8%':'10%')+'" onclick="toggleVagaSort(\'horario\')">Horário <span id="vi-horario">↕</span></th>'+
+    '<th style="width:'+(wA?'10%':'17%')+'" onclick="toggleVagaSort(\'lider\')">Líder responsável <span id="vi-lider">↕</span></th>'+
+    '<th style="width:'+(wA?'8%':'15%')+';cursor:default">Status</th>'+
+    (wA ? '<th style="width:11%;cursor:default" onclick="toggleVagaSort(\'colaborador_anterior\')">Colaborador Ant. <span id="vi-colaborador">↕</span></th>' : '')+
+    (wA ? '<th style="width:8%;cursor:default">Sal. Fixo</th>' : '')+
+    (wA ? '<th style="width:8%;cursor:default">Sal. Bruto</th>' : '')+
+    (wA ? '<th style="width:4%;cursor:default"></th>' : '')+
     '</tr></thead>'+
     '<tbody id="tbody-vagas"></tbody>'+
     '</table></div>';
@@ -1319,7 +1326,7 @@ function renderVagasTableRows() {
   if (!tbody) return;
   var sorted = _vagaSortedRows();
   var display = sorted.slice(0, _vagaShown);
-  var cols = isAdmin ? 9 : 8;
+  var cols = isAdmin ? 12 : 8;
   var html = display.map(function(r) {
     var sf = slugVagaStatus(r.status);
     return '<tr>'+
@@ -1331,6 +1338,9 @@ function renderVagasTableRows() {
       '<td>'+escH(r.horario || '—')+'</td>'+
       '<td>'+escH(r.lider || '—')+'</td>'+
       '<td><span class="status-badge sf-'+sf+'">'+escH(r.status || 'Sem status')+'</span></td>'+
+      (isAdmin ? '<td>'+escH(r.colaborador_anterior || '—')+'</td>' : '')+
+      (isAdmin ? '<td style="font-family:\'DM Mono\',monospace;font-size:11px">'+(r.salario_fixo ? _fmtMoney(r.salario_fixo) : '—')+'</td>' : '')+
+      (isAdmin ? '<td style="font-family:\'DM Mono\',monospace;font-size:11px">'+(r.salario_bruto ? _fmtMoney(r.salario_bruto) : '—')+'</td>' : '')+
       (isAdmin ? '<td><button class="btn-editar" title="Editar" onclick="openEditVaga(\''+r._linha+'\')">'+_editSvg+'</button></td>' : '')+
       '</tr>';
   }).join('');
