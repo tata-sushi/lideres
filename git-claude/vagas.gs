@@ -55,6 +55,7 @@ function handle(p) {
     }
 
     if (p.action === 'addVaga') {
+      p.status = 'Aberta'; // nova vaga sempre começa aberta
       var emptyBase = new Array(headers.length).fill('');
       sheet.appendRow(buildRow(headers, p, emptyBase));
       applyValidations(sheet, sheet.getLastRow());
@@ -101,10 +102,12 @@ function normKey(h) {
     .replace(/\s+/g, '_');
 }
 
-// Monta a linha: campos editáveis vêm do payload, demais preservam 'base'
+// Monta a linha: campos editáveis vêm do payload; se vazio, preserva 'base'
 function buildRow(headers, p, base) {
   return headers.map(function (h, i) {
     var field = FIELD_MAP[h];
-    return field !== undefined ? (p[field] || '') : (base[i] !== undefined ? base[i] : '');
+    if (field === undefined) return base[i] !== undefined ? base[i] : '';
+    var val = p[field];
+    return (val !== undefined && val !== '') ? val : (base[i] !== undefined ? base[i] : '');
   });
 }
