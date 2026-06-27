@@ -1855,19 +1855,43 @@ function popularVagasSelect() {
     var s = norm((v.status||'').toLowerCase().trim());
     return s === 'aberta' || s === 'aberto' || s.indexOf('andamento') >= 0;
   });
-  abertas.forEach(function(v) {
-    var label = [v.cargo, v.unidade, v.departamento].filter(Boolean).join(' · ');
-    var opt = document.createElement('option');
-    opt.value = label;
-    opt.textContent = label;
-    sel.appendChild(opt);
-  });
   if (!abertas.length) {
     var opt = document.createElement('option');
     opt.value = ''; opt.disabled = true;
     opt.textContent = 'Nenhuma vaga aberta encontrada';
     sel.appendChild(opt);
+    return;
   }
+  // Ordena: unidade → departamento → cargo
+  abertas.sort(function(a, b) {
+    var u = (a.unidade||'').localeCompare(b.unidade||'', 'pt-BR');
+    if (u !== 0) return u;
+    var d = (a.departamento||'').localeCompare(b.departamento||'', 'pt-BR');
+    if (d !== 0) return d;
+    return (a.cargo||'').localeCompare(b.cargo||'', 'pt-BR');
+  });
+  // Agrupa por unidade via <optgroup>
+  var grupos = {};
+  var ordem = [];
+  abertas.forEach(function(v) {
+    var u = v.unidade || 'Sem unidade';
+    if (!grupos[u]) { grupos[u] = []; ordem.push(u); }
+    grupos[u].push(v);
+  });
+  ordem.forEach(function(unidade) {
+    var grp = document.createElement('optgroup');
+    grp.label = unidade;
+    grupos[unidade].forEach(function(v) {
+      var parts = [v.cargo, v.departamento, v.horario].filter(Boolean);
+      var label = parts.join(' · ');
+      var value = [v.cargo, v.unidade, v.departamento, v.horario].filter(Boolean).join(' · ');
+      var opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label;
+      grp.appendChild(opt);
+    });
+    sel.appendChild(grp);
+  });
 }
 
 function salvarAvaliacao() {
