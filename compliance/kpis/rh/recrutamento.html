@@ -226,19 +226,7 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .btn-editar { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; background: var(--carbon); color: var(--citric); border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.15s; }
 .btn-editar:hover { opacity: 0.85; }
 .btn-editar svg { width: 12px; height: 12px; }
-.ev-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 400; opacity: 0; visibility: hidden; transition: opacity .2s, visibility .2s; display: flex; align-items: flex-end; }
-.ev-overlay.open { opacity: 1; visibility: visible; }
-.ev-panel { background: var(--surface); border-radius: 12px 12px 0 0; padding: 20px 20px 32px; transform: translateY(20px); transition: transform .25s; max-height: 90dvh; overflow-y: auto; width: 100%; }
-.ev-overlay.open .ev-panel { transform: translateY(0); }
-.ev-title { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--carbon); margin-bottom: 16px; }
-.ev-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
-.ev-field { display: flex; flex-direction: column; gap: 4px; }
-.ev-label { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
-.ev-input { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 13px; color: var(--carbon); background: var(--bg); outline: none; font-family: inherit; }
-.ev-input:focus { border-color: var(--carbon); }
-.ev-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
-.ev-btn-cancel { padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; background: none; font-size: 13px; cursor: pointer; color: var(--mid); }
-.ev-btn-save { padding: 8px 16px; border: none; border-radius: 6px; background: var(--carbon); color: var(--citric); font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; }
+.ev-field { display: flex; flex-direction: column; gap: 6px; }
 @media (min-width: 768px) {
   body[data-view="vagas"] .vaga-table-wrap { display: block; }
   body[data-view="vagas"] .vagas-cards-wrap { display: none; }
@@ -1315,6 +1303,52 @@ function showMoreVagas() {
 
 // ─── Edit Vaga ────────────────────────────────────────────────────────────────
 var VAGAS_EDIT_URL = '';
+var EV_CARGOS_URL  = 'https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec';
+var EV_MAPA_URL    = 'https://script.google.com/macros/s/AKfycbykOWkQ3ceH_50bmc_3dcLjUrE9V4Ropbraxc0yykMIp6W8eDVtpyo2XmN1Y_KJQzol/exec';
+var _evCargos  = null;
+var _evLideres = null;
+
+function _loadEvCargos(callback) {
+  if (_evCargos) { callback(_evCargos); return; }
+  fetch(EV_CARGOS_URL + '?action=getAll')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var seen = {};
+      _evCargos = (data.salarios || [])
+        .map(function(s) { return (s.cargo || '').trim(); })
+        .filter(function(c) { if (!c || seen[c]) return false; seen[c] = true; return true; })
+        .sort();
+      callback(_evCargos);
+    })
+    .catch(function() { _evCargos = []; callback([]); });
+}
+
+function _loadEvLideres(callback) {
+  if (_evLideres) { callback(_evLideres); return; }
+  fetch(EV_MAPA_URL + '?action=mapa')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      _evLideres = (data.usuarios || [])
+        .filter(function(u) { return u.perfil === 'lider'; })
+        .map(function(u) { return u.nome || ''; })
+        .filter(Boolean)
+        .sort();
+      callback(_evLideres);
+    })
+    .catch(function() { _evLideres = []; callback([]); });
+}
+
+function _evPopulateSelect(id, options, current) {
+  var sel = document.getElementById(id);
+  if (!sel) return;
+  var found = options.indexOf(current) >= 0;
+  var html = (!found && current) ? '<option value="'+escH(current)+'" selected>'+escH(current)+'</option>' : '';
+  html += options.map(function(o) {
+    return '<option value="'+escH(o)+'"'+(o===current?' selected':'')+'>'+escH(o)+'</option>';
+  }).join('');
+  sel.innerHTML = html || '<option value="">Nenhum</option>';
+  if (current) sel.value = current;
+}
 
 function openEditVaga(linha) {
   var r = null;
@@ -1322,30 +1356,29 @@ function openEditVaga(linha) {
     if (String(_vagaRows[i]._linha) === String(linha)) { r = _vagaRows[i]; break; }
   }
   if (!r) return;
-  document.getElementById('ev-linha').value       = r._linha || '';
-  document.getElementById('ev-status').value      = r.status || 'Aberta';
-  document.getElementById('ev-cargo').value       = r.cargo || '';
+  var t = document.getElementById('ev-cargo-title');
+  if (t) t.textContent = r.cargo || 'Vaga sem título';
+  document.getElementById('ev-linha').value        = r._linha || '';
+  document.getElementById('ev-status').value       = (r.status === 'Fechada') ? 'Fechada' : 'Aberta';
+  document.getElementById('ev-unidade').value      = r.unidade || '';
   document.getElementById('ev-departamento').value = r.departamento || '';
-  document.getElementById('ev-unidade').value     = r.unidade || '';
-  document.getElementById('ev-escala').value      = r.escala || '';
-  document.getElementById('ev-horario').value     = r.horario || '';
-  document.getElementById('ev-data').value        = r.data || '';
-  document.getElementById('ev-lider').value       = r.lider || '';
-  document.getElementById('ev-overlay').classList.add('open');
+  document.getElementById('ev-escala').value       = (r.escala || '').indexOf('5x2') >= 0 ? '5x2' : '6x1';
+  document.getElementById('ev-horario').value      = r.horario || '';
+  document.getElementById('ev-data').value         = r.data ? fmtDateBR(r.data) : '';
+  _loadEvCargos(function(list) { _evPopulateSelect('ev-cargo', list, r.cargo || ''); });
+  _loadEvLideres(function(list) { _evPopulateSelect('ev-lider', list, r.lider || ''); });
+  document.getElementById('ev-overlay').classList.add('active');
 }
 function closeEditVaga() {
-  document.getElementById('ev-overlay').classList.remove('open');
-}
-function evOverlayClick(e) {
-  if (e.target === document.getElementById('ev-overlay')) closeEditVaga();
+  document.getElementById('ev-overlay').classList.remove('active');
 }
 function salvarEditVaga() {
   if (!VAGAS_EDIT_URL) { alert('URL do Apps Script de vagas não configurada.'); return; }
   var btn = document.getElementById('ev-save');
   btn.disabled = true; btn.textContent = 'Salvando…';
   var payload = {
-    action: 'updateVaga',
-    row_index: document.getElementById('ev-linha').value,
+    action:       'updateVaga',
+    row_index:    document.getElementById('ev-linha').value,
     status:       document.getElementById('ev-status').value,
     cargo:        document.getElementById('ev-cargo').value,
     departamento: document.getElementById('ev-departamento').value,
@@ -1363,14 +1396,14 @@ function salvarEditVaga() {
         var linha = payload.row_index;
         for (var i = 0; i < _vagaRows.length; i++) {
           if (String(_vagaRows[i]._linha) === String(linha)) {
-            _vagaRows[i].status      = payload.status;
-            _vagaRows[i].cargo       = payload.cargo;
+            _vagaRows[i].status       = payload.status;
+            _vagaRows[i].cargo        = payload.cargo;
             _vagaRows[i].departamento = payload.departamento;
-            _vagaRows[i].unidade     = payload.unidade;
-            _vagaRows[i].escala      = payload.escala;
-            _vagaRows[i].horario     = payload.horario;
-            _vagaRows[i].data        = payload.data;
-            _vagaRows[i].lider       = payload.lider;
+            _vagaRows[i].unidade      = payload.unidade;
+            _vagaRows[i].escala       = payload.escala;
+            _vagaRows[i].horario      = payload.horario;
+            _vagaRows[i].data         = payload.data;
+            _vagaRows[i].lider        = payload.lider;
             break;
           }
         }
@@ -2470,31 +2503,101 @@ loadAllData();
 })();
 </script>
 <!-- EDIT VAGA -->
-<div class="ev-overlay" id="ev-overlay" onclick="evOverlayClick(event)">
-  <div class="ev-panel">
-    <div class="ev-title">Editar Vaga</div>
-    <input type="hidden" id="ev-linha">
-    <div class="ev-grid">
-      <div class="ev-field"><label class="ev-label">Status</label>
-        <select class="ev-input" id="ev-status">
-          <option value="Aberta">Aberta</option>
-          <option value="Em andamento">Em andamento</option>
-          <option value="Fechada">Fechada</option>
-          <option value="Pausada">Pausada</option>
-          <option value="Cancelada">Cancelada</option>
-        </select>
+<div class="modal-overlay" id="ev-overlay" onclick="if(event.target===this)closeEditVaga()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-header-info">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Editar Vaga</div>
+        <div class="candidate-name" id="ev-cargo-title">—</div>
       </div>
-      <div class="ev-field"><label class="ev-label">Cargo</label><input class="ev-input" id="ev-cargo" type="text"></div>
-      <div class="ev-field"><label class="ev-label">Departamento</label><input class="ev-input" id="ev-departamento" type="text"></div>
-      <div class="ev-field"><label class="ev-label">Unidade</label><input class="ev-input" id="ev-unidade" type="text"></div>
-      <div class="ev-field"><label class="ev-label">Escala</label><input class="ev-input" id="ev-escala" type="text"></div>
-      <div class="ev-field"><label class="ev-label">Horário</label><input class="ev-input" id="ev-horario" type="text"></div>
-      <div class="ev-field"><label class="ev-label">Data de Abertura</label><input class="ev-input" id="ev-data" type="text" placeholder="dd/mm/aaaa"></div>
-      <div class="ev-field"><label class="ev-label">Líder responsável</label><input class="ev-input" id="ev-lider" type="text"></div>
+      <button class="modal-close" onclick="closeEditVaga()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
-    <div class="ev-actions">
-      <button class="ev-btn-cancel" onclick="closeEditVaga()">Cancelar</button>
-      <button class="ev-btn-save" id="ev-save" onclick="salvarEditVaga()">Salvar</button>
+    <input type="hidden" id="ev-linha">
+    <div class="modal-body">
+      <div class="modal-info-grid">
+        <div class="ev-field">
+          <span class="modal-section-title">Status</span>
+          <select class="modal-select" id="ev-status">
+            <option value="Aberta">Aberta</option>
+            <option value="Fechada">Fechada</option>
+          </select>
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Unidade</span>
+          <select class="modal-select" id="ev-unidade">
+            <option value="">Selecione</option>
+            <option>Itaim</option>
+            <option>Pinheiros</option>
+            <option>Poke - Pinheiros</option>
+            <option>Administrativo</option>
+            <option>Tatá House</option>
+          </select>
+        </div>
+      </div>
+      <hr class="modal-divider">
+      <div class="modal-info-grid">
+        <div class="ev-field">
+          <span class="modal-section-title">Departamento</span>
+          <select class="modal-select" id="ev-departamento">
+            <option value="">Selecione</option>
+            <option>Bar</option>
+            <option>Caixa</option>
+            <option>Cozinha</option>
+            <option>Delivery</option>
+            <option>Estoque</option>
+            <option>Limpeza</option>
+            <option>Manutenção</option>
+            <option>Operação</option>
+            <option>Peixaria</option>
+            <option>Qualidade</option>
+            <option>Salão</option>
+            <option>Sushibar</option>
+            <option>Cozinha - Refeitório</option>
+            <option>Compras</option>
+            <option>Financeiro</option>
+            <option>RH</option>
+          </select>
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Cargo</span>
+          <select class="modal-select" id="ev-cargo">
+            <option value="">Carregando...</option>
+          </select>
+        </div>
+      </div>
+      <hr class="modal-divider">
+      <div class="modal-info-grid">
+        <div class="ev-field">
+          <span class="modal-section-title">Escala</span>
+          <select class="modal-select" id="ev-escala">
+            <option value="6x1">6x1</option>
+            <option value="5x2">5x2</option>
+          </select>
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Horário</span>
+          <input type="text" class="modal-input" id="ev-horario" placeholder="Ex: 15:00 às 23:20">
+        </div>
+      </div>
+      <hr class="modal-divider">
+      <div class="modal-info-grid">
+        <div class="ev-field">
+          <span class="modal-section-title">Data de Abertura</span>
+          <input type="text" class="modal-input" id="ev-data" readonly style="background:#F4F4F4;color:var(--muted);cursor:default;">
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Líder responsável</span>
+          <select class="modal-select" id="ev-lider">
+            <option value="">Carregando...</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="closeEditVaga()">Cancelar</button>
+      <button class="modal-btn modal-btn-save" id="ev-save" onclick="salvarEditVaga()">Salvar</button>
     </div>
   </div>
 </div>
