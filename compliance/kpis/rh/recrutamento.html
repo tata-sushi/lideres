@@ -812,10 +812,13 @@ function normVaga(obj) {
     quantidade:   v('quantidade','qtd','numero_vagas','n_de_vagas'),
     escala:       v('escala','turno','escala_de_trabalho','regime'),
     horario:      v('horario','hora','horario_de_trabalho','horario_do_cargo'),
-    observacoes:  v('observacoes','observacao','obs','descricao'),
-    prioridade:   v('prioridade','urgencia'),
-    salario:      v('salario','remuneracao','valor','faixa_salarial'),
-    id:           v('id')
+    observacoes:         v('observacoes','observacao','obs','descricao'),
+    prioridade:          v('prioridade','urgencia'),
+    salario:             v('salario','remuneracao','valor','faixa_salarial'),
+    salario_fixo:        v('salario_fixo'),
+    salario_bruto:       v('salario_bruto'),
+    colaborador_anterior: v('colaborador_anterior','colaborador'),
+    id:                  v('id')
   };
 }
 
@@ -1439,7 +1442,7 @@ function _fmtMoney(v) {
 function _evPopulateColaboradorSelect(current) {
   var sel = document.getElementById('ev-colaborador');
   if (!sel) return;
-  var special = ['Vaga Nova', 'Vaga Cota'];
+  var special = ['Vaga Nova'];
   var names   = (_evColaboradores || []).filter(function(n) { return special.indexOf(n) < 0; });
   var all     = special.concat(names);
   var found   = all.indexOf(current) >= 0;
@@ -1485,16 +1488,27 @@ function _evPopulateSelect(id, options, current) {
 
 function evUnidadeChanged() {
   var unidade = (document.getElementById('ev-unidade') || {}).value || '';
-  var currentDepto = (document.getElementById('ev-departamento') || {}).value || '';
-  _evPopulateSelect('ev-departamento', _evDeptsForUnidade(unidade), currentDepto);
-  evDeptoChanged();
+  if (!unidade) {
+    document.getElementById('ev-departamento').innerHTML = '<option value="">Selecione a unidade primeiro</option>';
+    document.getElementById('ev-cargo').innerHTML = '<option value="">Selecione o departamento</option>';
+    evCargoChanged();
+    return;
+  }
+  _evPopulateSelect('ev-departamento', _evDeptsForUnidade(unidade), '');
+  document.getElementById('ev-cargo').innerHTML = '<option value="">Selecione o departamento</option>';
+  evCargoChanged();
 }
 
 function evDeptoChanged() {
   var unidade = (document.getElementById('ev-unidade') || {}).value || '';
   var dept    = (document.getElementById('ev-departamento') || {}).value || '';
-  var currentCargo = (document.getElementById('ev-cargo') || {}).value || '';
-  _evPopulateSelect('ev-cargo', _evCargosForUnidadeDepto(unidade, dept), currentCargo);
+  if (!dept) {
+    document.getElementById('ev-cargo').innerHTML = '<option value="">Selecione o departamento</option>';
+    evCargoChanged();
+    return;
+  }
+  _evPopulateSelect('ev-cargo', _evCargosForUnidadeDepto(unidade, dept), '');
+  evCargoChanged();
 }
 
 function openNewVaga() {
@@ -1505,14 +1519,12 @@ function openNewVaga() {
   document.getElementById('ev-linha').value   = '';
   document.getElementById('ev-escala').value  = '6x1';
   document.getElementById('ev-horario').value = '';
-  var now = new Date(), pad = function(n){return String(n).padStart(2,'0');};
-  document.getElementById('ev-data').value = pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear();
   document.getElementById('ev-unidade').value = '';
   var fx = document.getElementById('ev-salario-fixo'); if (fx) fx.value = '';
   var br = document.getElementById('ev-salario-bruto'); if (br) br.value = '';
   _loadEvCargos(function() {
-    _evPopulateSelect('ev-departamento', _evDeptsForUnidade(''), '');
-    _evPopulateSelect('ev-cargo', _evCargosForUnidadeDepto('', ''), '');
+    document.getElementById('ev-departamento').innerHTML = '<option value="">Selecione a unidade primeiro</option>';
+    document.getElementById('ev-cargo').innerHTML = '<option value="">Selecione o departamento</option>';
   });
   _loadEvLideres(function(list) { _evPopulateSelect('ev-lider', list, ''); });
   _loadEvColaboradores(function() { _evPopulateColaboradorSelect('Vaga Nova'); });
@@ -1532,20 +1544,19 @@ function openEditVaga(linha) {
   document.getElementById('ev-linha').value   = r._linha || '';
   document.getElementById('ev-escala').value  = (r.escala || '').indexOf('5x2') >= 0 ? '5x2' : '6x1';
   document.getElementById('ev-horario').value = r.horario || '';
-  document.getElementById('ev-data').value    = r.data ? fmtDateBR(r.data) : '';
   var _u = r.unidade || '', _d = r.departamento || '', _c = r.cargo || '';
   document.getElementById('ev-unidade').value = _u;
   _loadEvCargos(function() {
-    _evPopulateSelect('ev-departamento', _evDeptsForUnidade(_u), _d);
-    _evPopulateSelect('ev-cargo', _evCargosForUnidadeDepto(_u, _d), _c);
+    _evPopulateSelect('ev-departamento', _u ? _evDeptsForUnidade(_u) : [], _d);
+    _evPopulateSelect('ev-cargo', (_u && _d) ? _evCargosForUnidadeDepto(_u, _d) : [], _c);
+    var sal = _evSalaryForCargo(_u, _d, _c);
+    var fx = document.getElementById('ev-salario-fixo');
+    var br = document.getElementById('ev-salario-bruto');
+    if (fx) fx.value = sal.fixo ? _fmtMoney(sal.fixo) : (r.salario_fixo ? _fmtMoney(r.salario_fixo) : '');
+    if (br) br.value = sal.bruto ? _fmtMoney(sal.bruto) : (r.salario_bruto ? _fmtMoney(r.salario_bruto) : '');
   });
   _loadEvLideres(function(list) { _evPopulateSelect('ev-lider', list, r.lider || ''); });
   _loadEvColaboradores(function() { _evPopulateColaboradorSelect(r.colaborador_anterior || ''); });
-  _loadEvCargos(function() {
-    var sal = _evSalaryForCargo(_u, _d, _c);
-    var fx = document.getElementById('ev-salario-fixo'); if (fx) fx.value = sal.fixo ? _fmtMoney(sal.fixo) : (r.salario_fixo || '');
-    var br = document.getElementById('ev-salario-bruto'); if (br) br.value = sal.bruto ? _fmtMoney(sal.bruto) : (r.salario_bruto || '');
-  });
   document.getElementById('ev-overlay').classList.add('active');
 }
 function closeEditVaga() {
@@ -1563,7 +1574,6 @@ function salvarEditVaga() {
     unidade:      document.getElementById('ev-unidade').value,
     escala:       document.getElementById('ev-escala').value,
     horario:      document.getElementById('ev-horario').value,
-    data:                document.getElementById('ev-data').value,
     lider:               document.getElementById('ev-lider').value,
     colaborador_anterior: document.getElementById('ev-colaborador').value,
     salario_fixo:        (document.getElementById('ev-salario-fixo') || {}).value || '',
@@ -2931,17 +2941,11 @@ function enviarSolicitacao() {
         </div>
       </div>
       <hr class="modal-divider">
-      <div class="modal-info-grid">
-        <div class="ev-field">
-          <span class="modal-section-title">Data de Abertura</span>
-          <input type="text" class="modal-input" id="ev-data" readonly style="background:#F4F4F4;color:var(--muted);cursor:default;">
-        </div>
-        <div class="ev-field">
-          <span class="modal-section-title">Líder responsável</span>
-          <select class="modal-select" id="ev-lider">
-            <option value="">Carregando...</option>
-          </select>
-        </div>
+      <div class="ev-field">
+        <span class="modal-section-title">Líder responsável</span>
+        <select class="modal-select" id="ev-lider">
+          <option value="">Carregando...</option>
+        </select>
       </div>
       <hr class="modal-divider">
       <div class="ev-field">
