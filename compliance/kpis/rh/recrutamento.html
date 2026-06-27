@@ -64,6 +64,8 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
 .tab-btn { flex: 1 0 auto; min-width: max-content; white-space: nowrap; padding: 16px 24px; border: none; background: transparent; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); cursor: pointer; transition: all 0.18s; border-bottom: 2px solid transparent; margin-bottom: -2px; }
 .tab-btn:hover { color: var(--carbon); background: var(--bg); }
 .tab-btn.active { background: var(--carbon); color: var(--citric); border-bottom-color: var(--carbon); }
+.tab-btn.admin-only { display: none; }
+body.is-admin .tab-btn.admin-only { display: inline-flex; }
 
 .filters-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
 .filters-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -293,6 +295,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   window.__lideresSession = session;
   window.__lideresPerfil  = perfil;
   document.documentElement.setAttribute('data-auth', 'ok');
+  if (perfil === 'admin') document.body.classList.add('is-admin');
 })();
 </script>
 <!-- ══ /AUTH GATE ═══════════════════════════════════════════════ -->
@@ -311,6 +314,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <button class="tab-btn active" id="tab-entrevistas" onclick="setTab('entrevistas')">Entrevistas</button>
   <button class="tab-btn" id="tab-testes" onclick="setTab('testes')">Testes</button>
   <button class="tab-btn" id="tab-dashboard" onclick="setTab('dashboard')">KPI's</button>
+  <button class="tab-btn admin-only" id="tab-vagas" onclick="setTab('vagas')">Vagas</button>
 </div>
 <div class="kpis-wrap" id="kpis-wrap">
   <div class="kpi-card">
@@ -543,6 +547,8 @@ var SHEET_ID          = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
 var API_KEY           = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
 var SHEET_ENTREVISTAS = 'CONTROLE DE ENTREVISTAS';
 var SHEET_TESTES      = 'CONTROLE DE TESTES';
+var SHEET_VAGAS_ID    = '';                   // TODO: ID da planilha de vagas
+var SHEET_VAGAS       = 'CONTROLE DE VAGAS';  // TODO: nome da aba de vagas
 var APPS_SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbw-opeZERkGF-qKzt44UWv2alrwWoF3bBshzwADG3d9SIl5k19jGJ7Fs7A76EVJxKI/exec';
 
 // ─── Estado ──────────────────────────────────────────────────────────────────
@@ -562,6 +568,7 @@ var isAdmin = (function(){ var p=(window.__lideresPerfil||''); return p==='admin
 })();
 var entrevistas = [];
 var testes = [];
+var vagas = [];
 var _testeCache = [];
 var _entrevistaCache = [];
 var state = {
@@ -660,6 +667,54 @@ function normTeste(obj) {
   };
 }
 
+function normVaga(obj) {
+  function v() {
+    for (var i=0; i<arguments.length; i++) {
+      if (obj[arguments[i]] !== undefined && obj[arguments[i]] !== '') return obj[arguments[i]];
+    }
+    return '';
+  }
+  return {
+    cargo:        v('cargo','vaga','funcao','posicao','titulo'),
+    unidade:      v('unidade','loja','local','filial'),
+    departamento: v('departamento','depto','setor','area'),
+    status:       v('status','situacao','estado','situacao_da_vaga'),
+    data:         v('data_abertura','data','abertura','data_da_abertura'),
+    responsavel:  v('responsavel','recrutador','gestor','responsavel_pela_vaga'),
+    quantidade:   v('quantidade','qtd','vagas','numero_vagas','n_de_vagas'),
+    observacoes:  v('observacoes','observacao','obs','descricao','detalhes'),
+    prioridade:   v('prioridade','urgencia','nivel_prioridade'),
+    salario:      v('salario','remuneracao','valor','faixa_salarial'),
+    id:           v('id')
+  };
+}
+
+function fetchSheetVagas(callback) {
+  if (!SHEET_VAGAS_ID && !SHEET_ID) { callback([], null); return; }
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/'
+    + (SHEET_VAGAS_ID || SHEET_ID)
+    + '/values/' + encodeURIComponent(SHEET_VAGAS + '!A:Z')
+    + '?key=' + API_KEY;
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) { callback([], null); return; }
+      var rows = data.values || [];
+      if (rows.length < 2) { callback([], null); return; }
+      var headers = rows[0];
+      var result = [];
+      for (var i = 1; i < rows.length; i++) {
+        if (rows[i].some(function(c){return c && c.trim();})) {
+          var obj = normVaga(rowToObj(headers, rows[i]));
+          obj._linha = i + 1;
+          result.push(obj);
+        }
+      }
+      callback(result, null);
+    })
+    .catch(function() { callback([], null); });
+}
+
 function fetchSheet(sheetName, normFn, callback) {
   fetch(sheetURL(sheetName))
     .then(function(r) { return r.json(); })
@@ -684,15 +739,22 @@ function fetchSheet(sheetName, normFn, callback) {
 function loadAllData() {
   state.loading = true; state.error = null;
   showLoading();
+  var total = isAdmin ? 3 : 2;
   var done = 0, errors = [];
   fetchSheet(SHEET_ENTREVISTAS, normEntrevista, function(data, err) {
     if (err) errors.push('Entrevistas: ' + err); else entrevistas = data || [];
-    if (++done === 2) finishLoad(errors);
+    if (++done === total) finishLoad(errors);
   });
   fetchSheet(SHEET_TESTES, normTeste, function(data, err) {
     if (err) errors.push('Testes: ' + err); else testes = data || [];
-    if (++done === 2) finishLoad(errors);
+    if (++done === total) finishLoad(errors);
   });
+  if (isAdmin) {
+    fetchSheetVagas(function(data) {
+      vagas = data || [];
+      if (++done === total) finishLoad(errors);
+    });
+  }
 }
 
 function finishLoad(errors) {
@@ -774,7 +836,11 @@ function contactHTML(c) {
 }
 
 // ─── Filtros ──────────────────────────────────────────────────────────────────
-function getSrc() { return state.tab==='entrevistas' ? entrevistas : testes; }
+function getSrc() {
+  return state.tab==='entrevistas' ? entrevistas :
+         state.tab==='testes'      ? testes      :
+         vagas;
+}
 
 function isHorarioZero(h) {
   if (!h) return true;
@@ -790,6 +856,14 @@ function isValorZero(v) {
 
 function getFiltered() {
   var src=getSrc(), f=state.filters;
+  if (state.tab === 'vagas') {
+    return src.filter(function(r) {
+      if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
+      if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
+      if (f.status!=='Todos' && r.status!==f.status) return false;
+      return true;
+    });
+  }
   var hoje=new Date(); hoje.setHours(0,0,0,0);
   var dMin=new Date(hoje); dMin.setDate(dMin.getDate()-10);
   var dMax=new Date(hoje); dMax.setDate(dMax.getDate()+10);
@@ -815,6 +889,7 @@ function getFiltered() {
 }
 
 function getStatusOpts() {
+  if (state.tab === 'vagas') return unique(vagas.map(function(r){return r.status;}));
   var src=getSrc();
   if (state.tab==='entrevistas') {
     src = src.filter(function(r){
@@ -868,6 +943,7 @@ function showError(msg) {
 
 // ─── Filtros UI ───────────────────────────────────────────────────────────────
 function renderFilters() {
+  if (state.tab === 'vagas') { renderVagasFilters(); return; }
   var src=getSrc(), f=state.filters, filtered=getFiltered();
   function sel(label, key, opts, curVal) {
     var h='<div class="filter-group"><label class="filter-label">'+label+'</label><select class="filter-select" onchange="setFilter(\''+key+'\',this.value)">';
@@ -895,6 +971,24 @@ function renderFilters() {
   html+=sel('Status','status',getStatusOpts(),f.status);
   html+='</div><div class="filters-actions"><button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>';
   html+='<span class="results-count"><span>'+filtered.length+'</span> resultado(s)</span></div>';
+  document.getElementById('filters-wrap').innerHTML=html;
+}
+
+function renderVagasFilters() {
+  var src=vagas, f=state.filters, filtered=getFiltered();
+  function sel(label, key, opts, curVal) {
+    var h='<div class="filter-group"><label class="filter-label">'+label+'</label><select class="filter-select" onchange="setFilter(\''+key+'\',this.value)">';
+    h+='<option value="Todos"'+(curVal==='Todos'?' selected':'')+'>Todos</option>';
+    opts.forEach(function(o){ h+='<option value="'+escH(o)+'"'+(curVal===o?' selected':'')+'>'+escH(o)+'</option>'; });
+    return h+'</select></div>';
+  }
+  var deptSrc = f.unidade==='Todos' ? src : src.filter(function(r){return r.unidade===f.unidade;});
+  var html='<div class="filters-row">';
+  html+=sel('Unidade','unidade',unique(src.map(function(r){return r.unidade;})),f.unidade);
+  html+=sel('Departamento','departamento',unique(deptSrc.map(function(r){return r.departamento;})),f.departamento);
+  html+=sel('Status','status',getStatusOpts(),f.status);
+  html+='</div><div class="filters-actions"><button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>';
+  html+='<span class="results-count"><span>'+filtered.length+'</span> vaga(s)</span></div>';
   document.getElementById('filters-wrap').innerHTML=html;
 }
 
@@ -992,6 +1086,36 @@ function cardTeste(r) {
     '<div class="card-field"><span class="field-label">Turno</span><span class="field-value">'+escH(r.recrutador)+'</span></div>'+
     '<div class="card-field"><span class="field-label">Valor Diária</span><span class="field-value">'+escH(r.pretensao)+'</span></div>'+
     '</div>'+footer+'</div>';
+}
+
+function slugVagaStatus(s) {
+  if (!s) return 'aguardando-entrevista';
+  var l = norm(s.toLowerCase().trim());
+  if (l.indexOf('aberta')>=0 || l.indexOf('aberto')>=0 || l.indexOf('ativa')>=0) return 'aguardando-entrevista';
+  if (l.indexOf('fechada')>=0 || l.indexOf('fechado')>=0 || l.indexOf('preenchida')>=0 || l.indexOf('encerrada')>=0) return 'contratado';
+  if (l.indexOf('cancelada')>=0 || l.indexOf('cancelado')>=0) return 'cancelado';
+  if (l.indexOf('pausada')>=0 || l.indexOf('pausado')>=0 || l.indexOf('suspensa')>=0) return 'aguardando-aprovacao';
+  return 'default';
+}
+
+function cardVaga(r) {
+  var sf = slugVagaStatus(r.status);
+  var sfLabel = r.status || 'Sem status';
+  return '<div class="card">'+
+    '<div class="card-header"><div>'+
+    '<div class="candidate-name">'+escH(r.cargo || 'Vaga sem título')+'</div>'+
+    '<div class="candidate-contact">'+escH(r.unidade)+'</div></div>'+
+    '<span class="status-badge sf-'+sf+'">'+escH(sfLabel)+'</span></div>'+
+    '<div class="card-body">'+
+    '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+escH(r.unidade)+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Departamento</span><span class="field-value">'+escH(r.departamento)+'</span></div>'+
+    (r.quantidade ? '<div class="card-field"><span class="field-label">Vagas</span><span class="field-value">'+escH(r.quantidade)+'</span></div>' : '')+
+    (r.data ? '<div class="card-field"><span class="field-label">Data Abertura</span><span class="field-value">'+escH(r.data)+'</span></div>' : '')+
+    (r.responsavel ? '<div class="card-field"><span class="field-label">Responsável</span><span class="field-value">'+escH(r.responsavel)+'</span></div>' : '')+
+    (r.salario ? '<div class="card-field"><span class="field-label">Salário</span><span class="field-value">'+escH(r.salario)+'</span></div>' : '')+
+    (r.prioridade ? '<div class="card-field"><span class="field-label">Prioridade</span><span class="field-value">'+escH(r.prioridade)+'</span></div>' : '')+
+    (r.observacoes ? '<div class="card-field"><span class="field-label">Observações</span><span class="field-value">'+escH(r.observacoes)+'</span></div>' : '')+
+    '</div></div>';
 }
 
 function emptyState() {
@@ -1642,7 +1766,11 @@ function render() {
   var c=document.getElementById('content');
   if (!filtered.length) { c.innerHTML=emptyState(); return; }
   _testeCache=[];_entrevistaCache=[];
-  c.innerHTML=filtered.map(function(r){ return state.tab==='entrevistas'?cardEntrevista(r):cardTeste(r); }).join('');
+  c.innerHTML=filtered.map(function(r){
+    return state.tab==='entrevistas'?cardEntrevista(r):
+           state.tab==='testes'?cardTeste(r):
+           cardVaga(r);
+  }).join('');
 }
 
 function setTab(tab) {
@@ -1655,6 +1783,7 @@ function setTab(tab) {
   document.getElementById('tab-entrevistas').classList.toggle('active',tab==='entrevistas');
   document.getElementById('tab-testes').classList.toggle('active',tab==='testes');
   document.getElementById('tab-dashboard').classList.toggle('active',tab==='dashboard');
+  document.getElementById('tab-vagas').classList.toggle('active',tab==='vagas');
   render();
 }
 function setFilter(key,val) {
