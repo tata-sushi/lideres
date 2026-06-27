@@ -1361,22 +1361,28 @@ function _loadEvCargos(callback) {
   fetch(EV_CARGOS_URL + '?action=getAll')
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      var seen = {};
+      var seenMap = {};
       _evCargos = (data.salarios || [])
         .map(function(s) {
           return {
             unidade: (s.unidade || '').trim(),
             dept:    (s.departamento || '').trim(),
             nome:    ((s.cargo || '') + (s.niveis ? ' ' + s.niveis : '')).trim(),
-            fixo:    s.salario_fixo      || '',
-            bruto:   s.bruto_aproximado  || ''
+            fixo:    s.salario_fixo     || 0,
+            bruto:   s.bruto_aproximado || 0
           };
         })
         .filter(function(c) {
           if (!c.nome) return false;
           var key = c.unidade + '|' + c.dept + '|' + c.nome;
-          if (seen[key]) return false;
-          seen[key] = true;
+          if (seenMap[key]) {
+            if (c.bruto > seenMap[key].bruto) {
+              seenMap[key].fixo  = c.fixo;
+              seenMap[key].bruto = c.bruto;
+            }
+            return false;
+          }
+          seenMap[key] = c;
           return true;
         });
       callback(_evCargos);
