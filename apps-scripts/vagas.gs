@@ -1,108 +1,75 @@
 // ── Apps Script: CONTROLE DE VAGAS ABERTAS ───────────────────────────────────
-// Implante como Web App:
-//   • Execute as: Me
-//   • Who has access: Anyone
-// Cole a URL gerada em VAGAS_EDIT_URL em recrutamento.html
+// Implantado como Web App: Execute as "Me" / Anyone
+// URL: https://script.google.com/macros/s/AKfycbwMUonqH1hJH-Duj09zS01UX_fxgEmle-AQffXYy9L8SqdvFJjkFVajMNCBjtCLJyFqMg/exec
 
 var SHEET_ID   = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
 var SHEET_NAME = 'CONTROLE DE VAGAS ABERTAS';
 
-function doGet(e) {
-  return handle(e.parameter);
-}
+// Cabeçalhos (normalizados) → campo do payload
+// Colunas não listadas aqui são preservadas no updateVaga e deixadas em branco no addVaga
+var FIELD_MAP = {
+  'data_da_solicitacao': 'data',
+  'unidade':             'unidade',
+  'departamento':        'departamento',
+  'cargo':               'cargo',
+  'escala':              'escala',
+  'horario':             'horario',
+  'status_da_vaga':      'status',
+  'lider_responsavel':   'lider'
+};
+
+function doGet(e) { return handle(e.parameter); }
 
 function doPost(e) {
-  var params;
-  try { params = JSON.parse(e.postData.contents); } catch (_) { params = e.parameter; }
-  return handle(params);
+  var p;
+  try { p = JSON.parse(e.postData.contents); } catch (_) { p = e.parameter; }
+  return handle(p);
 }
 
 function handle(p) {
-  var out = ContentService.createTextOutput();
-  out.setMimeType(ContentService.MimeType.JSON);
+  var out = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
   try {
-    var action = p.action || '';
-    var ss     = SpreadsheetApp.openById(SHEET_ID);
-    var sheet  = ss.getSheetByName(SHEET_NAME);
-    if (!sheet) {
-      out.setContent(JSON.stringify({ ok: false, error: 'Aba não encontrada' }));
-      return out;
-    }
+    var ss    = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAME);
+    if (!sheet) return out.setContent(JSON.stringify({ ok: false, error: 'Aba não encontrada' }));
 
-    if (action === 'addVaga') {
-      var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-      sheet.appendRow(buildRow(headers, p));
-      out.setContent(JSON.stringify({ ok: true }));
+    var lastCol  = sheet.getLastColumn();
+    var headers  = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(normKey);
 
-    } else if (action === 'updateVaga') {
-      var rowIndex = parseInt(p.row_index, 10);
-      if (!rowIndex || rowIndex < 2) {
-        out.setContent(JSON.stringify({ ok: false, error: 'row_index inválido' }));
-        return out;
+    if (p.action === 'addVaga') {
+      var emptyBase = new Array(headers.length).fill('');
+      sheet.appendRow(buildRow(headers, p, emptyBase));
+      return out.setContent(JSON.stringify({ ok: true }));
+
+    } else if (p.action === 'updateVaga') {
+      var rowIdx = parseInt(p.row_index, 10);
+      if (!rowIdx || rowIdx < 2) {
+        return out.setContent(JSON.stringify({ ok: false, error: 'row_index inválido' }));
       }
-      var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-      sheet.getRange(rowIndex, 1, 1, headers.length).setValues([buildRow(headers, p)]);
-      out.setContent(JSON.stringify({ ok: true }));
+      var existing = sheet.getRange(rowIdx, 1, 1, headers.length).getValues()[0];
+      sheet.getRange(rowIdx, 1, 1, headers.length).setValues([buildRow(headers, p, existing)]);
+      return out.setContent(JSON.stringify({ ok: true }));
 
     } else {
-      out.setContent(JSON.stringify({ ok: false, error: 'Ação desconhecida: ' + action }));
+      return out.setContent(JSON.stringify({ ok: false, error: 'Ação desconhecida: ' + p.action }));
     }
 
   } catch (err) {
-    out.setContent(JSON.stringify({ ok: false, error: err.toString() }));
+    return out.setContent(JSON.stringify({ ok: false, error: err.toString() }));
   }
-  return out;
 }
 
+// Normaliza cabeçalho: minúsculas, sem acentos, espaços → _
 function normKey(h) {
   return h.toString().toLowerCase().trim()
-    .replace(/\s+/g, '_')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, '_');
 }
 
-function buildRow(headers, p) {
-  var map = {
-    'cargo':               p.cargo         || '',
-    'vaga':                p.cargo         || '',
-    'funcao':              p.cargo         || '',
-    'posicao':             p.cargo         || '',
-    'titulo':              p.cargo         || '',
-    'unidade':             p.unidade       || '',
-    'loja':                p.unidade       || '',
-    'local':               p.unidade       || '',
-    'filial':              p.unidade       || '',
-    'departamento':        p.departamento  || '',
-    'depto':               p.departamento  || '',
-    'setor':               p.departamento  || '',
-    'area':                p.departamento  || '',
-    'status':              p.status        || '',
-    'status_da_vaga':      p.status        || '',
-    'situacao':            p.status        || '',
-    'estado':              p.status        || '',
-    'data':                p.data          || '',
-    'data_da_solicitacao': p.data          || '',
-    'data_solicitacao':    p.data          || '',
-    'data_abertura':       p.data          || '',
-    'data_de_abertura':    p.data          || '',
-    'abertura':            p.data          || '',
-    'lider':               p.lider         || '',
-    'lider_responsavel':   p.lider         || '',
-    'responsavel_lider':   p.lider         || '',
-    'lider_da_area':       p.lider         || '',
-    'gestor':              p.lider         || '',
-    'gestor_direto':       p.lider         || '',
-    'responsavel':         p.lider         || '',
-    'recrutador':          p.lider         || '',
-    'escala':              p.escala        || '',
-    'turno':               p.escala        || '',
-    'regime':              p.escala        || '',
-    'horario':             p.horario       || '',
-    'hora':                p.horario       || '',
-    'horario_de_trabalho': p.horario       || '',
-    'horario_do_cargo':    p.horario       || ''
-  };
-  return headers.map(function (h) {
-    var k = normKey(h);
-    return map.hasOwnProperty(k) ? map[k] : '';
+// Monta a linha: campos editáveis vêm do payload, demais preservam 'base'
+function buildRow(headers, p, base) {
+  return headers.map(function (h, i) {
+    var field = FIELD_MAP[h];
+    return field !== undefined ? (p[field] || '') : (base[i] !== undefined ? base[i] : '');
   });
 }
