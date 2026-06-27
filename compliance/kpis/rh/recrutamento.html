@@ -397,7 +397,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <hr class="modal-divider">
       <div>
         <div class="modal-section-title">Avaliação</div>
-        <select class="modal-select" id="modal-avaliacao-status" style="margin-top:8px;">
+        <select class="modal-select" id="modal-avaliacao-status" style="margin-top:8px;" onchange="onStatusTesteChange(this.value)">
           <option value="">Selecione o status</option>
           <option value="Contratado">Contratado</option>
           <option value="Agendar outro teste">Agendar outro teste</option>
@@ -405,6 +405,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <option value="Não compareceu">Não compareceu</option>
           <option value="Cancelado">Cancelado</option>
         </select>
+        <div id="modal-vaga-wrap" style="display:none; margin-top:12px;">
+          <div class="modal-section-title" style="margin-bottom:6px;">Vaga vinculada <span style="color:var(--red);font-size:12px;">*</span></div>
+          <select class="modal-select" id="modal-vaga-select">
+            <option value="">Selecione a vaga</option>
+          </select>
+        </div>
       </div>
       <hr class="modal-divider">
       <div>
@@ -1820,6 +1826,8 @@ function abrirModal(idx) {
   // reset form
   document.getElementById('modal-avaliacao-status').value = '';
   document.getElementById('modal-obs').value = '';
+  document.getElementById('modal-vaga-wrap').style.display = 'none';
+  document.getElementById('modal-vaga-select').value = '';
   document.getElementById('modal-avaliacao').classList.add('active');
   document.body.style.overflow = 'hidden';
 }
@@ -1829,9 +1837,47 @@ function fecharModal() {
   document.body.style.overflow = '';
 }
 
+function onStatusTesteChange(val) {
+  var wrap = document.getElementById('modal-vaga-wrap');
+  if (val === 'Contratado') {
+    popularVagasSelect();
+    wrap.style.display = '';
+  } else {
+    wrap.style.display = 'none';
+    document.getElementById('modal-vaga-select').value = '';
+  }
+}
+
+function popularVagasSelect() {
+  var sel = document.getElementById('modal-vaga-select');
+  sel.innerHTML = '<option value="">Selecione a vaga</option>';
+  var abertas = vagas.filter(function(v) {
+    var s = norm((v.status||'').toLowerCase().trim());
+    return s === 'aberta' || s === 'aberto' || s.indexOf('andamento') >= 0;
+  });
+  abertas.forEach(function(v) {
+    var label = [v.cargo, v.unidade, v.departamento].filter(Boolean).join(' · ');
+    var opt = document.createElement('option');
+    opt.value = label;
+    opt.textContent = label;
+    sel.appendChild(opt);
+  });
+  if (!abertas.length) {
+    var opt = document.createElement('option');
+    opt.value = ''; opt.disabled = true;
+    opt.textContent = 'Nenhuma vaga aberta encontrada';
+    sel.appendChild(opt);
+  }
+}
+
 function salvarAvaliacao() {
   var valor = document.getElementById('modal-avaliacao-status').value;
   if (!valor) { alert('Selecione uma opção de avaliação.'); return; }
+  var vagaVinculada = '';
+  if (valor === 'Contratado') {
+    vagaVinculada = document.getElementById('modal-vaga-select').value;
+    if (!vagaVinculada) { alert('Selecione a vaga vinculada à contratação.'); return; }
+  }
   var obs = document.getElementById('modal-obs').value;
   var d = _testeCache[_modalTesteIdx];
   if (!d) { alert('Erro: dados do candidato não encontrados.'); return; }
@@ -1846,12 +1892,13 @@ function salvarAvaliacao() {
   btnSalvar.disabled = true;
 
   var params = new URLSearchParams({
-    acao:    'avaliar-teste',
-    linha:   d.linha || '',
-    nome:    d.nome,
-    contato: d.contato,
-    status:  valor,
-    obs:     obs
+    acao:          'avaliar-teste',
+    linha:         d.linha || '',
+    nome:          d.nome,
+    contato:       d.contato,
+    status:        valor,
+    obs:           obs,
+    vaga_vinculada: vagaVinculada
   });
 
   fetch(APPS_SCRIPT_URL + '?' + params.toString())
