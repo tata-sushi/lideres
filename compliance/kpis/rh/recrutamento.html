@@ -66,6 +66,7 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
 .tab-btn.active { background: var(--carbon); color: var(--citric); border-bottom-color: var(--carbon); }
 .tab-btn.admin-only { display: none; }
 body.is-admin .tab-btn.admin-only { display: inline-flex; }
+body.is-lider .tab-btn.admin-only { display: inline-flex; }
 
 .filters-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
 .filters-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -311,7 +312,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   window.__lideresSession = session;
   window.__lideresPerfil  = perfil;
   document.documentElement.setAttribute('data-auth', 'ok');
-  if (perfil === 'admin') document.body.classList.add('is-admin');
+  if (perfil === 'admin' || perfil === 'analista-rh') document.body.classList.add('is-admin');
+  if (perfil === 'lider') document.body.classList.add('is-lider');
 })();
 </script>
 <!-- ══ /AUTH GATE ═══════════════════════════════════════════════ -->
@@ -585,6 +587,19 @@ var APPS_SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbw-opeZERkGF-qK
 
 // ─── Estado ──────────────────────────────────────────────────────────────────
 var isAdmin = (function(){ var p=(window.__lideresPerfil||''); return p==='admin'||p==='analista-rh'; })();
+var isLider = (window.__lideresPerfil||'') === 'lider';
+function _liderMatchVaga(r) {
+  var sess = window.__lideresSession || {};
+  var myUnidade = norm((sess.unidade||'').toLowerCase().trim());
+  var rawDeptos = Array.isArray(sess.departamentos) ? sess.departamentos : [];
+  if (!rawDeptos.length && sess.departamento) rawDeptos = [sess.departamento];
+  var myDeptos = rawDeptos.map(function(d){ return norm(d.toLowerCase().trim()); });
+  var vagaUnidade = norm((r.unidade||'').toLowerCase().trim());
+  var vagaDepto   = norm((r.departamento||'').toLowerCase().trim());
+  var unitOk  = vagaUnidade === myUnidade || myDeptos.indexOf(vagaUnidade) >= 0;
+  var deptoOk = !myDeptos.length || myDeptos.indexOf(vagaDepto) >= 0;
+  return unitOk && deptoOk;
+}
 (function lockVerMais(){
   var btn = document.querySelector('.btn-ver-mais');
   if (!btn || isAdmin) return;
@@ -895,6 +910,7 @@ function getFiltered() {
     return src.filter(function(r) {
       var s = norm((r.status||'').toLowerCase().trim());
       if (s !== 'aberta' && s !== 'aberto' && s.indexOf('andamento') < 0) return false;
+      if (isLider && !_liderMatchVaga(r)) return false;
       if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
       if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
       return true;
@@ -1011,7 +1027,7 @@ function renderFilters() {
 }
 
 function renderVagasFilters() {
-  var src=vagas.filter(function(v){ var s=norm((v.status||'').toLowerCase().trim()); return s==='aberta'||s==='aberto'||s.indexOf('andamento')>=0; }), f=state.filters, filtered=getFiltered();
+  var src=vagas.filter(function(v){ var s=norm((v.status||'').toLowerCase().trim()); return (s==='aberta'||s==='aberto'||s.indexOf('andamento')>=0) && (!isLider||_liderMatchVaga(v)); }), f=state.filters, filtered=getFiltered();
   function sel(label, key, opts, curVal) {
     var h='<div class="filter-group"><label class="filter-label">'+label+'</label><select class="filter-select" onchange="setFilter(\''+key+'\',this.value)">';
     h+='<option value="Todos"'+(curVal==='Todos'?' selected':'')+'>Todos</option>';
