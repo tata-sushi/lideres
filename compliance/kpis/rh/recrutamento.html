@@ -459,13 +459,21 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="modal-body">
       <div>
         <div class="modal-section-title">Status da entrevista</div>
-        <select class="modal-select" id="modal-ent-status" style="margin-top:8px;">
+        <select class="modal-select" id="modal-ent-status" style="margin-top:8px;" onchange="onStatusEntrevistaChange(this.value)">
           <option value="">Selecione o status</option>
           <option value="Aprovado para teste">Aprovado para teste</option>
           <option value="Não selecionado">Não selecionado</option>
           <option value="Não entrou">Não entrou</option>
           <option value="Não realizada">Não realizada</option>
         </select>
+        <div id="modal-ent-vaga-wrap" style="display:none; margin-top:12px;">
+          <div class="modal-section-title" style="margin-bottom:6px;">Para qual vaga? <span style="color:var(--red);font-size:12px;">*</span></div>
+          <div class="vaga-dd" id="modal-ent-vaga-dropdown">
+            <button type="button" class="vaga-dd-trigger" id="modal-ent-vaga-trigger" onclick="toggleVagaDropdownEnt(event)">Selecione a vaga</button>
+            <div class="vaga-dd-list" id="modal-ent-vaga-list"></div>
+          </div>
+          <input type="hidden" id="modal-ent-vaga-select" value="">
+        </div>
       </div>
       <hr class="modal-divider">
       <div>
@@ -2001,6 +2009,12 @@ function abrirModalEntrevista(idx) {
   document.getElementById('modal-ent-ref1-tel').value = '';
   document.getElementById('modal-ent-ref2-nome').value = '';
   document.getElementById('modal-ent-ref2-tel').value = '';
+  document.getElementById('modal-ent-vaga-wrap').style.display = 'none';
+  document.getElementById('modal-ent-vaga-select').value = '';
+  var _evt = document.getElementById('modal-ent-vaga-trigger');
+  if (_evt) { _evt.textContent = 'Selecione a vaga'; _evt.classList.remove('selected'); }
+  var _edd = document.getElementById('modal-ent-vaga-dropdown');
+  if (_edd) _edd.classList.remove('open');
   document.getElementById('modal-entrevista').classList.add('active');
   document.body.style.overflow = 'hidden';
 }
@@ -2010,9 +2024,89 @@ function fecharModalEntrevista() {
   document.body.style.overflow = '';
 }
 
+function toggleVagaDropdownEnt(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('modal-ent-vaga-dropdown');
+  dd.classList.toggle('open');
+}
+
+function selectVagaEnt(value, cargo, horario) {
+  document.getElementById('modal-ent-vaga-select').value = value;
+  var trigger = document.getElementById('modal-ent-vaga-trigger');
+  trigger.textContent = cargo + (horario ? ' — ' + horario : '');
+  trigger.classList.add('selected');
+  document.getElementById('modal-ent-vaga-dropdown').classList.remove('open');
+  document.querySelectorAll('#modal-ent-vaga-list .vaga-dd-item').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.value === value);
+  });
+}
+
+document.addEventListener('click', function(e) {
+  var dd = document.getElementById('modal-ent-vaga-dropdown');
+  if (dd && !dd.contains(e.target)) dd.classList.remove('open');
+});
+
+function onStatusEntrevistaChange(val) {
+  var wrap = document.getElementById('modal-ent-vaga-wrap');
+  if (val === 'Aprovado para teste') {
+    popularVagasSelectEnt();
+    wrap.style.display = '';
+  } else {
+    wrap.style.display = 'none';
+    document.getElementById('modal-ent-vaga-select').value = '';
+    var trigger = document.getElementById('modal-ent-vaga-trigger');
+    if (trigger) { trigger.textContent = 'Selecione a vaga'; trigger.classList.remove('selected'); }
+    var dd = document.getElementById('modal-ent-vaga-dropdown');
+    if (dd) dd.classList.remove('open');
+  }
+}
+
+function popularVagasSelectEnt() {
+  document.getElementById('modal-ent-vaga-select').value = '';
+  var trigger = document.getElementById('modal-ent-vaga-trigger');
+  trigger.textContent = 'Selecione a vaga';
+  trigger.classList.remove('selected');
+  var list = document.getElementById('modal-ent-vaga-list');
+  list.innerHTML = '';
+  var abertas = vagas.filter(function(v) {
+    var s = norm((v.status||'').toLowerCase().trim());
+    return s === 'aberta' || s === 'aberto' || s.indexOf('andamento') >= 0;
+  });
+  if (!abertas.length) {
+    list.innerHTML = '<div style="padding:12px 14px;font-size:12px;color:var(--muted);">Nenhuma vaga aberta encontrada</div>';
+    return;
+  }
+  abertas.sort(function(a, b) {
+    var u = (a.unidade||'').localeCompare(b.unidade||'', 'pt-BR');
+    if (u !== 0) return u;
+    var d = (a.departamento||'').localeCompare(b.departamento||'', 'pt-BR');
+    if (d !== 0) return d;
+    return (a.cargo||'').localeCompare(b.cargo||'', 'pt-BR');
+  });
+  abertas.forEach(function(v) {
+    var loc = [v.unidade, v.departamento].filter(Boolean).join(' · ');
+    var value = [v.cargo, v.unidade, v.departamento, v.horario].filter(Boolean).join(' · ');
+    var item = document.createElement('div');
+    item.className = 'vaga-dd-item';
+    item.dataset.value = value;
+    item.innerHTML = '<div class="vdi-loc">'+escH(loc)+'</div>'
+      + '<div class="vdi-cargo">'+escH(v.cargo||'Sem cargo')+'</div>'
+      + (v.horario ? '<div class="vdi-horario">'+escH(v.horario)+'</div>' : '');
+    item.onclick = (function(val, cargo, h) {
+      return function() { selectVagaEnt(val, cargo, h); };
+    })(value, v.cargo||'Sem cargo', v.horario);
+    list.appendChild(item);
+  });
+}
+
 function salvarEntrevista() {
   var status = document.getElementById('modal-ent-status').value;
   if (!status) { alert('Selecione o status da entrevista.'); return; }
+  var vagaVinculada = '';
+  if (status === 'Aprovado para teste') {
+    vagaVinculada = document.getElementById('modal-ent-vaga-select').value;
+    if (!vagaVinculada) { alert('Selecione a vaga para qual o candidato foi aprovado.'); return; }
+  }
   var feedback  = document.getElementById('modal-ent-feedback').value.trim();
   if (!feedback) { alert('Preencha o feedback da entrevista.'); return; }
   var ref1nome  = document.getElementById('modal-ent-ref1-nome').value.trim();
@@ -2028,16 +2122,17 @@ function salvarEntrevista() {
   btnSalvar.disabled = true;
 
   var params = new URLSearchParams({
-    acao:     'avaliar-entrevista',
-    linha:    d.linha || '',
-    nome:     d.nome,
-    contato:  d.contato,
-    status:   status,
-    feedback: feedback,
-    ref1nome: ref1nome,
-    ref1tel:  ref1tel,
-    ref2nome: ref2nome,
-    ref2tel:  ref2tel
+    acao:           'avaliar-entrevista',
+    linha:          d.linha || '',
+    nome:           d.nome,
+    contato:        d.contato,
+    status:         status,
+    vaga_vinculada: vagaVinculada,
+    feedback:       feedback,
+    ref1nome:       ref1nome,
+    ref1tel:        ref1tel,
+    ref2nome:       ref2nome,
+    ref2tel:        ref2tel
   });
 
   fetch(APPS_SCRIPT_URL + '?' + params.toString())
