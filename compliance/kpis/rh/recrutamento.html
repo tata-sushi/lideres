@@ -1315,9 +1315,20 @@ function _loadEvCargos(callback) {
     .then(function(data) {
       var seen = {};
       _evCargos = (data.salarios || [])
-        .map(function(s) { return (s.cargo || '').trim(); })
-        .filter(function(c) { if (!c || seen[c]) return false; seen[c] = true; return true; })
-        .sort();
+        .map(function(s) {
+          return {
+            unidade: (s.unidade || '').trim(),
+            dept:    (s.departamento || '').trim(),
+            nome:    ((s.cargo || '') + (s.niveis ? ' ' + s.niveis : '')).trim()
+          };
+        })
+        .filter(function(c) {
+          if (!c.nome) return false;
+          var key = c.unidade + '|' + c.dept + '|' + c.nome;
+          if (seen[key]) return false;
+          seen[key] = true;
+          return true;
+        });
       callback(_evCargos);
     })
     .catch(function() { _evCargos = []; callback([]); });
@@ -1338,6 +1349,26 @@ function _loadEvLideres(callback) {
     .catch(function() { _evLideres = []; callback([]); });
 }
 
+function _evUniqSorted(arr) {
+  var seen = {}, out = [];
+  arr.forEach(function(v) { if (v && !seen[v]) { seen[v] = true; out.push(v); } });
+  return out.sort();
+}
+
+function _evDeptsForUnidade(unidade) {
+  if (!_evCargos) return [];
+  return _evUniqSorted(_evCargos.filter(function(c) {
+    return !unidade || c.unidade === unidade;
+  }).map(function(c) { return c.dept; }));
+}
+
+function _evCargosForUnidadeDepto(unidade, dept) {
+  if (!_evCargos) return [];
+  return _evUniqSorted(_evCargos.filter(function(c) {
+    return (!unidade || c.unidade === unidade) && (!dept || c.dept === dept);
+  }).map(function(c) { return c.nome; }));
+}
+
 function _evPopulateSelect(id, options, current) {
   var sel = document.getElementById(id);
   if (!sel) return;
@@ -1346,8 +1377,22 @@ function _evPopulateSelect(id, options, current) {
   html += options.map(function(o) {
     return '<option value="'+escH(o)+'"'+(o===current?' selected':'')+'>'+escH(o)+'</option>';
   }).join('');
-  sel.innerHTML = html || '<option value="">Nenhum</option>';
+  sel.innerHTML = html || '<option value="">—</option>';
   if (current) sel.value = current;
+}
+
+function evUnidadeChanged() {
+  var unidade = (document.getElementById('ev-unidade') || {}).value || '';
+  var currentDepto = (document.getElementById('ev-departamento') || {}).value || '';
+  _evPopulateSelect('ev-departamento', _evDeptsForUnidade(unidade), currentDepto);
+  evDeptoChanged();
+}
+
+function evDeptoChanged() {
+  var unidade = (document.getElementById('ev-unidade') || {}).value || '';
+  var dept    = (document.getElementById('ev-departamento') || {}).value || '';
+  var currentCargo = (document.getElementById('ev-cargo') || {}).value || '';
+  _evPopulateSelect('ev-cargo', _evCargosForUnidadeDepto(unidade, dept), currentCargo);
 }
 
 function openEditVaga(linha) {
@@ -1358,14 +1403,17 @@ function openEditVaga(linha) {
   if (!r) return;
   var t = document.getElementById('ev-cargo-title');
   if (t) t.textContent = r.cargo || 'Vaga sem título';
-  document.getElementById('ev-linha').value        = r._linha || '';
-  document.getElementById('ev-status').value       = (r.status === 'Fechada') ? 'Fechada' : 'Aberta';
-  document.getElementById('ev-unidade').value      = r.unidade || '';
-  document.getElementById('ev-departamento').value = r.departamento || '';
-  document.getElementById('ev-escala').value       = (r.escala || '').indexOf('5x2') >= 0 ? '5x2' : '6x1';
-  document.getElementById('ev-horario').value      = r.horario || '';
-  document.getElementById('ev-data').value         = r.data ? fmtDateBR(r.data) : '';
-  _loadEvCargos(function(list) { _evPopulateSelect('ev-cargo', list, r.cargo || ''); });
+  document.getElementById('ev-linha').value   = r._linha || '';
+  document.getElementById('ev-status').value  = (r.status === 'Fechada') ? 'Fechada' : 'Aberta';
+  document.getElementById('ev-escala').value  = (r.escala || '').indexOf('5x2') >= 0 ? '5x2' : '6x1';
+  document.getElementById('ev-horario').value = r.horario || '';
+  document.getElementById('ev-data').value    = r.data ? fmtDateBR(r.data) : '';
+  var _u = r.unidade || '', _d = r.departamento || '', _c = r.cargo || '';
+  document.getElementById('ev-unidade').value = _u;
+  _loadEvCargos(function() {
+    _evPopulateSelect('ev-departamento', _evDeptsForUnidade(_u), _d);
+    _evPopulateSelect('ev-cargo', _evCargosForUnidadeDepto(_u, _d), _c);
+  });
   _loadEvLideres(function(list) { _evPopulateSelect('ev-lider', list, r.lider || ''); });
   document.getElementById('ev-overlay').classList.add('active');
 }
@@ -2526,7 +2574,7 @@ loadAllData();
         </div>
         <div class="ev-field">
           <span class="modal-section-title">Unidade</span>
-          <select class="modal-select" id="ev-unidade">
+          <select class="modal-select" id="ev-unidade" onchange="evUnidadeChanged()">
             <option value="">Selecione</option>
             <option>Itaim</option>
             <option>Pinheiros</option>
@@ -2540,24 +2588,8 @@ loadAllData();
       <div class="modal-info-grid">
         <div class="ev-field">
           <span class="modal-section-title">Departamento</span>
-          <select class="modal-select" id="ev-departamento">
-            <option value="">Selecione</option>
-            <option>Bar</option>
-            <option>Caixa</option>
-            <option>Cozinha</option>
-            <option>Delivery</option>
-            <option>Estoque</option>
-            <option>Limpeza</option>
-            <option>Manutenção</option>
-            <option>Operação</option>
-            <option>Peixaria</option>
-            <option>Qualidade</option>
-            <option>Salão</option>
-            <option>Sushibar</option>
-            <option>Cozinha - Refeitório</option>
-            <option>Compras</option>
-            <option>Financeiro</option>
-            <option>RH</option>
+          <select class="modal-select" id="ev-departamento" onchange="evDeptoChanged()">
+            <option value="">Selecione a unidade primeiro</option>
           </select>
         </div>
         <div class="ev-field">
