@@ -1353,6 +1353,7 @@ var EV_CARGOS_URL  = 'https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpK
 var EV_MAPA_URL    = 'https://script.google.com/macros/s/AKfycbykOWkQ3ceH_50bmc_3dcLjUrE9V4Ropbraxc0yykMIp6W8eDVtpyo2XmN1Y_KJQzol/exec';
 var EV_COLAB_URL   = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _evCargos        = null;
+var _evObs           = null; // { unidade: { ptG, ptP } }
 var _evLideres       = null;
 var _evColaboradores = null;
 
@@ -1361,6 +1362,14 @@ function _loadEvCargos(callback) {
   fetch(EV_CARGOS_URL + '?action=getAll')
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      // monta lookup de valor de ponto gorjeta/prêmio por unidade
+      _evObs = {};
+      (data.obs || []).forEach(function(o) {
+        if (o.loja_nome) _evObs[o.loja_nome.trim()] = {
+          ptG: o.valor_pt_gorjeta || 0,
+          ptP: o.valor_pt_premio  || 0
+        };
+      });
       var seenMap = {};
       _evCargos = (data.salarios || [])
         .map(function(s) {
@@ -1369,6 +1378,10 @@ function _loadEvCargos(callback) {
             dept:    (s.departamento || '').trim(),
             nome:    ((s.cargo || '') + (s.niveis ? ' ' + s.niveis : '')).trim(),
             fixo:    s.salario_fixo     || 0,
+            peric:   s.periculosidade   || 0,
+            insal:   s.insalubridade    || 0,
+            gorjeta: s.ponto_gorjeta    || 0,
+            premio:  s.ponto_premio     || 0,
             bruto:   s.bruto_aproximado || 0
           };
         })
@@ -1377,8 +1390,9 @@ function _loadEvCargos(callback) {
           var key = c.unidade + '|' + c.dept + '|' + c.nome;
           if (seenMap[key]) {
             if (c.bruto > seenMap[key].bruto) {
-              seenMap[key].fixo  = c.fixo;
-              seenMap[key].bruto = c.bruto;
+              seenMap[key].fixo = c.fixo; seenMap[key].peric = c.peric;
+              seenMap[key].insal = c.insal; seenMap[key].gorjeta = c.gorjeta;
+              seenMap[key].premio = c.premio; seenMap[key].bruto = c.bruto;
             }
             return false;
           }
@@ -1387,7 +1401,7 @@ function _loadEvCargos(callback) {
         });
       callback(_evCargos);
     })
-    .catch(function() { _evCargos = []; callback([]); });
+    .catch(function() { _evCargos = []; _evObs = {}; callback([]); });
 }
 
 function _loadEvLideres(callback) {
@@ -1422,7 +1436,12 @@ function _evSalaryForCargo(unidade, dept, nome) {
   for (var i = 0; i < _evCargos.length; i++) {
     var c = _evCargos[i];
     if (c.nome === nome && (!unidade || c.unidade === unidade) && (!dept || c.dept === dept)) {
-      return { fixo: c.fixo || '', bruto: c.bruto || '' };
+      var obs = (_evObs && _evObs[c.unidade]) || { ptG: 0, ptP: 0 };
+      var brutoCalc = (c.fixo || 0) + (c.insal || 0) + (c.peric || 0)
+                    + ((c.gorjeta || 0) * obs.ptG)
+                    + ((c.premio  || 0) * obs.ptP);
+      var bruto = brutoCalc > 0 ? brutoCalc : (c.bruto || 0);
+      return { fixo: c.fixo || '', bruto: bruto || '' };
     }
   }
   return { fixo: '', bruto: '' };
