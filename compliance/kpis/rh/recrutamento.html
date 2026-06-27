@@ -1348,8 +1348,10 @@ function showMoreVagas() {
 var VAGAS_EDIT_URL = 'https://script.google.com/macros/s/AKfycbwMUonqH1hJH-Duj09zS01UX_fxgEmle-AQffXYy9L8SqdvFJjkFVajMNCBjtCLJyFqMg/exec';
 var EV_CARGOS_URL  = 'https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec';
 var EV_MAPA_URL    = 'https://script.google.com/macros/s/AKfycbykOWkQ3ceH_50bmc_3dcLjUrE9V4Ropbraxc0yykMIp6W8eDVtpyo2XmN1Y_KJQzol/exec';
-var _evCargos  = null;
-var _evLideres = null;
+var EV_COLAB_URL   = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
+var _evCargos        = null;
+var _evLideres       = null;
+var _evColaboradores = null;
 
 function _loadEvCargos(callback) {
   if (_evCargos) { callback(_evCargos); return; }
@@ -1362,7 +1364,9 @@ function _loadEvCargos(callback) {
           return {
             unidade: (s.unidade || '').trim(),
             dept:    (s.departamento || '').trim(),
-            nome:    ((s.cargo || '') + (s.niveis ? ' ' + s.niveis : '')).trim()
+            nome:    ((s.cargo || '') + (s.niveis ? ' ' + s.niveis : '')).trim(),
+            fixo:    s.salario_fixo      || '',
+            bruto:   s.bruto_aproximado  || ''
           };
         })
         .filter(function(c) {
@@ -1388,6 +1392,63 @@ function _loadEvLideres(callback) {
       callback(_evLideres);
     })
     .catch(function() { _evLideres = []; callback([]); });
+}
+
+function _loadEvColaboradores(callback) {
+  if (_evColaboradores) { callback(_evColaboradores); return; }
+  fetch(EV_COLAB_URL + '?action=listColaboradores')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      _evColaboradores = (data.colaboradores || [])
+        .map(function(c) { return c.nome || ''; })
+        .filter(Boolean)
+        .sort();
+      callback(_evColaboradores);
+    })
+    .catch(function() { _evColaboradores = []; callback([]); });
+}
+
+function _evSalaryForCargo(unidade, dept, nome) {
+  if (!_evCargos) return { fixo: '', bruto: '' };
+  for (var i = 0; i < _evCargos.length; i++) {
+    var c = _evCargos[i];
+    if (c.nome === nome && (!unidade || c.unidade === unidade) && (!dept || c.dept === dept)) {
+      return { fixo: c.fixo || '', bruto: c.bruto || '' };
+    }
+  }
+  return { fixo: '', bruto: '' };
+}
+
+function evCargoChanged() {
+  var unidade = (document.getElementById('ev-unidade') || {}).value || '';
+  var dept    = (document.getElementById('ev-departamento') || {}).value || '';
+  var nome    = (document.getElementById('ev-cargo') || {}).value || '';
+  var sal = _evSalaryForCargo(unidade, dept, nome);
+  var fx = document.getElementById('ev-salario-fixo');
+  var br = document.getElementById('ev-salario-bruto');
+  if (fx) fx.value = sal.fixo ? _fmtMoney(sal.fixo) : '';
+  if (br) br.value = sal.bruto ? _fmtMoney(sal.bruto) : '';
+}
+
+function _fmtMoney(v) {
+  var n = parseFloat(String(v).replace(/[^0-9,.]/g,'').replace(',','.'));
+  if (isNaN(n)) return String(v);
+  return 'R$ ' + n.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+}
+
+function _evPopulateColaboradorSelect(current) {
+  var sel = document.getElementById('ev-colaborador');
+  if (!sel) return;
+  var special = ['Vaga Nova', 'Vaga Cota'];
+  var names   = (_evColaboradores || []).filter(function(n) { return special.indexOf(n) < 0; });
+  var all     = special.concat(names);
+  var found   = all.indexOf(current) >= 0;
+  var html    = (!found && current) ? '<option value="'+escH(current)+'" selected>'+escH(current)+'</option>' : '';
+  html += all.map(function(n) {
+    return '<option value="'+escH(n)+'"'+(n===current?' selected':'')+'>'+escH(n)+'</option>';
+  }).join('');
+  sel.innerHTML = html || '<option value="">—</option>';
+  if (current) sel.value = current;
 }
 
 function _evUniqSorted(arr) {
@@ -1445,13 +1506,17 @@ function openNewVaga() {
   document.getElementById('ev-status').value  = 'Aberta';
   document.getElementById('ev-escala').value  = '6x1';
   document.getElementById('ev-horario').value = '';
-  document.getElementById('ev-data').value    = '';
+  var now = new Date(), pad = function(n){return String(n).padStart(2,'0');};
+  document.getElementById('ev-data').value = pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear();
   document.getElementById('ev-unidade').value = '';
+  var fx = document.getElementById('ev-salario-fixo'); if (fx) fx.value = '';
+  var br = document.getElementById('ev-salario-bruto'); if (br) br.value = '';
   _loadEvCargos(function() {
     _evPopulateSelect('ev-departamento', _evDeptsForUnidade(''), '');
     _evPopulateSelect('ev-cargo', _evCargosForUnidadeDepto('', ''), '');
   });
   _loadEvLideres(function(list) { _evPopulateSelect('ev-lider', list, ''); });
+  _loadEvColaboradores(function() { _evPopulateColaboradorSelect('Vaga Nova'); });
   document.getElementById('ev-overlay').classList.add('active');
 }
 
@@ -1477,6 +1542,12 @@ function openEditVaga(linha) {
     _evPopulateSelect('ev-cargo', _evCargosForUnidadeDepto(_u, _d), _c);
   });
   _loadEvLideres(function(list) { _evPopulateSelect('ev-lider', list, r.lider || ''); });
+  _loadEvColaboradores(function() { _evPopulateColaboradorSelect(r.colaborador_anterior || ''); });
+  _loadEvCargos(function() {
+    var sal = _evSalaryForCargo(_u, _d, _c);
+    var fx = document.getElementById('ev-salario-fixo'); if (fx) fx.value = sal.fixo ? _fmtMoney(sal.fixo) : (r.salario_fixo || '');
+    var br = document.getElementById('ev-salario-bruto'); if (br) br.value = sal.bruto ? _fmtMoney(sal.bruto) : (r.salario_bruto || '');
+  });
   document.getElementById('ev-overlay').classList.add('active');
 }
 function closeEditVaga() {
@@ -1495,8 +1566,11 @@ function salvarEditVaga() {
     unidade:      document.getElementById('ev-unidade').value,
     escala:       document.getElementById('ev-escala').value,
     horario:      document.getElementById('ev-horario').value,
-    data:         document.getElementById('ev-data').value,
-    lider:        document.getElementById('ev-lider').value
+    data:                document.getElementById('ev-data').value,
+    lider:               document.getElementById('ev-lider').value,
+    colaborador_anterior: document.getElementById('ev-colaborador').value,
+    salario_fixo:        (document.getElementById('ev-salario-fixo') || {}).value || '',
+    salario_bruto:       (document.getElementById('ev-salario-bruto') || {}).value || ''
   };
   var _params = Object.keys(payload).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(payload[k]); }).join('&');
   fetch(VAGAS_EDIT_URL + '?' + _params)
@@ -2818,9 +2892,20 @@ function enviarSolicitacao() {
         </div>
         <div class="ev-field">
           <span class="modal-section-title">Cargo</span>
-          <select class="modal-select" id="ev-cargo">
+          <select class="modal-select" id="ev-cargo" onchange="evCargoChanged()">
             <option value="">Carregando...</option>
           </select>
+        </div>
+      </div>
+      <hr class="modal-divider">
+      <div class="modal-info-grid">
+        <div class="ev-field">
+          <span class="modal-section-title">Salário Fixo</span>
+          <input type="text" class="modal-input" id="ev-salario-fixo" readonly style="background:#F4F4F4;color:var(--muted);cursor:default;" placeholder="Automático pelo cargo">
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Salário Bruto</span>
+          <input type="text" class="modal-input" id="ev-salario-bruto" readonly style="background:#F4F4F4;color:var(--muted);cursor:default;" placeholder="Automático pelo cargo">
         </div>
       </div>
       <hr class="modal-divider">
@@ -2849,6 +2934,13 @@ function enviarSolicitacao() {
             <option value="">Carregando...</option>
           </select>
         </div>
+      </div>
+      <hr class="modal-divider">
+      <div class="ev-field">
+        <span class="modal-section-title">Colaborador Anterior</span>
+        <select class="modal-select" id="ev-colaborador">
+          <option value="Vaga Nova">Vaga Nova</option>
+        </select>
       </div>
     </div>
     <div class="modal-footer">
