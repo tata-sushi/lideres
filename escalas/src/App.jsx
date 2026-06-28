@@ -624,7 +624,7 @@ export default function EscalaPainel() {
           if (!data.ok) return;
           const us = new Set(data.colaboradores.map(c=>c.unidade));
           const ds = new Set(data.colaboradores.map(c=>c.departamento));
-          setDrawerKpis(k=>({...k, unidades:us.size, deptos:ds.size, colabs:data.total}));
+          setDrawerKpis(k=>({...k, unidades:us.size, deptos:ds.size, colabs:data.total - 3}));
           setDrawerKpisLoaded(true);
         }).catch(()=>{});
     }
