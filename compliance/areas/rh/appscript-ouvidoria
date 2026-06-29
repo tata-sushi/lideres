@@ -1,0 +1,94 @@
+// ══════════════════════════════════════════════════════════════════════════
+//   APPS SCRIPT — Ouvidoria TATÁ Sushi
+// ══════════════════════════════════════════════════════════════════════════
+//
+//   Recebe os relatos enviados pelo formulário ouvidoria-form.html e
+//   registra cada chamado na aba "Chamados" da planilha de controle.
+//
+//   Deploy:
+//     1. script.google.com → Novo projeto → cole este código como Code.gs
+//     2. Crie a planilha de destino e copie o ID para SHEET_ID abaixo
+//     3. Implantar → Nova implantação → Aplicativo da Web
+//        - Executar como: Eu
+//        - Quem tem acesso: Qualquer pessoa (anônimo)
+//     4. Copie a URL gerada e substitua OUVIDORIA_URL em ouvidoria-form.html
+//
+//   Ao editar depois: Implantar → Gerenciar implantações →
+//   ✏️ Editar → Versão: Nova versão → Implantar (URL não muda).
+//
+//   Colunas da aba "Chamados":
+//     A = Timestamp
+//     B = Identificação (Sim/Não)
+//     C = Nome
+//     D = Data do ocorrido
+//     E = Descrição
+//     F = Devolutiva? (Sim/Não)
+//     G = Forma da devolutiva
+//     H = Dados de contato
+//     I = Status          ← preenchido automaticamente como "Aberto"
+//
+// ══════════════════════════════════════════════════════════════════════════
+
+var SHEET_ID = 'COLE_O_ID_DA_PLANILHA_AQUI';
+var ABA      = 'Chamados';
+
+// ── CORS helper ─────────────────────────────────────────────────────────
+function _cors(output) {
+  return output
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ── doPost: recebe o relato e grava na planilha ──────────────────────────
+function doPost(e) {
+  try {
+    var body = JSON.parse(e.postData.contents);
+
+    var ss    = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(ABA);
+
+    // Cria a aba se não existir
+    if (!sheet) {
+      sheet = ss.insertSheet(ABA);
+      sheet.appendRow([
+        'Timestamp', 'Identificação', 'Nome', 'Data do ocorrido',
+        'Descrição', 'Devolutiva?', 'Forma da devolutiva',
+        'Dados de contato', 'Status'
+      ]);
+      sheet.getRange(1, 1, 1, 9).setFontWeight('bold');
+    }
+
+    var now = new Date();
+
+    sheet.appendRow([
+      now,
+      body.identificacao || '',
+      body.nome          || '',
+      body.data          || '',
+      body.descricao     || '',
+      body.devolutiva    || '',
+      body.forma         || '',
+      body.contato       || '',
+      'Aberto'
+    ]);
+
+    // Formata a coluna A (timestamp) como data/hora legível
+    var lastRow = sheet.getLastRow();
+    sheet.getRange(lastRow, 1).setNumberFormat('dd/MM/yyyy HH:mm:ss');
+
+    return _cors(ContentService.createTextOutput(
+      JSON.stringify({ ok: true, linha: lastRow })
+    ));
+
+  } catch (err) {
+    return _cors(ContentService.createTextOutput(
+      JSON.stringify({ ok: false, erro: err.toString() })
+    ));
+  }
+}
+
+// ── doGet: health-check ──────────────────────────────────────────────────
+function doGet(e) {
+  return _cors(ContentService.createTextOutput(
+    JSON.stringify({ ok: true, servico: 'Ouvidoria TATÁ Sushi', status: 'online' })
+  ));
+}
