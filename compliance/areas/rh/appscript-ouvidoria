@@ -3,38 +3,41 @@
 // ══════════════════════════════════════════════════════════════════════════
 //
 //   Recebe os relatos enviados pelo formulário ouvidoria-form.html e
-//   registra cada chamado na aba "Chamados" da planilha de controle.
+//   registra cada chamado na aba "Ouvidoria" da planilha existente,
+//   respeitando as colunas já criadas pelo Google Forms.
+//
+//   Planilha de destino: cole o ID abaixo (trecho entre /d/ e /edit na URL)
+//
+//   Colunas da aba "Ouvidoria":
+//     A = Carimbo de data/hora
+//     B = Você deseja identificar-se
+//     C = Qual seu nome?
+//     D = Informe a data do ocorrido
+//     E = Descreve seu feedback ou ocorrência
+//     F = Você gostaria de uma devolutiva?
+//     G = De qual forma gostaria de ter a devolutiva?
+//     H = Informe os dados da opção escolhida acima
+//     I = Devolutiva   ← deixado em branco, preenchido manualmente pela equipe
 //
 //   Deploy:
 //     1. script.google.com → Novo projeto → cole este código como Code.gs
-//     2. Crie a planilha de destino e copie o ID para SHEET_ID abaixo
+//     2. Cole o ID da planilha em SHEET_ID abaixo
 //     3. Implantar → Nova implantação → Aplicativo da Web
 //        - Executar como: Eu
 //        - Quem tem acesso: Qualquer pessoa (anônimo)
-//     4. Copie a URL gerada e substitua OUVIDORIA_URL em ouvidoria-form.html
+//     4. Cole a URL gerada em OUVIDORIA_URL no ouvidoria-form.html e faça push
 //
 //   Ao editar depois: Implantar → Gerenciar implantações →
 //   ✏️ Editar → Versão: Nova versão → Implantar (URL não muda).
 //
-//   Colunas da aba "Chamados":
-//     A = Timestamp
-//     B = Identificação (Sim/Não)
-//     C = Nome
-//     D = Data do ocorrido
-//     E = Descrição
-//     F = Devolutiva? (Sim/Não)
-//     G = Forma da devolutiva
-//     H = Dados de contato
-//     I = Status          ← preenchido automaticamente como "Aberto"
-//
 // ══════════════════════════════════════════════════════════════════════════
 
 var SHEET_ID = 'COLE_O_ID_DA_PLANILHA_AQUI';
-var ABA      = 'Chamados';
+var ABA      = 'Ouvidoria';
 
-// ── CORS helper ─────────────────────────────────────────────────────────
-function _cors(output) {
-  return output
+function _json(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -45,50 +48,41 @@ function doPost(e) {
 
     var ss    = SpreadsheetApp.openById(SHEET_ID);
     var sheet = ss.getSheetByName(ABA);
-
-    // Cria a aba se não existir
-    if (!sheet) {
-      sheet = ss.insertSheet(ABA);
-      sheet.appendRow([
-        'Timestamp', 'Identificação', 'Nome', 'Data do ocorrido',
-        'Descrição', 'Devolutiva?', 'Forma da devolutiva',
-        'Dados de contato', 'Status'
-      ]);
-      sheet.getRange(1, 1, 1, 9).setFontWeight('bold');
-    }
+    if (!sheet) throw new Error('Aba "' + ABA + '" não encontrada.');
 
     var now = new Date();
 
+    // Formata data do ocorrido de YYYY-MM-DD para DD/MM/YYYY
+    var dataOcorrido = body.data || '';
+    if (dataOcorrido.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      var partes = dataOcorrido.split('-');
+      dataOcorrido = partes[2] + '/' + partes[1] + '/' + partes[0];
+    }
+
     sheet.appendRow([
-      now,
-      body.identificacao || '',
-      body.nome          || '',
-      body.data          || '',
-      body.descricao     || '',
-      body.devolutiva    || '',
-      body.forma         || '',
-      body.contato       || '',
-      'Aberto'
+      now,                        // A — Carimbo de data/hora
+      body.identificacao || '',   // B — Você deseja identificar-se
+      body.nome          || '',   // C — Qual seu nome?
+      dataOcorrido,               // D — Informe a data do ocorrido
+      body.descricao     || '',   // E — Descreve seu feedback ou ocorrência
+      body.devolutiva    || '',   // F — Você gostaria de uma devolutiva?
+      body.forma         || '',   // G — De qual forma gostaria de ter a devolutiva?
+      body.contato       || '',   // H — Informe os dados da opção escolhida acima
+      ''                          // I — Devolutiva (preenchida manualmente)
     ]);
 
-    // Formata a coluna A (timestamp) como data/hora legível
+    // Formata timestamp da linha recém-inserida
     var lastRow = sheet.getLastRow();
     sheet.getRange(lastRow, 1).setNumberFormat('dd/MM/yyyy HH:mm:ss');
 
-    return _cors(ContentService.createTextOutput(
-      JSON.stringify({ ok: true, linha: lastRow })
-    ));
+    return _json({ ok: true, linha: lastRow });
 
   } catch (err) {
-    return _cors(ContentService.createTextOutput(
-      JSON.stringify({ ok: false, erro: err.toString() })
-    ));
+    return _json({ ok: false, erro: err.toString() });
   }
 }
 
 // ── doGet: health-check ──────────────────────────────────────────────────
 function doGet(e) {
-  return _cors(ContentService.createTextOutput(
-    JSON.stringify({ ok: true, servico: 'Ouvidoria TATÁ Sushi', status: 'online' })
-  ));
+  return _json({ ok: true, servico: 'Ouvidoria TATÁ Sushi', status: 'online' });
 }
