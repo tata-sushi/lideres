@@ -915,7 +915,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 var SHEET_ID  = '1PC5rZYA4zZGv0U0zkIJbpctA1MsGCG8kRawAOMiMznY';
-var GID       = '1411059243';
+var GID          = '1411059243';   // aba SOLICITAÇÕES RH
+var GID_DEMANDAS = '1160972519';   // aba Demandas_trello
 var API_KEY   = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1451,11 +1452,12 @@ var COL = {
   departamento: 4,   // Coluna E
   solicitante:  3,   // Coluna D
   tipo:         5,   // Coluna F (tipo de solicitação / badge)
-  abertura:     0,   // Coluna A
-  status:       5,   // Coluna F (filtro de status)
-  status_q:     16,  // Coluna Q (badge de status no card)
+  abertura:     0,   // Coluna A (sobrescrito pelo Demandas_trello se houver match)
+  status:       5,   // Coluna F
+  status_q:     16,  // Coluna Q (sobrescrito pelo Demandas_trello se houver match)
   devolutiva:   15,  // Coluna P
-  atualizacao:  9    // Coluna J
+  atualizacao:  17,  // Coluna R (Data de conclusão, sobrescrito pelo Demandas_trello)
+  id:           20   // Coluna U (ID card — chave de cruzamento com Demandas_trello)
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1483,10 +1485,11 @@ function showError(msg) {
 }
 
 function rowToObj(row) {
-  function cell(i) { return (row[i] || '').toString().trim(); }
+  function cell(i) { return (i >= 0 && row[i] != null ? row[i] : '').toString().trim(); }
   // Remove horário da data (ex: "04/04/2026 13:14:36" → "04/04/2026")
   function dateOnly(str) { return str ? str.split(' ')[0] : ''; }
   return {
+    id:           cell(COL.id),
     titulo:       cell(COL.titulo),
     tipo:         cell(COL.tipo),
     unidade:      cell(COL.unidade),
@@ -1511,53 +1514,59 @@ function updateFooter() {
 function fetchAndRender() {
   showLoading();
 
-  var range  = 'A:K';
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID +
-            '/values/' + encodeURIComponent(range) +
-            '?key=' + API_KEY +
-            '&majorDimension=ROWS' +
-            '&valueRenderOption=UNFORMATTED_VALUE' +
-            '&dateTimeRenderOption=FORMATTED_STRING' +
-            (GID ? '&ranges=' + encodeURIComponent(range) + '&includeGridData=false' : '');
+  var BASE = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID;
 
-  // Monta URL usando gid para buscar a aba correta pelo sheet name
-  var urlV4 = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID +
-              '?includeGridData=false&key=' + API_KEY;
-
-  // Primeiro buscamos o nome da aba pelo gid, depois buscamos os dados
-  fetch('https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + '?key=' + API_KEY)
+  // 1. Resolve nomes das duas abas pelo GID
+  fetch(BASE + '?key=' + API_KEY)
     .then(function(r) {
       if (!r.ok) throw new Error('HTTP ' + r.status + ': Verifique se a planilha está pública e a API Key é válida.');
       return r.json();
     })
     .then(function(meta) {
       var sheets = meta.sheets || [];
-      var sheetName = null;
-      for (var i = 0; i < sheets.length; i++) {
-        var props = sheets[i].properties || {};
-        if (String(props.sheetId) === GID) {
-          sheetName = props.title;
-          break;
+      function findName(gid) {
+        for (var i = 0; i < sheets.length; i++) {
+          var p = sheets[i].properties || {};
+          if (String(p.sheetId) === gid) return p.title;
         }
+        return null;
       }
-      if (!sheetName && sheets.length > 0) {
-        sheetName = (sheets[0].properties || {}).title || 'Sheet1';
+      var solName = findName(GID);
+      var demName = findName(GID_DEMANDAS);
+      if (!solName) throw new Error('Aba SOLICITAÇÕES RH não encontrada (gid=' + GID + ')');
+      if (!demName) throw new Error('Aba Demandas_trello não encontrada (gid=' + GID_DEMANDAS + ')');
+      return [solName, demName];
+    })
+    // 2. Busca as duas abas em paralelo
+    .then(function(names) {
+      var solUrl = BASE + '/values/' + encodeURIComponent(names[0] + '!A:U') +
+                   '?key=' + API_KEY + '&valueRenderOption=FORMATTED_VALUE';
+      var demUrl = BASE + '/values/' + encodeURIComponent(names[1] + '!A:H') +
+                   '?key=' + API_KEY + '&valueRenderOption=FORMATTED_VALUE';
+      return Promise.all([
+        fetch(solUrl).then(function(r) { if (!r.ok) throw new Error('Erro SOLICITAÇÕES: HTTP ' + r.status); return r.json(); }),
+        fetch(demUrl).then(function(r) { if (!r.ok) throw new Error('Erro Demandas: HTTP ' + r.status); return r.json(); })
+      ]);
+    })
+    .then(function(results) {
+      // 3. Monta lookup Demandas_trello: cardId → {status, abertura, conclusao}
+      // Colunas Demandas: A=Card ID, C=Data Criação, D=Status, H=Data de Conclusão
+      var demRows = (results[1].values) || [];
+      var demLookup = {};
+      for (var d = 1; d < demRows.length; d++) {
+        var dr = demRows[d];
+        if (!dr || !dr[0]) continue;
+        var cardId = dr[0].toString().trim();
+        if (!cardId) continue;
+        demLookup[cardId] = {
+          status:    (dr[3] || '').toString().trim(),
+          abertura:  (dr[2] || '').toString().trim(),
+          conclusao: (dr[7] || '').toString().trim()
+        };
       }
-      if (!sheetName) throw new Error('Aba não encontrada (gid=' + GID + ')');
-      return sheetName;
-    })
-    .then(function(sheetName) {
-      var dataUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID +
-                    '/values/' + encodeURIComponent(sheetName + '!A:Q') +
-                    '?key=' + API_KEY +
-                    '&valueRenderOption=FORMATTED_VALUE';
-      return fetch(dataUrl).then(function(r) {
-        if (!r.ok) throw new Error('Erro ao buscar dados: HTTP ' + r.status);
-        return r.json();
-      });
-    })
-    .then(function(json) {
-      var rows = json.values || [];
+
+      // 4. Processa SOLICITAÇÕES RH e enriquece com dados do Demandas
+      var rows = (results[0].values) || [];
       if (rows.length < 2) {
         DATA.length = 0;
         filtered = [];
@@ -1567,31 +1576,21 @@ function fetchAndRender() {
         return;
       }
 
-      // Linha 0 = cabeçalho, ignorar
-      // Detecta automaticamente as colunas pelo cabeçalho
-      var header = rows[0].map(function(h){ return (h||'').toString().toLowerCase().trim(); });
-
-      // Mapeamento fixo — colunas definidas manualmente em COL acima
-      // (autoMap desativado para garantir leitura das colunas corretas)
-
-      // Limite: somente solicitações abertas nos últimos 10 dias
-      var hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
-      var limite = new Date(hoje);
-      limite.setDate(limite.getDate() - 10);
-
       function parseDateBR(str) {
         if (!str) return null;
         str = str.toString().trim();
         var m;
-        // DD/MM/YYYY HH:MM:SS ou DD/MM/YYYY
         m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
         if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
-        // YYYY-MM-DD
         m = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
         if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
         return null;
       }
+
+      var hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      var limite = new Date(hoje);
+      limite.setDate(limite.getDate() - 10);
 
       DATA.length = 0;
       DATA_FULL.length = 0;
@@ -1600,6 +1599,15 @@ function fetchAndRender() {
         if (!row || row.every(function(c){ return !c; })) continue;
         var obj = rowToObj(row);
         if (!obj.titulo) continue;
+
+        // Enriquece com dados do Demandas_trello via ID do card
+        var dem = obj.id ? demLookup[obj.id] : null;
+        if (dem) {
+          if (dem.status)    obj.status_q   = dem.status;
+          if (dem.abertura)  obj.abertura   = dem.abertura.split(' ')[0];
+          if (dem.conclusao) obj.atualizacao = dem.conclusao.split(' ')[0];
+        }
+
         DATA_FULL.push(obj);
         var dtAbertura = parseDateBR(obj.abertura);
         if (dtAbertura && dtAbertura < limite) continue;
