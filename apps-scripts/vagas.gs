@@ -8,14 +8,16 @@ var SHEET_NAME = 'CONTROLE DE VAGAS ABERTAS';
 // Cabeçalhos (normalizados) → campo do payload
 // Colunas não listadas aqui são preservadas no updateVaga e deixadas em branco no addVaga
 var FIELD_MAP = {
-  'data_da_solicitacao': 'data',
-  'unidade':             'unidade',
-  'departamento':        'departamento',
-  'cargo':               'cargo',
-  'escala':              'escala',
-  'horario':             'horario',
-  'status_da_vaga':      'status',
-  'lider_responsavel':   'lider'
+  'data_da_solicitacao':    'data',
+  'unidade':                'unidade',
+  'departamento':           'departamento',
+  'cargo':                  'cargo',
+  'escala':                 'escala',
+  'horario':                'horario',
+  'status_da_vaga':         'status',
+  'lider_responsavel':      'lider',
+  'colaborador_contratado': 'colaborador_contratado',
+  'data_da_contratacao':    'data_contratacao'
 };
 
 function doGet(e) { return handle(e.parameter); }
