@@ -1553,32 +1553,30 @@ function _evPopulateColaboradorSelect(current) {
   if (current) sel.value = current;
 }
 
-// Popula o dropdown de "Colaborador contratado" a partir da planilha de testes.
-// Prioriza candidatos da mesma unidade/departamento/cargo da vaga; se não
-// houver casamento, mostra todos os candidatos únicos por nome.
-function _evPopulateColabContratadoSelect(cargo, unidade, dept, current) {
+// Popula o dropdown de "Colaborador contratado" com os últimos 10 candidatos
+// da planilha CONTROLE DE TESTES cujo status é "Contratado" (mais recentes
+// primeiro, por ordem de linha na planilha).
+function _evPopulateColabContratadoSelect(current) {
   var sel = document.getElementById('ev-colab-contratado');
   if (!sel) return;
-  var normLC = function(s){ return norm((s||'').toLowerCase().trim()); };
-  var uN = normLC(unidade), dN = normLC(dept), cN = normLC(cargo);
   var candidatos = (typeof testes !== 'undefined' && Array.isArray(testes)) ? testes : [];
-  var matched = candidatos.filter(function(t) {
+  var contratados = candidatos.filter(function(t) {
     if (!t || !t.nome) return false;
-    var u = normLC(t.unidade), d = normLC(t.departamento), c = normLC(t.cargo);
-    if (uN && u && u !== uN) return false;
-    if (dN && d && d !== dN) return false;
-    if (cN && c && c !== cN) return false;
-    return true;
+    return norm((t.status_final || '').toLowerCase().trim()) === 'contratado';
   });
-  var pool = matched.length ? matched : candidatos;
-  var nomes = _evUniqSorted(pool.map(function(t){ return t.nome; }).filter(Boolean));
-  var found = nomes.indexOf(current) >= 0;
-  var placeholder = pool.length
-    ? 'Selecione o candidato da planilha de testes'
-    : 'Nenhum candidato encontrado nos testes';
+  contratados.sort(function(a, b) { return (b._linha || 0) - (a._linha || 0); });
+  var seen = {}, ordered = [];
+  for (var i = 0; i < contratados.length && ordered.length < 10; i++) {
+    var nome = contratados[i].nome;
+    if (nome && !seen[nome]) { seen[nome] = true; ordered.push(nome); }
+  }
+  var found = ordered.indexOf(current) >= 0;
+  var placeholder = ordered.length
+    ? 'Nenhum — vaga segue em aberto'
+    : 'Nenhum candidato contratado na planilha de testes';
   var html = '<option value="">'+escH(placeholder)+'</option>';
   if (!found && current) html += '<option value="'+escH(current)+'" selected>'+escH(current)+'</option>';
-  html += nomes.map(function(n) {
+  html += ordered.map(function(n) {
     return '<option value="'+escH(n)+'"'+(n===current?' selected':'')+'>'+escH(n)+'</option>';
   }).join('');
   sel.innerHTML = html;
@@ -1697,7 +1695,7 @@ function openNewVaga() {
   _loadEvLideres(function(list) { _evPopulateSelect('ev-lider', list, ''); });
   _loadEvColaboradores(function() { _evPopulateColaboradorSelect('Vaga Nova'); });
   var sSel = document.getElementById('ev-status'); if (sSel) sSel.value = 'Aberta';
-  _evPopulateColabContratadoSelect('', '', '', '');
+  _evPopulateColabContratadoSelect('');
   evStatusChanged();
   document.getElementById('ev-overlay').classList.add('active');
 }
@@ -1731,7 +1729,7 @@ function openEditVaga(linha) {
   _loadEvColaboradores(function() { _evPopulateColaboradorSelect(r.colaborador_anterior || ''); });
   var sSel = document.getElementById('ev-status');
   if (sSel) sSel.value = ((r.status || '').toLowerCase().indexOf('fechad') >= 0) ? 'Fechada' : 'Aberta';
-  _evPopulateColabContratadoSelect(_c, _u, _d, r.colaborador_contratado || '');
+  _evPopulateColabContratadoSelect(r.colaborador_contratado || '');
   evStatusChanged();
   document.getElementById('ev-overlay').classList.add('active');
 }
