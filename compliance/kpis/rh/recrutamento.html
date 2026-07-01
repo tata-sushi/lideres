@@ -1590,17 +1590,28 @@ function _evTodayBR() {
   return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
 }
 
+function _evRefreshFechamentoLabel() {
+  var lbl = document.getElementById('ev-data-fechamento-label');
+  if (!lbl) return;
+  var statusSel = document.getElementById('ev-status');
+  var colabSel  = document.getElementById('ev-colab-contratado');
+  var willClose = (statusSel && (statusSel.value || '').toLowerCase() === 'fechada')
+               || (colabSel && !!(colabSel.value || '').trim());
+  lbl.textContent = willClose ? _evTodayBR() : '—';
+}
+
 function evStatusChanged() {
-  var sel  = document.getElementById('ev-status');
-  var wrap = document.getElementById('ev-colab-contratado-wrap');
-  var lbl  = document.getElementById('ev-data-fechamento-label');
-  if (!sel || !wrap) return;
-  var fechada = (sel.value || '').toLowerCase() === 'fechada';
-  wrap.style.display = fechada ? '' : 'none';
-  if (!fechada) {
-    _evClearFieldError('ev-colab-contratado');
+  _evRefreshFechamentoLabel();
+}
+
+function evColabContratadoChanged() {
+  _evClearFieldError('ev-colab-contratado');
+  var colabSel  = document.getElementById('ev-colab-contratado');
+  var statusSel = document.getElementById('ev-status');
+  if (colabSel && statusSel && (colabSel.value || '').trim()) {
+    statusSel.value = 'Fechada';
   }
-  if (lbl) lbl.textContent = fechada ? _evTodayBR() : '—';
+  _evRefreshFechamentoLabel();
 }
 
 function _evUniqSorted(arr) {
@@ -1731,8 +1742,11 @@ function salvarEditVaga() {
   // Limpa erros anteriores
   document.querySelectorAll('#ev-overlay .ev-field-error').forEach(function(el) { el.classList.remove('ev-field-error'); });
 
-  var statusVal = (document.getElementById('ev-status') || {}).value || 'Aberta';
-  var isFechada = statusVal.toLowerCase() === 'fechada';
+  var colabContratadoRaw = ((document.getElementById('ev-colab-contratado') || {}).value || '').trim();
+  var statusRaw = (document.getElementById('ev-status') || {}).value || 'Aberta';
+  // Selecionar um colaborador contratado equivale a fechar a vaga
+  var isFechada = colabContratadoRaw !== '' || statusRaw.toLowerCase() === 'fechada';
+  var statusVal = isFechada ? 'Fechada' : 'Aberta';
   var required = [
     { id: 'ev-unidade',      label: 'Unidade' },
     { id: 'ev-departamento', label: 'Departamento' },
@@ -1740,7 +1754,7 @@ function salvarEditVaga() {
     { id: 'ev-horario',      label: 'Horário' },
     { id: 'ev-lider',        label: 'Líder responsável' }
   ];
-  if (isFechada) required.push({ id: 'ev-colab-contratado', label: 'Colaborador contratado' });
+  if (isFechada && !colabContratadoRaw) required.push({ id: 'ev-colab-contratado', label: 'Colaborador contratado' });
   var invalidos = [];
   required.forEach(function(f) {
     var el = document.getElementById(f.id);
@@ -1758,7 +1772,7 @@ function salvarEditVaga() {
   var btn = document.getElementById('ev-save');
   btn.disabled = true; btn.textContent = 'Salvando…';
   var _linha = document.getElementById('ev-linha').value;
-  var colabContratado = isFechada ? (document.getElementById('ev-colab-contratado') || {}).value || '' : '';
+  var colabContratado = isFechada ? colabContratadoRaw : '';
   var dataContratacao = isFechada ? _evTodayBR() : '';
   var payload = {
     action:       _linha ? 'updateVaga' : 'addVaga',
@@ -3145,13 +3159,13 @@ function enviarSolicitacao() {
           <option value="Fechada">Fechada</option>
         </select>
       </div>
-      <div class="ev-field" id="ev-colab-contratado-wrap" style="display:none;margin-top:12px;">
-        <span class="modal-section-title">Colaborador contratado <span style="color:var(--red);font-size:12px;">*</span></span>
-        <select class="modal-select" id="ev-colab-contratado" onchange="_evClearFieldError('ev-colab-contratado')">
-          <option value="">Selecione o candidato aprovado no teste</option>
+      <div class="ev-field" id="ev-colab-contratado-wrap" style="margin-top:12px;">
+        <span class="modal-section-title">Colaborador contratado</span>
+        <select class="modal-select" id="ev-colab-contratado" onchange="evColabContratadoChanged()">
+          <option value="">Nenhum — vaga segue em aberto</option>
         </select>
         <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.4px;color:var(--muted);margin-top:6px;text-transform:uppercase;">
-          Data de fechamento: <span id="ev-data-fechamento-label">—</span>
+          Ao selecionar, a vaga é marcada como <strong>Fechada</strong> em <span id="ev-data-fechamento-label">—</span>
         </div>
       </div>
     </div>
