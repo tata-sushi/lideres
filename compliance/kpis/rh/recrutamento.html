@@ -823,6 +823,8 @@ function normVaga(obj) {
     salario_fixo:        v('salario_fixo'),
     salario_bruto:       v('salario_bruto'),
     colaborador_anterior: v('colaborador_anterior','colaborador'),
+    colaborador_contratado: v('colaborador_contratado','colaborador_admitido','colaborador_novo','contratado'),
+    data_contratacao:      v('data_da_contratacao','data_contratacao','data_de_contratacao','data_fechamento','data_de_fechamento','conclusao'),
     id:                  v('id')
   };
 }
@@ -1551,6 +1553,56 @@ function _evPopulateColaboradorSelect(current) {
   if (current) sel.value = current;
 }
 
+// Popula o dropdown de "Colaborador contratado" a partir da planilha de testes.
+// Prioriza candidatos da mesma unidade/departamento/cargo da vaga; se não
+// houver casamento, mostra todos os candidatos únicos por nome.
+function _evPopulateColabContratadoSelect(cargo, unidade, dept, current) {
+  var sel = document.getElementById('ev-colab-contratado');
+  if (!sel) return;
+  var normLC = function(s){ return norm((s||'').toLowerCase().trim()); };
+  var uN = normLC(unidade), dN = normLC(dept), cN = normLC(cargo);
+  var candidatos = (typeof testes !== 'undefined' && Array.isArray(testes)) ? testes : [];
+  var matched = candidatos.filter(function(t) {
+    if (!t || !t.nome) return false;
+    var u = normLC(t.unidade), d = normLC(t.departamento), c = normLC(t.cargo);
+    if (uN && u && u !== uN) return false;
+    if (dN && d && d !== dN) return false;
+    if (cN && c && c !== cN) return false;
+    return true;
+  });
+  var pool = matched.length ? matched : candidatos;
+  var nomes = _evUniqSorted(pool.map(function(t){ return t.nome; }).filter(Boolean));
+  var found = nomes.indexOf(current) >= 0;
+  var placeholder = pool.length
+    ? 'Selecione o candidato da planilha de testes'
+    : 'Nenhum candidato encontrado nos testes';
+  var html = '<option value="">'+escH(placeholder)+'</option>';
+  if (!found && current) html += '<option value="'+escH(current)+'" selected>'+escH(current)+'</option>';
+  html += nomes.map(function(n) {
+    return '<option value="'+escH(n)+'"'+(n===current?' selected':'')+'>'+escH(n)+'</option>';
+  }).join('');
+  sel.innerHTML = html;
+  if (current) sel.value = current;
+}
+
+function _evTodayBR() {
+  var d = new Date();
+  return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
+}
+
+function evStatusChanged() {
+  var sel  = document.getElementById('ev-status');
+  var wrap = document.getElementById('ev-colab-contratado-wrap');
+  var lbl  = document.getElementById('ev-data-fechamento-label');
+  if (!sel || !wrap) return;
+  var fechada = (sel.value || '').toLowerCase() === 'fechada';
+  wrap.style.display = fechada ? '' : 'none';
+  if (!fechada) {
+    _evClearFieldError('ev-colab-contratado');
+  }
+  if (lbl) lbl.textContent = fechada ? _evTodayBR() : '—';
+}
+
 function _evUniqSorted(arr) {
   var seen = {}, out = [];
   arr.forEach(function(v) { if (v && !seen[v]) { seen[v] = true; out.push(v); } });
@@ -1633,6 +1685,9 @@ function openNewVaga() {
   });
   _loadEvLideres(function(list) { _evPopulateSelect('ev-lider', list, ''); });
   _loadEvColaboradores(function() { _evPopulateColaboradorSelect('Vaga Nova'); });
+  var sSel = document.getElementById('ev-status'); if (sSel) sSel.value = 'Aberta';
+  _evPopulateColabContratadoSelect('', '', '', '');
+  evStatusChanged();
   document.getElementById('ev-overlay').classList.add('active');
 }
 
@@ -1663,6 +1718,10 @@ function openEditVaga(linha) {
   });
   _loadEvLideres(function(list) { _evPopulateSelect('ev-lider', list, r.lider || ''); });
   _loadEvColaboradores(function() { _evPopulateColaboradorSelect(r.colaborador_anterior || ''); });
+  var sSel = document.getElementById('ev-status');
+  if (sSel) sSel.value = ((r.status || '').toLowerCase().indexOf('fechad') >= 0) ? 'Fechada' : 'Aberta';
+  _evPopulateColabContratadoSelect(_c, _u, _d, r.colaborador_contratado || '');
+  evStatusChanged();
   document.getElementById('ev-overlay').classList.add('active');
 }
 function closeEditVaga() {
@@ -1672,6 +1731,8 @@ function salvarEditVaga() {
   // Limpa erros anteriores
   document.querySelectorAll('#ev-overlay .ev-field-error').forEach(function(el) { el.classList.remove('ev-field-error'); });
 
+  var statusVal = (document.getElementById('ev-status') || {}).value || 'Aberta';
+  var isFechada = statusVal.toLowerCase() === 'fechada';
   var required = [
     { id: 'ev-unidade',      label: 'Unidade' },
     { id: 'ev-departamento', label: 'Departamento' },
@@ -1679,6 +1740,7 @@ function salvarEditVaga() {
     { id: 'ev-horario',      label: 'Horário' },
     { id: 'ev-lider',        label: 'Líder responsável' }
   ];
+  if (isFechada) required.push({ id: 'ev-colab-contratado', label: 'Colaborador contratado' });
   var invalidos = [];
   required.forEach(function(f) {
     var el = document.getElementById(f.id);
@@ -1696,6 +1758,8 @@ function salvarEditVaga() {
   var btn = document.getElementById('ev-save');
   btn.disabled = true; btn.textContent = 'Salvando…';
   var _linha = document.getElementById('ev-linha').value;
+  var colabContratado = isFechada ? (document.getElementById('ev-colab-contratado') || {}).value || '' : '';
+  var dataContratacao = isFechada ? _evTodayBR() : '';
   var payload = {
     action:       _linha ? 'updateVaga' : 'addVaga',
     row_index:    _linha,
@@ -1707,7 +1771,10 @@ function salvarEditVaga() {
     lider:               document.getElementById('ev-lider').value,
     colaborador_anterior: document.getElementById('ev-colaborador').value,
     salario_fixo:        (document.getElementById('ev-salario-fixo') || {}).value || '',
-    salario_bruto:       (document.getElementById('ev-salario-bruto') || {}).value || ''
+    salario_bruto:       (document.getElementById('ev-salario-bruto') || {}).value || '',
+    status:                statusVal,
+    colaborador_contratado: colabContratado,
+    data_contratacao:       dataContratacao
   };
   var _params = Object.keys(payload).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(payload[k]); }).join('&');
   fetch(VAGAS_EDIT_URL + '?' + _params)
@@ -1726,6 +1793,8 @@ function salvarEditVaga() {
             _vagaRows[i].horario      = payload.horario;
             _vagaRows[i].data         = payload.data;
             _vagaRows[i].lider        = payload.lider;
+            _vagaRows[i].colaborador_contratado = payload.colaborador_contratado;
+            _vagaRows[i].data_contratacao       = payload.data_contratacao;
             break;
           }
         }
@@ -3067,6 +3136,23 @@ function enviarSolicitacao() {
         <select class="modal-select" id="ev-lider" onchange="_evClearFieldError('ev-lider')">
           <option value="">Carregando...</option>
         </select>
+      </div>
+      <hr class="modal-divider">
+      <div class="ev-field">
+        <span class="modal-section-title">Status da vaga</span>
+        <select class="modal-select" id="ev-status" onchange="evStatusChanged()">
+          <option value="Aberta">Aberta</option>
+          <option value="Fechada">Fechada</option>
+        </select>
+      </div>
+      <div class="ev-field" id="ev-colab-contratado-wrap" style="display:none;margin-top:12px;">
+        <span class="modal-section-title">Colaborador contratado <span style="color:var(--red);font-size:12px;">*</span></span>
+        <select class="modal-select" id="ev-colab-contratado" onchange="_evClearFieldError('ev-colab-contratado')">
+          <option value="">Selecione o candidato aprovado no teste</option>
+        </select>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.4px;color:var(--muted);margin-top:6px;text-transform:uppercase;">
+          Data de fechamento: <span id="ev-data-fechamento-label">—</span>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
