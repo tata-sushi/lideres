@@ -1764,16 +1764,18 @@ function salvarEditVaga() {
   if (invalidos.length) {
     var primeiro = document.querySelector('#ev-overlay .ev-field-error');
     if (primeiro) primeiro.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    showNsToast('Preencha: ' + invalidos.join(', '), true);
     return;
   }
 
   var btn = document.getElementById('ev-save');
   btn.disabled = true; btn.textContent = 'Salvando…';
   var _linha = document.getElementById('ev-linha').value;
+  var isNew = !_linha;
   var colabContratado = isFechada ? colabContratadoRaw : '';
   var dataContratacao = isFechada ? _evTodayBR() : '';
   var payload = {
-    action:       _linha ? 'updateVaga' : 'addVaga',
+    action:       isNew ? 'addVaga' : 'updateVaga',
     row_index:    _linha,
     cargo:        document.getElementById('ev-cargo').value,
     departamento: document.getElementById('ev-departamento').value,
@@ -1792,31 +1794,24 @@ function salvarEditVaga() {
   fetch(VAGAS_EDIT_URL + '?' + _params)
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      btn.disabled = false; btn.textContent = 'Salvar';
-      if (data.ok) {
-        var linha = payload.row_index;
-        for (var i = 0; i < _vagaRows.length; i++) {
-          if (String(_vagaRows[i]._linha) === String(linha)) {
-            _vagaRows[i].status       = payload.status;
-            _vagaRows[i].cargo        = payload.cargo;
-            _vagaRows[i].departamento = payload.departamento;
-            _vagaRows[i].unidade      = payload.unidade;
-            _vagaRows[i].escala       = payload.escala;
-            _vagaRows[i].horario      = payload.horario;
-            _vagaRows[i].data         = payload.data;
-            _vagaRows[i].lider        = payload.lider;
-            _vagaRows[i].colaborador_contratado = payload.colaborador_contratado;
-            _vagaRows[i].data_contratacao       = payload.data_contratacao;
-            break;
-          }
-        }
+      if (!data.ok) {
+        btn.disabled = false; btn.textContent = 'Salvar';
+        showNsToast('Erro ao salvar: ' + (data.error || 'desconhecido'), true);
+        return;
+      }
+      // Sucesso: recarrega vagas direto da planilha para pegar a linha recém-criada
+      // (no addVaga não temos _linha local) e re-renderiza o tab.
+      fetchSheetVagas(function(list) {
+        vagas = list || [];
+        btn.disabled = false; btn.textContent = 'Salvar';
         closeEditVaga();
-        renderVagasTableRows();
-      } else { alert('Erro ao salvar: ' + (data.error || 'desconhecido')); }
+        render();
+        showNsToast(isNew ? 'Vaga cadastrada com sucesso' : 'Vaga atualizada com sucesso');
+      });
     })
     .catch(function(err) {
       btn.disabled = false; btn.textContent = 'Salvar';
-      alert('Erro de conexão: ' + err);
+      showNsToast('Erro de conexão: ' + err, true);
     });
 }
 
