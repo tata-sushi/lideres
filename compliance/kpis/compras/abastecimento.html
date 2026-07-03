@@ -607,8 +607,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
       <button class="drawer-sam-btn" onclick="abrirModalPedido()">Novo Pedido</button>
-      <button class="drawer-sam-btn" onclick="closeDrawer();abrirModalRelReceb()" style="margin-top:8px;">Relatório de Recebimentos</button>
-      <button class="drawer-sam-btn" onclick="closeDrawer();abrirModalExportProc()" style="margin-top:8px;">Exportar CSV · Processamento</button>
+      <button class="drawer-sam-btn" onclick="closeDrawer(true);abrirModalRelReceb()" style="margin-top:8px;">Relatório de Recebimentos</button>
+      <button class="drawer-sam-btn" onclick="closeDrawer(true);abrirModalRelEntregas()" style="margin-top:8px;">Relatório de Entregas</button>
+      <button class="drawer-sam-btn" onclick="closeDrawer(true);abrirModalExportProc()" style="margin-top:8px;">Exportar CSV · Processamento</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -948,6 +949,33 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="modal-footer">
       <button class="modal-btn modal-btn-cancel" onclick="fecharModalRelReceb()">Cancelar</button>
       <button class="modal-btn modal-btn-confirm" onclick="gerarRelatorioRecebimentos()">Gerar PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL RELATÓRIO ENTREGAS ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-rel-entregas">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div>
+        <div class="modal-eyebrow">Entregas</div>
+        <div class="modal-title">Relatório por Data</div>
+      </div>
+      <button class="modal-close" onclick="fecharModalRelEntregas()">✕</button>
+    </div>
+    <div class="modal-body" style="gap:14px;">
+      <div class="fg">
+        <label class="flbl">Data de entrega prevista</label>
+        <input type="date" class="fctrl" id="rel-entregas-data">
+      </div>
+      <p style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6;">
+        Gera um PDF com todos os pedidos com entrega prevista na data selecionada, incluindo fornecedor, itens e quantidades esperadas.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="fecharModalRelEntregas()">Cancelar</button>
+      <button class="modal-btn modal-btn-confirm" onclick="gerarRelatorioEntregas()">Gerar PDF</button>
     </div>
   </div>
 </div>
@@ -1407,11 +1435,11 @@ function loadDrawerMeta() {
 }
 function openDrawer() {
   loadDrawerMeta(); document.getElementById('drawer-overlay').classList.add('open'); document.getElementById('drawer').classList.add('open'); document.body.style.overflow='hidden'; loadDrawerKPIs(); }
-function closeDrawer() { document.getElementById('drawer-overlay').classList.remove('open'); document.getElementById('drawer').classList.remove('open'); document.body.style.overflow=''; }
+function closeDrawer(keepScrollLocked) { document.getElementById('drawer-overlay').classList.remove('open'); document.getElementById('drawer').classList.remove('open'); if (!keepScrollLocked) document.body.style.overflow=''; }
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeDrawer();});
 
 // ── MODAL NOVO PEDIDO ────────────────────────────────────────────────────────
-function abrirModalPedido() { closeDrawer(); setTimeout(function(){ document.getElementById('modal-pedido').classList.add('active'); document.body.style.overflow='hidden'; },220); }
+function abrirModalPedido() { closeDrawer(true); setTimeout(function(){ document.getElementById('modal-pedido').classList.add('active'); document.body.style.overflow='hidden'; },220); }
 function fecharModalPedido() { document.getElementById('modal-pedido').classList.remove('active'); document.body.style.overflow=''; }
 
 // ── MODAL VISUALIZAR ──────────────────────────────────────────────────────────
@@ -2795,6 +2823,121 @@ function gerarRelatorioRecebimentos() {
   fecharModalRelReceb();
   var logoSrc = (document.querySelector('.logo-img') || {}).src || '';
   var logoEl  = document.getElementById('rp-logo-rel');
+  if (logoEl && logoSrc) {
+    logoEl.onload  = function(){ window.print(); };
+    logoEl.onerror = function(){ window.print(); };
+    logoEl.src = logoSrc;
+  } else {
+    setTimeout(function(){ window.print(); }, 100);
+  }
+}
+
+// ── MODAL RELATÓRIO ENTREGAS ──────────────────────────────────────────────────
+function abrirModalRelEntregas() {
+  var inp = document.getElementById('rel-entregas-data');
+  if (!inp.value) inp.value = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-rel-entregas').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function fecharModalRelEntregas() {
+  document.getElementById('modal-rel-entregas').classList.remove('active');
+  document.body.style.overflow = '';
+}
+function gerarRelatorioEntregas() {
+  var dataISO = document.getElementById('rel-entregas-data').value;
+  if (!dataISO) { toast('Selecione uma data.'); return; }
+  var dataBR = (function(d){ var p = d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; })(dataISO);
+
+  var linhas = [];
+  ORDERS.forEach(function(o) {
+    (o.fornecedores || []).forEach(function(forn) {
+      var dp = forn.dataPrev || (o.raw && o.raw.dataEntregaPrevista) || '';
+      if (!dp) return;
+      var dpBR = fmtDataBR(dp);
+      if (dpBR !== dataBR) return;
+      linhas.push({ order: o, forn: forn });
+    });
+    if (!o.fornecedores || o.fornecedores.length === 0) {
+      var dp2 = (o.raw && o.raw.dataEntregaPrevista) || '';
+      if (dp2 && fmtDataBR(dp2) === dataBR) linhas.push({ order: o, forn: null });
+    }
+  });
+
+  if (linhas.length === 0) { toast('Nenhuma entrega prevista para ' + dataBR + '.'); return; }
+
+  var unidadeTxt = UNIDADE || '—';
+  var grandTotal = 0;
+  var rowsHtml   = '';
+
+  linhas.forEach(function(item) {
+    var o       = item.order;
+    var forn    = item.forn;
+    var raw     = o.raw || {};
+    var fornNome = forn ? forn.nome : (raw.fornecedor || '—');
+    var pedidoId = raw.id_display || o.id || '—';
+    var itens    = forn ? forn.itens : o.itensList;
+
+    (itens || []).forEach(function(it) {
+      var cat    = it.cat || (o.cats && o.cats[0]) || '—';
+      var qty    = it.qty || it.qtdComprada || 0;
+      var vlUnit = it.vlPedido || 0;
+      grandTotal += qty * vlUnit;
+      rowsHtml +=
+        '<tr>' +
+          '<td>' + pedidoId + '</td>' +
+          '<td>' + cat + '</td>' +
+          '<td>' + fornNome + '</td>' +
+          '<td>' + (it.nome || '—') + '</td>' +
+          '<td class="center">' + (it.un || '—') + '</td>' +
+          '<td class="r">' + qty + '</td>' +
+          '<td class="r">' + (vlUnit ? 'R$ ' + vlUnit.toLocaleString('pt-BR', {minimumFractionDigits:2}) : '—') + '</td>' +
+          '<td class="rp-check-cell"><span class="rp-check-box"></span></td>' +
+        '</tr>';
+    });
+  });
+
+  var html =
+    '<div class="rp-header">' +
+      '<img id="rp-logo-entregas" class="rp-logo-img" alt="TATÁ Sushi">' +
+      '<div class="rp-header-center">' +
+        '<div class="rp-title-main">Relatório de Entregas</div>' +
+        '<div class="rp-subtitle">' + dataBR + '</div>' +
+      '</div>' +
+      '<div class="rp-header-right">' +
+        '<div class="rp-meta-line">Unidade: <strong>' + unidadeTxt + '</strong></div>' +
+        '<div class="rp-meta-line">Emitido em: ' + new Date().toLocaleString('pt-BR') + '</div>' +
+        '<div class="rp-meta-line">' + linhas.length + ' pedido' + (linhas.length !== 1 ? 's' : '') + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="rp-section">Itens com Entrega Prevista</div>' +
+    '<table class="rp-table"><thead><tr>' +
+      '<th>Pedido</th><th>Categoria</th><th>Fornecedor</th><th>Produto</th><th class="center">Un.</th><th class="r">Qtd</th><th class="r">Vl. Unit</th><th class="center" style="width:30px">✓</th>' +
+    '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+    '<div class="rp-grand">' +
+      '<span class="rp-grand-label">Total Geral</span>' +
+      '<span class="rp-grand-value">R$ ' + grandTotal.toLocaleString('pt-BR', {minimumFractionDigits:2}) + '</span>' +
+    '</div>';
+
+  var reciboEl = document.getElementById('recibo');
+  reciboEl.innerHTML = html;
+  reciboEl.classList.add('landscape');
+  var orientStyle = document.getElementById('print-orient-landscape');
+  if (!orientStyle) {
+    orientStyle = document.createElement('style');
+    orientStyle.id = 'print-orient-landscape';
+    orientStyle.textContent = '@page { size: A4 landscape; margin: 12mm; }';
+    document.head.appendChild(orientStyle);
+  }
+  function _restoreOrient() {
+    reciboEl.classList.remove('landscape');
+    if (orientStyle && orientStyle.parentNode) orientStyle.parentNode.removeChild(orientStyle);
+    window.removeEventListener('afterprint', _restoreOrient);
+  }
+  window.addEventListener('afterprint', _restoreOrient);
+
+  fecharModalRelEntregas();
+  var logoSrc = (document.querySelector('.logo-img') || {}).src || '';
+  var logoEl  = document.getElementById('rp-logo-entregas');
   if (logoEl && logoSrc) {
     logoEl.onload  = function(){ window.print(); };
     logoEl.onerror = function(){ window.print(); };
