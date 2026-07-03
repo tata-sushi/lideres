@@ -1502,13 +1502,15 @@ async function confirmarPedido() {
     var entregaInp=document.getElementById('proc-date-'+idx);
     var entrega='—'; var entregaISO='';
     if(entregaInp&&entregaInp.value){var p=entregaInp.value.split('-');entrega=p[2]+'/'+p[1]+'/'+p[0];entregaISO=entregaInp.value;}
-    item.vlPedido=vl;
-    dadosProc[idx]={conf:conf, vl:vl, forn:forn||'—', entrega:entrega, entregaISO:entregaISO};
-    totalGeral += conf*vl;
+    var vlOriginal = item.vlPedido;             // valor_inicial do catálogo
+    var vlEfetivo  = vl > 0 ? vl : vlOriginal; // usa catálogo se não preenchido
+    item.vlPedido  = vlEfetivo;
+    dadosProc[idx]={conf:conf, vl:vlEfetivo, vlNovo:(vl>0), forn:forn||'—', entrega:entrega, entregaISO:entregaISO};
+    totalGeral += conf * vlEfetivo;
     if(conf>0){
       var key = forn || '—';
       if(!fornGroups[key]) fornGroups[key] = [];
-      fornGroups[key].push({ nome:item.nome, un:item.un, qty:conf, vlPedido:vl, _supaId:item._supaId });
+      fornGroups[key].push({ nome:item.nome, un:item.un, qty:conf, vlPedido:vlEfetivo, _supaId:item._supaId });
     }
   });
   dadosProc.obs=document.getElementById('proc-obs').value.trim();
@@ -1526,7 +1528,6 @@ async function confirmarPedido() {
         var d = dadosProc[idx] || {conf:0, vl:0, forn:'—'};
         var updateData = {
           qtd_comprada:  d.conf,
-          valor_inicial: d.vl || null,
           valor_compra:  d.conf * (d.vl || 0),
           fornecedor:    d.forn !== '—' ? d.forn : null,
           data_compra:   dataCompraISO,
@@ -1535,6 +1536,7 @@ async function confirmarPedido() {
           obs_compras:   dadosProc.obs || null,
           status:        'comprado'
         };
+        if (d.vlNovo) updateData.valor_inicial = d.vl; // só sobrescreve se usuário digitou
         return item._supaId
           ? supa.from('abastecimento').update(updateData).eq('id', item._supaId)
           : supa.from('abastecimento').update(updateData).eq('id_display', order.id).eq('produto_nome', item.nome);
@@ -2498,7 +2500,8 @@ async function confirmarBaixaNF() {
       var inpRec=document.getElementById(rowId+'-rec-inp');
       var inpVl=document.getElementById(rowId+'-vl-inp');
       var rec=inpRec?(inpRec.value!==''?(parseFloat(inpRec.value)||0):(item.qty||0)):(item.qty||0);
-      var vlRec=parseFloat(inpVl&&inpVl.value)||(item.vlPedido||0);
+      var vlDigitado=parseFloat(inpVl&&inpVl.value&&inpVl.value!==''?inpVl.value:0);
+      var vlRec=vlDigitado>0 ? vlDigitado : (item.vlPedido||0);
       itensPdf.push({nome:item.nome,un:item.un,qtdPedido:item.qty||0,vlPedido:item.vlPedido||0,rec:rec,vlRec:vlRec});
       itensApi.push({produtoNome:item.nome, qtdRecebida:rec, vlUnit:vlRec, _supaId:item._supaId||null});
     });
