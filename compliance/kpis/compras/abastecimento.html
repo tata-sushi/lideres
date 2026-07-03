@@ -1123,14 +1123,20 @@ function hideLoading() { document.getElementById('loading-overlay').classList.re
 async function carregarPedidos() {
   gasErro = null;
   showLoading();
-  if (!GAS_URL) { carregando = false; hideLoading(); renderAll(); updateKPIs(); return; }
+  if (!supa) { carregando = false; hideLoading(); renderAll(); updateKPIs(); return; }
   try {
-    // Sem filtro por unidade/perfil: lista todos os pedidos da planilha
-    var data = await gasGet({ action: 'getPedidos' });
-    if (data && data.pedidos) {
-      var pedidosUI = await Promise.all(data.pedidos.map(pedidoParaUI));
-      ORDERS = pedidosUI;
-    }
+    var res = await supa.from('abastecimento').select('*')
+      .order('data_solicitacao', {ascending: false})
+      .order('created_at', {ascending: false});
+    if (res.error) throw new Error(res.error.message);
+    var rows = res.data || [];
+    var groups = {}, orderList = [];
+    rows.forEach(function(row) {
+      var key = row.id_display || row.id;
+      if (!groups[key]) { groups[key] = []; orderList.push(key); }
+      groups[key].push(row);
+    });
+    ORDERS = orderList.map(function(key) { return rowsParaUI(key, groups[key]); });
   } catch(e) {
     gasErro = e.message;
     toast('Erro ao carregar pedidos: ' + e.message);
@@ -1159,39 +1165,59 @@ function fmtDataBR(v) {
   return isNaN(d2.getTime()) ? '—' : d2.toLocaleDateString('pt-BR');
 }
 
-async function pedidoParaUI(p) {
-  var s = statusBackendParaUI(p);
-  var data    = fmtDataBR(p.dataSolicitacao);
-  var entrega = fmtDataBR(p.dataEntregaDesejada);
+function rowsParaUI(idDisplay, rows) {
+  var firstRow = rows[0];
+  var status = firstRow.status || 'solicitado';
+  var s = statusBackendParaUI({status: status});
 
-  function mapItens(itens) {
-    return itens.map(function(it) {
-      var catLabel = (CATALOGO[it.categoriaKey] && CATALOGO[it.categoriaKey].label) || it.categoriaKey;
-      var qty = ((s.aba === 'entregas' || s.aba === 'conferencia') && it.qtdComprada) ? Number(it.qtdComprada) : Number(it.qtdSolicitada) || 0;
-      var catProd = (CATALOGO[it.categoriaKey] && CATALOGO[it.categoriaKey].produtos.find(function(prod){ return prod.nome === it.produtoNome; })) || {};
+  var raw = {
+    unidade:         firstRow.unidade,
+    departamento:    firstRow.departamento,
+    solicitante:     firstRow.solicitante,
+    dataSolicitacao: firstRow.data_solicitacao,
+    status:          status,
+    obsSolicitante:  firstRow.obs_solicitante,
+    fornecedor:      rows.map(function(r){return r.fornecedor||'';}).filter(Boolean)
+                       .filter(function(v,i,a){return a.indexOf(v)===i;}).join(', '),
+    dataRecebimento: firstRow.data_recebimento,
+    dataVencimento:  firstRow.data_vencimento_boleto,
+    notaFiscal:      firstRow.numero_nf,
+    recebidoPor:     firstRow.recebedor,
+    obsEstoque:      firstRow.obs_recebimento,
+    dataCompra:      firstRow.data_emissao_nf || '',
+    comprador:       firstRow.comprador,
+    conferente:      firstRow.conferente,
+    itens: rows.map(function(row) {
       return {
-        cat:         catLabel,
-        nome:        it.produtoNome,
-        un:          it.unidade,
-        qty:         qty,
-        vlPedido:    0,
-        fornecedor:  it.fornecedor || catProd.fornecedor || '',
-        qtdComprada: Number(it.qtdComprada) || 0,
-        qtdRecebida: Number(it.qtdRecebida) || 0
+        produtoNome:   row.produto_nome,
+        categoriaKey:  row.categoria,
+        unidade:       row.unidade_medida,
+        qtdSolicitada: row.qtd_solicitada,
+        qtdComprada:   row.qtd_comprada,
+        qtdRecebida:   row.qtd_recebida,
+        fornecedor:    row.fornecedor,
+        _supaId:       row.id
       };
-    });
-  }
+    })
+  };
 
-  // Usa itens inline do getPedidos (sem N+1); faz fallback só se ausentes
-  var itensList = [];
-  if (p.itens && p.itens.length > 0) {
-    itensList = mapItens(p.itens);
-  } else {
-    try {
-      var det = await gasGet({ action: 'getPedido', id: p.id });
-      if (det && det.itens) itensList = mapItens(det.itens);
-    } catch(e) { console.warn('getPedido falhou para ' + p.id, e.message); }
-  }
+  var itensList = rows.map(function(row) {
+    var catLabel = (CATALOGO[row.categoria] && CATALOGO[row.categoria].label) || row.categoria || '';
+    var qty = (s.aba === 'entregas' || s.aba === 'conferencia')
+      ? (Number(row.qtd_comprada) || Number(row.qtd_solicitada) || 0)
+      : (Number(row.qtd_solicitada) || 0);
+    return {
+      cat:         catLabel,
+      nome:        row.produto_nome,
+      un:          row.unidade_medida,
+      qty:         qty,
+      vlPedido:    Number(row.valor_inicial) || 0,
+      fornecedor:  row.fornecedor || '',
+      qtdComprada: Number(row.qtd_comprada) || 0,
+      qtdRecebida: Number(row.qtd_recebida) || 0,
+      _supaId:     row.id
+    };
+  });
 
   var catsSet = {};
   itensList.forEach(function(it) {
@@ -1199,53 +1225,43 @@ async function pedidoParaUI(p) {
     if (first) catsSet[first] = 1;
   });
 
-  // Após Compras: agrupa itens por fornecedor (1 card por fornecedor na aba Recebimentos)
+  // Agrupa por fornecedor (aba Entregas)
   var fornecedores = null;
-  if (p.status === 'comprado' || p.status === 'parcial' || p.status === 'recebido' || p.status === 'parcial_entrega' || p.status === 'conferido') {
+  if (status === 'comprado' || status === 'parcial' || status === 'recebido' || status === 'parcial_entrega' || status === 'conferido') {
     var grupos = {};
-    (p.itens || []).forEach(function(it) {
-      var f = String(it.fornecedor || '').trim() || String(p.fornecedor || '—');
+    rows.forEach(function(row) {
+      var f = String(row.fornecedor || '').trim() || '—';
       if (!grupos[f]) grupos[f] = [];
-      grupos[f].push(it);
+      grupos[f].push(row);
     });
     if (Object.keys(grupos).length > 0) {
       fornecedores = Object.keys(grupos).map(function(forn) {
         var its = grupos[forn];
-        // Pega data prevista mais tarde do grupo
-        var prevs = its.map(function(it) { return it.dataEntregaPrevista; }).filter(Boolean);
-        var dataPrev = prevs.sort().pop() || '';
-        // Pega data de recebimento mais tarde do grupo (apenas itens recebidos)
-        var recs = its.filter(function(it) { return Number(it.qtdRecebida) > 0; })
-                      .map(function(it) { return it.dataRecebimento; }).filter(Boolean);
-        var dataReceb = recs.sort().pop() || '';
-        // Recebido se TODOS os itens com qtdComprada > 0 têm qtdRecebida >= qtdComprada
-        var todosRecebidos = its.every(function(it) {
-          var c = Number(it.qtdComprada) || 0;
-          if (c === 0) return true;
-          return Number(it.qtdRecebida) >= c;
+        var todosRecebidos = its.every(function(row) {
+          var c = Number(row.qtd_comprada) || 0;
+          return c === 0 || Number(row.qtd_recebida) >= c;
         });
         return {
           nome:      forn,
           status:    todosRecebidos ? 'b-concluido' : 'b-aguardando',
-          label:     todosRecebidos ? 'Recebido'   : 'Aguardando recebimento',
-          dataPrev:  dataPrev,
-          dataReceb: dataReceb,
-          itens: its.map(function(it) {
+          label:     todosRecebidos ? 'Recebido' : 'Aguardando recebimento',
+          dataPrev:  '',
+          dataReceb: its[0].data_recebimento || '',
+          itens: its.map(function(row) {
             return {
-              nome:        it.produtoNome,
-              un:          it.unidade,
-              qty:         Number(it.qtdComprada) || 0,
-              vlPedido:    0,
-              qtdRecebida: Number(it.qtdRecebida) || 0
+              nome:        row.produto_nome,
+              un:          row.unidade_medida,
+              qty:         Number(row.qtd_comprada) || 0,
+              vlPedido:    Number(row.valor_inicial) || 0,
+              qtdRecebida: Number(row.qtd_recebida) || 0,
+              _supaId:     row.id
             };
           })
         };
       });
-
-      // Se há múltiplos fornecedores e alguns entregaram mas outros não → Recebimento parcial
       if (fornecedores.length > 1) {
-        var algumFeito  = fornecedores.some(function(f)  { return f.status === 'b-concluido'; });
-        var algumPend   = fornecedores.some(function(f)  { return f.status === 'b-aguardando'; });
+        var algumFeito = fornecedores.some(function(f) { return f.status === 'b-concluido'; });
+        var algumPend  = fornecedores.some(function(f) { return f.status === 'b-aguardando'; });
         if (algumFeito && algumPend) {
           s = { cls: 'b-parcial-entrega', lbl: 'Recebimento parcial', aba: 'entregas' };
         }
@@ -1254,18 +1270,18 @@ async function pedidoParaUI(p) {
   }
 
   return {
-    id:        p.id,
-    idDisplay: p.idDisplay || ('#' + p.id),
-    status:    s.cls,
-    label:     s.lbl,
-    cats:      Object.keys(catsSet),
-    data:      data,
-    entrega:   entrega,
-    obs:       p.obsSolicitante || '',
-    aba:       s.aba,
-    itensList: itensList,
+    id:           idDisplay,
+    idDisplay:    idDisplay,
+    status:       s.cls,
+    label:        s.lbl,
+    cats:         Object.keys(catsSet),
+    data:         fmtDataBR(firstRow.data_solicitacao),
+    entrega:      '—',
+    obs:          firstRow.obs_solicitante || '',
+    aba:          s.aba,
+    itensList:    itensList,
     fornecedores: fornecedores,
-    raw:       p
+    raw:          raw
   };
 }
 
@@ -1476,63 +1492,55 @@ async function confirmarPedido() {
   for(var i=0;i<ORDERS.length;i++){ if(ORDERS[i].id===procOrderId){ order=ORDERS[i]; break; } }
   if(!order){ toast('Erro ao confirmar pedido.'); fecharModalProc(); return; }
 
-  // Coleta dados por item + agrupa fornecedores
-  var fornGroups = {};   // forn → [{nome, un, qty, vlPedido}]
+  var fornGroups = {};
   var totalGeral = 0;
-  var itensApi = [];     // payload para updateCompras
-  var dataPrevistaISO = ''; // data prevista mais tarde (yyyy-mm-dd) p/ enviar ao GAS
   order.itensList.forEach(function(item,idx){
     var conf=parseFloat((document.getElementById('proc-conf-'+idx)||{}).value)||0;
     var vl=parseFloat((document.getElementById('proc-vl-'+idx)||{}).value)||0;
     var forn=((document.getElementById('proc-forn-'+idx)||{}).value||'').trim();
     var entregaInp=document.getElementById('proc-date-'+idx);
     var entrega='—';
-    if(entregaInp&&entregaInp.value){
-      var p=entregaInp.value.split('-');
-      entrega=p[2]+'/'+p[1]+'/'+p[0];
-      // Mantém a data MAIS TARDE entre todos os itens
-      if (!dataPrevistaISO || entregaInp.value > dataPrevistaISO) dataPrevistaISO = entregaInp.value;
-    }
+    if(entregaInp&&entregaInp.value){var p=entregaInp.value.split('-');entrega=p[2]+'/'+p[1]+'/'+p[0];}
     item.vlPedido=vl;
     dadosProc[idx]={conf:conf, vl:vl, forn:forn||'—', entrega:entrega};
     totalGeral += conf*vl;
     if(conf>0){
-      itensApi.push({
-        produtoNome:         item.nome,
-        qtdComprada:         conf,
-        fornecedor:          forn || '—',
-        dataEntregaPrevista: (entregaInp && entregaInp.value) ? entregaInp.value : ''
-      });
       var key = forn || '—';
       if(!fornGroups[key]) fornGroups[key] = [];
-      fornGroups[key].push({ nome:item.nome, un:item.un, qty:conf, vlPedido:vl });
+      fornGroups[key].push({ nome:item.nome, un:item.un, qty:conf, vlPedido:vl, _supaId:item._supaId });
     }
   });
   dadosProc.obs=document.getElementById('proc-obs').value.trim();
-  // Atualiza dataEntregaPrevista no estado local para refletir nos cards imediatamente
-  if (dataPrevistaISO) { if (!order.raw) order.raw = {}; order.raw.dataEntregaPrevista = dataPrevistaISO; }
 
-  // Atualiza estado local: pedido vai para a aba "entregas" com fornecedores agrupados
   order.fornecedores = Object.keys(fornGroups).map(function(forn){
     return { nome: forn, status:'b-aguardando', label:'Aguardando recebimento', itens: fornGroups[forn] };
   });
   order.status='b-aguardando'; order.label='Aguardando recebimento'; order.aba='entregas';
 
-  // Sincroniza com a planilha
-  if (GAS_URL) {
+  if (supa) {
     try {
-      var fornecedorAgg = Object.keys(fornGroups).join(', ') || '—';
-      var res = await gasPost({
-        action:              'updateCompras',
-        id:                  order.id,
-        fornecedor:          fornecedorAgg,
-        valorTotal:          totalGeral,
-        notaFiscal:          '',
-        obsCompras:          dadosProc.obs,
-        dataEntregaPrevista: dataPrevistaISO,
-        itens:               itensApi
+      var comprador = (currentUser && currentUser.name) || '—';
+      var dataCompraISO = new Date().toISOString().split('T')[0];
+      var updates = order.itensList.map(function(item, idx) {
+        var d = dadosProc[idx] || {conf:0, vl:0, forn:'—'};
+        var updateData = {
+          qtd_comprada:  d.conf,
+          valor_inicial: d.vl || null,
+          valor_compra:  d.conf * (d.vl || 0),
+          fornecedor:    d.forn !== '—' ? d.forn : null,
+          data_compra:   dataCompraISO,
+          comprador:     comprador,
+          obs_compras:   dadosProc.obs || null,
+          status:        'comprado'
+        };
+        return item._supaId
+          ? supa.from('abastecimento').update(updateData).eq('id', item._supaId)
+          : supa.from('abastecimento').update(updateData).eq('id_display', order.id).eq('produto_nome', item.nome);
       });
-      if (res && res.idDisplay) order.idDisplay = res.idDisplay;
+      var results = await Promise.all(updates);
+      var erros = results.filter(function(r) { return r.error; });
+      if (erros.length) throw new Error(erros[0].error.message);
+      if (order.raw) { order.raw.status = 'comprado'; order.raw.comprador = comprador; }
       toast('Pedido '+order.id+' enviado para entregas.');
     } catch(e) {
       toast('Erro ao atualizar Compras: ' + e.message);
@@ -1609,46 +1617,52 @@ function removeCategoria(key) {
 async function enviarPedido() {
   if(activeCats.length===0){toast('Adicione ao menos uma categoria.');return;}
   var itensList=[];
-  var itensApi=[];
+  var rowsToInsert=[];
   activeCats.forEach(function(key){
     CATALOGO[key].produtos.forEach(function(p,i){
       var inp=document.getElementById('qty-'+key+'-'+i);
       var qty=inp?parseFloat(inp.value):0;
       if(qty>0){
         itensList.push({cat:CATALOGO[key].label,nome:p.nome,un:p.un,qty:qty,fornecedor:p.fornecedor||''});
-        itensApi.push({categoriaKey:key, produtoNome:p.nome, unidade:p.un, qtdSolicitada:qty});
+        rowsToInsert.push({
+          categoria:      key,
+          produto_nome:   p.nome,
+          unidade_medida: p.un || null,
+          qtd_solicitada: qty,
+          fornecedor:     p.fornecedor || null,
+          valor_inicial:  p.valorUnitario || null
+        });
       }
     });
   });
   if(itensList.length===0){toast('Informe ao menos uma quantidade.');return;}
-  var now=new Date(); var dataStr=now.toLocaleDateString('pt-BR');
-  var entregaVal='';
-  var entregaStr='—';
+  var now=new Date();
+  var dataStr=now.toLocaleDateString('pt-BR');
+  var dataISO=now.toISOString().split('T')[0];
   var obsVal=document.getElementById('modal-obs').value.trim();
-  var newId='P-'+(100+ORDERS.length);
-  var newDisplay='#'+newId;
+  var pad=function(n,l){return String(n).padStart(l,'0');};
+  var newIdDisplay='P-'+now.getFullYear()+pad(now.getMonth()+1,2)+pad(now.getDate(),2)+'-'+pad(Math.floor(Math.random()*900)+100,3);
   var cats=activeCats.map(function(k){return CATALOGO[k].label.split(' ')[0];});
-  var newOrder={id:newId,idDisplay:newDisplay,status:'b-enviado',label:'Aguardando compra',cats:cats,data:dataStr,entrega:entregaStr,obs:obsVal,aba:'processamento',itensList:itensList};
+  var newOrder={id:newIdDisplay,idDisplay:newIdDisplay,status:'b-enviado',label:'Aguardando compra',cats:cats,data:dataStr,entrega:'—',obs:obsVal,aba:'processamento',itensList:itensList,raw:{unidade:UNIDADE,departamento:DEPARTAMENTO,dataSolicitacao:dataISO,status:'solicitado',obsSolicitante:obsVal}};
 
-  if (GAS_URL) {
+  if (supa) {
     try {
-      var res = await gasPost({
-        action:              'savePedido',
-        unidade:             UNIDADE,
-        departamento:        DEPARTAMENTO,
-        solicitante:         (currentUser && currentUser.name) || 'Líder',
-        dataEntregaDesejada: entregaVal,
-        obs:                 obsVal,
-        itens:               itensApi
-      });
-      newOrder.id        = res.id        || newId;
-      newOrder.idDisplay = res.idDisplay || newDisplay;
-      toast('Pedido ' + newOrder.idDisplay + ' enviado para a planilha.');
+      var commonFields={id_display:newIdDisplay,unidade:UNIDADE||null,departamento:DEPARTAMENTO||null,solicitante:(currentUser&&currentUser.name)||'Líder',data_solicitacao:dataISO,status:'solicitado',obs_solicitante:obsVal||null};
+      var insertRows=rowsToInsert.map(function(r){return Object.assign({},r,commonFields);});
+      var res=await supa.from('abastecimento').insert(insertRows).select('id, produto_nome');
+      if(res.error) throw new Error(res.error.message);
+      if(res.data){
+        res.data.forEach(function(row){
+          var item=newOrder.itensList.find(function(it){return it.nome===row.produto_nome;});
+          if(item) item._supaId=row.id;
+        });
+      }
+      toast('Pedido '+newIdDisplay+' enviado.');
     } catch(e) {
-      toast('Erro ao salvar na planilha: ' + e.message);
+      toast('Erro ao salvar pedido: '+e.message);
     }
   } else {
-    toast('Pedido '+newId+' gerado! '+itensList.length+' itens.');
+    toast('Pedido '+newIdDisplay+' gerado! '+itensList.length+' itens.');
   }
 
   ORDERS.unshift(newOrder);
@@ -2157,21 +2171,7 @@ function fecharModalNF() { document.getElementById('modal-nf').classList.remove(
 
 // ── CONFERÊNCIA (Estágio 4 — Escritório) ─────────────────────────────────────
 
-var CONF_ORDERS = [];
 var confOrderId = null;
-
-async function carregarConferencias() {
-  if (!GAS_URL) { renderConferencia(); return; }
-  try {
-    var data = await gasGet({ action: 'getConferencias' });
-    if (data && data.conferencias) {
-      CONF_ORDERS = await Promise.all(data.conferencias.map(pedidoParaUI));
-    }
-  } catch(e) {
-    toast('Erro ao carregar conferências: ' + e.message);
-  }
-  renderConferencia();
-}
 
 function renderConferencia() {
   var container = document.getElementById('page-conferencia');
@@ -2358,28 +2358,38 @@ function _coletarDadosConferencia() {
 async function salvarConferencia() {
   var dados = _coletarDadosConferencia();
   if (!dados) { toast('Erro ao coletar dados.'); return; }
-  var nome = (currentUser && currentUser.name) || (window.__lideresUser) || '—';
-  dados.action = 'salvarConferencia';
-  dados.editadoPor = nome;
-  if (GAS_URL) {
+  var nome = (currentUser && currentUser.name) || '—';
+  var order = null;
+  for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
+  if (supa) {
     try {
-      await gasPost(dados);
-      // Atualiza estado local do raw para refletir correções
-      var order = null;
-      for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
+      var commonUpd = await supa.from('abastecimento').update({
+        fornecedor:             dados.fornecedor || null,
+        numero_nf:              dados.notaFiscal || null,
+        data_recebimento:       dados.dataRecebimento || null,
+        data_vencimento_boleto: dados.dataVencimento || null,
+        recebedor:              dados.recebidoPor || null,
+        obs_recebimento:        dados.obsEstoque || null,
+        obs_conferente:         dados.obsEstoque || null
+      }).eq('id_display', confOrderId);
+      if (commonUpd.error) throw new Error(commonUpd.error.message);
+      var itemUpdates = dados.itens.map(function(it, idx) {
+        var rawItem = order && order.itensList && order.itensList[idx];
+        var upd = { qtd_recebida: it.qtdRecebida, valor_recebimento: it.qtdRecebida * it.vlUnitario };
+        return rawItem && rawItem._supaId
+          ? supa.from('abastecimento').update(upd).eq('id', rawItem._supaId)
+          : supa.from('abastecimento').update(upd).eq('id_display', confOrderId).eq('produto_nome', it.produtoNome);
+      });
+      var results = await Promise.all(itemUpdates);
+      var erros = results.filter(function(r) { return r.error; });
+      if (erros.length) throw new Error(erros[0].error.message);
       if (order && order.raw) {
-        order.raw.fornecedor      = dados.fornecedor;
-        order.raw.notaFiscal      = dados.notaFiscal;
-        order.raw.dataRecebimento = dados.dataRecebimento;
-        order.raw.dataVencimento  = dados.dataVencimento;
-        order.raw.recebidoPor     = dados.recebidoPor;
-        order.raw.obsEstoque      = dados.obsEstoque;
-        order.raw.editadoPor      = nome;
+        order.raw.fornecedor = dados.fornecedor; order.raw.notaFiscal = dados.notaFiscal;
+        order.raw.dataRecebimento = dados.dataRecebimento; order.raw.dataVencimento = dados.dataVencimento;
+        order.raw.recebidoPor = dados.recebidoPor; order.raw.obsEstoque = dados.obsEstoque;
       }
       toast('Correção salva — ' + confOrderId);
-    } catch(e) {
-      toast('Erro ao salvar correção: ' + e.message);
-    }
+    } catch(e) { toast('Erro ao salvar correção: ' + e.message); }
   } else {
     toast('Correção salva localmente — ' + confOrderId);
   }
@@ -2388,41 +2398,49 @@ async function salvarConferencia() {
 async function confirmarConferencia() {
   var dados = _coletarDadosConferencia();
   if (!dados) { toast('Erro ao coletar dados.'); return; }
-  var nome = (currentUser && currentUser.name) || (window.__lideresUser) || '—';
-  dados.action = 'confirmarConferencia';
-  dados.conferidoPor = nome;
-  if (GAS_URL) {
+  var nome = (currentUser && currentUser.name) || '—';
+  var order = null;
+  for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
+  if (supa) {
     try {
-      var res = await gasPost(dados);
-      // Atualiza estado local
-      var order = null;
-      for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
+      var commonUpd = await supa.from('abastecimento').update({
+        fornecedor:             dados.fornecedor || null,
+        numero_nf:              dados.notaFiscal || null,
+        data_recebimento:       dados.dataRecebimento || null,
+        data_vencimento_boleto: dados.dataVencimento || null,
+        recebedor:              dados.recebidoPor || null,
+        obs_recebimento:        dados.obsEstoque || null,
+        obs_conferente:         dados.obsEstoque || null,
+        conferente:             nome,
+        check_conferente:       true,
+        status:                 'conferido'
+      }).eq('id_display', confOrderId);
+      if (commonUpd.error) throw new Error(commonUpd.error.message);
+      var itemUpdates = dados.itens.map(function(it, idx) {
+        var rawItem = order && order.itensList && order.itensList[idx];
+        var upd = { qtd_recebida: it.qtdRecebida, valor_recebimento: it.qtdRecebida * it.vlUnitario };
+        return rawItem && rawItem._supaId
+          ? supa.from('abastecimento').update(upd).eq('id', rawItem._supaId)
+          : supa.from('abastecimento').update(upd).eq('id_display', confOrderId).eq('produto_nome', it.produtoNome);
+      });
+      var results = await Promise.all(itemUpdates);
+      var erros = results.filter(function(r) { return r.error; });
+      if (erros.length) throw new Error(erros[0].error.message);
       if (order) {
-        order.status = 'b-conferido';
-        order.label  = 'Conferido';
-        order.aba    = 'conferencia';
-        if (res && res.idDisplay) order.idDisplay = res.idDisplay;
+        order.status = 'b-conferido'; order.label = 'Conferido'; order.aba = 'conferencia';
         if (order.raw) {
-          order.raw.status        = 'conferido';
-          order.raw.fornecedor    = dados.fornecedor;
-          order.raw.notaFiscal    = dados.notaFiscal;
-          order.raw.dataRecebimento = dados.dataRecebimento;
-          order.raw.dataVencimento  = dados.dataVencimento;
-          order.raw.recebidoPor   = dados.recebidoPor;
-          order.raw.obsEstoque    = dados.obsEstoque;
-          order.raw.conferidoPor  = nome;
+          order.raw.status = 'conferido'; order.raw.conferente = nome;
+          order.raw.fornecedor = dados.fornecedor; order.raw.notaFiscal = dados.notaFiscal;
+          order.raw.dataRecebimento = dados.dataRecebimento; order.raw.dataVencimento = dados.dataVencimento;
+          order.raw.recebidoPor = dados.recebidoPor; order.raw.obsEstoque = dados.obsEstoque;
         }
       }
       toast('Conferência confirmada — ' + confOrderId);
-      fecharModalConferencia();
-      renderAll(); updateKPIs();
-    } catch(e) {
-      toast('Erro ao confirmar conferência: ' + e.message);
-    }
+      fecharModalConferencia(); renderAll(); updateKPIs();
+    } catch(e) { toast('Erro ao confirmar conferência: ' + e.message); }
   } else {
     toast('Conferência confirmada localmente — ' + confOrderId);
-    fecharModalConferencia();
-    renderAll(); updateKPIs();
+    fecharModalConferencia(); renderAll(); updateKPIs();
   }
 }
 
@@ -2441,10 +2459,10 @@ async function confirmarBaixaNF() {
       var rowId='item-'+idx;
       var inpRec=document.getElementById(rowId+'-rec-inp');
       var inpVl=document.getElementById(rowId+'-vl-inp');
-      var rec=parseFloat(inpRec&&inpRec.value)||(item.qty||0);
+      var rec=inpRec?(inpRec.value!==''?(parseFloat(inpRec.value)||0):(item.qty||0)):(item.qty||0);
       var vlRec=parseFloat(inpVl&&inpVl.value)||(item.vlPedido||0);
       itensPdf.push({nome:item.nome,un:item.un,qtdPedido:item.qty||0,vlPedido:item.vlPedido||0,rec:rec,vlRec:vlRec});
-      itensApi.push({produtoNome:item.nome, qtdRecebida:rec});
+      itensApi.push({produtoNome:item.nome, qtdRecebida:rec, vlUnit:vlRec, _supaId:item._supaId||null});
     });
   }
   // Bonificações
@@ -2494,29 +2512,34 @@ async function confirmarBaixaNF() {
     }
   }
 
-  // Sincroniza com a planilha
-  if (GAS_URL && order) {
+  // Sincroniza com o Supabase
+  if (supa && order) {
     try {
-      var res = await gasPost({
-        action:          'updateEstoque',
-        id:              order.id,
-        recebidoPor:     dadosNF.quem,
-        obsEstoque:      dadosNF.obs + (dadosNF.numero ? ' [NF '+dadosNF.numero+']' : ''),
-        dataVencimento:  dVenc || '',
-        itens:           itensApi
+      var newStatus =
+        order.status === 'b-concluido'      ? 'recebido'       :
+        order.status === 'b-parcial-entrega' ? 'parcial_entrega' : 'comprado';
+      var itemUpdates = itensApi.map(function(it) {
+        var upd = {
+          qtd_recebida:           it.qtdRecebida,
+          valor_recebimento:      it.qtdRecebida * it.vlUnit,
+          numero_nf:              dadosNF.numero || null,
+          data_emissao_nf:        dEm || null,
+          data_recebimento:       dRec || null,
+          data_vencimento_boleto: dVenc || null,
+          recebedor:              dadosNF.quem || null,
+          obs_recebimento:        dadosNF.obs || null
+        };
+        return it._supaId
+          ? supa.from('abastecimento').update(upd).eq('id', it._supaId)
+          : supa.from('abastecimento').update(upd).eq('id_display', order.id).eq('produto_nome', it.produtoNome);
       });
-      if (res && res.idDisplay) order.idDisplay = res.idDisplay;
-      if (res) {
-        if (res.status === 'recebido') {
-          order.status='b-concluido'; order.label='Recebido'; order.aba='conferencia';
-        } else if (res.status === 'parcial_entrega') {
-          order.status='b-parcial-entrega'; order.label='Recebimento parcial'; order.aba='entregas';
-        } else if (res.status === 'parcial') {
-          order.status='b-aguardando'; order.label='Aguardando recebimento'; order.aba='entregas';
-        }
-      }
+      itemUpdates.push(supa.from('abastecimento').update({status: newStatus}).eq('id_display', order.id));
+      var results = await Promise.all(itemUpdates);
+      var erros = results.filter(function(r) { return r.error; });
+      if (erros.length) throw new Error(erros[0].error.message);
+      if (order.raw) { order.raw.status = newStatus; order.raw.dataRecebimento = dRec; }
     } catch(e) {
-      toast('Erro ao atualizar Estoque: ' + e.message);
+      toast('Erro ao registrar recebimento: ' + e.message);
     }
   }
 
