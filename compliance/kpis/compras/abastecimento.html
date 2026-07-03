@@ -49,8 +49,11 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .card-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .order-id { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
 .order-title { font-size: 14px; font-weight: 700; color: var(--carbon); line-height: 1.3; }
-.card-body { padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.order-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.card-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .card-col { display: flex; flex-direction: column; gap: 8px; }
+.card-dates-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.card-meta-row  { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 16px; }
 .card-field { display: flex; flex-direction: column; gap: 1px; }
 .field-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
 .field-value { font-size: 13px; color: var(--carbon); font-weight: 500; }
@@ -422,7 +425,7 @@ tr.row-editing td { background:#FAFFF0; }
 @media (min-width: 640px) {
   .content { padding: 24px 32px 100px; }
   .filters-row { grid-template-columns: repeat(5, 1fr); }
-  .filters-row-dates { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .filters-row-dates { grid-template-columns: repeat(3, 1fr); }
 }
 @media (min-width: 768px) {
   .modal-overlay { align-items: center; }
@@ -1213,6 +1216,8 @@ function rowsParaUI(idDisplay, rows) {
     recebidoPor:     firstRow.recebedor,
     obsEstoque:      firstRow.obs_recebimento,
     dataCompra:           firstRow.data_emissao_nf || '',
+    dataCompraProc:       firstRow.data_compra   || '',
+    dataEmissao:          firstRow.data_emissao_nf || '',
     dataEntregaPrevista:  firstRow.data_entrega || '',
     comprador:            firstRow.comprador,
     conferente:           firstRow.conferente,
@@ -1773,7 +1778,7 @@ function ordenaPorDataDesc(a, b) {
 }
 
 // ── FILTROS GLOBAIS ───────────────────────────────────────────────────────────
-var pageFilters = { unidade: 'Todos', departamento: 'Todos', categoria: 'Todos', status: 'Todos', fornecedor: 'Todos', dataPedido: '', dataEntrega: '', dataReceb: '', dataVenc: '' };
+var pageFilters = { unidade: 'Todos', departamento: 'Todos', categoria: 'Todos', status: 'Todos', fornecedor: 'Todos', dataPedido: '', dataCompra: '', dataEntrega: '', dataReceb: '', dataEmissao: '', dataVenc: '' };
 
 function toISO(raw) {
   if (!raw) return '';
@@ -1787,7 +1792,7 @@ function toISO(raw) {
 
 function hasDateFilters() {
   var f = pageFilters;
-  return f.dataPedido || f.dataEntrega || f.dataReceb || f.dataVenc;
+  return f.dataPedido || f.dataCompra || f.dataEntrega || f.dataReceb || f.dataEmissao || f.dataVenc;
 }
 
 function uniqueSorted(arr) {
@@ -1814,10 +1819,12 @@ function aplicarFiltros(lista) {
                     String((o.raw && o.raw.fornecedor) || '').split(',').map(function(s){return s.trim();}).indexOf(f.fornecedor) !== -1;
       if (!hasForn) return false;
     }
-    if (f.dataPedido && toISO(o.raw && o.raw.dataSolicitacao)  !== f.dataPedido) return false;
+    if (f.dataPedido && toISO(o.raw && o.raw.dataSolicitacao)    !== f.dataPedido) return false;
+    if (f.dataCompra  && toISO(o.raw && o.raw.dataCompraProc)    !== f.dataCompra)  return false;
     if (f.dataEntrega && toISO(o.raw && o.raw.dataEntregaPrevista) !== f.dataEntrega) return false;
-    if (f.dataReceb   && toISO(o.raw && o.raw.dataRecebimento)     !== f.dataReceb)   return false;
-    if (f.dataVenc    && toISO(o.raw && o.raw.dataVencimento)      !== f.dataVenc)    return false;
+    if (f.dataReceb   && toISO(o.raw && o.raw.dataRecebimento)   !== f.dataReceb)   return false;
+    if (f.dataEmissao && toISO(o.raw && o.raw.dataEmissao)       !== f.dataEmissao) return false;
+    if (f.dataVenc    && toISO(o.raw && o.raw.dataVencimento)    !== f.dataVenc)    return false;
     return true;
   });
 }
@@ -1869,8 +1876,11 @@ function renderFilters() {
   '</div>' +
   '<div class="filters-row-dates">' +
     dateInput('Data do Pedido',      'dataPedido') +
-    dateInput('Data de Entrega',     'dataEntrega') +
-    dateInput('Data de Recebimento', 'dataReceb') +
+    dateInput('Data da Compra',      'dataCompra') +
+    dateInput('Data da Entrega',     'dataEntrega') +
+    dateInput('Data do Recebimento', 'dataReceb') +
+    dateInput('Data de Emissão',     'dataEmissao') +
+    dateInput('Data do Vencimento',  'dataVenc') +
   '</div>' +
   '<div class="filters-actions">' +
     '<button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>' +
@@ -1887,7 +1897,7 @@ function setFilter(key, value) {
 }
 
 function clearFilters() {
-  pageFilters = { unidade: 'Todos', departamento: 'Todos', categoria: 'Todos', status: 'Todos', fornecedor: 'Todos', dataPedido: '', dataEntrega: '', dataReceb: '', dataVenc: '' };
+  pageFilters = { unidade: 'Todos', departamento: 'Todos', categoria: 'Todos', status: 'Todos', fornecedor: 'Todos', dataPedido: '', dataCompra: '', dataEntrega: '', dataReceb: '', dataEmissao: '', dataVenc: '' };
   renderFilters();
   renderAll();
 }
@@ -1950,20 +1960,28 @@ function fornCardHTML(order, forn, fi) {
     ? '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
     : '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
   var titulo = 'Pedido ' + (order.idDisplay || ('#' + order.id));
+  var solicitante = (order.raw && order.raw.solicitante) || '';
+  var dataCompra = fmtDataBR((order.raw && order.raw.dataCompraProc) || '');
   var dataPrev  = fmtDataBR(forn.dataPrev || (order.raw && order.raw.dataEntregaPrevista));
   var dataReceb = forn.dataReceb ? fmtDataBR(forn.dataReceb) : (isRecebido ? fmtDataBR(order.raw && order.raw.dataRecebimento) : '—');
   return '<div class="card">'+
-    '<div class="card-header"><div><div class="order-title">'+titulo+'</div></div><span class="badge '+forn.status+'">'+forn.label+'</span></div>'+
+    '<div class="card-header"><div>'+
+      '<div class="order-title">'+titulo+'</div>'+
+      (solicitante ? '<div class="order-sub">'+solicitante+'</div>' : '')+
+    '</div><span class="badge '+forn.status+'">'+forn.label+'</span></div>'+
     '<div class="card-body">'+
-      '<div class="card-col">'+
+      '<div class="card-dates-row">'+
         '<div class="card-field"><span class="field-label">Data do pedido</span><span class="field-value">'+(order.data||'—')+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Entrega prevista</span><span class="field-value">'+dataPrev+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Recebido em</span><span class="field-value">'+dataReceb+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Data da compra</span><span class="field-value">'+(dataCompra||'—')+'</span></div>'+
       '</div>'+
-      '<div class="card-col">'+
-        '<div class="card-field"><span class="field-label">Categorias</span><span class="field-value">'+(order.cats.join(', ')||'—')+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Quantidade de itens</span><span class="field-value">'+forn.itens.length+' produtos</span></div>'+
+      '<div class="card-dates-row">'+
+        '<div class="card-field"><span class="field-label">Data da entrega</span><span class="field-value">'+(dataPrev||'—')+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Data do recebimento</span><span class="field-value">'+dataReceb+'</span></div>'+
+      '</div>'+
+      '<div class="card-meta-row">'+
+        '<div class="card-field"><span class="field-label">Categoria</span><span class="field-value">'+(order.cats.join(', ')||'—')+'</span></div>'+
         '<div class="card-field"><span class="field-label">Fornecedor</span><span class="field-value">'+forn.nome+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Itens</span><span class="field-value">'+forn.itens.length+'</span></div>'+
       '</div>'+
     '</div>'+
     '<div class="card-footer" style="justify-content:flex-end;"><button class="btn-ver" onclick="'+btnFn+'('+btnArgs+')">'+iconSvg+' '+btnLabel+'</button></div>'+
@@ -1984,19 +2002,29 @@ function cardHTML(o, contexto) {
     ? '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
     : '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
   var titulo = 'Pedido ' + (o.idDisplay || ('#' + id));
+  var solicitante = (o.raw && o.raw.solicitante) || '';
+  var dataCompra = fmtDataBR((o.raw && o.raw.dataCompraProc) || '');
   var dataPrev  = fmtDataBR(o.raw && o.raw.dataEntregaPrevista);
   var dataReceb = fmtDataBR(o.raw && o.raw.dataRecebimento);
+  var fornNome  = (o.fornecedores && o.fornecedores.length ? o.fornecedores.map(function(f){return f.nome;}).join(', ') : (o.raw && o.raw.fornecedor)) || '—';
   return '<div class="card">'+
-    '<div class="card-header"><div><div class="order-title">'+titulo+'</div></div><span class="badge '+o.status+'">'+o.label+'</span></div>'+
+    '<div class="card-header"><div>'+
+      '<div class="order-title">'+titulo+'</div>'+
+      (solicitante ? '<div class="order-sub">'+solicitante+'</div>' : '')+
+    '</div><span class="badge '+o.status+'">'+o.label+'</span></div>'+
     '<div class="card-body">'+
-      '<div class="card-col">'+
+      '<div class="card-dates-row">'+
         '<div class="card-field"><span class="field-label">Data do pedido</span><span class="field-value">'+o.data+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Entrega prevista</span><span class="field-value">'+dataPrev+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Recebido em</span><span class="field-value">'+dataReceb+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Data da compra</span><span class="field-value">'+(dataCompra||'—')+'</span></div>'+
       '</div>'+
-      '<div class="card-col">'+
-        '<div class="card-field"><span class="field-label">Categorias</span><span class="field-value">'+(o.cats.join(', ')||'—')+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Quantidade de itens</span><span class="field-value">'+o.itensList.length+' produtos</span></div>'+
+      '<div class="card-dates-row">'+
+        '<div class="card-field"><span class="field-label">Data da entrega</span><span class="field-value">'+(dataPrev||'—')+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Data do recebimento</span><span class="field-value">'+(dataReceb||'—')+'</span></div>'+
+      '</div>'+
+      '<div class="card-meta-row">'+
+        '<div class="card-field"><span class="field-label">Categoria</span><span class="field-value">'+(o.cats.join(', ')||'—')+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Fornecedor</span><span class="field-value">'+fornNome+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Itens</span><span class="field-value">'+o.itensList.length+'</span></div>'+
       '</div>'+
     '</div>'+
     '<div class="card-footer" style="justify-content:flex-end;"><button class="btn-ver" onclick="'+fnBtn+'(\''+id+'\')">'+iconSvg+' '+labelBtn+'</button></div>'+
