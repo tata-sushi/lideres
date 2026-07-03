@@ -38,6 +38,9 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .content { padding: 16px 20px 100px; }
 .page { display: none; flex-direction: column; gap: 12px; }
 .page.active { display: flex; }
+.cols-unidade { display: flex; gap: 20px; align-items: flex-start; }
+.col-unidade { flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 12px; }
+.col-unidade-lbl { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); padding-bottom: 8px; }
 
 /* ── CARD ── */
 .card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; box-shadow: var(--shadow); transition: box-shadow 0.15s; }
@@ -1815,22 +1818,34 @@ function renderAba(aba) {
     }
     return;
   }
-  if (aba === 'entregas') {
-    var html = '<div style="display:flex;flex-direction:column;gap:12px;">';
-    lista.forEach(function(o) {
-      if (o.fornecedores) {
-        o.fornecedores.forEach(function(f, fi) {
-          if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
-          html += fornCardHTML(o, f, fi);
-        });
-      } else { html += cardHTML(o, 'entregas'); }
-    });
-    html += '</div>';
-    container.innerHTML = html;
-    return;
-  }
-  container.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px;">' +
-    lista.map(function(o) { return cardHTML(o, aba); }).join('') + '</div>';
+  // Agrupar por unidade
+  var groups = {}, unidadeOrder = [];
+  lista.forEach(function(o) {
+    var u = (o.raw && o.raw.unidade) || '—';
+    if (!groups[u]) { groups[u] = []; unidadeOrder.push(u); }
+    groups[u].push(o);
+  });
+  unidadeOrder.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
+  var multiCol = unidadeOrder.length > 1;
+  var html = '<div class="' + (multiCol ? 'cols-unidade' : 'col-unidade') + '">';
+  unidadeOrder.forEach(function(u) {
+    if (multiCol) html += '<div class="col-unidade"><div class="col-unidade-lbl">' + u + '</div>';
+    if (aba === 'entregas') {
+      groups[u].forEach(function(o) {
+        if (o.fornecedores) {
+          o.fornecedores.forEach(function(f, fi) {
+            if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
+            html += fornCardHTML(o, f, fi);
+          });
+        } else { html += cardHTML(o, 'entregas'); }
+      });
+    } else {
+      groups[u].forEach(function(o) { html += cardHTML(o, aba); });
+    }
+    if (multiCol) html += '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
 }
 
 function fornCardHTML(order, forn, fi) {
