@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TATÁ · Cardápio &amp; Compras</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -958,8 +959,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 // ── CONFIG GAS / SHEET ────────────────────────────────────────────────────────
-// Web App do Apps Script publicado a partir de Code.gs (planilha de abastecimento).
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbze41DuQ9r3M9933ILYc99VC3BtvkFhdjtRYU1xPO147r6U25bbNb7y_pgKT5kveunoUA/exec';
+
+// ── CONFIG SUPABASE ───────────────────────────────────────────────────────────
+var SUPA_URL = 'https://aoqsbusfrffapjglpqjk.supabase.co';
+var SUPA_KEY = 'sb_publishable_X3pKD_F1QLAyxbxFU32HqQ_pRp9p6JQ';
+var supa = window.supabase ? window.supabase.createClient(SUPA_URL, SUPA_KEY) : null;
 
 // Unidade e departamento do usuário logado — populados em carregarUsuario()
 var UNIDADE = '';
@@ -1040,27 +1045,31 @@ var catalogoErro = null;
 
 async function carregarCatalogo() {
   catalogoErro = null;
-  if (!GAS_URL) { catalogoErro = 'GAS_URL não configurado'; popularSelectCategorias(); return; }
+  if (!supa) { catalogoErro = 'Supabase não inicializado'; popularSelectCategorias(); return; }
   try {
-    var data = await gasGet({ action: 'getCatalogo' });
-    if (data && data.catalogo && Object.keys(data.catalogo).length > 0) {
-      var convertido = {};
-      Object.keys(data.catalogo).forEach(function(key) {
-        var c = data.catalogo[key];
-        convertido[key] = {
-          label: c.label,
-          produtos: (c.produtos || []).map(function(p) {
-            return { nome: p.nome, un: p.un, fornecedor: p.fornecedor || '', prazoEntrega: p.prazoEntrega || '', fatorCompra: p.fatorCompra != null ? p.fatorCompra : '', pedidoMinimo: p.pedidoMinimo != null ? p.pedidoMinimo : '', multiplo: p.multiplo != null ? p.multiplo : '' };
-          })
-        };
+    var res = await supa.from('catalogo').select('*').eq('ativo', true).order('categoria').order('produto_nome');
+    if (res.error) throw new Error(res.error.message);
+    var rows = res.data || [];
+    if (rows.length === 0) { catalogoErro = 'Catálogo vazio no Supabase'; popularSelectCategorias(); return; }
+    var convertido = {};
+    rows.forEach(function(r) {
+      var key = (r.categoria || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+      if (!convertido[key]) convertido[key] = { label: r.categoria, produtos: [] };
+      convertido[key].produtos.push({
+        nome:         r.produto_nome  || '',
+        un:           r.unidade != null ? String(r.unidade) : '',
+        fornecedor:   r.fornecedor    || '',
+        prazoEntrega: r.prazo_entrega || '',
+        fatorCompra:  '',
+        pedidoMinimo: r.pedido_minimo != null ? String(r.pedido_minimo) : '',
+        multiplo:     '',
+        valorUnitario: r.valor_unitario != null ? r.valor_unitario : 0
       });
-      CATALOGO = convertido;
-    } else {
-      catalogoErro = 'Catálogo vazio na planilha (aba Catalogo sem itens ativos)';
-    }
+    });
+    CATALOGO = convertido;
   } catch(e) {
     catalogoErro = e.message;
-    console.warn('Catálogo: erro ao carregar.', e.message);
+    console.warn('Catálogo Supabase: erro.', e.message);
   }
   popularSelectCategorias();
 }
