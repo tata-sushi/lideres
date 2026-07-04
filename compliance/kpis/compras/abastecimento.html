@@ -370,6 +370,20 @@ tr.row-editing td { background:#FAFFF0; }
 .kpi-bar-fill  { height:100%; background:var(--carbon); border-radius:3px; transition:width 0.4s ease; }
 .kpi-bar-val   { font-family:'DM Mono',monospace; font-size:11px; color:var(--carbon); text-align:right; font-weight:600; }
 .kpi-empty-chart { font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); padding:16px 0; }
+.kpi-items-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.kpi-items-table  { min-width:560px; display:flex; flex-direction:column; }
+.kpi-items-head   { display:grid; grid-template-columns:2fr 1fr 1.2fr 56px 72px 72px; gap:8px; padding:0 0 8px; border-bottom:2px solid var(--carbon); }
+.kpi-items-head span { font-family:'DM Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:0.8px; color:var(--muted); }
+.kpi-items-head span:nth-child(4),
+.kpi-items-head span:nth-child(5),
+.kpi-items-head span:nth-child(6) { text-align:right; }
+.kpi-items-row    { display:grid; grid-template-columns:2fr 1fr 1.2fr 56px 72px 72px; gap:8px; padding:9px 0; border-bottom:1px solid var(--border); align-items:center; }
+.kpi-items-row:last-child { border-bottom:none; }
+.kpi-item-name  { font-size:13px; color:var(--carbon); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi-item-cat   { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi-item-forn  { font-size:12px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi-item-num   { font-family:'DM Mono',monospace; font-size:12px; color:var(--carbon); font-weight:600; text-align:right; }
+.kpi-item-val   { font-family:'DM Mono',monospace; font-size:12px; color:var(--carbon); font-weight:600; text-align:right; }
 
 #recibo { display: none; }
 @media print {
@@ -1512,6 +1526,52 @@ function renderKPIsPage() {
   var tcStr = tempoCompra!==null ? tempoCompra+'': '—';
   var teStr = tempoEntrega!==null? tempoEntrega+'':'—';
 
+  // ── Itens agregados ──────────────────────────────────────────────────────
+  var byItem = {};
+  orders.forEach(function(o) {
+    (o.itensList || []).forEach(function(it) {
+      var key = (it.nome || '').trim().toLowerCase();
+      if (!key) return;
+      if (!byItem[key]) {
+        byItem[key] = { nome: it.nome, cat: it.cat || '—', forn: it.fornecedor || '—', qtd: 0, vlTotal: 0, nPedidos: 0 };
+      }
+      byItem[key].qtd      += Number(it.qtdComprada) || Number(it.qty) || 0;
+      byItem[key].vlTotal  += Number(it.vlCompra) || Number(it.vlPedido) || 0;
+      byItem[key].nPedidos += 1;
+    });
+  });
+  var itemData = Object.keys(byItem).map(function(k){ return byItem[k]; })
+    .sort(function(a,b){ return b.qtd - a.qtd; });
+
+  function itemsTable(data) {
+    if (!data.length) return '<div class="kpi-empty-chart">Sem dados de itens</div>';
+    var rows = data.map(function(d) {
+      var vlMedio = d.qtd > 0 ? (d.vlTotal / d.qtd) : 0;
+      var vlStr = vlMedio > 0 ? 'R$ '+vlMedio.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+      return '<div class="kpi-items-row">'+
+        '<div class="kpi-item-name">'+d.nome+'</div>'+
+        '<div class="kpi-item-cat">'+d.cat+'</div>'+
+        '<div class="kpi-item-forn">'+d.forn+'</div>'+
+        '<div class="kpi-item-num">'+d.qtd+'</div>'+
+        '<div class="kpi-item-num">'+d.nPedidos+'</div>'+
+        '<div class="kpi-item-val">'+vlStr+'</div>'+
+      '</div>';
+    }).join('');
+    return '<div class="kpi-items-scroll">'+
+      '<div class="kpi-items-table">'+
+        '<div class="kpi-items-head">'+
+          '<span>Item</span>'+
+          '<span>Categoria</span>'+
+          '<span>Fornecedor</span>'+
+          '<span>Qtd</span>'+
+          '<span>Pedidos</span>'+
+          '<span>Vlr Médio</span>'+
+        '</div>'+
+        rows+
+      '</div>'+
+    '</div>';
+  }
+
   var html =
     '<div class="kpi-stat-grid">'+
       metricCard('Total de pedidos', total, '', 'no período')+
@@ -1532,6 +1592,10 @@ function renderKPIsPage() {
       '<div class="kpi-chart-block"><div class="kpi-chart-title">Evolução Mensal</div>'+
         '<svg id="kpi-evol-svg" viewBox="0 0 600 180" preserveAspectRatio="none" style="width:100%;height:180px;display:block;"></svg>'+
       '</div>'+
+    '</div>'+
+    '<div class="kpi-chart-block">'+
+      '<div class="kpi-chart-title">Itens · Resumo ('+itemData.length+')</div>'+
+      itemsTable(itemData)+
     '</div>';
 
   container.innerHTML = html;
