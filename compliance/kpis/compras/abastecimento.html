@@ -389,7 +389,9 @@ tr.row-editing td { background:#FAFFF0; }
 .dt-unit { font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); }
 .dt-date { font-family:'DM Mono',monospace; font-size:11px; color:var(--text); }
 .dt-forn { font-size:12px; color:var(--text); }
-.dt-qty  { font-family:'DM Mono',monospace; font-size:12px; font-weight:600; color:var(--carbon); text-align:center; }
+.dt-qty  { font-family:'DM Mono',monospace; font-size:12px; font-weight:600; color:var(--carbon); }
+.desk-table thead th.sort-asc::after  { content:' ↑'; color:var(--carbon); }
+.desk-table thead th.sort-desc::after { content:' ↓'; color:var(--carbon); }
 .btn-dt-edit { width:28px; height:28px; border:none; border-radius:6px; background:var(--carbon); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0; opacity:0.9; transition:opacity 0.15s; }
 .btn-dt-edit:hover { opacity:1; }
 .btn-dt-edit svg { width:13px; height:13px; stroke:var(--citric); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
@@ -2234,7 +2236,7 @@ function renderAba(aba) {
   html += '</div>';
   // ── Desktop table ─────────────────────────────────────────────────────────
   var tableRows = '';
-  lista.forEach(function(o) {
+  sortDeskLista(lista).forEach(function(o) {
     if (aba === 'entregas') {
       if (o.fornecedores) {
         o.fornecedores.forEach(function(f, fi) {
@@ -2246,25 +2248,65 @@ function renderAba(aba) {
       tableRows += tableRowHTML(o, aba);
     }
   });
-  html += '<div class="desk-table-wrap"><table class="desk-table">'+DESK_TABLE_HEAD+'<tbody>'+tableRows+'</tbody></table></div>';
+  html += '<div class="desk-table-wrap"><table class="desk-table">'+buildDeskHead()+'<tbody>'+tableRows+'</tbody></table></div>';
   container.innerHTML = html;
 }
 
 var PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
 
-var DESK_TABLE_HEAD =
-  '<thead><tr>'+
-    '<th>Pedido</th>'+
-    '<th>Unidade</th>'+
-    '<th>Departamento</th>'+
-    '<th>Dt Pedido</th>'+
-    '<th>Dt Compra</th>'+
-    '<th>Dt Entrega</th>'+
-    '<th>Dt Recebimento</th>'+
-    '<th>Itens</th>'+
-    '<th>Status</th>'+
-    '<th></th>'+
-  '</tr></thead>';
+var deskSort = { col: null, asc: true };
+
+function deskSortBy(col) {
+  if (deskSort.col === col) { deskSort.asc = !deskSort.asc; }
+  else { deskSort.col = col; deskSort.asc = true; }
+  renderAba('pedidos'); renderAba('processamento'); renderAba('entregas'); renderConferencia();
+}
+
+function sortDeskLista(lista) {
+  if (!deskSort.col) return lista;
+  var col = deskSort.col, asc = deskSort.asc;
+  return lista.slice().sort(function(a, b) {
+    var va, vb;
+    switch(col) {
+      case 'id':         va = a.idDisplay||a.id;          vb = b.idDisplay||b.id;          break;
+      case 'unidade':    va = (a.raw&&a.raw.unidade)||''; vb = (b.raw&&b.raw.unidade)||''; break;
+      case 'fornecedor':
+        va = (a.fornecedores&&a.fornecedores.length?a.fornecedores[0].nome:(a.raw&&a.raw.fornecedor))||'';
+        vb = (b.fornecedores&&b.fornecedores.length?b.fornecedores[0].nome:(b.raw&&b.raw.fornecedor))||''; break;
+      case 'data':       va = (a.raw&&a.raw.dataSolicitacao)||''; vb = (b.raw&&b.raw.dataSolicitacao)||''; break;
+      case 'dataCompra': va = (a.raw&&a.raw.dataCompraProc)||'';  vb = (b.raw&&b.raw.dataCompraProc)||''; break;
+      case 'dataEntrega':va = (a.raw&&a.raw.dataEntregaPrevista)||''; vb = (b.raw&&b.raw.dataEntregaPrevista)||''; break;
+      case 'dataReceb':  va = (a.raw&&a.raw.dataRecebimento)||'';vb = (b.raw&&b.raw.dataRecebimento)||''; break;
+      case 'itens':      va = a.itensList.length;         vb = b.itensList.length;         break;
+      case 'status':     va = a.status||'';               vb = b.status||'';               break;
+      default: return 0;
+    }
+    if (typeof va === 'number') return asc ? va - vb : vb - va;
+    return asc ? String(va).localeCompare(String(vb),'pt-BR') : String(vb).localeCompare(String(va),'pt-BR');
+  });
+}
+
+var DESK_COLS = [
+  { key:'id',         label:'Pedido'       },
+  { key:'unidade',    label:'Unidade / Depto' },
+  { key:'fornecedor', label:'Fornecedor'   },
+  { key:'data',       label:'Dt Pedido'   },
+  { key:'dataCompra', label:'Dt Compra'   },
+  { key:'dataEntrega',label:'Dt Entrega'  },
+  { key:'dataReceb',  label:'Dt Recebimento' },
+  { key:'itens',      label:'Itens'        },
+  { key:'status',     label:'Status'       },
+  { key:null,         label:''             }
+];
+
+function buildDeskHead() {
+  var ths = DESK_COLS.map(function(c) {
+    if (!c.key) return '<th style="width:40px;cursor:default;"></th>';
+    var cls = deskSort.col===c.key ? (deskSort.asc?'sort-asc':'sort-desc') : '';
+    return '<th'+(cls?' class="'+cls+'"':'')+' onclick="deskSortBy(\''+c.key+'\')">'+c.label+'</th>';
+  }).join('');
+  return '<thead><tr>'+ths+'</tr></thead>';
+}
 
 function tableRowHTML(o, aba) {
   var id = o.id;
@@ -2276,12 +2318,14 @@ function tableRowHTML(o, aba) {
   var dataPrev   = fmtDataBR(o.raw&&o.raw.dataEntregaPrevista);
   var dataReceb  = fmtDataBR(o.raw&&o.raw.dataRecebimento);
   var unidade    = (o.raw&&o.raw.unidade)||'—';
-  var depto      = (o.raw&&o.raw.departamento)||'—';
+  var depto      = (o.raw&&o.raw.departamento)||'';
+  var unidDepto  = unidade + (depto ? ' / '+depto : '');
+  var fornNome   = (o.fornecedores&&o.fornecedores.length?o.fornecedores.map(function(f){return f.nome;}).join(', '):(o.raw&&o.raw.fornecedor))||'—';
   var solicitante= (o.raw&&o.raw.solicitante)||'';
   return '<tr>'+
-    '<td><div class="dt-num">'+(o.idDisplay||('#'+id))+'</div>'+(solicitante?'<div class="dt-sub">'+solicitante+'</div>':'')+' </td>'+
-    '<td class="dt-unit">'+unidade+'</td>'+
-    '<td class="dt-unit">'+depto+'</td>'+
+    '<td><div class="dt-num">Pedido '+(o.idDisplay||('#'+id))+'</div>'+(solicitante?'<div class="dt-sub">'+solicitante+'</div>':'')+' </td>'+
+    '<td class="dt-unit">'+unidDepto+'</td>'+
+    '<td class="dt-forn">'+fornNome+'</td>'+
     '<td class="dt-date">'+(o.data||'—')+'</td>'+
     '<td class="dt-date">'+(dataCompra||'—')+'</td>'+
     '<td class="dt-date">'+(dataPrev||'—')+'</td>'+
@@ -2300,12 +2344,13 @@ function fornTableRowHTML(order, forn, fi) {
   var dataPrev   = fmtDataBR(forn.dataPrev||(order.raw&&order.raw.dataEntregaPrevista));
   var dataReceb  = forn.dataReceb?fmtDataBR(forn.dataReceb):(isRecebido?fmtDataBR(order.raw&&order.raw.dataRecebimento):'—');
   var unidade    = (order.raw&&order.raw.unidade)||'—';
-  var depto      = (order.raw&&order.raw.departamento)||'—';
+  var depto      = (order.raw&&order.raw.departamento)||'';
+  var unidDepto  = unidade + (depto ? ' / '+depto : '');
   var solicitante= (order.raw&&order.raw.solicitante)||'';
   return '<tr>'+
-    '<td><div class="dt-num">'+(order.idDisplay||('#'+order.id))+'</div>'+(solicitante?'<div class="dt-sub">'+solicitante+'</div>':'')+' </td>'+
-    '<td class="dt-unit">'+unidade+'</td>'+
-    '<td class="dt-unit">'+depto+'</td>'+
+    '<td><div class="dt-num">Pedido '+(order.idDisplay||('#'+order.id))+'</div>'+(solicitante?'<div class="dt-sub">'+solicitante+'</div>':'')+' </td>'+
+    '<td class="dt-unit">'+unidDepto+'</td>'+
+    '<td class="dt-forn">'+forn.nome+'</td>'+
     '<td class="dt-date">'+(order.data||'—')+'</td>'+
     '<td class="dt-date">'+(dataCompra||'—')+'</td>'+
     '<td class="dt-date">'+(dataPrev||'—')+'</td>'+
@@ -2318,13 +2363,15 @@ function fornTableRowHTML(order, forn, fi) {
 
 function confTableRowHTML(o) {
   var raw = o.raw || {};
-  var dataReceb = fmtDataBR(raw.dataRecebimento);
-  var unidade   = raw.unidade || '—';
-  var depto     = raw.departamento || '—';
+  var dataReceb  = fmtDataBR(raw.dataRecebimento);
+  var unidade    = raw.unidade || '—';
+  var depto      = raw.departamento || '';
+  var unidDepto  = unidade + (depto ? ' / '+depto : '');
+  var fornNome   = raw.fornecedor || '—';
   return '<tr>'+
-    '<td><div class="dt-num">'+(o.idDisplay||('#'+o.id))+'</div></td>'+
-    '<td class="dt-unit">'+unidade+'</td>'+
-    '<td class="dt-unit">'+depto+'</td>'+
+    '<td><div class="dt-num">Pedido '+(o.idDisplay||('#'+o.id))+'</div></td>'+
+    '<td class="dt-unit">'+unidDepto+'</td>'+
+    '<td class="dt-forn">'+fornNome+'</td>'+
     '<td class="dt-date">'+(o.data||'—')+'</td>'+
     '<td class="dt-date">—</td>'+
     '<td class="dt-date">—</td>'+
@@ -2717,8 +2764,8 @@ function renderConferencia() {
   html += '</div>'; // fim mobile-cards
   // ── Desktop table ─────────────────────────────────────────────────────────
   var tableRows = '';
-  lista.forEach(function(o) { tableRows += confTableRowHTML(o); });
-  html += '<div class="desk-table-wrap"><table class="desk-table">'+DESK_TABLE_HEAD+'<tbody>'+tableRows+'</tbody></table></div>';
+  sortDeskLista(lista).forEach(function(o) { tableRows += confTableRowHTML(o); });
+  html += '<div class="desk-table-wrap"><table class="desk-table">'+buildDeskHead()+'<tbody>'+tableRows+'</tbody></table></div>';
   container.innerHTML = html;
 }
 
