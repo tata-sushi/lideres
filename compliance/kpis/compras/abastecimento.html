@@ -365,6 +365,29 @@ tr.row-editing td { background:#FAFFF0; }
 .kpi-bar-track { height:14px; background:var(--bg); border-radius:3px; overflow:hidden; }
 .kpi-bar-fill  { height:100%; background:var(--carbon); border-radius:3px; transition:width 0.4s ease; }
 .kpi-bar-val   { font-family:'DM Mono',monospace; font-size:11px; color:var(--carbon); text-align:right; font-weight:600; }
+/* ── Desktop table ──────────────────────────────────────────────────────── */
+.mobile-cards { display: flex; gap: 20px; align-items: flex-start; }
+.desk-table-wrap { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+@media (min-width: 768px) {
+  .mobile-cards { display: none !important; }
+  .desk-table-wrap { display: block; }
+}
+.desk-table { width: 100%; border-collapse: collapse; }
+.desk-table thead th { font-family:'DM Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:0.8px; color:var(--muted); padding:10px 12px; text-align:left; background:var(--bg); border-bottom:2px solid var(--border); white-space:nowrap; }
+.desk-table thead th:last-child { width: 36px; }
+.desk-table tbody td { padding:10px 12px; border-bottom:1px solid var(--border); font-size:13px; color:var(--carbon); vertical-align:middle; }
+.desk-table tbody tr:last-child td { border-bottom:none; }
+.desk-table tbody tr:hover td { background:var(--bg); cursor:default; }
+.dt-num { font-size:13px; font-weight:600; color:var(--carbon); white-space:nowrap; }
+.dt-sub { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); margin-top:2px; }
+.dt-unit { font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); white-space:nowrap; }
+.dt-date { font-family:'DM Mono',monospace; font-size:11px; color:var(--text); white-space:nowrap; }
+.dt-forn { font-size:12px; color:var(--text); max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dt-qty  { font-family:'DM Mono',monospace; font-size:12px; font-weight:600; color:var(--carbon); text-align:center; }
+.btn-dt-edit { width:28px; height:28px; border:1px solid var(--border); border-radius:4px; background:var(--surface); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:background 0.15s, border-color 0.15s; padding:0; }
+.btn-dt-edit:hover { background:var(--carbon); border-color:var(--carbon); }
+.btn-dt-edit svg { width:13px; height:13px; stroke:var(--carbon); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; transition:stroke 0.15s; }
+.btn-dt-edit:hover svg { stroke:var(--citric); }
 .kpi-empty-chart { font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); padding:16px 0; }
 .kpi-items-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .kpi-items-table  { min-width:560px; display:flex; flex-direction:column; }
@@ -2157,7 +2180,8 @@ function renderAba(aba) {
     groups[u].push(o);
   });
   unidadeOrder.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
-  var html = '<div class="cols-unidade">';
+  // ── Mobile cards ─────────────────────────────────────────────────────────
+  var html = '<div class="mobile-cards">';
   unidadeOrder.forEach(function(u) {
     html += '<div class="col-unidade">';
     if (u && u !== '—') html += '<div class="col-unidade-lbl">' + u + '</div>';
@@ -2176,7 +2200,106 @@ function renderAba(aba) {
     html += '</div>';
   });
   html += '</div>';
+  // ── Desktop table ─────────────────────────────────────────────────────────
+  var tableRows = '';
+  lista.forEach(function(o) {
+    if (aba === 'entregas') {
+      if (o.fornecedores) {
+        o.fornecedores.forEach(function(f, fi) {
+          if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
+          tableRows += fornTableRowHTML(o, f, fi);
+        });
+      } else { tableRows += tableRowHTML(o, aba); }
+    } else {
+      tableRows += tableRowHTML(o, aba);
+    }
+  });
+  html += '<div class="desk-table-wrap"><table class="desk-table">'+DESK_TABLE_HEAD+'<tbody>'+tableRows+'</tbody></table></div>';
   container.innerHTML = html;
+}
+
+var PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+
+var DESK_TABLE_HEAD =
+  '<thead><tr>'+
+    '<th>Pedido</th>'+
+    '<th>Unidade</th>'+
+    '<th>Status</th>'+
+    '<th>Dt Pedido</th>'+
+    '<th>Dt Compra</th>'+
+    '<th>Dt Entrega</th>'+
+    '<th>Dt Recebimento</th>'+
+    '<th>Fornecedor</th>'+
+    '<th>Itens</th>'+
+    '<th></th>'+
+  '</tr></thead>';
+
+function tableRowHTML(o, aba) {
+  var id = o.id;
+  var podeProcessar = (o.status==='b-enviado'||o.status==='b-proc');
+  var podeReceber   = (o.status==='b-aguardando');
+  var modoAcao = (aba==='processamento'&&podeProcessar)?'proc':(aba==='entregas'&&podeReceber)?'nf':'view';
+  var fnBtn = modoAcao==='proc'?'abrirModalProc':modoAcao==='nf'?'abrirModalNF':'abrirModalView';
+  var dataCompra = fmtDataBR((o.raw&&o.raw.dataCompraProc)||'');
+  var dataPrev   = fmtDataBR(o.raw&&o.raw.dataEntregaPrevista);
+  var dataReceb  = fmtDataBR(o.raw&&o.raw.dataRecebimento);
+  var fornNome   = (o.fornecedores&&o.fornecedores.length?o.fornecedores.map(function(f){return f.nome;}).join(', '):(o.raw&&o.raw.fornecedor))||'—';
+  var unidade    = (o.raw&&o.raw.unidade)||'—';
+  var solicitante= (o.raw&&o.raw.solicitante)||'';
+  return '<tr>'+
+    '<td><div class="dt-num">Pedido '+(o.idDisplay||('#'+id))+'</div>'+(solicitante?'<div class="dt-sub">'+solicitante+'</div>':'')+' </td>'+
+    '<td class="dt-unit">'+unidade+'</td>'+
+    '<td><span class="badge '+o.status+'">'+o.label+'</span></td>'+
+    '<td class="dt-date">'+(o.data||'—')+'</td>'+
+    '<td class="dt-date">'+(dataCompra||'—')+'</td>'+
+    '<td class="dt-date">'+(dataPrev||'—')+'</td>'+
+    '<td class="dt-date">'+(dataReceb||'—')+'</td>'+
+    '<td class="dt-forn">'+fornNome+'</td>'+
+    '<td class="dt-qty">'+o.itensList.length+'</td>'+
+    '<td><button class="btn-dt-edit" onclick="'+fnBtn+'(\''+id+'\')">'+PENCIL_SVG+'</button></td>'+
+  '</tr>';
+}
+
+function fornTableRowHTML(order, forn, fi) {
+  var isRecebido = forn.status==='b-concluido';
+  var btnFn   = isRecebido?'abrirModalView':'abrirModalNF';
+  var btnArgs = isRecebido?"'"+order.id+"'":"'"+order.id+"',"+fi;
+  var dataCompra = fmtDataBR((order.raw&&order.raw.dataCompraProc)||'');
+  var dataPrev   = fmtDataBR(forn.dataPrev||(order.raw&&order.raw.dataEntregaPrevista));
+  var dataReceb  = forn.dataReceb?fmtDataBR(forn.dataReceb):(isRecebido?fmtDataBR(order.raw&&order.raw.dataRecebimento):'—');
+  var unidade    = (order.raw&&order.raw.unidade)||'—';
+  var solicitante= (order.raw&&order.raw.solicitante)||'';
+  return '<tr>'+
+    '<td><div class="dt-num">Pedido '+(order.idDisplay||('#'+order.id))+'</div>'+(solicitante?'<div class="dt-sub">'+solicitante+'</div>':'')+' </td>'+
+    '<td class="dt-unit">'+unidade+'</td>'+
+    '<td><span class="badge '+forn.status+'">'+forn.label+'</span></td>'+
+    '<td class="dt-date">'+(order.data||'—')+'</td>'+
+    '<td class="dt-date">'+(dataCompra||'—')+'</td>'+
+    '<td class="dt-date">'+(dataPrev||'—')+'</td>'+
+    '<td class="dt-date">'+dataReceb+'</td>'+
+    '<td class="dt-forn">'+forn.nome+'</td>'+
+    '<td class="dt-qty">'+forn.itens.length+'</td>'+
+    '<td><button class="btn-dt-edit" onclick="'+btnFn+'('+btnArgs+')">'+PENCIL_SVG+'</button></td>'+
+  '</tr>';
+}
+
+function confTableRowHTML(o) {
+  var raw = o.raw || {};
+  var fornNome  = raw.fornecedor || '—';
+  var dataReceb = fmtDataBR(raw.dataRecebimento);
+  var unidade   = raw.unidade || '—';
+  return '<tr>'+
+    '<td><div class="dt-num">Pedido '+(o.idDisplay||('#'+o.id))+'</div></td>'+
+    '<td class="dt-unit">'+unidade+'</td>'+
+    '<td><span class="badge b-concluido">Recebido</span></td>'+
+    '<td class="dt-date">'+(o.data||'—')+'</td>'+
+    '<td class="dt-date">—</td>'+
+    '<td class="dt-date">—</td>'+
+    '<td class="dt-date">'+dataReceb+'</td>'+
+    '<td class="dt-forn">'+fornNome+'</td>'+
+    '<td class="dt-qty">'+o.itensList.length+'</td>'+
+    '<td><button class="btn-dt-edit" onclick="abrirModalConferencia(\''+o.id+'\')">'+PENCIL_SVG+'</button></td>'+
+  '</tr>';
 }
 
 function fornCardHTML(order, forn, fi) {
@@ -2522,7 +2645,8 @@ function renderConferencia() {
   });
   unidadeOrder.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
 
-  var html = '<div class="cols-unidade">';
+  // ── Mobile cards ─────────────────────────────────────────────────────────
+  var html = '<div class="mobile-cards">';
   unidadeOrder.forEach(function(u) {
     html += '<div class="col-unidade">';
     if (u && u !== '—') html += '<div class="col-unidade-lbl">' + u + '</div>';
@@ -2557,7 +2681,11 @@ function renderConferencia() {
     }); // fim groups[u].forEach
     html += '</div>'; // fim col-unidade
   }); // fim unidadeOrder.forEach
-  html += '</div>'; // fim cols-unidade
+  html += '</div>'; // fim mobile-cards
+  // ── Desktop table ─────────────────────────────────────────────────────────
+  var tableRows = '';
+  lista.forEach(function(o) { tableRows += confTableRowHTML(o); });
+  html += '<div class="desk-table-wrap"><table class="desk-table">'+DESK_TABLE_HEAD+'<tbody>'+tableRows+'</tbody></table></div>';
   container.innerHTML = html;
 }
 
