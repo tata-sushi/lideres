@@ -222,11 +222,7 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 /* ── FILTROS ── */
 .filters-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
 .filters-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.filters-row-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .filter-group { display: flex; flex-direction: column; gap: 4px; }
-.filter-date-group { display: flex; flex-direction: column; gap: 4px; }
-.filter-date-input { border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 10px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text); background: var(--bg); transition: border-color 0.15s; width: 100%; }
-.filter-date-input:focus { outline: none; border-color: var(--carbon); background: #fff; }
 .filter-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
 .filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); cursor: pointer; transition: border-color 0.15s; width: 100%; }
 .filter-select:focus { outline: none; border-color: var(--carbon); }
@@ -464,7 +460,6 @@ tr.row-editing td { background:#FAFFF0; }
 @media (min-width: 640px) {
   .content { padding: 24px 32px 100px; }
   .filters-row { grid-template-columns: repeat(5, 1fr); }
-  .filters-row-dates { grid-template-columns: repeat(6, 1fr); }
 }
 @media (min-width: 768px) {
   .modal-overlay { align-items: center; }
@@ -2036,7 +2031,7 @@ function ordenaPorDataDesc(a, b) {
 }
 
 // ── FILTROS GLOBAIS ───────────────────────────────────────────────────────────
-var pageFilters = { unidade: 'Todos', departamento: 'Todos', categoria: 'Todos', status: 'Todos', fornecedor: 'Todos', dataPedido: '', dataCompra: '', dataEntrega: '', dataReceb: '', dataEmissao: '', dataVenc: '' };
+var pageFilters = { unidade: 'Todos', departamento: 'Todos', categoria: 'Todos', status: 'Todos', fornecedor: 'Todos' };
 
 function toISO(raw) {
   if (!raw) return '';
@@ -2048,10 +2043,6 @@ function toISO(raw) {
   return '';
 }
 
-function hasDateFilters() {
-  var f = pageFilters;
-  return f.dataPedido || f.dataCompra || f.dataEntrega || f.dataReceb || f.dataEmissao || f.dataVenc;
-}
 
 function uniqueSorted(arr) {
   var s = {}, out = [];
@@ -2077,12 +2068,6 @@ function aplicarFiltros(lista) {
                     String((o.raw && o.raw.fornecedor) || '').split(',').map(function(s){return s.trim();}).indexOf(f.fornecedor) !== -1;
       if (!hasForn) return false;
     }
-    if (f.dataPedido && toISO(o.raw && o.raw.dataSolicitacao)    !== f.dataPedido) return false;
-    if (f.dataCompra  && toISO(o.raw && o.raw.dataCompraProc)    !== f.dataCompra)  return false;
-    if (f.dataEntrega && toISO(o.raw && o.raw.dataEntregaPrevista) !== f.dataEntrega) return false;
-    if (f.dataReceb   && toISO(o.raw && o.raw.dataRecebimento)   !== f.dataReceb)   return false;
-    if (f.dataEmissao && toISO(o.raw && o.raw.dataEmissao)       !== f.dataEmissao) return false;
-    if (f.dataVenc    && toISO(o.raw && o.raw.dataVencimento)    !== f.dataVenc)    return false;
     return true;
   });
 }
@@ -2090,7 +2075,7 @@ function aplicarFiltros(lista) {
 function renderFilters() {
   var wrap = document.getElementById('filters-wrap');
   if (!wrap) return;
-  var base = hasDateFilters() ? ORDERS : ORDERS.filter(dentroDe10Dias);
+  var base = ORDERS.filter(dentroDe10Dias);
   var unidades = uniqueSorted(base.map(function(o) { return (o.raw && o.raw.unidade) || ''; }));
   var deptoSrc = pageFilters.unidade === 'Todos' ? base : base.filter(function(o) { return ((o.raw && o.raw.unidade) || '') === pageFilters.unidade; });
   var deptos   = uniqueSorted(deptoSrc.map(function(o) { return (o.raw && o.raw.departamento) || ''; }));
@@ -2116,13 +2101,6 @@ function renderFilters() {
     return h + '</select></div>';
   }
 
-  function dateInput(label, key) {
-    return '<div class="filter-date-group">' +
-      '<label class="filter-label">' + label + '</label>' +
-      '<input type="date" class="filter-date-input" value="' + (pageFilters[key]||'') + '" onchange="setFilter(\'' + key + '\',this.value)">' +
-    '</div>';
-  }
-
   var filtered = aplicarFiltros(base.sort(ordenaPorDataDesc));
   var fornecedoresOpts = getFornecedores().filter(function(f) { return f !== 'Outro'; });
   var html = '<div class="filters-row">' +
@@ -2131,14 +2109,6 @@ function renderFilters() {
     sel('Categoria',    'categoria',    cats,     pageFilters.categoria)    +
     sel('Status',       'status',       statusOpts, pageFilters.status, true) +
     sel('Fornecedor',   'fornecedor',   fornecedoresOpts, pageFilters.fornecedor) +
-  '</div>' +
-  '<div class="filters-row-dates">' +
-    dateInput('Data do Pedido',      'dataPedido') +
-    dateInput('Data da Compra',      'dataCompra') +
-    dateInput('Data da Entrega',     'dataEntrega') +
-    dateInput('Data do Recebimento', 'dataReceb') +
-    dateInput('Data de Emissão',     'dataEmissao') +
-    dateInput('Data do Vencimento',  'dataVenc') +
   '</div>' +
   '<div class="filters-actions">' +
     '<button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>' +
@@ -2155,7 +2125,7 @@ function setFilter(key, value) {
 }
 
 function clearFilters() {
-  pageFilters = { unidade: 'Todos', departamento: 'Todos', categoria: 'Todos', status: 'Todos', fornecedor: 'Todos', dataPedido: '', dataCompra: '', dataEntrega: '', dataReceb: '', dataEmissao: '', dataVenc: '' };
+  pageFilters = { unidade: 'Todos', departamento: 'Todos', categoria: 'Todos', status: 'Todos', fornecedor: 'Todos' };
   renderFilters();
   renderAll();
 }
@@ -2167,7 +2137,7 @@ function renderAba(aba) {
     container.innerHTML = '';
     return;
   }
-  var base = (hasDateFilters() ? ORDERS : ORDERS.filter(dentroDe10Dias)).sort(ordenaPorDataDesc);
+  var base = ORDERS.filter(dentroDe10Dias).sort(ordenaPorDataDesc);
   var lista = aplicarFiltros(base);
   if (lista.length === 0) {
     if (gasErro) {
