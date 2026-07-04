@@ -351,6 +351,31 @@ tr.row-editing td { background:#FAFFF0; }
 .photo-remove svg { width: 10px; height: 10px; stroke: #fff; fill: none; stroke-width: 2.5; stroke-linecap: round; }
 
 /* ── PRINT (PDFs) ── */
+/* ── KPI PAGE ─────────────────────────────────────────────────────────────── */
+.kpi-stat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
+@media (max-width:639px) { .kpi-stat-grid { grid-template-columns: repeat(2,1fr); } }
+.kpi-metric-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; position: relative; overflow: hidden; }
+.kpi-metric-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--border); }
+.kpi-metric-card.ok::before     { background: #3a7a3a; }
+.kpi-metric-card.warn::before   { background: #D69E2E; }
+.kpi-metric-card.bad::before    { background: #E53E3E; }
+.kpi-metric-card.neutral::before { background: var(--carbon); }
+.kpi-mc-label { font-family:'DM Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:0.8px; color:var(--muted); margin-bottom:8px; }
+.kpi-mc-val-row { display:flex; align-items:baseline; gap:5px; }
+.kpi-mc-value { font-size:26px; font-weight:700; color:var(--carbon); letter-spacing:-0.5px; line-height:1; }
+.kpi-mc-unit  { font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); }
+.kpi-mc-sub   { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); margin-top:6px; }
+.kpi-charts-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+@media (max-width:639px) { .kpi-charts-row { grid-template-columns:1fr; } }
+.kpi-chart-block { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+.kpi-chart-title { font-family:'DM Mono',monospace; font-size:10px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--carbon); margin-bottom:14px; }
+.kpi-bar-row  { display:grid; grid-template-columns:110px 1fr 32px; align-items:center; gap:8px; margin-bottom:8px; }
+.kpi-bar-name { font-size:12px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi-bar-track { height:16px; background:var(--bg); border-radius:4px; overflow:hidden; }
+.kpi-bar-fill  { height:100%; background:var(--carbon); border-radius:4px; transition:width 0.4s ease; }
+.kpi-bar-val   { font-family:'DM Mono',monospace; font-size:11px; color:var(--carbon); text-align:right; font-weight:600; }
+.kpi-empty-chart { font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); padding:16px 0; }
+
 #recibo { display: none; }
 @media print {
   body > *:not(#recibo) { display: none !important; }
@@ -536,7 +561,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <button class="tab-btn"        id="tab-processamento" onclick="setTab('processamento')">Processamento</button>
   <button class="tab-btn"        id="tab-entregas"      onclick="setTab('entregas')">Recebimentos</button>
   <button class="tab-btn"        id="tab-conferencia"   onclick="setTab('conferencia')" style="display:none;">Conferência</button>
-  <button class="tab-btn disabled" id="tab-kpis">KPIs</button>
+  <button class="tab-btn" id="tab-kpis" onclick="setTab('kpis')">KPIs</button>
 </div>
 
 <div class="kpis-wrap" id="kpis-wrap">
@@ -1397,6 +1422,168 @@ function setTab(t) {
   if (btn && !btn.classList.contains('disabled')) btn.classList.add('active');
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   var pg = document.getElementById('page-'+t); if (pg) pg.classList.add('active');
+  if (t === 'kpis') renderKPIsPage();
+}
+
+// ── KPI PAGE ──────────────────────────────────────────────────────────────────
+function renderKPIsPage() {
+  var container = document.getElementById('page-kpis');
+  if (!container) return;
+  var orders = ORDERS;
+  if (!orders || !orders.length) {
+    container.innerHTML = '<div class="empty"><p>Nenhum dado disponível.</p></div>';
+    return;
+  }
+
+  // ── Cálculos ─────────────────────────────────────────────────────────────
+  var total            = orders.length;
+  var aguardandoCompra = orders.filter(function(o){ return o.status==='b-enviado'; }).length;
+  var aguardandoReceb  = orders.filter(function(o){ return o.status==='b-aguardando'||o.status==='b-parcial-entrega'; }).length;
+  var recebidos        = orders.filter(function(o){ return o.status==='b-concluido'||o.status==='b-conferido'; }).length;
+
+  var valorTotal = 0;
+  orders.forEach(function(o){
+    (o.itensList||[]).forEach(function(it){ valorTotal += (Number(it.vlCompra)||0); });
+  });
+
+  function avgDays(f1, f2) {
+    var sum = 0, n = 0;
+    orders.forEach(function(o){
+      var d1 = toISO(o.raw&&o.raw[f1]), d2 = toISO(o.raw&&o.raw[f2]);
+      if (d1 && d2) { var diff = (new Date(d2)-new Date(d1))/86400000; if (diff>=0){sum+=diff;n++;} }
+    });
+    return n > 0 ? Math.round(sum/n) : null;
+  }
+  var tempoCompra  = avgDays('dataSolicitacao','dataCompraProc');
+  var tempoEntrega = avgDays('dataCompraProc','dataRecebimento');
+
+  // Por categoria
+  var byCat = {};
+  orders.forEach(function(o){ (o.cats||[]).forEach(function(c){ byCat[c]=(byCat[c]||0)+1; }); });
+  var catData = Object.keys(byCat).map(function(k){return{nome:k,val:byCat[k]};}).sort(function(a,b){return b.val-a.val;}).slice(0,8);
+
+  // Por fornecedor
+  var byForn = {};
+  orders.forEach(function(o){
+    var fs=(o.fornecedores||[]).map(function(f){return f.nome;});
+    if (!fs.length && o.raw&&o.raw.fornecedor) fs=String(o.raw.fornecedor).split(',').map(function(s){return s.trim();}).filter(Boolean);
+    fs.forEach(function(f){ if(f&&f!=='—') byForn[f]=(byForn[f]||0)+1; });
+  });
+  var fornData = Object.keys(byForn).map(function(k){return{nome:k,val:byForn[k]};}).sort(function(a,b){return b.val-a.val;}).slice(0,8);
+
+  // Por unidade
+  var byUnit = {};
+  orders.forEach(function(o){ var u=(o.raw&&o.raw.unidade)||'—'; byUnit[u]=(byUnit[u]||0)+1; });
+  var unitData = Object.keys(byUnit).map(function(k){return{nome:k,val:byUnit[k]};}).sort(function(a,b){return b.val-a.val;});
+
+  // Evolução mensal (últimos 6 meses)
+  var mNames=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var byMonth = {};
+  orders.forEach(function(o){
+    var d=toISO(o.raw&&o.raw.dataSolicitacao); if(!d)return;
+    var ym=d.slice(0,7); byMonth[ym]=(byMonth[ym]||0)+1;
+  });
+  var monthData = Object.keys(byMonth).sort().slice(-6).map(function(k){
+    var p=k.split('-');
+    return {label:mNames[parseInt(p[1],10)-1]+'/'+p[0].slice(2), val:byMonth[k]};
+  });
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function fmtBRL(v) { return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function stCls(v,good,warn){ if(v===null)return 'neutral'; return v<=good?'ok':v<=warn?'warn':'bad'; }
+
+  function metricCard(label,value,unit,cls,sub) {
+    return '<div class="kpi-metric-card '+cls+'">'+
+      '<div class="kpi-mc-label">'+label+'</div>'+
+      '<div class="kpi-mc-val-row"><span class="kpi-mc-value">'+value+'</span>'+
+      (unit?'<span class="kpi-mc-unit">'+unit+'</span>':'')+
+      '</div>'+
+      (sub?'<div class="kpi-mc-sub">'+sub+'</div>':'')+
+    '</div>';
+  }
+
+  function hBars(data) {
+    if (!data.length) return '<div class="kpi-empty-chart">Sem dados</div>';
+    var mx=data[0].val||1;
+    return data.map(function(d){
+      return '<div class="kpi-bar-row">'+
+        '<div class="kpi-bar-name">'+d.nome+'</div>'+
+        '<div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:'+Math.round(d.val/mx*100)+'%"></div></div>'+
+        '<div class="kpi-bar-val">'+d.val+'</div>'+
+      '</div>';
+    }).join('');
+  }
+
+  // ── Montar HTML ───────────────────────────────────────────────────────────
+  var tcStr = tempoCompra!==null ? tempoCompra+'': '—';
+  var teStr = tempoEntrega!==null? tempoEntrega+'':'—';
+
+  var html =
+    '<div class="kpi-stat-grid">'+
+      metricCard('Total de pedidos', total, '', 'neutral', 'no período')+
+      metricCard('Valor comprado', fmtBRL(valorTotal), '', 'neutral', recebidos+' recebidos')+
+      metricCard('Aguardando compra', aguardandoCompra, 'pedidos', aguardandoCompra>0?'warn':'ok', aguardandoCompra===0?'Todos processados':'em aberto')+
+      metricCard('Aguardando recebimento', aguardandoReceb, 'pedidos', aguardandoReceb>0?'warn':'ok', aguardandoReceb===0?'Todos recebidos':'em aberto')+
+      metricCard('Tempo médio de compra', tcStr, tempoCompra!==null?'dias':'', stCls(tempoCompra,3,7), 'solicitação → compra')+
+      metricCard('Tempo médio de entrega', teStr, tempoEntrega!==null?'dias':'', stCls(tempoEntrega,5,10), 'compra → recebimento')+
+    '</div>'+
+    '<div class="kpi-charts-row">'+
+      '<div class="kpi-chart-block"><div class="kpi-chart-title">Pedidos por Categoria</div>'+hBars(catData)+'</div>'+
+      '<div class="kpi-chart-block"><div class="kpi-chart-title">Top Fornecedores</div>'+hBars(fornData)+'</div>'+
+    '</div>'+
+    '<div class="kpi-charts-row">'+
+      '<div class="kpi-chart-block"><div class="kpi-chart-title">Pedidos por Unidade</div>'+
+        '<svg id="kpi-unit-svg" viewBox="0 0 600 180" preserveAspectRatio="none" style="width:100%;height:180px;display:block;"></svg>'+
+      '</div>'+
+      '<div class="kpi-chart-block"><div class="kpi-chart-title">Evolução Mensal</div>'+
+        '<svg id="kpi-evol-svg" viewBox="0 0 600 180" preserveAspectRatio="none" style="width:100%;height:180px;display:block;"></svg>'+
+      '</div>'+
+    '</div>';
+
+  container.innerHTML = html;
+  _drawKpiUnitBars('kpi-unit-svg', unitData);
+  _drawKpiEvolLine('kpi-evol-svg', monthData);
+}
+
+function _drawKpiUnitBars(svgId, data) {
+  var svg = document.getElementById(svgId); if (!svg||!data.length) return;
+  var W=600,H=180,PB=36,PT=20,PLR=16;
+  var mx=Math.max.apply(null,data.map(function(d){return d.val;}));
+  var n=data.length, tw=W-PLR*2, bw=Math.min(64,Math.floor(tw/n)-6), ph=H-PB-PT;
+  var c='';
+  data.forEach(function(d,i){
+    var x=PLR+(tw/n)*i+(tw/n-bw)/2;
+    var bh=mx>0?Math.round(d.val/mx*ph):0, y=PT+(ph-bh);
+    var isMax=d.val===mx;
+    c+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="3" fill="'+(isMax?'#35383F':'#C8C9CC')+'"/>';
+    c+='<text x="'+(x+bw/2)+'" y="'+(y-5)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="'+(isMax?'#35383F':'#999')+'" font-weight="'+(isMax?'600':'400')+'">'+d.val+'</text>';
+    var lbl=d.nome.length>9?d.nome.slice(0,8)+'…':d.nome;
+    c+='<text x="'+(x+bw/2)+'" y="'+(H-6)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#555">'+lbl+'</text>';
+  });
+  svg.innerHTML=c;
+}
+
+function _drawKpiEvolLine(svgId, data) {
+  var svg = document.getElementById(svgId); if (!svg) return;
+  if (data.length < 2) { svg.innerHTML='<text x="300" y="90" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#999">Dados insuficientes</text>'; return; }
+  var W=600,H=180,PB=28,PT=24,PLR=32;
+  var mx=Math.max.apply(null,data.map(function(d){return d.val;}));
+  var n=data.length, pw=W-PLR*2, ph=H-PB-PT;
+  function px(i){return PLR+(i/(n-1))*pw;}
+  function py(v){return PT+(1-v/(mx||1))*ph;}
+  var area='M '+px(0)+','+(PT+ph);
+  data.forEach(function(d,i){area+=' L '+px(i)+','+py(d.val);});
+  area+=' L '+px(n-1)+','+(PT+ph)+' Z';
+  var line=data.map(function(d,i){return(i===0?'M':'L')+' '+px(i)+','+py(d.val);}).join(' ');
+  var c='';
+  c+='<path d="'+area+'" fill="#35383F" opacity="0.08"/>';
+  c+='<path d="'+line+'" fill="none" stroke="#35383F" stroke-width="2"/>';
+  data.forEach(function(d,i){
+    c+='<circle cx="'+px(i)+'" cy="'+py(d.val)+'" r="3" fill="#35383F"/>';
+    c+='<text x="'+px(i)+'" y="'+(py(d.val)-7)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" font-weight="600">'+d.val+'</text>';
+    c+='<text x="'+px(i)+'" y="'+(H-4)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#555">'+d.label+'</text>';
+  });
+  svg.innerHTML=c;
 }
 
 // ── DRAWER ────────────────────────────────────────────────────────────────────
