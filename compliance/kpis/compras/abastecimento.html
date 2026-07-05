@@ -2754,26 +2754,31 @@ function nfDrop(e) {
 }
 
 async function nfUploadAnexos(idDisplay, quem) {
-  if (!supa || !nfAnexosPendentes.length) return;
-  var erroAnexo = null;
+  if (!supa) { console.warn('[anexo] supa não inicializado'); return; }
+  if (!nfAnexosPendentes.length) { console.log('[anexo] nenhum arquivo pendente'); return; }
+  console.log('[anexo] upload de', nfAnexosPendentes.length, 'arquivo(s) →', idDisplay);
+  var erros = [];
   for (var i = 0; i < nfAnexosPendentes.length; i++) {
     var file = nfAnexosPendentes[i];
     var safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
     var path = idDisplay + '/' + Date.now() + '-' + safeName;
     try {
       var up = await supa.storage.from('conferencias').upload(path, file, { upsert: false });
-      if (up.error) throw new Error(up.error.message);
+      if (up.error) { console.error('[anexo] storage:', up.error); throw new Error(up.error.message); }
       var pub = supa.storage.from('conferencias').getPublicUrl(path);
-      await supa.from('conferencia_anexos').insert({
+      var ins = await supa.from('conferencia_anexos').insert({
         id_display:   idDisplay,
         arquivo_nome: file.name,
         arquivo_url:  pub.data.publicUrl,
         arquivo_tipo: file.type || null,
         enviado_por:  quem || null
       });
-    } catch(e) { erroAnexo = e.message; }
+      if (ins.error) { console.error('[anexo] insert:', ins.error); throw new Error(ins.error.message); }
+      console.log('[anexo] ok:', file.name);
+    } catch(e) { console.error('[anexo] erro:', e); erros.push(file.name + ': ' + e.message); }
   }
-  if (erroAnexo) toast('Aviso: erro ao salvar anexo — ' + erroAnexo);
+  if (erros.length) toast('Erro no anexo — ' + erros[0]);
+  else toast(nfAnexosPendentes.length + ' anexo(s) salvo(s)');
 }
 
 function fecharModalNF() {
