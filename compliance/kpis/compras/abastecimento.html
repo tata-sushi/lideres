@@ -349,6 +349,15 @@ tr.row-editing td { background:#FAFFF0; }
 .anexo-item-rm { width:22px; height:22px; border:none; background:none; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:4px; flex-shrink:0; color:var(--muted); padding:0; }
 .anexo-item-rm:hover { background:#FDEAEA; color:#C0392B; }
 .anexo-item-rm svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2.5; stroke-linecap:round; }
+.anexo-item.uploading { opacity:0.65; }
+.anexo-item.uploading .anexo-item-rm { display:none; }
+.anexo-item.done { border-color:#4CAF50; }
+.anexo-item.done .anexo-item-icon svg { stroke:#4CAF50; }
+.anexo-item.error { border-color:#E53935; }
+.anexo-item.error .anexo-item-icon svg { stroke:#E53935; }
+.anexo-spinner { display:inline-block; width:13px; height:13px; border:2px solid var(--border); border-top-color:var(--carbon); border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.modal-btn-confirm:disabled { opacity:0.5; cursor:not-allowed; pointer-events:none; }
 .anexo-link { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; text-decoration:none; color:var(--text); font-size:12px; transition:border-color 0.15s; }
 .anexo-link:hover { border-color:var(--carbon); }
 .anexo-link svg { width:14px; height:14px; fill:none; stroke:var(--mid); stroke-width:1.5; flex-shrink:0; }
@@ -2705,10 +2714,17 @@ function calcGrandTotal() {
 // ── ANEXOS – RECEBIMENTO ─────────────────────────────────────────────────────
 var nfAnexosPendentes = [];
 
+var NF_MAX_MB = 20;
+
 function nfAddArquivos(fileList) {
-  Array.from(fileList).forEach(function(f) { nfAnexosPendentes.push(f); });
+  var rejeitados = [];
+  Array.from(fileList).forEach(function(f) {
+    if (f.size > NF_MAX_MB * 1048576) { rejeitados.push(f.name); return; }
+    nfAnexosPendentes.push(f);
+  });
   nfRenderAnexos();
   document.getElementById('anexo-file-input').value = '';
+  if (rejeitados.length) toast('Arquivo muito grande (máx ' + NF_MAX_MB + ' MB): ' + rejeitados[0]);
 }
 
 function nfRemoverAnexo(idx) {
@@ -2754,40 +2770,43 @@ function nfDrop(e) {
 }
 
 async function nfUploadAnexos(idDisplay, quem) {
-  if (!supa) { console.warn('[anexo] supa não inicializado'); return; }
-  if (!nfAnexosPendentes.length) { console.log('[anexo] nenhum arquivo pendente'); return; }
-  var safeId = (idDisplay || 'sem-id').replace(/[^a-zA-Z0-9.\-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-  console.log('[anexo] upload de', nfAnexosPendentes.length, 'arquivo(s) →', safeId, '(id:', idDisplay, ')');
-  var erros = [];
+  if (!supa || !nfAnexosPendentes.length) return [];
+  var safeId = (idDisplay || 'sem-id').replace(/[^a-zA-Z0-9_\-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'pedido';
+  console.log('[anexo] bucket:conferencias safeId:', safeId, 'original:', idDisplay);
+  var list = document.getElementById('anexo-list');
+  var resultados = [];
   for (var i = 0; i < nfAnexosPendentes.length; i++) {
     var file = nfAnexosPendentes[i];
-    var safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    var ts = String(Date.now());
-    var path = safeId + '/' + ts + '-' + safeName;
-    console.log('[anexo] path tentando:', path);
+    var itemEl = list ? list.children[i] : null;
+    var sizeEl = itemEl ? itemEl.querySelector('.anexo-item-size') : null;
+    if (itemEl) { itemEl.classList.add('uploading'); if (sizeEl) sizeEl.innerHTML = '<span class="anexo-spinner"></span>'; }
+    var safeName = file.name.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+    var path = safeId + '_' + String(Date.now()) + '_' + safeName;
+    console.log('[anexo] path:', path, 'size:', file.size);
     try {
-      var up = await supa.storage.from('conferencias').upload(path, file, { upsert: false });
-      if (up.error) {
-        console.error('[anexo] storage error:', JSON.stringify(up.error));
-        throw new Error((up.error.statusCode ? up.error.statusCode + ' · ' : '') + up.error.message);
-      }
+      var up = await supa.storage.from('conferencias').upload(path, file, { upsert: true });
+      console.log('[anexo] up.data:', JSON.stringify(up.data), 'up.error:', JSON.stringify(up.error));
+      if (up.error) throw new Error('storage ' + (up.error.status || up.error.statusCode || '?') + ': ' + up.error.message);
       var pub = supa.storage.from('conferencias').getPublicUrl(path);
       var ins = await supa.from('conferencia_anexos').insert({
-        id_display:   idDisplay,
-        arquivo_nome: file.name,
-        arquivo_url:  pub.data.publicUrl,
-        arquivo_tipo: file.type || null,
-        enviado_por:  quem || null
+        id_display: idDisplay, arquivo_nome: file.name,
+        arquivo_url: pub.data.publicUrl, arquivo_tipo: file.type || null, enviado_por: quem || null
       });
-      if (ins.error) {
-        console.error('[anexo] insert error:', JSON.stringify(ins.error));
-        throw new Error((ins.error.code ? ins.error.code + ' · ' : '') + ins.error.message);
-      }
+      console.log('[anexo] ins.error:', JSON.stringify(ins.error));
+      if (ins.error) throw new Error('db ' + (ins.error.code || '?') + ': ' + ins.error.message);
       console.log('[anexo] ok:', file.name);
-    } catch(e) { console.error('[anexo] erro final:', e.message); erros.push(file.name + ': ' + e.message); }
+      resultados.push({ nome: file.name, ok: true });
+      if (itemEl) { itemEl.classList.remove('uploading'); itemEl.classList.add('done'); if (sizeEl) sizeEl.textContent = '✓'; }
+    } catch(e) {
+      console.error('[anexo] erro:', e.message);
+      resultados.push({ nome: file.name, ok: false, erro: e.message });
+      if (itemEl) { itemEl.classList.remove('uploading'); itemEl.classList.add('error'); if (sizeEl) sizeEl.textContent = '✗'; }
+    }
   }
-  if (erros.length) toast('Erro no anexo — ' + erros[0]);
-  else toast(nfAnexosPendentes.length + ' anexo(s) salvo(s)');
+  var erros = resultados.filter(function(r){ return !r.ok; });
+  if (erros.length) toast('Erro no anexo — ' + erros[0].erro);
+  else if (resultados.length) toast(resultados.length + ' anexo(s) salvo(s)');
+  return resultados;
 }
 
 function fecharModalNF() {
@@ -3174,11 +3193,14 @@ async function confirmarBaixaNF() {
     }
   }
 
-  await nfUploadAnexos(order.id, dadosNF.quem);
-  var savedOrder=order, savedForn=forn;
+  var btnConf = document.querySelector('#modal-nf .modal-btn-confirm');
+  if (btnConf) { btnConf.disabled = true; btnConf.textContent = 'Enviando anexos…'; }
+  var uploadResultados = await nfUploadAnexos(order.id, dadosNF.quem);
+  if (btnConf) { btnConf.disabled = false; btnConf.textContent = 'Confirmar Recebimento'; }
+  var savedOrder=order, savedForn=forn, savedUpload=uploadResultados;
   toast('Baixa de NF registrada — '+nfOrderId+' · '+(forn?forn.nome:''));
   fecharModalNF(); renderAll(); updateKPIs();
-  if(savedOrder && savedForn) setTimeout(function(){gerarPDFBaixaNF(savedOrder, savedForn, dadosNF);},400);
+  if(savedOrder && savedForn) setTimeout(function(){gerarPDFBaixaNF(savedOrder, savedForn, dadosNF, savedUpload);},400);
 }
 
 // ── KPIs ──────────────────────────────────────────────────────────────────────
@@ -3622,7 +3644,7 @@ function gerarPDFProcessamento(order, dadosProc) {
   }
 }
 
-function gerarPDFBaixaNF(order, forn, dadosNF) {
+function gerarPDFBaixaNF(order, forn, dadosNF, uploadResultados) {
   var baixaPor = (currentUser && currentUser.name) || (window.__lideresUser) || '—';
   var dataReceb = dadosNF.dataReceb || new Date().toLocaleDateString('pt-BR');
   var rowsHtml=''; var totalGeral=0;
@@ -3641,9 +3663,17 @@ function gerarPDFBaixaNF(order, forn, dadosNF) {
       '<td class="r">'+difTxt+'</td>'+
     '</tr>';
   });
-  var anexosHtml = dadosNF.anexos && dadosNF.anexos.length
-    ? dadosNF.anexos.map(function(n){return '<span class="rp-anexo-pill">📎 '+n+'</span>';}).join('')
-    : '<span class="rp-anexo-pill" style="color:#999">Nenhum anexo</span>';
+  var anexosHtml;
+  if (uploadResultados && uploadResultados.length) {
+    anexosHtml = uploadResultados.map(function(r) {
+      if (r.ok) return '<span class="rp-anexo-pill" style="border-color:#4CAF50">✓ '+r.nome+'</span>';
+      return '<span class="rp-anexo-pill" style="border-color:#E53935;color:#E53935" title="'+r.erro+'">✗ '+r.nome+' (não enviado)</span>';
+    }).join('');
+  } else if (dadosNF.anexos && dadosNF.anexos.length) {
+    anexosHtml = dadosNF.anexos.map(function(n){return '<span class="rp-anexo-pill">📎 '+n+'</span>';}).join('');
+  } else {
+    anexosHtml = '<span class="rp-anexo-pill" style="color:#999">Nenhum anexo</span>';
+  }
   var unidadeTxt      = (UNIDADE      || (order.raw && order.raw.unidade)      || '—');
   var departamentoTxt = (DEPARTAMENTO || (order.raw && order.raw.departamento) || '—');
   var orderIdTxt      = order.idDisplay || ('#'+order.id);
