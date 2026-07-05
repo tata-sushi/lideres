@@ -376,13 +376,14 @@ tr.row-editing td { background:#FAFFF0; }
   .mobile-cards { display: none !important; }
   .desk-table-wrap { display: block; }
 }
-.desk-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 760px; }
+.desk-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 860px; }
 .desk-table thead th { font-family:'DM Mono',monospace; font-size:9px; font-weight:500; text-transform:uppercase; letter-spacing:0.8px; color:var(--muted); padding:8px 6px; text-align:center; background:var(--surface); border-bottom:2px solid var(--carbon); cursor:pointer; user-select:none; white-space:nowrap; }
 .desk-table thead th:hover { color: var(--carbon); }
-.desk-table thead th:last-child { width: 40px; cursor: default; }
+.desk-table thead th:first-child { padding-left:14px; }
+.desk-table thead th:last-child { width:44px; cursor:default; padding-right:14px; }
 .desk-table tbody td { padding:8px 6px; border-bottom:1px solid var(--border); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; }
-.desk-table tbody td:first-child { text-align:left; }
-.desk-table thead th:first-child { text-align:left; }
+.desk-table tbody td:first-child { text-align:left; padding-left:14px; }
+.desk-table tbody td:last-child  { padding-right:14px; }
 .desk-table tbody tr { cursor: pointer; transition: background 0.1s; }
 .desk-table tbody tr:last-child td { border-bottom:none; }
 .desk-table tbody tr:hover td { background:#FAFAFA; }
@@ -394,6 +395,7 @@ tr.row-editing td { background:#FAFFF0; }
 .dt-qty  { font-family:'DM Mono',monospace; font-size:12px; font-weight:600; color:var(--carbon); }
 .desk-table thead th.sort-asc::after  { content:' ↑'; color:var(--carbon); }
 .desk-table thead th.sort-desc::after { content:' ↓'; color:var(--carbon); }
+.filters-wrap.kpi-mode .filters-row-dates { display:none; }
 .btn-dt-edit { width:28px; height:28px; border:none; border-radius:6px; background:var(--carbon); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0; opacity:0.9; transition:opacity 0.15s; }
 .btn-dt-edit:hover { opacity:1; }
 .btn-dt-edit svg { width:13px; height:13px; stroke:var(--citric); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
@@ -1249,6 +1251,13 @@ async function carregarPedidos() {
     : 'Atualizado: ' + agora.toLocaleDateString('pt-BR') + ', ' + agora.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 
+function abreviarNome(nome) {
+  if (!nome) return '';
+  var partes = nome.trim().split(/\s+/);
+  if (partes.length <= 2) return nome;
+  return partes[0] + ' ' + partes[partes.length - 1];
+}
+
 function fmtDataBR(v) {
   if (v === undefined || v === null || v === '') return '—';
   if (v instanceof Date) return isNaN(v.getTime()) ? '—' : v.toLocaleDateString('pt-BR');
@@ -1460,7 +1469,7 @@ function setTab(t) {
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   var pg = document.getElementById('page-'+t); if (pg) pg.classList.add('active');
   var fw = document.getElementById('filters-wrap');
-  if (fw) fw.style.display = (t === 'kpis') ? 'none' : '';
+  if (fw) fw.classList.toggle('kpi-mode', t === 'kpis');
   if (t === 'kpis') renderKPIsPage();
 }
 
@@ -2291,23 +2300,24 @@ function sortDeskLista(lista) {
 }
 
 var DESK_COLS = [
-  { key:'id',         label:'Pedido'       },
-  { key:'unidade',    label:'Unidade / Depto' },
-  { key:'fornecedor', label:'Fornecedor'   },
-  { key:'data',       label:'Dt Pedido'   },
-  { key:'dataCompra', label:'Dt Compra'   },
-  { key:'dataEntrega',label:'Dt Entrega'  },
-  { key:'dataReceb',  label:'Dt Recebimento' },
-  { key:'itens',      label:'Itens'        },
-  { key:'status',     label:'Status'       },
-  { key:null,         label:''             }
+  { key:'id',         label:'Pedido',          w:'160px' },
+  { key:'unidade',    label:'Unidade / Depto', w:'140px' },
+  { key:'fornecedor', label:'Fornecedor',       w:'140px' },
+  { key:'data',       label:'Dt Pedido',        w:'82px'  },
+  { key:'dataCompra', label:'Dt Compra',        w:'82px'  },
+  { key:'dataEntrega',label:'Dt Entrega',       w:'82px'  },
+  { key:'dataReceb',  label:'Dt Recebimento',   w:'96px'  },
+  { key:'itens',      label:'Itens',            w:'48px'  },
+  { key:'status',     label:'Status',           w:'110px' },
+  { key:null,         label:'',                 w:'44px'  }
 ];
 
 function buildDeskHead() {
   var ths = DESK_COLS.map(function(c) {
-    if (!c.key) return '<th style="width:40px;cursor:default;"></th>';
+    var wStyle = 'width:'+c.w+';';
+    if (!c.key) return '<th style="'+wStyle+'cursor:default;"></th>';
     var cls = deskSort.col===c.key ? (deskSort.asc?'sort-asc':'sort-desc') : '';
-    return '<th'+(cls?' class="'+cls+'"':'')+' onclick="deskSortBy(\''+c.key+'\')">'+c.label+'</th>';
+    return '<th'+(cls?' class="'+cls+'"':'')+' style="'+wStyle+'" onclick="deskSortBy(\''+c.key+'\')">'+c.label+'</th>';
   }).join('');
   return '<thead><tr>'+ths+'</tr></thead>';
 }
@@ -2325,7 +2335,7 @@ function tableRowHTML(o, aba) {
   var depto      = (o.raw&&o.raw.departamento)||'';
   var unidDepto  = unidade + (depto ? ' - '+depto : '');
   var fornNome   = (o.fornecedores&&o.fornecedores.length?o.fornecedores.map(function(f){return f.nome;}).join(', '):(o.raw&&o.raw.fornecedor))||'—';
-  var solicitante= (o.raw&&o.raw.solicitante)||'';
+  var solicitante= abreviarNome((o.raw&&o.raw.solicitante)||'');
   return '<tr>'+
     '<td><div class="dt-num">Pedido '+(o.idDisplay||('#'+id))+'</div>'+(solicitante?'<div class="dt-sub">'+solicitante+'</div>':'')+' </td>'+
     '<td class="dt-unit">'+unidDepto+'</td>'+
@@ -2350,7 +2360,7 @@ function fornTableRowHTML(order, forn, fi) {
   var unidade    = (order.raw&&order.raw.unidade)||'—';
   var depto      = (order.raw&&order.raw.departamento)||'';
   var unidDepto  = unidade + (depto ? ' - '+depto : '');
-  var solicitante= (order.raw&&order.raw.solicitante)||'';
+  var solicitante= abreviarNome((order.raw&&order.raw.solicitante)||'');
   return '<tr>'+
     '<td><div class="dt-num">Pedido '+(order.idDisplay||('#'+order.id))+'</div>'+(solicitante?'<div class="dt-sub">'+solicitante+'</div>':'')+' </td>'+
     '<td class="dt-unit">'+unidDepto+'</td>'+
