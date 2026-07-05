@@ -2756,15 +2756,21 @@ function nfDrop(e) {
 async function nfUploadAnexos(idDisplay, quem) {
   if (!supa) { console.warn('[anexo] supa não inicializado'); return; }
   if (!nfAnexosPendentes.length) { console.log('[anexo] nenhum arquivo pendente'); return; }
-  console.log('[anexo] upload de', nfAnexosPendentes.length, 'arquivo(s) →', idDisplay);
+  var safeId = (idDisplay || 'sem-id').replace(/[^a-zA-Z0-9.\-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  console.log('[anexo] upload de', nfAnexosPendentes.length, 'arquivo(s) →', safeId, '(id:', idDisplay, ')');
   var erros = [];
   for (var i = 0; i < nfAnexosPendentes.length; i++) {
     var file = nfAnexosPendentes[i];
     var safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    var path = idDisplay + '/' + Date.now() + '-' + safeName;
+    var ts = String(Date.now());
+    var path = safeId + '/' + ts + '-' + safeName;
+    console.log('[anexo] path tentando:', path);
     try {
       var up = await supa.storage.from('conferencias').upload(path, file, { upsert: false });
-      if (up.error) { console.error('[anexo] storage:', up.error); throw new Error(up.error.message); }
+      if (up.error) {
+        console.error('[anexo] storage error:', JSON.stringify(up.error));
+        throw new Error((up.error.statusCode ? up.error.statusCode + ' · ' : '') + up.error.message);
+      }
       var pub = supa.storage.from('conferencias').getPublicUrl(path);
       var ins = await supa.from('conferencia_anexos').insert({
         id_display:   idDisplay,
@@ -2773,9 +2779,12 @@ async function nfUploadAnexos(idDisplay, quem) {
         arquivo_tipo: file.type || null,
         enviado_por:  quem || null
       });
-      if (ins.error) { console.error('[anexo] insert:', ins.error); throw new Error(ins.error.message); }
+      if (ins.error) {
+        console.error('[anexo] insert error:', JSON.stringify(ins.error));
+        throw new Error((ins.error.code ? ins.error.code + ' · ' : '') + ins.error.message);
+      }
       console.log('[anexo] ok:', file.name);
-    } catch(e) { console.error('[anexo] erro:', e); erros.push(file.name + ': ' + e.message); }
+    } catch(e) { console.error('[anexo] erro final:', e.message); erros.push(file.name + ': ' + e.message); }
   }
   if (erros.length) toast('Erro no anexo — ' + erros[0]);
   else toast(nfAnexosPendentes.length + ' anexo(s) salvo(s)');
