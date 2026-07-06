@@ -297,6 +297,22 @@ textarea.fctrl { resize: vertical; min-height: 70px; font-family: 'DM Sans', san
 .btn-add-item { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: transparent; border: 1px dashed var(--border); border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); cursor: pointer; transition: all 0.15s; width: 100%; }
 .btn-add-item:hover { border-color: var(--carbon); color: var(--carbon); }
 .bonus-row td { background: #F0FFF4; }
+/* Conferência — lista de itens */
+.conf-item-list { display: flex; flex-direction: column; gap: 8px; }
+.conf-item-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; background: var(--surface); }
+.conf-item-card.bonus-row { background: #F0FFF4; }
+.conf-item-check { width: 20px; height: 20px; margin-top: 4px; accent-color: var(--carbon); cursor: pointer; }
+.conf-item-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.conf-item-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.conf-item-nome { font-size: 13px; font-weight: 600; color: var(--carbon); }
+.conf-item-un { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); }
+.conf-item-rows { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.conf-item-cell { display: flex; flex-direction: column; gap: 3px; }
+.conf-item-cell-lbl { font-family: 'DM Mono', monospace; font-size: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+.conf-item-cell-val { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--carbon); font-weight: 600; }
+.conf-item-cell input { width: 100%; text-align: right; border: 1px solid var(--border); border-radius: 5px; padding: 4px 6px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); background: var(--bg); }
+.conf-item-cell input:focus { outline: none; border-color: var(--carbon); background: #fff; }
+@media (max-width: 640px) { .conf-item-rows { grid-template-columns: repeat(2, 1fr); } }
 
 @media (max-width: 639px) {
   .nf-table thead { display: none; }
@@ -943,7 +959,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <div class="fg"><label class="flbl">Data Recebimento</label><input type="date" class="fctrl" id="conf-nf-data-receb"></div>
           <div class="fg"><label class="flbl">Data de Vencimento</label><input type="date" class="fctrl" id="conf-nf-data-venc"></div>
           <div class="fg" style="grid-column:1/-1;">
-            <label class="flbl">Quem recebeu</label>
+            <label class="flbl">Identificação do estoquista (baixa da NF)</label>
             <select class="fctrl" id="conf-nf-quem"><option value="">Selecionar…</option></select>
           </div>
         </div>
@@ -952,19 +968,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <!-- ITENS (editáveis) -->
       <div>
         <div class="nf-section-label">Itens Recebidos</div>
-        <div style="overflow-x:auto;">
-          <table class="nf-table">
-            <thead><tr>
-              <th>Produto</th>
-              <th class="th-r">Pedido</th>
-              <th class="th-r">Comprado</th>
-              <th class="th-r">Recebido (editar)</th>
-              <th class="th-r">Vl. Unit (editar)</th>
-              <th class="th-r">Total</th>
-            </tr></thead>
-            <tbody id="conf-tbody"></tbody>
-          </table>
-        </div>
+        <div class="conf-item-list" id="conf-list"></div>
         <div class="nf-grand-total">
           <span class="nf-grand-label">Total geral</span>
           <span class="nf-grand-value" id="conf-grand">R$ 0,00</span>
@@ -2962,9 +2966,9 @@ async function abrirModalConferencia(orderId) {
   RECEBEDORES.forEach(function(r) { var o = document.createElement('option'); o.value = r; o.textContent = r; selQuem.appendChild(o); });
   selQuem.value = raw.recebidoPor || '';
 
-  // Tabela de itens
-  var tbody = document.getElementById('conf-tbody');
-  tbody.innerHTML = '';
+  // Lista de itens
+  var list = document.getElementById('conf-list');
+  list.innerHTML = '';
   order.itensList.forEach(function(item, idx) {
     var raw_item = (order.raw && order.raw.itens && order.raw.itens[idx]) || {};
     var qtdRec = raw_item.qtdRecebida != null ? raw_item.qtdRecebida : item.qtdRecebida;
@@ -2972,24 +2976,30 @@ async function abrirModalConferencia(orderId) {
     var qtdSol = raw_item.qtdSolicitada != null ? raw_item.qtdSolicitada : (item.qty || 0);
     var vlUnit = item.vlPedido || 0;
     var isBonus = item.isBonus || raw_item.isBonus || String(item.cat || '').toLowerCase() === 'bonificacao';
-    var tr = document.createElement('tr');
-    if (isBonus) tr.className = 'bonus-row';
     var total = (Number(qtdRec) || 0) * vlUnit;
-    var bonusTag = isBonus ? ' <span style="font-family:\'DM Mono\',monospace;font-size:8px;background:var(--carbon);color:var(--citric);padding:1px 5px;border-radius:8px;letter-spacing:.5px;text-transform:uppercase;">Bonif.</span>' : '';
-    tr.innerHTML =
-      '<td>' + item.nome + bonusTag + '<br><span style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--muted);">' + (item.un || '') + '</span></td>' +
-      '<td class="td-ped" data-label="Pedido">' + qtdSol + '</td>' +
-      '<td class="td-ped" data-label="Comprado">' + qtdComp + '</td>' +
-      '<td data-label="Recebido" style="text-align:right;">' +
-        '<input type="number" class="nf-rec-input" id="conf-rec-' + idx + '" min="0" value="' + (qtdRec || '') + '" oninput="confRecalcTotal()">' +
-      '</td>' +
-      '<td data-label="Vl. Unit" style="text-align:right;">' +
-        '<input type="number" class="nf-vl-input" id="conf-vl-' + idx + '" min="0" step="0.01" value="' + (vlUnit || '') + '" oninput="confRecalcTotal()">' +
-      '</td>' +
-      '<td class="td-total" id="conf-total-' + idx + '" data-label="Total" style="text-align:right;">' +
-        (total > 0 ? 'R$ ' + total.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—') +
-      '</td>';
-    tbody.appendChild(tr);
+    var totalTxt = total > 0 ? 'R$ ' + total.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
+    var bonusTag = isBonus ? '<span style="font-family:\'DM Mono\',monospace;font-size:8px;background:var(--carbon);color:var(--citric);padding:1px 5px;border-radius:8px;letter-spacing:.5px;text-transform:uppercase;">Bonif.</span>' : '';
+    var card = document.createElement('div');
+    card.className = 'conf-item-card' + (isBonus ? ' bonus-row' : '');
+    card.innerHTML =
+      '<input type="checkbox" class="conf-item-check" id="conf-check-' + idx + '">' +
+      '<div class="conf-item-body">' +
+        '<div class="conf-item-head">' +
+          '<span class="conf-item-nome">' + item.nome + '</span>' +
+          (item.un ? '<span class="conf-item-un">' + item.un + '</span>' : '') +
+          bonusTag +
+        '</div>' +
+        '<div class="conf-item-rows">' +
+          '<div class="conf-item-cell"><span class="conf-item-cell-lbl">Pedido</span><span class="conf-item-cell-val">' + qtdSol + '</span></div>' +
+          '<div class="conf-item-cell"><span class="conf-item-cell-lbl">Comprado</span><span class="conf-item-cell-val">' + qtdComp + '</span></div>' +
+          '<div class="conf-item-cell"><span class="conf-item-cell-lbl">Recebido</span>' +
+            '<input type="number" id="conf-rec-' + idx + '" min="0" value="' + (qtdRec || '') + '" oninput="confRecalcTotal()"></div>' +
+          '<div class="conf-item-cell"><span class="conf-item-cell-lbl">Vl. Unit</span>' +
+            '<input type="number" id="conf-vl-' + idx + '" min="0" step="0.01" value="' + (vlUnit || '') + '" oninput="confRecalcTotal()"></div>' +
+          '<div class="conf-item-cell"><span class="conf-item-cell-lbl">Total</span><span class="conf-item-cell-val" id="conf-total-' + idx + '">' + totalTxt + '</span></div>' +
+        '</div>' +
+      '</div>';
+    list.appendChild(card);
   });
   confRecalcTotal();
 
@@ -3150,13 +3160,27 @@ async function confirmarConferencia() {
           order.raw.recebidoPor = dados.recebidoPor; order.raw.obsEstoque = dados.obsEstoque;
         }
       }
+      var savedOrderConf = order, savedDadosConf = dados, savedChecksConf = _coletarChecksConferencia();
       alert('Conferência confirmada — ' + confOrderId);
       fecharModalConferencia(); renderAll(); updateKPIs();
+      if (savedOrderConf) setTimeout(function(){ gerarPDFConferencia(savedOrderConf, savedDadosConf, savedChecksConf, nome); }, 400);
     } catch(e) { toast('Erro ao confirmar conferência: ' + e.message); }
   } else {
+    var savedOrderConf2 = order, savedDadosConf2 = dados, savedChecksConf2 = _coletarChecksConferencia();
     alert('Conferência confirmada localmente — ' + confOrderId);
     fecharModalConferencia(); renderAll(); updateKPIs();
+    if (savedOrderConf2) setTimeout(function(){ gerarPDFConferencia(savedOrderConf2, savedDadosConf2, savedChecksConf2, nome); }, 400);
   }
+}
+
+function _coletarChecksConferencia() {
+  var order = null;
+  for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
+  if (!order) return [];
+  return order.itensList.map(function(_, idx) {
+    var el = document.getElementById('conf-check-' + idx);
+    return !!(el && el.checked);
+  });
 }
 
 // ── CONFIRMAR BAIXA NF (Estágio 3 — Estoque) ─────────────────────────────────
@@ -3836,6 +3860,91 @@ function gerarPDFBaixaNF(order, forn, dadosNF, uploadResultados) {
     logoEl.src = logoSrc;
   } else {
     setTimeout(function(){window.print();},100);
+  }
+}
+
+function gerarPDFConferencia(order, dados, checks, conferenteNome) {
+  var raw = order.raw || {};
+  var itens = order.itensList || [];
+  var rowsHtml = ''; var totalGeral = 0;
+  itens.forEach(function(item, idx) {
+    var d = (dados.itens && dados.itens[idx]) || {};
+    var qtdSol = (raw.itens && raw.itens[idx] && raw.itens[idx].qtdSolicitada) || item.qty || 0;
+    var qtdComp = (raw.itens && raw.itens[idx] && raw.itens[idx].qtdComprada) || item.qtdComprada || 0;
+    var qtdRec = d.qtdRecebida || 0;
+    var vlUnit = d.vlUnitario || 0;
+    var total = qtdRec * vlUnit;
+    totalGeral += total;
+    var checked = checks[idx] ? '☑' : '☐';
+    var isBonus = item.isBonus || String(item.cat || '').toLowerCase() === 'bonificacao';
+    var bonusTag = isBonus ? ' <span style="font-family:monospace;font-size:8px;background:#35383F;color:#CFFF00;padding:1px 4px;border-radius:6px;">BONIF.</span>' : '';
+    rowsHtml += '<tr>' +
+      '<td style="text-align:center;font-size:14px;">' + checked + '</td>' +
+      '<td>' + item.nome + bonusTag + '</td>' +
+      '<td class="r">' + qtdSol + (item.un ? ' ' + item.un : '') + '</td>' +
+      '<td class="r">' + qtdComp + (item.un ? ' ' + item.un : '') + '</td>' +
+      '<td class="r">' + qtdRec + (item.un ? ' ' + item.un : '') + '</td>' +
+      '<td class="r">' + (vlUnit ? 'R$ ' + vlUnit.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—') + '</td>' +
+      '<td class="r">' + (total > 0 ? 'R$ ' + total.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—') + '</td>' +
+    '</tr>';
+  });
+  var unidadeTxt = raw.unidade || UNIDADE || '—';
+  var departamentoTxt = raw.departamento || DEPARTAMENTO || '—';
+  var orderIdTxt = order.idDisplay || ('#' + order.id);
+  var dataEmi = (function(v){ if(!v) return '—'; var p=String(v).split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:v; })(document.getElementById('conf-nf-data-emissao').value || raw.dataCompra);
+  var dataRec = (function(v){ if(!v) return '—'; var p=String(v).split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:v; })(dados.dataRecebimento);
+  var dataVen = (function(v){ if(!v) return '—'; var p=String(v).split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:v; })(dados.dataVencimento);
+  var html =
+    '<div class="rp-header">' +
+      '<img id="rp-logo-conf" class="rp-logo-img" alt="TATÁ Sushi">' +
+      '<div class="rp-header-center"><div class="rp-title-main">Conferência de NF</div></div>' +
+      '<div class="rp-header-right">' +
+        '<div class="rp-meta-line">Unidade: <strong>' + unidadeTxt + '</strong></div>' +
+        '<div class="rp-meta-line">Departamento: <strong>' + departamentoTxt + '</strong></div>' +
+        '<div class="rp-meta-line">Emitido em: ' + new Date().toLocaleString('pt-BR') + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="rp-section">Dados da Nota Fiscal</div>' +
+    '<div class="rp-intro">' +
+      '<div class="rp-intro-nome">' +
+        '<span class="rp-intro-label">Pedido:</span><span class="rp-linha">' + orderIdTxt + '</span>' +
+        '<span class="rp-intro-label" style="margin-left:20px">Nº NF:</span><span class="rp-linha">' + (dados.notaFiscal || '—') + '</span>' +
+        '<span class="rp-intro-label" style="margin-left:20px">Fornecedor:</span><span class="rp-linha">' + (dados.fornecedor || '—') + '</span>' +
+      '</div>' +
+      '<div class="rp-intro-nome">' +
+        '<span class="rp-intro-label">Emissão:</span><span class="rp-linha">' + dataEmi + '</span>' +
+        '<span class="rp-intro-label" style="margin-left:20px">Recebimento:</span><span class="rp-linha">' + dataRec + '</span>' +
+        '<span class="rp-intro-label" style="margin-left:20px">Vencimento:</span><span class="rp-linha">' + dataVen + '</span>' +
+      '</div>' +
+      '<div class="rp-intro-nome">' +
+        '<span class="rp-intro-label">Recebido por:</span><span class="rp-linha">' + (raw.recebidoPor || '—') + '</span>' +
+        '<span class="rp-intro-label" style="margin-left:20px">Baixa NF por:</span><span class="rp-linha">' + (dados.recebidoPor || '—') + '</span>' +
+        '<span class="rp-intro-label" style="margin-left:20px">Conferente:</span><span class="rp-linha">' + (conferenteNome || '—') + '</span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="rp-section">Itens Conferidos</div>' +
+    '<table class="rp-table"><thead><tr>' +
+      '<th style="width:28px;text-align:center;">✓</th>' +
+      '<th>Produto</th>' +
+      '<th class="r">Pedido</th>' +
+      '<th class="r">Comprado</th>' +
+      '<th class="r">Recebido</th>' +
+      '<th class="r">Vl. Unit</th>' +
+      '<th class="r">Total</th>' +
+    '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+    '<div class="rp-totais">' +
+      '<span><span class="rp-totais-lbl">Total Geral</span><span class="rp-totais-val">R$ ' + totalGeral.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</span></span>' +
+    '</div>' +
+    (dados.obsEstoque ? '<div class="rp-section">Observações</div><div class="rp-obs">' + dados.obsEstoque + '</div>' : '');
+  document.getElementById('recibo').innerHTML = html;
+  var logoSrc = (document.querySelector('.logo-img') || {}).src || '';
+  var logoEl = document.getElementById('rp-logo-conf');
+  if (logoEl && logoSrc) {
+    logoEl.onload = function(){ window.print(); };
+    logoEl.onerror = function(){ window.print(); };
+    logoEl.src = logoSrc;
+  } else {
+    setTimeout(function(){ window.print(); }, 100);
   }
 }
 
