@@ -1452,9 +1452,23 @@ function rowsParaUI(idDisplay, rows) {
           return c === 0 || Number(row.qtd_recebida) >= c;
         });
         var todosConferidos = its.every(function(row) { return row.status === 'conferido'; });
+        // pega primeira row com valor não-vazio para cada campo (evita bonif com null sobrescrever)
+        function firstNonEmpty(field) {
+          for (var i = 0; i < its.length; i++) {
+            var v = its[i][field];
+            if (v !== null && v !== undefined && v !== '') return v;
+          }
+          return null;
+        }
         return {
-          nome:      g.forn,
-          notaFiscal: g.nf || '',
+          nome:            g.forn,
+          notaFiscal:      g.nf || '',
+          dataEmissaoNf:   firstNonEmpty('data_emissao_nf') || '',
+          dataRecebNf:     firstNonEmpty('data_recebimento') || '',
+          dataVencimento:  firstNonEmpty('data_vencimento_boleto') || '',
+          recebedor:       firstNonEmpty('recebedor') || '',
+          obsRecebimento:  firstNonEmpty('obs_recebimento') || '',
+          obsConferente:   firstNonEmpty('obs_conferente') || '',
           status:    todosConferidos ? 'b-conferido' : (todosRecebidos ? 'b-concluido' : 'b-aguardando'),
           label:     todosConferidos ? 'Conferido' : (todosRecebidos ? 'Recebido' : 'Aguardando recebimento'),
           dataPrev:  its.map(function(r){return r.data_entrega||'';}).filter(Boolean).sort().pop() || '',
@@ -3056,17 +3070,27 @@ async function abrirModalConferencia(orderId, fornIdx) {
 
   document.getElementById('conf-id').textContent = (order.idDisplay || ('#' + orderId)) + (forn ? ' · ' + forn.nome + (forn.notaFiscal ? ' · NF ' + forn.notaFiscal : '') : '');
 
+  // Fonte de dados: se forn (grupo por fornecedor+NF), usa dados dele; senão, usa raw agregado
+  var srcRecebedor    = forn ? forn.recebedor      : (raw.recebidoPor || '');
+  var srcDataReceb    = forn ? forn.dataRecebNf    : (raw.dataRecebimento || '');
+  var srcObsEstoque   = forn ? forn.obsRecebimento : (raw.obsEstoque || '');
+  var srcNumeroNf     = forn ? forn.notaFiscal     : (raw.notaFiscal || '');
+  var srcDataEmi      = forn ? forn.dataEmissaoNf  : (raw.dataCompra || '');
+  var srcDataVenc     = forn ? forn.dataVencimento : (raw.dataVencimento || '');
+  var srcObsConferente= forn ? forn.obsConferente  : (raw.obsConferente || '');
+  var srcFornNome     = forn ? forn.nome           : (raw.fornecedor || '');
+
   // Referência do estoquista (somente leitura)
-  document.getElementById('conf-orig-quem').textContent = raw.recebidoPor || '—';
-  document.getElementById('conf-orig-data-receb').textContent = fmtDataBR(raw.dataRecebimento);
-  document.getElementById('conf-orig-obs').textContent = raw.obsEstoque || '—';
+  document.getElementById('conf-orig-quem').textContent = srcRecebedor || '—';
+  document.getElementById('conf-orig-data-receb').textContent = fmtDataBR(srcDataReceb);
+  document.getElementById('conf-orig-obs').textContent = srcObsEstoque || '—';
 
   // Campos editáveis — NF
-  document.getElementById('conf-nf-numero').value = raw.notaFiscal || '';
-  document.getElementById('conf-nf-data-emissao').value = raw.dataCompra || '';
-  document.getElementById('conf-nf-data-receb').value = raw.dataRecebimento || '';
-  document.getElementById('conf-nf-data-venc').value = raw.dataVencimento || '';
-  document.getElementById('conf-obs').value = raw.obsConferente || '';
+  document.getElementById('conf-nf-numero').value = srcNumeroNf;
+  document.getElementById('conf-nf-data-emissao').value = srcDataEmi;
+  document.getElementById('conf-nf-data-receb').value = srcDataReceb;
+  document.getElementById('conf-nf-data-venc').value = srcDataVenc;
+  document.getElementById('conf-obs').value = srcObsConferente;
 
   // Fornecedor select
   var selForn = document.getElementById('conf-nf-fornecedor');
@@ -3074,11 +3098,11 @@ async function abrirModalConferencia(orderId, fornIdx) {
   getFornecedores().forEach(function(f) {
     var o = document.createElement('option');
     o.value = f; o.textContent = f;
-    if (f === raw.fornecedor) o.selected = true;
+    if (f === srcFornNome) o.selected = true;
     selForn.appendChild(o);
   });
-  if (raw.fornecedor && selForn.value !== raw.fornecedor) {
-    var oExtra = document.createElement('option'); oExtra.value = raw.fornecedor; oExtra.textContent = raw.fornecedor; oExtra.selected = true;
+  if (srcFornNome && selForn.value !== srcFornNome) {
+    var oExtra = document.createElement('option'); oExtra.value = srcFornNome; oExtra.textContent = srcFornNome; oExtra.selected = true;
     selForn.insertBefore(oExtra, selForn.firstChild);
   }
 
@@ -3086,7 +3110,7 @@ async function abrirModalConferencia(orderId, fornIdx) {
   var selQuem = document.getElementById('conf-nf-quem');
   selQuem.innerHTML = '<option value="">Selecionar…</option>';
   RECEBEDORES.forEach(function(r) { var o = document.createElement('option'); o.value = r; o.textContent = r; selQuem.appendChild(o); });
-  selQuem.value = raw.recebidoPor || '';
+  selQuem.value = srcRecebedor;
 
   // Lista de itens (filtrada por fornecedor se for conferência por NF)
   var list = document.getElementById('conf-list');
