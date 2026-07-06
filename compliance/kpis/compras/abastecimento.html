@@ -2913,7 +2913,7 @@ function nfDrop(e) {
   if (e.dataTransfer && e.dataTransfer.files) nfAddArquivos(e.dataTransfer.files);
 }
 
-async function nfUploadAnexos(idDisplay, quem) {
+async function nfUploadAnexos(idDisplay, quem, numeroNf, fornNome) {
   if (!supa || !nfAnexosPendentes.length) return [];
   var safeId = (idDisplay || 'sem-id').replace(/[^a-zA-Z0-9_\-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'pedido';
   console.log('[anexo] bucket:conferencias safeId:', safeId, 'original:', idDisplay);
@@ -2934,7 +2934,8 @@ async function nfUploadAnexos(idDisplay, quem) {
       var pub = supa.storage.from('conferencias').getPublicUrl(path);
       var ins = await supa.from('conferencia_anexos').insert({
         id_display: idDisplay, arquivo_nome: file.name,
-        arquivo_url: pub.data.publicUrl, arquivo_tipo: file.type || null, enviado_por: quem || null
+        arquivo_url: pub.data.publicUrl, arquivo_tipo: file.type || null, enviado_por: quem || null,
+        numero_nf: numeroNf || null, fornecedor: fornNome || null
       });
       console.log('[anexo] ins.error:', JSON.stringify(ins.error));
       if (ins.error) throw new Error('db ' + (ins.error.code || '?') + ': ' + ins.error.message);
@@ -3152,7 +3153,12 @@ async function abrirModalConferencia(orderId, fornIdx) {
   wrapAnexos.style.display = 'none';
   listAnexos.innerHTML = '';
   if (supa) {
-    supa.from('conferencia_anexos').select('*').eq('id_display', orderId).order('created_at')
+    var qAnex = supa.from('conferencia_anexos').select('*').eq('id_display', orderId);
+    if (forn) {
+      if (forn.notaFiscal) qAnex = qAnex.eq('numero_nf', forn.notaFiscal);
+      else qAnex = qAnex.eq('fornecedor', forn.nome);
+    }
+    qAnex.order('created_at')
       .then(function(res) {
         if (!res.error && res.data && res.data.length) {
           listAnexos.innerHTML = res.data.map(function(a) {
@@ -3517,7 +3523,7 @@ async function confirmarBaixaNF() {
 
   var btnConf = document.querySelector('#modal-nf .modal-btn-confirm');
   if (btnConf) { btnConf.disabled = true; btnConf.textContent = 'Enviando anexos…'; }
-  var uploadResultados = await nfUploadAnexos(order.id, dadosNF.quem);
+  var uploadResultados = await nfUploadAnexos(order.id, dadosNF.quem, dadosNF.numero, forn && forn.nome);
   if (btnConf) { btnConf.disabled = false; btnConf.textContent = 'Confirmar Recebimento'; }
   var savedOrder=order, savedForn=forn, savedUpload=uploadResultados;
   alert('Baixa de NF registrada — '+nfOrderId+' · '+(forn?forn.nome:''));
