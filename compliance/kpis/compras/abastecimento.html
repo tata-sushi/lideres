@@ -731,6 +731,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         </div>
       </div>
       <div class="fg">
+        <label class="flbl">Departamento</label>
+        <select class="fctrl" id="pedido-depto"></select>
+      </div>
+      <div class="fg">
         <label class="flbl">Observações</label>
         <textarea class="fctrl" id="modal-obs" placeholder="Informações adicionais para o pedido…"></textarea>
       </div>
@@ -1078,6 +1082,7 @@ var supa = window.supabase ? window.supabase.createClient(SUPA_URL, SUPA_KEY) : 
 // Unidade e departamento do usuário logado — populados em carregarUsuario()
 var UNIDADE = '';
 var DEPARTAMENTO = '';
+var DEPTOS_DISPONIVEIS = [];
 
 async function gasGet(params) {
   if (!GAS_URL) return null;
@@ -1425,6 +1430,9 @@ async function carregarUsuario(session) {
         if (!UNIDADE)      UNIDADE      = String(col.unidade      || '').trim();
         DEPARTAMENTO = String(col.departamento || '').trim();
       }
+      DEPTOS_DISPONIVEIS = Array.from(new Set(
+        data.colaboradores.map(function(c){ return String(c.departamento || '').trim(); }).filter(Boolean)
+      )).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
     }
   } catch(e) { console.warn('Erro ao identificar usuário:', e.message); }
 }
@@ -1750,7 +1758,20 @@ function unlockBodyScroll() {
 }
 
 // ── MODAL NOVO PEDIDO ────────────────────────────────────────────────────────
-function abrirModalPedido() { closeDrawer(true); setTimeout(function(){ document.getElementById('modal-pedido').classList.add('active'); lockBodyScroll(); },220); }
+function abrirModalPedido() {
+  closeDrawer(true);
+  setTimeout(function(){
+    var sel = document.getElementById('pedido-depto');
+    if (sel) {
+      var deptos = DEPTOS_DISPONIVEIS.length ? DEPTOS_DISPONIVEIS : (DEPARTAMENTO ? [DEPARTAMENTO] : []);
+      sel.innerHTML = deptos.map(function(d){
+        return '<option value="'+d+'"'+(d===DEPARTAMENTO?' selected':'')+'>'+d+'</option>';
+      }).join('') || '<option value="">—</option>';
+    }
+    document.getElementById('modal-pedido').classList.add('active');
+    lockBodyScroll();
+  }, 220);
+}
 function fecharModalPedido() { document.getElementById('modal-pedido').classList.remove('active'); unlockBodyScroll(); }
 
 // ── MODAL VISUALIZAR ──────────────────────────────────────────────────────────
@@ -2040,13 +2061,14 @@ async function enviarPedido() {
   var dataStr=now.toLocaleDateString('pt-BR');
   var dataISO=now.toISOString().split('T')[0];
   var obsVal=document.getElementById('modal-obs').value.trim();
+  var deptoSel = (document.getElementById('pedido-depto')||{}).value || DEPARTAMENTO;
   var newIdDisplay = await gerarIdDisplay(UNIDADE);
   var cats=activeCats.map(function(k){return CATALOGO[k].label.split(' ')[0];});
-  var newOrder={id:newIdDisplay,idDisplay:newIdDisplay,status:'b-enviado',label:'Aguardando compra',cats:cats,data:dataStr,entrega:'—',obs:obsVal,aba:'processamento',itensList:itensList,raw:{unidade:UNIDADE,departamento:DEPARTAMENTO,dataSolicitacao:dataISO,status:'solicitado',obsSolicitante:obsVal}};
+  var newOrder={id:newIdDisplay,idDisplay:newIdDisplay,status:'b-enviado',label:'Aguardando compra',cats:cats,data:dataStr,entrega:'—',obs:obsVal,aba:'processamento',itensList:itensList,raw:{unidade:UNIDADE,departamento:deptoSel,dataSolicitacao:dataISO,status:'solicitado',obsSolicitante:obsVal}};
 
   if (supa) {
     try {
-      var commonFields={id_display:newIdDisplay,unidade:UNIDADE||null,departamento:DEPARTAMENTO||null,solicitante:(currentUser&&currentUser.name)||'Líder',data_solicitacao:dataISO,status:'solicitado',obs_solicitante:obsVal||null};
+      var commonFields={id_display:newIdDisplay,unidade:UNIDADE||null,departamento:deptoSel||null,solicitante:(currentUser&&currentUser.name)||'Líder',data_solicitacao:dataISO,status:'solicitado',obs_solicitante:obsVal||null};
       var insertRows=rowsToInsert.map(function(r){return Object.assign({},r,commonFields);});
       var res=await supa.from('abastecimento').insert(insertRows).select('id, produto_nome');
       if(res.error) throw new Error(res.error.message);
