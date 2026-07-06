@@ -1330,7 +1330,8 @@ function rowsParaUI(idDisplay, rows) {
       fornecedor:   row.fornecedor || '',
       qtdComprada:  Number(row.qtd_comprada) || 0,
       qtdRecebida:  Number(row.qtd_recebida) || 0,
-      _supaId:      row.id
+      _supaId:      row.id,
+      isBonus:      String(row.categoria || '').toLowerCase() === 'bonificacao'
     };
   });
 
@@ -2970,10 +2971,13 @@ async function abrirModalConferencia(orderId) {
     var qtdComp = raw_item.qtdComprada != null ? raw_item.qtdComprada : item.qtdComprada;
     var qtdSol = raw_item.qtdSolicitada != null ? raw_item.qtdSolicitada : (item.qty || 0);
     var vlUnit = item.vlPedido || 0;
+    var isBonus = item.isBonus || raw_item.isBonus || String(item.cat || '').toLowerCase() === 'bonificacao';
     var tr = document.createElement('tr');
+    if (isBonus) tr.className = 'bonus-row';
     var total = (Number(qtdRec) || 0) * vlUnit;
+    var bonusTag = isBonus ? ' <span style="font-family:\'DM Mono\',monospace;font-size:8px;background:#CFFF00;color:#35383F;padding:1px 5px;border-radius:8px;letter-spacing:.5px;text-transform:uppercase;">Bonif.</span>' : '';
     tr.innerHTML =
-      '<td>' + item.nome + '<br><span style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--muted);">' + (item.un || '') + '</span></td>' +
+      '<td>' + item.nome + bonusTag + '<br><span style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--muted);">' + (item.un || '') + '</span></td>' +
       '<td class="td-ped" data-label="Pedido">' + qtdSol + '</td>' +
       '<td class="td-ped" data-label="Comprado">' + qtdComp + '</td>' +
       '<td data-label="Recebido" style="text-align:right;">' +
@@ -3276,8 +3280,25 @@ async function confirmarBaixaNF() {
             status:                 newStatus
           };
         });
-        var bonRes = await supa.from('abastecimento').insert(bonRows);
+        var bonRes = await supa.from('abastecimento').insert(bonRows).select('id, produto_nome');
         if (bonRes.error) throw new Error('bonificação: ' + bonRes.error.message);
+        // Atualiza estado local para aparecer no modal de conferência sem refresh
+        itensBonus.forEach(function(bon) {
+          var inserted = bonRes.data && bonRes.data.find(function(r){ return r.produto_nome === bon.nome; });
+          var supaId = inserted ? inserted.id : null;
+          order.itensList.push({
+            cat: 'bonificacao', nome: bon.nome, un: bon.un, qty: 0,
+            vlPedido: 0, vlCompra: 0, fornecedor: (forn && forn.nome) || '',
+            qtdComprada: 0, qtdRecebida: bon.qty, _supaId: supaId, isBonus: true
+          });
+          if (order.raw && order.raw.itens) {
+            order.raw.itens.push({
+              produtoNome: bon.nome, categoriaKey: 'bonificacao', unidade: bon.un,
+              qtdSolicitada: 0, qtdComprada: 0, qtdRecebida: bon.qty,
+              fornecedor: (forn && forn.nome) || '', _supaId: supaId, isBonus: true
+            });
+          }
+        });
       }
       if (order.raw) { order.raw.status = newStatus; order.raw.dataRecebimento = dRec; }
     } catch(e) {
