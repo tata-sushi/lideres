@@ -3185,13 +3185,17 @@ async function confirmarBaixaNF() {
     });
   }
   // Bonificações
+  var itensBonus = [];
   for(var b=0;b<nfBonusCount;b++){
     var bonRowId='bon-'+b;
     var inpNome=document.getElementById(bonRowId+'-nome');
     if(!inpNome||!inpNome.value.trim()) continue;
     var inpUn=document.getElementById(bonRowId+'-un');
     var inpRecB=document.getElementById(bonRowId+'-rec-inp');
-    itensPdf.push({nome:inpNome.value.trim()+' (bonificação)',un:(inpUn&&inpUn.value)||'',qtdPedido:0,vlPedido:0,rec:parseFloat(inpRecB&&inpRecB.value)||0,vlRec:0});
+    var bonNome=inpNome.value.trim();
+    var bonQty=parseFloat((inpRecB&&inpRecB.value)||0)||0;
+    itensPdf.push({nome:bonNome+' (bonificação)',un:(inpUn&&inpUn.value)||'',qtdPedido:0,vlPedido:0,rec:bonQty,vlRec:0});
+    itensBonus.push({nome:bonNome, un:(inpUn&&inpUn.value)||'', qty:bonQty});
   }
   // Anexos (nomes para o PDF)
   var anexos = nfAnexosPendentes.map(function(f){ return f.name; });
@@ -3252,6 +3256,33 @@ async function confirmarBaixaNF() {
       var results = await Promise.all(itemUpdates);
       var erros = results.filter(function(r) { return r.error; });
       if (erros.length) throw new Error(erros[0].error.message);
+      // INSERT itens bonificados
+      if (itensBonus.length) {
+        var bonRows = itensBonus.map(function(bon) {
+          return {
+            id_display:             order.id,
+            unidade:                (order.raw && order.raw.unidade) || null,
+            departamento:           (order.raw && order.raw.departamento) || null,
+            solicitante:            (order.raw && order.raw.solicitante) || null,
+            categoria:              'bonificacao',
+            produto_nome:           bon.nome,
+            unidade_medida:         bon.un || null,
+            fornecedor:             (forn && forn.nome) || null,
+            qtd_solicitada:         0,
+            qtd_recebida:           bon.qty,
+            valor_recebimento:      0,
+            numero_nf:              dadosNF.numero || null,
+            data_emissao_nf:        dEm || null,
+            data_recebimento:       dRec || null,
+            data_vencimento_boleto: dVenc || null,
+            recebedor:              dadosNF.quem || null,
+            obs_recebimento:        dadosNF.obs || null,
+            status:                 newStatus
+          };
+        });
+        var bonRes = await supa.from('abastecimento').insert(bonRows);
+        if (bonRes.error) throw new Error('bonificação: ' + bonRes.error.message);
+      }
       if (order.raw) { order.raw.status = newStatus; order.raw.dataRecebimento = dRec; }
     } catch(e) {
       toast('Erro ao registrar recebimento: ' + e.message);
