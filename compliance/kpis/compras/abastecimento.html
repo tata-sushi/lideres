@@ -1432,26 +1432,31 @@ function rowsParaUI(idDisplay, rows) {
     if (first) catsSet[first] = 1;
   });
 
-  // Agrupa por fornecedor (aba Entregas)
+  // Agrupa por fornecedor + NF (aba Entregas/Conferência)
   var fornecedores = null;
   if (status === 'comprado' || status === 'parcial' || status === 'recebido' || status === 'parcial_entrega' || status === 'conferido') {
-    var grupos = {};
+    var grupos = {}, ordemGrupos = [];
     rows.forEach(function(row) {
       var f = String(row.fornecedor || '').trim() || '—';
-      if (!grupos[f]) grupos[f] = [];
-      grupos[f].push(row);
+      var nf = String(row.numero_nf || '').trim();
+      var key = f + '||' + nf;
+      if (!grupos[key]) { grupos[key] = { forn: f, nf: nf, rows: [] }; ordemGrupos.push(key); }
+      grupos[key].rows.push(row);
     });
-    if (Object.keys(grupos).length > 0) {
-      fornecedores = Object.keys(grupos).map(function(forn) {
-        var its = grupos[forn];
+    if (ordemGrupos.length > 0) {
+      fornecedores = ordemGrupos.map(function(key) {
+        var g = grupos[key];
+        var its = g.rows;
         var todosRecebidos = its.every(function(row) {
           var c = Number(row.qtd_comprada) || 0;
           return c === 0 || Number(row.qtd_recebida) >= c;
         });
+        var todosConferidos = its.every(function(row) { return row.status === 'conferido'; });
         return {
-          nome:      forn,
-          status:    todosRecebidos ? 'b-concluido' : 'b-aguardando',
-          label:     todosRecebidos ? 'Recebido' : 'Aguardando recebimento',
+          nome:      g.forn,
+          notaFiscal: g.nf || '',
+          status:    todosConferidos ? 'b-conferido' : (todosRecebidos ? 'b-concluido' : 'b-aguardando'),
+          label:     todosConferidos ? 'Conferido' : (todosRecebidos ? 'Recebido' : 'Aguardando recebimento'),
           dataPrev:  its.map(function(r){return r.data_entrega||'';}).filter(Boolean).sort().pop() || '',
           dataReceb: its[0].data_recebimento || '',
           itens: its.map(function(row) {
@@ -2522,10 +2527,12 @@ function confTableRowHTML(o, forn, fi) {
   var depto      = raw.departamento || '';
   var unidDepto  = unidade + (depto ? ' - '+depto : '');
   var fornNome   = (forn && forn.nome) || raw.fornecedor || '—';
+  var nfNum      = (forn && forn.notaFiscal) || raw.notaFiscal || '';
   var itensCount = forn ? forn.itens.length : o.itensList.length;
   var arg = forn ? ("'"+o.id+"',"+fi) : ("'"+o.id+"'");
+  var pedidoTxt = 'Pedido '+(o.idDisplay||('#'+o.id))+(nfNum?' — NF '+nfNum:'');
   return '<tr>'+
-    '<td><div class="dt-num">Pedido '+(o.idDisplay||('#'+o.id))+'</div></td>'+
+    '<td><div class="dt-num">'+pedidoTxt+'</div></td>'+
     '<td class="dt-unit">'+unidDepto+'</td>'+
     '<td class="dt-forn">'+fornNome+'</td>'+
     '<td class="dt-date">'+(o.data||'—')+'</td>'+
@@ -2987,11 +2994,12 @@ function renderConferencia() {
       var raw = o.raw || {};
       var dataReceb = fmtDataBR(raw.dataRecebimento);
       var recebidoPor = raw.recebidoPor || '—';
-      var titulo = 'Pedido ' + (o.idDisplay || ('#' + o.id));
       forEachForn(o, function(forn, fi) {
         var fornNome = (forn && forn.nome) || raw.fornecedor || '—';
+        var nfNum = (forn && forn.notaFiscal) || raw.notaFiscal || '';
         var itensCount = forn ? forn.itens.length : o.itensList.length;
         var arg = forn ? ("'"+o.id+"',"+fi) : ("'"+o.id+"'");
+        var titulo = 'Pedido ' + (o.idDisplay || ('#' + o.id)) + (nfNum ? ' — NF ' + nfNum : '');
         html += '<div class="card">' +
           '<div class="card-header"><div><div class="order-title">' + titulo + '</div></div>' +
           '<span class="badge b-concluido">Recebido</span></div>' +
@@ -3046,7 +3054,7 @@ async function abrirModalConferencia(orderId, fornIdx) {
   var raw = order.raw || {};
   if (!RECEBEDORES.length) await carregarRecebedores();
 
-  document.getElementById('conf-id').textContent = (order.idDisplay || ('#' + orderId)) + (forn ? ' · ' + forn.nome : '');
+  document.getElementById('conf-id').textContent = (order.idDisplay || ('#' + orderId)) + (forn ? ' · ' + forn.nome + (forn.notaFiscal ? ' · NF ' + forn.notaFiscal : '') : '');
 
   // Referência do estoquista (somente leitura)
   document.getElementById('conf-orig-quem').textContent = raw.recebidoPor || '—';
@@ -3212,7 +3220,7 @@ async function salvarConferencia() {
         recebedor:              dados.recebidoPor || null,
         obs_conferente:         dados.obsEstoque || null
       }).eq('id_display', confOrderId);
-      if (forn) q = q.eq('fornecedor', forn.nome);
+      if (forn) { q = q.eq('fornecedor', forn.nome); if (forn.notaFiscal) q = q.eq('numero_nf', forn.notaFiscal); }
       var commonUpd = await q;
       if (commonUpd.error) throw new Error(commonUpd.error.message);
       var itemUpdates = dados.itens.map(function(it) {
@@ -3270,7 +3278,7 @@ async function confirmarConferencia() {
         check_conferente:       true,
         status:                 'conferido'
       }).eq('id_display', confOrderId);
-      if (forn) q = q.eq('fornecedor', forn.nome);
+      if (forn) { q = q.eq('fornecedor', forn.nome); if (forn.notaFiscal) q = q.eq('numero_nf', forn.notaFiscal); }
       var commonUpd = await q;
       if (commonUpd.error) throw new Error(commonUpd.error.message);
       var itemUpdates = dados.itens.map(function(it) {
