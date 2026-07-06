@@ -185,6 +185,7 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 .proc-table { width: 100%; border-collapse: collapse; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .proc-table th { font-family: 'DM Mono', monospace; font-size: 8.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); padding: 8px 10px; background: var(--bg); border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
 .proc-table th.th-r { text-align: right; }
+.proc-table th.th-c { text-align: center; }
 .proc-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--carbon); vertical-align: middle; }
 .proc-table tr:last-child td { border-bottom: none; }
 .proc-table td.td-sol { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); text-align: right; white-space: nowrap; }
@@ -790,7 +791,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="modal-handle"></div>
     <div class="modal-header">
       <div>
-        <div class="modal-eyebrow" id="view-id">P-000</div>
         <div class="modal-title" id="view-title">Pedido</div>
       </div>
       <button class="modal-close" onclick="fecharModalView()">
@@ -821,11 +821,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <table class="proc-table" id="proc-table">
             <thead><tr>
               <th>Produto</th>
-              <th class="th-r">Solicitado</th>
-              <th class="th-r">Confirmado</th>
-              <th class="th-r">Vl. unit (R$)</th>
-              <th>Fornecedor</th>
-              <th>Entrega</th>
+              <th class="th-c">Solicitado</th>
+              <th class="th-c">Confirmado</th>
+              <th class="th-c">Vl. unit (R$)</th>
+              <th class="th-c">Fornecedor</th>
+              <th class="th-c">Entrega</th>
             </tr></thead>
             <tbody id="proc-tbody"></tbody>
           </table>
@@ -856,7 +856,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="modal-handle"></div>
     <div class="modal-header">
       <div>
-        <div class="modal-title">Validar Recebimento</div>
+        <div class="modal-title" id="nf-title">Validar Recebimento</div>
       </div>
       <button class="modal-close" onclick="fecharModalNF()">
 ✕</button>
@@ -1831,8 +1831,7 @@ function fecharModalPedido() { document.getElementById('modal-pedido').classList
 // ── MODAL VISUALIZAR ──────────────────────────────────────────────────────────
 async function abrirModalView(id) {
   var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===id){order=ORDERS[i];break;}} if(!order)return;
-  document.getElementById('view-id').textContent=order.id;
-  document.getElementById('view-title').textContent=order.cats.join(', ');
+  document.getElementById('view-title').textContent='Pedido '+(order.idDisplay||('#'+order.id));
   var grupos={},grupoCats=[];
   order.itensList.forEach(function(item){if(!grupos[item.cat]){grupos[item.cat]=[];grupoCats.push(item.cat);}grupos[item.cat].push(item);});
   var html='';
@@ -2374,6 +2373,7 @@ function renderAba(aba) {
 }
 
 var PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+var EYE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 
 var deskSort = { col: null, asc: true };
 
@@ -2400,7 +2400,6 @@ function sortDeskLista(lista) {
       case 'dataReceb':  va = (a.raw&&a.raw.dataRecebimento)||'';vb = (b.raw&&b.raw.dataRecebimento)||''; break;
       case 'itens':      va = a.itensList.length;         vb = b.itensList.length;         break;
       case 'status':        va = a.status||'';  vb = b.status||''; break;
-      case 'atualizadoPor': va = (a.raw&&(a.raw.recebidoPor||a.raw.comprador||a.raw.solicitante))||''; vb = (b.raw&&(b.raw.recebidoPor||b.raw.comprador||b.raw.solicitante))||''; break;
       default: return 0;
     }
     if (typeof va === 'number') return asc ? va - vb : vb - va;
@@ -2418,7 +2417,6 @@ var DESK_COLS = [
   { key:'dataReceb',  label:'Dt Recebimento',   w:'96px'  },
   { key:'itens',      label:'Itens',            w:'48px'  },
   { key:'status',     label:'Status',           w:'110px' },
-  { key:'atualizadoPor', label:'Atualizado por',w:'110px' },
   { key:null,         label:'',                 w:'44px'  }
 ];
 
@@ -2438,6 +2436,7 @@ function tableRowHTML(o, aba) {
   var podeReceber   = (o.status==='b-aguardando');
   var modoAcao = (aba==='processamento'&&podeProcessar)?'proc':(aba==='entregas'&&podeReceber)?'nf':'view';
   var fnBtn = modoAcao==='proc'?'abrirModalProc':modoAcao==='nf'?'abrirModalNF':'abrirModalView';
+  var icone = (modoAcao==='view' || aba==='pedidos') ? EYE_SVG : PENCIL_SVG;
   var dataCompra = fmtDataBR((o.raw&&o.raw.dataCompraProc)||'');
   var dataPrev   = fmtDataBR(o.raw&&o.raw.dataEntregaPrevista);
   var dataReceb  = fmtDataBR(o.raw&&o.raw.dataRecebimento);
@@ -2446,7 +2445,6 @@ function tableRowHTML(o, aba) {
   var unidDepto  = unidade + (depto ? ' - '+depto : '');
   var fornNome   = (o.fornecedores&&o.fornecedores.length?o.fornecedores.map(function(f){return f.nome;}).join(', '):(o.raw&&o.raw.fornecedor))||'—';
   var solicitante= abreviarNome((o.raw&&o.raw.solicitante)||'');
-  var atualizadoPor = abreviarNome((o.raw&&o.raw.recebidoPor)||(o.raw&&o.raw.comprador)||(o.raw&&o.raw.solicitante)||'');
   return '<tr>'+
     '<td><div class="dt-num">Pedido '+(o.idDisplay||('#'+id))+'</div>'+(solicitante?'<div class="dt-sub">'+solicitante+'</div>':'')+' </td>'+
     '<td class="dt-unit">'+unidDepto+'</td>'+
@@ -2457,8 +2455,7 @@ function tableRowHTML(o, aba) {
     '<td class="dt-date">'+(dataReceb||'—')+'</td>'+
     '<td class="dt-qty">'+o.itensList.length+'</td>'+
     '<td><span class="badge '+o.status+'">'+o.label+'</span></td>'+
-    '<td class="dt-sub" style="font-size:11px;color:var(--muted);">'+atualizadoPor+'</td>'+
-    '<td><button class="btn-dt-edit" onclick="'+fnBtn+'(\''+id+'\')">'+PENCIL_SVG+'</button></td>'+
+    '<td><button class="btn-dt-edit" onclick="'+fnBtn+'(\''+id+'\')">'+icone+'</button></td>'+
   '</tr>';
 }
 
@@ -2466,6 +2463,7 @@ function fornTableRowHTML(order, forn, fi) {
   var isRecebido = forn.status==='b-concluido';
   var btnFn   = isRecebido?'abrirModalView':'abrirModalNF';
   var btnArgs = isRecebido?"'"+order.id+"'":"'"+order.id+"',"+fi;
+  var icone   = isRecebido ? EYE_SVG : PENCIL_SVG;
   var dataCompra = fmtDataBR((order.raw&&order.raw.dataCompraProc)||'');
   var dataPrev   = fmtDataBR(forn.dataPrev||(order.raw&&order.raw.dataEntregaPrevista));
   var dataReceb  = forn.dataReceb?fmtDataBR(forn.dataReceb):(isRecebido?fmtDataBR(order.raw&&order.raw.dataRecebimento):'—');
@@ -2473,7 +2471,6 @@ function fornTableRowHTML(order, forn, fi) {
   var depto      = (order.raw&&order.raw.departamento)||'';
   var unidDepto  = unidade + (depto ? ' - '+depto : '');
   var solicitante= abreviarNome((order.raw&&order.raw.solicitante)||'');
-  var atualizadoPor = abreviarNome((order.raw&&order.raw.recebidoPor)||(order.raw&&order.raw.comprador)||(order.raw&&order.raw.solicitante)||'');
   return '<tr>'+
     '<td><div class="dt-num">Pedido '+(order.idDisplay||('#'+order.id))+'</div>'+(solicitante?'<div class="dt-sub">'+solicitante+'</div>':'')+' </td>'+
     '<td class="dt-unit">'+unidDepto+'</td>'+
@@ -2484,18 +2481,19 @@ function fornTableRowHTML(order, forn, fi) {
     '<td class="dt-date">'+dataReceb+'</td>'+
     '<td class="dt-qty">'+forn.itens.length+'</td>'+
     '<td><span class="badge '+forn.status+'">'+forn.label+'</span></td>'+
-    '<td class="dt-sub" style="font-size:11px;color:var(--muted);">'+atualizadoPor+'</td>'+
-    '<td><button class="btn-dt-edit" onclick="'+btnFn+'('+btnArgs+')">'+PENCIL_SVG+'</button></td>'+
+    '<td><button class="btn-dt-edit" onclick="'+btnFn+'('+btnArgs+')">'+icone+'</button></td>'+
   '</tr>';
 }
 
-function confTableRowHTML(o) {
+function confTableRowHTML(o, forn, fi) {
   var raw = o.raw || {};
   var dataReceb  = fmtDataBR(raw.dataRecebimento);
   var unidade    = raw.unidade || '—';
   var depto      = raw.departamento || '';
   var unidDepto  = unidade + (depto ? ' - '+depto : '');
-  var fornNome   = raw.fornecedor || '—';
+  var fornNome   = (forn && forn.nome) || raw.fornecedor || '—';
+  var itensCount = forn ? forn.itens.length : o.itensList.length;
+  var arg = forn ? ("'"+o.id+"',"+fi) : ("'"+o.id+"'");
   return '<tr>'+
     '<td><div class="dt-num">Pedido '+(o.idDisplay||('#'+o.id))+'</div></td>'+
     '<td class="dt-unit">'+unidDepto+'</td>'+
@@ -2504,9 +2502,9 @@ function confTableRowHTML(o) {
     '<td class="dt-date">—</td>'+
     '<td class="dt-date">—</td>'+
     '<td class="dt-date">'+dataReceb+'</td>'+
-    '<td class="dt-qty">'+o.itensList.length+'</td>'+
+    '<td class="dt-qty">'+itensCount+'</td>'+
     '<td><span class="badge '+o.status+'">'+o.label+'</span></td>'+
-    '<td><button class="btn-dt-edit" onclick="abrirModalConferencia(\''+o.id+'\')">'+PENCIL_SVG+'</button></td>'+
+    '<td><button class="btn-dt-edit" onclick="abrirModalConferencia('+arg+')">'+PENCIL_SVG+'</button></td>'+
   '</tr>';
 }
 
@@ -2612,6 +2610,7 @@ async function abrirModalNF(orderId, fornIdx) {
   document.getElementById('nf-obs').value='';
   document.getElementById('nf-fornecedor-ro').textContent=forn.nome;
   document.getElementById('nf-pedido-ro').textContent=orderId+' · '+order.cats.join(', ');
+  document.getElementById('nf-title').textContent='Validar Recebimento — Pedido '+(order.idDisplay||('#'+orderId));
 
   nfAnexosPendentes = [];
   nfRenderAnexos();
@@ -2914,6 +2913,8 @@ function fecharModalNF() {
 // ── CONFERÊNCIA (Estágio 4 — Escritório) ─────────────────────────────────────
 
 var confOrderId = null;
+var confFornIdx = null;
+var confItensView = [];
 
 function renderConferencia() {
   var container = document.getElementById('page-conferencia');
@@ -2938,59 +2939,84 @@ function renderConferencia() {
   });
   unidadeOrder.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
 
+  function forEachForn(o, cb) {
+    if (o.fornecedores && o.fornecedores.length) {
+      o.fornecedores.forEach(function(f, fi) {
+        if (f.status !== 'b-conferido') cb(f, fi);
+      });
+    } else {
+      cb(null, null);
+    }
+  }
   // ── Mobile cards ─────────────────────────────────────────────────────────
   var html = '<div class="mobile-cards">';
   unidadeOrder.forEach(function(u) {
     html += '<div class="col-unidade">';
     if (u && u !== '—') html += '<div class="col-unidade-lbl">' + u + '</div>';
     groups[u].forEach(function(o) {
-    var raw = o.raw || {};
-    var fornNome = raw.fornecedor || '—';
-    var dataReceb = fmtDataBR(raw.dataRecebimento);
-    var recebidoPor = raw.recebidoPor || '—';
-    var titulo = 'Pedido ' + (o.idDisplay || ('#' + o.id));
-    html += '<div class="card">' +
-      '<div class="card-header"><div><div class="order-title">' + titulo + '</div></div>' +
-      '<span class="badge b-concluido">Recebido</span></div>' +
-      '<div class="card-body">' +
-        '<div class="card-col">' +
-          '<div class="card-field"><span class="field-label">Data do pedido</span><span class="field-value">' + o.data + '</span></div>' +
-          '<div class="card-field"><span class="field-label">Recebido em</span><span class="field-value">' + dataReceb + '</span></div>' +
-          '<div class="card-field"><span class="field-label">Recebido por</span><span class="field-value">' + recebidoPor + '</span></div>' +
-        '</div>' +
-        '<div class="card-col">' +
-          '<div class="card-field"><span class="field-label">Fornecedor</span><span class="field-value">' + fornNome + '</span></div>' +
-          '<div class="card-field"><span class="field-label">Categorias</span><span class="field-value">' + (o.cats.join(', ') || '—') + '</span></div>' +
-          '<div class="card-field"><span class="field-label">Itens</span><span class="field-value">' + o.itensList.length + ' produtos</span></div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="card-footer" style="justify-content:flex-end;">' +
-        '<button class="btn-ver" onclick="abrirModalConferencia(\'' + o.id + '\')">' +
-          '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
-          ' Conferir' +
-        '</button>' +
-      '</div>' +
-    '</div>';
-    }); // fim groups[u].forEach
+      var raw = o.raw || {};
+      var dataReceb = fmtDataBR(raw.dataRecebimento);
+      var recebidoPor = raw.recebidoPor || '—';
+      var titulo = 'Pedido ' + (o.idDisplay || ('#' + o.id));
+      forEachForn(o, function(forn, fi) {
+        var fornNome = (forn && forn.nome) || raw.fornecedor || '—';
+        var itensCount = forn ? forn.itens.length : o.itensList.length;
+        var arg = forn ? ("'"+o.id+"',"+fi) : ("'"+o.id+"'");
+        html += '<div class="card">' +
+          '<div class="card-header"><div><div class="order-title">' + titulo + '</div></div>' +
+          '<span class="badge b-concluido">Recebido</span></div>' +
+          '<div class="card-body">' +
+            '<div class="card-col">' +
+              '<div class="card-field"><span class="field-label">Data do pedido</span><span class="field-value">' + o.data + '</span></div>' +
+              '<div class="card-field"><span class="field-label">Recebido em</span><span class="field-value">' + dataReceb + '</span></div>' +
+              '<div class="card-field"><span class="field-label">Recebido por</span><span class="field-value">' + recebidoPor + '</span></div>' +
+            '</div>' +
+            '<div class="card-col">' +
+              '<div class="card-field"><span class="field-label">Fornecedor</span><span class="field-value">' + fornNome + '</span></div>' +
+              '<div class="card-field"><span class="field-label">Categorias</span><span class="field-value">' + (o.cats.join(', ') || '—') + '</span></div>' +
+              '<div class="card-field"><span class="field-label">Itens</span><span class="field-value">' + itensCount + ' produtos</span></div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="card-footer" style="justify-content:flex-end;">' +
+            '<button class="btn-ver" onclick="abrirModalConferencia(' + arg + ')">' +
+              '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
+              ' Conferir' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+      });
+    });
     html += '</div>'; // fim col-unidade
-  }); // fim unidadeOrder.forEach
+  });
   html += '</div>'; // fim mobile-cards
   // ── Desktop table ─────────────────────────────────────────────────────────
   var tableRows = '';
-  sortDeskLista(lista).forEach(function(o) { tableRows += confTableRowHTML(o); });
+  sortDeskLista(lista).forEach(function(o) {
+    forEachForn(o, function(forn, fi) { tableRows += confTableRowHTML(o, forn, fi); });
+  });
   html += '<div class="desk-table-wrap"><table class="desk-table">'+buildDeskHead()+'<tbody>'+tableRows+'</tbody></table></div>';
   container.innerHTML = html;
 }
 
-async function abrirModalConferencia(orderId) {
+async function abrirModalConferencia(orderId, fornIdx) {
   var order = null;
   for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === orderId) { order = ORDERS[i]; break; } }
   if (!order) return;
   confOrderId = orderId;
+  confFornIdx = (typeof fornIdx === 'number') ? fornIdx : null;
+  var forn = (confFornIdx != null && order.fornecedores) ? order.fornecedores[confFornIdx] : null;
+  // Determina lista de itens a exibir/salvar (subset por fornecedor, se aplicável)
+  if (forn) {
+    var fornItemIds = {};
+    forn.itens.forEach(function(it){ if (it._supaId) fornItemIds[it._supaId] = 1; });
+    confItensView = order.itensList.filter(function(it){ return it._supaId ? fornItemIds[it._supaId] : (it.fornecedor === forn.nome); });
+  } else {
+    confItensView = order.itensList.slice();
+  }
   var raw = order.raw || {};
   if (!RECEBEDORES.length) await carregarRecebedores();
 
-  document.getElementById('conf-id').textContent = order.idDisplay || ('#' + orderId);
+  document.getElementById('conf-id').textContent = (order.idDisplay || ('#' + orderId)) + (forn ? ' · ' + forn.nome : '');
 
   // Referência do estoquista (somente leitura)
   document.getElementById('conf-orig-quem').textContent = raw.recebidoPor || '—';
@@ -3024,11 +3050,12 @@ async function abrirModalConferencia(orderId) {
   RECEBEDORES.forEach(function(r) { var o = document.createElement('option'); o.value = r; o.textContent = r; selQuem.appendChild(o); });
   selQuem.value = raw.recebidoPor || '';
 
-  // Lista de itens
+  // Lista de itens (filtrada por fornecedor se for conferência por NF)
   var list = document.getElementById('conf-list');
   list.innerHTML = '';
-  order.itensList.forEach(function(item, idx) {
-    var raw_item = (order.raw && order.raw.itens && order.raw.itens[idx]) || {};
+  confItensView.forEach(function(item, idx) {
+    var origIdx = order.itensList.indexOf(item);
+    var raw_item = (order.raw && order.raw.itens && order.raw.itens[origIdx]) || {};
     var qtdRec = raw_item.qtdRecebida != null ? raw_item.qtdRecebida : item.qtdRecebida;
     var qtdComp = raw_item.qtdComprada != null ? raw_item.qtdComprada : item.qtdComprada;
     var qtdSol = raw_item.qtdSolicitada != null ? raw_item.qtdSolicitada : (item.qty || 0);
@@ -3091,7 +3118,7 @@ function confRecalcTotal() {
   for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
   if (!order) return;
   var grandTotal = 0;
-  order.itensList.forEach(function(item, idx) {
+  confItensView.forEach(function(item, idx) {
     var rec = parseFloat((document.getElementById('conf-rec-' + idx) || {}).value) || 0;
     var vl  = parseFloat((document.getElementById('conf-vl-' + idx)  || {}).value) || 0;
     var total = rec * vl;
@@ -3107,15 +3134,18 @@ function fecharModalConferencia() {
   document.getElementById('modal-conferencia').classList.remove('active');
   unlockBodyScroll();
   confOrderId = null;
+  confFornIdx = null;
+  confItensView = [];
 }
 
 function _coletarDadosConferencia() {
   var order = null;
   for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
   if (!order) return null;
-  var itens = order.itensList.map(function(item, idx) {
+  var itens = confItensView.map(function(item, idx) {
     return {
       produtoNome: item.nome,
+      _supaId:     item._supaId || null,
       qtdRecebida: parseFloat((document.getElementById('conf-rec-' + idx) || {}).value) || 0,
       vlUnitario:  parseFloat((document.getElementById('conf-vl-'  + idx) || {}).value) || 0
     };
@@ -3143,7 +3173,8 @@ async function salvarConferencia() {
   for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
   if (supa) {
     try {
-      var commonUpd = await supa.from('abastecimento').update({
+      var forn = (confFornIdx != null && order && order.fornecedores) ? order.fornecedores[confFornIdx] : null;
+      var q = supa.from('abastecimento').update({
         fornecedor:             dados.fornecedor || null,
         numero_nf:              dados.notaFiscal || null,
         data_recebimento:       dados.dataRecebimento || null,
@@ -3151,21 +3182,21 @@ async function salvarConferencia() {
         recebedor:              dados.recebidoPor || null,
         obs_conferente:         dados.obsEstoque || null
       }).eq('id_display', confOrderId);
+      if (forn) q = q.eq('fornecedor', forn.nome);
+      var commonUpd = await q;
       if (commonUpd.error) throw new Error(commonUpd.error.message);
-      var itemUpdates = dados.itens.map(function(it, idx) {
-        var rawItem = order && order.itensList && order.itensList[idx];
+      var itemUpdates = dados.itens.map(function(it) {
         var upd = { qtd_recebida: it.qtdRecebida, valor_recebimento: it.qtdRecebida * it.vlUnitario };
-        return rawItem && rawItem._supaId
-          ? supa.from('abastecimento').update(upd).eq('id', rawItem._supaId)
+        return it._supaId
+          ? supa.from('abastecimento').update(upd).eq('id', it._supaId)
           : supa.from('abastecimento').update(upd).eq('id_display', confOrderId).eq('produto_nome', it.produtoNome);
       });
       var results = await Promise.all(itemUpdates);
       var erros = results.filter(function(r) { return r.error; });
       if (erros.length) throw new Error(erros[0].error.message);
       if (order && order.raw) {
-        order.raw.fornecedor = dados.fornecedor; order.raw.notaFiscal = dados.notaFiscal;
-        order.raw.dataRecebimento = dados.dataRecebimento; order.raw.dataVencimento = dados.dataVencimento;
         order.raw.recebidoPor = dados.recebidoPor; order.raw.obsConferente = dados.obsEstoque;
+        if (!forn) { order.raw.fornecedor = dados.fornecedor; order.raw.notaFiscal = dados.notaFiscal; order.raw.dataRecebimento = dados.dataRecebimento; order.raw.dataVencimento = dados.dataVencimento; }
       }
       alert('Correção salva — ' + confOrderId);
     } catch(e) { toast('Erro ao salvar correção: ' + e.message); }
@@ -3197,7 +3228,8 @@ async function confirmarConferencia() {
   for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
   if (supa) {
     try {
-      var commonUpd = await supa.from('abastecimento').update({
+      var forn = (confFornIdx != null && order && order.fornecedores) ? order.fornecedores[confFornIdx] : null;
+      var q = supa.from('abastecimento').update({
         fornecedor:             dados.fornecedor || null,
         numero_nf:              dados.notaFiscal || null,
         data_recebimento:       dados.dataRecebimento || null,
@@ -3208,24 +3240,30 @@ async function confirmarConferencia() {
         check_conferente:       true,
         status:                 'conferido'
       }).eq('id_display', confOrderId);
+      if (forn) q = q.eq('fornecedor', forn.nome);
+      var commonUpd = await q;
       if (commonUpd.error) throw new Error(commonUpd.error.message);
-      var itemUpdates = dados.itens.map(function(it, idx) {
-        var rawItem = order && order.itensList && order.itensList[idx];
+      var itemUpdates = dados.itens.map(function(it) {
         var upd = { qtd_recebida: it.qtdRecebida, valor_recebimento: it.qtdRecebida * it.vlUnitario };
-        return rawItem && rawItem._supaId
-          ? supa.from('abastecimento').update(upd).eq('id', rawItem._supaId)
+        return it._supaId
+          ? supa.from('abastecimento').update(upd).eq('id', it._supaId)
           : supa.from('abastecimento').update(upd).eq('id_display', confOrderId).eq('produto_nome', it.produtoNome);
       });
       var results = await Promise.all(itemUpdates);
       var erros = results.filter(function(r) { return r.error; });
       if (erros.length) throw new Error(erros[0].error.message);
       if (order) {
-        order.status = 'b-conferido'; order.label = 'Conferido'; order.aba = 'conferencia';
+        if (forn) {
+          forn.status = 'b-conferido'; forn.label = 'Conferido';
+          var allDone = order.fornecedores.every(function(f){ return f.status === 'b-conferido'; });
+          if (allDone) { order.status = 'b-conferido'; order.label = 'Conferido'; }
+        } else {
+          order.status = 'b-conferido'; order.label = 'Conferido'; order.aba = 'conferencia';
+        }
         if (order.raw) {
-          order.raw.status = 'conferido'; order.raw.conferente = nome;
-          order.raw.fornecedor = dados.fornecedor; order.raw.notaFiscal = dados.notaFiscal;
-          order.raw.dataRecebimento = dados.dataRecebimento; order.raw.dataVencimento = dados.dataVencimento;
+          order.raw.conferente = nome;
           order.raw.recebidoPor = dados.recebidoPor; order.raw.obsConferente = dados.obsEstoque;
+          if (!forn) { order.raw.status = 'conferido'; order.raw.fornecedor = dados.fornecedor; order.raw.notaFiscal = dados.notaFiscal; order.raw.dataRecebimento = dados.dataRecebimento; order.raw.dataVencimento = dados.dataVencimento; }
         }
       }
       var savedOrder = order, savedDados = dados, savedChecks = _coletarChecksConferencia();
@@ -3248,7 +3286,7 @@ function _coletarChecksConferencia() {
   }
   var order = null;
   for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
-  var itens = order ? order.itensList.map(function(_, idx) { return chk('row-item-' + idx); }) : [];
+  var itens = confItensView.map(function(_, idx) { return chk('row-item-' + idx); });
   return {
     origQuem:     chk('row-orig-quem'),
     origDataReceb:chk('row-orig-data-receb'),
