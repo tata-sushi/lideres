@@ -1040,6 +1040,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <button class="modal-btn modal-btn-cancel" onclick="fecharModalConferencia()">Cancelar</button>
       <button class="modal-btn modal-btn-save"    onclick="salvarConferencia()">Salvar correção</button>
       <button class="modal-btn modal-btn-confirm" onclick="confirmarConferencia()">Confirmar conferência</button>
+      <button class="modal-btn modal-btn-confirm" id="btn-reimprimir-conf" style="display:none" onclick="reimprimirConferencia()">Reimprimir Relatório</button>
     </div>
   </div>
 </div>
@@ -3186,11 +3187,13 @@ async function abrirModalConferencia(orderId, fornIdx, readonly) {
     if (isReadonly) el.setAttribute('disabled', 'disabled'); else el.removeAttribute('disabled');
   });
   var btnSave = modal.querySelector('.modal-btn-save');
-  var btnConfirm = modal.querySelector('.modal-btn-confirm');
+  var btnConfirm = modal.querySelector('.modal-btn-confirm:not(#btn-reimprimir-conf)');
   var btnCancel = modal.querySelector('.modal-btn-cancel');
+  var btnReimp = document.getElementById('btn-reimprimir-conf');
   if (btnSave) btnSave.style.display = isReadonly ? 'none' : '';
   if (btnConfirm) btnConfirm.style.display = isReadonly ? 'none' : '';
   if (btnCancel) btnCancel.textContent = isReadonly ? 'Fechar' : 'Cancelar';
+  if (btnReimp) btnReimp.style.display = isReadonly ? '' : 'none';
   // Pré-marca todos os checks quando readonly (visualização do estado conferido)
   if (isReadonly) modal.querySelectorAll('.conf-check').forEach(function(cb) { cb.checked = true; cb.disabled = true; });
 
@@ -3221,6 +3224,18 @@ function fecharModalConferencia() {
   confOrderId = null;
   confFornIdx = null;
   confItensView = [];
+}
+
+function reimprimirConferencia() {
+  var order = null;
+  for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === confOrderId) { order = ORDERS[i]; break; } }
+  if (!order) { alert('Pedido não encontrado.'); return; }
+  var dados = _coletarDadosConferencia();
+  if (!dados) { alert('Erro ao coletar dados.'); return; }
+  // Como está readonly, todos os checks foram pré-marcados — reflete o estado conferido
+  var checks = _coletarChecksConferencia();
+  var conferenteNome = (order.raw && order.raw.conferente) || (currentUser && currentUser.name) || '—';
+  gerarPDFConferencia(order, dados, checks, conferenteNome);
 }
 
 function _coletarDadosConferencia() {
