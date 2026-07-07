@@ -2538,9 +2538,9 @@ function confTableRowHTML(o, forn, fi) {
   var fornNome   = (forn && forn.nome) || raw.fornecedor || '—';
   var nfNum      = (forn && forn.notaFiscal) || raw.notaFiscal || '';
   var itensCount = forn ? forn.itens.length : o.itensList.length;
-  var arg = forn ? ("'"+o.id+"',"+fi) : ("'"+o.id+"'");
-  var pedidoTxt = 'Pedido '+(o.idDisplay||('#'+o.id))+(nfNum?' — NF '+nfNum:'');
   var isConf = forn ? forn.status === 'b-conferido' : o.status === 'b-conferido';
+  var arg = forn ? ("'"+o.id+"',"+fi+","+(isConf?'true':'false')) : ("'"+o.id+"',null,"+(isConf?'true':'false'));
+  var pedidoTxt = 'Pedido '+(o.idDisplay||('#'+o.id))+(nfNum?' — NF '+nfNum:'');
   var icone  = isConf ? EYE_SVG : PENCIL_SVG;
   var badgeCls = isConf ? 'b-conferido' : (forn ? forn.status : o.status);
   var badgeLbl = isConf ? 'Conferido' : (forn ? forn.label : o.label);
@@ -3010,9 +3010,9 @@ function renderConferencia() {
         var fornNome = (forn && forn.nome) || raw.fornecedor || '—';
         var nfNum = (forn && forn.notaFiscal) || raw.notaFiscal || '';
         var itensCount = forn ? forn.itens.length : o.itensList.length;
-        var arg = forn ? ("'"+o.id+"',"+fi) : ("'"+o.id+"'");
-        var titulo = 'Pedido ' + (o.idDisplay || ('#' + o.id)) + (nfNum ? ' — NF ' + nfNum : '');
         var isConf = forn ? forn.status === 'b-conferido' : o.status === 'b-conferido';
+        var arg = forn ? ("'"+o.id+"',"+fi+","+(isConf?'true':'false')) : ("'"+o.id+"',null,"+(isConf?'true':'false'));
+        var titulo = 'Pedido ' + (o.idDisplay || ('#' + o.id)) + (nfNum ? ' — NF ' + nfNum : '');
         var badgeCls = isConf ? 'b-conferido' : 'b-concluido';
         var badgeLbl = isConf ? 'Conferido' : 'Recebido';
         html += '<div class="card">' +
@@ -3051,7 +3051,7 @@ function renderConferencia() {
   container.innerHTML = html;
 }
 
-async function abrirModalConferencia(orderId, fornIdx) {
+async function abrirModalConferencia(orderId, fornIdx, readonly) {
   var order = null;
   for (var i = 0; i < ORDERS.length; i++) { if (ORDERS[i].id === orderId) { order = ORDERS[i]; break; } }
   if (!order) return;
@@ -3176,6 +3176,21 @@ async function abrirModalConferencia(orderId, fornIdx) {
   // Reseta checks
   var modal = document.getElementById('modal-conferencia');
   modal.querySelectorAll('.conf-check').forEach(function(cb) { cb.checked = false; });
+
+  // Modo readonly (NF já conferida)
+  var isReadonly = readonly || (forn && forn.status === 'b-conferido') || (!forn && order.status === 'b-conferido');
+  var body = modal.querySelector('.modal-body');
+  body.querySelectorAll('input, select, textarea').forEach(function(el) {
+    if (isReadonly) el.setAttribute('disabled', 'disabled'); else el.removeAttribute('disabled');
+  });
+  var btnSave = modal.querySelector('.modal-btn-save');
+  var btnConfirm = modal.querySelector('.modal-btn-confirm');
+  var btnCancel = modal.querySelector('.modal-btn-cancel');
+  if (btnSave) btnSave.style.display = isReadonly ? 'none' : '';
+  if (btnConfirm) btnConfirm.style.display = isReadonly ? 'none' : '';
+  if (btnCancel) btnCancel.textContent = isReadonly ? 'Fechar' : 'Cancelar';
+  // Pré-marca todos os checks quando readonly (visualização do estado conferido)
+  if (isReadonly) modal.querySelectorAll('.conf-check').forEach(function(cb) { cb.checked = true; cb.disabled = true; });
 
   modal.classList.add('active');
   lockBodyScroll();
