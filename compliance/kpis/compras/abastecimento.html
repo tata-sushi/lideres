@@ -1681,17 +1681,31 @@ function renderKPIsPage() {
   var teStr = tempoEntrega!==null? tempoEntrega+'':'—';
 
   // ── Itens agregados ──────────────────────────────────────────────────────
+  // Ordena orders por data_solicitacao desc para pegar o "último" preço primeiro
+  var ordersSorted = orders.slice().sort(function(a,b){
+    var da = (a.raw && a.raw.dataSolicitacao) || '';
+    var db = (b.raw && b.raw.dataSolicitacao) || '';
+    return db.localeCompare(da);
+  });
   var byItem = {};
-  orders.forEach(function(o) {
+  ordersSorted.forEach(function(o) {
     (o.itensList || []).forEach(function(it) {
       var key = (it.nome || '').trim().toLowerCase();
       if (!key) return;
+      var vlUnit = Number(it.vlCompra) || Number(it.vlPedido) || 0;
+      var qtd = Number(it.qtdComprada) || Number(it.qty) || 0;
       if (!byItem[key]) {
-        byItem[key] = { nome: it.nome, cat: it.cat || '—', forn: it.fornecedor || '—', qtd: 0, vlTotal: 0, nPedidos: 0 };
+        byItem[key] = { nome: it.nome, cat: it.cat || '—', forn: it.fornecedor || '—', qtd: 0, vlTotal: 0, nPedidos: 0, lastVl: 0, minVl: Infinity, maxVl: 0 };
       }
-      byItem[key].qtd      += Number(it.qtdComprada) || Number(it.qty) || 0;
-      byItem[key].vlTotal  += Number(it.vlCompra) || Number(it.vlPedido) || 0;
-      byItem[key].nPedidos += 1;
+      var b = byItem[key];
+      b.qtd      += qtd;
+      b.vlTotal  += vlUnit * qtd;
+      b.nPedidos += 1;
+      if (!b.lastVl && vlUnit > 0) b.lastVl = vlUnit; // primeira ocorrência (ordem desc = mais recente)
+      if (vlUnit > 0) {
+        if (vlUnit < b.minVl) b.minVl = vlUnit;
+        if (vlUnit > b.maxVl) b.maxVl = vlUnit;
+      }
     });
   });
   var itemData = Object.keys(byItem).map(function(k){ return byItem[k]; })
@@ -1702,6 +1716,20 @@ function renderKPIsPage() {
     var rows = data.map(function(d) {
       var vlMedio = d.qtd > 0 ? (d.vlTotal / d.qtd) : 0;
       var vlStr = vlMedio > 0 ? 'R$ '+vlMedio.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+      var varStr = '—';
+      var varStyle = 'color:var(--muted);';
+      if (vlMedio > 0 && d.lastVl > 0) {
+        var pct = ((d.lastVl - vlMedio) / vlMedio) * 100;
+        if (Math.abs(pct) < 0.5) {
+          varStr = '≈ 0%';
+        } else if (pct > 0) {
+          varStr = '▲ '+pct.toFixed(1).replace('.',',')+'%';
+          varStyle = 'color:#E53935;font-weight:600;';
+        } else {
+          varStr = '▼ '+Math.abs(pct).toFixed(1).replace('.',',')+'%';
+          varStyle = 'color:#2E7D32;font-weight:600;';
+        }
+      }
       return '<tr>'+
         '<td>'+d.nome+'</td>'+
         '<td class="cat">'+d.cat+'</td>'+
@@ -1709,6 +1737,7 @@ function renderKPIsPage() {
         '<td class="r">'+d.qtd+'</td>'+
         '<td class="r">'+d.nPedidos+'</td>'+
         '<td class="r">'+vlStr+'</td>'+
+        '<td class="r" style="'+varStyle+'">'+varStr+'</td>'+
       '</tr>';
     }).join('');
     return '<div class="kpi-items-scroll">'+
@@ -1720,6 +1749,7 @@ function renderKPIsPage() {
           '<th class="r">Qtd</th>'+
           '<th class="r">Pedidos</th>'+
           '<th class="r">Vlr Médio</th>'+
+          '<th class="r">Variação</th>'+
         '</tr></thead>'+
         '<tbody>'+rows+'</tbody>'+
       '</table>'+
