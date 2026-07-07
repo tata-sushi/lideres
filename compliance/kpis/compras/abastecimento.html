@@ -1897,6 +1897,18 @@ function fecharModalPedido() { document.getElementById('modal-pedido').classList
 // ── MODAL VISUALIZAR ──────────────────────────────────────────────────────────
 async function abrirModalView(id) {
   var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===id){order=ORDERS[i];break;}} if(!order)return;
+  // Roteia para o modal do último estado (view-only)
+  if (order.fornecedores && order.fornecedores.length) {
+    // Pega o fornecedor mais avançado
+    var fornIdx = -1, priority = -1;
+    order.fornecedores.forEach(function(f, i){
+      var p = f.status === 'b-conferido' ? 3 : f.status === 'b-concluido' ? 2 : 1;
+      if (p > priority) { priority = p; fornIdx = i; }
+    });
+    var fmax = fornIdx >= 0 ? order.fornecedores[fornIdx] : null;
+    if (fmax && fmax.status === 'b-conferido') return abrirModalConferencia(id, fornIdx, true);
+    if (fmax && fmax.status === 'b-concluido') return abrirModalNF(id, fornIdx, true);
+  }
   document.getElementById('view-title').textContent='Pedido '+(order.idDisplay||('#'+order.id));
   var grupos={},grupoCats=[];
   order.itensList.forEach(function(item){if(!grupos[item.cat]){grupos[item.cat]=[];grupoCats.push(item.cat);}grupos[item.cat].push(item);});
@@ -2682,31 +2694,26 @@ var nfOrderId = null;
 var nfFornIdx = null;
 var nfBonusCount = 0;
 
-async function abrirModalNF(orderId, fornIdx) {
+async function abrirModalNF(orderId, fornIdx, readonly) {
   var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===orderId){order=ORDERS[i];break;}} if(!order)return;
   var forn = order.fornecedores ? order.fornecedores[fornIdx] : {nome:'—', itens:order.itensList||[]};
-  // Se já conferido/concluído, redireciona para modal de visualização
-  if (forn && (forn.status === 'b-conferido' || forn.status === 'b-concluido')) {
-    return abrirModalView(orderId);
-  }
-  if (order.status === 'b-conferido' || order.status === 'b-concluido') {
-    return abrirModalView(orderId);
-  }
+  var isReadonly = readonly === true;
   nfOrderId=orderId; nfFornIdx=fornIdx; nfBonusCount=0;
 
-  document.getElementById('nf-numero').value='';
-  document.getElementById('nf-data-emissao').value='';
-  document.getElementById('nf-data-receb').value=new Date().toISOString().split('T')[0];
-  document.getElementById('nf-data-venc').value='';
+  // Prefill com dados já salvos (se houver)
+  document.getElementById('nf-numero').value = (forn && forn.notaFiscal) || (order.raw && order.raw.notaFiscal) || '';
+  document.getElementById('nf-data-emissao').value = (forn && forn.dataEmissaoNf) || (order.raw && order.raw.dataEmissao) || '';
+  document.getElementById('nf-data-receb').value = (forn && forn.dataRecebNf) || (order.raw && order.raw.dataRecebimento) || new Date().toISOString().split('T')[0];
+  document.getElementById('nf-data-venc').value = (forn && forn.dataVencimento) || (order.raw && order.raw.dataVencimento) || '';
   if (!RECEBEDORES.length) await carregarRecebedores();
   var selQuem=document.getElementById('nf-quem');
   selQuem.innerHTML='<option value="">Selecionar…</option>';
   RECEBEDORES.forEach(function(r){ var o=document.createElement('option'); o.value=r; o.textContent=r; selQuem.appendChild(o); });
-  selQuem.value='';
-  document.getElementById('nf-obs').value='';
+  selQuem.value = (forn && forn.recebedor) || (order.raw && order.raw.recebidoPor) || '';
+  document.getElementById('nf-obs').value = (forn && forn.obsRecebimento) || (order.raw && order.raw.obsEstoque) || '';
   document.getElementById('nf-fornecedor-ro').textContent=forn.nome;
   document.getElementById('nf-pedido-ro').textContent=orderId+' · '+order.cats.join(', ');
-  document.getElementById('nf-title').textContent='Validar Recebimento — Pedido '+(order.idDisplay||('#'+orderId));
+  document.getElementById('nf-title').textContent=(isReadonly?'Recebimento — ':'Validar Recebimento — ')+'Pedido '+(order.idDisplay||('#'+orderId));
 
   nfAnexosPendentes = [];
   nfRenderAnexos();
@@ -2715,7 +2722,18 @@ async function abrirModalNF(orderId, fornIdx) {
   forn.itens.forEach(function(item,idx){ addNFRow(item,idx,false); });
   calcGrandTotal();
 
-  document.getElementById('modal-nf').classList.add('active'); lockBodyScroll();
+  // Modo readonly: desabilita inputs, esconde botões de ação
+  var modal = document.getElementById('modal-nf');
+  modal.querySelectorAll('.modal-body input, .modal-body select, .modal-body textarea, .modal-body button').forEach(function(el) {
+    if (el.classList.contains('modal-btn')) return;
+    if (isReadonly) el.setAttribute('disabled', 'disabled'); else el.removeAttribute('disabled');
+  });
+  var btnConf = modal.querySelector('.modal-btn-confirm');
+  var btnCancel = modal.querySelector('.modal-btn-cancel');
+  if (btnConf) btnConf.style.display = isReadonly ? 'none' : '';
+  if (btnCancel) btnCancel.textContent = isReadonly ? 'Fechar' : 'Cancelar';
+
+  modal.classList.add('active'); lockBodyScroll();
 }
 
 function addBonificacaoRow() {
