@@ -78,6 +78,13 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 .b-parcial          { background: #FFF4DC; color: #7A4A00; }
 .b-parcial-entrega  { background: #FFF4DC; color: #7A4A00; }
 .b-conferido        { background: var(--carbon); color: var(--citric); }
+.nf-foto-thumb { width: 34px; height: 34px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border); cursor: zoom-in; flex-shrink: 0; transition: transform .12s; }
+.nf-foto-thumb:hover { transform: scale(1.05); }
+.foto-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 99999; display: none; align-items: center; justify-content: center; cursor: zoom-out; padding: 20px; }
+.foto-modal-overlay.active { display: flex; }
+.foto-modal-content { max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.foto-modal-content img { max-width: 100%; max-height: 85vh; border-radius: 8px; object-fit: contain; }
+.foto-modal-content .foto-modal-caption { color: #fff; font-family: 'DM Mono', monospace; font-size: 12px; text-align: center; }
 
 /* ── KPI GRID ── */
 .kpis-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -1151,6 +1158,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <!-- Recibo (oculto, usado para gerar PDFs via window.print) -->
 <div id="recibo"></div>
+<div class="foto-modal-overlay" id="foto-modal" onclick="fecharFotoModal()">
+  <div class="foto-modal-content">
+    <img id="foto-modal-img" src="" alt="">
+    <div class="foto-modal-caption" id="foto-modal-caption"></div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -1195,6 +1208,32 @@ async function gasPost(body) {
 
 // Catálogo é carregado integralmente da planilha via carregarCatalogo()
 var CATALOGO = {};
+
+function getFotoProduto(nome) {
+  if (!nome) return '';
+  var alvo = String(nome).trim().toLowerCase();
+  for (var k in CATALOGO) {
+    var ps = CATALOGO[k].produtos || [];
+    for (var i = 0; i < ps.length; i++) {
+      if (String(ps[i].nome || '').trim().toLowerCase() === alvo && ps[i].fotoUrl) return ps[i].fotoUrl;
+    }
+  }
+  return '';
+}
+
+function abrirFotoModal(url, caption) {
+  var img = document.getElementById('foto-modal-img');
+  var cap = document.getElementById('foto-modal-caption');
+  var overlay = document.getElementById('foto-modal');
+  if (img) img.src = url;
+  if (cap) cap.textContent = caption || '';
+  if (overlay) overlay.classList.add('active');
+}
+
+function fecharFotoModal() {
+  var overlay = document.getElementById('foto-modal');
+  if (overlay) overlay.classList.remove('active');
+}
 
 // Lista de recebedores — carregada de COLAB_URL em carregarRecebedores()
 var RECEBEDORES = [];
@@ -1249,7 +1288,8 @@ async function carregarCatalogo() {
         fatorCompra:  '',
         pedidoMinimo: r.pedido_minimo != null ? String(r.pedido_minimo) : '',
         multiplo:     '',
-        valorUnitario: r.valor_unitario != null ? r.valor_unitario : 0
+        valorUnitario: r.valor_unitario != null ? r.valor_unitario : 0,
+        fotoUrl:      r.foto_url || ''
       });
     });
     CATALOGO = convertido;
@@ -2827,7 +2867,18 @@ function addNFRow(item, idx, isBonus) {
   if(isBonus){
     var inpNome=document.createElement('input'); inpNome.type='text'; inpNome.className='nf-txt-input'; inpNome.placeholder='Nome do item…'; inpNome.id=rowId+'-nome';
     tdNome.appendChild(inpNome);
-  } else { tdNome.textContent=item.nome; tdNome.style.whiteSpace='nowrap'; }
+  } else {
+    var fotoUrl = getFotoProduto(item.nome);
+    if (fotoUrl) {
+      var wrap = document.createElement('div'); wrap.style.cssText = 'display:flex;align-items:center;gap:8px;';
+      var img = document.createElement('img'); img.src = fotoUrl; img.className='nf-foto-thumb'; img.alt = item.nome; img.title = 'Ver foto de '+item.nome; img.onclick = function(){ abrirFotoModal(fotoUrl, item.nome); };
+      var span = document.createElement('span'); span.textContent = item.nome; span.style.whiteSpace = 'nowrap';
+      wrap.appendChild(img); wrap.appendChild(span);
+      tdNome.appendChild(wrap);
+    } else {
+      tdNome.textContent = item.nome; tdNome.style.whiteSpace='nowrap';
+    }
+  }
 
   // PEDIDO
   var tdPed=document.createElement('td'); tdPed.className='td-ped'; tdPed.setAttribute('data-label','Pedido');
@@ -4101,8 +4152,12 @@ function gerarPDFBaixaNF(order, forn, dadosNF, uploadResultados) {
     var dif=rec-(it.qtdPedido||0);
     var difTxt = dif===0?'—':(dif>0?'+'+dif:String(dif));
     totalGeral += total;
+    var fotoUrl = getFotoProduto(it.nome);
+    var nomeCel = fotoUrl
+      ? '<div style="display:flex;align-items:center;gap:6px;"><img src="'+fotoUrl+'" style="width:32px;height:32px;object-fit:cover;border-radius:4px;border:1px solid #ddd;">'+it.nome+'</div>'
+      : it.nome;
     rowsHtml+='<tr>'+
-      '<td>'+it.nome+'</td>'+
+      '<td>'+nomeCel+'</td>'+
       '<td class="r">'+(it.qtdPedido||'—')+(it.un?' '+it.un:'')+'</td>'+
       '<td class="r">'+(it.vlPedido?'R$ '+it.vlPedido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—')+'</td>'+
       '<td class="r">'+rec+(it.un?' '+it.un:'')+'</td>'+
