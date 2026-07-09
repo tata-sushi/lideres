@@ -1589,11 +1589,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   var PEER_DY   = 30;
   var PEER_GAP  = 20;
-  var SUBTIER_DROP = 40;   // distância vertical extra do sub-nível dos coordenadores
+  var SUBTIER_DY = 30;   // pequeno degrau dos coordenadores (mesma lógica visual dos sócios)
 
-  // Coordenadores ligados direto ao CEO formam um SUB-NÍVEL visual: continuam
-  // filhos do CEO (hierarquia/líder intactos), mas são desenhados centralizados
-  // um degrau abaixo da linha dos gerentes.
+  // Coordenadores ligados direto ao CEO ganham o mesmo tratamento visual dos
+  // sócios: continuam filhos do CEO (hierarquia/líder intactos), mas flanqueiam
+  // a fileira dos gerentes um pequeno degrau abaixo.
   function isSubTierRole(n) {
     var c = String(n && n.cargo || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     return /\bcoordenador/.test(c);
@@ -1641,10 +1641,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       }
     }
 
-    // ── LAYOUT DO TOPO: gerentes centralizados + coordenadores num sub-nível ──
-    // Os gerentes (Cinthia/Fábio/Victor) ficam centralizados sob o CEO, com a
-    // "Gerente Executiva" (Cinthia) no meio. Os coordenadores (Eduardo/Wellington)
-    // descem centralizados logo abaixo, mantendo o CEO como líder.
+    // ── LAYOUT DO TOPO: gerentes centralizados + coordenadores nas pontas ──
+    // Fileira única: Coordenador · Gerentes (Cinthia no centro sob o CEO) · Coordenador.
+    // Os coordenadores flanqueiam os gerentes um pequeno degrau abaixo — mesma
+    // lógica visual dos sócios em relação ao CEO. Líder/hierarquia permanecem.
     var _rootLayout = null;
     if (arvore._layout === 'horizontal') {
       var vkids = visibleChildren(arvore);
@@ -1657,35 +1657,30 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           var mid = Math.floor(others.length / 2);
           gers = others.slice(0, mid).concat(central, others.slice(mid));
         }
+        // metade dos coordenadores à esquerda, metade à direita (nas pontas)
+        var splitAt = Math.floor(coords.length / 2);
+        var leftC = coords.slice(0, splitAt);
+        var rightC = coords.slice(splitAt);
+        var order = leftC.concat(gers).concat(rightC);
+
         var ceoCx = arvore.x + NODE_W / 2;
-        var gy = gers[0].y;   // linha atual dos gerentes (após ajuste dos sócios)
+        var gy = gers[0].y;   // linha dos gerentes (após ajuste dos sócios)
 
         function rowWidth(list) {
           var w = 0;
           list.forEach(function(n) { w += (n.subWidth || NODE_W) + H_GAP; });
           return w - H_GAP;
         }
-        function layoutRow(list, rowY) {
-          var cursor = ceoCx - rowWidth(list) / 2;
-          list.forEach(function(n) {
-            var sw = n.subWidth || NODE_W;
-            var dx = (cursor + sw / 2) - (n.x + NODE_W / 2);
-            shiftVisibleTree(n, dx, rowY - n.y);
-            cursor += sw + H_GAP;
-          });
-        }
-        layoutRow(gers, gy);
-        // Coordenadores descem abaixo da linha dos gerentes; se a gerente central
-        // (Cinthia) estiver expandida, ficam abaixo de toda a subárvore dela.
-        var central2 = gers.filter(isCentralManager)[0] || gers[Math.floor(gers.length / 2)];
-        function subtreeBottom(n) {
-          var b = n.y + NODE_H;
-          visibleChildren(n).forEach(function(c) { var cb = subtreeBottom(c); if (cb > b) b = cb; });
-          return b;
-        }
-        var coordY = Math.max(gy + NODE_H + SUBTIER_DROP, subtreeBottom(central2) + SUBTIER_DROP);
-        layoutRow(coords, coordY);
-        _rootLayout = { gers: gers, coords: coords };
+        // centraliza a fileira inteira sob o CEO; coordenadores descem SUBTIER_DY
+        var cursor = ceoCx - rowWidth(order) / 2;
+        order.forEach(function(n) {
+          var sw = n.subWidth || NODE_W;
+          var dx = (cursor + sw / 2) - (n.x + NODE_W / 2);
+          var rowY = isSubTierRole(n) ? gy + SUBTIER_DY : gy;
+          shiftVisibleTree(n, dx, rowY - n.y);
+          cursor += sw + H_GAP;
+        });
+        _rootLayout = { order: order };
       }
     }
 
@@ -1718,24 +1713,17 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       var x1 = n.x + NODE_W / 2, y1 = n.y + NODE_H;
       // Raiz (CEO): T invertido grosso (stem + trilho) + curvas bezier dos filhos saindo do centro do trilho
       if (n === arvore && n._layout !== 'vertical') {
-        // Layout centralizado: trilho → gerentes; tronco central → coordenadores
+        // Fileira única (gerentes + coordenadores nas pontas): trilho + bezier p/ cada
         if (_rootLayout) {
           var socioBottomR = socL ? (socL.y + NODE_H) : (socR ? (socR.y + NODE_H) : (y1 + 40));
           var railYR = socioBottomR + 10;
-          var gT = _rootLayout.gers.map(function(gn) { return { x: gn.x + NODE_W / 2, y: gn.y, node: gn }; });
-          var cT = _rootLayout.coords.map(function(cn) { return { x: cn.x + NODE_W / 2, y: cn.y, node: cn }; });
+          var tgts = _rootLayout.order.map(function(nd) { return { x: nd.x + NODE_W / 2, y: nd.y, node: nd }; });
           var railHalfR = NODE_W;
-          gT.forEach(function(t) { railHalfR = Math.max(railHalfR, Math.abs(t.x - x1)); });
+          tgts.forEach(function(t) { railHalfR = Math.max(railHalfR, Math.abs(t.x - x1)); });
           parts.push('<path d="M ' + x1 + ' ' + y1 + ' L ' + x1 + ' ' + railYR + '" stroke="#35383F" stroke-width="1.8"/>');
           parts.push('<path d="M ' + (x1 - railHalfR) + ' ' + railYR + ' L ' + (x1 + railHalfR) + ' ' + railYR + '" stroke="#35383F" stroke-width="1.8"/>');
-          gT.forEach(function(t) {
+          tgts.forEach(function(t) {
             var ctrlY = railYR + (t.y - railYR) * 0.6;
-            parts.push('<path d="M ' + x1 + ' ' + railYR + ' C ' + x1 + ' ' + ctrlY + ', ' + t.x + ' ' + ctrlY + ', ' + t.x + ' ' + t.y + '"/>');
-            drawConn(t.node);
-          });
-          // Tronco central até os coordenadores — o trecho atrás da Cinthia fica oculto pelo card dela
-          cT.forEach(function(t) {
-            var ctrlY = railYR + (t.y - railYR) * 0.5;
             parts.push('<path d="M ' + x1 + ' ' + railYR + ' C ' + x1 + ' ' + ctrlY + ', ' + t.x + ' ' + ctrlY + ', ' + t.x + ' ' + t.y + '"/>');
             drawConn(t.node);
           });
