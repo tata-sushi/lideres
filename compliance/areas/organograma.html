@@ -1589,6 +1589,26 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   var PEER_DY   = 30;
   var PEER_GAP  = 20;
+  var SUBTIER_DROP = 40;   // distância vertical extra do sub-nível dos coordenadores
+
+  // Coordenadores ligados direto ao CEO formam um SUB-NÍVEL visual: continuam
+  // filhos do CEO (hierarquia/líder intactos), mas são desenhados centralizados
+  // um degrau abaixo da linha dos gerentes.
+  function isSubTierRole(n) {
+    var c = String(n && n.cargo || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return /\bcoordenador/.test(c);
+  }
+  // Gerente que ocupa o CENTRO da fileira (sob o CEO): a "Gerente Executiva" (Cinthia)
+  function isCentralManager(n) {
+    var c = String(n && n.cargo || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    var nome = String(n && n.nome || '').toLowerCase();
+    return /gerente executiv/.test(c) || /\bcinthia\b/.test(nome);
+  }
+  // Desloca o nó e toda a subárvore visível por (dx, dy)
+  function shiftVisibleTree(n, dx, dy) {
+    n.x += dx; n.y += dy;
+    visibleChildren(n).forEach(function(c) { shiftVisibleTree(c, dx, dy); });
+  }
 
   function renderSvg() {
     if (!container || !arvore) return;
@@ -1621,6 +1641,54 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       }
     }
 
+    // ── LAYOUT DO TOPO: gerentes centralizados + coordenadores num sub-nível ──
+    // Os gerentes (Cinthia/Fábio/Victor) ficam centralizados sob o CEO, com a
+    // "Gerente Executiva" (Cinthia) no meio. Os coordenadores (Eduardo/Wellington)
+    // descem centralizados logo abaixo, mantendo o CEO como líder.
+    var _rootLayout = null;
+    if (arvore._layout === 'horizontal') {
+      var vkids = visibleChildren(arvore);
+      var gers = vkids.filter(function(n) { return !isSubTierRole(n); });
+      var coords = vkids.filter(isSubTierRole);
+      if (coords.length && gers.length) {
+        var central = gers.filter(isCentralManager);
+        if (central.length) {
+          var others = gers.filter(function(n) { return !isCentralManager(n); });
+          var mid = Math.floor(others.length / 2);
+          gers = others.slice(0, mid).concat(central, others.slice(mid));
+        }
+        var ceoCx = arvore.x + NODE_W / 2;
+        var gy = gers[0].y;   // linha atual dos gerentes (após ajuste dos sócios)
+
+        function rowWidth(list) {
+          var w = 0;
+          list.forEach(function(n) { w += (n.subWidth || NODE_W) + H_GAP; });
+          return w - H_GAP;
+        }
+        function layoutRow(list, rowY) {
+          var cursor = ceoCx - rowWidth(list) / 2;
+          list.forEach(function(n) {
+            var sw = n.subWidth || NODE_W;
+            var dx = (cursor + sw / 2) - (n.x + NODE_W / 2);
+            shiftVisibleTree(n, dx, rowY - n.y);
+            cursor += sw + H_GAP;
+          });
+        }
+        layoutRow(gers, gy);
+        // Coordenadores descem abaixo da linha dos gerentes; se a gerente central
+        // (Cinthia) estiver expandida, ficam abaixo de toda a subárvore dela.
+        var central2 = gers.filter(isCentralManager)[0] || gers[Math.floor(gers.length / 2)];
+        function subtreeBottom(n) {
+          var b = n.y + NODE_H;
+          visibleChildren(n).forEach(function(c) { var cb = subtreeBottom(c); if (cb > b) b = cb; });
+          return b;
+        }
+        var coordY = Math.max(gy + NODE_H + SUBTIER_DROP, subtreeBottom(central2) + SUBTIER_DROP);
+        layoutRow(coords, coordY);
+        _rootLayout = { gers: gers, coords: coords };
+      }
+    }
+
     var maxX = 0, maxY = 0;
     function bounds(n) {
       if (n.x + NODE_W > maxX) maxX = n.x + NODE_W;
@@ -1650,6 +1718,29 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       var x1 = n.x + NODE_W / 2, y1 = n.y + NODE_H;
       // Raiz (CEO): T invertido grosso (stem + trilho) + curvas bezier dos filhos saindo do centro do trilho
       if (n === arvore && n._layout !== 'vertical') {
+        // Layout centralizado: trilho → gerentes; tronco central → coordenadores
+        if (_rootLayout) {
+          var socioBottomR = socL ? (socL.y + NODE_H) : (socR ? (socR.y + NODE_H) : (y1 + 40));
+          var railYR = socioBottomR + 10;
+          var gT = _rootLayout.gers.map(function(gn) { return { x: gn.x + NODE_W / 2, y: gn.y, node: gn }; });
+          var cT = _rootLayout.coords.map(function(cn) { return { x: cn.x + NODE_W / 2, y: cn.y, node: cn }; });
+          var railHalfR = NODE_W;
+          gT.forEach(function(t) { railHalfR = Math.max(railHalfR, Math.abs(t.x - x1)); });
+          parts.push('<path d="M ' + x1 + ' ' + y1 + ' L ' + x1 + ' ' + railYR + '" stroke="#35383F" stroke-width="1.8"/>');
+          parts.push('<path d="M ' + (x1 - railHalfR) + ' ' + railYR + ' L ' + (x1 + railHalfR) + ' ' + railYR + '" stroke="#35383F" stroke-width="1.8"/>');
+          gT.forEach(function(t) {
+            var ctrlY = railYR + (t.y - railYR) * 0.6;
+            parts.push('<path d="M ' + x1 + ' ' + railYR + ' C ' + x1 + ' ' + ctrlY + ', ' + t.x + ' ' + ctrlY + ', ' + t.x + ' ' + t.y + '"/>');
+            drawConn(t.node);
+          });
+          // Tronco central até os coordenadores — o trecho atrás da Cinthia fica oculto pelo card dela
+          cT.forEach(function(t) {
+            var ctrlY = railYR + (t.y - railYR) * 0.5;
+            parts.push('<path d="M ' + x1 + ' ' + railYR + ' C ' + x1 + ' ' + ctrlY + ', ' + t.x + ' ' + ctrlY + ', ' + t.x + ' ' + t.y + '"/>');
+            drawConn(t.node);
+          });
+          return;
+        }
         var targets = n._groups.map(function(g) {
           var tn = g.type === 'node' ? g.node : g.nodes[0];
           return { x: tn.x + NODE_W / 2, y: tn.y, group: g };
