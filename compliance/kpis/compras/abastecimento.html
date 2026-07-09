@@ -759,6 +759,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <button class="drawer-sam-btn" onclick="closeDrawer(true);abrirModalRelReceb()" style="margin-top:8px;">Relatório de Recebimentos</button>
       <button class="drawer-sam-btn" onclick="closeDrawer(true);abrirModalRelEntregas()" style="margin-top:8px;">Relatório de Entregas</button>
       <button class="drawer-sam-btn" onclick="closeDrawer(true);abrirModalExportProc()" style="margin-top:8px;">Exportar CSV · Processamento</button>
+      <button class="drawer-sam-btn" onclick="closeDrawer(true);exportarCSVCatalogo()" style="margin-top:8px;">Exportar CSV · Catálogo</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -3789,6 +3790,49 @@ function exportarCSVProcessamento() {
   document.body.removeChild(a); URL.revokeObjectURL(url);
   fecharModalExportProc();
   alert('CSV gerado: ' + (linhas.length - 1) + ' item(s).');
+}
+
+function exportarCSVCatalogo() {
+  var totalItens = 0;
+  Object.keys(CATALOGO).forEach(function(k){ totalItens += (CATALOGO[k].produtos || []).length; });
+  if (totalItens === 0) { alert('Catálogo vazio ou ainda carregando.'); return; }
+
+  var linhas = [['Categoria', 'Produto', 'Unidade', 'Fornecedor', 'Valor Unitário', 'Prazo Entrega', 'Pedido Mínimo', 'Foto URL']];
+
+  Object.keys(CATALOGO).sort(function(a,b){
+    return String(CATALOGO[a].label||a).localeCompare(String(CATALOGO[b].label||b), 'pt-BR');
+  }).forEach(function(k) {
+    var cat = CATALOGO[k].label || k;
+    (CATALOGO[k].produtos || []).forEach(function(p) {
+      linhas.push([
+        cat,
+        p.nome || '',
+        p.un || '',
+        p.fornecedor || '',
+        p.valorUnitario != null ? Number(p.valorUnitario).toFixed(2).replace('.', ',') : '',
+        p.prazoEntrega || '',
+        p.pedidoMinimo || '',
+        p.fotoUrl || ''
+      ]);
+    });
+  });
+
+  var csv = linhas.map(function(row) {
+    return row.map(function(v) {
+      var s = String(v == null ? '' : v);
+      return s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1
+        ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(',');
+  }).join('\r\n');
+
+  var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url;
+  a.download = 'catalogo-' + new Date().toISOString().split('T')[0] + '.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  alert('CSV gerado: ' + (linhas.length - 1) + ' produto(s).');
 }
 
 // ── MODAL RELATÓRIO RECEBIMENTOS ─────────────────────────────────────────────
