@@ -18,17 +18,19 @@ var STATUS_OPTS = ['Aberta', 'Fechada'];
 
 // Cabeçalhos normalizados → campo do payload
 var FIELD_MAP = {
-  'data_da_solicitacao':  'data',
-  'unidade':              'unidade',
-  'departamento':         'departamento',
-  'cargo':                'cargo',
-  'escala':               'escala',
-  'horario':              'horario',
-  'salario_fixo':         'salario_fixo',
-  'salario_bruto':        'salario_bruto',
-  'colaborador_anterior': 'colaborador_anterior',
-  'status_da_vaga':       'status',
-  'lider_responsavel':    'lider'
+  'data_da_solicitacao':    'data',
+  'unidade':                'unidade',
+  'departamento':           'departamento',
+  'cargo':                  'cargo',
+  'escala':                 'escala',
+  'horario':                'horario',
+  'salario_fixo':           'salario_fixo',
+  'salario_bruto':          'salario_bruto',
+  'colaborador_anterior':   'colaborador_anterior',
+  'colaborador_contratado': 'colaborador_contratado',
+  'data_da_contratacao':    'data_contratacao',
+  'status_da_vaga':         'status',
+  'lider_responsavel':      'lider'
 };
 
 function doGet(e) { return handle(e.parameter); }
