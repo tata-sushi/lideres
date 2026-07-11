@@ -2162,7 +2162,8 @@ async function confirmarPedido() {
           data_entrega:  d.entregaISO || null,
           comprador:     comprador,
           obs_compras:   dadosProc.obs || null,
-          status:        'comprado'
+          status:        'comprado',
+          atualizado_por: comprador
         };
         if (d.vlNovo) updateData.valor_inicial = d.vl; // só sobrescreve se usuário digitou
         return item._supaId
@@ -2364,7 +2365,8 @@ async function enviarPedido() {
 
   if (supa) {
     try {
-      var commonFields={id_display:newIdDisplay,unidade:UNIDADE||null,departamento:deptoSel||null,solicitante:(currentUser&&currentUser.name)||'Líder',data_solicitacao:dataISO,status:'solicitado',obs_solicitante:obsVal||null};
+      var nomeSolicitante=(currentUser&&currentUser.name)||'Líder';
+      var commonFields={id_display:newIdDisplay,unidade:UNIDADE||null,departamento:deptoSel||null,solicitante:nomeSolicitante,data_solicitacao:dataISO,status:'solicitado',obs_solicitante:obsVal||null,atualizado_por:nomeSolicitante};
       var insertRows=rowsToInsert.map(function(r){return Object.assign({},r,commonFields);});
       var res=await supa.from('abastecimento').insert(insertRows).select('id, produto_nome');
       if(res.error) throw new Error(res.error.message);
@@ -3505,13 +3507,14 @@ async function salvarConferencia() {
         data_recebimento:       dados.dataRecebimento || null,
         data_vencimento_boleto: dados.dataVencimento || null,
         recebedor:              dados.recebidoPor || null,
-        obs_conferente:         dados.obsEstoque || null
+        obs_conferente:         dados.obsEstoque || null,
+        atualizado_por:         nome
       }).eq('id_display', confOrderId);
       if (forn) { q = q.eq('fornecedor', forn.nome); if (forn.notaFiscal) q = q.eq('numero_nf', forn.notaFiscal); }
       var commonUpd = await q;
       if (commonUpd.error) throw new Error(commonUpd.error.message);
       var itemUpdates = dados.itens.map(function(it) {
-        var upd = { qtd_recebida: it.qtdRecebida, valor_recebimento: it.qtdRecebida * it.vlUnitario };
+        var upd = { qtd_recebida: it.qtdRecebida, valor_recebimento: it.qtdRecebida * it.vlUnitario, atualizado_por: nome };
         return it._supaId
           ? supa.from('abastecimento').update(upd).eq('id', it._supaId)
           : supa.from('abastecimento').update(upd).eq('id_display', confOrderId).eq('produto_nome', it.produtoNome);
@@ -3564,13 +3567,14 @@ async function confirmarConferencia() {
         obs_conferente:         dados.obsEstoque || null,
         conferente:             nome,
         check_conferente:       true,
-        status:                 'conferido'
+        status:                 'conferido',
+        atualizado_por:         nome
       }).eq('id_display', confOrderId);
       if (forn) { q = q.eq('fornecedor', forn.nome); if (forn.notaFiscal) q = q.eq('numero_nf', forn.notaFiscal); }
       var commonUpd = await q;
       if (commonUpd.error) throw new Error(commonUpd.error.message);
       var itemUpdates = dados.itens.map(function(it) {
-        var upd = { qtd_recebida: it.qtdRecebida, valor_recebimento: it.qtdRecebida * it.vlUnitario };
+        var upd = { qtd_recebida: it.qtdRecebida, valor_recebimento: it.qtdRecebida * it.vlUnitario, atualizado_por: nome };
         return it._supaId
           ? supa.from('abastecimento').update(upd).eq('id', it._supaId)
           : supa.from('abastecimento').update(upd).eq('id_display', confOrderId).eq('produto_nome', it.produtoNome);
@@ -3716,7 +3720,8 @@ async function confirmarBaixaNF() {
           data_recebimento:       dRec || null,
           data_vencimento_boleto: dVenc || null,
           recebedor:              dadosNF.quem || null,
-          obs_recebimento:        dadosNF.obs || null
+          obs_recebimento:        dadosNF.obs || null,
+          atualizado_por:         (currentUser && currentUser.name) || dadosNF.quem || null
         };
         return it._supaId
           ? supa.from('abastecimento').update(upd).eq('id', it._supaId)
@@ -3751,7 +3756,8 @@ async function confirmarBaixaNF() {
             data_vencimento_boleto: dVenc || null,
             recebedor:              dadosNF.quem || null,
             obs_recebimento:        dadosNF.obs || null,
-            status:                 newStatus
+            status:                 newStatus,
+            atualizado_por:         (currentUser && currentUser.name) || dadosNF.quem || null
           };
         });
         var bonRes = await supa.from('abastecimento').insert(bonRows).select('id, produto_nome');
