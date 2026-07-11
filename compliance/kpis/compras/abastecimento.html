@@ -258,8 +258,14 @@ textarea.fctrl { resize: vertical; min-height: 70px; font-family: 'DM Sans', san
 .btn-add-cat { padding: 10px 16px; background: var(--carbon); color: var(--citric); border: none; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.05em; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
 .btn-add-cat:hover { opacity: 0.85; }
 .cat-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-.cat-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.cat-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
+.cat-header-left { display: flex; align-items: center; gap: 8px; }
 .cat-name { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; color: var(--carbon); }
+.cat-toggle { width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: transform 0.15s; }
+.cat-toggle svg { width: 10px; height: 10px; stroke: var(--muted); fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.cat-section.collapsed .cat-toggle { transform: rotate(-90deg); }
+.cat-section.collapsed .cat-item-header,
+.cat-section.collapsed .cat-item { display: none; }
 .cat-remove { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 2px; transition: color 0.15s; }
 .cat-remove:hover { color: #E53E3E; }
 .cat-item-header { display: flex; align-items: center; padding: 6px 14px; border-bottom: 1px solid var(--border); }
@@ -803,14 +809,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           </select>
         </div>
       </div>
-      <div class="fg">
+      <div class="fg" id="fg-subcat" style="display:none">
         <label class="flbl">Subcategoria</label>
         <div class="cat-add-row">
           <select class="cat-select" id="sel-subcat">
             <option value="">Todas</option>
           </select>
-          <button class="btn-add-cat" onclick="addCategoria()">Adicionar</button>
         </div>
+      </div>
+      <div class="fg" id="fg-add-btn" style="display:none">
+        <button class="btn-add-cat" style="width:100%" onclick="addCategoria()">Adicionar</button>
       </div>
       <div class="fg">
         <label class="flbl">Observações Solicitante</label>
@@ -1336,20 +1344,25 @@ function popularSelectCategorias() {
 
 function popularSelectSubcategorias() {
   var selSub = document.getElementById('sel-subcat');
+  var fgSubcat = document.getElementById('fg-subcat');
+  var fgAddBtn = document.getElementById('fg-add-btn');
   if (!selSub) return;
   var catKey = (document.getElementById('sel-cat') || {}).value;
   selSub.innerHTML = '<option value="">Todas</option>';
-  if (!catKey || !CATALOGO[catKey]) return;
+  if (fgAddBtn) fgAddBtn.style.display = catKey ? '' : 'none';
+  if (!catKey || !CATALOGO[catKey]) { if (fgSubcat) fgSubcat.style.display = 'none'; return; }
   var subs = {};
   (CATALOGO[catKey].produtos || []).forEach(function(p) {
     var s = String(p.subcategoria || '').trim();
     if (s) subs[s] = 1;
   });
-  Object.keys(subs).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); }).forEach(function(s) {
+  var subKeys = Object.keys(subs).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
+  subKeys.forEach(function(s) {
     var opt = document.createElement('option');
     opt.value = s; opt.textContent = s;
     selSub.appendChild(opt);
   });
+  if (fgSubcat) fgSubcat.style.display = subKeys.length ? '' : 'none';
 }
 
 function categoriaLabelParaKey(label) {
@@ -2224,9 +2237,13 @@ function renderCatSection(key, subKey) {
   var secId = 'cat-sec-' + tagId.replace(/[^a-z0-9_]/gi,'_');
   var div=document.createElement('div'); div.className='cat-section'; div.id=secId;
   var hdr=document.createElement('div'); hdr.className='cat-header';
+  hdr.onclick=function(e){ if(e.target===btnRem) return; div.classList.toggle('collapsed'); };
+  var left=document.createElement('div'); left.className='cat-header-left';
+  var toggle=document.createElement('span'); toggle.className='cat-toggle'; toggle.innerHTML='<svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>';
   var span=document.createElement('span'); span.className='cat-name'; span.textContent=cat.label + (subKey ? ' — ' + subKey : '');
+  left.appendChild(toggle); left.appendChild(span);
   var btnRem=document.createElement('button'); btnRem.className='cat-remove'; btnRem.textContent='×'; btnRem.onclick=function(){removeCategoria(tagId);};
-  hdr.appendChild(span); hdr.appendChild(btnRem);
+  hdr.appendChild(left); hdr.appendChild(btnRem);
   // header row
   var hdrRow=document.createElement('div'); hdrRow.className='cat-item-header';
   var hNome=document.createElement('span'); hNome.className='cat-col-nome hdr'; hNome.textContent='Produto';
