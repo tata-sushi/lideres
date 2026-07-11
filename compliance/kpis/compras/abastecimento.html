@@ -804,21 +804,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="fg">
         <label class="flbl">Adicionar categoria</label>
         <div class="cat-add-row">
-          <select class="cat-select" id="sel-cat" onchange="popularSelectSubcategorias()">
+          <select class="cat-select" id="sel-cat">
             <option value="">Carregando categorias…</option>
           </select>
+          <button class="btn-add-cat" onclick="addCategoria()">Adicionar</button>
         </div>
-      </div>
-      <div class="fg" id="fg-subcat" style="display:none">
-        <label class="flbl">Subcategoria</label>
-        <div class="cat-add-row">
-          <select class="cat-select" id="sel-subcat">
-            <option value="">Todas</option>
-          </select>
-        </div>
-      </div>
-      <div class="fg" id="fg-add-btn" style="display:none">
-        <button class="btn-add-cat" style="width:100%" onclick="addCategoria()">Adicionar</button>
       </div>
       <div class="fg">
         <label class="flbl">Observações Solicitante</label>
@@ -1333,36 +1323,34 @@ function popularSelectCategorias() {
   }
   sel.disabled = false;
   sel.innerHTML = '<option value="">Selecione uma categoria…</option>';
-  keys.forEach(function(key) {
-    var opt = document.createElement('option');
-    opt.value = key;
-    opt.textContent = CATALOGO[key].label;
-    sel.appendChild(opt);
+  keys.sort(function(a,b){ return String(CATALOGO[a].label).localeCompare(String(CATALOGO[b].label),'pt-BR'); }).forEach(function(key) {
+    var subs = {};
+    var temSemSub = false;
+    (CATALOGO[key].produtos || []).forEach(function(p) {
+      var s = String(p.subcategoria || '').trim();
+      if (s) subs[s] = 1; else temSemSub = true;
+    });
+    var subKeys = Object.keys(subs).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
+    if (subKeys.length === 0) {
+      var opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = CATALOGO[key].label;
+      sel.appendChild(opt);
+    } else {
+      subKeys.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = key + '::' + s;
+        opt.textContent = CATALOGO[key].label + ' — ' + s;
+        sel.appendChild(opt);
+      });
+      if (temSemSub) {
+        var optAll = document.createElement('option');
+        optAll.value = key;
+        optAll.textContent = CATALOGO[key].label + ' — Outros';
+        sel.appendChild(optAll);
+      }
+    }
   });
-  popularSelectSubcategorias();
-}
-
-function popularSelectSubcategorias() {
-  var selSub = document.getElementById('sel-subcat');
-  var fgSubcat = document.getElementById('fg-subcat');
-  var fgAddBtn = document.getElementById('fg-add-btn');
-  if (!selSub) return;
-  var catKey = (document.getElementById('sel-cat') || {}).value;
-  selSub.innerHTML = '<option value="">Todas</option>';
-  if (fgAddBtn) fgAddBtn.style.display = catKey ? '' : 'none';
-  if (!catKey || !CATALOGO[catKey]) { if (fgSubcat) fgSubcat.style.display = 'none'; return; }
-  var subs = {};
-  (CATALOGO[catKey].produtos || []).forEach(function(p) {
-    var s = String(p.subcategoria || '').trim();
-    if (s) subs[s] = 1;
-  });
-  var subKeys = Object.keys(subs).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
-  subKeys.forEach(function(s) {
-    var opt = document.createElement('option');
-    opt.value = s; opt.textContent = s;
-    selSub.appendChild(opt);
-  });
-  if (fgSubcat) fgSubcat.style.display = subKeys.length ? '' : 'none';
 }
 
 function categoriaLabelParaKey(label) {
@@ -2003,7 +1991,6 @@ function abrirModalPedido() {
     var secs = document.getElementById('cat-sections'); if (secs) secs.innerHTML = '';
     var obs = document.getElementById('modal-obs'); if (obs) obs.value = '';
     var selCat = document.getElementById('sel-cat'); if (selCat) selCat.value = '';
-    popularSelectSubcategorias();
     document.getElementById('modal-pedido').classList.add('active');
     lockBodyScroll();
   }, 220);
@@ -2200,12 +2187,12 @@ async function confirmarPedido() {
 
 // ── CATEGORIAS ────────────────────────────────────────────────────────────────
 function addCategoria() {
-  var sel=document.getElementById('sel-cat'); var key=sel.value;
-  if(!key){alert('Selecione uma categoria.');return;}
-  var subKey = (document.getElementById('sel-subcat')||{}).value || '';
-  var tagId = key + (subKey ? '::' + subKey : '');
+  var sel=document.getElementById('sel-cat'); var tagId=sel.value;
+  if(!tagId){alert('Selecione uma categoria.');return;}
+  var parts = tagId.split('::');
+  var key = parts[0]; var subKey = parts[1] || '';
   if(activeCats.indexOf(tagId)!==-1){alert('Categoria/subcategoria já adicionada.');return;}
-  activeCats.push(tagId); renderCatSection(key, subKey); sel.value=''; popularSelectSubcategorias();
+  activeCats.push(tagId); renderCatSection(key, subKey); sel.value='';
 }
 // Agrupa produtos do catálogo por nome+unidade (mesmo item pode ter várias linhas,
 // uma por fornecedor — o solicitante escolhe só o item; o fornecedor é definido no Processamento).
