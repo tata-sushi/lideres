@@ -2193,6 +2193,30 @@ function addCategoria() {
   if(activeCats.indexOf(tagId)!==-1){alert('Categoria/subcategoria já adicionada.');return;}
   activeCats.push(tagId); renderCatSection(key, subKey); sel.value=''; popularSelectSubcategorias();
 }
+// Agrupa produtos do catálogo por nome+unidade (mesmo item pode ter várias linhas,
+// uma por fornecedor — o solicitante escolhe só o item; o fornecedor é definido no Processamento).
+function getGrupoProdutos(key, subKey) {
+  var produtos = (CATALOGO[key] && CATALOGO[key].produtos) || [];
+  var subNorm = String(subKey||'').trim().toLowerCase();
+  var groups = {}; var order = [];
+  produtos.forEach(function(p, i) {
+    if (subNorm && String(p.subcategoria||'').trim().toLowerCase() !== subNorm) return;
+    var gkey = String(p.nome||'').trim().toLowerCase() + '|' + String(p.un||'').trim().toLowerCase();
+    if (!groups[gkey]) {
+      groups[gkey] = {
+        nome: p.nome, un: p.un, pedidoMinimo: p.pedidoMinimo, prazoEntrega: p.prazoEntrega,
+        fatorCompra: p.fatorCompra, fotoUrl: p.fotoUrl, valorUnitario: p.valorUnitario,
+        fornecedores: [], idxs: []
+      };
+      order.push(gkey);
+    }
+    if (p.fornecedor) groups[gkey].fornecedores.push(p.fornecedor);
+    groups[gkey].idxs.push(i);
+  });
+  return order.map(function(k){ return groups[k]; })
+    .sort(function(a,b){ return a.nome.localeCompare(b.nome,'pt-BR'); });
+}
+
 function renderCatSection(key, subKey) {
   var cat=CATALOGO[key]; var container=document.getElementById('cat-sections');
   var tagId = key + (subKey ? '::' + subKey : '');
@@ -2210,37 +2234,31 @@ function renderCatSection(key, subKey) {
   hdrRow.appendChild(hNome); hdrRow.appendChild(hMin); hdrRow.appendChild(hQty);
   div.appendChild(hdr); div.appendChild(hdrRow);
 
-  // filtra por subcategoria (case-insensitive) e ordena por fornecedor + nome
-  var subNorm = String(subKey||'').trim().toLowerCase();
-  var sorted=cat.produtos.map(function(p,i){return {p:p,i:i};})
-    .filter(function(o){ return !subNorm || String(o.p.subcategoria||'').trim().toLowerCase() === subNorm; })
-    .sort(function(a,b){
-      var fA=a.p.fornecedor||''; var fB=b.p.fornecedor||'';
-      return fA.localeCompare(fB,'pt-BR') || a.p.nome.localeCompare(b.p.nome,'pt-BR');
-    });
+  // Agrupa por nome+unidade — mesmo item com vários fornecedores vira uma única linha
+  var grupos = getGrupoProdutos(key, subKey);
+  var tagSafe = tagId.replace(/[^a-z0-9_]/gi,'_');
 
-  sorted.forEach(function(obj){
-    var p=obj.p; var origIdx=obj.i;
+  grupos.forEach(function(g, gi){
     var item=document.createElement('div'); item.className='cat-item';
     // linha principal: [foto] nome | mín | múlt | qtd
     var main=document.createElement('div'); main.className='cat-item-main';
     var nomeEl=document.createElement('span'); nomeEl.className='cat-col-nome';
-    if (p.fotoUrl) {
+    if (g.fotoUrl) {
       var wrap=document.createElement('span'); wrap.style.cssText='display:inline-flex;align-items:center;gap:8px;';
-      var img=document.createElement('img'); img.src=p.fotoUrl; img.className='nf-foto-thumb'; img.style.cssText='width:34px;height:34px;border-radius:6px;object-fit:cover;border:1px solid var(--border);cursor:zoom-in;flex-shrink:0;'; img.alt=p.nome; img.title='Ver foto de '+p.nome;
-      img.onclick=(function(url,cap){return function(){abrirFotoModal(url,cap);};})(p.fotoUrl,p.nome);
-      var txt=document.createElement('span'); txt.textContent=p.nome;
+      var img=document.createElement('img'); img.src=g.fotoUrl; img.className='nf-foto-thumb'; img.style.cssText='width:34px;height:34px;border-radius:6px;object-fit:cover;border:1px solid var(--border);cursor:zoom-in;flex-shrink:0;'; img.alt=g.nome; img.title='Ver foto de '+g.nome;
+      img.onclick=(function(url,cap){return function(){abrirFotoModal(url,cap);};})(g.fotoUrl,g.nome);
+      var txt=document.createElement('span'); txt.textContent=g.nome;
       wrap.appendChild(img); wrap.appendChild(txt);
       nomeEl.appendChild(wrap);
     } else {
-      nomeEl.textContent=p.nome;
+      nomeEl.textContent=g.nome;
     }
-    var minEl=document.createElement('span'); minEl.className='cat-col-num'; minEl.textContent=p.pedidoMinimo!==''?p.pedidoMinimo:'—';
+    var minEl=document.createElement('span'); minEl.className='cat-col-num'; minEl.textContent=g.pedidoMinimo!==''?g.pedidoMinimo:'—';
     var qtyEl=document.createElement('span'); qtyEl.className='cat-col-qty';
-    var inp=document.createElement('input'); inp.type='number'; inp.className='qty-input'; inp.min='0'; inp.placeholder='—'; inp.id='qty-'+tagId.replace(/[^a-z0-9_]/gi,'_')+'-'+origIdx;
+    var inp=document.createElement('input'); inp.type='number'; inp.className='qty-input'; inp.min='0'; inp.placeholder='—'; inp.id='qty-'+tagSafe+'-g'+gi;
     qtyEl.appendChild(inp);
     main.appendChild(nomeEl); main.appendChild(minEl); main.appendChild(qtyEl);
-    // linhas secundárias: fornecedor, prazo, fator
+    // linhas secundárias: fornecedores (só informativo), prazo, fator
     var sub=document.createElement('div'); sub.className='cat-item-sub';
     function subLine(lbl, val) {
       if (!val) return;
@@ -2248,9 +2266,10 @@ function renderCatSection(key, subKey) {
       d.innerHTML='<span class="cat-sub-lbl">'+lbl+'</span> '+val;
       sub.appendChild(d);
     }
-    subLine('Fornecedor', p.fornecedor);
-    subLine('Prazo', p.prazoEntrega);
-    subLine('Fator', p.fatorCompra!==''?p.fatorCompra:'');
+    var fornUnicos = g.fornecedores.filter(function(f,idx){ return g.fornecedores.indexOf(f)===idx; });
+    subLine(fornUnicos.length>1?'Fornecedores':'Fornecedor', fornUnicos.join(', '));
+    subLine('Prazo', g.prazoEntrega);
+    subLine('Fator', g.fatorCompra!==''?g.fatorCompra:'');
     item.appendChild(main); item.appendChild(sub); div.appendChild(item);
   });
   container.appendChild(div);
@@ -2308,21 +2327,20 @@ async function enviarPedido() {
     var key = parts[0]; var subKey = parts[1] || '';
     if (!CATALOGO[key]) return;
     var tagSafe = tagId.replace(/[^a-z0-9_]/gi,'_');
-    var subNorm2 = String(subKey||'').trim().toLowerCase();
-    CATALOGO[key].produtos.forEach(function(p,i){
-      if (subNorm2 && String(p.subcategoria||'').trim().toLowerCase() !== subNorm2) return;
-      var inp=document.getElementById('qty-'+tagSafe+'-'+i);
+    var grupos = getGrupoProdutos(key, subKey);
+    grupos.forEach(function(g, gi){
+      var inp=document.getElementById('qty-'+tagSafe+'-g'+gi);
       var qty=inp?parseFloat(inp.value):0;
       if(qty>0){
-        itensList.push({cat:CATALOGO[key].label,nome:p.nome,un:p.un,qty:qty,fornecedor:p.fornecedor||''});
+        itensList.push({cat:CATALOGO[key].label,nome:g.nome,un:g.un,qty:qty,fornecedor:g.fornecedores[0]||''});
         rowsToInsert.push({
           categoria:      key,
-          subcategoria:   subKey || (p.subcategoria || null),
-          produto_nome:   p.nome,
-          unidade_medida: p.un || null,
+          subcategoria:   subKey || null,
+          produto_nome:   g.nome,
+          unidade_medida: g.un || null,
           qtd_solicitada: qty,
-          fornecedor:     p.fornecedor || null,
-          valor_inicial:  p.valorUnitario || null
+          fornecedor:     null,
+          valor_inicial:  g.valorUnitario || null
         });
       }
     });
