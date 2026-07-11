@@ -798,8 +798,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="fg">
         <label class="flbl">Adicionar categoria</label>
         <div class="cat-add-row">
-          <select class="cat-select" id="sel-cat">
+          <select class="cat-select" id="sel-cat" onchange="popularSelectSubcategorias()">
             <option value="">Carregando categorias…</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg">
+        <label class="flbl">Subcategoria</label>
+        <div class="cat-add-row">
+          <select class="cat-select" id="sel-subcat">
+            <option value="">Todas</option>
           </select>
           <button class="btn-add-cat" onclick="addCategoria()">Adicionar</button>
         </div>
@@ -1322,6 +1330,25 @@ function popularSelectCategorias() {
     opt.value = key;
     opt.textContent = CATALOGO[key].label;
     sel.appendChild(opt);
+  });
+  popularSelectSubcategorias();
+}
+
+function popularSelectSubcategorias() {
+  var selSub = document.getElementById('sel-subcat');
+  if (!selSub) return;
+  var catKey = (document.getElementById('sel-cat') || {}).value;
+  selSub.innerHTML = '<option value="">Todas</option>';
+  if (!catKey || !CATALOGO[catKey]) return;
+  var subs = {};
+  (CATALOGO[catKey].produtos || []).forEach(function(p) {
+    var s = String(p.subcategoria || '').trim();
+    if (s) subs[s] = 1;
+  });
+  Object.keys(subs).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); }).forEach(function(s) {
+    var opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    selSub.appendChild(opt);
   });
 }
 
@@ -2155,15 +2182,18 @@ async function confirmarPedido() {
 function addCategoria() {
   var sel=document.getElementById('sel-cat'); var key=sel.value;
   if(!key){alert('Selecione uma categoria.');return;}
-  if(activeCats.indexOf(key)!==-1){alert('Categoria já adicionada.');return;}
-  activeCats.push(key); renderCatSection(key); sel.value='';
+  var subKey = (document.getElementById('sel-subcat')||{}).value || '';
+  var tagId = key + (subKey ? '::' + subKey : '');
+  if(activeCats.indexOf(tagId)!==-1){alert('Categoria/subcategoria já adicionada.');return;}
+  activeCats.push(tagId); renderCatSection(key, subKey); sel.value=''; popularSelectSubcategorias();
 }
-function renderCatSection(key) {
+function renderCatSection(key, subKey) {
   var cat=CATALOGO[key]; var container=document.getElementById('cat-sections');
-  var div=document.createElement('div'); div.className='cat-section'; div.id='cat-sec-'+key;
+  var secId = 'cat-sec-' + tagId.replace(/[^a-z0-9_]/gi,'_');
+  var div=document.createElement('div'); div.className='cat-section'; div.id=secId;
   var hdr=document.createElement('div'); hdr.className='cat-header';
-  var span=document.createElement('span'); span.className='cat-name'; span.textContent=cat.label;
-  var btnRem=document.createElement('button'); btnRem.className='cat-remove'; btnRem.textContent='×'; btnRem.onclick=function(){removeCategoria(key);};
+  var span=document.createElement('span'); span.className='cat-name'; span.textContent=cat.label + (subKey ? ' — ' + subKey : '');
+  var btnRem=document.createElement('button'); btnRem.className='cat-remove'; btnRem.textContent='×'; btnRem.onclick=function(){removeCategoria(tagId);};
   hdr.appendChild(span); hdr.appendChild(btnRem);
   // header row
   var hdrRow=document.createElement('div'); hdrRow.className='cat-item-header';
@@ -2173,11 +2203,13 @@ function renderCatSection(key) {
   hdrRow.appendChild(hNome); hdrRow.appendChild(hMin); hdrRow.appendChild(hQty);
   div.appendChild(hdr); div.appendChild(hdrRow);
 
-  // sort by fornecedor then nome
-  var sorted=cat.produtos.map(function(p,i){return {p:p,i:i};}).sort(function(a,b){
-    var fA=a.p.fornecedor||''; var fB=b.p.fornecedor||'';
-    return fA.localeCompare(fB,'pt-BR') || a.p.nome.localeCompare(b.p.nome,'pt-BR');
-  });
+  // filtra por subcategoria (se selecionada) e ordena por fornecedor + nome
+  var sorted=cat.produtos.map(function(p,i){return {p:p,i:i};})
+    .filter(function(o){ return !subKey || String(o.p.subcategoria||'').trim() === subKey; })
+    .sort(function(a,b){
+      var fA=a.p.fornecedor||''; var fB=b.p.fornecedor||'';
+      return fA.localeCompare(fB,'pt-BR') || a.p.nome.localeCompare(b.p.nome,'pt-BR');
+    });
 
   sorted.forEach(function(obj){
     var p=obj.p; var origIdx=obj.i;
@@ -2197,7 +2229,7 @@ function renderCatSection(key) {
     }
     var minEl=document.createElement('span'); minEl.className='cat-col-num'; minEl.textContent=p.pedidoMinimo!==''?p.pedidoMinimo:'—';
     var qtyEl=document.createElement('span'); qtyEl.className='cat-col-qty';
-    var inp=document.createElement('input'); inp.type='number'; inp.className='qty-input'; inp.min='0'; inp.placeholder='—'; inp.id='qty-'+key+'-'+origIdx;
+    var inp=document.createElement('input'); inp.type='number'; inp.className='qty-input'; inp.min='0'; inp.placeholder='—'; inp.id='qty-'+tagId.replace(/[^a-z0-9_]/gi,'_')+'-'+origIdx;
     qtyEl.appendChild(inp);
     main.appendChild(nomeEl); main.appendChild(minEl); main.appendChild(qtyEl);
     // linhas secundárias: fornecedor, prazo, fator
@@ -2215,9 +2247,10 @@ function renderCatSection(key) {
   });
   container.appendChild(div);
 }
-function removeCategoria(key) {
-  activeCats=activeCats.filter(function(k){return k!==key;});
-  var el=document.getElementById('cat-sec-'+key); if(el)el.remove();
+function removeCategoria(tagId) {
+  activeCats=activeCats.filter(function(k){return k!==tagId;});
+  var secId = 'cat-sec-' + tagId.replace(/[^a-z0-9_]/gi,'_');
+  var el=document.getElementById(secId); if(el)el.remove();
 }
 
 // ── GERAÇÃO DE ID POR UNIDADE ─────────────────────────────────────────────────
@@ -2262,14 +2295,20 @@ async function enviarPedido() {
   if(activeCats.length===0){alert('Adicione ao menos uma categoria.');return;}
   var itensList=[];
   var rowsToInsert=[];
-  activeCats.forEach(function(key){
+  activeCats.forEach(function(tagId){
+    var parts = tagId.split('::');
+    var key = parts[0]; var subKey = parts[1] || '';
+    if (!CATALOGO[key]) return;
+    var tagSafe = tagId.replace(/[^a-z0-9_]/gi,'_');
     CATALOGO[key].produtos.forEach(function(p,i){
-      var inp=document.getElementById('qty-'+key+'-'+i);
+      if (subKey && String(p.subcategoria||'').trim() !== subKey) return;
+      var inp=document.getElementById('qty-'+tagSafe+'-'+i);
       var qty=inp?parseFloat(inp.value):0;
       if(qty>0){
         itensList.push({cat:CATALOGO[key].label,nome:p.nome,un:p.un,qty:qty,fornecedor:p.fornecedor||''});
         rowsToInsert.push({
           categoria:      key,
+          subcategoria:   subKey || (p.subcategoria || null),
           produto_nome:   p.nome,
           unidade_medida: p.un || null,
           qtd_solicitada: qty,
@@ -2286,7 +2325,7 @@ async function enviarPedido() {
   var obsVal=document.getElementById('modal-obs').value.trim();
   var deptoSel = (document.getElementById('pedido-depto')||{}).value || DEPARTAMENTO;
   var newIdDisplay = await gerarIdDisplay(UNIDADE);
-  var cats=activeCats.map(function(k){return CATALOGO[k].label.split(' ')[0];});
+  var cats=activeCats.map(function(k){var key=k.split('::')[0]; return (CATALOGO[key]&&CATALOGO[key].label||key).split(' ')[0];});
   var newOrder={id:newIdDisplay,idDisplay:newIdDisplay,status:'b-enviado',label:'Aguardando compra',cats:cats,data:dataStr,entrega:'—',obs:obsVal,aba:'processamento',itensList:itensList,raw:{unidade:UNIDADE,departamento:deptoSel,dataSolicitacao:dataISO,status:'solicitado',obsSolicitante:obsVal}};
 
   if (supa) {
