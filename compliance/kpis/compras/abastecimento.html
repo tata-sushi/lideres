@@ -2628,6 +2628,7 @@ function renderAba(aba) {
       groups[u].forEach(function(o) {
         if (o.fornecedores && o.fornecedores.length) {
           o.fornecedores.forEach(function(f, fi) {
+            if (f.status === 'b-concluido' || f.status === 'b-conferido' || f.status === 'b-nao-realizado') return;
             if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
             html += fornCardHTML(o, f, fi);
           });
@@ -2654,6 +2655,7 @@ function renderAba(aba) {
     if (aba === 'entregas') {
       if (o.fornecedores && o.fornecedores.length) {
         o.fornecedores.forEach(function(f, fi) {
+          if (f.status === 'b-concluido' || f.status === 'b-conferido' || f.status === 'b-nao-realizado') return;
           if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
           tableRows += fornTableRowHTML(o, f, fi);
         });
@@ -2966,20 +2968,22 @@ var nfBonusCount = 0;
 async function abrirModalNF(orderId, fornIdx, readonly) {
   var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===orderId){order=ORDERS[i];break;}} if(!order)return;
   var forn = order.fornecedores ? order.fornecedores[fornIdx] : {nome:'—', itens:order.itensList||[]};
+  var isMultiForn = !!(order.fornecedores && order.fornecedores.length);
   var isReadonly = readonly === true;
   nfOrderId=orderId; nfFornIdx=fornIdx; nfBonusCount=0;
 
-  // Prefill com dados já salvos (se houver)
-  document.getElementById('nf-numero').value = (forn && forn.notaFiscal) || (order.raw && order.raw.notaFiscal) || '';
-  document.getElementById('nf-data-emissao').value = (forn && forn.dataEmissaoNf) || (order.raw && order.raw.dataEmissao) || '';
-  document.getElementById('nf-data-receb').value = (forn && forn.dataRecebNf) || (order.raw && order.raw.dataRecebimento) || new Date().toISOString().split('T')[0];
-  document.getElementById('nf-data-venc').value = (forn && forn.dataVencimento) || (order.raw && order.raw.dataVencimento) || '';
+  // Prefill com dados já salvos (se houver) — em pedidos com split por fornecedor,
+  // NÃO cair no fallback agregado do pedido (order.raw), pois ele mistura dados de outro fornecedor
+  document.getElementById('nf-numero').value = (forn && forn.notaFiscal) || (!isMultiForn && order.raw && order.raw.notaFiscal) || '';
+  document.getElementById('nf-data-emissao').value = (forn && forn.dataEmissaoNf) || (!isMultiForn && order.raw && order.raw.dataEmissao) || '';
+  document.getElementById('nf-data-receb').value = (forn && forn.dataRecebNf) || (!isMultiForn && order.raw && order.raw.dataRecebimento) || new Date().toISOString().split('T')[0];
+  document.getElementById('nf-data-venc').value = (forn && forn.dataVencimento) || (!isMultiForn && order.raw && order.raw.dataVencimento) || '';
   if (!RECEBEDORES.length) await carregarRecebedores();
   var selQuem=document.getElementById('nf-quem');
   selQuem.innerHTML='<option value="">Selecionar…</option>';
   RECEBEDORES.forEach(function(r){ var o=document.createElement('option'); o.value=r; o.textContent=r; selQuem.appendChild(o); });
-  selQuem.value = (forn && forn.recebedor) || (order.raw && order.raw.recebidoPor) || '';
-  document.getElementById('nf-obs').value = (forn && forn.obsRecebimento) || (order.raw && order.raw.obsEstoque) || '';
+  selQuem.value = (forn && forn.recebedor) || (!isMultiForn && order.raw && order.raw.recebidoPor) || '';
+  document.getElementById('nf-obs').value = (forn && forn.obsRecebimento) || (!isMultiForn && order.raw && order.raw.obsEstoque) || '';
   document.getElementById('nf-fornecedor-ro').textContent=forn.nome;
   document.getElementById('nf-pedido-ro').textContent=orderId+' · '+order.cats.join(', ');
   document.getElementById('nf-title').textContent=(isReadonly?'Recebimento — ':'Validar Recebimento — ')+'Pedido '+(order.idDisplay||('#'+orderId));
