@@ -2017,11 +2017,12 @@ async function abrirModalView(id) {
     // Pega o fornecedor mais avançado
     var fornIdx = -1, priority = -1;
     order.fornecedores.forEach(function(f, i){
-      var p = f.status === 'b-conferido' ? 3 : f.status === 'b-concluido' ? 2 : 1;
+      var p = f.status === 'b-conferido' ? 4 : f.status === 'b-concluido' ? 3 : f.status === 'b-nao-realizado' ? 2 : 1;
       if (p > priority) { priority = p; fornIdx = i; }
     });
     var fmax = fornIdx >= 0 ? order.fornecedores[fornIdx] : null;
     if (fmax && fmax.status === 'b-conferido') return abrirModalConferencia(id, fornIdx, true);
+    if (fmax && fmax.status === 'b-nao-realizado') return abrirModalConferencia(id, fornIdx, false);
     if (fmax && fmax.status === 'b-concluido') return abrirModalNF(id, fornIdx, true);
   }
   document.getElementById('view-title').textContent='Pedido '+(order.idDisplay||('#'+order.id));
@@ -2759,17 +2760,11 @@ function confTableRowHTML(o, forn, fi) {
   var nfNum      = (forn && forn.notaFiscal) || raw.notaFiscal || '';
   var itensCount = forn ? forn.itens.length : o.itensList.length;
   var isConf = forn ? forn.status === 'b-conferido' : o.status === 'b-conferido';
-  var isNaoRealizado = forn ? forn.status === 'b-nao-realizado' : o.status === 'b-nao-realizado';
   var pedidoTxt = 'Pedido '+(o.idDisplay||('#'+o.id))+(nfNum?' — NF '+nfNum:'');
   var badgeCls = isConf ? 'b-conferido' : (forn ? forn.status : o.status);
   var badgeLbl = isConf ? 'Conferido' : (forn ? forn.label : o.label);
-  var btnHtml;
-  if (isNaoRealizado) {
-    btnHtml = '<button class="btn-dt-edit" onclick="abrirModalView(\''+o.id+'\')">'+EYE_SVG+'</button>';
-  } else {
-    var arg = forn ? ("'"+o.id+"',"+fi+","+(isConf?'true':'false')) : ("'"+o.id+"',null,"+(isConf?'true':'false'));
-    btnHtml = '<button class="btn-dt-edit" onclick="abrirModalConferencia('+arg+')">'+(isConf?EYE_SVG:PENCIL_SVG)+'</button>';
-  }
+  var arg = forn ? ("'"+o.id+"',"+fi+","+(isConf?'true':'false')) : ("'"+o.id+"',null,"+(isConf?'true':'false'));
+  var btnHtml = '<button class="btn-dt-edit" onclick="abrirModalConferencia('+arg+')">'+(isConf?EYE_SVG:PENCIL_SVG)+'</button>';
   return '<tr>'+
     '<td><div class="dt-num">'+pedidoTxt+'</div></td>'+
     '<td class="dt-unit">'+unidDepto+'</td>'+
@@ -3266,19 +3261,11 @@ function renderConferencia() {
         var titulo = 'Pedido ' + (o.idDisplay || ('#' + o.id)) + (nfNum ? ' — NF ' + nfNum : '');
         var badgeCls = isConf ? 'b-conferido' : (isNaoRealizado ? 'b-nao-realizado' : 'b-concluido');
         var badgeLbl = isConf ? 'Conferido' : (isNaoRealizado ? 'Pedido não realizado' : 'Recebido');
-        var footerBtn;
-        if (isNaoRealizado) {
-          footerBtn = '<button class="btn-ver" onclick="abrirModalView(\'' + o.id + '\')">' +
-              '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' +
-              ' Visualizar' +
-            '</button>';
-        } else {
-          var arg = forn ? ("'"+o.id+"',"+fi+","+(isConf?'true':'false')) : ("'"+o.id+"',null,"+(isConf?'true':'false'));
-          footerBtn = '<button class="btn-ver" onclick="abrirModalConferencia(' + arg + ')">' +
-              '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
-              ' Conferir' +
-            '</button>';
-        }
+        var arg = forn ? ("'"+o.id+"',"+fi+","+(isConf?'true':'false')) : ("'"+o.id+"',null,"+(isConf?'true':'false'));
+        var footerBtn = '<button class="btn-ver" onclick="abrirModalConferencia(' + arg + ')">' +
+            '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
+            ' Conferir' +
+          '</button>';
         html += '<div class="card">' +
           '<div class="card-header"><div><div class="order-title">' + titulo + '</div></div>' +
           '<span class="badge ' + badgeCls + '">' + badgeLbl + '</span></div>' +
