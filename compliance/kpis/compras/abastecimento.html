@@ -2020,6 +2020,17 @@ async function abrirModalPorForn(orderId, fornIdx) {
   return abrirModalView(orderId);
 }
 
+// Igual acima, mas SEMPRE somente-leitura — usado na aba Pedidos (visão geral, sem ações)
+async function abrirModalPorFornView(orderId, fornIdx) {
+  var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===orderId){order=ORDERS[i];break;}} if(!order)return;
+  var forn = order.fornecedores ? order.fornecedores[fornIdx] : null;
+  if (!forn) return abrirModalView(orderId);
+  if (forn.status === 'b-conferido')     return abrirModalConferencia(orderId, fornIdx, true);
+  if (forn.status === 'b-nao-realizado') return abrirModalConferencia(orderId, fornIdx, true);
+  if (forn.status === 'b-concluido')     return abrirModalNF(orderId, fornIdx, true);
+  return abrirModalView(orderId);
+}
+
 // ── MODAL VISUALIZAR ──────────────────────────────────────────────────────────
 async function abrirModalView(id) {
   var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===id){order=ORDERS[i];break;}} if(!order)return;
@@ -2613,12 +2624,21 @@ function renderAba(aba) {
   unidadeOrder.forEach(function(u) {
     html += '<div class="col-unidade">';
     if (u && u !== '—') html += '<div class="col-unidade-lbl">' + u + '</div>';
-    if (aba === 'entregas' || aba === 'pedidos') {
+    if (aba === 'entregas') {
       groups[u].forEach(function(o) {
         if (o.fornecedores && o.fornecedores.length) {
           o.fornecedores.forEach(function(f, fi) {
             if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
             html += fornCardHTML(o, f, fi);
+          });
+        } else { html += cardHTML(o, aba); }
+      });
+    } else if (aba === 'pedidos') {
+      groups[u].forEach(function(o) {
+        if (o.fornecedores && o.fornecedores.length) {
+          o.fornecedores.forEach(function(f, fi) {
+            if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
+            html += pedidoFornCardHTML(o, f, fi);
           });
         } else { html += cardHTML(o, aba); }
       });
@@ -2631,11 +2651,18 @@ function renderAba(aba) {
   // ── Desktop table ─────────────────────────────────────────────────────────
   var tableRows = '';
   sortDeskLista(lista).forEach(function(o) {
-    if (aba === 'entregas' || aba === 'pedidos') {
+    if (aba === 'entregas') {
       if (o.fornecedores && o.fornecedores.length) {
         o.fornecedores.forEach(function(f, fi) {
           if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
           tableRows += fornTableRowHTML(o, f, fi);
+        });
+      } else { tableRows += tableRowHTML(o, aba); }
+    } else if (aba === 'pedidos') {
+      if (o.fornecedores && o.fornecedores.length) {
+        o.fornecedores.forEach(function(f, fi) {
+          if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
+          tableRows += pedidoFornTableRowHTML(o, f, fi);
         });
       } else { tableRows += tableRowHTML(o, aba); }
     } else {
@@ -2758,6 +2785,65 @@ function fornTableRowHTML(order, forn, fi) {
     '<td><span class="badge '+forn.status+'">'+forn.label+'</span></td>'+
     '<td><button class="btn-dt-edit" onclick="'+btnFn+'('+btnArgs+')">'+icone+'</button></td>'+
   '</tr>';
+}
+
+// Linha de fornecedor/NF para a aba Pedidos — sempre visualização, nunca ação
+function pedidoFornTableRowHTML(order, forn, fi) {
+  var dataCompra = fmtDataBR((order.raw&&order.raw.dataCompraProc)||'');
+  var dataPrev   = fmtDataBR(forn.dataPrev||(order.raw&&order.raw.dataEntregaPrevista));
+  var isRecebido = forn.status==='b-concluido' || forn.status==='b-conferido';
+  var dataReceb  = forn.dataReceb?fmtDataBR(forn.dataReceb):(isRecebido?fmtDataBR(order.raw&&order.raw.dataRecebimento):'—');
+  var unidade    = (order.raw&&order.raw.unidade)||'—';
+  var depto      = (order.raw&&order.raw.departamento)||'';
+  var unidDepto  = unidade + (depto ? ' - '+depto : '');
+  var solicitante= abreviarNome((order.raw&&order.raw.solicitante)||'');
+  var btnArgs = "'"+order.id+"',"+fi;
+  return '<tr>'+
+    '<td><div class="dt-num">Pedido '+(order.idDisplay||('#'+order.id))+'</div>'+(solicitante?'<div class="dt-sub">'+solicitante+'</div>':'')+' </td>'+
+    '<td class="dt-unit">'+unidDepto+'</td>'+
+    '<td class="dt-forn">'+forn.nome+'</td>'+
+    '<td class="dt-date">'+(order.data||'—')+'</td>'+
+    '<td class="dt-date">'+(dataCompra||'—')+'</td>'+
+    '<td class="dt-date">'+(dataPrev||'—')+'</td>'+
+    '<td class="dt-date">'+dataReceb+'</td>'+
+    '<td class="dt-qty">'+forn.itens.length+'</td>'+
+    '<td><span class="badge '+forn.status+'">'+forn.label+'</span></td>'+
+    '<td><button class="btn-dt-edit" onclick="abrirModalPorFornView('+btnArgs+')">'+EYE_SVG+'</button></td>'+
+  '</tr>';
+}
+
+function pedidoFornCardHTML(order, forn, fi) {
+  var isRecebido = forn.status === 'b-concluido' || forn.status === 'b-conferido';
+  var titulo = 'Pedido ' + (order.idDisplay || ('#' + order.id));
+  var solicitante = (order.raw && order.raw.solicitante) || '';
+  var dataCompra = fmtDataBR((order.raw && order.raw.dataCompraProc) || '');
+  var dataPrev  = fmtDataBR(forn.dataPrev || (order.raw && order.raw.dataEntregaPrevista));
+  var dataReceb = forn.dataReceb ? fmtDataBR(forn.dataReceb) : (isRecebido ? fmtDataBR(order.raw && order.raw.dataRecebimento) : '—');
+  var btnArgs = "'"+order.id+"',"+fi;
+  return '<div class="card">'+
+    '<div class="card-header"><div>'+
+      '<div class="order-title">'+titulo+'</div>'+
+      (solicitante ? '<div class="order-sub">'+solicitante+'</div>' : '')+
+    '</div><span class="badge '+forn.status+'">'+forn.label+'</span></div>'+
+    '<div class="card-body">'+
+      '<div class="card-dates-row">'+
+        '<div class="card-field"><span class="field-label">Data da Solicitação</span><span class="field-value">'+(order.data||'—')+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Data da Compra</span><span class="field-value">'+(dataCompra||'—')+'</span></div>'+
+      '</div>'+
+      '<div class="card-dates-row">'+
+        '<div class="card-field"><span class="field-label">Data de Entrega</span><span class="field-value">'+(dataPrev||'—')+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Data de Recebimento</span><span class="field-value">'+dataReceb+'</span></div>'+
+      '</div>'+
+      '<div class="card-meta-row">'+
+        '<div class="card-field"><span class="field-label">Categoria</span><span class="field-value">'+(order.cats.join(', ')||'—')+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Fornecedor</span><span class="field-value">'+forn.nome+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Itens</span><span class="field-value">'+forn.itens.length+'</span></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="card-footer" style="justify-content:flex-end;"><button class="btn-ver" onclick="abrirModalPorFornView('+btnArgs+')">'+
+      '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'+
+      ' Visualizar</button></div>'+
+  '</div>';
 }
 
 function confTableRowHTML(o, forn, fi) {
