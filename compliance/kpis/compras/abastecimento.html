@@ -3770,7 +3770,7 @@ async function confirmarBaixaNF() {
       var vlDigitado=parseFloat(inpVl&&inpVl.value&&inpVl.value!==''?inpVl.value:0);
       var vlRec=vlDigitado>0 ? vlDigitado : (item.vlCompra||item.vlPedido||0);
       itensPdf.push({nome:item.nome,un:item.un,qtdPedido:item.qty||0,vlPedido:item.vlPedido||0,rec:rec,vlRec:vlRec});
-      itensApi.push({produtoNome:item.nome, qtdRecebida:rec, vlUnit:vlRec, _supaId:item._supaId||null});
+      itensApi.push({produtoNome:item.nome, qtdComprada:item.qty||0, qtdRecebida:rec, vlUnit:vlRec, _supaId:item._supaId||null});
     });
   }
   // Bonificações
@@ -3823,9 +3823,9 @@ async function confirmarBaixaNF() {
   // Sincroniza com o Supabase
   if (supa && order) {
     try {
-      var newStatus =
-        order.status === 'b-concluido'      ? 'recebido'       :
-        order.status === 'b-parcial-entrega' ? 'parcial_entrega' : 'comprado';
+      // Status é calculado só com os itens DESTE fornecedor/NF — não mexe nas linhas dos outros fornecedores do mesmo pedido
+      var newStatus = (itensApi.length > 0 && itensApi.every(function(it){ return it.qtdRecebida >= it.qtdComprada; }))
+        ? 'recebido' : 'comprado';
       var itemUpdates = itensApi.map(function(it) {
         var upd = {
           qtd_recebida:           it.qtdRecebida,
@@ -3836,13 +3836,13 @@ async function confirmarBaixaNF() {
           data_vencimento_boleto: dVenc || null,
           recebedor:              dadosNF.quem || null,
           obs_recebimento:        dadosNF.obs || null,
-          atualizado_por:         (currentUser && currentUser.name) || dadosNF.quem || null
+          atualizado_por:         (currentUser && currentUser.name) || dadosNF.quem || null,
+          status:                 newStatus
         };
         return it._supaId
           ? supa.from('abastecimento').update(upd).eq('id', it._supaId)
           : supa.from('abastecimento').update(upd).eq('id_display', order.id).eq('produto_nome', it.produtoNome);
       });
-      itemUpdates.push(supa.from('abastecimento').update({status: newStatus}).eq('id_display', order.id));
       var results = await Promise.all(itemUpdates);
       var erros = results.filter(function(r) { return r.error; });
       if (erros.length) throw new Error(erros[0].error.message);
