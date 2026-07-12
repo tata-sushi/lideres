@@ -1373,6 +1373,7 @@ function statusBackendParaUI(p) {
     parcial_entrega:  { cls:'b-parcial-entrega',  lbl:'Recebimento parcial',    aba:'entregas' },
     recebido:         { cls:'b-concluido',        lbl:'Recebido',               aba:'conferencia' },
     conferido:        { cls:'b-conferido',        lbl:'Conferido',              aba:'conferencia' },
+    nao_realizado:    { cls:'b-nao-realizado',     lbl:'Pedido não realizado',   aba:'conferencia' },
     cancelado:        { cls:'b-rascunho',         lbl:'Cancelado',              aba:'pedidos' }
   };
   return map[p.status] || { cls:'b-enviado', lbl:'Aguardando compra', aba:'processamento' };
@@ -1532,7 +1533,7 @@ function rowsParaUI(idDisplay, rows) {
 
   // Agrupa por fornecedor + NF (aba Entregas/Conferência)
   var fornecedores = null;
-  if (status === 'comprado' || status === 'parcial' || status === 'recebido' || status === 'parcial_entrega' || status === 'conferido') {
+  if (status === 'comprado' || status === 'parcial' || status === 'recebido' || status === 'parcial_entrega' || status === 'conferido' || status === 'nao_realizado') {
     var grupos = {}, ordemGrupos = [];
     rows.forEach(function(row) {
       var f = String(row.fornecedor || '').trim() || '—';
@@ -2155,7 +2156,11 @@ async function confirmarPedido() {
   order.fornecedores = Object.keys(fornGroups).map(function(forn){
     return { nome: forn, status:'b-aguardando', label:'Aguardando recebimento', itens: fornGroups[forn] };
   });
-  order.status='b-aguardando'; order.label='Aguardando recebimento'; order.aba='entregas';
+  if (order.fornecedores.length === 0) {
+    order.status='b-nao-realizado'; order.label='Pedido não realizado'; order.aba='conferencia';
+  } else {
+    order.status='b-aguardando'; order.label='Aguardando recebimento'; order.aba='entregas';
+  }
 
   if (supa) {
     try {
@@ -2171,7 +2176,7 @@ async function confirmarPedido() {
           data_entrega:  d.entregaISO || null,
           comprador:     comprador,
           obs_compras:   dadosProc.obs || null,
-          status:        'comprado',
+          status:        d.conf > 0 ? 'comprado' : 'nao_realizado',
           atualizado_por: comprador
         };
         if (d.vlNovo) updateData.valor_inicial = d.vl; // só sobrescreve se usuário digitou
@@ -2182,7 +2187,8 @@ async function confirmarPedido() {
       var results = await Promise.all(updates);
       var erros = results.filter(function(r) { return r.error; });
       if (erros.length) throw new Error(erros[0].error.message);
-      if (order.raw) { order.raw.status = 'comprado'; order.raw.comprador = comprador; }
+      var algumComprado = order.itensList.some(function(item, idx){ return (dadosProc[idx]||{}).conf > 0; });
+      if (order.raw) { order.raw.status = algumComprado ? 'comprado' : 'nao_realizado'; order.raw.comprador = comprador; }
       alert('Pedido '+order.id+' enviado para entregas.');
     } catch(e) {
       toast('Erro ao atualizar Compras: ' + e.message, true);
