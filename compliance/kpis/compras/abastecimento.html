@@ -79,6 +79,7 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 .b-parcial-entrega  { background: #FFF4DC; color: #7A4A00; }
 .b-conferido        { background: var(--carbon); color: var(--citric); }
 .b-nao-realizado    { background: #FFF4DC; color: #7A4A00; }
+.b-nao-recebido     { background: #FBE0DC; color: #8A2E12; }
 .nf-foto-thumb { width: 34px; height: 34px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border); cursor: zoom-in; flex-shrink: 0; transition: transform .12s; }
 .nf-foto-thumb:hover { transform: scale(1.05); }
 .foto-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 99999; display: none; align-items: center; justify-content: center; cursor: zoom-out; padding: 20px; }
@@ -970,6 +971,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-btn-cancel" onclick="fecharModalNF()">Cancelar</button>
+      <button class="modal-btn modal-btn-naorecebido" onclick="marcarNaoRecebido()" style="background:#FBE0DC;color:#8A2E12;">Não recebido</button>
       <button class="modal-btn modal-btn-confirm" onclick="confirmarBaixaNF()">Confirmar Recebimento</button>
     </div>
   </div>
@@ -1374,6 +1376,7 @@ function statusBackendParaUI(p) {
     recebido:         { cls:'b-concluido',        lbl:'Recebido',               aba:'conferencia' },
     conferido:        { cls:'b-conferido',        lbl:'Conferido',              aba:'conferencia' },
     nao_realizado:    { cls:'b-nao-realizado',     lbl:'Pedido não realizado',   aba:'conferencia' },
+    nao_recebido:     { cls:'b-nao-recebido',       lbl:'Não recebido',           aba:'processamento' },
     cancelado:        { cls:'b-rascunho',         lbl:'Cancelado',              aba:'pedidos' }
   };
   return map[p.status] || { cls:'b-enviado', lbl:'Aguardando compra', aba:'processamento' };
@@ -1533,7 +1536,7 @@ function rowsParaUI(idDisplay, rows) {
 
   // Agrupa por fornecedor + NF (aba Entregas/Conferência)
   var fornecedores = null;
-  if (status === 'comprado' || status === 'parcial' || status === 'recebido' || status === 'parcial_entrega' || status === 'conferido' || status === 'nao_realizado') {
+  if (status === 'comprado' || status === 'parcial' || status === 'recebido' || status === 'parcial_entrega' || status === 'conferido' || status === 'nao_realizado' || status === 'nao_recebido') {
     var grupos = {}, ordemGrupos = [];
     rows.forEach(function(row) {
       var f = String(row.fornecedor || '').trim() || '—';
@@ -1553,6 +1556,7 @@ function rowsParaUI(idDisplay, rows) {
           return Number(row.qtd_recebida) >= Number(row.qtd_comprada);
         });
         var todosConferidos = !naoRealizado && its.every(function(row) { return row.status === 'conferido'; });
+        var todosNaoRecebidos = !naoRealizado && its.every(function(row) { return row.status === 'nao_recebido'; });
         // pega primeira row com valor não-vazio para cada campo (evita bonif com null sobrescrever)
         function firstNonEmpty(field) {
           for (var i = 0; i < its.length; i++) {
@@ -1570,8 +1574,8 @@ function rowsParaUI(idDisplay, rows) {
           recebedor:       firstNonEmpty('recebedor') || '',
           obsRecebimento:  firstNonEmpty('obs_recebimento') || '',
           obsConferente:   firstNonEmpty('obs_conferente') || '',
-          status:    naoRealizado ? 'b-nao-realizado' : (todosConferidos ? 'b-conferido' : (todosRecebidos ? 'b-concluido' : 'b-aguardando')),
-          label:     naoRealizado ? 'Pedido não realizado' : (todosConferidos ? 'Conferido' : (todosRecebidos ? 'Recebido' : 'Aguardando recebimento')),
+          status:    naoRealizado ? 'b-nao-realizado' : (todosNaoRecebidos ? 'b-nao-recebido' : (todosConferidos ? 'b-conferido' : (todosRecebidos ? 'b-concluido' : 'b-aguardando'))),
+          label:     naoRealizado ? 'Pedido não realizado' : (todosNaoRecebidos ? 'Não recebido' : (todosConferidos ? 'Conferido' : (todosRecebidos ? 'Recebido' : 'Aguardando recebimento'))),
           dataPrev:  its.map(function(r){return r.data_entrega||'';}).filter(Boolean).sort().pop() || '',
           dataReceb: its[0].data_recebimento || '',
           itens: its.map(function(row) {
@@ -1589,9 +1593,13 @@ function rowsParaUI(idDisplay, rows) {
       });
       if (fornecedores.length > 0) {
         var todosNaoRealizados = fornecedores.every(function(f) { return f.status === 'b-nao-realizado'; });
+        var todosNaoRecebidos  = fornecedores.every(function(f) { return f.status === 'b-nao-recebido'; });
         if (todosNaoRealizados) {
           // Nada foi comprado em nenhum fornecedor — não há o que receber, vai direto pra Conferência.
           s = { cls: 'b-nao-realizado', lbl: 'Pedido não realizado', aba: 'conferencia' };
+        } else if (todosNaoRecebidos) {
+          // Nenhum fornecedor entregou — volta pro Processamento pra reprocessar a compra.
+          s = { cls: 'b-nao-recebido', lbl: 'Não recebido', aba: 'processamento' };
         } else if (fornecedores.length > 1) {
           var algumFeito = fornecedores.some(function(f) { return f.status === 'b-concluido'; });
           var algumPend  = fornecedores.some(function(f) { return f.status === 'b-aguardando'; });
@@ -2016,6 +2024,7 @@ async function abrirModalPorForn(orderId, fornIdx) {
   if (!forn) return abrirModalView(orderId);
   if (forn.status === 'b-conferido')     return abrirModalConferencia(orderId, fornIdx, true);
   if (forn.status === 'b-nao-realizado') return abrirModalConferencia(orderId, fornIdx, false);
+  if (forn.status === 'b-nao-recebido')  return abrirModalConferencia(orderId, fornIdx, true);
   if (forn.status === 'b-concluido')     return abrirModalNF(orderId, fornIdx, true);
   return abrirModalView(orderId);
 }
@@ -2027,6 +2036,7 @@ async function abrirModalPorFornView(orderId, fornIdx) {
   if (!forn) return abrirModalView(orderId);
   if (forn.status === 'b-conferido')     return abrirModalConferencia(orderId, fornIdx, true);
   if (forn.status === 'b-nao-realizado') return abrirModalConferencia(orderId, fornIdx, true);
+  if (forn.status === 'b-nao-recebido')  return abrirModalConferencia(orderId, fornIdx, true);
   if (forn.status === 'b-concluido')     return abrirModalNF(orderId, fornIdx, true);
   return abrirModalView(orderId);
 }
@@ -2597,7 +2607,7 @@ function renderAba(aba) {
   base = base.filter(function(o) {
     if (aba === 'pedidos') return true;
     if (aba === 'processamento') return o.status !== 'b-conferido' && o.status !== 'b-nao-realizado';
-    if (aba === 'entregas') return o.status !== 'b-conferido' && o.status !== 'b-concluido' && o.status !== 'b-nao-realizado';
+    if (aba === 'entregas') return o.status !== 'b-conferido' && o.status !== 'b-concluido' && o.status !== 'b-nao-realizado' && o.status !== 'b-nao-recebido';
     return true;
   });
   var lista = aplicarFiltros(base);
@@ -2628,7 +2638,7 @@ function renderAba(aba) {
       groups[u].forEach(function(o) {
         if (o.fornecedores && o.fornecedores.length) {
           o.fornecedores.forEach(function(f, fi) {
-            if (f.status === 'b-concluido' || f.status === 'b-conferido' || f.status === 'b-nao-realizado') return;
+            if (f.status === 'b-concluido' || f.status === 'b-conferido' || f.status === 'b-nao-realizado' || f.status === 'b-nao-recebido') return;
             if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
             html += fornCardHTML(o, f, fi);
           });
@@ -2735,7 +2745,7 @@ function buildDeskHead() {
 
 function tableRowHTML(o, aba) {
   var id = o.id;
-  var podeProcessar = (o.status==='b-enviado'||o.status==='b-proc');
+  var podeProcessar = (o.status==='b-enviado'||o.status==='b-proc'||o.status==='b-nao-recebido');
   var podeReceber   = (o.status==='b-aguardando');
   var modoAcao = (aba==='processamento'&&podeProcessar)?'proc':(aba==='entregas'&&podeReceber)?'nf':'view';
   var fnBtn = modoAcao==='proc'?'abrirModalProc':modoAcao==='nf'?'abrirModalNF':'abrirModalView';
@@ -3003,7 +3013,9 @@ async function abrirModalNF(orderId, fornIdx, readonly) {
   });
   var btnConf = modal.querySelector('.modal-btn-confirm');
   var btnCancel = modal.querySelector('.modal-btn-cancel');
+  var btnNaoReceb = modal.querySelector('.modal-btn-naorecebido');
   if (btnConf) btnConf.style.display = isReadonly ? 'none' : '';
+  if (btnNaoReceb) btnNaoReceb.style.display = isReadonly ? 'none' : '';
   if (btnCancel) btnCancel.textContent = isReadonly ? 'Fechar' : 'Cancelar';
 
   modal.classList.add('active'); lockBodyScroll();
@@ -3325,7 +3337,7 @@ function renderConferencia() {
   // pedidos multi-fornecedor onde só uma parte já foi recebida (aba geral fica 'entregas')
   var base = ORDERS.filter(function(o) {
     if (o.aba === 'conferencia') return true;
-    return !!(o.fornecedores && o.fornecedores.some(function(f) { return f.status !== 'b-aguardando'; }));
+    return !!(o.fornecedores && o.fornecedores.some(function(f) { return f.status !== 'b-aguardando' && f.status !== 'b-nao-recebido'; }));
   });
   var lista = aplicarFiltros(base);
 
@@ -3345,7 +3357,7 @@ function renderConferencia() {
 
   function forEachForn(o, cb) {
     if (o.fornecedores && o.fornecedores.length) {
-      o.fornecedores.forEach(function(f, fi) { if (f.status !== 'b-aguardando') cb(f, fi); });
+      o.fornecedores.forEach(function(f, fi) { if (f.status !== 'b-aguardando' && f.status !== 'b-nao-recebido') cb(f, fi); });
     } else {
       cb(null, null);
     }
@@ -3918,6 +3930,50 @@ async function confirmarBaixaNF() {
   fecharModalNF();
   await carregarPedidos();
   if(savedOrder && savedForn) setTimeout(function(){gerarPDFBaixaNF(savedOrder, savedForn, dadosNF, savedUpload);},400);
+}
+
+// ── MARCAR NÃO RECEBIDO (fornecedor não entregou) ────────────────────────────
+async function marcarNaoRecebido() {
+  var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===nfOrderId){order=ORDERS[i];break;}}
+  if(!order) return;
+  var forn = order.fornecedores ? order.fornecedores[nfFornIdx] : null;
+  var itens = forn ? forn.itens : order.itensList;
+  if (!itens || !itens.length) return;
+  if (!confirm('Marcar '+(forn?forn.nome:'este pedido')+' como não recebido? Ele volta para Processamento.')) return;
+
+  var quem = document.getElementById('nf-quem').value.trim() || (currentUser && currentUser.name) || null;
+  var obs  = document.getElementById('nf-obs').value.trim() || null;
+
+  if(forn){ forn.status='b-nao-recebido'; forn.label='Não recebido'; }
+  var todosNaoRecebidos = order.fornecedores ? order.fornecedores.every(function(f){return f.status==='b-nao-recebido';}) : true;
+  if (todosNaoRecebidos) { order.status='b-nao-recebido'; order.label='Não recebido'; order.aba='processamento'; }
+
+  if (supa) {
+    try {
+      var updates = itens.map(function(it) {
+        var upd = {
+          status:          'nao_recebido',
+          qtd_recebida:    0,
+          recebedor:       quem,
+          obs_recebimento: obs,
+          atualizado_por:  (currentUser && currentUser.name) || quem
+        };
+        return it._supaId
+          ? supa.from('abastecimento').update(upd).eq('id', it._supaId)
+          : supa.from('abastecimento').update(upd).eq('id_display', order.id).eq('produto_nome', it.nome);
+      });
+      var results = await Promise.all(updates);
+      var erros = results.filter(function(r) { return r.error; });
+      if (erros.length) throw new Error(erros[0].error.message);
+    } catch(e) {
+      toast('Erro ao marcar como não recebido: ' + e.message, true);
+      return;
+    }
+  }
+
+  fecharModalNF();
+  await carregarPedidos();
+  toast('Pedido marcado como não recebido — voltou para Processamento.');
 }
 
 // ── KPIs ──────────────────────────────────────────────────────────────────────
