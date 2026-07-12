@@ -78,6 +78,7 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 .b-parcial          { background: #FFF4DC; color: #7A4A00; }
 .b-parcial-entrega  { background: #FFF4DC; color: #7A4A00; }
 .b-conferido        { background: var(--carbon); color: var(--citric); }
+.b-nao-realizado    { background: #EFEFEF; color: #6B6B6B; }
 .nf-foto-thumb { width: 34px; height: 34px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border); cursor: zoom-in; flex-shrink: 0; transition: transform .12s; }
 .nf-foto-thumb:hover { transform: scale(1.05); }
 .foto-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 99999; display: none; align-items: center; justify-content: center; cursor: zoom-out; padding: 20px; }
@@ -1544,13 +1545,13 @@ function rowsParaUI(idDisplay, rows) {
       fornecedores = ordemGrupos.map(function(key) {
         var g = grupos[key];
         var its = g.rows;
-        // Só considera "recebido" se houve item de fato comprado (qtd_comprada>0) e todos foram recebidos.
-        // Grupo com tudo zerado (nada comprado) fica pendente, não "vacuosamente" recebido.
+        // Grupo com TUDO zerado (nada de fato comprado) = "Pedido não realizado" — pula Recebimento/Conferência.
         var itensComCompra = its.filter(function(row) { return (Number(row.qtd_comprada) || 0) > 0; });
-        var todosRecebidos = itensComCompra.length > 0 && itensComCompra.every(function(row) {
+        var naoRealizado = itensComCompra.length === 0;
+        var todosRecebidos = !naoRealizado && itensComCompra.every(function(row) {
           return Number(row.qtd_recebida) >= Number(row.qtd_comprada);
         });
-        var todosConferidos = its.every(function(row) { return row.status === 'conferido'; });
+        var todosConferidos = !naoRealizado && its.every(function(row) { return row.status === 'conferido'; });
         // pega primeira row com valor não-vazio para cada campo (evita bonif com null sobrescrever)
         function firstNonEmpty(field) {
           for (var i = 0; i < its.length; i++) {
@@ -1568,8 +1569,8 @@ function rowsParaUI(idDisplay, rows) {
           recebedor:       firstNonEmpty('recebedor') || '',
           obsRecebimento:  firstNonEmpty('obs_recebimento') || '',
           obsConferente:   firstNonEmpty('obs_conferente') || '',
-          status:    todosConferidos ? 'b-conferido' : (todosRecebidos ? 'b-concluido' : 'b-aguardando'),
-          label:     todosConferidos ? 'Conferido' : (todosRecebidos ? 'Recebido' : 'Aguardando recebimento'),
+          status:    naoRealizado ? 'b-nao-realizado' : (todosConferidos ? 'b-conferido' : (todosRecebidos ? 'b-concluido' : 'b-aguardando')),
+          label:     naoRealizado ? 'Pedido não realizado' : (todosConferidos ? 'Conferido' : (todosRecebidos ? 'Recebido' : 'Aguardando recebimento')),
           dataPrev:  its.map(function(r){return r.data_entrega||'';}).filter(Boolean).sort().pop() || '',
           dataReceb: its[0].data_recebimento || '',
           itens: its.map(function(row) {
@@ -2709,7 +2710,7 @@ function tableRowHTML(o, aba) {
 }
 
 function fornTableRowHTML(order, forn, fi) {
-  var isRecebido = forn.status==='b-concluido' || forn.status==='b-conferido';
+  var isRecebido = forn.status==='b-concluido' || forn.status==='b-conferido' || forn.status==='b-nao-realizado';
   var btnFn   = isRecebido?'abrirModalView':'abrirModalNF';
   var btnArgs = isRecebido?"'"+order.id+"'":"'"+order.id+"',"+fi;
   var icone   = isRecebido ? EYE_SVG : PENCIL_SVG;
@@ -2766,7 +2767,7 @@ function confTableRowHTML(o, forn, fi) {
 }
 
 function fornCardHTML(order, forn, fi) {
-  var isRecebido = forn.status === 'b-concluido' || forn.status === 'b-conferido';
+  var isRecebido = forn.status === 'b-concluido' || forn.status === 'b-conferido' || forn.status === 'b-nao-realizado';
   var btnLabel = isRecebido ? 'Visualizar' : 'Dar baixa de NF';
   var btnFn    = isRecebido ? 'abrirModalView' : 'abrirModalNF';
   var btnArgs  = isRecebido ? "'"+order.id+"'" : "'"+order.id+"',"+fi;
