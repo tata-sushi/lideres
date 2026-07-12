@@ -78,7 +78,7 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 .b-parcial          { background: #FFF4DC; color: #7A4A00; }
 .b-parcial-entrega  { background: #FFF4DC; color: #7A4A00; }
 .b-conferido        { background: var(--carbon); color: var(--citric); }
-.b-nao-realizado    { background: #EFEFEF; color: #6B6B6B; }
+.b-nao-realizado    { background: #FFF4DC; color: #7A4A00; }
 .nf-foto-thumb { width: 34px; height: 34px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border); cursor: zoom-in; flex-shrink: 0; transition: transform .12s; }
 .nf-foto-thumb:hover { transform: scale(1.05); }
 .foto-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 99999; display: none; align-items: center; justify-content: center; cursor: zoom-out; padding: 20px; }
@@ -1586,11 +1586,17 @@ function rowsParaUI(idDisplay, rows) {
           })
         };
       });
-      if (fornecedores.length > 1) {
-        var algumFeito = fornecedores.some(function(f) { return f.status === 'b-concluido'; });
-        var algumPend  = fornecedores.some(function(f) { return f.status === 'b-aguardando'; });
-        if (algumFeito && algumPend) {
-          s = { cls: 'b-parcial-entrega', lbl: 'Recebimento parcial', aba: 'entregas' };
+      if (fornecedores.length > 0) {
+        var todosNaoRealizados = fornecedores.every(function(f) { return f.status === 'b-nao-realizado'; });
+        if (todosNaoRealizados) {
+          // Nada foi comprado em nenhum fornecedor — não há o que receber, vai direto pra Conferência.
+          s = { cls: 'b-nao-realizado', lbl: 'Pedido não realizado', aba: 'conferencia' };
+        } else if (fornecedores.length > 1) {
+          var algumFeito = fornecedores.some(function(f) { return f.status === 'b-concluido'; });
+          var algumPend  = fornecedores.some(function(f) { return f.status === 'b-aguardando'; });
+          if (algumFeito && algumPend) {
+            s = { cls: 'b-parcial-entrega', lbl: 'Recebimento parcial', aba: 'entregas' };
+          }
         }
       }
     }
@@ -2561,8 +2567,8 @@ function renderAba(aba) {
   // Filtro por aba: cada tab mostra só o que se aplica àquela etapa
   base = base.filter(function(o) {
     if (aba === 'pedidos') return true;
-    if (aba === 'processamento') return o.status !== 'b-conferido';
-    if (aba === 'entregas') return o.status !== 'b-conferido' && o.status !== 'b-concluido';
+    if (aba === 'processamento') return o.status !== 'b-conferido' && o.status !== 'b-nao-realizado';
+    if (aba === 'entregas') return o.status !== 'b-conferido' && o.status !== 'b-concluido' && o.status !== 'b-nao-realizado';
     return true;
   });
   var lista = aplicarFiltros(base);
@@ -2747,11 +2753,17 @@ function confTableRowHTML(o, forn, fi) {
   var nfNum      = (forn && forn.notaFiscal) || raw.notaFiscal || '';
   var itensCount = forn ? forn.itens.length : o.itensList.length;
   var isConf = forn ? forn.status === 'b-conferido' : o.status === 'b-conferido';
-  var arg = forn ? ("'"+o.id+"',"+fi+","+(isConf?'true':'false')) : ("'"+o.id+"',null,"+(isConf?'true':'false'));
+  var isNaoRealizado = forn ? forn.status === 'b-nao-realizado' : o.status === 'b-nao-realizado';
   var pedidoTxt = 'Pedido '+(o.idDisplay||('#'+o.id))+(nfNum?' — NF '+nfNum:'');
-  var icone  = isConf ? EYE_SVG : PENCIL_SVG;
   var badgeCls = isConf ? 'b-conferido' : (forn ? forn.status : o.status);
   var badgeLbl = isConf ? 'Conferido' : (forn ? forn.label : o.label);
+  var btnHtml;
+  if (isNaoRealizado) {
+    btnHtml = '<button class="btn-dt-edit" onclick="abrirModalView(\''+o.id+'\')">'+EYE_SVG+'</button>';
+  } else {
+    var arg = forn ? ("'"+o.id+"',"+fi+","+(isConf?'true':'false')) : ("'"+o.id+"',null,"+(isConf?'true':'false'));
+    btnHtml = '<button class="btn-dt-edit" onclick="abrirModalConferencia('+arg+')">'+(isConf?EYE_SVG:PENCIL_SVG)+'</button>';
+  }
   return '<tr>'+
     '<td><div class="dt-num">'+pedidoTxt+'</div></td>'+
     '<td class="dt-unit">'+unidDepto+'</td>'+
@@ -2762,7 +2774,7 @@ function confTableRowHTML(o, forn, fi) {
     '<td class="dt-date">'+dataReceb+'</td>'+
     '<td class="dt-qty">'+itensCount+'</td>'+
     '<td><span class="badge '+badgeCls+'">'+badgeLbl+'</span></td>'+
-    '<td><button class="btn-dt-edit" onclick="abrirModalConferencia('+arg+')">'+icone+'</button></td>'+
+    '<td>'+btnHtml+'</td>'+
   '</tr>';
 }
 
@@ -3244,10 +3256,23 @@ function renderConferencia() {
         var nfNum = (forn && forn.notaFiscal) || raw.notaFiscal || '';
         var itensCount = forn ? forn.itens.length : o.itensList.length;
         var isConf = forn ? forn.status === 'b-conferido' : o.status === 'b-conferido';
-        var arg = forn ? ("'"+o.id+"',"+fi+","+(isConf?'true':'false')) : ("'"+o.id+"',null,"+(isConf?'true':'false'));
+        var isNaoRealizado = forn ? forn.status === 'b-nao-realizado' : o.status === 'b-nao-realizado';
         var titulo = 'Pedido ' + (o.idDisplay || ('#' + o.id)) + (nfNum ? ' — NF ' + nfNum : '');
-        var badgeCls = isConf ? 'b-conferido' : 'b-concluido';
-        var badgeLbl = isConf ? 'Conferido' : 'Recebido';
+        var badgeCls = isConf ? 'b-conferido' : (isNaoRealizado ? 'b-nao-realizado' : 'b-concluido');
+        var badgeLbl = isConf ? 'Conferido' : (isNaoRealizado ? 'Pedido não realizado' : 'Recebido');
+        var footerBtn;
+        if (isNaoRealizado) {
+          footerBtn = '<button class="btn-ver" onclick="abrirModalView(\'' + o.id + '\')">' +
+              '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' +
+              ' Visualizar' +
+            '</button>';
+        } else {
+          var arg = forn ? ("'"+o.id+"',"+fi+","+(isConf?'true':'false')) : ("'"+o.id+"',null,"+(isConf?'true':'false'));
+          footerBtn = '<button class="btn-ver" onclick="abrirModalConferencia(' + arg + ')">' +
+              '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
+              ' Conferir' +
+            '</button>';
+        }
         html += '<div class="card">' +
           '<div class="card-header"><div><div class="order-title">' + titulo + '</div></div>' +
           '<span class="badge ' + badgeCls + '">' + badgeLbl + '</span></div>' +
@@ -3263,12 +3288,7 @@ function renderConferencia() {
               '<div class="card-field"><span class="field-label">Itens</span><span class="field-value">' + itensCount + ' produtos</span></div>' +
             '</div>' +
           '</div>' +
-          '<div class="card-footer" style="justify-content:flex-end;">' +
-            '<button class="btn-ver" onclick="abrirModalConferencia(' + arg + ')">' +
-              '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
-              ' Conferir' +
-            '</button>' +
-          '</div>' +
+          '<div class="card-footer" style="justify-content:flex-end;">' + footerBtn + '</div>' +
         '</div>';
       });
     });
