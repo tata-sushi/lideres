@@ -1279,6 +1279,8 @@ var PERFIL = '';
 
 var activeCats = [];
 var procOrderId = null;
+var procFornIdx = null;
+var procItens = null;
 var currentUser = null;
 
 // ── SHEET LOADERS ─────────────────────────────────────────────────────────────
@@ -1601,10 +1603,19 @@ function rowsParaUI(idDisplay, rows) {
           // Nenhum fornecedor entregou — volta pro Processamento pra reprocessar a compra.
           s = { cls: 'b-nao-recebido', lbl: 'Não recebido', aba: 'processamento' };
         } else if (fornecedores.length > 1) {
+          // Mais de um fornecedor com estados diferentes — o status do pedido não pode confiar
+          // só na primeira linha (rows[0]), senão ele "vaza" o estado de um fornecedor pros outros
+          // (ex.: 1º item já veio nao_recebido, mas outro fornecedor do mesmo pedido ainda está pendente).
           var algumFeito = fornecedores.some(function(f) { return f.status === 'b-concluido'; });
           var algumPend  = fornecedores.some(function(f) { return f.status === 'b-aguardando'; });
           if (algumFeito && algumPend) {
             s = { cls: 'b-parcial-entrega', lbl: 'Recebimento parcial', aba: 'entregas' };
+          } else if (algumPend) {
+            // Ainda tem fornecedor aguardando recebimento — pedido continua em Recebimentos.
+            s = { cls: 'b-aguardando', lbl: 'Aguardando recebimento', aba: 'entregas' };
+          } else if (algumFeito) {
+            // Nenhum pendente, mas tem pelo menos um já recebido — pedido segue pra Conferência.
+            s = { cls: 'b-concluido', lbl: 'Recebido', aba: 'conferencia' };
           }
         }
       }
@@ -2098,14 +2109,17 @@ async function abrirModalView(id) {
 function fecharModalView() { document.getElementById('modal-view').classList.remove('active'); unlockBodyScroll(); }
 
 // ── MODAL PROCESSAR ───────────────────────────────────────────────────────────
-function abrirModalProc(id) {
+function abrirModalProc(id, fornIdx) {
   var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===id){order=ORDERS[i];break;}} if(!order)return;
   procOrderId=id;
-  document.getElementById('proc-id').textContent=order.idDisplay;
+  procFornIdx = (typeof fornIdx === 'number') ? fornIdx : null;
+  var forn = (procFornIdx != null && order.fornecedores) ? order.fornecedores[procFornIdx] : null;
+  procItens = forn ? forn.itens : order.itensList;
+  document.getElementById('proc-id').textContent = order.idDisplay + (forn ? ' · ' + forn.nome + ' (não recebido)' : '');
   document.getElementById('proc-obs').value='';
   var entregaDefault=order.entrega?(function(d){var p=d.split('/');return p[2]+'-'+p[1]+'-'+p[0];})(order.entrega):'';
   var tbody=document.getElementById('proc-tbody'); tbody.innerHTML='';
-  order.itensList.forEach(function(item,idx){
+  procItens.forEach(function(item,idx){
     var tr=document.createElement('tr');
     var tdNome=document.createElement('td'); tdNome.className='td-nome-cell'; tdNome.textContent=item.nome; tdNome.style.whiteSpace='nowrap';
     var unTxt = item.un && isNaN(item.un) ? ' '+item.un : ''; var tdSol=document.createElement('td'); tdSol.className='td-sol'; tdSol.setAttribute('data-label','Solicitado'); tdSol.textContent=item.qty+unTxt;
@@ -2137,7 +2151,7 @@ function abrirModalProc(id) {
 function recalcResumo() {
   var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===procOrderId){order=ORDERS[i];break;}} if(!order)return;
   var total=0,itensComQtd=0,fornSet={};
-  order.itensList.forEach(function(item,idx){
+  (procItens || order.itensList).forEach(function(item,idx){
     var conf=parseFloat((document.getElementById('proc-conf-'+idx)||{}).value)||0;
     var vl=parseFloat((document.getElementById('proc-vl-'+idx)||{}).value)||0;
     var forn=((document.getElementById('proc-forn-'+idx)||{}).value||'').trim();
@@ -2150,7 +2164,7 @@ function recalcResumo() {
   document.getElementById('proc-r-total').textContent=total>0?'R$ '+total.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
 }
 
-function fecharModalProc() { document.getElementById('modal-proc').classList.remove('active'); unlockBodyScroll(); procOrderId=null; }
+function fecharModalProc() { document.getElementById('modal-proc').classList.remove('active'); unlockBodyScroll(); procOrderId=null; procFornIdx=null; procItens=null; }
 
 // ── CONFIRMAR PROCESSAMENTO (Estágio 2 — Compras) ────────────────────────────
 async function confirmarPedido() {
@@ -2159,9 +2173,12 @@ async function confirmarPedido() {
   for(var i=0;i<ORDERS.length;i++){ if(ORDERS[i].id===procOrderId){ order=ORDERS[i]; break; } }
   if(!order){ alert('Erro ao confirmar pedido.'); fecharModalProc(); return; }
 
+  var itensAlvo = procItens || order.itensList;
+  var reprocessandoForn = procFornIdx != null;
+
   var fornGroups = {};
   var totalGeral = 0;
-  order.itensList.forEach(function(item,idx){
+  itensAlvo.forEach(function(item,idx){
     var conf=parseFloat((document.getElementById('proc-conf-'+idx)||{}).value)||0;
     var vl=parseFloat((document.getElementById('proc-vl-'+idx)||{}).value)||0;
     var forn=((document.getElementById('proc-forn-'+idx)||{}).value||'').trim();
@@ -2181,25 +2198,30 @@ async function confirmarPedido() {
   });
   dadosProc.obs=document.getElementById('proc-obs').value.trim();
 
-  var semData = order.itensList.some(function(item,idx){
+  var semData = itensAlvo.some(function(item,idx){
     var d = dadosProc[idx]; return d && d.conf > 0 && !d.entregaISO;
   });
   if (semData) { alert('Informe a data de entrega para todos os itens confirmados.'); return; }
 
-  order.fornecedores = Object.keys(fornGroups).map(function(forn){
-    return { nome: forn, status:'b-aguardando', label:'Aguardando recebimento', itens: fornGroups[forn] };
-  });
-  if (order.fornecedores.length === 0) {
-    order.status='b-nao-realizado'; order.label='Pedido não realizado'; order.aba='conferencia';
-  } else {
-    order.status='b-aguardando'; order.label='Aguardando recebimento'; order.aba='entregas';
+  if (!reprocessandoForn) {
+    // Pedido inteiro (primeira compra) — reconstrói a lista de fornecedores do zero
+    order.fornecedores = Object.keys(fornGroups).map(function(forn){
+      return { nome: forn, status:'b-aguardando', label:'Aguardando recebimento', itens: fornGroups[forn] };
+    });
+    if (order.fornecedores.length === 0) {
+      order.status='b-nao-realizado'; order.label='Pedido não realizado'; order.aba='conferencia';
+    } else {
+      order.status='b-aguardando'; order.label='Aguardando recebimento'; order.aba='entregas';
+    }
   }
+  // Quando reprocessandoForn=true, os outros fornecedores do pedido não são tocados — o recarregamento
+  // do Supabase logo abaixo recalcula tudo (inclusive esse grupo) a partir das linhas atualizadas.
 
   if (supa) {
     try {
       var comprador = (currentUser && currentUser.name) || '—';
       var dataCompraISO = new Date().toISOString().split('T')[0];
-      var updates = order.itensList.map(function(item, idx) {
+      var updates = itensAlvo.map(function(item, idx) {
         var d = dadosProc[idx] || {conf:0, vl:0, forn:'—'};
         var updateData = {
           qtd_comprada:  d.conf,
@@ -2220,8 +2242,10 @@ async function confirmarPedido() {
       var results = await Promise.all(updates);
       var erros = results.filter(function(r) { return r.error; });
       if (erros.length) throw new Error(erros[0].error.message);
-      var algumComprado = order.itensList.some(function(item, idx){ return (dadosProc[idx]||{}).conf > 0; });
-      if (order.raw) { order.raw.status = algumComprado ? 'comprado' : 'nao_realizado'; order.raw.comprador = comprador; }
+      if (!reprocessandoForn) {
+        var algumComprado = itensAlvo.some(function(item, idx){ return (dadosProc[idx]||{}).conf > 0; });
+        if (order.raw) { order.raw.status = algumComprado ? 'comprado' : 'nao_realizado'; order.raw.comprador = comprador; }
+      }
       alert('Pedido '+order.id+' enviado para entregas.');
     } catch(e) {
       toast('Erro ao atualizar Compras: ' + e.message, true);
@@ -2231,9 +2255,10 @@ async function confirmarPedido() {
   }
 
   var savedOrder = order;
+  var savedItens = itensAlvo;
   fecharModalProc();
   await carregarPedidos();
-  setTimeout(function(){gerarPDFProcessamento(savedOrder, dadosProc);},400);
+  setTimeout(function(){gerarPDFProcessamento(savedOrder, dadosProc, savedItens);},400);
 }
 
 // ── CATEGORIAS ────────────────────────────────────────────────────────────────
@@ -2653,6 +2678,16 @@ function renderAba(aba) {
           });
         } else { html += cardHTML(o, aba); }
       });
+    } else if (aba === 'processamento') {
+      groups[u].forEach(function(o) {
+        if (o.fornecedores && o.fornecedores.length) {
+          o.fornecedores.forEach(function(f, fi) {
+            if (f.status !== 'b-nao-recebido') return;
+            if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
+            html += procFornCardHTML(o, f, fi);
+          });
+        } else { html += cardHTML(o, aba); }
+      });
     } else {
       groups[u].forEach(function(o) { html += cardHTML(o, aba); });
     }
@@ -2665,7 +2700,7 @@ function renderAba(aba) {
     if (aba === 'entregas') {
       if (o.fornecedores && o.fornecedores.length) {
         o.fornecedores.forEach(function(f, fi) {
-          if (f.status === 'b-concluido' || f.status === 'b-conferido' || f.status === 'b-nao-realizado') return;
+          if (f.status === 'b-concluido' || f.status === 'b-conferido' || f.status === 'b-nao-realizado' || f.status === 'b-nao-recebido') return;
           if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
           tableRows += fornTableRowHTML(o, f, fi);
         });
@@ -2675,6 +2710,14 @@ function renderAba(aba) {
         o.fornecedores.forEach(function(f, fi) {
           if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
           tableRows += pedidoFornTableRowHTML(o, f, fi);
+        });
+      } else { tableRows += tableRowHTML(o, aba); }
+    } else if (aba === 'processamento') {
+      if (o.fornecedores && o.fornecedores.length) {
+        o.fornecedores.forEach(function(f, fi) {
+          if (f.status !== 'b-nao-recebido') return;
+          if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
+          tableRows += procFornTableRowHTML(o, f, fi);
         });
       } else { tableRows += tableRowHTML(o, aba); }
     } else {
@@ -2924,6 +2967,49 @@ function fornCardHTML(order, forn, fi) {
       '</div>'+
     '</div>'+
     '<div class="card-footer" style="justify-content:flex-end;"><button class="btn-ver" onclick="'+btnFn+'('+btnArgs+')">'+iconSvg+' '+btnLabel+'</button></div>'+
+  '</div>';
+}
+
+// Linha de fornecedor "Não recebido" na aba Processamento — reabre a compra só pros itens desse fornecedor
+function procFornTableRowHTML(order, forn, fi) {
+  var btnArgs = "'"+order.id+"',"+fi;
+  var unidade    = (order.raw&&order.raw.unidade)||'—';
+  var depto      = (order.raw&&order.raw.departamento)||'';
+  var unidDepto  = unidade + (depto ? ' - '+depto : '');
+  var solicitante= abreviarNome((order.raw&&order.raw.solicitante)||'');
+  return '<tr>'+
+    '<td><div class="dt-num">Pedido '+(order.idDisplay||('#'+order.id))+'</div>'+(solicitante?'<div class="dt-sub">'+solicitante+'</div>':'')+' </td>'+
+    '<td class="dt-unit">'+unidDepto+'</td>'+
+    '<td class="dt-forn">'+forn.nome+'</td>'+
+    '<td class="dt-date">'+(order.data||'—')+'</td>'+
+    '<td class="dt-date">—</td>'+
+    '<td class="dt-date">—</td>'+
+    '<td class="dt-date">—</td>'+
+    '<td class="dt-qty">'+forn.itens.length+'</td>'+
+    '<td><span class="badge '+forn.status+'">'+forn.label+'</span></td>'+
+    '<td><button class="btn-dt-edit" onclick="abrirModalProc('+btnArgs+')">'+PENCIL_SVG+'</button></td>'+
+  '</tr>';
+}
+
+function procFornCardHTML(order, forn, fi) {
+  var titulo = 'Pedido ' + (order.idDisplay || ('#' + order.id));
+  var solicitante = (order.raw && order.raw.solicitante) || '';
+  return '<div class="card">'+
+    '<div class="card-header"><div>'+
+      '<div class="order-title">'+titulo+'</div>'+
+      (solicitante ? '<div class="order-sub">'+solicitante+'</div>' : '')+
+    '</div><span class="badge '+forn.status+'">'+forn.label+'</span></div>'+
+    '<div class="card-body">'+
+      '<div class="card-dates-row">'+
+        '<div class="card-field"><span class="field-label">Data da Solicitação</span><span class="field-value">'+(order.data||'—')+'</span></div>'+
+      '</div>'+
+      '<div class="card-meta-row">'+
+        '<div class="card-field"><span class="field-label">Categoria</span><span class="field-value">'+(order.cats.join(', ')||'—')+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Fornecedor</span><span class="field-value">'+forn.nome+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Itens</span><span class="field-value">'+forn.itens.length+'</span></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="card-footer" style="justify-content:flex-end;"><button class="btn-ver" onclick="abrirModalProc(\''+order.id+'\','+fi+')">'+PENCIL_SVG+' Processar</button></div>'+
   '</div>';
 }
 
@@ -4400,11 +4486,11 @@ function gerarPDFPedido(order) {
   }
 }
 
-function gerarPDFProcessamento(order, dadosProc) {
+function gerarPDFProcessamento(order, dadosProc, itensOrigem) {
   var nome = (currentUser && currentUser.name) || (window.__lideresUser) || 'Compras';
   var dataProc = new Date().toLocaleDateString('pt-BR');
   var rowsHtml=''; var totalGeral=0; var fornSet={}; var itensComQtd=0;
-  order.itensList.forEach(function(item,idx){
+  (itensOrigem || order.itensList).forEach(function(item,idx){
     var dp = dadosProc[idx] || {};
     var conf = dp.conf || 0;
     var vl = dp.vl || 0;
