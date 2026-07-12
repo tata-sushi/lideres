@@ -2009,6 +2009,17 @@ function abrirModalPedido() {
 }
 function fecharModalPedido() { document.getElementById('modal-pedido').classList.remove('active'); unlockBodyScroll(); }
 
+// Abre o modal correto para UM fornecedor/NF específico (sem adivinhar o "mais avançado" do pedido)
+async function abrirModalPorForn(orderId, fornIdx) {
+  var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===orderId){order=ORDERS[i];break;}} if(!order)return;
+  var forn = order.fornecedores ? order.fornecedores[fornIdx] : null;
+  if (!forn) return abrirModalView(orderId);
+  if (forn.status === 'b-conferido')     return abrirModalConferencia(orderId, fornIdx, true);
+  if (forn.status === 'b-nao-realizado') return abrirModalConferencia(orderId, fornIdx, false);
+  if (forn.status === 'b-concluido')     return abrirModalNF(orderId, fornIdx, true);
+  return abrirModalView(orderId);
+}
+
 // ── MODAL VISUALIZAR ──────────────────────────────────────────────────────────
 async function abrirModalView(id) {
   var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===id){order=ORDERS[i];break;}} if(!order)return;
@@ -2602,14 +2613,14 @@ function renderAba(aba) {
   unidadeOrder.forEach(function(u) {
     html += '<div class="col-unidade">';
     if (u && u !== '—') html += '<div class="col-unidade-lbl">' + u + '</div>';
-    if (aba === 'entregas') {
+    if (aba === 'entregas' || aba === 'pedidos') {
       groups[u].forEach(function(o) {
-        if (o.fornecedores) {
+        if (o.fornecedores && o.fornecedores.length) {
           o.fornecedores.forEach(function(f, fi) {
             if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
             html += fornCardHTML(o, f, fi);
           });
-        } else { html += cardHTML(o, 'entregas'); }
+        } else { html += cardHTML(o, aba); }
       });
     } else {
       groups[u].forEach(function(o) { html += cardHTML(o, aba); });
@@ -2620,8 +2631,8 @@ function renderAba(aba) {
   // ── Desktop table ─────────────────────────────────────────────────────────
   var tableRows = '';
   sortDeskLista(lista).forEach(function(o) {
-    if (aba === 'entregas') {
-      if (o.fornecedores) {
+    if (aba === 'entregas' || aba === 'pedidos') {
+      if (o.fornecedores && o.fornecedores.length) {
         o.fornecedores.forEach(function(f, fi) {
           if (pageFilters.fornecedor !== 'Todos' && f.nome !== pageFilters.fornecedor) return;
           tableRows += fornTableRowHTML(o, f, fi);
@@ -2723,10 +2734,11 @@ function tableRowHTML(o, aba) {
 }
 
 function fornTableRowHTML(order, forn, fi) {
-  var isRecebido = forn.status==='b-concluido' || forn.status==='b-conferido' || forn.status==='b-nao-realizado';
-  var btnFn   = isRecebido?'abrirModalView':'abrirModalNF';
-  var btnArgs = isRecebido?"'"+order.id+"'":"'"+order.id+"',"+fi;
-  var icone   = isRecebido ? EYE_SVG : PENCIL_SVG;
+  var isRecebido = forn.status==='b-concluido' || forn.status==='b-conferido';
+  var isNaoRealizado = forn.status==='b-nao-realizado';
+  var btnFn   = (isRecebido || isNaoRealizado) ? 'abrirModalPorForn' : 'abrirModalNF';
+  var btnArgs = "'"+order.id+"',"+fi;
+  var icone   = isNaoRealizado ? PENCIL_SVG : (isRecebido ? EYE_SVG : PENCIL_SVG);
   var dataCompra = fmtDataBR((order.raw&&order.raw.dataCompraProc)||'');
   var dataPrev   = fmtDataBR(forn.dataPrev||(order.raw&&order.raw.dataEntregaPrevista));
   var dataReceb  = forn.dataReceb?fmtDataBR(forn.dataReceb):(isRecebido?fmtDataBR(order.raw&&order.raw.dataRecebimento):'—');
@@ -2780,11 +2792,12 @@ function confTableRowHTML(o, forn, fi) {
 }
 
 function fornCardHTML(order, forn, fi) {
-  var isRecebido = forn.status === 'b-concluido' || forn.status === 'b-conferido' || forn.status === 'b-nao-realizado';
-  var btnLabel = isRecebido ? 'Visualizar' : 'Dar baixa de NF';
-  var btnFn    = isRecebido ? 'abrirModalView' : 'abrirModalNF';
-  var btnArgs  = isRecebido ? "'"+order.id+"'" : "'"+order.id+"',"+fi;
-  var iconSvg = isRecebido
+  var isRecebido = forn.status === 'b-concluido' || forn.status === 'b-conferido';
+  var isNaoRealizado = forn.status === 'b-nao-realizado';
+  var btnLabel = isNaoRealizado ? 'Conferir' : (isRecebido ? 'Visualizar' : 'Dar baixa de NF');
+  var btnFn    = (isRecebido || isNaoRealizado) ? 'abrirModalPorForn' : 'abrirModalNF';
+  var btnArgs  = "'"+order.id+"',"+fi;
+  var iconSvg = (isRecebido && !isNaoRealizado)
     ? '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
     : '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
   var titulo = 'Pedido ' + (order.idDisplay || ('#' + order.id));
