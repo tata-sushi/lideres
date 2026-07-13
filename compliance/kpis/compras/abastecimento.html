@@ -313,6 +313,12 @@ textarea.fctrl { resize: vertical; min-height: 70px; font-family: 'DM Sans', san
 .nf-un-input:focus { outline: none; border-color: var(--carbon); background: #fff; }
 .btn-add-item { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: transparent; border: 1px dashed var(--border); border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); cursor: pointer; transition: all 0.15s; width: 100%; }
 .btn-add-item:hover { border-color: var(--carbon); color: var(--carbon); }
+.btn-split-forn, .btn-split-remove { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); cursor: pointer; font-size: 15px; line-height: 1; transition: all 0.15s; flex-shrink: 0; }
+.btn-split-forn { color: var(--muted); }
+.btn-split-forn:hover { border-color: var(--carbon); color: var(--carbon); }
+.btn-split-remove { color: #A33; }
+.btn-split-remove:hover { border-color: #A33; background: #FDEAEA; }
+.proc-split-row td.td-nome-cell { color: var(--muted); font-style: italic; }
 .bonus-row td { background: #F0FFF4; }
 /* Conferência — checklist compacto */
 .conf-check-list { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--border); border-radius: 12px; padding: 4px 12px; }
@@ -867,6 +873,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
               <th class="th-c">Vl. unit (R$)</th>
               <th class="th-c">Fornecedor</th>
               <th class="th-c">Entrega</th>
+              <th class="th-c"></th>
             </tr></thead>
             <tbody id="proc-tbody"></tbody>
           </table>
@@ -1299,6 +1306,8 @@ var activeCats = [];
 var procOrderId = null;
 var procFornIdx = null;
 var procItens = null;
+var procSplits = {};    // idx do item → array de chaves de divisão (ex.: ['x1','x2'])
+var procSplitSeq = 0;   // contador global pra gerar chaves de divisão únicas
 var currentUser = null;
 
 // ── SHEET LOADERS ─────────────────────────────────────────────────────────────
@@ -2128,40 +2137,110 @@ async function abrirModalView(id) {
 function fecharModalView() { document.getElementById('modal-view').classList.remove('active'); unlockBodyScroll(); }
 
 // ── MODAL PROCESSAR ───────────────────────────────────────────────────────────
+// Constrói uma linha da tabela de processamento. splitKey=null → linha principal do item;
+// splitKey='x1','x2'… → linha extra de divisão entre fornecedores (mesmo produto, mesmo idx).
+function criarLinhaProcItem(item, idx, splitKey, entregaDefault) {
+  var suf = splitKey ? (idx + '-' + splitKey) : String(idx);
+  var tr = document.createElement('tr');
+  if (splitKey) tr.className = 'proc-split-row';
+  var tdNome = document.createElement('td'); tdNome.className = 'td-nome-cell';
+  tdNome.textContent = splitKey ? ('↳ ' + item.nome) : item.nome;
+  tdNome.style.whiteSpace = 'nowrap';
+  var unTxt = item.un && isNaN(item.un) ? ' ' + item.un : '';
+  var tdSol = document.createElement('td'); tdSol.className = 'td-sol'; tdSol.setAttribute('data-label', 'Solicitado');
+  tdSol.textContent = splitKey ? '—' : (item.qty + unTxt);
+  var tdConf = document.createElement('td'); tdConf.setAttribute('data-label', 'Confirmado');
+  var inpConf = document.createElement('input'); inpConf.type = 'number'; inpConf.className = 'proc-input'; inpConf.min = '0';
+  inpConf.value = splitKey ? 0 : item.qty;
+  inpConf.id = 'proc-conf-' + suf; inpConf.oninput = recalcResumo; tdConf.appendChild(inpConf);
+  var tdVl = document.createElement('td'); tdVl.setAttribute('data-label', 'Vl. Unit (R$)');
+  var vlCat = 0;
+  Object.keys(CATALOGO).forEach(function(k){
+    (CATALOGO[k].produtos||[]).forEach(function(p){
+      if (!vlCat && p.nome === item.nome) vlCat = Number(p.valorUnitario) || 0;
+    });
+  });
+  var vlDefault = Number(item.vlPedido) || Number(item.vlCompra) || vlCat || 0;
+  var inpVl = document.createElement('input'); inpVl.type = 'number'; inpVl.className = 'proc-vl-input'; inpVl.min = '0'; inpVl.step = '0.01'; inpVl.placeholder = '0,00'; inpVl.id = 'proc-vl-' + suf; inpVl.value = vlDefault || ''; inpVl.oninput = recalcResumo; tdVl.appendChild(inpVl);
+  var tdForn = document.createElement('td'); tdForn.setAttribute('data-label', 'Fornecedor');
+  var inpForn = document.createElement('select'); inpForn.className = 'proc-forn-input'; inpForn.id = 'proc-forn-' + suf; inpForn.onchange = recalcResumo;
+  var optBlank = document.createElement('option'); optBlank.value = ''; optBlank.textContent = 'Selecionar…'; inpForn.appendChild(optBlank);
+  getFornecedores().forEach(function(f){ var o=document.createElement('option'); o.value=f; o.textContent=f; if (!splitKey && f===item.fornecedor) o.selected=true; inpForn.appendChild(o); });
+  tdForn.appendChild(inpForn);
+  var tdData = document.createElement('td'); tdData.setAttribute('data-label', 'Entrega');
+  var inpData = document.createElement('input'); inpData.type = 'date'; inpData.className = 'proc-date-input'; inpData.value = entregaDefault; inpData.id = 'proc-date-' + suf; tdData.appendChild(inpData);
+  var tdAcao = document.createElement('td'); tdAcao.setAttribute('data-label', '');
+  if (splitKey) {
+    var btnDel = document.createElement('button'); btnDel.type = 'button'; btnDel.className = 'btn-split-remove'; btnDel.title = 'Remover divisão'; btnDel.textContent = '×';
+    btnDel.onclick = function(){ removerDivisaoForn(idx, splitKey); };
+    tdAcao.appendChild(btnDel);
+  } else {
+    var btnAdd = document.createElement('button'); btnAdd.type = 'button'; btnAdd.className = 'btn-split-forn'; btnAdd.title = 'Dividir este item entre fornecedores diferentes'; btnAdd.textContent = '+';
+    btnAdd.onclick = function(){ adicionarDivisaoForn(idx); };
+    tdAcao.appendChild(btnAdd);
+  }
+  tr.appendChild(tdNome); tr.appendChild(tdSol); tr.appendChild(tdConf); tr.appendChild(tdVl); tr.appendChild(tdForn); tr.appendChild(tdData); tr.appendChild(tdAcao);
+  return tr;
+}
+
+function adicionarDivisaoForn(idx) {
+  var itens = procItens; if (!itens) return;
+  var item = itens[idx]; if (!item) return;
+  if (!procSplits[idx]) procSplits[idx] = [];
+  var splitKey = 'x' + (++procSplitSeq);
+
+  var inpConfPrincipal = document.getElementById('proc-conf-' + idx);
+  var novaQtdInicial = 0;
+  if (procSplits[idx].length === 0 && inpConfPrincipal) {
+    // Primeira divisão desse item: reparte a quantidade confirmada atual em duas metades.
+    var atual = parseFloat(inpConfPrincipal.value) || 0;
+    inpConfPrincipal.value = Math.ceil(atual / 2);
+    novaQtdInicial = Math.floor(atual / 2);
+  }
+  var ultimaChave = procSplits[idx].length ? procSplits[idx][procSplits[idx].length - 1] : null;
+  procSplits[idx].push(splitKey);
+
+  var entregaDefault = document.getElementById('proc-date-' + idx) ? document.getElementById('proc-date-' + idx).value : '';
+  var novaLinha = criarLinhaProcItem(item, idx, splitKey, entregaDefault);
+  var inpConfNovo = novaLinha.querySelector('#proc-conf-' + idx + '-' + splitKey);
+  if (inpConfNovo) inpConfNovo.value = novaQtdInicial;
+
+  var ancoraId = ultimaChave ? ('proc-conf-' + idx + '-' + ultimaChave) : ('proc-conf-' + idx);
+  var ancoraEl = document.getElementById(ancoraId);
+  var ancoraTr = ancoraEl ? ancoraEl.closest('tr') : null;
+  if (ancoraTr && ancoraTr.parentNode) {
+    ancoraTr.parentNode.insertBefore(novaLinha, ancoraTr.nextSibling);
+  } else {
+    document.getElementById('proc-tbody').appendChild(novaLinha);
+  }
+  recalcResumo();
+}
+
+function removerDivisaoForn(idx, splitKey) {
+  if (!procSplits[idx]) return;
+  var pos = procSplits[idx].indexOf(splitKey);
+  if (pos === -1) return;
+  procSplits[idx].splice(pos, 1);
+  if (procSplits[idx].length === 0) delete procSplits[idx];
+  var el = document.getElementById('proc-conf-' + idx + '-' + splitKey);
+  var tr = el ? el.closest('tr') : null;
+  if (tr && tr.parentNode) tr.parentNode.removeChild(tr);
+  recalcResumo();
+}
+
 function abrirModalProc(id, fornIdx) {
   var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===id){order=ORDERS[i];break;}} if(!order)return;
   procOrderId=id;
   procFornIdx = (typeof fornIdx === 'number') ? fornIdx : null;
   var forn = (procFornIdx != null && order.fornecedores) ? order.fornecedores[procFornIdx] : null;
   procItens = forn ? forn.itens : order.itensList;
+  procSplits = {}; procSplitSeq = 0;
   document.getElementById('proc-id').textContent = order.idDisplay + (forn ? ' · ' + forn.nome + ' (não recebido)' : '');
   document.getElementById('proc-obs').value='';
   var entregaDefault=order.entrega?(function(d){var p=d.split('/');return p[2]+'-'+p[1]+'-'+p[0];})(order.entrega):'';
   var tbody=document.getElementById('proc-tbody'); tbody.innerHTML='';
   procItens.forEach(function(item,idx){
-    var tr=document.createElement('tr');
-    var tdNome=document.createElement('td'); tdNome.className='td-nome-cell'; tdNome.textContent=item.nome; tdNome.style.whiteSpace='nowrap';
-    var unTxt = item.un && isNaN(item.un) ? ' '+item.un : ''; var tdSol=document.createElement('td'); tdSol.className='td-sol'; tdSol.setAttribute('data-label','Solicitado'); tdSol.textContent=item.qty+unTxt;
-    var tdConf=document.createElement('td'); tdConf.setAttribute('data-label','Confirmado');
-    var inpConf=document.createElement('input'); inpConf.type='number'; inpConf.className='proc-input'; inpConf.min='0'; inpConf.value=item.qty; inpConf.id='proc-conf-'+idx; inpConf.oninput=recalcResumo; tdConf.appendChild(inpConf);
-    var tdVl=document.createElement('td'); tdVl.setAttribute('data-label','Vl. Unit (R$)');
-    var vlCat = 0;
-    Object.keys(CATALOGO).forEach(function(k){
-      (CATALOGO[k].produtos||[]).forEach(function(p){
-        if (!vlCat && p.nome === item.nome) vlCat = Number(p.valorUnitario) || 0;
-      });
-    });
-    var vlDefault = Number(item.vlPedido) || Number(item.vlCompra) || vlCat || 0;
-    var inpVl=document.createElement('input'); inpVl.type='number'; inpVl.className='proc-vl-input'; inpVl.min='0'; inpVl.step='0.01'; inpVl.placeholder='0,00'; inpVl.id='proc-vl-'+idx; inpVl.value = vlDefault || ''; inpVl.oninput=recalcResumo; tdVl.appendChild(inpVl);
-    var tdForn=document.createElement('td'); tdForn.setAttribute('data-label','Fornecedor');
-    var inpForn=document.createElement('select'); inpForn.className='proc-forn-input'; inpForn.id='proc-forn-'+idx; inpForn.onchange=recalcResumo;
-    var optBlank=document.createElement('option'); optBlank.value=''; optBlank.textContent='Selecionar…'; inpForn.appendChild(optBlank);
-    getFornecedores().forEach(function(f){ var o=document.createElement('option'); o.value=f; o.textContent=f; if(f===item.fornecedor) o.selected=true; inpForn.appendChild(o); });
-    tdForn.appendChild(inpForn);
-    var tdData=document.createElement('td'); tdData.setAttribute('data-label','Entrega');
-    var inpData=document.createElement('input'); inpData.type='date'; inpData.className='proc-date-input'; inpData.value=entregaDefault; inpData.id='proc-date-'+idx; tdData.appendChild(inpData);
-    tr.appendChild(tdNome); tr.appendChild(tdSol); tr.appendChild(tdConf); tr.appendChild(tdVl); tr.appendChild(tdForn); tr.appendChild(tdData);
-    tbody.appendChild(tr);
+    tbody.appendChild(criarLinhaProcItem(item, idx, null, entregaDefault));
   });
   document.getElementById('modal-proc').classList.add('active'); lockBodyScroll();
   recalcResumo();
@@ -2171,55 +2250,65 @@ function recalcResumo() {
   var order=null; for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===procOrderId){order=ORDERS[i];break;}} if(!order)return;
   var total=0,itensComQtd=0,fornSet={};
   (procItens || order.itensList).forEach(function(item,idx){
-    var conf=parseFloat((document.getElementById('proc-conf-'+idx)||{}).value)||0;
-    var vl=parseFloat((document.getElementById('proc-vl-'+idx)||{}).value)||0;
-    var forn=((document.getElementById('proc-forn-'+idx)||{}).value||'').trim();
-    if(conf>0)itensComQtd++;
-    if(forn)fornSet[forn.toLowerCase()]=1;
-    total+=conf*vl;
+    [null].concat(procSplits[idx]||[]).forEach(function(splitKey){
+      var suf = splitKey ? (idx+'-'+splitKey) : String(idx);
+      var conf=parseFloat((document.getElementById('proc-conf-'+suf)||{}).value)||0;
+      var vl=parseFloat((document.getElementById('proc-vl-'+suf)||{}).value)||0;
+      var forn=((document.getElementById('proc-forn-'+suf)||{}).value||'').trim();
+      if(conf>0)itensComQtd++;
+      if(forn)fornSet[forn.toLowerCase()]=1;
+      total+=conf*vl;
+    });
   });
   document.getElementById('proc-r-forn').textContent=Object.keys(fornSet).length||'—';
   document.getElementById('proc-r-itens').textContent=itensComQtd||'—';
   document.getElementById('proc-r-total').textContent=total>0?'R$ '+total.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
 }
 
-function fecharModalProc() { document.getElementById('modal-proc').classList.remove('active'); unlockBodyScroll(); procOrderId=null; procFornIdx=null; procItens=null; }
+function fecharModalProc() { document.getElementById('modal-proc').classList.remove('active'); unlockBodyScroll(); procOrderId=null; procFornIdx=null; procItens=null; procSplits={}; procSplitSeq=0; }
 
 // ── CONFIRMAR PROCESSAMENTO (Estágio 2 — Compras) ────────────────────────────
 async function confirmarPedido() {
-  var dadosProc = {};
   var order = null;
   for(var i=0;i<ORDERS.length;i++){ if(ORDERS[i].id===procOrderId){ order=ORDERS[i]; break; } }
   if(!order){ alert('Erro ao confirmar pedido.'); fecharModalProc(); return; }
 
   var itensAlvo = procItens || order.itensList;
   var reprocessandoForn = procFornIdx != null;
+  var obsCompras = document.getElementById('proc-obs').value.trim();
+
+  // "linhas" achata item principal + divisões de fornecedor numa lista única —
+  // cada entrada vira 1 UPDATE (linha principal, já existe no banco) ou 1 INSERT (divisão nova).
+  var linhas = [];
+  itensAlvo.forEach(function(item, idx){
+    linhas.push({ item: item, idx: idx, splitKey: null, suf: String(idx) });
+    (procSplits[idx] || []).forEach(function(splitKey){
+      linhas.push({ item: item, idx: idx, splitKey: splitKey, suf: idx + '-' + splitKey });
+    });
+  });
 
   var fornGroups = {};
   var totalGeral = 0;
-  itensAlvo.forEach(function(item,idx){
-    var conf=parseFloat((document.getElementById('proc-conf-'+idx)||{}).value)||0;
-    var vl=parseFloat((document.getElementById('proc-vl-'+idx)||{}).value)||0;
-    var forn=((document.getElementById('proc-forn-'+idx)||{}).value||'').trim();
-    var entregaInp=document.getElementById('proc-date-'+idx);
+  linhas.forEach(function(linha){
+    var conf=parseFloat((document.getElementById('proc-conf-'+linha.suf)||{}).value)||0;
+    var vl=parseFloat((document.getElementById('proc-vl-'+linha.suf)||{}).value)||0;
+    var forn=((document.getElementById('proc-forn-'+linha.suf)||{}).value||'').trim();
+    var entregaInp=document.getElementById('proc-date-'+linha.suf);
     var entrega='—'; var entregaISO='';
     if(entregaInp&&entregaInp.value){var p=entregaInp.value.split('-');entrega=p[2]+'/'+p[1]+'/'+p[0];entregaISO=entregaInp.value;}
-    var vlOriginal = item.vlPedido;             // valor_inicial do catálogo
-    var vlEfetivo  = vl > 0 ? vl : vlOriginal; // usa catálogo se não preenchido
-    item.vlPedido  = vlEfetivo;
-    dadosProc[idx]={conf:conf, vl:vlEfetivo, vlNovo:(vl>0), forn:forn||'—', entrega:entrega, entregaISO:entregaISO};
+    var vlOriginal = linha.item.vlPedido;        // valor_inicial do catálogo
+    var vlEfetivo  = vl > 0 ? vl : vlOriginal;   // usa catálogo se não preenchido
+    if (!linha.splitKey) linha.item.vlPedido = vlEfetivo;
+    linha.d = {conf:conf, vl:vlEfetivo, vlNovo:(vl>0), forn:forn||'—', entrega:entrega, entregaISO:entregaISO};
     totalGeral += conf * vlEfetivo;
     if(conf>0){
       var key = forn || '—';
       if(!fornGroups[key]) fornGroups[key] = [];
-      fornGroups[key].push({ nome:item.nome, un:item.un, qty:conf, vlPedido:vlEfetivo, _supaId:item._supaId });
+      fornGroups[key].push({ nome:linha.item.nome, un:linha.item.un, qty:conf, vlPedido:vlEfetivo, _supaId:linha.splitKey?null:linha.item._supaId });
     }
   });
-  dadosProc.obs=document.getElementById('proc-obs').value.trim();
 
-  var semData = itensAlvo.some(function(item,idx){
-    var d = dadosProc[idx]; return d && d.conf > 0 && !d.entregaISO;
-  });
+  var semData = linhas.some(function(linha){ return linha.d.conf > 0 && !linha.d.entregaISO; });
   if (semData) { alert('Informe a data de entrega para todos os itens confirmados.'); return; }
 
   if (!reprocessandoForn) {
@@ -2240,29 +2329,64 @@ async function confirmarPedido() {
     try {
       var comprador = (currentUser && currentUser.name) || '—';
       var dataCompraISO = new Date().toISOString().split('T')[0];
-      var updates = itensAlvo.map(function(item, idx) {
-        var d = dadosProc[idx] || {conf:0, vl:0, forn:'—'};
-        var updateData = {
+
+      var updatesPromises = [];
+      var novasLinhas = [];
+      linhas.forEach(function(linha){
+        var d = linha.d;
+        var dadosComuns = {
           qtd_comprada:  d.conf,
           valor_compra:  d.conf * (d.vl || 0),
           fornecedor:    d.forn !== '—' ? d.forn : null,
           data_compra:   dataCompraISO,
           data_entrega:  d.entregaISO || null,
           comprador:     comprador,
-          obs_compras:   dadosProc.obs || null,
+          obs_compras:   obsCompras || null,
           status:        d.conf > 0 ? 'comprado' : 'nao_realizado',
           atualizado_por: comprador
         };
-        if (d.vlNovo) updateData.valor_inicial = d.vl; // só sobrescreve se usuário digitou
-        return item._supaId
-          ? supa.from('abastecimento').update(updateData).eq('id', item._supaId)
-          : supa.from('abastecimento').update(updateData).eq('id_display', order.id).eq('produto_nome', item.nome);
+        if (!linha.splitKey) {
+          if (d.vlNovo) dadosComuns.valor_inicial = d.vl; // só sobrescreve se usuário digitou
+          var item = linha.item;
+          updatesPromises.push(
+            item._supaId
+              ? supa.from('abastecimento').update(dadosComuns).eq('id', item._supaId)
+              : supa.from('abastecimento').update(dadosComuns).eq('id_display', order.id).eq('produto_nome', item.nome)
+          );
+        } else {
+          // Divisão entre fornecedores: cria uma linha nova no banco pro mesmo produto,
+          // clonando os dados de contexto do pedido original.
+          var catKey = '';
+          Object.keys(CATALOGO).forEach(function(k){
+            (CATALOGO[k].produtos||[]).forEach(function(p){ if (!catKey && p.nome === linha.item.nome) catKey = k; });
+          });
+          var stub = {
+            id_display:       order.id,
+            unidade:          (order.raw && order.raw.unidade) || null,
+            departamento:     (order.raw && order.raw.departamento) || null,
+            solicitante:      (order.raw && order.raw.solicitante) || null,
+            data_solicitacao: (order.raw && order.raw.dataSolicitacao) || null,
+            categoria:        catKey || null,
+            produto_nome:     linha.item.nome,
+            unidade_medida:   linha.item.un || null,
+            qtd_solicitada:   0,
+            valor_inicial:    linha.item.vlPedido || null
+          };
+          novasLinhas.push(Object.assign(stub, dadosComuns));
+        }
       });
-      var results = await Promise.all(updates);
+
+      var results = await Promise.all(updatesPromises);
       var erros = results.filter(function(r) { return r.error; });
       if (erros.length) throw new Error(erros[0].error.message);
+
+      if (novasLinhas.length) {
+        var insRes = await supa.from('abastecimento').insert(novasLinhas);
+        if (insRes.error) throw new Error('divisão de fornecedor: ' + insRes.error.message);
+      }
+
       if (!reprocessandoForn) {
-        var algumComprado = itensAlvo.some(function(item, idx){ return (dadosProc[idx]||{}).conf > 0; });
+        var algumComprado = linhas.some(function(linha){ return linha.d.conf > 0; });
         if (order.raw) { order.raw.status = algumComprado ? 'comprado' : 'nao_realizado'; order.raw.comprador = comprador; }
       }
       alert('Pedido '+order.id+' enviado para entregas.');
@@ -2274,10 +2398,12 @@ async function confirmarPedido() {
   }
 
   var savedOrder = order;
-  var savedItens = itensAlvo;
+  var savedLinhas = linhas.map(function(linha){
+    return { nome: linha.item.nome, un: linha.item.un, qtySolicitada: linha.splitKey ? null : linha.item.qty, conf: linha.d.conf, vl: linha.d.vl, forn: linha.d.forn, entrega: linha.d.entrega };
+  });
   fecharModalProc();
   await carregarPedidos();
-  setTimeout(function(){gerarPDFProcessamento(savedOrder, dadosProc, savedItens);},400);
+  setTimeout(function(){gerarPDFProcessamento(savedOrder, savedLinhas);},400);
 }
 
 // ── CATEGORIAS ────────────────────────────────────────────────────────────────
@@ -4505,24 +4631,24 @@ function gerarPDFPedido(order) {
   }
 }
 
-function gerarPDFProcessamento(order, dadosProc, itensOrigem) {
+function gerarPDFProcessamento(order, linhas) {
   var nome = (currentUser && currentUser.name) || (window.__lideresUser) || 'Compras';
   var dataProc = new Date().toLocaleDateString('pt-BR');
   var rowsHtml=''; var totalGeral=0; var fornSet={}; var itensComQtd=0;
-  (itensOrigem || order.itensList).forEach(function(item,idx){
-    var dp = dadosProc[idx] || {};
-    var conf = dp.conf || 0;
-    var vl = dp.vl || 0;
-    var forn = dp.forn || '—';
-    var entrega = dp.entrega || '—';
+  (linhas || []).forEach(function(l){
+    var conf = l.conf || 0;
+    var vl = l.vl || 0;
+    var forn = l.forn || '—';
+    var entrega = l.entrega || '—';
     var subtotal = conf*vl;
     if(conf>0)itensComQtd++;
     if(forn && forn!=='—')fornSet[forn.toLowerCase()]=1;
     totalGeral += subtotal;
+    var unTxt = l.un && isNaN(l.un) ? ' '+l.un : '';
     rowsHtml+='<tr>'+
-      '<td>'+item.nome+'</td>'+
-      '<td class="center">'+item.qty+(item.un&&isNaN(item.un)?' '+item.un:'')+'</td>'+
-      '<td class="center">'+conf+(item.un&&isNaN(item.un)?' '+item.un:'')+'</td>'+
+      '<td>'+l.nome+'</td>'+
+      '<td class="center">'+(l.qtySolicitada!=null ? (l.qtySolicitada+unTxt) : '—')+'</td>'+
+      '<td class="center">'+conf+unTxt+'</td>'+
       '<td class="center">'+(vl>0?'R$ '+vl.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—')+'</td>'+
       '<td class="center">'+forn+'</td>'+
       '<td class="center">'+entrega+'</td>'+
