@@ -217,6 +217,9 @@
     align-items: center;
     justify-content: center;
     box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    position: relative;
+    z-index: 11;               /* sempre por cima da pílula de aviso */
+    transition: transform 0.36s cubic-bezier(0.34,1.12,0.6,1);
   }
   .toolbar-toggle svg {
     width: 16px;
@@ -739,33 +742,32 @@
     .toolbar-controls button, .unit-filter { font-size: 9px; padding: 4px 9px; }
   }
 
-  /* ── AVISOS: pílula que nasce de dentro do menu (atrás da setinha) e desliza p/ a esquerda ── */
+  /* ── AVISOS: pílula que nasce de dentro do menu; a setinha acompanha (vai p/ a esquerda) ── */
   .hint-bar {
     position: fixed;
-    top: 14px;
-    right: 16px;               /* borda direita atrás da setinha da toolbar */
-    z-index: 9;                /* abaixo da toolbar (z-index 10): a setinha "esconde" a origem */
+    top: 12px;                 /* alinhado com a setinha (36px @ top 12) */
+    right: 12px;               /* borda direita alinhada com a setinha */
+    height: 36px;
+    z-index: 9;                /* abaixo da toolbar (z-index 10): a setinha fica por cima */
     display: flex;
     align-items: center;
     gap: 8px;
-    max-width: min(80vw, 252px);
-    padding: 8px 46px 8px 15px;/* padding direito maior para o texto sair de trás da setinha */
+    max-width: min(82vw, 258px);
+    padding: 0 48px 0 16px;    /* padding direito reserva o espaço da setinha */
     background: var(--carbon); /* mesmo padrão do seletor */
     color: #FFFFFF;
     border-radius: 100px;      /* PÍLULA */
-    box-shadow: 0 4px 16px rgba(0,0,0,0.22);
     font-family: 'DM Sans', sans-serif;
     font-size: 11.5px;
     font-weight: 600;
     line-height: 1.15;
     white-space: nowrap;
-    opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transform: translateX(100%);   /* recolhido dentro do menu */
-    transition: transform 0.34s cubic-bezier(0.34,1.15,0.6,1), opacity 0.22s ease, visibility 0.34s;
+    clip-path: inset(0 0 0 100% round 18px);   /* recolhido: cresce da direita p/ a esquerda */
+    transition: clip-path 0.36s cubic-bezier(0.34,1.12,0.6,1), visibility 0.36s;
   }
-  .hint-bar.show { opacity: 1; visibility: visible; transform: translateX(0); }
+  .hint-bar.show { visibility: visible; clip-path: inset(0 0 0 0 round 18px); }
   .hint-ico { flex-shrink: 0; display: flex; }
   .hint-ico svg {
     width: 20px; height: 20px;
@@ -778,6 +780,10 @@
   @keyframes rotate-tip { 0%, 55%, 100% { transform: rotate(0deg); } 25%, 40% { transform: rotate(88deg); } }
   @keyframes pinch-move { 0%, 100% { transform: scale(1); } 50% { transform: scale(0.62); } }
   @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  /* no mobile a toolbar fica em top/right 8px — alinha a pílula à setinha */
+  @media (max-width: 640px) {
+    .hint-bar { top: 8px; right: 8px; }
+  }
 </style>
 </head>
 <body>
@@ -2179,6 +2185,7 @@
     var card = document.getElementById('hintCard');
     var ico = document.getElementById('hintIco');
     var txt = document.getElementById('hintTxt');
+    var toggle = document.querySelector('.toolbar-toggle');
     if (!card || _hintRunning) return;
     var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     var isPortraitPhone = window.matchMedia && window.matchMedia('(max-width: 820px) and (orientation: portrait)').matches;
@@ -2187,18 +2194,30 @@
     if (isTouch)         steps.push({ cls: 'pinch',  icon: ICON_PINCH,  text: 'Use dois dedos para dar zoom', ms: 5000 });
     steps.push({ cls: 'unit', icon: ICON_UNIT, text: 'Toque aqui para trocar de unidade', ms: 3000 });
     if (!steps.length) return;
+    // A setinha acompanha: vai p/ a esquerda junto com a pílula e volta ao recolher
+    function shiftToggle(on) {
+      if (!toggle) return;
+      if (on) {
+        var w = card.getBoundingClientRect().width;   // largura total da pílula
+        toggle.style.transform = 'translateX(-' + Math.max(0, Math.round(w - 42)) + 'px)';
+      } else {
+        toggle.style.transform = '';
+      }
+    }
     _hintRunning = true;
     var i = 0;
     function next() {
-      if (i >= steps.length) { card.classList.remove('show'); _hintRunning = false; return; }
+      if (i >= steps.length) { card.classList.remove('show'); shiftToggle(false); _hintRunning = false; return; }
       var s = steps[i++];
       ico.className = 'hint-ico ' + s.cls;
       ico.innerHTML = s.icon;
       txt.textContent = s.text;
       card.classList.add('show');
+      shiftToggle(true);                 // abre: pílula + setinha vão p/ a esquerda
       setTimeout(function() {
         card.classList.remove('show');   // fecha
-        setTimeout(next, 380);           // ...e abre o próximo
+        shiftToggle(false);              // ...e a setinha recolhe junto
+        setTimeout(next, 420);           // abre o próximo
       }, s.ms);
     }
     next();
