@@ -743,7 +743,7 @@
   .pinch-overlay {
     position: fixed;
     inset: 0;
-    z-index: 400;
+    z-index: 600;
     background: rgba(53,56,63,0.6);
     display: flex;
     align-items: center;
@@ -752,9 +752,10 @@
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
+    cursor: pointer;
     transition: opacity 0.3s ease;
   }
-  .pinch-overlay.show { opacity: 1; visibility: visible; }
+  .pinch-overlay.show { opacity: 1; visibility: visible; pointer-events: auto; }
   .hint-pill {
     display: flex;
     align-items: center;
@@ -774,11 +775,11 @@
     stroke: var(--citric); fill: none;
     stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
   }
-  /* Aviso de girar a tela — tela cheia, fundo translúcido (~70%), temporário e não bloqueante */
+  /* Aviso de girar a tela — tela cheia, fundo translúcido (~70%), por cima do loading */
   .rotate-overlay {
     position: fixed;
     inset: 0;
-    z-index: 400;
+    z-index: 600;
     background: rgba(53,56,63,0.7);
     display: flex;
     flex-direction: column;
@@ -1092,8 +1093,6 @@
         atualizarStats(data.stats || {}, data.total || 0);
         showLoading(false);
         detectMode(true);
-        // Mostra os avisos só depois que o carregamento terminou (uma vez)
-        if (!_hintsShown) { _hintsShown = true; setTimeout(showHints, 500); }
         var _cv = document.getElementById('canvas');
         if (_cv) { _cv.scrollTop = 0; _cv.scrollLeft = 0; }
         if (window.scrollTo) window.scrollTo(0, 0);
@@ -2189,10 +2188,9 @@
     });
   }
 
-  // Avisos (5s cada), não bloqueantes, mostrados SÓ APÓS o carregamento terminar
-  // (para não cobrir o loading). 1) girar a tela — overlay translúcido 70%;
-  // 2) pinça p/ zoom — pílula centralizada, fundo 60%.
-  var _hintsShown = false;
+  // Avisos (~3s cada). O de girar aparece POR CIMA do carregamento (translúcido,
+  // com o loading rodando por trás). O da pinça fica centralizado (fundo 60%) e
+  // fecha ao clicar em qualquer ponto (ou sozinho após 3s).
   function showHints() {
     var overlay = document.getElementById('rotateOverlay');
     var pinch = document.getElementById('pinchOverlay');
@@ -2202,19 +2200,29 @@
     if (isPortraitPhone && overlay) {
       queue.push(function(done) {
         overlay.classList.add('show');
-        setTimeout(function() { overlay.classList.remove('show'); setTimeout(done, 400); }, 5000);
+        setTimeout(function() { overlay.classList.remove('show'); setTimeout(done, 400); }, 3000);
       });
     }
     if (isTouch && pinch) {
       queue.push(function(done) {
         pinch.classList.add('show');
-        setTimeout(function() { pinch.classList.remove('show'); setTimeout(done, 400); }, 5000);
+        var closed = false, tid;
+        function close() {
+          if (closed) return; closed = true;
+          clearTimeout(tid);
+          pinch.removeEventListener('click', close);
+          pinch.classList.remove('show');
+          setTimeout(done, 400);
+        }
+        tid = setTimeout(close, 3000);
+        pinch.addEventListener('click', close);
       });
     }
     var i = 0;
     function next() { if (i < queue.length) queue[i++](next); }
-    setTimeout(next, 300);
+    setTimeout(next, 200);
   }
+  showHints();
 
   carregarDados();
   carregarCES();
