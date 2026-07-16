@@ -1281,12 +1281,12 @@
   // ============================================
   // SVG (DESKTOP)
   // ============================================
-  var NODE_W = 160;
-  var NODE_H = 48;
+  var NODE_W = 128;
+  var NODE_H = 86;
   var H_GAP = 20;
-  var V_GAP_LEVEL = 90;
-  var V_GAP_OP = 10;
-  var AVATAR_SIZE = 28;
+  var V_GAP_LEVEL = 122;
+  var V_GAP_OP = 12;
+  var AVATAR_SIZE = 44;
 
   // Horizontal layout: 2+ kids where at least one has its own children (multi-dept)
   // Leaf kids are grouped by departamento into shared columns
@@ -1576,82 +1576,53 @@
 
     parts.push('<g class="nodes">');
     function drawNode(n) {
-      var fill = '#FFFFFF', stroke = '#E8E8E8', strokeW = 1;
-      var nameColor = '#35383F', roleColor = '#6B6F76';
-      var toggleFill = '#F4F4F4', toggleColor = '#35383F';
-      var fkids = filteredChildren(n);
-
-      if (fkids.length > 0) {
-        fill = '#35383F'; stroke = '#35383F'; nameColor = '#FFFFFF'; roleColor = '#CFFF00';
-        toggleFill = '#CFFF00'; toggleColor = '#35383F';
-      } else if (n.unitClass) {
-        stroke = '#35383F'; strokeW = 2;
-      } else {
-        stroke = '#CFFF00'; strokeW = 2;
-      }
-
-      var nodeH = NODE_H;
       var dispName = abreviarNome(n.nome);
-      if (dispName.length > 15) dispName = dispName.slice(0, 14) + '…';
-      var dispRole = String(n.cargo || '').length > 18 ? String(n.cargo).slice(0, 17) + '…' : String(n.cargo || '');
+      if (dispName.length > 14) dispName = dispName.slice(0, 13) + '…';
+      var dispRole = String(n.cargo || '');
+      if (dispRole.length > 16) dispRole = dispRole.slice(0, 15) + '…';
+
+      var cx = n.x + NODE_W / 2;
+      var avatarR = AVATAR_SIZE / 2;
+      var avatarCy = n.y + avatarR + 1;
 
       parts.push('<g class="org-node" data-id="' + escapeHtml(n.id) + '">');
-      parts.push('<rect class="card-rect" x="' + n.x + '" y="' + n.y + '" width="' + NODE_W + '" height="' + nodeH +
-            '" rx="6" fill="' + fill + '" stroke="' + stroke + '" stroke-width="' + strokeW + '" style="cursor:pointer"/>');
+      // Área clicável invisível (cobre todo o card)
+      parts.push('<rect x="' + n.x + '" y="' + n.y + '" width="' + NODE_W + '" height="' + NODE_H + '" fill="transparent" style="cursor:pointer"/>');
 
-      var avatarCx = n.x + 22;
-      var avatarCy = n.y + nodeH / 2;
-      var avatarR = AVATAR_SIZE / 2;
-
+      // Foto centralizada no topo (fora das pílulas)
       if (n.foto) {
-        parts.push('<circle cx="' + avatarCx + '" cy="' + avatarCy + '" r="' + avatarR + '" fill="#CFFF00" stroke="#FFFFFF" stroke-width="2" pointer-events="none"/>');
-        parts.push('<g transform="translate(' + avatarCx + ',' + avatarCy + ')" pointer-events="none">' +
+        parts.push('<circle cx="' + cx + '" cy="' + avatarCy + '" r="' + avatarR + '" fill="#CFFF00" stroke="#FFFFFF" stroke-width="2" pointer-events="none"/>');
+        parts.push('<g transform="translate(' + cx + ',' + avatarCy + ')" pointer-events="none">' +
           '<image x="' + (-avatarR) + '" y="' + (-avatarR) +
           '" width="' + AVATAR_SIZE + '" height="' + AVATAR_SIZE +
           '" href="' + escapeHtml(n.foto) + '" clip-path="url(#clip_' + n.id + ')" preserveAspectRatio="xMidYMid slice"/></g>');
       } else {
-        parts.push('<circle cx="' + avatarCx + '" cy="' + avatarCy + '" r="' + avatarR + '" fill="#CFFF00" stroke="#FFFFFF" stroke-width="2" pointer-events="none"/>');
-        parts.push('<text x="' + avatarCx + '" y="' + (avatarCy + 4) +
-          '" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="11" font-weight="700" fill="#35383F" pointer-events="none">' +
+        parts.push('<circle cx="' + cx + '" cy="' + avatarCy + '" r="' + avatarR + '" fill="#CFFF00" stroke="#FFFFFF" stroke-width="2" pointer-events="none"/>');
+        parts.push('<text x="' + cx + '" y="' + (avatarCy + 5) +
+          '" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="15" font-weight="700" fill="#35383F" pointer-events="none">' +
           escapeHtml(n.iniciais || '?') + '</text>');
       }
 
-      var textX = avatarCx + avatarR + 8;
-      parts.push(
-        '<text x="' + textX + '" y="' + (n.y + 20) + '" font-family="DM Sans, sans-serif" font-size="11" font-weight="600" fill="' + nameColor + '" pointer-events="none">' + escapeHtml(dispName) + '</text>' +
-        '<text x="' + textX + '" y="' + (n.y + 34) + '" font-family="DM Mono, monospace" font-size="9" fill="' + roleColor + '" pointer-events="none">' + escapeHtml(dispRole) + '</text>'
-      );
-
-      // Pílula — quem tem subordinados mostra a unidade; folhas mostram o departamento
-      // (CEO/raiz não exibe pílula)
-      if (n !== arvore) {
-      var unitLabels = { itaim: 'Itaim', pinheiros: 'Pin', puc: 'Poke', tatahouse: 'House' };
-      var unitLabel;
-      if (fkids.length > 0) {
-        unitLabel = n.unitClass ? (unitLabels[n.unitClass] || n.unitClass) : 'Adm';
-      } else {
-        var dep = (n.departamento || '').trim();
-        if (dep.length > 7) dep = dep.slice(0, 7);
-        unitLabel = dep || (n.unitClass ? (unitLabels[n.unitClass] || n.unitClass) : 'Adm');
-      }
-      var pillFill, pillText;
-      if (fill !== '#FFFFFF') {
-        pillFill = fill; pillText = '#CFFF00';   // card carbon → pílula carbon, texto cítrico
-      } else if (stroke === '#CFFF00') {
-        pillFill = '#CFFF00'; pillText = '#35383F'; // borda cítrica (Adm) → pílula cítrica, texto carbon
-      } else {
-        pillFill = '#35383F'; pillText = '#CFFF00'; // borda carbon (unidade) → pílula carbon, texto cítrico
-      }
-      var pillW = 40;
-      var pillH = 13;
-      var pillX = n.x + NODE_W - pillW - 4;
-      var pillY = n.y - Math.floor(pillH / 2);
+      // Pílula do nome (escura) + pílula do cargo (cítrica), centralizadas e coladas
+      var pillTop = avatarCy + avatarR + 6;
+      var nameW = Math.min(NODE_W, Math.max(30, dispName.length * 6.2 + 16));
+      var nameH = 17;
       parts.push(
         '<g pointer-events="none">' +
-        '<rect x="' + pillX + '" y="' + pillY + '" width="' + pillW + '" height="' + pillH + '" rx="6" fill="' + pillFill + '"/>' +
-        '<text x="' + (pillX + pillW / 2) + '" y="' + (pillY + 9) + '" text-anchor="middle" font-family="DM Mono, monospace" font-size="7" font-weight="500" fill="' + pillText + '">' + escapeHtml(unitLabel) + '</text>' +
+        '<rect x="' + (cx - nameW / 2) + '" y="' + pillTop + '" width="' + nameW + '" height="' + nameH + '" rx="8.5" fill="#35383F"/>' +
+        '<text x="' + cx + '" y="' + (pillTop + 12) + '" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="10" font-weight="600" fill="#FFFFFF">' + escapeHtml(dispName) + '</text>' +
         '</g>'
       );
+      if (dispRole) {
+        var roleTop = pillTop + nameH + 2;
+        var roleW = Math.min(NODE_W, Math.max(28, dispRole.length * 5.4 + 14));
+        var roleH = 15;
+        parts.push(
+          '<g pointer-events="none">' +
+          '<rect x="' + (cx - roleW / 2) + '" y="' + roleTop + '" width="' + roleW + '" height="' + roleH + '" rx="7.5" fill="#CFFF00"/>' +
+          '<text x="' + cx + '" y="' + (roleTop + 10.5) + '" text-anchor="middle" font-family="DM Mono, monospace" font-size="8" font-weight="500" fill="#35383F">' + escapeHtml(dispRole) + '</text>' +
+          '</g>'
+        );
       }
 
       parts.push('</g>');
@@ -1663,22 +1634,34 @@
     function drawSocioCard(s) {
       if (!s) return;
       var dispNome = abreviarNome(s.nome);
-      var dispCargo = (s.cargo || 'Sócio').length > 16 ? (s.cargo || 'Sócio').slice(0, 15) + '…' : (s.cargo || 'Sócio');
-      parts.push('<g class="org-node" data-id="' + escapeHtml(s.id) + '">');
-      parts.push('<rect class="card-rect" x="' + s.x + '" y="' + s.y + '" width="' + NODE_W + '" height="' + NODE_H + '" rx="6" fill="#35383F" stroke="#35383F" stroke-width="1" style="cursor:pointer"/>');
-      var aCx = s.x + 22, aCy = s.y + NODE_H / 2;
+      if (dispNome.length > 14) dispNome = dispNome.slice(0, 13) + '…';
+      var dispCargo = (s.cargo || 'Sócio');
+      if (dispCargo.length > 16) dispCargo = dispCargo.slice(0, 15) + '…';
+      var aCx = s.x + NODE_W / 2;
       var avatarR = AVATAR_SIZE / 2;
-      // Sempre desenha círculo + iniciais; foto sobrepõe se carregar
+      var aCy = s.y + avatarR + 1;
+      parts.push('<g class="org-node" data-id="' + escapeHtml(s.id) + '">');
+      parts.push('<rect x="' + s.x + '" y="' + s.y + '" width="' + NODE_W + '" height="' + NODE_H + '" fill="transparent" style="cursor:pointer"/>');
+      // Foto centralizada no topo
       parts.push('<circle cx="' + aCx + '" cy="' + aCy + '" r="' + avatarR + '" fill="#CFFF00" stroke="#FFFFFF" stroke-width="2" pointer-events="none"/>');
-      parts.push('<text x="' + aCx + '" y="' + (aCy + 4) + '" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="11" font-weight="700" fill="#35383F" pointer-events="none">' + escapeHtml(s.iniciais || '?') + '</text>');
+      parts.push('<text x="' + aCx + '" y="' + (aCy + 5) + '" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="15" font-weight="700" fill="#35383F" pointer-events="none">' + escapeHtml(s.iniciais || '?') + '</text>');
       if (s.foto) {
         parts.push('<g transform="translate(' + aCx + ',' + aCy + ')" pointer-events="none">' +
           '<image x="' + (-avatarR) + '" y="' + (-avatarR) + '" width="' + AVATAR_SIZE + '" height="' + AVATAR_SIZE +
           '" href="' + escapeHtml(s.foto) + '" clip-path="url(#clip_' + escapeHtml(s.id) + ')" preserveAspectRatio="xMidYMid slice"/></g>');
       }
-      var tX = aCx + AVATAR_SIZE / 2 + 8;
-      parts.push('<text x="' + tX + '" y="' + (s.y + 20) + '" font-family="DM Sans, sans-serif" font-size="11" font-weight="600" fill="#FFFFFF" pointer-events="none">' + escapeHtml(dispNome) + '</text>');
-      parts.push('<text x="' + tX + '" y="' + (s.y + 34) + '" font-family="DM Mono, monospace" font-size="9" fill="#CFFF00" pointer-events="none">' + escapeHtml(dispCargo) + '</text>');
+      var sPillTop = aCy + avatarR + 6;
+      var sNameW = Math.min(NODE_W, Math.max(30, dispNome.length * 6.2 + 16));
+      parts.push('<g pointer-events="none">' +
+        '<rect x="' + (aCx - sNameW / 2) + '" y="' + sPillTop + '" width="' + sNameW + '" height="17" rx="8.5" fill="#35383F"/>' +
+        '<text x="' + aCx + '" y="' + (sPillTop + 12) + '" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="10" font-weight="600" fill="#FFFFFF">' + escapeHtml(dispNome) + '</text>' +
+        '</g>');
+      var sRoleTop = sPillTop + 17 + 2;
+      var sRoleW = Math.min(NODE_W, Math.max(28, dispCargo.length * 5.4 + 14));
+      parts.push('<g pointer-events="none">' +
+        '<rect x="' + (aCx - sRoleW / 2) + '" y="' + sRoleTop + '" width="' + sRoleW + '" height="15" rx="7.5" fill="#CFFF00"/>' +
+        '<text x="' + aCx + '" y="' + (sRoleTop + 10.5) + '" text-anchor="middle" font-family="DM Mono, monospace" font-size="8" font-weight="500" fill="#35383F">' + escapeHtml(dispCargo) + '</text>' +
+        '</g>');
       parts.push('</g>');
     }
     drawSocioCard(socL);
