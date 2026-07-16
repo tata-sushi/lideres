@@ -254,6 +254,8 @@
     display: flex;
     align-items: flex-start;
     padding-top: 50px;
+    /* Gestos tratados via JS (arrastar + pinça); impede o zoom do navegador */
+    touch-action: none;
   }
   .canvas:active { cursor: grabbing; }
   #svgContainer {
@@ -1709,6 +1711,20 @@
     });
   }
 
+  var ZOOM_MIN = 0.25, ZOOM_MAX = 3;
+
+  // Zoom mantendo fixo o ponto sob o cursor/centro da pinça
+  function zoomAtPoint(newZoom, px, py) {
+    if (!canvas) { zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom)); applyZoom(); return; }
+    newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+    var contentX = (canvas.scrollLeft + px) / zoom;
+    var contentY = (canvas.scrollTop + py) / zoom;
+    zoom = newZoom;
+    applyZoom();
+    canvas.scrollLeft = contentX * zoom - px;
+    canvas.scrollTop = contentY * zoom - py;
+  }
+
   if (canvas) {
     var dragging = false, sx = 0, sy = 0, sl = 0, st = 0;
     canvas.addEventListener('mousedown', function(e) {
@@ -1721,13 +1737,65 @@
       canvas.scrollLeft = sl - (e.pageX - sx);
       canvas.scrollTop = st - (e.pageY - sy);
     });
+
+    // Pinça de trackpad / Ctrl+scroll (desktop) — zoom sem afetar o navegador
+    canvas.addEventListener('wheel', function(e) {
+      if (!e.ctrlKey) return;   // scroll normal continua rolando o canvas
+      e.preventDefault();
+      var rect = canvas.getBoundingClientRect();
+      zoomAtPoint(zoom * Math.exp(-e.deltaY * 0.01), e.clientX - rect.left, e.clientY - rect.top);
+    }, { passive: false });
+
+    // Toque: 1 dedo = arrastar (pan) · 2 dedos = pinça (zoom)
+    var tMode = null, tDist0 = 0, tZoom0 = 1, tsx = 0, tsy = 0, tsl = 0, tst = 0;
+    function touchDist(a, b) { return Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY); }
+
+    canvas.addEventListener('touchstart', function(e) {
+      if (e.touches.length >= 2) {
+        tMode = 'pinch';
+        tDist0 = touchDist(e.touches[0], e.touches[1]);
+        tZoom0 = zoom;
+      } else if (e.touches.length === 1) {
+        tMode = 'pan';
+        tsx = e.touches[0].clientX; tsy = e.touches[0].clientY;
+        tsl = canvas.scrollLeft; tst = canvas.scrollTop;
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', function(e) {
+      if (tMode === 'pinch' && e.touches.length >= 2) {
+        e.preventDefault();
+        if (tDist0 <= 0) return;
+        var rect = canvas.getBoundingClientRect();
+        var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+        var my = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+        zoomAtPoint(tZoom0 * (touchDist(e.touches[0], e.touches[1]) / tDist0), mx, my);
+      } else if (tMode === 'pan' && e.touches.length === 1) {
+        e.preventDefault();
+        canvas.scrollLeft = tsl - (e.touches[0].clientX - tsx);
+        canvas.scrollTop = tst - (e.touches[0].clientY - tsy);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', function(e) {
+      if (e.touches.length === 0) {
+        tMode = null;
+      } else if (e.touches.length === 1) {
+        // saiu da pinça para 1 dedo → volta a arrastar
+        tMode = 'pan';
+        tsx = e.touches[0].clientX; tsy = e.touches[0].clientY;
+        tsl = canvas.scrollLeft; tst = canvas.scrollTop;
+      }
+    });
   }
 
   function clearExpandedFlags(n) { n._expanded = false; if (n.children) n.children.forEach(clearExpandedFlags); }
   window.expandAll = function() { _initialView = false; clearExpandedFlags(arvore); setCollapsed(arvore, false, false); renderSvg(); };
   window.collapseOps = function() { _initialView = false; clearExpandedFlags(arvore); setCollapsed(arvore, false, false); setCollapsed(arvore, true, true); renderSvg(); };
   window.collapseAllLevels = function() { _initialView = false; clearExpandedFlags(arvore); setCollapsed(arvore, true, false); arvore.collapsed = false; renderSvg(); };
-  window.zoomChange = function(delta) { zoom = Math.max(0.25, Math.min(2, zoom + delta)); applyZoom(); };
+  window.zoomChange = function(delta) {
+    zoomAtPoint(zoom + delta, canvas ? canvas.clientWidth / 2 : 0, canvas ? canvas.clientHeight / 2 : 0);
+  };
   window.zoomReset = function() { zoom = 1; applyZoom(); };
   window.fitScreen = function() {
     if (!canvas) return;
