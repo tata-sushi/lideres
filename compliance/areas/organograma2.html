@@ -739,36 +739,37 @@
     .toolbar-controls button, .unit-filter { font-size: 9px; padding: 4px 9px; }
   }
 
-  /* ── GIRE O CELULAR (mobile em pé) ── */
-  .rotate-hint { display: none; }
-  @media (max-width: 820px) and (orientation: portrait) {
-    .rotate-hint {
-      display: flex;
-      position: fixed;
-      inset: 0;
-      z-index: 400;
-      background: var(--carbon);
-      color: #FFFFFF;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 32px;
-      gap: 16px;
-    }
-    .rotate-hint svg {
-      width: 54px; height: 54px;
-      stroke: var(--citric); fill: none;
-      stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
-      animation: rotate-tip 2.6s ease-in-out infinite;
-    }
-    .rotate-hint h2 { font-family: 'DM Sans', sans-serif; font-size: 20px; font-weight: 700; }
-    .rotate-hint p {
-      font-family: 'DM Mono', monospace; font-size: 11px; line-height: 1.7;
-      color: rgba(255,255,255,0.55); max-width: 260px;
-      text-transform: uppercase; letter-spacing: 0.04em;
-    }
+  /* ── AVISO TEMPORÁRIO (toast) — girar tela / pinça ── */
+  .hint-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%) translateY(14px);
+    z-index: 400;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    max-width: 88vw;
+    background: rgba(53,56,63,0.96);
+    color: #FFFFFF;
+    padding: 12px 18px;
+    border-radius: 100px;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.28);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    line-height: 1.35;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
   }
+  .hint-toast.show { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+  .hint-toast svg {
+    width: 24px; height: 24px; flex-shrink: 0;
+    stroke: var(--citric); fill: none;
+    stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .hint-toast .ht-rotate { animation: rotate-tip 2.6s ease-in-out infinite; }
   @keyframes rotate-tip { 0%, 55%, 100% { transform: rotate(0deg); } 25%, 40% { transform: rotate(88deg); } }
 </style>
 </head>
@@ -785,12 +786,8 @@
   <span>Carregando dados...</span>
 </div>
 
-<!-- GIRE O CELULAR (mobile em pé) -->
-<div class="rotate-hint" id="rotateHint">
-  <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2.5"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>
-  <h2>Gire o celular</h2>
-  <p>Para visualizar o organograma, vire a tela na horizontal.</p>
-</div>
+<!-- AVISO TEMPORÁRIO (toast): girar tela / pinça -->
+<div class="hint-toast" id="hintToast"></div>
 
 <!-- CANVAS (ORGANOGRAMA) -->
 <div class="canvas-section">
@@ -2141,6 +2138,33 @@
       if (arvore) { renderSvg(); if (window.fitScreen) window.fitScreen(); }
     });
   }
+
+  // Avisos temporários (~2,6s cada), não bloqueantes: girar a tela (celular em pé)
+  // e, em seguida, a pinça para dar zoom (toque). A pessoa pode usar na vertical também.
+  (function showHints() {
+    var toast = document.getElementById('hintToast');
+    if (!toast) return;
+    var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    var isPortraitPhone = window.matchMedia && window.matchMedia('(max-width: 820px) and (orientation: portrait)').matches;
+    var ROTATE = '<svg class="ht-rotate" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2.5"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>';
+    var PINCH  = '<svg viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-8 8"/><path d="M3 21l8-8"/></svg>';
+    var steps = [];
+    if (isPortraitPhone) steps.push({ icon: ROTATE, text: 'Gire o celular para ver melhor — mas dá pra visualizar na vertical também.' });
+    if (isTouch)         steps.push({ icon: PINCH,  text: 'Use dois dedos (pinça) para aumentar e reduzir o zoom.' });
+    if (!steps.length) return;
+    var i = 0;
+    function next() {
+      if (i >= steps.length) return;
+      var s = steps[i++];
+      toast.innerHTML = s.icon + '<span>' + s.text + '</span>';
+      toast.classList.add('show');
+      setTimeout(function() {
+        toast.classList.remove('show');
+        setTimeout(next, 450);
+      }, 2600);
+    }
+    setTimeout(next, 600);
+  })();
 
   carregarDados();
   carregarCES();
