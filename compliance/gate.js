@@ -112,6 +112,13 @@
       perfil: perfil || 'lider',
       paginas: permitidos,
     }
+    // Preenche o chip de usuário com o PRIMEIRO nome. Feito aqui (após o gate
+    // resolver) porque o script inline de algumas páginas roda antes do token
+    // chegar e deixaria o chip em "—".
+    try {
+      var hu = document.getElementById('header-user')
+      if (hu && nome) hu.textContent = String(nome).trim().split(/\s+/)[0]
+    } catch (e) {}
     try {
       trancarCards(permitidos, ehAdminDe(perfil))
     } catch (e) {}
