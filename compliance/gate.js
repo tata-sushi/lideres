@@ -39,20 +39,31 @@
     return
   }
 
-  // Tranca os cards de menu que a pessoa não pode ver (admin vê tudo).
+  // Normaliza url pra comparar por pasta (tira .html, /index e barra final).
+  function baseUrl(u) {
+    return (u || '')
+      .toLowerCase()
+      .replace(/\.html?$/, '')
+      .replace(/\/index$/, '')
+      .replace(/\/$/, '')
+  }
+
+  // Tranca os cards de menu que a pessoa não pode ver (admin vê tudo). Um card
+  // de seção libera se a pessoa tem QUALQUER página dentro da seção dele.
   function trancarCards(permitidos, ehAdmin) {
     var cards = document.querySelectorAll(
       '.ac-dept-chip[data-access-id], .sec-card[data-access-id]',
     )
     cards.forEach(function (card) {
       var cid = (card.getAttribute('data-access-id') || '').toLowerCase()
-      var curl = (card.getAttribute('data-access-url') || '').toLowerCase()
+      var cbase = baseUrl(card.getAttribute('data-access-url') || '')
       var ok =
         ehAdmin ||
         permitidos.some(function (p) {
-          var id = String(p.id || '').toLowerCase()
-          var url = String(p.url || '').toLowerCase()
-          return id === cid || (curl && url.indexOf(curl) !== -1)
+          if (String(p.id || '').toLowerCase() === cid) return true
+          if (!cbase) return false
+          var pb = baseUrl(p.url)
+          return pb === cbase || pb.indexOf(cbase + '/') === 0
         })
       if (ok) {
         card.classList.remove('locked')
@@ -68,10 +79,10 @@
     if (resolvido) return
     var ehAdmin = (perfil || '').toLowerCase() === 'admin'
     window.__lideresPerfil = (perfil || 'lider').toLowerCase()
-    if (nome) {
-      window.__lideresUser = nome
-      window.__lideresSession = { displayName: nome, perfil: perfil || 'lider', paginas: [] }
-    }
+    if (nome) window.__lideresUser = nome
+    // __lideresSession (com paginas) só é definido DEPOIS do RPC — assim o
+    // trava-cards próprio das páginas (que checa session.paginas) sai pela
+    // guarda `if (!session) return` e não tranca tudo com lista vazia.
     if (!window.supabase || !sess || !sess.access_token) {
       nega()
       return
