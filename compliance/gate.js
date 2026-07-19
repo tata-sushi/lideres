@@ -1,10 +1,15 @@
 /* gate.js — Controle de acesso das páginas de Governança de Processos (modelo novo).
  *
  * A página abre SOMENTE embarcada no app Tatá Plus, que passa o token da sessão
- * do usuário via postMessage (origem verificada). A permissão é checada AO VIVO,
- * por página, no Supabase (gov_tenho_acesso) — revogar acesso vale na hora.
- * Em páginas de menu, os cards são trancados conforme gov_meus_acessos (ao vivo).
- * Não há mais login no portal nem localStorage 'lideres_session'.
+ * do usuário via postMessage (origem verificada). A permissão é conferida no
+ * Supabase (gov_meus_acessos) — uma única consulta resolve o acesso da página e
+ * ainda destrava os cards do menu. Revogar acesso vale na hora.
+ *
+ * Para o carregamento ficar invisível:
+ *  - a lista de acessos fica em cache na sessão do iframe (gov_cache), então a
+ *    navegação interna libera na hora, sem rede;
+ *  - a página avisa o Plus (gov-ok / gov-denied) assim que resolve, pra ele
+ *    esconder o próprio loader por cima — o usuário não vê "verificando acesso".
  *
  * Uso na página:
  *   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -17,20 +22,33 @@
   var SUPA_ANON =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvcXNidXNmcmZmYXBqZ2xwcWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MzcxMjQsImV4cCI6MjA5ODUxMzEyNH0.Dd9Z3SR3-18mQVX_yqUbIi0PG-eltLNjmOZB1Xu7W9o'
   var PLUS_ORIGIN = 'https://plus.tatasushi.tech'
+  var PORTAL_HOME = 'https://lideres.tatasushi.tech/compliance/'
+  var CACHE_KEY = 'gov_cache'
 
-  var PAGE_ID = window.GOV_PAGE_ID || ''
+  var PAGE_ID = (window.GOV_PAGE_ID || '').toLowerCase()
   var root = document.documentElement
   root.setAttribute('data-auth', 'pending')
-  var resolvido = false
+  var resolvido = false // já mostrou uma decisão (liberou/negou) e avisou o Plus
+  var validado = false // já confirmou pela rede (não precisa re-checar)
+  var revalidando = false
 
+  // Avisa o Plus pra ele esconder o loader dele e revelar a página.
+  function notify(tp) {
+    try {
+      window.parent.postMessage({ tp: tp, page: PAGE_ID }, PLUS_ORIGIN)
+    } catch (e) {}
+  }
   function nega() {
     if (resolvido) return
     resolvido = true
     root.setAttribute('data-auth', 'denied')
+    notify('gov-denied')
   }
   function libera() {
+    if (resolvido) return
     resolvido = true
     root.setAttribute('data-auth', 'ok')
+    notify('gov-ok')
   }
 
   // Fora do Plus (aberta direto no portal) → nega.
@@ -46,6 +64,16 @@
       .replace(/\.html?$/, '')
       .replace(/\/index$/, '')
       .replace(/\/$/, '')
+  }
+
+  function ehAdminDe(perfil) {
+    return (perfil || '').toLowerCase() === 'admin'
+  }
+  function temAcesso(permitidos, ehAdmin) {
+    if (ehAdmin) return true
+    return permitidos.some(function (p) {
+      return String(p.id || '').toLowerCase() === PAGE_ID
+    })
   }
 
   // Tranca os cards de menu que a pessoa não pode ver (admin vê tudo). Um card
@@ -75,62 +103,84 @@
     })
   }
 
-  function checar(sess, nome, perfil) {
-    if (resolvido) return
-    var ehAdmin = (perfil || '').toLowerCase() === 'admin'
+  // Publica a sessão pras páginas (nome/perfil/lista) e tranca os cards.
+  function montarSessao(nome, perfil, permitidos) {
     window.__lideresPerfil = (perfil || 'lider').toLowerCase()
     if (nome) window.__lideresUser = nome
-    // __lideresSession (com paginas) só é definido DEPOIS do RPC — assim o
-    // trava-cards próprio das páginas (que checa session.paginas) sai pela
-    // guarda `if (!session) return` e não tranca tudo com lista vazia.
+    window.__lideresSession = {
+      displayName: nome || '',
+      perfil: perfil || 'lider',
+      paginas: permitidos,
+    }
+    try {
+      trancarCards(permitidos, ehAdminDe(perfil))
+    } catch (e) {}
+  }
+
+  function lerCache() {
+    try {
+      return JSON.parse(sessionStorage.getItem(CACHE_KEY))
+    } catch (e) {
+      return null
+    }
+  }
+  function gravarCache(c) {
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(c))
+    } catch (e) {}
+  }
+
+  // Consulta a lista de acessos ao vivo, atualiza o cache e decide/corrige.
+  function checar(sess, nome, perfil) {
+    if (validado || revalidando) return
     if (!window.supabase || !sess || !sess.access_token) {
-      nega()
+      if (!resolvido) nega()
       return
     }
-    var sb = window.supabase.createClient(SUPA_URL, SUPA_ANON, { auth: { persistSession: false } })
+    revalidando = true
+    var ehAdmin = ehAdminDe(perfil)
+    var sb = window.supabase.createClient(SUPA_URL, SUPA_ANON, {
+      auth: { persistSession: false },
+    })
     sb.auth
       .setSession(sess)
       .then(function () {
-        return sb.schema('tata_plus').rpc('gov_tenho_acesso', { p_pagina_id: PAGE_ID })
-      })
-      .then(function (r) {
-        if (!r || r.data !== true) {
-          nega()
-          return null
-        }
-        try {
-          sessionStorage.setItem('gov_sess', JSON.stringify({ s: sess, n: nome, p: perfil }))
-        } catch (e) {}
-        // Página liberada: busca a lista completa p/ trancar os cards do menu.
         return sb.schema('tata_plus').rpc('gov_meus_acessos')
       })
       .then(function (r) {
-        if (resolvido) return
+        validado = true
+        revalidando = false
         var permitidos = (r && r.data ? r.data : []).map(function (x) {
           return { id: x.pagina_id, url: x.url }
         })
-        window.__lideresSession = {
-          displayName: nome || '',
-          perfil: perfil || 'lider',
-          paginas: permitidos,
+        gravarCache({ sess: sess, nome: nome, perfil: perfil, permitidos: permitidos })
+        if (temAcesso(permitidos, ehAdmin)) {
+          montarSessao(nome, perfil, permitidos)
+          libera() // no-op se o cache já liberou; senão revela agora
+        } else if (resolvido) {
+          // O cache dizia que tinha acesso, mas foi revogado → tira da página.
+          location.replace(PORTAL_HOME)
+        } else {
+          nega()
         }
-        try {
-          trancarCards(permitidos, ehAdmin)
-        } catch (e) {}
-        libera()
       })
       .catch(function () {
-        nega()
+        revalidando = false
+        if (!resolvido) nega()
       })
   }
 
-  // 1) Reaproveita a sessão guardada (navegação interna dentro do iframe).
-  try {
-    var g = JSON.parse(sessionStorage.getItem('gov_sess'))
-    if (g && g.s && g.s.access_token) checar(g.s, g.n, g.p)
-  } catch (e) {}
+  // 1) Cache da sessão do iframe → navegação interna libera na hora (sem rede).
+  //    Só antecipamos quando o cache diz que TEM acesso; negação espera a rede
+  //    (evita "negado" à toa se o cache estiver defasado). A rede sempre
+  //    revalida depois e corrige se o acesso mudou.
+  var cache = lerCache()
+  if (cache && cache.permitidos && temAcesso(cache.permitidos, ehAdminDe(cache.perfil))) {
+    montarSessao(cache.nome, cache.perfil, cache.permitidos)
+    libera()
+  }
 
-  // 2) Recebe o token vindo do Plus (só dessa origem).
+  // 2) Recebe o token vindo do Plus (só dessa origem) e revalida ao vivo.
   window.addEventListener('message', function (ev) {
     if (ev.origin !== PLUS_ORIGIN) return
     var d = ev.data || {}
@@ -139,17 +189,22 @@
     }
   })
 
-  // 3) Pede o token ao Plus, repetindo até responder (evita corrida de carregamento).
-  var tentativas = 0
-  var timer = setInterval(function () {
-    if (resolvido || tentativas > 20) {
-      clearInterval(timer)
-      if (!resolvido) nega()
-      return
-    }
-    tentativas++
+  // 3) Pede o token ao Plus, repetindo até validar (o Plus também manda sozinho
+  //    no onLoad do iframe — isso aqui é a rede de segurança).
+  function pedir() {
     try {
       window.parent.postMessage({ tp: 'gov-ready', page: PAGE_ID }, PLUS_ORIGIN)
     } catch (e) {}
-  }, 400)
+  }
+  pedir()
+  var tentativas = 0
+  var timer = setInterval(function () {
+    if (validado || tentativas > 25) {
+      clearInterval(timer)
+      if (!validado && !resolvido) nega()
+      return
+    }
+    tentativas++
+    pedir()
+  }, 300)
 })()
