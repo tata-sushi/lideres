@@ -3,6 +3,7 @@
  * A página abre SOMENTE embarcada no app Tatá Plus, que passa o token da sessão
  * do usuário via postMessage (origem verificada). A permissão é checada AO VIVO,
  * por página, no Supabase (gov_tenho_acesso) — revogar acesso vale na hora.
+ * Em páginas de menu, os cards são trancados conforme gov_meus_acessos (ao vivo).
  * Não há mais login no portal nem localStorage 'lideres_session'.
  *
  * Uso na página:
@@ -38,10 +39,39 @@
     return
   }
 
+  // Tranca os cards de menu que a pessoa não pode ver (admin vê tudo).
+  function trancarCards(permitidos, ehAdmin) {
+    var cards = document.querySelectorAll(
+      '.ac-dept-chip[data-access-id], .sec-card[data-access-id]',
+    )
+    cards.forEach(function (card) {
+      var cid = (card.getAttribute('data-access-id') || '').toLowerCase()
+      var curl = (card.getAttribute('data-access-url') || '').toLowerCase()
+      var ok =
+        ehAdmin ||
+        permitidos.some(function (p) {
+          var id = String(p.id || '').toLowerCase()
+          var url = String(p.url || '').toLowerCase()
+          return id === cid || (curl && url.indexOf(curl) !== -1)
+        })
+      if (ok) {
+        card.classList.remove('locked')
+      } else {
+        card.classList.add('locked')
+        card.removeAttribute('onclick')
+        card.style.cursor = 'not-allowed'
+      }
+    })
+  }
+
   function checar(sess, nome, perfil) {
     if (resolvido) return
-    // Mantém compatibilidade com códigos internos da página que leem o nome.
-    if (nome) window.__lideresSession = { displayName: nome, perfil: perfil || 'lider', paginas: [] }
+    var ehAdmin = (perfil || '').toLowerCase() === 'admin'
+    window.__lideresPerfil = (perfil || 'lider').toLowerCase()
+    if (nome) {
+      window.__lideresUser = nome
+      window.__lideresSession = { displayName: nome, perfil: perfil || 'lider', paginas: [] }
+    }
     if (!window.supabase || !sess || !sess.access_token) {
       nega()
       return
@@ -53,14 +83,30 @@
         return sb.schema('tata_plus').rpc('gov_tenho_acesso', { p_pagina_id: PAGE_ID })
       })
       .then(function (r) {
-        if (r && r.data === true) {
-          try {
-            sessionStorage.setItem('gov_sess', JSON.stringify({ s: sess, n: nome, p: perfil }))
-          } catch (e) {}
-          libera()
-        } else {
+        if (!r || r.data !== true) {
           nega()
+          return null
         }
+        try {
+          sessionStorage.setItem('gov_sess', JSON.stringify({ s: sess, n: nome, p: perfil }))
+        } catch (e) {}
+        // Página liberada: busca a lista completa p/ trancar os cards do menu.
+        return sb.schema('tata_plus').rpc('gov_meus_acessos')
+      })
+      .then(function (r) {
+        if (resolvido) return
+        var permitidos = (r && r.data ? r.data : []).map(function (x) {
+          return { id: x.pagina_id, url: x.url }
+        })
+        window.__lideresSession = {
+          displayName: nome || '',
+          perfil: perfil || 'lider',
+          paginas: permitidos,
+        }
+        try {
+          trancarCards(permitidos, ehAdmin)
+        } catch (e) {}
+        libera()
       })
       .catch(function () {
         nega()
