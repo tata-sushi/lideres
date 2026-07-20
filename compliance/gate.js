@@ -166,6 +166,27 @@
     try {
       trancarCards(permitidos, ehAdminDe(perfil))
     } catch (e) {}
+    // Marca o perfil no <body> pras abas/blocos restritos (.admin-only etc.):
+    // admin → is-admin; quem não é admin mas tem acesso à página → is-lider
+    // (herda o modelo antigo; hoje o gate já barra quem não tem acesso).
+    aplicarPerfilNoBody(perfil)
+    // Avisa a página que o perfil resolveu, pra re-aplicar lógica que dependia
+    // dele (o script da página roda antes do token chegar).
+    try {
+      window.dispatchEvent(new CustomEvent('lideres:sessao', { detail: { perfil: perfil } }))
+    } catch (e) {}
+  }
+
+  function aplicarPerfilNoBody(perfil) {
+    function apply() {
+      var b = document.body
+      if (!b) return
+      var ehAdm = ehAdminDe(perfil)
+      b.classList.toggle('is-admin', ehAdm)
+      b.classList.toggle('is-lider', !ehAdm)
+    }
+    if (document.body) apply()
+    else document.addEventListener('DOMContentLoaded', apply)
   }
 
   function lerCache() {
