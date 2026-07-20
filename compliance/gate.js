@@ -81,7 +81,10 @@
         '" style="display:inline-flex;align-items:center;gap:8px;background:#8be04e;' +
         'color:#0e1512;font-weight:700;font-size:15px;text-decoration:none;padding:13px 22px;' +
         'border-radius:14px">Abrir o app</a>'
-      ;(document.body || document.documentElement).appendChild(o)
+      // Anexa DENTRO do #auth-gate: no estado denied a página faz
+      // `body > *:not(#auth-gate){display:none}`, então um filho do body seria
+      // escondido. O #auth-gate é a exceção — e fica visível no denied.
+      ;(document.getElementById('auth-gate') || document.body || document.documentElement).appendChild(o)
     }
     if (document.body) render()
     else document.addEventListener('DOMContentLoaded', render)
