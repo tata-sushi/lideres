@@ -51,9 +51,49 @@
     notify('gov-ok')
   }
 
-  // Fora do Plus (aberta direto no portal) → nega.
+  // Tela "Disponível pelo aplicativo" — injetada e autossuficiente (não depende
+  // do CSS da página). Cobre a tela toda e leva pro app. Mesma linha da tela de
+  // entrada do Tatá Plus (ModoApp).
+  function mostrarTelaApp() {
+    function render() {
+      if (document.getElementById('gov-app-only')) return
+      var o = document.createElement('div')
+      o.id = 'gov-app-only'
+      o.setAttribute(
+        'style',
+        'position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;' +
+          'align-items:center;justify-content:center;gap:22px;padding:24px;text-align:center;' +
+          'background:#0e1512;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif',
+      )
+      o.innerHTML =
+        '<img src="' +
+        PLUS_ORIGIN +
+        '/icons/icon-192.png" alt="Tatá Plus" width="80" height="80" ' +
+        'style="width:80px;height:80px;border-radius:18px" />' +
+        '<div style="font-weight:800;font-size:26px;letter-spacing:-.02em">' +
+        'TATÁ<span style="color:#8be04e"> PLUS</span></div>' +
+        '<div style="max-width:280px">' +
+        '<div style="font-weight:700;font-size:18px">Disponível pelo aplicativo</div>' +
+        '<div style="margin-top:8px;font-size:14px;color:#9fb0a6">' +
+        'Abra esta página pelo app Tatá Plus.</div></div>' +
+        '<a href="' +
+        PLUS_ORIGIN +
+        '" style="display:inline-flex;align-items:center;gap:8px;background:#8be04e;' +
+        'color:#0e1512;font-weight:700;font-size:15px;text-decoration:none;padding:13px 22px;' +
+        'border-radius:14px">Abrir o app</a>'
+      ;(document.body || document.documentElement).appendChild(o)
+    }
+    if (document.body) render()
+    else document.addEventListener('DOMContentLoaded', render)
+  }
+
+  // Fora do Plus (aberta direto no navegador) → identidade "abra pelo app" no
+  // lugar do "negado" seco. O data-auth=denied esconde o conteúdo por baixo
+  // (defesa) e a tela injetada cobre tudo.
   if (window.parent === window) {
-    nega()
+    resolvido = true
+    root.setAttribute('data-auth', 'denied')
+    mostrarTelaApp()
     return
   }
 
