@@ -1,4 +1,5 @@
 /* gate.js — Controle de acesso das páginas de Governança de Processos (modelo novo).
+ * rev: 2026-07-20 — tela "abra pelo app" ancorada no #auth-gate (não escondida pelo denied).
  *
  * A página abre SOMENTE embarcada no app Tatá Plus, que passa o token da sessão
  * do usuário via postMessage (origem verificada). A permissão é conferida no
