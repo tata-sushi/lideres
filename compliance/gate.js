@@ -211,8 +211,12 @@
     }
     revalidando = true
     var ehAdmin = ehAdminDe(perfil)
+    // persistSession:false + autoRefreshToken:false: o iframe NÃO guarda nem
+    // renova a sessão. Se renovasse, rotacionaria o refresh token compartilhado
+    // e derrubaria a sessão do app principal (logout sozinho). O token vem
+    // fresco do Plus a cada carga; o iframe só o usa pra checar o acesso.
     var sb = window.supabase.createClient(SUPA_URL, SUPA_ANON, {
-      auth: { persistSession: false },
+      auth: { persistSession: false, autoRefreshToken: false },
     })
     sb.auth
       .setSession(sess)
