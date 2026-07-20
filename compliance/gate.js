@@ -147,6 +147,47 @@
     })
   }
 
+  // Esconde as abas que a pessoa foi bloqueada de ver (admin vê tudo). Aba
+  // marcada com data-aba-id; liberada por padrão, some só se estiver na denylist.
+  // Esconde via CSS injetado — roda antes das abas existirem no DOM (o gate.js
+  // carrega no <head>), então não há flash da aba bloqueada na navegação.
+  function trancarAbas(bloqueadas, ehAdmin) {
+    var lista = ehAdmin ? [] : bloqueadas || []
+    var st = document.getElementById('gov-abas-css')
+    if (!st) {
+      st = document.createElement('style')
+      st.id = 'gov-abas-css'
+      ;(document.head || document.documentElement).appendChild(st)
+    }
+    st.textContent = lista
+      .map(function (id) {
+        return '[data-aba-id="' + id + '"]{display:none!important}'
+      })
+      .join('')
+    // Se a aba ativa caiu na denylist, ativa a primeira visível (precisa do DOM).
+    function ajustar() {
+      var tabs = document.querySelectorAll('[data-aba-id]')
+      if (!tabs.length) return
+      var ativoEscondido = false
+      var visivel = null
+      tabs.forEach(function (t) {
+        var bloq = lista.indexOf(t.getAttribute('data-aba-id')) >= 0
+        if (bloq) {
+          if (t.classList.contains('active')) ativoEscondido = true
+        } else if (!visivel) {
+          visivel = t
+        }
+      })
+      if (ativoEscondido && visivel)
+        try {
+          visivel.click()
+        } catch (e) {}
+    }
+    if (document.querySelector('[data-aba-id]')) ajustar()
+    else if (document.readyState === 'loading')
+      document.addEventListener('DOMContentLoaded', ajustar)
+  }
+
   // Publica a sessão pras páginas (nome/perfil/lista) e tranca os cards.
   function montarSessao(nome, perfil, permitidos) {
     window.__lideresPerfil = (perfil || 'lider').toLowerCase()
@@ -224,14 +265,43 @@
         return sb.schema('tata_plus').rpc('gov_meus_acessos')
       })
       .then(function (r) {
-        validado = true
-        revalidando = false
         var permitidos = (r && r.data ? r.data : []).map(function (x) {
           return { id: x.pagina_id, url: x.url }
         })
-        gravarCache({ sess: sess, nome: nome, perfil: perfil, permitidos: permitidos })
-        if (temAcesso(permitidos, ehAdmin)) {
-          montarSessao(nome, perfil, permitidos)
+        // Só busca bloqueios de aba se a página tem abas controláveis.
+        if (document.querySelector('[data-aba-id]')) {
+          return sb
+            .schema('tata_plus')
+            .rpc('gov_minhas_abas_bloqueadas')
+            .then(
+              function (rb) {
+                return {
+                  permitidos: permitidos,
+                  bloqueadas: (rb && rb.data ? rb.data : []).map(function (x) {
+                    return x.aba_id
+                  }),
+                }
+              },
+              function () {
+                return { permitidos: permitidos, bloqueadas: [] }
+              },
+            )
+        }
+        return { permitidos: permitidos, bloqueadas: [] }
+      })
+      .then(function (res) {
+        validado = true
+        revalidando = false
+        gravarCache({
+          sess: sess,
+          nome: nome,
+          perfil: perfil,
+          permitidos: res.permitidos,
+          bloqueadas: res.bloqueadas,
+        })
+        if (temAcesso(res.permitidos, ehAdmin)) {
+          montarSessao(nome, perfil, res.permitidos)
+          trancarAbas(res.bloqueadas, ehAdmin)
           libera() // no-op se o cache já liberou; senão revela agora
         } else if (resolvido) {
           // O cache dizia que tinha acesso, mas foi revogado → tira da página.
@@ -253,6 +323,7 @@
   var cache = lerCache()
   if (cache && cache.permitidos && temAcesso(cache.permitidos, ehAdminDe(cache.perfil))) {
     montarSessao(cache.nome, cache.perfil, cache.permitidos)
+    trancarAbas(cache.bloqueadas || [], ehAdminDe(cache.perfil))
     libera()
   }
 
