@@ -207,6 +207,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:100px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.3px;white-space:nowrap;flex-shrink:0}
 .badge.def{background:rgba(139,224,78,.22);color:#3f7d16}
 .badge.pend{background:var(--bg);color:var(--muted);border:1px solid var(--border)}
+.hdr-right{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.badge.status{text-transform:none;letter-spacing:.2px}
+.badge.st-aprov{background:#FEF3C7;color:#92400E}
+.badge.st-compra{background:#DBEAFE;color:#1E40AF}
+.badge.st-receb{background:#E0E7FF;color:#3730A3}
+.badge.st-preparo{background:#FFEDD5;color:#9A3412}
+.badge.st-servindo{background:rgba(139,224,78,.28);color:#3f7d16}
+.badge.st-aval{background:#F3E8FF;color:#6B21A8}
+.badge.st-final{background:#E5E7EB;color:#374151}
 .ro-itens{display:flex;flex-direction:column;gap:4px}
 .ro-item{font-size:13px;color:var(--carbon)}
 .ro-tag{display:inline-block;font-family:'DM Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:1px 6px;margin-right:6px}
@@ -364,6 +373,20 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     { v:'bebida', l:'Bebida' }, { v:'outro', l:'Outro' }
   ];
   var TIPO_LABEL = {}; TIPOS.forEach(function(t){ TIPO_LABEL[t.v]=t.l; });
+
+  // Ciclo de vida do cardapio do dia (7 estagios, em ordem)
+  var STATUS = [
+    { v:'aguardando_aprovacao',   l:'Aguardando aprovação',   c:'aprov' },
+    { v:'aguardando_compra',      l:'Aguardando compra',      c:'compra' },
+    { v:'aguardando_recebimento', l:'Aguardando recebimento', c:'receb' },
+    { v:'aguardando_preparo',     l:'Aguardando preparo',     c:'preparo' },
+    { v:'servindo',               l:'Servindo',               c:'servindo' },
+    { v:'aguardando_avaliacao',   l:'Aguardando avaliação',   c:'aval' },
+    { v:'finalizado',             l:'Finalizado',             c:'final' }
+  ];
+  var STATUS_LABEL={}, STATUS_CLS={};
+  STATUS.forEach(function(x){ STATUS_LABEL[x.v]=x.l; STATUS_CLS[x.v]=x.c; });
+  function statusInfo(v){ return { label: STATUS_LABEL[v]||'—', cls: STATUS_CLS[v]||'' }; }
   var ITENS_EXEMPLO = [
     { nome:'Arroz', un:'kg', custo:5 }, { nome:'Feijão', un:'kg', custo:8 },
     { nome:'Frango', un:'kg', custo:18 }, { nome:'Picanha', un:'kg', custo:60 },
@@ -385,7 +408,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   function addDays(d,n){ var x=new Date(d); x.setDate(x.getDate()+n); return x; }
   function iso(d){ var p=function(n){return String(n).padStart(2,'0');}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
   function fmtDia(d){ var p=function(n){return String(n).padStart(2,'0');}; return p(d.getDate())+'/'+p(d.getMonth()+1); }
-  function emptyDia(dataStr){ return { data:dataStr, dia_id:null, resumo:'', almoco:null, jantar:null, marmitas:null, obs:'', itens:[] }; }
+  function emptyDia(dataStr){ return { data:dataStr, dia_id:null, status:null, resumo:'', almoco:null, jantar:null, marmitas:null, obs:'', itens:[] }; }
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function podeEditar(){ return String(window.__lideresPerfil||'').toLowerCase()==='admin'; }
   function num(v){ return v===''||v==null?null:parseInt(v,10); }
@@ -408,7 +431,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           var dataStr=iso(addDays(_monday,i)); var d=null;
           for(var k=0;k<dados.length;k++){ if(dados[k].data===dataStr){ d=dados[k]; break; } }
           if(!d) return emptyDia(dataStr);
-          return { data:dataStr, dia_id:d.dia_id, resumo:d.resumo||'', almoco:d.almoco, jantar:d.jantar, marmitas:d.marmitas, obs:d.obs||'',
+          return { data:dataStr, dia_id:d.dia_id, status:d.status||null, resumo:d.resumo||'', almoco:d.almoco, jantar:d.jantar, marmitas:d.marmitas, obs:d.obs||'',
             itens:(d.itens||[]).map(function(it){ return { tipo:it.tipo||'outro', item:it.item||'', qtd:it.qtd, un:it.un||'', custo:it.custo }; }) };
         });
         renderGrid();
@@ -425,7 +448,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       card.innerHTML=
         '<div class="card-header">'+
           '<span class="badge dia-pill">'+DIAS_NOME[i].replace('-feira','')+'</span>'+
-          '<span class="dia-data">'+fmtDia(addDays(_monday,i))+'</span>'+
+          '<div class="hdr-right">'+
+            '<span class="dia-data">'+fmtDia(addDays(_monday,i))+'</span>'+
+            (dia.status?'<span class="badge status st-'+statusInfo(dia.status).cls+'">'+statusInfo(dia.status).label+'</span>':'')+
+          '</div>'+
         '</div>'+
         '<div class="card-body">'+
           '<div class="card-field"><span class="field-label">Cardápio do dia</span><span class="field-value">'+(dia.resumo?esc(dia.resumo):'—')+'</span></div>'+
@@ -503,7 +529,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     _supa.schema('tata_plus').rpc('refeicoes_dia_salvar',{ p_data:_semana[i].data, p_resumo:resumo||null, p_almoco:almoco, p_jantar:jantar, p_marmitas:marmitas, p_obs:obs||null, p_itens:itens }).then(function(res){
       btn.disabled=false; btn.textContent='Salvar';
       if(res.error){ showToast('Erro: '+(res.error.message||'falha')); return; }
-      _semana[i]={ data:_semana[i].data, dia_id:res.data, resumo:resumo, almoco:almoco, jantar:jantar, marmitas:marmitas, obs:obs, itens:itens };
+      _semana[i]={ data:_semana[i].data, dia_id:res.data, status:_semana[i].status, resumo:resumo, almoco:almoco, jantar:jantar, marmitas:marmitas, obs:obs, itens:itens };
       renderGrid(); fecharModal(); showToast('Salvo ✓');
     }, function(){ btn.disabled=false; btn.textContent='Salvar'; showToast('Erro ao salvar'); });
   }
