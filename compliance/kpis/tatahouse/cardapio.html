@@ -243,8 +243,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <div class="tabs">
   <button data-aba-id="governanca-kpis-tatahouse-cardapio::cardapio" class="tab-btn active" data-tab="cardapio">Cardápio</button>
-  <button data-aba-id="governanca-kpis-tatahouse-cardapio::compras" class="tab-btn" data-tab="compras">Compras</button>
-  <button data-aba-id="governanca-kpis-tatahouse-cardapio::precos" class="tab-btn" data-tab="precos">Preços</button>
+  <button data-aba-id="governanca-kpis-tatahouse-cardapio::processamento" class="tab-btn" data-tab="processamento">Processamento</button>
   <button data-aba-id="governanca-kpis-tatahouse-cardapio::relatorios" class="tab-btn" data-tab="relatorios">Relatórios</button>
 </div>
 
@@ -266,14 +265,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 </div>
 
-<!-- TAB: COMPRAS -->
-<div id="tab-compras" class="tab-pane">
-  <p class="empty-msg">Em breve</p>
-</div>
-
-<!-- TAB: PREÇOS -->
-<div id="tab-precos" class="tab-pane">
-  <p class="empty-msg">Em breve</p>
+<!-- TAB: PROCESSAMENTO -->
+<div id="tab-processamento" class="tab-pane">
+  <div class="week-nav" style="justify-content:center">
+    <div class="week-nav-center">
+      <div class="week-nav-label">Em processamento</div>
+      <div class="week-nav-dates">Cardápios aprovados — do pedido à finalização</div>
+    </div>
+  </div>
+  <div class="grid-wrap" id="procGrid"></div>
 </div>
 
 <!-- TAB: RELATÓRIOS -->
@@ -449,6 +449,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var grid=document.getElementById('diasGrid'); grid.innerHTML='';
     var v=function(x){ return (x==null||x==='')?'—':x; };
     _semana.forEach(function(dia,i){
+      if(dia.status && dia.status!=='aguardando_aprovacao') return; // aprovados vão pra Processamento
       var card=document.createElement('div'); card.className='card';
       card.innerHTML=
         '<div class="card-header">'+
@@ -472,9 +473,51 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       grid.appendChild(card);
       var b=card.querySelector('.btn-editar-dia'); if(b) b.addEventListener('click', function(){ abrirModal(i); });
     });
+    if(!grid.children.length){ grid.innerHTML='<p class="empty-msg">Nenhum pedido pendente nesta semana. Planeje um dia ou acompanhe em Processamento.</p>'; }
   }
 
   /* ---------- MODAL (edição) ---------- */
+  var DOW_NOME=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  function parseISO(x){ var p=String(x).split('-'); return new Date(+p[0],(+p[1])-1,+p[2]); }
+  var _proc=[];
+  function carregarProcessamento(){
+    var grid=document.getElementById('procGrid'); if(!grid) return;
+    grid.innerHTML='<p class="empty-msg">Carregando…</p>';
+    comSupa(function(supa){
+      _supa=supa;
+      supa.schema('tata_plus').rpc('refeicoes_processamento',{}).then(function(res){
+        if(res.error){ grid.innerHTML='<p class="empty-msg">Erro ao carregar.</p>'; return; }
+        _proc=res.data||[]; renderProcessamento();
+      }, function(){ grid.innerHTML='<p class="empty-msg">Erro ao carregar.</p>'; });
+    });
+  }
+  function renderProcessamento(){
+    var grid=document.getElementById('procGrid'); if(!grid) return; grid.innerHTML='';
+    var v=function(x){ return (x==null||x==='')?'—':x; };
+    if(!_proc.length){ grid.innerHTML='<p class="empty-msg">Nenhum cardápio em processamento.</p>'; return; }
+    _proc.forEach(function(dia){
+      var d=parseISO(dia.data), si=statusInfo(dia.status);
+      var card=document.createElement('div'); card.className='card';
+      card.innerHTML=
+        '<div class="card-header">'+
+          '<span class="badge dia-pill">'+DOW_NOME[d.getDay()]+'</span>'+
+          '<div class="hdr-right">'+
+            '<span class="dia-data">'+fmtDia(d)+'</span>'+
+            '<span class="badge status st-'+si.cls+'">'+si.label+'</span>'+
+          '</div>'+
+        '</div>'+
+        '<div class="card-body">'+
+          '<div class="card-field"><span class="field-label">Cardápio do dia</span><span class="field-value">'+(dia.resumo?esc(dia.resumo):'—')+'</span></div>'+
+          '<div class="card-meta-row">'+
+            '<div class="card-field"><span class="field-label">Almoço</span><span class="field-value">'+v(dia.almoco)+'</span></div>'+
+            '<div class="card-field"><span class="field-label">Jantar</span><span class="field-value">'+v(dia.jantar)+'</span></div>'+
+            '<div class="card-field"><span class="field-label">Marmitas</span><span class="field-value">'+v(dia.marmitas)+'</span></div>'+
+          '</div>'+
+        '</div>';
+      grid.appendChild(card);
+    });
+  }
+
   function abrirModal(i){
     _editIdx=i; var dia=_semana[i];
     document.getElementById('md-title').textContent = DIAS_ABREV[i]+' · '+fmtDia(addDays(_monday,i));
@@ -566,7 +609,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   document.addEventListener('DOMContentLoaded', function() {
     var tabBtns=document.querySelectorAll('.tab-btn');
-    tabBtns.forEach(function(btn){ btn.addEventListener('click', function(){ tabBtns.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var target=btn.dataset.tab; document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); }); var pane=document.getElementById('tab-'+target); if(pane) pane.classList.add('active'); }); });
+    tabBtns.forEach(function(btn){ btn.addEventListener('click', function(){ tabBtns.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var target=btn.dataset.tab; document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); }); var pane=document.getElementById('tab-'+target); if(pane) pane.classList.add('active'); if(target==='processamento'){ carregarProcessamento(); } }); });
     document.getElementById('btnPrevWeek').addEventListener('click', function(){ currentWeekOffset--; carregarSemana(); });
     document.getElementById('btnNextWeek').addEventListener('click', function(){ currentWeekOffset++; carregarSemana(); });
     document.getElementById('md-add').addEventListener('click', function(){ document.getElementById('md-itens').appendChild(mkItemRow({tipo:'principal',item:'',qtd:'',un:'',custo:''})); recalcModal(); });
