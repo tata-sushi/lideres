@@ -221,6 +221,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .btn-aprovar-modal{margin-left:auto;border:none;border-radius:8px;padding:8px 14px;background:#5FA82B;color:#fff;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;cursor:pointer}
 .btn-aprovar-modal:hover{opacity:.9}
 .btn-aprovar-modal:disabled{opacity:.6;cursor:default}
+.aval-box{display:flex;flex-direction:column;gap:3px;padding:8px 10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;margin-top:2px}
+.aval-box.aval-vazio{color:var(--muted);font-size:12px;background:var(--bg);border-color:var(--border);font-family:'DM Mono',monospace;padding:8px 10px}
+.aval-linha{display:flex;align-items:center;gap:8px;font-size:12px}
+.aval-un{flex:1;color:var(--mid);font-weight:500}
+.aval-geral .aval-un{color:var(--carbon);font-weight:700}
+.aval-nota{font-family:'DM Mono',monospace;font-weight:600;color:#B45309}
+.aval-geral .aval-nota{font-size:14px}
+.aval-n{color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;min-width:22px;text-align:right}
+.sv-hint{font-size:11px;color:var(--muted);text-align:center;margin:6px 0 0}
 .ro-itens{display:flex;flex-direction:column;gap:4px}
 .ro-item{font-size:13px;color:var(--carbon)}
 .ro-tag{display:inline-block;font-family:'DM Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:1px 6px;margin-right:6px}
@@ -282,6 +291,30 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <!-- MODAL EDITAR DIA -->
+<div class="modal-overlay" id="modal-servir">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div><div class="modal-eyebrow">Refeições servidas</div><div class="modal-title" id="sv-title">—</div></div>
+      <button class="modal-close" onclick="document.getElementById('modal-servir').classList.remove('active');document.body.style.overflow=''">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="sv-aval"></div>
+      <div class="itens-label">Quantidades servidas</div>
+      <div class="contagens">
+        <div class="cont-field field-wrap"><div class="field-label">Almoço</div><input class="field-input" type="number" min="0" id="sv-almoco"></div>
+        <div class="cont-field field-wrap"><div class="field-label">Jantar</div><input class="field-input" type="number" min="0" id="sv-jantar"></div>
+        <div class="cont-field field-wrap"><div class="field-label">Marmitas</div><input class="field-input" type="number" min="0" id="sv-marmitas"></div>
+      </div>
+      <p class="sv-hint">Ao salvar, o dia é finalizado.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('modal-servir').classList.remove('active');document.body.style.overflow=''">Cancelar</button>
+      <button class="modal-btn modal-btn-save" id="sv-salvar">Finalizar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-dia">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -497,6 +530,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     if(!_proc.length){ grid.innerHTML='<p class="empty-msg">Nenhum cardápio em processamento.</p>'; return; }
     _proc.forEach(function(dia){
       var d=parseISO(dia.data), si=statusInfo(dia.status);
+      var isAval=(dia.status==='aguardando_avaliacao');
       var card=document.createElement('div'); card.className='card';
       card.innerHTML=
         '<div class="card-header">'+
@@ -508,13 +542,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         '</div>'+
         '<div class="card-body">'+
           '<div class="card-field"><span class="field-label">Cardápio do dia</span><span class="field-value">'+(dia.resumo?esc(dia.resumo):'—')+'</span></div>'+
+          (isAval?'<div class="card-field"><span class="field-label">Avaliação</span>'+avalHtml(dia.aval)+'</div>':'')+
           '<div class="card-meta-row">'+
             '<div class="card-field"><span class="field-label">Almoço</span><span class="field-value">'+v(dia.almoco)+'</span></div>'+
             '<div class="card-field"><span class="field-label">Jantar</span><span class="field-value">'+v(dia.jantar)+'</span></div>'+
             '<div class="card-field"><span class="field-label">Marmitas</span><span class="field-value">'+v(dia.marmitas)+'</span></div>'+
           '</div>'+
-        '</div>';
+        '</div>'+
+        (isAval&&podeEditar()?'<div class="card-footer" style="justify-content:flex-end">'+
+          '<button type="button" class="btn-ver btn-servir-dia">✓ Registrar servidas</button>'+
+        '</div>':'');
       grid.appendChild(card);
+      var sb=card.querySelector('.btn-servir-dia'); if(sb) sb.addEventListener('click', function(){ abrirServir(dia); });
     });
   }
 
@@ -592,6 +631,40 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     }, function(){ btn.disabled=false; btn.textContent='Salvar'; showToast('Erro ao salvar'); });
   }
 
+  function avalHtml(av){
+    if(!av || !av.total){ return '<div class="aval-box aval-vazio">Sem avaliações ainda</div>'; }
+    var nota=function(x){ return x==null?'—':('★ '+x); };
+    return '<div class="aval-box">'+
+      '<div class="aval-linha aval-geral"><span class="aval-un">Geral</span><span class="aval-nota">'+nota(av.geral)+'</span><span class="aval-n">'+(av.total||0)+'</span></div>'+
+      '<div class="aval-linha"><span class="aval-un">Itaim</span><span class="aval-nota">'+nota(av.itaim)+'</span><span class="aval-n">'+(av.total_itaim||0)+'</span></div>'+
+      '<div class="aval-linha"><span class="aval-un">Pinheiros</span><span class="aval-nota">'+nota(av.pinheiros)+'</span><span class="aval-n">'+(av.total_pinheiros||0)+'</span></div>'+
+    '</div>';
+  }
+  var _servirData=null;
+  function abrirServir(dia){
+    _servirData=dia; var d=parseISO(dia.data);
+    document.getElementById('sv-title').textContent = DOW_NOME[d.getDay()]+' · '+fmtDia(d);
+    document.getElementById('sv-aval').innerHTML = avalHtml(dia.aval);
+    var pick=function(serv,plan){ return serv!=null?serv:(plan!=null?plan:''); };
+    document.getElementById('sv-almoco').value   = pick(dia.almoco_servido, dia.almoco);
+    document.getElementById('sv-jantar').value   = pick(dia.jantar_servido, dia.jantar);
+    document.getElementById('sv-marmitas').value = pick(dia.marmitas_servido, dia.marmitas);
+    document.getElementById('modal-servir').classList.add('active');
+    document.body.style.overflow='hidden';
+  }
+  function fecharServir(){ document.getElementById('modal-servir').classList.remove('active'); document.body.style.overflow=''; _servirData=null; }
+  function salvarServir(){
+    if(!_servirData){ return; }
+    if(!_supa){ showToast('Aguarde a sessão…'); return; }
+    var a=num(document.getElementById('sv-almoco').value), j=num(document.getElementById('sv-jantar').value), m=num(document.getElementById('sv-marmitas').value);
+    var btn=document.getElementById('sv-salvar'); btn.disabled=true; btn.textContent='Finalizando…';
+    _supa.schema('tata_plus').rpc('refeicoes_dia_servir',{ p_data:_servirData.data, p_almoco:a, p_jantar:j, p_marmitas:m }).then(function(res){
+      btn.disabled=false; btn.textContent='Finalizar';
+      if(res.error){ showToast('Erro: '+(res.error.message||'falha')); return; }
+      fecharServir(); carregarProcessamento(); showToast('Finalizado ✓');
+    }, function(){ btn.disabled=false; btn.textContent='Finalizar'; showToast('Erro ao finalizar'); });
+  }
+
   function aprovarDia(i){
     if(i<0||!_semana[i]){ return; }
     if(!_supa){ showToast('Aguarde a sessão…'); return; }
@@ -614,6 +687,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.getElementById('btnNextWeek').addEventListener('click', function(){ currentWeekOffset++; carregarSemana(); });
     document.getElementById('md-add').addEventListener('click', function(){ document.getElementById('md-itens').appendChild(mkItemRow({tipo:'principal',item:'',qtd:'',un:'',custo:''})); recalcModal(); });
     document.getElementById('md-salvar').addEventListener('click', salvarModal);
+    var svSalvar=document.getElementById('sv-salvar'); if(svSalvar) svSalvar.addEventListener('click', salvarServir);
+    var mServ=document.getElementById('modal-servir'); if(mServ) mServ.addEventListener('click', function(ev){ if(ev.target===this){ mServ.classList.remove('active'); document.body.style.overflow=''; } });
     document.getElementById('modal-dia').addEventListener('click', function(ev){ if(ev.target===this) fecharModal(); });
     window.addEventListener('lideres:sessao', function(){ renderGrid(); });
     document.body.insertAdjacentHTML('beforeend', '<datalist id="itens-cat">'+ITENS_EXEMPLO.map(function(x){return '<option value="'+x.nome+'">';}).join('')+'</datalist>');
