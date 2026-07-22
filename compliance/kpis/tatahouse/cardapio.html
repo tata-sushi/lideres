@@ -198,6 +198,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .item-del:hover { color: #c1272d; }
 .btn-add-item { margin-top: 4px; border: 1px dashed var(--border); background: transparent; color: var(--mid); border-radius: 6px; padding: 10px; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; width: 100%; transition: border-color .15s, color .15s; }
 .btn-add-item:hover { border-color: var(--carbon); color: var(--carbon); }
+.ia-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:-2px 0 16px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.btn-ia{display:inline-flex;align-items:center;gap:7px;background:var(--carbon);color:var(--citric);border:none;border-radius:8px;padding:10px 16px;font-family:'DM Mono',monospace;font-size:12px;font-weight:600;letter-spacing:.3px;cursor:pointer;transition:opacity .15s,transform .05s;white-space:nowrap}
+.btn-ia:hover{opacity:.9}.btn-ia:active{transform:translateY(1px)}.btn-ia:disabled{opacity:.55;cursor:default}
+.ia-hint{font-size:11px;color:var(--muted);line-height:1.4;flex:1;min-width:180px}
 .contagens { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .dia-total { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--mid); }
 .dia-total strong { font-family: 'DM Mono', monospace; font-size: 14px; color: var(--carbon); font-weight: 700; }
@@ -278,6 +282,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="week-nav-dates" id="weekDates">—</div>
     </div>
     <button class="week-nav-btn" id="btnNextWeek">&#8250;</button>
+  </div>
+
+  <div class="ia-bar" id="iaBar" style="display:none">
+    <button class="btn-ia" id="btnGerarIA">✨ Gerar semana com IA</button>
+    <span class="ia-hint">Preenche os dias vazios da semana com uma proposta (rascunho) para você revisar e aprovar.</span>
   </div>
 
   <div class="grid-wrap" id="diasGrid">
@@ -715,6 +724,27 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     }, function(){ volta(); showToast('Erro ao aprovar'); });
   }
 
+  function toggleIABar(){ var ib=document.getElementById('iaBar'); if(ib) ib.style.display=podeEditar()?'flex':'none'; }
+  function gerarCardapioIA(){
+    if(!podeEditar()) return;
+    var btn=document.getElementById('btnGerarIA'); if(!btn||btn.disabled) return;
+    if(!confirm('Gerar rascunho de card\u00e1pio com IA para a semana de '+fmtDia(_monday)+'?\n\nDias j\u00e1 preenchidos s\u00e3o preservados \u2014 s\u00f3 os vazios recebem proposta.')) return;
+    var txt=btn.textContent; btn.disabled=true; btn.textContent='Gerando\u2026';
+    function done(){ btn.disabled=false; btn.textContent=txt; }
+    comSupa(function(supa){
+      supa.functions.invoke('gerar-cardapio',{ body:{ inicio:iso(_monday), dias:7, janela:5 } }).then(function(res){
+        if(res.error){ done();
+          var ctx=res.error.context;
+          if(ctx && typeof ctx.json==='function'){ ctx.json().then(function(b){ showToast('IA: '+((b&&b.error)||res.error.message)); }, function(){ showToast('IA: '+res.error.message); }); }
+          else showToast('IA: '+res.error.message);
+          return;
+        }
+        done(); var n=(res.data&&res.data.gravadas)||0;
+        showToast(n? ('IA prop\u00f4s '+n+' dia(s) \u2014 revise e aprove') : 'Semana j\u00e1 preenchida \u2014 nada a gerar');
+        carregarSemana();
+      }, function(){ done(); showToast('IA: falha na chamada'); });
+    });
+  }
   function showToast(msg){ var t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.add('show'); setTimeout(function(){ t.classList.remove('show'); },2200); }
 
   document.addEventListener('DOMContentLoaded', function() {
@@ -722,12 +752,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     tabBtns.forEach(function(btn){ btn.addEventListener('click', function(){ tabBtns.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var target=btn.dataset.tab; document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); }); var pane=document.getElementById('tab-'+target); if(pane) pane.classList.add('active'); if(target==='processamento'){ carregarProcessamento(); } }); });
     document.getElementById('btnPrevWeek').addEventListener('click', function(){ currentWeekOffset--; carregarSemana(); });
     document.getElementById('btnNextWeek').addEventListener('click', function(){ currentWeekOffset++; carregarSemana(); });
+    var _bIA=document.getElementById('btnGerarIA'); if(_bIA) _bIA.addEventListener('click', gerarCardapioIA);
+    toggleIABar();
     document.getElementById('md-add').addEventListener('click', function(){ document.getElementById('md-itens').appendChild(mkItemRow({tipo:'principal',item:'',qtd:'',un:'',custo:''})); recalcModal(); });
     document.getElementById('md-salvar').addEventListener('click', salvarModal);
     var svSalvar=document.getElementById('sv-salvar'); if(svSalvar) svSalvar.addEventListener('click', salvarServir);
     var mServ=document.getElementById('modal-servir'); if(mServ) mServ.addEventListener('click', function(ev){ if(ev.target===this){ mServ.classList.remove('active'); document.body.style.overflow=''; } });
     document.getElementById('modal-dia').addEventListener('click', function(ev){ if(ev.target===this) fecharModal(); });
-    window.addEventListener('lideres:sessao', function(){ renderGrid(); });
+    window.addEventListener('lideres:sessao', function(){ renderGrid(); toggleIABar(); });
     document.body.insertAdjacentHTML('beforeend', '<datalist id="itens-cat">'+ITENS_EXEMPLO.map(function(x){return '<option value="'+x.nome+'">';}).join('')+'</datalist>');
     var s=window.__lideresSession||{}; if(s.displayName){ var hu=document.getElementById('header-user'); if(hu){ hu.textContent=s.displayName.trim().split(/\s+/)[0]; } }
     (function(){ var d=new Date(); var p=function(n){return String(n).padStart(2,'0');}; var fd=document.getElementById('footer-date'); if(fd) fd.textContent='Atualizado: '+p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+', '+p(d.getHours())+':'+p(d.getMinutes()); })();
