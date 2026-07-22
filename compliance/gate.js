@@ -262,6 +262,13 @@
     sb.auth
       .setSession(sess)
       .then(function () {
+        // Publica o cliente JÁ autenticado pras páginas que precisam do Supabase
+        // com a sessão do usuário (ex.: editor do cardápio). Puramente aditivo —
+        // não altera nada da resolução de acesso abaixo.
+        window.__lideresSupa = sb
+        try {
+          window.dispatchEvent(new CustomEvent('lideres:supa', { detail: { perfil: perfil } }))
+        } catch (e) {}
         return sb.schema('tata_plus').rpc('gov_meus_acessos')
       })
       .then(function (r) {
