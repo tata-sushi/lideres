@@ -215,6 +215,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .badge.st-preparo{background:#FFEDD5;color:#9A3412}
 .badge.st-aval{background:#F3E8FF;color:#6B21A8}
 .badge.st-final{background:#E5E7EB;color:#374151}
+.md-status-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.md-status-banner:empty{display:none}
+.md-status-hint{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
+.btn-aprovar-modal{margin-left:auto;border:none;border-radius:8px;padding:8px 14px;background:#5FA82B;color:#fff;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;cursor:pointer}
+.btn-aprovar-modal:hover{opacity:.9}
+.btn-aprovar-modal:disabled{opacity:.6;cursor:default}
 .ro-itens{display:flex;flex-direction:column;gap:4px}
 .ro-item{font-size:13px;color:var(--carbon)}
 .ro-tag{display:inline-block;font-family:'DM Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:1px 6px;margin-right:6px}
@@ -284,6 +290,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <button class="modal-close" onclick="document.getElementById('modal-dia').classList.remove('active');document.body.style.overflow=''">✕</button>
     </div>
     <div class="modal-body">
+      <div class="md-status-banner" id="md-status-banner"></div>
       <div class="field-wrap"><div class="field-label">Cardápio (resumo)</div><textarea class="field-input cardapio-resumo" id="md-resumo" rows="2" placeholder="Ex.: Picanha à cebolada, arroz e feijão, salada…"></textarea></div>
       <div class="itens-label">Itens</div>
       <div class="itens-list" id="md-itens"></div>
@@ -472,6 +479,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     _editIdx=i; var dia=_semana[i];
     document.getElementById('md-title').textContent = DIAS_ABREV[i]+' · '+fmtDia(addDays(_monday,i));
     document.getElementById('md-resumo').value=dia.resumo||'';
+    var _b=document.getElementById('md-status-banner'), _st=dia.status||null;
+    if(_st==='aguardando_aprovacao'){
+      var _si=statusInfo(_st);
+      _b.innerHTML='<span class="badge status st-'+_si.cls+'">'+_si.label+'</span>'+
+        '<button type="button" class="btn-aprovar-modal" id="md-aprovar">Aprovar e enviar p/ compra</button>';
+      document.getElementById('md-aprovar').addEventListener('click', function(){ aprovarDia(_editIdx); });
+    } else if(_st){
+      var _si2=statusInfo(_st);
+      _b.innerHTML='<span class="badge status st-'+_si2.cls+'">'+_si2.label+'</span><span class="md-status-hint">status automático</span>';
+    } else { _b.innerHTML=''; }
     document.getElementById('md-almoco').value=dia.almoco==null?'':dia.almoco;
     document.getElementById('md-jantar').value=dia.jantar==null?'':dia.jantar;
     document.getElementById('md-marmitas').value=dia.marmitas==null?'':dia.marmitas;
@@ -482,7 +499,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.getElementById('modal-dia').classList.add('active');
     document.body.style.overflow='hidden';
   }
-  function fecharModal(){ document.getElementById('modal-dia').classList.remove('active'); document.body.style.overflow=''; _editIdx=-1; }
+  function fecharModal(){ document.getElementById('modal-dia').classList.remove('active'); document.body.style.overflow=''; _editIdx=-1; var _b=document.getElementById('md-status-banner'); if(_b) _b.innerHTML=''; }
 
   function mkItemRow(it){
     var row=document.createElement('div'); row.className='item-row';
@@ -530,6 +547,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       _semana[i]={ data:_semana[i].data, dia_id:res.data, status:_semana[i].status, resumo:resumo, almoco:almoco, jantar:jantar, marmitas:marmitas, obs:obs, itens:itens };
       renderGrid(); fecharModal(); showToast('Salvo ✓');
     }, function(){ btn.disabled=false; btn.textContent='Salvar'; showToast('Erro ao salvar'); });
+  }
+
+  function aprovarDia(i){
+    if(i<0||!_semana[i]){ return; }
+    if(!_supa){ showToast('Aguarde a sessão…'); return; }
+    var btn=document.getElementById('md-aprovar');
+    if(btn){ btn.disabled=true; btn.textContent='Aprovando…'; }
+    function volta(){ if(btn){ btn.disabled=false; btn.textContent='Aprovar e enviar p/ compra'; } }
+    _supa.schema('tata_plus').rpc('refeicoes_dia_aprovar',{ p_data:_semana[i].data }).then(function(res){
+      if(res.error){ volta(); showToast('Erro: '+(res.error.message||'falha')); return; }
+      _semana[i].status = res.data || 'aguardando_compra';
+      renderGrid(); fecharModal(); showToast('Aprovado ✓');
+    }, function(){ volta(); showToast('Erro ao aprovar'); });
   }
 
   function showToast(msg){ var t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.add('show'); setTimeout(function(){ t.classList.remove('show'); },2200); }
