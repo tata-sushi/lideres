@@ -206,6 +206,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .item-l3{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:6px;padding-left:2px}
 .ins-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
 .ins-chip{font-size:11px;background:var(--green-bg);color:var(--green);border-radius:5px;padding:1px 7px}
+.ins-head{display:flex;align-items:center;gap:8px;margin:6px 0 4px}
+.ins-add{font-size:10px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.5px;color:var(--green);background:var(--green-bg);border:none;border-radius:5px;padding:2px 8px;cursor:pointer}
+.ins-rows{display:flex;flex-direction:column;gap:5px}
+.ins-row{display:grid;grid-template-columns:1fr 66px 30px 22px;gap:6px;align-items:center}
+.ins-cat{min-width:0;font-size:12px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--carbon)}
+.ins-qtd{min-width:0;font-size:12px;padding:5px 6px;border:1px solid var(--border);border-radius:6px}
+.ins-un{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;text-align:center}
+.ins-del{border:none;background:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0}
+.ins-del:hover{color:var(--red)}
 .contagens { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .dia-total { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--mid); }
 .dia-total strong { font-family: 'DM Mono', monospace; font-size: 14px; color: var(--carbon); font-weight: 700; }
@@ -485,7 +494,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   var _supa = null;
   function comSupa(cb){ if(window.__lideresSupa){ cb(window.__lideresSupa); return; } window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true }); }
 
-  var currentWeekOffset = 0, _monday = null, _semana = [], _editIdx = -1;
+  var currentWeekOffset = 0, _monday = null, _semana = [], _editIdx = -1, _catalogo = [];
 
   function mondayOf(d){ var x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); var dow=(x.getDay()+6)%7; x.setDate(x.getDate()-dow); return x; }
   function addDays(d,n){ var x=new Date(d); x.setDate(x.getDate()+n); return x; }
@@ -506,6 +515,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     renderGrid();
     comSupa(function(supa){
       _supa=supa; var inicio=iso(_monday);
+      if(!_catalogo.length){ supa.schema('tata_plus').rpc('catalogo_produtos').then(function(r){ if(!r.error) _catalogo=r.data||[]; }); }
       supa.schema('tata_plus').rpc('refeicoes_semana',{ p_inicio:inicio }).then(function(res){
         if(res.error){ showToast('Erro ao carregar'); return; }
         if(iso(_monday)!==inicio) return;
@@ -638,6 +648,27 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   }
   function fecharModal(){ document.getElementById('modal-dia').classList.remove('active'); document.body.style.overflow=''; _editIdx=-1; var _b=document.getElementById('md-status-banner'); if(_b) _b.innerHTML=''; }
 
+  function catalogoOptions(selId, selNome, selUn){
+    var found=false, o='';
+    _catalogo.forEach(function(p){ var sel=String(p.id)===String(selId); if(sel) found=true; o+='<option value="'+esc(p.id)+'" data-un="'+esc(p.un||'')+'"'+(sel?' selected':'')+'>'+esc(p.nome)+'</option>'; });
+    var head='<option value="">\u2014 produto do cat\u00e1logo \u2014</option>';
+    if(selId && !found){ head='<option value="'+esc(selId)+'" data-un="'+esc(selUn||'')+'" selected>'+esc(selNome||'(produto)')+'</option>'+head; }
+    return head+o;
+  }
+  function mkInsumoRow(ins){
+    ins=ins||{};
+    var r=document.createElement('div'); r.className='ins-row';
+    r.innerHTML=
+      '<select class="ins-cat">'+catalogoOptions(ins.catalogo_id, ins.catalogo_nome||ins.insumo, ins.un)+'</select>'+
+      '<input class="ins-qtd" type="number" min="0" step="any" placeholder="Qtd" value="'+(ins.qtd==null?'':esc(ins.qtd))+'">'+
+      '<span class="ins-un"></span>'+
+      '<button type="button" class="ins-del" title="Remover">\u00d7</button>';
+    var sel=r.querySelector('.ins-cat'), un=r.querySelector('.ins-un');
+    function sync(){ var op=sel.options[sel.selectedIndex]; un.textContent=op?(op.getAttribute('data-un')||''):''; }
+    sync(); sel.addEventListener('change', sync);
+    r.querySelector('.ins-del').addEventListener('click', function(){ r.remove(); });
+    return r;
+  }
   function mkItemRow(it){
     var row=document.createElement('div'); row.className='item-row';
     var opts=TIPOS.map(function(t){ return '<option value="'+t.v+'"'+(t.v===it.tipo?' selected':'')+'>'+t.l+'</option>'; }).join('');
@@ -653,7 +684,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         '<input class="item-custo" type="number" min="0" step="any" placeholder="Custo un." value="'+(it.custo==null?'':esc(it.custo))+'">'+
         '<span class="item-total" title="Total (qtd × custo)">—</span>'+
       '</div>'+
-      ((it.insumos && it.insumos.length)?('<div class="item-l3"><span class="ins-lbl">Insumos</span>'+it.insumos.map(function(x){ var nm=(typeof x==="string")?x:((x&&x.insumo)||""); var q=(x&&x.qtd!=null&&x.qtd!=="")?(" \u00b7 "+x.qtd+(x.un?(" "+x.un):"")):""; return '<span class="ins-chip">'+esc(nm)+esc(q)+'</span>'; }).join('')+'</div>'):'');
+      '<div class="item-l3">'+
+        '<div class="ins-head"><span class="ins-lbl">Insumos</span><button type="button" class="ins-add">+ insumo</button></div>'+
+        '<div class="ins-rows"></div>'+
+      '</div>';
+    var _insRows=row.querySelector('.ins-rows');
+    (it.insumos||[]).forEach(function(x){ _insRows.appendChild(mkInsumoRow(typeof x==="string"?{insumo:x}:x)); });
+    row.querySelector('.ins-add').addEventListener('click', function(){ _insRows.appendChild(mkInsumoRow({})); });
     var nome=row.querySelector('.item-nome'), qtd=row.querySelector('.item-qtd'), un=row.querySelector('.item-un'), custo=row.querySelector('.item-custo');
     function recalc(){ recalcLinha(row); recalcModal(); }
     nome.addEventListener('change', function(){ var ex=itemExemplo(nome.value); if(ex){ if(!un.value) un.value=ex.un; if(!custo.value) custo.value=ex.custo; } recalc(); checarRestricoes(); });
@@ -690,7 +727,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.querySelectorAll('#md-itens .item-row').forEach(function(r){
       var item=r.querySelector('.item-nome').value.trim(); if(!item) return;
       var q=r.querySelector('.item-qtd').value, c=r.querySelector('.item-custo').value;
-      itens.push({ tipo:r.querySelector('.item-tipo').value, item:item, qtd:q===''?null:q, un:r.querySelector('.item-un').value.trim(), custo:c===''?null:c });
+      var insumos=[];
+      r.querySelectorAll('.ins-row').forEach(function(ir){ var ssel=ir.querySelector('.ins-cat'); var cid=ssel.value; if(!cid) return; var op=ssel.options[ssel.selectedIndex]; var nome=op?op.textContent:''; var un2=op?(op.getAttribute('data-un')||''):''; var q2=ir.querySelector('.ins-qtd').value; insumos.push({ catalogo_id:cid, catalogo_nome:nome, nome:nome, un:un2, qtd:q2===''?null:q2 }); });
+      itens.push({ tipo:r.querySelector('.item-tipo').value, item:item, qtd:q===''?null:q, un:r.querySelector('.item-un').value.trim(), custo:c===''?null:c, insumos:insumos });
     });
     var btn=document.getElementById('md-salvar'); btn.disabled=true; btn.textContent='Salvando…';
     _supa.schema('tata_plus').rpc('refeicoes_dia_salvar',{ p_data:_semana[i].data, p_resumo:resumo||null, p_almoco:almoco, p_jantar:jantar, p_marmitas:marmitas, p_obs:obs||null, p_itens:itens }).then(function(res){
