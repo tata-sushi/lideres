@@ -201,6 +201,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .ia-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:-2px 0 16px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
 .btn-ia{display:inline-flex;align-items:center;gap:7px;background:var(--carbon);color:var(--citric);border:none;border-radius:8px;padding:10px 16px;font-family:'DM Mono',monospace;font-size:12px;font-weight:600;letter-spacing:.3px;cursor:pointer;transition:opacity .15s,transform .05s;white-space:nowrap}
 .btn-ia:hover{opacity:.9}.btn-ia:active{transform:translateY(1px)}.btn-ia:disabled{opacity:.55;cursor:default}
+.ia-status{font-size:12px;margin-top:8px;line-height:1.4;min-height:16px}
 .ia-hint{font-size:11px;color:var(--muted);line-height:1.4;flex:1;min-width:180px}
 .item-l3{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:6px;padding-left:2px}
 .ins-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
@@ -287,11 +288,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <button class="week-nav-btn" id="btnNextWeek">&#8250;</button>
   </div>
 
-  <div class="ia-bar" id="iaBar" style="display:none">
-    <button class="btn-ia" id="btnGerarIA">✨ Gerar semana com IA</button>
-    <span class="ia-hint">Preenche os dias vazios da semana com uma proposta (rascunho) para você revisar e aprovar.</span>
-  </div>
-
   <div class="grid-wrap" id="diasGrid">
     <!-- rendered by JS -->
   </div>
@@ -312,6 +308,26 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <!-- TAB: RELATÓRIOS -->
 <div id="tab-relatorios" class="tab-pane">
   <p class="empty-msg">Em breve</p>
+</div>
+
+<!-- MODAL GERAR IA -->
+<div class="modal-overlay" id="modal-ia">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div><div class="modal-eyebrow">Cardápio com IA</div><div class="modal-title">Gerar semana</div></div>
+      <button class="modal-close" onclick="document.getElementById('modal-ia').classList.remove('active');document.body.style.overflow=''" aria-label="Fechar"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field-wrap"><div class="field-label">Semana</div><select class="field-input" id="ia-semana"></select></div>
+      <p class="sv-hint">Preenche os dias vazios da semana com uma proposta (rascunho) para revisar e aprovar. Dias já preenchidos são preservados.</p>
+      <div id="ia-status" class="ia-status"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('modal-ia').classList.remove('active');document.body.style.overflow=''">Cancelar</button>
+      <button class="modal-btn modal-btn-save" id="ia-gerar">Gerar</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL EDITAR DIA -->
@@ -385,6 +401,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </button>
   </div>
   <div class="drawer-body">
+    <div class="drawer-section" id="drawerIA" style="display:none">
+      <div class="drawer-section-label">Cardápio</div>
+      <button class="btn-ia" id="btnGerarIA" style="width:100%;justify-content:center">✨ Gerar cardápio com IA</button>
+    </div>
     <div class="drawer-section">
       <div class="drawer-section-label">Versão atual</div>
       <div class="drawer-version">
@@ -633,7 +653,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         '<input class="item-custo" type="number" min="0" step="any" placeholder="Custo un." value="'+(it.custo==null?'':esc(it.custo))+'">'+
         '<span class="item-total" title="Total (qtd × custo)">—</span>'+
       '</div>'+
-      ((it.insumos && it.insumos.length)?('<div class="item-l3"><span class="ins-lbl">Insumos</span>'+it.insumos.map(function(x){return '<span class="ins-chip">'+esc(x)+'</span>';}).join('')+'</div>'):'');
+      ((it.insumos && it.insumos.length)?('<div class="item-l3"><span class="ins-lbl">Insumos</span>'+it.insumos.map(function(x){ var nm=(typeof x==="string")?x:((x&&x.insumo)||""); var q=(x&&x.qtd!=null&&x.qtd!=="")?(" \u00b7 "+x.qtd+(x.un?(" "+x.un):"")):""; return '<span class="ins-chip">'+esc(nm)+esc(q)+'</span>'; }).join('')+'</div>'):'');
     var nome=row.querySelector('.item-nome'), qtd=row.querySelector('.item-qtd'), un=row.querySelector('.item-un'), custo=row.querySelector('.item-custo');
     function recalc(){ recalcLinha(row); recalcModal(); }
     nome.addEventListener('change', function(){ var ex=itemExemplo(nome.value); if(ex){ if(!un.value) un.value=ex.un; if(!custo.value) custo.value=ex.custo; } recalc(); checarRestricoes(); });
@@ -728,25 +748,31 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     }, function(){ volta(); showToast('Erro ao aprovar'); });
   }
 
-  function toggleIABar(){ var ib=document.getElementById('iaBar'); if(ib) ib.style.display=podeEditar()?'flex':'none'; }
+  function toggleIABar(){ var ib=document.getElementById('drawerIA'); if(ib) ib.style.display=podeEditar()?'block':'none'; }
+  function proximasSemanas(n){ var arr=[]; var base=mondayOf(new Date()); for(var i=1;i<=n;i++){ var m=addDays(base,i*7); arr.push({iso:iso(m), label:'Semana de '+fmtDia(m)+' \u2013 '+fmtDia(addDays(m,6))}); } return arr; }
+  function abrirModalIA(){ if(!podeEditar()) return; var sel=document.getElementById('ia-semana'); sel.innerHTML=''; proximasSemanas(8).forEach(function(w){ var o=document.createElement('option'); o.value=w.iso; o.textContent=w.label; sel.appendChild(o); }); var st=document.getElementById('ia-status'); if(st) st.textContent=''; if(typeof closeDrawer==='function') closeDrawer(); var m=document.getElementById('modal-ia'); m.classList.add('active'); document.body.style.overflow='hidden'; }
+  function fecharModalIA(){ var m=document.getElementById('modal-ia'); if(m) m.classList.remove('active'); document.body.style.overflow=''; }
   function gerarCardapioIA(){
     if(!podeEditar()) return;
-    var btn=document.getElementById('btnGerarIA'); if(!btn||btn.disabled) return;
-    if(!confirm('Gerar rascunho de card\u00e1pio com IA para a semana de '+fmtDia(_monday)+'?\n\nDias j\u00e1 preenchidos s\u00e3o preservados \u2014 s\u00f3 os vazios recebem proposta.')) return;
+    var btn=document.getElementById('ia-gerar'); if(!btn||btn.disabled) return;
+    var inicio=document.getElementById('ia-semana').value; if(!inicio) return;
+    var st=document.getElementById('ia-status'); st.style.color='var(--muted)'; st.textContent='Gerando\u2026 (pode levar alguns segundos)';
     var txt=btn.textContent; btn.disabled=true; btn.textContent='Gerando\u2026';
     function done(){ btn.disabled=false; btn.textContent=txt; }
+    function err(msg){ done(); st.style.color='var(--red)'; st.textContent='Erro: '+msg; }
     comSupa(function(supa){
-      supa.functions.invoke('gerar-cardapio',{ body:{ inicio:iso(_monday), dias:7, janela:5 } }).then(function(res){
-        if(res.error){ done();
-          var ctx=res.error.context;
-          if(ctx && typeof ctx.json==='function'){ ctx.json().then(function(b){ showToast('IA: '+((b&&b.error)||res.error.message)); }, function(){ showToast('IA: '+res.error.message); }); }
-          else showToast('IA: '+res.error.message);
-          return;
-        }
+      supa.functions.invoke('gerar-cardapio',{ body:{ inicio:inicio, dias:7, janela:5 } }).then(function(res){
+        if(res.error){ var ctx=res.error.context;
+          if(ctx && typeof ctx.json==='function'){ ctx.json().then(function(b){ err((b&&b.error)||res.error.message); }, function(){ err(res.error.message); }); }
+          else err(res.error.message);
+          return; }
         done(); var n=(res.data&&res.data.gravadas)||0;
-        showToast(n? ('IA prop\u00f4s '+n+' dia(s) \u2014 revise e aprove') : 'Semana j\u00e1 preenchida \u2014 nada a gerar');
+        st.style.color='var(--green)'; st.textContent=n? ('Pronto! '+n+' dia(s) proposto(s) \u2014 revise e aprove.') : 'Semana j\u00e1 preenchida \u2014 nada a gerar.';
+        var alvo=mondayOf(new Date(inicio+'T12:00:00'));
+        currentWeekOffset=Math.round((alvo-mondayOf(new Date()))/604800000);
         carregarSemana();
-      }, function(){ done(); showToast('IA: falha na chamada'); });
+        setTimeout(fecharModalIA, 1400);
+      }, function(){ err('falha na chamada'); });
     });
   }
   function showToast(msg){ var t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.add('show'); setTimeout(function(){ t.classList.remove('show'); },2200); }
@@ -756,7 +782,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     tabBtns.forEach(function(btn){ btn.addEventListener('click', function(){ tabBtns.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var target=btn.dataset.tab; document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); }); var pane=document.getElementById('tab-'+target); if(pane) pane.classList.add('active'); if(target==='processamento'){ carregarProcessamento(); } }); });
     document.getElementById('btnPrevWeek').addEventListener('click', function(){ currentWeekOffset--; carregarSemana(); });
     document.getElementById('btnNextWeek').addEventListener('click', function(){ currentWeekOffset++; carregarSemana(); });
-    var _bIA=document.getElementById('btnGerarIA'); if(_bIA) _bIA.addEventListener('click', gerarCardapioIA);
+    var _bIA=document.getElementById('btnGerarIA'); if(_bIA) _bIA.addEventListener('click', abrirModalIA);
+    var _gIA=document.getElementById('ia-gerar'); if(_gIA) _gIA.addEventListener('click', gerarCardapioIA);
+    var _mIA=document.getElementById('modal-ia'); if(_mIA) _mIA.addEventListener('click', function(ev){ if(ev.target===this) fecharModalIA(); });
     toggleIABar();
     document.getElementById('md-add').addEventListener('click', function(){ document.getElementById('md-itens').appendChild(mkItemRow({tipo:'principal',item:'',qtd:'',un:'',custo:''})); recalcModal(); });
     document.getElementById('md-salvar').addEventListener('click', salvarModal);
