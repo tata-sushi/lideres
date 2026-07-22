@@ -218,6 +218,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .md-status-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .md-status-banner:empty{display:none}
 .md-status-hint{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
+.restr-box:empty{display:none}
+.restr-ok{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;padding:4px 0 0}
+.restr-alerta{border:1px solid #FCA5A5;background:#FEF2F2;border-radius:10px;padding:10px 12px}
+.restr-cab{font-size:12px;font-weight:700;color:#B91C1C;margin-bottom:6px}
+.restr-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.restr-lista li{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-size:12px}
+.restr-nome{font-weight:600;color:var(--carbon)}
+.restr-un{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);background:#fff;border:1px solid var(--border);border-radius:5px;padding:0 6px}
+.restr-itens{color:#B91C1C;font-family:'DM Mono',monospace;font-size:11px}
 .btn-aprovar-modal{margin-left:auto;border:none;border-radius:8px;padding:8px 14px;background:#5FA82B;color:#fff;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;cursor:pointer}
 .btn-aprovar-modal:hover{opacity:.9}
 .btn-aprovar-modal:disabled{opacity:.6;cursor:default}
@@ -328,6 +337,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="itens-label">Itens</div>
       <div class="itens-list" id="md-itens"></div>
       <button type="button" class="btn-add-item" id="md-add">+ item</button>
+      <div class="restr-box" id="md-restricoes"></div>
       <div class="contagens">
         <div class="cont-field field-wrap"><div class="field-label">Almoço</div><input class="field-input" type="number" min="0" id="md-almoco"></div>
         <div class="cont-field field-wrap"><div class="field-label">Jantar</div><input class="field-input" type="number" min="0" id="md-jantar"></div>
@@ -578,6 +588,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var list=document.getElementById('md-itens'); list.innerHTML='';
     (dia.itens||[]).forEach(function(it){ list.appendChild(mkItemRow(it)); });
     recalcModal();
+    checarRestricoes();
     document.getElementById('modal-dia').classList.add('active');
     document.body.style.overflow='hidden';
   }
@@ -600,14 +611,28 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       '</div>';
     var nome=row.querySelector('.item-nome'), qtd=row.querySelector('.item-qtd'), un=row.querySelector('.item-un'), custo=row.querySelector('.item-custo');
     function recalc(){ recalcLinha(row); recalcModal(); }
-    nome.addEventListener('change', function(){ var ex=itemExemplo(nome.value); if(ex){ if(!un.value) un.value=ex.un; if(!custo.value) custo.value=ex.custo; } recalc(); });
+    nome.addEventListener('change', function(){ var ex=itemExemplo(nome.value); if(ex){ if(!un.value) un.value=ex.un; if(!custo.value) custo.value=ex.custo; } recalc(); checarRestricoes(); });
     qtd.addEventListener('input', recalc); custo.addEventListener('input', recalc);
-    row.querySelector('.item-del').addEventListener('click', function(){ row.remove(); recalcModal(); });
+    row.querySelector('.item-del').addEventListener('click', function(){ row.remove(); recalcModal(); checarRestricoes(); });
     recalcLinha(row);
     return row;
   }
   function recalcLinha(row){ var q=parseFloat(row.querySelector('.item-qtd').value), c=parseFloat(row.querySelector('.item-custo').value); var t=(isNaN(q)||isNaN(c))?null:q*c; row.querySelector('.item-total').textContent = t==null?'—':fmtBRL(t); }
   function recalcModal(){ var s=0; document.querySelectorAll('#md-itens .item-row').forEach(function(r){ var q=parseFloat(r.querySelector('.item-qtd').value), c=parseFloat(r.querySelector('.item-custo').value); if(!isNaN(q)&&!isNaN(c)) s+=q*c; }); document.getElementById('md-total').textContent=fmtBRL(s); }
+  function checarRestricoes(){
+    var el=document.getElementById('md-restricoes'); if(!el) return;
+    var itens=[]; document.querySelectorAll('#md-itens .item-nome').forEach(function(i){ var v=(i.value||'').trim(); if(v) itens.push(v); });
+    if(!itens.length || !window.__lideresSupa){ el.innerHTML=''; return; }
+    window.__lideresSupa.schema('tata_plus').rpc('restricoes_do_cardapio',{ p_itens:itens }).then(function(res){
+      if(res.error){ el.innerHTML=''; return; }
+      var ppl=res.data||[];
+      if(!ppl.length){ el.innerHTML='<div class="restr-ok">Sem restrições entre os itens ✓</div>'; return; }
+      var lis=ppl.map(function(p){
+        return '<li><span class="restr-nome">'+esc(p.nome)+'</span>'+(p.unidade?'<span class="restr-un">'+esc(p.unidade)+'</span>':'')+'<span class="restr-itens">'+(p.itens||[]).map(esc).join(', ')+'</span></li>';
+      }).join('');
+      el.innerHTML='<div class="restr-alerta"><div class="restr-cab">\u26A0 '+ppl.length+' '+(ppl.length>1?'pessoas':'pessoa')+' com restrição</div><ul class="restr-lista">'+lis+'</ul></div>';
+    }, function(){ el.innerHTML=''; });
+  }
 
   function salvarModal(){
     if(_editIdx<0){ return; }
