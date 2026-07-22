@@ -764,9 +764,10 @@ function renderFilters() {
   document.getElementById('results-count').innerHTML =
     '<b>'+filtered.length+'</b> resultado'+(filtered.length!==1?'s':'');
 }
-function setFilter(k, v) { state.filters[k]=v; render(); }
+function setFilter(k, v) { state.filters[k]=v; _manutShown = MANUT_PAGE; render(); }
 function clearFilters() {
   state.filters = { unidade:'Todos', departamento:'Todos', status:'Todos', prioridade:'Todos', solicitante:'Todos' };
+  _manutShown = MANUT_PAGE;
   render();
 }
 
@@ -1152,6 +1153,14 @@ function tableRowHTML(r) {
   '</tr>';
 }
 
+// Paginação "Ver mais" (padrão recrutamento)
+var MANUT_PAGE = 10;
+var _manutShown = MANUT_PAGE;
+function showMoreManut() {
+  _manutShown += MANUT_PAGE;
+  render();
+}
+
 function render() {
   var filtered = getFiltered();
   renderKPIs();
@@ -1160,8 +1169,23 @@ function render() {
   if (!filtered.length) {
     c.innerHTML = '<div class="empty-state"><p>Nenhum resultado encontrado</p></div>';
   } else {
-    var mobile = '<div class="mobile-cards">' + filtered.map(cardHTML).join('') + '</div>';
-    var desk   = '<div class="desk-table-wrap"><table class="desk-table">' + buildDeskHead() + '<tbody>' + filtered.map(tableRowHTML).join('') + '</tbody></table></div>';
+    var display = filtered.slice(0, _manutShown);
+    var resto   = filtered.length - _manutShown;
+    var prox    = resto > 0 ? Math.min(MANUT_PAGE, resto) : 0;
+
+    var verMaisBtn = prox > 0
+      ? '<button onclick="showMoreManut()" style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer">Ver mais (' + prox + ')</button>'
+      : '';
+
+    var mobileVerMais = verMaisBtn ? '<div style="text-align:center;padding:10px 0">' + verMaisBtn + '</div>' : '';
+    var mobile = '<div class="mobile-cards">' + display.map(cardHTML).join('') + mobileVerMais + '</div>';
+
+    var tbodyRows = display.map(tableRowHTML).join('');
+    if (verMaisBtn) {
+      tbodyRows += '<tr><td colspan="8" style="text-align:center;padding:10px;border-bottom:none">' + verMaisBtn + '</td></tr>';
+    }
+    var desk = '<div class="desk-table-wrap"><table class="desk-table">' + buildDeskHead() + '<tbody>' + tbodyRows + '</tbody></table></div>';
+
     c.innerHTML = mobile + desk;
   }
   var _fd=new Date(),_fp=function(n){return n<10?'0'+n:String(n);}; document.getElementById('footer-date').textContent='Atualizado: '+_fp(_fd.getDate())+'/'+_fp(_fd.getMonth()+1)+'/'+_fd.getFullYear()+', '+_fp(_fd.getHours())+':'+_fp(_fd.getMinutes())+':'+_fp(_fd.getSeconds());
