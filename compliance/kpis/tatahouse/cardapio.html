@@ -670,8 +670,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       '<button type="button" class="ins-del" title="Remover">\u00d7</button>';
     var sel=r.querySelector('.ins-cat'), un=r.querySelector('.ins-un'), cu=r.querySelector('.ins-custo');
     function sync(){ var op=sel.options[sel.selectedIndex]; var u=op?(op.getAttribute('data-un')||''):''; var v=op?(op.getAttribute('data-valor')||''):''; un.textContent=u||'un'; un.className='ins-un'+(u?'':' empty'); cu.textContent=(v!==''&&v!=null&&!isNaN(parseFloat(v)))?fmtBRL(parseFloat(v)):'—'; }
-    sync(); sel.addEventListener('change', sync);
-    r.querySelector('.ins-del').addEventListener('click', function(){ r.remove(); });
+    sync();
+    sel.addEventListener('change', function(){ sync(); recalcModal(); });
+    r.querySelector('.ins-qtd').addEventListener('input', recalcModal);
+    r.querySelector('.ins-del').addEventListener('click', function(){ r.remove(); recalcModal(); });
     return r;
   }
   function mkItemRow(it){
@@ -683,11 +685,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         '<input class="item-nome" type="text" list="itens-cat" placeholder="Item" value="'+esc(it.item)+'">'+
         '<button type="button" class="item-del" title="Remover">×</button>'+
       '</div>'+
-      '<div class="item-l2">'+
-        '<input class="item-qtd" type="number" min="0" step="any" placeholder="Qtd" value="'+(it.qtd==null?'':esc(it.qtd))+'">'+
-        '<input class="item-un" type="text" placeholder="Un" value="'+esc(it.un)+'">'+
-        '<input class="item-custo" type="number" min="0" step="any" placeholder="Custo un." value="'+(it.custo==null?'':esc(it.custo))+'">'+
-      '</div>'+
       '<div class="item-l3">'+
         '<div class="ins-lbl">Insumos</div>'+
         '<div class="ins-rows"></div>'+
@@ -696,16 +693,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var _insRows=row.querySelector('.ins-rows');
     (it.insumos||[]).forEach(function(x){ _insRows.appendChild(mkInsumoRow(typeof x==="string"?{insumo:x}:x)); });
     row.querySelector('.ins-add-bar').addEventListener('click', function(){ _insRows.appendChild(mkInsumoRow({})); });
-    var nome=row.querySelector('.item-nome'), qtd=row.querySelector('.item-qtd'), un=row.querySelector('.item-un'), custo=row.querySelector('.item-custo');
-    function recalc(){ recalcLinha(row); recalcModal(); }
-    nome.addEventListener('change', function(){ var ex=itemExemplo(nome.value); if(ex){ if(!un.value) un.value=ex.un; if(!custo.value) custo.value=ex.custo; } recalc(); checarRestricoes(); });
-    qtd.addEventListener('input', recalc); custo.addEventListener('input', recalc);
+    var nome=row.querySelector('.item-nome');
+    nome.addEventListener('change', function(){ recalcModal(); checarRestricoes(); });
     row.querySelector('.item-del').addEventListener('click', function(){ row.remove(); recalcModal(); checarRestricoes(); });
-    recalcLinha(row);
     return row;
   }
   function recalcLinha(row){ var q=parseFloat(row.querySelector('.item-qtd').value), c=parseFloat(row.querySelector('.item-custo').value); var t=(isNaN(q)||isNaN(c))?null:q*c; var _tt=row.querySelector('.item-total'); if(_tt) _tt.textContent = t==null?'—':fmtBRL(t); }
-  function recalcModal(){ var s=0; document.querySelectorAll('#md-itens .item-row').forEach(function(r){ var q=parseFloat(r.querySelector('.item-qtd').value), c=parseFloat(r.querySelector('.item-custo').value); if(!isNaN(q)&&!isNaN(c)) s+=q*c; }); document.getElementById('md-total').textContent=fmtBRL(s); }
+  function recalcModal(){ var s=0; document.querySelectorAll('#md-itens .ins-row').forEach(function(ir){ var q=parseFloat(ir.querySelector('.ins-qtd').value); var op=ir.querySelector('.ins-cat'); op=op.options[op.selectedIndex]; var v=op?parseFloat(op.getAttribute('data-valor')):NaN; if(!isNaN(q)&&!isNaN(v)) s+=q*v; }); var el=document.getElementById('md-total'); if(el) el.textContent=fmtBRL(s); }
   function checarRestricoes(){
     var el=document.getElementById('md-restricoes'); if(!el) return;
     var itens=[]; document.querySelectorAll('#md-itens .item-nome').forEach(function(i){ var v=(i.value||'').trim(); if(v) itens.push(v); });
@@ -731,10 +725,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var itens=[];
     document.querySelectorAll('#md-itens .item-row').forEach(function(r){
       var item=r.querySelector('.item-nome').value.trim(); if(!item) return;
-      var q=r.querySelector('.item-qtd').value, c=r.querySelector('.item-custo').value;
       var insumos=[];
       r.querySelectorAll('.ins-row').forEach(function(ir){ var ssel=ir.querySelector('.ins-cat'); var cid=ssel.value; if(!cid) return; var op=ssel.options[ssel.selectedIndex]; var nome=op?op.textContent:''; var un2=op?(op.getAttribute('data-un')||''):''; var q2=ir.querySelector('.ins-qtd').value; insumos.push({ catalogo_id:cid, catalogo_nome:nome, nome:nome, un:un2, qtd:q2===''?null:q2 }); });
-      itens.push({ tipo:r.querySelector('.item-tipo').value, item:item, qtd:q===''?null:q, un:r.querySelector('.item-un').value.trim(), custo:c===''?null:c, insumos:insumos });
+      itens.push({ tipo:r.querySelector('.item-tipo').value, item:item, qtd:null, un:null, custo:null, insumos:insumos });
     });
     var btn=document.getElementById('md-salvar'); btn.disabled=true; btn.textContent='Salvando…';
     _supa.schema('tata_plus').rpc('refeicoes_dia_salvar',{ p_data:_semana[i].data, p_resumo:resumo||null, p_almoco:almoco, p_jantar:jantar, p_marmitas:marmitas, p_obs:obs||null, p_itens:itens }).then(function(res){
