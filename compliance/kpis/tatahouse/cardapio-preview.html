@@ -855,10 +855,28 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     });
   }
 
+  function transInfo(status){
+    if(status==='aguardando_compra')      return { label:'Confirmar compra',     rpc:'refeicoes_dia_comprar', msg:'Compra confirmada ✓' };
+    if(status==='aguardando_recebimento') return { label:'Confirmar recebimento', rpc:'refeicoes_dia_receber',  msg:'Recebimento confirmado ✓' };
+    if(status==='aguardando_preparo')     return { label:'Marcar como preparado', rpc:'refeicoes_dia_preparar', msg:'Preparo confirmado ✓' };
+    return null;
+  }
+  function avancarStatusModal(t){
+    if(!_procData){ fecharModal(); return; }
+    if(!_supa){ showToast('Aguarde a sessão…'); return; }
+    var btn=document.getElementById('md-salvar'); var _lbl=btn.textContent; btn.disabled=true; btn.textContent='Salvando…';
+    _supa.schema('tata_plus').rpc(t.rpc,{ p_data:_procData.data }).then(function(res){
+      btn.disabled=false; btn.textContent=_lbl;
+      if(res.error){ showToast('Erro: '+(res.error.message||'falha')); return; }
+      fecharModal(); carregarProcessamento(); showToast(t.msg);
+    }, function(){ btn.disabled=false; btn.textContent=_lbl; showToast('Erro ao atualizar'); });
+  }
   function onModalPrimary(){
     if(_modalMode==='proc'){
-      if(_procData && _procData.status==='aguardando_avaliacao'){ salvarServirModal(); }
-      else { fecharModal(); }
+      if(_procData && _procData.status==='aguardando_avaliacao'){ salvarServirModal(); return; }
+      var _t=_procData?transInfo(_procData.status):null;
+      if(podeEditar() && _t){ avancarStatusModal(_t); return; }
+      fecharModal();
       return;
     }
     salvarModal();
@@ -903,7 +921,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var list=document.getElementById('md-itens'); list.innerHTML='';
     (dia.itens||[]).forEach(function(it){ list.appendChild(mkItemRow(it)); });
     recalcModal(); checarRestricoes();
-    document.getElementById('md-salvar').textContent=isAval?'Informar quantidades':'Fechar';
+    var _trans=transInfo(dia.status);
+    document.getElementById('md-salvar').textContent = isAval ? 'Informar quantidades' : ((podeEditar()&&_trans)?_trans.label:'Fechar');
     setModalReadonly(true, isAval);
     document.getElementById('modal-dia').classList.add('active');
     document.body.style.overflow='hidden';
