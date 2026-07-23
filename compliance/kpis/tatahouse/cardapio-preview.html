@@ -288,6 +288,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .ins-del{border:none;background:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0}
 .ins-del:hover{color:var(--red)}
 .contagens { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+#md-desperdicio{display:flex;flex-direction:column;gap:6px}
+#md-desperdicio:empty{display:none}
+.desp-row{display:grid;grid-template-columns:1fr 84px auto;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+.desp-nome{font-size:13px;font-weight:600;color:var(--carbon);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.desp-in{min-width:0;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:right}
+.desp-in:focus{outline:none;border-color:var(--carbon)}
+.desp-un{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
 .dia-total { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--mid); }
 .dia-total strong { font-family: 'DM Mono', monospace; font-size: 14px; color: var(--carbon); font-weight: 700; }
 .btn-ver{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:var(--carbon);color:var(--citric);border:none;border-radius:var(--radius);font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:opacity .15s;white-space:nowrap}
@@ -570,6 +577,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="cont-field field-wrap"><div class="field-label">Jantar</div><input class="field-input" type="number" min="0" id="md-jantar"></div>
         <div class="cont-field field-wrap"><div class="field-label">Marmitas</div><input class="field-input" type="number" min="0" id="md-marmitas"></div>
       </div>
+      <div class="itens-label" id="md-desp-label" style="display:none">Desperdício por prato</div>
+      <div id="md-desperdicio"></div>
       <div class="itens-label">Avaliação</div>
       <div id="md-aval"></div>
       <div class="field-wrap"><div class="field-label">Observação para compras</div><textarea class="field-input cardapio-obs" id="md-obs" rows="1" placeholder="Anotações que vão para o Compras…"></textarea></div>
@@ -919,8 +928,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     if(!_procData){ fecharModal(); return; }
     if(!_supa){ showToast('Aguarde a sessão…'); return; }
     var a=num(document.getElementById('md-almoco').value), j=num(document.getElementById('md-jantar').value), m=num(document.getElementById('md-marmitas').value);
+    var desp=[];
+    document.querySelectorAll('#md-desperdicio .desp-in').forEach(function(i){ var id=i.getAttribute('data-item-id'); if(!id) return; var v=(i.value||'').trim(); desp.push({ id:id, desperdicio: v===''?null:v }); });
     var btn=document.getElementById('md-salvar'); var _lbl=btn.textContent; btn.disabled=true; btn.textContent='Finalizando…';
-    _supa.schema('tata_plus').rpc('refeicoes_dia_servir',{ p_data:_procData.data, p_almoco:a, p_jantar:j, p_marmitas:m, p_unidade:_uniProc }).then(function(res){
+    _supa.schema('tata_plus').rpc('refeicoes_dia_servir',{ p_data:_procData.data, p_almoco:a, p_jantar:j, p_marmitas:m, p_unidade:_uniProc, p_desperdicio:desp }).then(function(res){
       btn.disabled=false; btn.textContent=_lbl;
       if(res.error){ showToast('Erro: '+(res.error.message||'falha')); return; }
       fecharModal(); carregarProcessamento(); showToast('Finalizado ✓');
@@ -958,6 +969,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     (dia.itens||[]).forEach(function(it){ list.appendChild(mkItemRow(it)); });
     recalcModal(); checarRestricoes();
     carregarValoresProc(dia);
+    renderDesperdicio(dia.itens, isAval);
     document.getElementById('md-salvar').textContent = isAval ? 'Informar quantidades' : 'Fechar';
     var _bn=document.getElementById('md-status-banner'); if(_bn) _bn.innerHTML=procHint(dia.status);
     setModalReadonly(true, isAval);
@@ -988,6 +1000,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     (dia.itens||[]).forEach(function(it){ list.appendChild(mkItemRow(it)); });
     recalcModal();
     checarRestricoes();
+    renderDesperdicio(null, false);
     setModalReadonly(false, true);
     document.getElementById('modal-dia').classList.add('active');
     document.body.style.overflow='hidden';
@@ -1016,6 +1029,21 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       });
       if(temReal){ var el=document.getElementById('md-total'); if(el) el.textContent=fmtBRL(diaTotal); }
     }, function(){});
+  }
+  // Desperdício por PRATO (item do cardápio) — só aparece em "aguardando avaliação".
+  function renderDesperdicio(itens, mostrar){
+    var host=document.getElementById('md-desperdicio'), lbl=document.getElementById('md-desp-label');
+    if(host) host.innerHTML='';
+    if(lbl) lbl.style.display = mostrar ? '' : 'none';
+    if(!mostrar || !host) return;
+    (itens||[]).forEach(function(it){
+      var row=document.createElement('div'); row.className='desp-row';
+      row.innerHTML=
+        '<span class="desp-nome" title="'+esc(it.item||'')+'">'+esc(it.item||'—')+'</span>'+
+        '<input class="desp-in" type="number" min="0" step="any" placeholder="0" value="'+(it.desperdicio==null?'':esc(it.desperdicio))+'" data-item-id="'+(it.id==null?'':esc(it.id))+'">'+
+        '<span class="desp-un">kg</span>';
+      host.appendChild(row);
+    });
   }
 
   function catalogoOptions(selId, selNome, selUn){
