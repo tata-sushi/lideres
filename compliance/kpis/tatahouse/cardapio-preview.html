@@ -957,6 +957,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var list=document.getElementById('md-itens'); list.innerHTML='';
     (dia.itens||[]).forEach(function(it){ list.appendChild(mkItemRow(it)); });
     recalcModal(); checarRestricoes();
+    carregarValoresProc(dia);
     document.getElementById('md-salvar').textContent = isAval ? 'Informar quantidades' : 'Fechar';
     var _bn=document.getElementById('md-status-banner'); if(_bn) _bn.innerHTML=procHint(dia.status);
     setModalReadonly(true, isAval);
@@ -992,6 +993,30 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.body.style.overflow='hidden';
   }
   function fecharModal(){ document.getElementById('modal-dia').classList.remove('active'); document.body.style.overflow=''; _editIdx=-1; _modalMode='elab'; _procData=null; var _b=document.getElementById('md-status-banner'); if(_b) _b.innerHTML=''; }
+  // Processamento: troca o custo do catálogo (estimado) pelo VALOR REAL do Compras,
+  // pela regra do ÚLTIMO PREÇO (recebimento → compra → inicial), via refeicoes_dia_detalhe.
+  // Insumo e dia batem por ordem (itens por ci.id, insumos por cii.id nas duas RPCs).
+  function carregarValoresProc(dia){
+    if(!_supa || dia==null || dia.dia_id==null) return;
+    _supa.schema('tata_plus').rpc('refeicoes_dia_detalhe',{ p_dia_id:dia.dia_id }).then(function(res){
+      if(res.error || !Array.isArray(res.data)) return;
+      if(!_procData || _procData.dia_id!==dia.dia_id) return; // o modal já mudou de dia
+      var items=res.data, rows=document.querySelectorAll('#md-itens .item-row'), diaTotal=0, temReal=false;
+      rows.forEach(function(row, i){
+        var det=items[i]; if(!det) return;
+        var insList=det.insumos||[];
+        row.querySelectorAll('.ins-row').forEach(function(ir, j){
+          var d=insList[j]; if(!d) return;
+          var cu=ir.querySelector('.ins-custo'); if(!cu) return;
+          var tot=(d.total==null)?NaN:parseFloat(d.total);
+          if(!isNaN(tot)){ cu.textContent=fmtBRL(tot); temReal=true; }
+          if(d.vl_unit!=null) cu.title='Unitário (Compras): '+fmtBRL(parseFloat(d.vl_unit));
+        });
+        if(det.custo!=null) diaTotal+=parseFloat(det.custo);
+      });
+      if(temReal){ var el=document.getElementById('md-total'); if(el) el.textContent=fmtBRL(diaTotal); }
+    }, function(){});
+  }
 
   function catalogoOptions(selId, selNome, selUn){
     var found=false, o='';
