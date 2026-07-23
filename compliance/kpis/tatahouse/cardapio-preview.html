@@ -649,7 +649,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   /* ---------- MODAL (edição) ---------- */
   var DOW_NOME=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
   function parseISO(x){ var p=String(x).split('-'); return new Date(+p[0],(+p[1])-1,+p[2]); }
-  var _proc=[];
+  var _proc=[]; var _modalMode='elab', _procData=null;
   function carregarProcessamento(){
     var grid=document.getElementById('procGrid'); if(!grid) return;
     grid.innerHTML='<p class="empty-msg">Carregando…</p>';
@@ -687,16 +687,62 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           '</div>'+
           (isAval?'<div class="card-field"><span class="field-label">Avaliação</span>'+avalHtml(dia.aval)+'</div>':'')+
         '</div>'+
-        (isAval&&podeEditar()?'<div class="card-footer" style="justify-content:flex-end">'+
-          '<button type="button" class="btn-ver btn-servir-dia">✓ Registrar servidas</button>'+
+        (podeEditar()?'<div class="card-footer" style="justify-content:flex-end">'+
+          '<button type="button" class="btn-ver btn-proc-dia">'+(isAval?'✓ Registrar servidas':'Ver detalhes')+'</button>'+
         '</div>':'');
       grid.appendChild(card);
-      var sb=card.querySelector('.btn-servir-dia'); if(sb) sb.addEventListener('click', function(){ abrirServir(dia); });
+      var b=card.querySelector('.btn-proc-dia'); if(b) b.addEventListener('click', function(){ abrirModalProc(dia); });
     });
   }
 
+  function onModalPrimary(){
+    if(_modalMode==='proc'){
+      if(_procData && _procData.status==='aguardando_avaliacao'){ salvarServirModal(); }
+      else { fecharModal(); }
+      return;
+    }
+    salvarModal();
+  }
+  function salvarServirModal(){
+    if(!_procData){ fecharModal(); return; }
+    if(!_supa){ showToast('Aguarde a sessão…'); return; }
+    var a=num(document.getElementById('md-almoco').value), j=num(document.getElementById('md-jantar').value), m=num(document.getElementById('md-marmitas').value);
+    var btn=document.getElementById('md-salvar'); var _lbl=btn.textContent; btn.disabled=true; btn.textContent='Finalizando…';
+    _supa.schema('tata_plus').rpc('refeicoes_dia_servir',{ p_data:_procData.data, p_almoco:a, p_jantar:j, p_marmitas:m }).then(function(res){
+      btn.disabled=false; btn.textContent=_lbl;
+      if(res.error){ showToast('Erro: '+(res.error.message||'falha')); return; }
+      fecharModal(); carregarProcessamento(); showToast('Finalizado ✓');
+    }, function(){ btn.disabled=false; btn.textContent=_lbl; showToast('Erro ao finalizar'); });
+  }
+  function abrirModalProc(dia){
+    _modalMode='proc'; _procData=dia; _editIdx=-1;
+    var d=parseISO(dia.data);
+    var DOW_CURTO=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+    var isAval=(dia.status==='aguardando_avaliacao');
+    document.getElementById('md-title').textContent='Refeição do dia '+fmtDia(d)+' ('+DOW_CURTO[d.getDay()]+')';
+    var _si=dia.status?statusInfo(dia.status):null;
+    document.getElementById('md-i-nome').textContent=dia.resumo||'—';
+    document.getElementById('md-i-status').innerHTML=_si?('<span class="badge status st-'+_si.cls+'">'+_si.label+'</span>'):'—';
+    document.getElementById('md-i-data').textContent=fmtDataBR(dia.data);
+    document.getElementById('md-i-aprov').textContent=fmtDataBR(dia.aprovado_em);
+    document.getElementById('md-i-compra').textContent=fmtDataBR(dia.comprado_em);
+    document.getElementById('md-i-receb').textContent=fmtDataBR(dia.recebido_em);
+    document.getElementById('md-i-restr').textContent=(dia.n_restricoes!=null?dia.n_restricoes:'—');
+    var pick=function(x,y){ return x!=null?x:(y!=null?y:''); };
+    document.getElementById('md-almoco').value=isAval?pick(dia.almoco_servido,dia.almoco):(dia.almoco==null?'':dia.almoco);
+    document.getElementById('md-jantar').value=isAval?pick(dia.jantar_servido,dia.jantar):(dia.jantar==null?'':dia.jantar);
+    document.getElementById('md-marmitas').value=isAval?pick(dia.marmitas_servido,dia.marmitas):(dia.marmitas==null?'':dia.marmitas);
+    document.getElementById('md-obs').value=dia.obs||'';
+    var list=document.getElementById('md-itens'); list.innerHTML='';
+    (dia.itens||[]).forEach(function(it){ list.appendChild(mkItemRow(it)); });
+    recalcModal(); checarRestricoes();
+    document.getElementById('md-salvar').textContent=isAval?'Registrar servidas':'Fechar';
+    document.getElementById('modal-dia').classList.add('active');
+    document.body.style.overflow='hidden';
+  }
+
   function abrirModal(i){
-    _editIdx=i; var dia=_semana[i];
+    _modalMode='elab'; _editIdx=i; var dia=_semana[i];
     document.getElementById('md-title').textContent = 'Refeição do dia '+fmtDia(addDays(_monday,i))+' ('+diaSemanaCurto(i)+')';
     var _st=dia.status||null; var _si=_st?statusInfo(_st):null;
     document.getElementById('md-i-nome').textContent=dia.resumo||'—';
@@ -718,7 +764,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.getElementById('modal-dia').classList.add('active');
     document.body.style.overflow='hidden';
   }
-  function fecharModal(){ document.getElementById('modal-dia').classList.remove('active'); document.body.style.overflow=''; _editIdx=-1; var _b=document.getElementById('md-status-banner'); if(_b) _b.innerHTML=''; }
+  function fecharModal(){ document.getElementById('modal-dia').classList.remove('active'); document.body.style.overflow=''; _editIdx=-1; _modalMode='elab'; _procData=null; var _b=document.getElementById('md-status-banner'); if(_b) _b.innerHTML=''; }
 
   function catalogoOptions(selId, selNome, selUn){
     var found=false, o='';
@@ -893,7 +939,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var _mIA=document.getElementById('modal-ia'); if(_mIA) _mIA.addEventListener('click', function(ev){ if(ev.target===this) fecharModalIA(); });
     toggleIABar();
     document.getElementById('md-add').addEventListener('click', function(){ document.getElementById('md-itens').appendChild(mkItemRow({tipo:'principal',item:'',qtd:'',un:'',custo:''})); recalcModal(); });
-    document.getElementById('md-salvar').addEventListener('click', salvarModal);
+    document.getElementById('md-salvar').addEventListener('click', onModalPrimary);
     var svSalvar=document.getElementById('sv-salvar'); if(svSalvar) svSalvar.addEventListener('click', salvarServir);
     var mServ=document.getElementById('modal-servir'); if(mServ) mServ.addEventListener('click', function(ev){ if(ev.target===this){ mServ.classList.remove('active'); document.body.style.overflow=''; } });
     document.getElementById('modal-dia').addEventListener('click', function(ev){ if(ev.target===this) fecharModal(); });
