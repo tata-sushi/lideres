@@ -346,6 +346,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   .btn-clear:hover { color: var(--carbon); }
   .results-count { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
   .results-count span { color: var(--carbon); font-weight: 500; }
+  .elab-filter-row { display: flex; align-items: flex-end; gap: 12px; }
+  .week-arrows { display: flex; flex-shrink: 0; }
+  .week-arrows .week-nav-btn { border-radius: 0; }
+  .week-arrows .week-nav-btn:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+  .week-arrows .week-nav-btn:last-child { border-radius: 0 var(--radius) var(--radius) 0; border-left: 0; }
 
 </style>
 <header class="header">
@@ -371,13 +376,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <!-- TAB: CARDÁPIO -->
 <div id="tab-cardapio" class="tab-pane active">
 
-  <div class="week-nav">
-    <button class="week-nav-btn" id="btnPrevWeek">&#8249;</button>
-    <div class="week-nav-center">
-      <div class="week-nav-label" id="weekLabel">—</div>
-      <div class="week-nav-dates" id="weekDates">—</div>
+  <div class="filters-wrap" id="elab-filters">
+    <div class="elab-filter-row">
+      <div class="filter-group" style="flex:1"><label class="filter-label">Refeição</label><select class="filter-select" id="ef-ref"></select></div>
+      <div class="week-arrows">
+        <button class="week-nav-btn" id="btnPrevWeek">&#8249;</button>
+        <button class="week-nav-btn" id="btnNextWeek">&#8250;</button>
+      </div>
     </div>
-    <button class="week-nav-btn" id="btnNextWeek">&#8250;</button>
+    <div class="filters-actions">
+      <button class="btn-clear" id="ef-clear">Limpar filtros</button>
+      <span class="results-count" id="ef-count"></span>
+    </div>
   </div>
 
   <div class="grid-wrap" id="diasGrid">
@@ -598,7 +608,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   function num(v){ return v===''||v==null?null:parseInt(v,10); }
   function somaDia(dia){ var s=0; (dia.itens||[]).forEach(function(it){ var q=parseFloat(it.qtd),c=parseFloat(it.custo); if(!isNaN(q)&&!isNaN(c)) s+=q*c; }); return s; }
 
-  function renderWeekNav(){ var fim=addDays(_monday,6); document.getElementById('weekLabel').textContent='Semana de '+fmtDia(_monday); document.getElementById('weekDates').textContent=fmtDia(_monday)+' – '+fmtDia(fim); }
+  function renderWeekNav(){ var wl=document.getElementById('weekLabel'); if(!wl) return; var fim=addDays(_monday,6); wl.textContent='Semana de '+fmtDia(_monday); var wd=document.getElementById('weekDates'); if(wd) wd.textContent=fmtDia(_monday)+' – '+fmtDia(fim); }
 
   function carregarSemana(){
     _monday=addDays(mondayOf(new Date()),currentWeekOffset*7);
@@ -625,11 +635,23 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   }
 
   /* ---------- CARDS (só-leitura) ---------- */
+  var elabFilter={ refeicao:'Todas' };
+  function renderElabFilters(){
+    var sel=document.getElementById('ef-ref'); if(!sel) return;
+    var DOW_CURTO=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+    var dias=(_semana||[]).filter(function(d){ return !d.status || d.status==='aguardando_aprovacao'; });
+    sel.innerHTML='<option value="Todas"'+(elabFilter.refeicao==='Todas'?' selected':'')+'>Todas</option>'+
+      dias.map(function(d){ var dd=parseISO(d.data); return '<option value="'+d.data+'"'+(elabFilter.refeicao===d.data?' selected':'')+'>'+fmtDia(dd)+' ('+DOW_CURTO[dd.getDay()]+')</option>'; }).join('');
+    var n=dias.filter(function(d){ return elabFilter.refeicao==='Todas' || d.data===elabFilter.refeicao; }).length;
+    var c=document.getElementById('ef-count'); if(c) c.innerHTML='<span>'+n+'</span> cardápio'+(n!==1?'s':'');
+  }
+
   function renderGrid(){
     var grid=document.getElementById('diasGrid'); grid.innerHTML='';
     var v=function(x){ return (x==null||x==='')?'—':x; };
     _semana.forEach(function(dia,i){
       if(dia.status && dia.status!=='aguardando_aprovacao') return; // aprovados vão pra Processamento
+      if(elabFilter.refeicao!=='Todas' && dia.data!==elabFilter.refeicao) return;
       var card=document.createElement('div'); card.className='card';
       card.innerHTML=
         '<div class="card-header">'+
@@ -655,6 +677,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       var b=card.querySelector('.btn-editar-dia'); if(b) b.addEventListener('click', function(){ abrirModal(i); });
     });
     if(!grid.children.length){ grid.innerHTML='<p class="empty-msg">Nenhum pedido pendente nesta semana. Planeje um dia ou acompanhe em Processamento.</p>'; }
+    renderElabFilters();
   }
 
   /* ---------- MODAL (edição) ---------- */
@@ -983,8 +1006,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   document.addEventListener('DOMContentLoaded', function() {
     var tabBtns=document.querySelectorAll('.tab-btn');
     tabBtns.forEach(function(btn){ btn.addEventListener('click', function(){ tabBtns.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var target=btn.dataset.tab; document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); }); var pane=document.getElementById('tab-'+target); if(pane) pane.classList.add('active'); if(target==='processamento'){ carregarProcessamento(); } }); });
-    document.getElementById('btnPrevWeek').addEventListener('click', function(){ currentWeekOffset--; carregarSemana(); });
-    document.getElementById('btnNextWeek').addEventListener('click', function(){ currentWeekOffset++; carregarSemana(); });
+    document.getElementById('btnPrevWeek').addEventListener('click', function(){ currentWeekOffset--; elabFilter.refeicao='Todas'; carregarSemana(); });
+    document.getElementById('btnNextWeek').addEventListener('click', function(){ currentWeekOffset++; elabFilter.refeicao='Todas'; carregarSemana(); });
+    var _efr=document.getElementById('ef-ref'); if(_efr) _efr.addEventListener('change', function(){ elabFilter.refeicao=this.value; renderGrid(); });
+    var _efc=document.getElementById('ef-clear'); if(_efc) _efc.addEventListener('click', function(){ elabFilter.refeicao='Todas'; renderGrid(); });
     var _bIA=document.getElementById('btnGerarIA'); if(_bIA) _bIA.addEventListener('click', abrirModalIA);
     var _gIA=document.getElementById('ia-gerar'); if(_gIA) _gIA.addEventListener('click', gerarCardapioIA);
     var _mIA=document.getElementById('modal-ia'); if(_mIA) _mIA.addEventListener('click', function(ev){ if(ev.target===this) fecharModalIA(); });
