@@ -928,8 +928,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     if(!_procData){ fecharModal(); return; }
     if(!_supa){ showToast('Aguarde a sessão…'); return; }
     var a=num(document.getElementById('md-almoco').value), j=num(document.getElementById('md-jantar').value), m=num(document.getElementById('md-marmitas').value);
-    var desp=[];
-    document.querySelectorAll('#md-desperdicio .desp-in').forEach(function(i){ var id=i.getAttribute('data-item-id'); if(!id) return; var v=(i.value||'').trim(); desp.push({ id:id, desperdicio: v===''?null:v }); });
+    var byItem={};
+    document.querySelectorAll('#md-desperdicio .desp-in').forEach(function(i){
+      var id=i.getAttribute('data-item-id'); if(!id) return;
+      var parte=i.getAttribute('data-parte'); var v=(i.value||'').trim();
+      if(parte){ if(!byItem[id]) byItem[id]={ id:id, partes:{} }; byItem[id].partes[parte]= v===''?null:v; }
+      else { byItem[id]={ id:id, valor: v===''?null:v }; }
+    });
+    var desp=Object.keys(byItem).map(function(k){ return byItem[k]; });
     var btn=document.getElementById('md-salvar'); var _lbl=btn.textContent; btn.disabled=true; btn.textContent='Finalizando…';
     _supa.schema('tata_plus').rpc('refeicoes_dia_servir',{ p_data:_procData.data, p_almoco:a, p_jantar:j, p_marmitas:m, p_unidade:_uniProc, p_desperdicio:desp }).then(function(res){
       btn.disabled=false; btn.textContent=_lbl;
@@ -1031,18 +1037,34 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     }, function(){});
   }
   // Desperdício por PRATO (item do cardápio) — só aparece em "aguardando avaliação".
+  // "Arroz e Feijão" é dividido em 2 campos (Arroz / Feijão) só aqui — no resto continua 1 prato.
+  function despPartesDe(nome){
+    var n=(nome||'').trim().toLowerCase();
+    if(n==='arroz e feijão' || n==='arroz e feijao') return ['Arroz','Feijão'];
+    return null;
+  }
+  function mkDespRow(nome, val, itemId, parte){
+    var row=document.createElement('div'); row.className='desp-row';
+    row.innerHTML=
+      '<span class="desp-nome" title="'+esc(nome||'')+'">'+esc(nome||'—')+'</span>'+
+      '<input class="desp-in" type="number" min="0" step="any" placeholder="0" value="'+(val==null?'':esc(val))+'"'+
+        ' data-item-id="'+(itemId==null?'':esc(itemId))+'"'+(parte?(' data-parte="'+esc(parte)+'"'):'')+'>'+
+      '<span class="desp-un">kg</span>';
+    return row;
+  }
   function renderDesperdicio(itens, mostrar){
     var host=document.getElementById('md-desperdicio'), lbl=document.getElementById('md-desp-label');
     if(host) host.innerHTML='';
     if(lbl) lbl.style.display = mostrar ? '' : 'none';
     if(!mostrar || !host) return;
     (itens||[]).forEach(function(it){
-      var row=document.createElement('div'); row.className='desp-row';
-      row.innerHTML=
-        '<span class="desp-nome" title="'+esc(it.item||'')+'">'+esc(it.item||'—')+'</span>'+
-        '<input class="desp-in" type="number" min="0" step="any" placeholder="0" value="'+(it.desperdicio==null?'':esc(it.desperdicio))+'" data-item-id="'+(it.id==null?'':esc(it.id))+'">'+
-        '<span class="desp-un">kg</span>';
-      host.appendChild(row);
+      var partes=despPartesDe(it.item);
+      if(partes){
+        var saved=it.partes||{};
+        partes.forEach(function(p){ host.appendChild(mkDespRow(p, saved[p], it.id, p)); });
+      } else {
+        host.appendChild(mkDespRow(it.item, it.desperdicio, it.id, null));
+      }
     });
   }
 
