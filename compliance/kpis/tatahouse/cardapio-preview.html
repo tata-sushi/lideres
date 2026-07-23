@@ -259,6 +259,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .ia-status{font-size:12px;margin-top:8px;line-height:1.4;min-height:16px}
 .ia-hint{font-size:11px;color:var(--muted);line-height:1.4;flex:1;min-width:180px}
 .item-l3{margin-top:8px}
+.item-row.proc{gap:6px;background:var(--surface)}
+.proc-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.proc-tipo{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:2px 7px;white-space:nowrap}
+.proc-nome{font-size:13px;font-weight:600;color:var(--carbon)}
+.proc-ins{margin-top:2px}
+.proc-loading,.proc-empty{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);padding:4px 0}
+.proc-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.proc-tbl th{font-family:'DM Mono',monospace;font-size:9px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);text-align:left;padding:4px 6px;border-bottom:1px solid var(--border)}
+.proc-tbl td{padding:6px;border-bottom:1px solid var(--border);color:var(--carbon)}
+.proc-tbl th.num,.proc-tbl td.num{text-align:right;font-family:'DM Mono',monospace;white-space:nowrap}
+.proc-tbl tbody tr:last-child td{border-bottom:1px solid var(--border)}
+.proc-tbl tfoot td{border-bottom:none;padding-top:7px;font-weight:700;color:var(--carbon)}
+.proc-tbl tfoot td.lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);font-weight:500}
 .ins-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
 .ins-chip{font-size:11px;background:var(--green-bg);color:var(--green);border-radius:5px;padding:1px 7px}
 .ins-head{display:flex;align-items:center;gap:8px;margin:6px 0 4px}
@@ -560,7 +573,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="itens-label">Avaliação</div>
       <div id="md-aval"></div>
       <div class="field-wrap"><div class="field-label">Observação para compras</div><textarea class="field-input cardapio-obs" id="md-obs" rows="1" placeholder="Anotações que vão para o Compras…"></textarea></div>
-      <div class="dia-total"><span>Custo estimado</span><strong class="dia-total-val" id="md-total">R$ 0,00</strong></div>
+      <div class="dia-total"><span id="md-total-lbl">Custo estimado</span><strong class="dia-total-val" id="md-total">R$ 0,00</strong></div>
     </div>
     <div class="md-status-banner" id="md-status-banner"></div>
     <div class="modal-footer">
@@ -939,9 +952,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.getElementById('md-jantar').value=isAval?pick(dia.jantar_servido,dia.jantar):(dia.jantar==null?'':dia.jantar);
     document.getElementById('md-marmitas').value=isAval?pick(dia.marmitas_servido,dia.marmitas):(dia.marmitas==null?'':dia.marmitas);
     document.getElementById('md-obs').value=dia.obs||''; var _ma=document.getElementById('md-aval'); if(_ma) _ma.innerHTML=avalSimples(dia.aval);
+    var _tl=document.getElementById('md-total-lbl'); if(_tl) _tl.textContent='Custo (Compras)';
     var list=document.getElementById('md-itens'); list.innerHTML='';
-    (dia.itens||[]).forEach(function(it){ list.appendChild(mkItemRow(it)); });
-    recalcModal(); checarRestricoes();
+    (dia.itens||[]).forEach(function(it){ list.appendChild(mkItemRowProc(it)); });
+    carregarDetalheProc(dia);
+    checarRestricoes((dia.itens||[]).map(function(it){ return it.item; }).filter(Boolean));
     document.getElementById('md-salvar').textContent = isAval ? 'Informar quantidades' : 'Fechar';
     var _bn=document.getElementById('md-status-banner'); if(_bn) _bn.innerHTML=procHint(dia.status);
     setModalReadonly(true, isAval);
@@ -961,6 +976,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.getElementById('md-i-compra').textContent=fmtDataBR(dia.comprado_em);
     document.getElementById('md-i-receb').textContent=fmtDataBR(dia.recebido_em);
     document.getElementById('md-i-restr').textContent='—';
+    var _tle=document.getElementById('md-total-lbl'); if(_tle) _tle.textContent='Custo estimado';
     var _svb=document.getElementById('md-salvar'); _svb.textContent=(_st==='aguardando_aprovacao')?'Aprovar para compra':'Salvar';
     var _bn3=document.getElementById('md-status-banner'); if(_bn3) _bn3.innerHTML='';
     document.getElementById('md-almoco').value=dia.almoco==null?'':dia.almoco;
@@ -1023,11 +1039,49 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     row.querySelector('.item-del').addEventListener('click', function(){ row.remove(); recalcModal(); checarRestricoes(); });
     return row;
   }
+  // --- Processamento: item somente-leitura com a tabela de VALORES do Compras ---
+  function tipoLabel(v){ var f=(TIPOS||[]).find(function(t){ return t.v===v; }); return f?f.l:(v||'Item'); }
+  function brl(n){ var x=(n==null||n==='')?NaN:parseFloat(n); return isNaN(x)?'—':fmtBRL(x); }
+  function fmtQtd(n){ if(n==null||n==='') return ''; var x=parseFloat(n); if(isNaN(x)) return esc(String(n)); return (Math.round(x*1000)/1000).toString().replace('.',','); }
+  function mkItemRowProc(it){
+    var row=document.createElement('div'); row.className='item-row proc';
+    row.setAttribute('data-item-id', it.id==null?'':String(it.id));
+    row.innerHTML=
+      '<div class="proc-head"><span class="proc-tipo">'+esc(tipoLabel(it.tipo))+'</span><span class="proc-nome">'+esc(it.item||'—')+'</span></div>'+
+      '<div class="proc-ins"><div class="proc-loading">Carregando insumos…</div></div>';
+    return row;
+  }
+  function carregarDetalheProc(dia){
+    var host=document.getElementById('md-itens');
+    var totalEl=document.getElementById('md-total'); if(totalEl) totalEl.textContent='—';
+    var setAll=function(html){ host.querySelectorAll('.item-row.proc .proc-ins').forEach(function(b){ b.innerHTML=html; }); };
+    if(!_supa || dia.dia_id==null){ setAll('<div class="proc-empty">Sem insumos</div>'); return; }
+    _supa.schema('tata_plus').rpc('refeicoes_dia_detalhe',{ p_dia_id:dia.dia_id }).then(function(res){
+      if(res.error){ setAll('<div class="proc-empty">Falha ao carregar valores</div>'); return; }
+      var items=res.data||[]; var byId={}; items.forEach(function(it){ byId[String(it.id)]=it; });
+      var diaTotal=0;
+      host.querySelectorAll('.item-row.proc').forEach(function(row){
+        var it=byId[row.getAttribute('data-item-id')]; var box=row.querySelector('.proc-ins');
+        var ins=(it&&it.insumos)||[];
+        if(!ins.length){ box.innerHTML='<div class="proc-empty">Sem insumos cadastrados</div>'; return; }
+        var sub=0;
+        var trs=ins.map(function(x){ var t=parseFloat(x.total); if(!isNaN(t)) sub+=t;
+          return '<tr><td>'+esc(x.nome||'—')+'</td><td class="num">'+fmtQtd(x.qtd)+' '+esc(x.un||'')+'</td><td class="num">'+brl(x.vl_unit)+'</td><td class="num">'+brl(x.total)+'</td></tr>';
+        }).join('');
+        diaTotal+=sub;
+        box.innerHTML='<table class="proc-tbl"><thead><tr><th>Insumo</th><th class="num">Qtd</th><th class="num">Vl. unit.</th><th class="num">Total</th></tr></thead><tbody>'+trs+'</tbody>'+
+          '<tfoot><tr><td class="lbl" colspan="3">Subtotal do prato</td><td class="num">'+brl(sub)+'</td></tr></tfoot></table>';
+      });
+      if(totalEl) totalEl.textContent=brl(diaTotal);
+    }, function(){ setAll('<div class="proc-empty">Falha ao carregar valores</div>'); });
+  }
   function recalcLinha(row){ var q=parseFloat(row.querySelector('.item-qtd').value), c=parseFloat(row.querySelector('.item-custo').value); var t=(isNaN(q)||isNaN(c))?null:q*c; var _tt=row.querySelector('.item-total'); if(_tt) _tt.textContent = t==null?'—':fmtBRL(t); }
   function recalcModal(){ var s=0; document.querySelectorAll('#md-itens .ins-row').forEach(function(ir){ var q=parseFloat(ir.querySelector('.ins-qtd').value); var op=ir.querySelector('.ins-cat'); op=op.options[op.selectedIndex]; var v=op?parseFloat(op.getAttribute('data-valor')):NaN; if(!isNaN(q)&&!isNaN(v)) s+=q*v; }); var el=document.getElementById('md-total'); if(el) el.textContent=fmtBRL(s); }
-  function checarRestricoes(){
+  function checarRestricoes(itensArg){
     var el=document.getElementById('md-restricoes'); if(!el) return;
-    var itens=[]; document.querySelectorAll('#md-itens .item-nome').forEach(function(i){ var v=(i.value||'').trim(); if(v) itens.push(v); });
+    var itens=[];
+    if(itensArg){ (itensArg||[]).forEach(function(v){ v=(v||'').trim(); if(v) itens.push(v); }); }
+    else { document.querySelectorAll('#md-itens .item-nome').forEach(function(i){ var v=(i.value||'').trim(); if(v) itens.push(v); }); }
     if(!itens.length || !window.__lideresSupa){ el.innerHTML=''; return; }
     window.__lideresSupa.schema('tata_plus').rpc('restricoes_do_cardapio',{ p_itens:itens }).then(function(res){
       if(res.error){ el.innerHTML=''; return; }
