@@ -292,7 +292,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .badge.st-preparo{background:#FFEDD5;color:#9A3412}
 .badge.st-aval{background:#F3E8FF;color:#6B21A8}
 .badge.st-final{background:#E5E7EB;color:#374151}
-.md-status-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.md-status-banner{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:11px 20px;font-size:12px;line-height:1.4;color:var(--muted);background:var(--surface);border-top:1px solid var(--border)}
 .md-status-banner:empty{display:none}
 .md-status-hint{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
 .md-info{margin-bottom:16px}
@@ -559,6 +559,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="field-wrap"><div class="field-label">Observação para compras</div><textarea class="field-input cardapio-obs" id="md-obs" rows="1" placeholder="Anotações que vão para o Compras…"></textarea></div>
       <div class="dia-total"><span>Custo estimado</span><strong class="dia-total-val" id="md-total">R$ 0,00</strong></div>
     </div>
+    <div class="md-status-banner" id="md-status-banner"></div>
     <div class="modal-footer">
       <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('modal-dia').classList.remove('active');document.body.style.overflow=''">Cancelar</button>
       <button class="modal-btn modal-btn-save" id="md-salvar">Salvar</button>
@@ -855,28 +856,17 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     });
   }
 
-  function transInfo(status){
-    if(status==='aguardando_compra')      return { label:'Confirmar compra',     rpc:'refeicoes_dia_comprar', msg:'Compra confirmada ✓' };
-    if(status==='aguardando_recebimento') return { label:'Confirmar recebimento', rpc:'refeicoes_dia_receber',  msg:'Recebimento confirmado ✓' };
-    if(status==='aguardando_preparo')     return { label:'Marcar como preparado', rpc:'refeicoes_dia_preparar', msg:'Preparo confirmado ✓' };
-    return null;
-  }
-  function avancarStatusModal(t){
-    if(!_procData){ fecharModal(); return; }
-    if(!_supa){ showToast('Aguarde a sessão…'); return; }
-    var btn=document.getElementById('md-salvar'); var _lbl=btn.textContent; btn.disabled=true; btn.textContent='Salvando…';
-    _supa.schema('tata_plus').rpc(t.rpc,{ p_data:_procData.data }).then(function(res){
-      btn.disabled=false; btn.textContent=_lbl;
-      if(res.error){ showToast('Erro: '+(res.error.message||'falha')); return; }
-      fecharModal(); carregarProcessamento(); showToast(t.msg);
-    }, function(){ btn.disabled=false; btn.textContent=_lbl; showToast('Erro ao atualizar'); });
+  function procHint(status){
+    if(status==='aguardando_compra')      return 'Conduzido pelas Compras — o status avança sozinho quando o pedido é comprado.';
+    if(status==='aguardando_recebimento') return 'Conduzido pelas Compras — avança quando o recebimento é registrado no fluxo de compras.';
+    if(status==='aguardando_preparo')     return 'Aguardando o dia da refeição — entra em avaliação automaticamente na data.';
+    if(status==='aguardando_avaliacao')   return 'Aberto para avaliação — informe as quantidades servidas para finalizar o dia.';
+    return '';
   }
   function onModalPrimary(){
     if(_modalMode==='proc'){
-      if(_procData && _procData.status==='aguardando_avaliacao'){ salvarServirModal(); return; }
-      var _t=_procData?transInfo(_procData.status):null;
-      if(podeEditar() && _t){ avancarStatusModal(_t); return; }
-      fecharModal();
+      if(_procData && _procData.status==='aguardando_avaliacao'){ salvarServirModal(); }
+      else { fecharModal(); }
       return;
     }
     salvarModal();
@@ -921,8 +911,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var list=document.getElementById('md-itens'); list.innerHTML='';
     (dia.itens||[]).forEach(function(it){ list.appendChild(mkItemRow(it)); });
     recalcModal(); checarRestricoes();
-    var _trans=transInfo(dia.status);
-    document.getElementById('md-salvar').textContent = isAval ? 'Informar quantidades' : ((podeEditar()&&_trans)?_trans.label:'Fechar');
+    document.getElementById('md-salvar').textContent = isAval ? 'Informar quantidades' : 'Fechar';
+    var _bn=document.getElementById('md-status-banner'); if(_bn) _bn.innerHTML=procHint(dia.status);
     setModalReadonly(true, isAval);
     document.getElementById('modal-dia').classList.add('active');
     document.body.style.overflow='hidden';
@@ -940,6 +930,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.getElementById('md-i-receb').textContent=fmtDataBR(dia.recebido_em);
     document.getElementById('md-i-restr').textContent='—';
     var _svb=document.getElementById('md-salvar'); _svb.textContent=(_st==='aguardando_aprovacao')?'Aprovar para compra':'Salvar';
+    var _bn3=document.getElementById('md-status-banner'); if(_bn3) _bn3.innerHTML='';
     document.getElementById('md-almoco').value=dia.almoco==null?'':dia.almoco;
     document.getElementById('md-jantar').value=dia.jantar==null?'':dia.jantar;
     document.getElementById('md-marmitas').value=dia.marmitas==null?'':dia.marmitas;
