@@ -403,7 +403,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   <div class="filters-wrap" id="elab-filters">
     <div class="elab-filter-row">
-      <div class="filter-group"><label class="filter-label">Unidade</label><select class="filter-select" id="ef-unidade"><option value="Itaim">Itaim</option><option value="Pinheiros">Pinheiros</option></select></div>
+      <div class="filter-group"><label class="filter-label">Unidade</label><select class="filter-select" id="ef-unidade"><option value="Itaim">TATÁ House - Itaim</option><option value="Pinheiros">TATÁ House - Pinheiros</option></select></div>
       <div class="filter-group" style="flex:1"><label class="filter-label">Cardápio</label><select class="filter-select" id="ef-ref"></select></div>
       <div class="week-arrows">
         <button class="week-nav-btn" id="btnPrevWeek">&#8249;</button>
@@ -432,7 +432,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div id="tab-relatorios" class="tab-pane">
   <div class="filters-wrap" id="rel-filters">
     <div class="filters-row">
-      <div class="filter-group"><label class="filter-label">Unidade</label><select class="filter-select"><option>Itaim</option><option>Pinheiros</option></select></div>
+      <div class="filter-group"><label class="filter-label">Unidade</label><select class="filter-select" id="rel-unidade"><option>TATÁ House - Itaim</option><option>TATÁ House - Pinheiros</option></select></div>
       <div class="filter-group"><label class="filter-label">Status</label><select class="filter-select"><option>Todos</option><option>Finalizado</option><option>Aguardando avaliação</option></select></div>
       <div class="filter-group"><label class="filter-label">Cardápio</label><select class="filter-select"><option>Todos</option></select></div>
     </div>
@@ -673,7 +673,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   var _supa = null;
   function comSupa(cb){ if(window.__lideresSupa){ cb(window.__lideresSupa); return; } window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true }); }
 
-  var currentWeekOffset = 0, _monday = null, _semana = [], _editIdx = -1, _catalogo = [], _uniElab = 'Itaim', _uniProc = 'Itaim';
+  var currentWeekOffset = 0, _monday = null, _semana = [], _editIdx = -1, _catalogo = [], _uniElab = 'Itaim', _uniProc = 'Itaim', _cozinhas = [];
 
   function mondayOf(d){ var x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); var dow=(x.getDay()+6)%7; x.setDate(x.getDate()-dow); return x; }
   function addDays(d,n){ var x=new Date(d); x.setDate(x.getDate()+n); return x; }
@@ -688,6 +688,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   function renderWeekNav(){ var wl=document.getElementById('weekLabel'); if(!wl) return; var fim=addDays(_monday,6); wl.textContent='Semana de '+fmtDia(_monday); var wd=document.getElementById('weekDates'); if(wd) wd.textContent=fmtDia(_monday)+' – '+fmtDia(fim); }
 
+  function cozNome(ch){ for(var i=0;i<_cozinhas.length;i++){ if(_cozinhas[i].chave===ch) return _cozinhas[i].nome; } return ch; }
+  function popularSelCozinha(){
+    var opts=_cozinhas.map(function(c){ return '<option value="'+esc(c.chave)+'">'+esc(c.nome)+'</option>'; }).join('');
+    ['ef-unidade','rel-unidade'].forEach(function(id){ var s=document.getElementById(id); if(s) s.innerHTML=opts; });
+    var eu=document.getElementById('ef-unidade'); if(eu) eu.value=_uniElab;
+  }
+  function carregarCozinhas(cb){
+    var fb=[{chave:'Itaim',nome:'TATÁ House - Itaim'},{chave:'Pinheiros',nome:'TATÁ House - Pinheiros'}];
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('cozinhas_lista').then(function(r){
+        _cozinhas=(r&&!r.error&&Array.isArray(r.data)&&r.data.length)?r.data:fb;
+        _uniElab=_cozinhas[0].chave; _uniProc=_cozinhas[0].chave;
+        popularSelCozinha(); if(cb) cb();
+      }, function(){ _cozinhas=fb; _uniElab=_cozinhas[0].chave; _uniProc=_cozinhas[0].chave; popularSelCozinha(); if(cb) cb(); });
+    });
+  }
   function carregarSemana(){
     _monday=addDays(mondayOf(new Date()),currentWeekOffset*7);
     renderWeekNav();
@@ -740,7 +756,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         '<div class="card-body">'+
           '<div class="card-meta-row">'+
         '<div class="card-field"><span class="field-label">Prato principal</span><span class="field-value">'+(dia.resumo?esc(dia.resumo):'—')+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+esc(_uCard)+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+esc(cozNome(_uCard))+'</span></div>'+
         '</div>'+
           '<div class="card-meta-row">'+
             '<div class="card-field"><span class="field-label">Data da<br>aprovação</span><span class="field-value">'+fmtDataBR(dia.aprovado_em)+'</span></div>'+
@@ -813,7 +829,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       STATUS_OPTS.map(function(o){ return '<option value="'+o.v+'"'+(procFilters.status===o.v?' selected':'')+'>'+o.l+'</option>'; }).join('');
     var refOpts='<option value="Todas"'+(procFilters.refeicao==='Todas'?' selected':'')+'>Todas</option>'+
       datas.map(function(ds){ var dd=parseISO(ds); return '<option value="'+ds+'"'+(procFilters.refeicao===ds?' selected':'')+'>'+fmtDia(dd)+' ('+DOW_CURTO[dd.getDay()]+')</option>'; }).join('');
-    var uniOpts=['Itaim','Pinheiros'].map(function(u){ return '<option value="'+u+'"'+(_uniProc===u?' selected':'')+'>'+u+'</option>'; }).join('');
+    var uniOpts=_cozinhas.map(function(c){ return '<option value="'+esc(c.chave)+'"'+(_uniProc===c.chave?' selected':'')+'>'+esc(c.nome)+'</option>'; }).join('');
     wrap.innerHTML=
       '<div class="filters-row">'+
         '<div class="filter-group"><label class="filter-label">Unidade</label><select class="filter-select" id="pf-unidade">'+uniOpts+'</select></div>'+
@@ -848,7 +864,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         '<div class="card-body">'+
           '<div class="card-meta-row">'+
         '<div class="card-field"><span class="field-label">Prato principal</span><span class="field-value">'+(dia.resumo?esc(dia.resumo):'—')+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+esc(_uCard)+'</span></div>'+
+        '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+esc(cozNome(_uCard))+'</span></div>'+
         '</div>'+
           '<div class="card-meta-row">'+
             '<div class="card-field"><span class="field-label">Data da<br>aprovação</span><span class="field-value">'+fmtDataBR(dia.aprovado_em)+'</span></div>'+
@@ -911,7 +927,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var isAval=(dia.status==='aguardando_avaliacao');
     document.getElementById('md-title').textContent='Refeição do dia '+fmtDia(d)+' ('+DOW_CURTO[d.getDay()]+')';
     var _si=dia.status?statusInfo(dia.status):null;
-    document.getElementById('md-i-nome').textContent=dia.resumo||'—'; document.getElementById('md-i-unidade').textContent=_uModal;
+    document.getElementById('md-i-nome').textContent=dia.resumo||'—'; document.getElementById('md-i-unidade').textContent=cozNome(_uModal);
     document.getElementById('md-i-status').innerHTML=_si?('<span class="badge status st-'+_si.cls+'">'+_si.label+'</span>'):'—';
     document.getElementById('md-i-data').textContent=fmtDataBR(dia.data);
     document.getElementById('md-i-aprov').textContent=fmtDataBR(dia.aprovado_em);
@@ -938,7 +954,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     _modalMode='elab'; _editIdx=i; var dia=_semana[i];
     document.getElementById('md-title').textContent = 'Refeição do dia '+fmtDia(addDays(_monday,i))+' ('+diaSemanaCurto(i)+')';
     var _st=dia.status||null; var _si=_st?statusInfo(_st):null;
-    document.getElementById('md-i-nome').textContent=dia.resumo||'—'; document.getElementById('md-i-unidade').textContent=_uModal;
+    document.getElementById('md-i-nome').textContent=dia.resumo||'—'; document.getElementById('md-i-unidade').textContent=cozNome(_uModal);
     document.getElementById('md-i-status').innerHTML=_si?('<span class="badge status st-'+_si.cls+'">'+_si.label+'</span>'):'—';
     document.getElementById('md-i-data').textContent=fmtDataBR(dia.data);
     document.getElementById('md-i-aprov').textContent=fmtDataBR(dia.aprovado_em);
@@ -1152,7 +1168,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.body.insertAdjacentHTML('beforeend', '<datalist id="itens-cat">'+ITENS_EXEMPLO.map(function(x){return '<option value="'+x.nome+'">';}).join('')+'</datalist>');
     var s=window.__lideresSession||{}; if(s.displayName){ var hu=document.getElementById('header-user'); if(hu){ hu.textContent=s.displayName.trim().split(/\s+/)[0]; } }
     (function(){ var d=new Date(); var p=function(n){return String(n).padStart(2,'0');}; var fd=document.getElementById('footer-date'); if(fd) fd.textContent='Atualizado: '+p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+', '+p(d.getHours())+':'+p(d.getMinutes()); })();
-    carregarSemana();
+    carregarCozinhas(function(){ carregarSemana(); });
   });
 })();
 
