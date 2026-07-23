@@ -99,12 +99,37 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 /* GRID de dias (container) */
 .grid-wrap { padding: 12px; display: flex; flex-direction: column; gap: 12px; max-width: 800px; margin: 0 auto; }
 @media (min-width: 640px) {
-  .grid-wrap { grid-template-columns: 1fr 1fr; display: grid; padding: 16px 12px; }
+  .grid-wrap .mobile-cards { grid-template-columns: 1fr 1fr; display: grid; gap: 12px; }
 }
 @media (min-width: 768px) {
-  .grid-wrap { padding: 20px 0; }
+  .grid-wrap { padding: 20px 24px; max-width: none; }
   .week-nav { max-width: 800px; margin: 0 auto; padding: 12px 0; }
+  .grid-wrap .mobile-cards { display: none !important; }
+  .grid-wrap .desk-table-wrap { display: block; }
 }
+@media (min-width: 1024px) {
+  .grid-wrap { padding: 20px 32px; }
+}
+
+/* MOBILE cards vs DESKTOP table (padrão abastecimento) */
+.mobile-cards { display: flex; flex-direction: column; gap: 12px; }
+.desk-table-wrap { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow-x: auto; }
+.desk-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 1100px; }
+.desk-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); padding: 10px 6px; text-align: center; background: var(--surface); border-bottom: 2px solid var(--carbon); user-select: none; white-space: nowrap; }
+.desk-table thead th:first-child { padding-left: 14px; }
+.desk-table thead th:last-child { width: 70px; padding-right: 14px; }
+.desk-table tbody td { padding: 10px 6px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--carbon); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.desk-table tbody td:first-child { padding-left: 14px; }
+.desk-table tbody td:last-child { padding-right: 14px; }
+/* Coluna Prato (3ª) alinhada à esquerda */
+.desk-table tbody td:nth-child(3) { text-align: left; }
+.desk-table tbody tr:last-child td { border-bottom: none; }
+.desk-table tbody tr:hover td { background: #FAFAFA; }
+.dt-prato { font-weight: 600; color: var(--carbon); }
+.dt-mono { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--mid); }
+.dt-num { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--carbon); font-weight: 600; }
+.btn-dt-edit { border: none; border-radius: 6px; background: var(--carbon); color: var(--citric); cursor: pointer; padding: 6px 10px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.4px; text-transform: uppercase; transition: opacity 0.15s; white-space: nowrap; }
+.btn-dt-edit:hover { opacity: 0.85; }
 
 /* DRAWER */
 .drawer-overlay { position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:300; opacity:0; visibility:hidden; transition:opacity .25s,visibility .25s; }
@@ -781,13 +806,56 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var c=document.getElementById('ef-count'); if(c) c.innerHTML='<span>'+n+'</span> cardápio'+(n!==1?'s':'');
   }
 
+  function elabTableHead(){
+    return '<thead><tr>'+
+      '<th>Data</th>'+
+      '<th>Dia</th>'+
+      '<th>Prato principal</th>'+
+      '<th>Unidade</th>'+
+      '<th>Aprovação</th>'+
+      '<th>Compra</th>'+
+      '<th>Recebimento</th>'+
+      '<th>Refeições</th>'+
+      '<th>Restrições</th>'+
+      '<th>Avaliação</th>'+
+      '<th>Status</th>'+
+      '<th>Ação</th>'+
+    '</tr></thead>';
+  }
+  function elabTableRow(dia,i,_uCard){
+    var statusTd = dia.status
+      ? '<span class="badge status st-'+statusInfo(dia.status).cls+'">'+statusInfo(dia.status).label+'</span>'
+      : '<span class="badge status st-'+statusInfo('aguardando_aprovacao').cls+'">'+statusInfo('aguardando_aprovacao').label+'</span>';
+    var acaoTd = podeEditar()
+      ? '<button class="btn-dt-edit" data-i="'+i+'" data-action="elab">Aprovar</button>'
+      : '';
+    return '<tr>'+
+      '<td class="dt-mono">'+fmtDia(addDays(_monday,i))+'</td>'+
+      '<td class="dt-mono">'+diaSemanaCurto(i)+'</td>'+
+      '<td class="dt-prato">'+(dia.resumo?esc(dia.resumo):'—')+'</td>'+
+      '<td>'+esc(cozNome(_uCard))+'</td>'+
+      '<td class="dt-mono">'+fmtDataBR(dia.aprovado_em)+'</td>'+
+      '<td class="dt-mono">'+fmtDataBR(dia.comprado_em)+'</td>'+
+      '<td class="dt-mono">'+fmtDataBR(dia.recebido_em)+'</td>'+
+      '<td class="dt-num">'+((dia.almoco||0)+(dia.jantar||0)+(dia.marmitas||0))+'</td>'+
+      '<td class="dt-num">'+(dia.n_restricoes||0)+'</td>'+
+      '<td class="dt-num">'+notaGeral(dia.aval)+'</td>'+
+      '<td>'+statusTd+'</td>'+
+      '<td>'+acaoTd+'</td>'+
+    '</tr>';
+  }
+
   function renderGrid(){
     var _uCard=_uniElab;
     var grid=document.getElementById('diasGrid'); grid.innerHTML='';
     var v=function(x){ return (x==null||x==='')?'—':x; };
+    var mobileFrag=document.createElement('div'); mobileFrag.className='mobile-cards';
+    var deskRows='';
+    var count=0;
     _semana.forEach(function(dia,i){
       if(dia.status && dia.status!=='aguardando_aprovacao') return; // aprovados vão pra Processamento
       if(elabFilter.refeicao!=='Todas' && dia.data!==elabFilter.refeicao) return;
+      count++;
       var card=document.createElement('div'); card.className='card';
       card.innerHTML=
         '<div class="card-header">'+
@@ -813,10 +881,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         (podeEditar()?'<div class="card-footer" style="justify-content:flex-end">'+
           '<button type="button" class="btn-ver btn-editar-dia"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg> Aprovar</button>'+
         '</div>':'');
-      grid.appendChild(card);
+      mobileFrag.appendChild(card);
       var b=card.querySelector('.btn-editar-dia'); if(b) b.addEventListener('click', function(){ abrirModal(i); });
+      deskRows += elabTableRow(dia, i, _uCard);
     });
-    if(!grid.children.length){ grid.innerHTML='<p class="empty-msg">Nenhum pedido pendente nesta semana. Planeje um dia ou acompanhe em Processamento.</p>'; }
+    if(!count){ grid.innerHTML='<p class="empty-msg">Nenhum pedido pendente nesta semana. Planeje um dia ou acompanhe em Processamento.</p>'; renderElabFilters(); return; }
+    grid.appendChild(mobileFrag);
+    var deskWrap=document.createElement('div'); deskWrap.className='desk-table-wrap';
+    deskWrap.innerHTML='<table class="desk-table">'+elabTableHead()+'<tbody>'+deskRows+'</tbody></table>';
+    grid.appendChild(deskWrap);
+    deskWrap.querySelectorAll('button[data-action="elab"]').forEach(function(btn){
+      btn.addEventListener('click', function(){ abrirModal(+btn.dataset.i); });
+    });
     renderElabFilters();
   }
 
@@ -888,13 +964,53 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     wrap.querySelector('#pf-clear').addEventListener('click', function(){ procFilters={status:'Todos',refeicao:'Todas'}; renderProcFilters(); renderProcessamento(); });
   }
 
+  function procTableHead(){
+    return '<thead><tr>'+
+      '<th>Data</th>'+
+      '<th>Dia</th>'+
+      '<th>Prato principal</th>'+
+      '<th>Unidade</th>'+
+      '<th>Aprovação</th>'+
+      '<th>Compra</th>'+
+      '<th>Recebimento</th>'+
+      '<th>Refeições</th>'+
+      '<th>Restrições</th>'+
+      '<th>Avaliação</th>'+
+      '<th>Status</th>'+
+      '<th>Ação</th>'+
+    '</tr></thead>';
+  }
+  function procTableRow(dia, idx, _uCard, DOW_CURTO){
+    var d=parseISO(dia.data), si=statusInfo(dia.status);
+    var isAval=(dia.status==='aguardando_avaliacao');
+    var acaoTd = podeEditar()
+      ? '<button class="btn-dt-edit" data-proc-idx="'+idx+'">'+(isAval?'Informar':'Ver')+'</button>'
+      : '';
+    return '<tr>'+
+      '<td class="dt-mono">'+fmtDia(d)+'</td>'+
+      '<td class="dt-mono">'+DOW_CURTO[d.getDay()]+'</td>'+
+      '<td class="dt-prato">'+(dia.resumo?esc(dia.resumo):'—')+'</td>'+
+      '<td>'+esc(cozNome(_uCard))+'</td>'+
+      '<td class="dt-mono">'+fmtDataBR(dia.aprovado_em)+'</td>'+
+      '<td class="dt-mono">'+fmtDataBR(dia.comprado_em)+'</td>'+
+      '<td class="dt-mono">'+fmtDataBR(dia.recebido_em)+'</td>'+
+      '<td class="dt-num">'+((dia.almoco||0)+(dia.jantar||0)+(dia.marmitas||0))+'</td>'+
+      '<td class="dt-num">'+(dia.n_restricoes||0)+'</td>'+
+      '<td class="dt-num">'+notaGeral(dia.aval)+'</td>'+
+      '<td><span class="badge status st-'+si.cls+'">'+si.label+'</span></td>'+
+      '<td>'+acaoTd+'</td>'+
+    '</tr>';
+  }
+
   function renderProcessamento(){
     var _uCard=_uniProc;
     var grid=document.getElementById('procGrid'); if(!grid) return; grid.innerHTML='';
     var lista=aplicarProcFiltros(_proc);
     if(!lista.length){ grid.innerHTML='<p class="empty-msg">'+(_proc.length?'Nenhum cardápio com esses filtros.':'Nenhum cardápio em processamento.')+'</p>'; return; }
     var DOW_CURTO=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
-    lista.forEach(function(dia){
+    var mobileFrag=document.createElement('div'); mobileFrag.className='mobile-cards';
+    var deskRows='';
+    lista.forEach(function(dia, idx){
       var d=parseISO(dia.data), si=statusInfo(dia.status);
       var isAval=(dia.status==='aguardando_avaliacao');
       var card=document.createElement('div'); card.className='card';
@@ -918,13 +1034,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
             '<div class="card-field"><span class="field-label">Restrições</span><span class="field-value">'+(dia.n_restricoes||0)+'</span></div>'+
           '<div class="card-field"><span class="field-label">Avaliação geral</span><span class="field-value">'+notaGeral(dia.aval)+'</span></div>'+
           '</div>'+
-          
+
         '</div>'+
         (podeEditar()?'<div class="card-footer" style="justify-content:flex-end">'+
           '<button type="button" class="btn-ver btn-proc-dia">'+(isAval?'Informar quantidades':'Ver detalhes')+'</button>'+
         '</div>':'');
-      grid.appendChild(card);
+      mobileFrag.appendChild(card);
       var b=card.querySelector('.btn-proc-dia'); if(b) b.addEventListener('click', function(){ abrirModalProc(dia); });
+      deskRows += procTableRow(dia, idx, _uCard, DOW_CURTO);
+    });
+    grid.appendChild(mobileFrag);
+    var deskWrap=document.createElement('div'); deskWrap.className='desk-table-wrap';
+    deskWrap.innerHTML='<table class="desk-table">'+procTableHead()+'<tbody>'+deskRows+'</tbody></table>';
+    grid.appendChild(deskWrap);
+    deskWrap.querySelectorAll('button[data-proc-idx]').forEach(function(btn){
+      var i=+btn.dataset.procIdx;
+      btn.addEventListener('click', function(){ abrirModalProc(lista[i]); });
     });
   }
 
