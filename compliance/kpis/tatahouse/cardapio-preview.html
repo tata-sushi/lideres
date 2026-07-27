@@ -328,6 +328,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .desp-row{display:grid;grid-template-columns:1fr 84px auto;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
 .desp-nome{font-size:13px;font-weight:600;color:var(--carbon);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .desp-in{min-width:0;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:right}
+.desp-sel{min-width:0;width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px}
+.desp-un-del{display:flex;align-items:center;gap:6px}
+.desp-del{border:none;background:transparent;color:var(--mid);cursor:pointer;font-size:16px;line-height:1;padding:0}
 .desp-in:focus{outline:none;border-color:var(--carbon)}
 .desp-un{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
 .dia-total { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--mid); }
@@ -618,6 +621,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </div>
       <div class="itens-label" id="md-desp-label" style="display:none">Desperdícios</div>
       <div id="md-desperdicio"></div>
+      <button type="button" class="btn-add-item" id="md-add-desp" style="display:none">+ desperdício</button>
       <div class="field-wrap" id="md-obs-wrap"><div class="field-label">Observação para compras</div><textarea class="field-input cardapio-obs" id="md-obs" rows="1" placeholder="Anotações que vão para o Compras…"></textarea></div>
       <div class="dia-total"><span id="md-total-lbl">Custo do cardápio</span><strong class="dia-total-val" id="md-total">R$ 0,00</strong></div>
     </div>
@@ -741,7 +745,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   var _supa = null;
   function comSupa(cb){ if(window.__lideresSupa){ cb(window.__lideresSupa); return; } window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true }); }
 
-  var currentWeekOffset = 0, _monday = null, _semana = [], _editIdx = -1, _catalogo = [], _uniElab = 'Itaim', _uniProc = 'Itaim', _cozinhas = [];
+  var currentWeekOffset = 0, _monday = null, _semana = [], _editIdx = -1, _catalogo = [], _repertorio = [], _uniElab = 'Itaim', _uniProc = 'Itaim', _cozinhas = [];
 
   function mondayOf(d){ var x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); var dow=(x.getDay()+6)%7; x.setDate(x.getDate()-dow); return x; }
   function addDays(d,n){ var x=new Date(d); x.setDate(x.getDate()+n); return x; }
@@ -780,6 +784,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     comSupa(function(supa){
       _supa=supa; var inicio=iso(_monday);
       if(!_catalogo.length){ supa.schema('tata_plus').rpc('catalogo_produtos').then(function(r){ if(!r.error) _catalogo=r.data||[]; }); }
+      if(!_repertorio.length){ supa.schema('tata_plus').rpc('refeicoes_itens_repertorio').then(function(r){ if(!r.error) _repertorio=r.data||[]; }); }
       supa.schema('tata_plus').rpc('refeicoes_semana',{ p_inicio:inicio, p_unidade:_uniElab }).then(function(res){
         if(res.error){ showToast('Erro ao carregar'); return; }
         if(iso(_monday)!==inicio) return;
@@ -918,6 +923,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     comSupa(function(supa){
       _supa=supa;
       if(!_catalogo.length){ supa.schema('tata_plus').rpc('catalogo_produtos').then(function(r){ if(!r.error) _catalogo=r.data||[]; }); }
+      if(!_repertorio.length){ supa.schema('tata_plus').rpc('refeicoes_itens_repertorio').then(function(r){ if(!r.error) _repertorio=r.data||[]; }); }
       supa.schema('tata_plus').rpc('refeicoes_processamento',{ p_unidade:_uniProc }).then(function(res){
         if(res.error){ grid.innerHTML='<p class="empty-msg">Erro ao carregar.</p>'; return; }
         _proc=res.data||[]; renderProcFilters(); renderProcessamento();
@@ -1074,14 +1080,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     if(!_procData){ fecharModal(); return; }
     if(!_supa){ showToast('Aguarde a sessão…'); return; }
     var a=num(document.getElementById('md-almoco').value), j=num(document.getElementById('md-jantar').value), m=num(document.getElementById('md-marmitas').value);
-    var byItem={};
+    var byItem={}, novos=[];
     document.querySelectorAll('#md-desperdicio .desp-in').forEach(function(i){
+      var v=(i.value||'').trim();
+      if(i.getAttribute('data-novo')){
+        var row=i.closest('.desp-row'); var sel=row?row.querySelector('.desp-sel'):null;
+        if(!sel || !sel.value || v==='') return;
+        var op=sel.options[sel.selectedIndex];
+        novos.push({ novo:true, item:sel.value, tipo:(op&&op.getAttribute('data-tipo'))||'outro', valor:v });
+        return;
+      }
       var id=i.getAttribute('data-item-id'); if(!id) return;
-      var parte=i.getAttribute('data-parte'); var v=(i.value||'').trim();
+      var parte=i.getAttribute('data-parte');
       if(parte){ if(!byItem[id]) byItem[id]={ id:id, partes:{} }; byItem[id].partes[parte]= v===''?null:v; }
       else { byItem[id]={ id:id, valor: v===''?null:v }; }
     });
-    var desp=Object.keys(byItem).map(function(k){ return byItem[k]; });
+    var desp=Object.keys(byItem).map(function(k){ return byItem[k]; }).concat(novos);
     var btn=document.getElementById('md-salvar'); var _lbl=btn.textContent; btn.disabled=true; btn.textContent='Finalizando…';
     _supa.schema('tata_plus').rpc('refeicoes_dia_servir',{ p_data:_procData.data, p_almoco:a, p_jantar:j, p_marmitas:m, p_unidade:_uniProc, p_desperdicio:desp }).then(function(res){
       btn.disabled=false; btn.textContent=_lbl;
@@ -1202,10 +1216,25 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       '<span class="desp-un">kg</span>';
     return row;
   }
+  function repertorioOptions(){
+    var o='<option value="">— escolher item —</option>';
+    (_repertorio||[]).forEach(function(it){ o+='<option value="'+esc(it.item)+'" data-tipo="'+esc(it.tipo||'outro')+'">'+esc(it.item)+'</option>'; });
+    return o;
+  }
+  function mkDespRowNovo(){
+    var row=document.createElement('div'); row.className='desp-row desp-row-novo';
+    row.innerHTML=
+      '<select class="desp-sel">'+repertorioOptions()+'</select>'+
+      '<input class="desp-in" type="number" min="0" step="any" placeholder="0.0" data-novo="1">'+
+      '<span class="desp-un desp-un-del">kg <button type="button" class="desp-del" title="Remover">×</button></span>';
+    row.querySelector('.desp-del').addEventListener('click', function(){ row.remove(); });
+    return row;
+  }
   function renderDesperdicio(itens, mostrar){
     var host=document.getElementById('md-desperdicio'), lbl=document.getElementById('md-desp-label');
     if(host) host.innerHTML='';
     if(lbl) lbl.style.display = mostrar ? '' : 'none';
+    var _addb=document.getElementById('md-add-desp'); if(_addb) _addb.style.display = mostrar ? '' : 'none';
     if(!mostrar || !host) return;
     (itens||[]).forEach(function(it){
       var partes=despPartesDe(it.item);
@@ -1456,6 +1485,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     toggleIABar();
     var _eu=document.getElementById('ef-unidade'); if(_eu) _eu.addEventListener('change', function(){ _uniElab=this.value; carregarSemana(); });
     document.getElementById('md-add').addEventListener('click', function(){ document.getElementById('md-itens').appendChild(mkItemRow({tipo:'principal',item:'',qtd:'',un:'',custo:''})); recalcModal(); });
+    var _adDesp=document.getElementById('md-add-desp'); if(_adDesp) _adDesp.addEventListener('click', function(){ document.getElementById('md-desperdicio').appendChild(mkDespRowNovo()); });
     document.getElementById('md-salvar').addEventListener('click', onModalPrimary);
     var svSalvar=document.getElementById('sv-salvar'); if(svSalvar) svSalvar.addEventListener('click', salvarServir);
     var mServ=document.getElementById('modal-servir'); if(mServ) mServ.addEventListener('click', function(ev){ if(ev.target===this){ mServ.classList.remove('active'); document.body.style.overflow=''; } });
