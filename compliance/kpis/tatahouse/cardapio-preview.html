@@ -121,7 +121,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .desk-table tbody td:first-child { padding-left: 14px; }
 .desk-table tbody td:last-child { padding-right: 14px; }
 /* Coluna Prato (3ª) alinhada à esquerda */
-.desk-table tbody td:nth-child(3) { text-align: left; }
+/* Prato Principal (coluna 4 em ambas as tabelas) alinhado à esquerda */
+.desk-table tbody td:nth-child(4) { text-align: left; }
 .desk-table tbody tr:last-child td { border-bottom: none; }
 .desk-table tbody tr:hover td { background: #FAFAFA; }
 .dt-prato { font-weight: 600; color: var(--carbon); }
@@ -129,6 +130,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .dt-num { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--carbon); font-weight: 600; }
 .btn-dt-edit { border: none; border-radius: 6px; background: var(--carbon); color: var(--citric); cursor: pointer; padding: 6px 10px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.4px; text-transform: uppercase; transition: opacity 0.15s; white-space: nowrap; }
 .btn-dt-edit:hover { opacity: 0.85; }
+.btn-dt-icon { width: 28px; height: 28px; border: none; border-radius: 6px; background: var(--carbon); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; opacity: 0.9; transition: opacity 0.15s; }
+.btn-dt-icon:hover { opacity: 1; }
+.btn-dt-icon svg { width: 12px; height: 12px; stroke: var(--citric); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* DRAWER */
 .drawer-overlay { position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:300; opacity:0; visibility:hidden; transition:opacity .25s,visibility .25s; }
@@ -819,15 +823,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var c=document.getElementById('ef-count'); if(c) c.innerHTML='<span>'+n+'</span> cardápio'+(n!==1?'s':'');
   }
 
+  var PENCIL_SVG = '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  var EYE_SVG    = '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+
   function elabTableHead(){
     return '<thead><tr>'+
-      '<th>Data</th>'+
-      '<th>Dia</th>'+
-      '<th>Prato principal</th>'+
       '<th>Unidade</th>'+
+      '<th>Cardápio do dia</th>'+
+      '<th>Dia da semana</th>'+
+      '<th>Prato Principal</th>'+
       '<th>Restrições</th>'+
       '<th>Status</th>'+
-      '<th>Ação</th>'+
+      '<th></th>'+
     '</tr></thead>';
   }
   function elabTableRow(dia,i,_uCard){
@@ -835,13 +842,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       ? '<span class="badge status st-'+statusInfo(dia.status).cls+'">'+statusInfo(dia.status).label+'</span>'
       : '<span class="badge status st-'+statusInfo('aguardando_aprovacao').cls+'">'+statusInfo('aguardando_aprovacao').label+'</span>';
     var acaoTd = podeEditar()
-      ? '<button class="btn-dt-edit" data-i="'+i+'" data-action="elab">Aprovar</button>'
+      ? '<button class="btn-dt-icon" data-i="'+i+'" data-action="elab" title="Aprovar">'+PENCIL_SVG+'</button>'
       : '';
+    var idx = ((i%7)+7)%7;
+    var diaLongo = DIAS_NOME[idx].toLowerCase();
     return '<tr>'+
-      '<td class="dt-mono">'+fmtDia(addDays(_monday,i))+'</td>'+
-      '<td class="dt-mono">'+diaSemanaCurto(i)+'</td>'+
-      '<td class="dt-prato">'+(dia.resumo?esc(dia.resumo):'—')+'</td>'+
       '<td>'+esc(cozNome(_uCard))+'</td>'+
+      '<td class="dt-mono">'+fmtDataBR(addDays(_monday,i))+'</td>'+
+      '<td class="dt-mono">'+diaLongo+'</td>'+
+      '<td class="dt-prato">'+(dia.resumo?esc(dia.resumo):'—')+'</td>'+
       '<td class="dt-num">'+(dia.n_restricoes||0)+'</td>'+
       '<td>'+statusTd+'</td>'+
       '<td>'+acaoTd+'</td>'+
@@ -995,29 +1004,31 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   function procTableHead(){
     return '<thead><tr>'+
-      '<th>Data</th>'+
-      '<th>Dia</th>'+
-      '<th>Prato principal</th>'+
       '<th>Unidade</th>'+
-      '<th>Aprovação</th>'+
-      '<th>Compra</th>'+
-      '<th>Recebimento</th>'+
+      '<th>Cardápio do dia</th>'+
+      '<th>Dia da semana</th>'+
+      '<th>Prato Principal</th>'+
+      '<th>Data da aprovação</th>'+
+      '<th>Data da compra</th>'+
+      '<th>Data do recebimento</th>'+
       '<th>Restrições</th>'+
       '<th>Status</th>'+
-      '<th>Ação</th>'+
+      '<th></th>'+
     '</tr></thead>';
   }
-  function procTableRow(dia, idx, _uCard, DOW_CURTO){
+  function procTableRow(dia, idx, _uCard, DOW_LONGO){
     var d=parseISO(dia.data), si=statusInfo(dia.status);
     var isAval=(dia.status==='aguardando_avaliacao');
+    var icon = isAval ? PENCIL_SVG : EYE_SVG;
+    var title = isAval ? 'Informar quantidades' : 'Ver detalhes';
     var acaoTd = podeEditar()
-      ? '<button class="btn-dt-edit" data-proc-idx="'+idx+'">'+(isAval?'Informar':'Ver')+'</button>'
+      ? '<button class="btn-dt-icon" data-proc-idx="'+idx+'" title="'+title+'">'+icon+'</button>'
       : '';
     return '<tr>'+
-      '<td class="dt-mono">'+fmtDia(d)+'</td>'+
-      '<td class="dt-mono">'+DOW_CURTO[d.getDay()]+'</td>'+
-      '<td class="dt-prato">'+(dia.resumo?esc(dia.resumo):'—')+'</td>'+
       '<td>'+esc(cozNome(_uCard))+'</td>'+
+      '<td class="dt-mono">'+fmtDataBR(dia.data)+'</td>'+
+      '<td class="dt-mono">'+DOW_LONGO[d.getDay()]+'</td>'+
+      '<td class="dt-prato">'+(dia.resumo?esc(dia.resumo):'—')+'</td>'+
       '<td class="dt-mono">'+fmtDataBR(dia.aprovado_em)+'</td>'+
       '<td class="dt-mono">'+fmtDataBR(dia.comprado_em)+'</td>'+
       '<td class="dt-mono">'+fmtDataBR(dia.recebido_em)+'</td>'+
@@ -1032,7 +1043,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var grid=document.getElementById('procGrid'); if(!grid) return; grid.innerHTML='';
     var lista=aplicarProcFiltros(_proc);
     if(!lista.length){ grid.innerHTML='<p class="empty-msg">'+(_proc.length?'Nenhum cardápio com esses filtros.':'Nenhum cardápio em processamento.')+'</p>'; return; }
-    var DOW_CURTO=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+    var DOW_LONGO=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
     var mobileFrag=document.createElement('div'); mobileFrag.className='mobile-cards';
     var deskRows='';
     lista.forEach(function(dia, idx){
@@ -1041,7 +1052,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       var card=document.createElement('div'); card.className='card';
       card.innerHTML=
         '<div class="card-header">'+
-          '<span class="card-titulo">Cardápio do dia '+fmtDia(d)+' <span class="card-dia-sem">('+DOW_CURTO[d.getDay()]+')</span></span>'+
+          '<span class="card-titulo">Cardápio do dia '+fmtDia(d)+' <span class="card-dia-sem">('+DOW_LONGO[d.getDay()]+')</span></span>'+
           '<span class="badge status st-'+si.cls+'">'+si.label+'</span>'+
         '</div>'+
         '<div class="card-body">'+
@@ -1063,7 +1074,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         '</div>':'');
       mobileFrag.appendChild(card);
       var b=card.querySelector('.btn-proc-dia'); if(b) b.addEventListener('click', function(){ abrirModalProc(dia); });
-      deskRows += procTableRow(dia, idx, _uCard, DOW_CURTO);
+      deskRows += procTableRow(dia, idx, _uCard, DOW_LONGO);
     });
     grid.appendChild(mobileFrag);
     var deskWrap=document.createElement('div'); deskWrap.className='desk-table-wrap';
