@@ -541,6 +541,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         </table>
       </div>
     </div>
+    <div class="chart-card" style="grid-column:1 / -1">
+      <div class="chart-title">Todos os cardápios</div>
+      <div class="rel-table-wrap" id="relFullTable"><p class="empty-msg">Carregando…</p></div>
+    </div>
   </div>
 </div>
 
@@ -894,7 +898,38 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   function parseISO(x){ var p=String(x).split('-'); return new Date(+p[0],(+p[1])-1,+p[2]); }
   var _proc=[]; var _modalMode='elab', _procData=null;
   var relChartInst=null;
+  function relFullTableRow(dia){
+    var d=parseISO(dia.data), si=statusInfo(dia.status);
+    var DOW_CURTO=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+    return '<tr>'+
+      '<td class="dt-mono">'+fmtDia(d)+'</td>'+
+      '<td class="dt-mono">'+DOW_CURTO[d.getDay()]+'</td>'+
+      '<td class="dt-prato">'+(dia.resumo?esc(dia.resumo):'—')+'</td>'+
+      '<td>'+esc(cozNome(dia.unidade))+'</td>'+
+      '<td class="dt-mono">'+fmtDataBR(dia.aprovado_em)+'</td>'+
+      '<td class="dt-mono">'+fmtDataBR(dia.comprado_em)+'</td>'+
+      '<td class="dt-mono">'+fmtDataBR(dia.recebido_em)+'</td>'+
+      '<td class="dt-num">'+(dia.servido||0)+'</td>'+
+      '<td class="dt-num">'+(dia.n_restricoes||0)+'</td>'+
+      '<td class="dt-num">'+(dia.aval_geral!=null?('★ '+dia.aval_geral):'—')+'</td>'+
+      '<td><span class="badge status st-'+si.cls+'">'+si.label+'</span></td>'+
+    '</tr>';
+  }
+  function carregarRelatorioTabela(){
+    var wrap=document.getElementById('relFullTable'); if(!wrap) return;
+    var uni=_uniProc||'Itaim';
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('refeicoes_relatorio',{ p_unidade:uni }).then(function(res){
+        if(res.error){ wrap.innerHTML='<p class="empty-msg">Erro ao carregar.</p>'; return; }
+        var lista=res.data||[];
+        if(!lista.length){ wrap.innerHTML='<p class="empty-msg">Nenhum cardápio.</p>'; return; }
+        var head='<thead><tr><th>Data</th><th>Dia</th><th>Prato principal</th><th>Unidade</th><th>Aprovação</th><th>Compra</th><th>Recebimento</th><th>Refeições</th><th>Restrições</th><th>Avaliação</th><th>Status</th></tr></thead>';
+        wrap.innerHTML='<table class="rel-table">'+head+'<tbody>'+lista.map(relFullTableRow).join('')+'</tbody></table>';
+      }, function(){ wrap.innerHTML='<p class="empty-msg">Erro ao carregar.</p>'; });
+    });
+  }
   function renderRelatorios(){
+    carregarRelatorioTabela();
     if(relChartInst || typeof Chart==='undefined') return;
     var cv=document.getElementById('relChart'); if(!cv) return;
     relChartInst=new Chart(cv, {
