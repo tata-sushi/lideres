@@ -364,6 +364,20 @@
     if (ev.origin !== PLUS_ORIGIN) return
     var d = ev.data || {}
     if (d.tp === 'gov-session' && d.access_token) {
+      // Já validado = o Plus está reenviando um token RENOVADO (autoRefresh do app).
+      // Atualiza o token do cliente pra ele não expirar no iframe (senão as
+      // consultas passam a dar 401 depois de ~1h e a página trava). O access_token
+      // vem fresco do Plus, então setSession não dispara refresh (não rotaciona o
+      // refresh token compartilhado).
+      if (validado && window.__lideresSupa && window.__lideresSupa.auth) {
+        try {
+          window.__lideresSupa.auth.setSession({
+            access_token: d.access_token,
+            refresh_token: d.refresh_token,
+          })
+        } catch (e) {}
+        return
+      }
       checar({ access_token: d.access_token, refresh_token: d.refresh_token }, d.nome, d.perfil)
     }
   })
