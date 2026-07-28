@@ -1556,18 +1556,30 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   function toggleIABar(){ var ib=document.getElementById('drawerIA'); if(ib) ib.style.display='block'; /* drawer visível p/ quem tem a página; gate.js esconde os botões bloqueados no painel */ }
   function proximasSemanas(n){ var arr=[]; var base=mondayOf(new Date()); for(var i=1;i<=n;i++){ var m=addDays(base,i*7); arr.push({iso:iso(m), label:'Semana de '+fmtDia(m)+' \u2013 '+fmtDia(addDays(m,6))}); } return arr; }
-  function abrirModalIA(){ var sel=document.getElementById('ia-semana'); sel.innerHTML=''; proximasSemanas(8).forEach(function(w){ var o=document.createElement('option'); o.value=w.iso; o.textContent=w.label; sel.appendChild(o); }); var st=document.getElementById('ia-status'); st.style.color=''; st.textContent='';
-    btn.disabled=true; btn.classList.add('loading');
-    function done(){ btn.disabled=false; btn.classList.remove('loading'); }
-    function err(msg){ done(); st.style.color='var(--red)'; st.textContent='Erro: '+msg; }
+  function abrirModalIA(){
+    var sel=document.getElementById('ia-semana'); if(sel){ sel.innerHTML=''; proximasSemanas(8).forEach(function(w){ var o=document.createElement('option'); o.value=w.iso; o.textContent=w.label; sel.appendChild(o); }); }
+    var st=document.getElementById('ia-status'); if(st){ st.style.color=''; st.textContent=''; }
+    var m=document.getElementById('modal-ia'); if(m){ m.classList.add('active'); document.body.style.overflow='hidden'; }
+  }
+  function fecharModalIA(){
+    var m=document.getElementById('modal-ia'); if(m) m.classList.remove('active'); document.body.style.overflow='';
+  }
+  function gerarCardapioIA(){
+    var sel=document.getElementById('ia-semana'); var inicio=sel? sel.value : '';
+    var st=document.getElementById('ia-status'); var btn=document.getElementById('ia-gerar');
+    if(!inicio){ if(st){ st.style.color='var(--red)'; st.textContent='Erro: selecione uma semana.'; } return; }
+    if(st){ st.style.color=''; st.textContent=''; }
+    if(btn){ btn.disabled=true; btn.classList.add('loading'); }
+    function done(){ if(btn){ btn.disabled=false; btn.classList.remove('loading'); } }
+    function err(msg){ done(); if(st){ st.style.color='var(--red)'; st.textContent='Erro: '+msg; } }
     comSupa(function(supa){
       supa.functions.invoke('gerar-cardapio',{ body:{ inicio:inicio, dias:7, janela:5 } }).then(function(res){
         if(res.error){ var ctx=res.error.context;
-          if(ctx && typeof ctx.text==='function'){ ctx.text().then(function(t){ var m=t; try{ var b=JSON.parse(t); m=(b&&(b.error||b.detail))||t; }catch(e){} err(m||res.error.message); }, function(){ err(res.error.message); }); }
+          if(ctx && typeof ctx.text==='function'){ ctx.text().then(function(t){ var mm=t; try{ var b=JSON.parse(t); mm=(b&&(b.error||b.detail))||t; }catch(e){} err(mm||res.error.message); }, function(){ err(res.error.message); }); }
           else err(res.error.message);
           return; }
         done(); var n=(res.data&&res.data.gravadas)||0;
-        st.style.color='var(--green)'; st.textContent=n? ('Pronto! '+n+' dia(s) proposto(s) \u2014 revise e aprove.') : 'Semana j\u00e1 preenchida \u2014 nada a gerar.';
+        if(st){ st.style.color='var(--green)'; st.textContent=n? ('Pronto! '+n+' dia(s) proposto(s) \u2014 revise e aprove.') : 'Semana j\u00e1 preenchida \u2014 nada a gerar.'; }
         var alvo=mondayOf(new Date(inicio+'T12:00:00'));
         currentWeekOffset=Math.round((alvo-mondayOf(new Date()))/604800000);
         carregarSemana();
