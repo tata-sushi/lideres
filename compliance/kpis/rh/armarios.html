@@ -742,7 +742,7 @@ function initApp() {
   if (!session) {
     try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
   }
-  if (!session || !session.displayName) return;
+  if (!session || !session.displayName) { window.addEventListener('lideres:sessao', initApp, { once: true }); return; }
 
   var parts = session.displayName.trim().split(/\s+/);
   currentUser = {
@@ -753,7 +753,7 @@ function initApp() {
     unit:     session.unidade || null
   };
 
-  document.getElementById('header-user').textContent = currentUser.short;
+  var _hu = document.getElementById('header-user'); if (_hu) _hu.textContent = currentUser.short;
 
   // Se líder, restringir tabs à unidade
   if (currentUser.type === 'lider' && currentUser.unit) {
@@ -782,6 +782,13 @@ function hideLoading() {
 /* ════════════════════════════════════════════════
    LOAD DATA
    ════════════════════════════════════════════════ */
+function fetchJSON(url, ms) {
+  var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var timer = setTimeout(function(){ if (ctrl) ctrl.abort(); }, ms || 10000);
+  return fetch(url, ctrl ? { signal: ctrl.signal } : undefined)
+    .then(function(r){ return r.json(); })
+    .finally(function(){ clearTimeout(timer); });
+}
 function loadData() {
   if (!GAS_URL_ARMARIO) {
     // Sem URL configurada: usar dados de demo
@@ -794,8 +801,8 @@ function loadData() {
   }
 
   Promise.all([
-    fetch(GAS_URL_ARMARIO + '?action=armarios').then(function(r){ return r.json(); }),
-    fetch(GAS_URL_ARMARIO + '?action=historico&n=200').then(function(r){ return r.json(); })
+    fetchJSON(GAS_URL_ARMARIO + '?action=armarios', 10000),
+    fetchJSON(GAS_URL_ARMARIO + '?action=historico&n=200', 10000)
   ])
   .then(function(res) {
     ARMARIOS  = res[0] || [];
@@ -1633,6 +1640,8 @@ function showToast(msg, err) {
    ════════════════════════════════════════════════ */
 /* START */
 initApp();
+// Rede de segurança: nenhum spinner de abertura fica preso pra sempre.
+setTimeout(function(){ var el=document.getElementById('loading-overlay'); if(el && el.classList.contains('show')){ el.classList.remove('show'); if(typeof showToast==='function') showToast('Não foi possível carregar os dados. Recarregue a página ou entre novamente.', false); } }, 15000);
 
 var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
