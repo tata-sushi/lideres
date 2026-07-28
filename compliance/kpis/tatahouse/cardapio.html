@@ -417,8 +417,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   .rel-tipo-list { display:flex; flex-direction:column; gap:8px; }
   .rel-tipo-item { display:flex; align-items:flex-start; gap:11px; padding:11px 13px; background:var(--bg); border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:border-color .15s, background .15s; }
   .rel-tipo-item:hover { border-color:var(--carbon); }
-  .rel-tipo-item input[type="radio"] { margin-top:3px; cursor:pointer; accent-color:var(--carbon); flex-shrink:0; }
-  .rel-tipo-item.active { border-color:var(--green); background:var(--green-bg); box-shadow:inset 3px 0 0 var(--green); }
+  .rel-tipo-item input[type="radio"] { width:16px; height:16px; margin-top:2px; cursor:pointer; accent-color:var(--carbon); flex-shrink:0; }
+  .rel-tipo-item.active { border-color:var(--border); background:var(--bg); }
   .rel-tipo-name { font-size:13px; font-weight:600; color:var(--carbon); }
   .rel-tipo-desc { font-family:'DM Mono',monospace; font-size:10px; line-height:1.4; color:var(--muted); margin-top:3px; letter-spacing:.3px; }
   .rel-btn { background:var(--carbon); color:var(--citric,#CFFF00); border:none; border-radius:8px; padding:12px 20px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
@@ -780,7 +780,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="drawer-section-label">Ações</div>
       <button class="drawer-sam-btn" id="btnGerarIA" data-aba-id="governanca-kpis-tatahouse-cardapio::gerar-cardapio" style="margin-bottom:8px">Gerar cardápio</button>
       <!-- visíveis no drawer, ainda sem ação (a implementar); controlados pelo painel via data-aba-id -->
-      <button class="drawer-sam-btn" id="btnGerarRelatorios" data-aba-id="governanca-kpis-tatahouse-cardapio::gerar-relatorios" style="margin-bottom:8px">Gerar relatório (PDF)</button>
+      <button class="drawer-sam-btn" id="btnGerarRelatorios" data-aba-id="governanca-kpis-tatahouse-cardapio::gerar-relatorios" style="margin-bottom:8px">Gerar relatório</button>
+      <button class="drawer-sam-btn" id="btnCardapioMural" data-aba-id="governanca-kpis-tatahouse-cardapio::cardapio-mural" style="margin-bottom:8px">Cardápio semanal (mural)</button>
       <button class="drawer-sam-btn" id="btnExtrairCSV" data-aba-id="governanca-kpis-tatahouse-cardapio::extrair-csv" style="margin-bottom:8px">Extrair CSV</button>
     </div>
   </div>
@@ -1699,7 +1700,7 @@ function loadDrawerMeta() {
     document.querySelectorAll('.rel-tipo-item').forEach(function(i){ i.classList.remove('active'); });
     if(el && el.checked) el.closest('.rel-tipo-item').classList.add('active');
     var lbl = document.getElementById('rel-btn-label');
-    if(lbl){ lbl.textContent = (el && el.value && el.value.indexOf('csv')===0) ? 'Baixar CSV' : 'Gerar PDF'; }
+    if(lbl && el && el.value){ var v=el.value; lbl.textContent = v.indexOf('csv')===0 ? 'Baixar CSV' : (v==='mural' ? 'Gerar mural' : 'Gerar PDF'); }
   };
 
   function _relAbrirBase(){
@@ -1714,14 +1715,13 @@ function loadDrawerMeta() {
   }
   // Um único modal, dois modos: 'pdf' (relatórios) e 'csv' (planilhas).
   // Cada botão abre o modal já no seu modo, escondendo o grupo do outro.
+  function _relGrupo(v){ return v==='mural' ? 'mural' : (v.indexOf('csv')===0 ? 'csv' : 'pdf'); }
   function _relSetMode(mode){
-    var isCsv = (mode==='csv');
     var list = document.getElementById('rel-tipo-list');
     var firstVisible = null;
     if(list){ Array.prototype.forEach.call(list.querySelectorAll('.rel-tipo-item'), function(item){
       var inp = item.querySelector('input[name="rel-tipo"]');
-      var itemIsCsv = inp && inp.value.indexOf('csv')===0;
-      var show = isCsv ? itemIsCsv : !itemIsCsv;
+      var show = inp && _relGrupo(inp.value)===mode;
       item.style.display = show ? '' : 'none';
       if(show && !firstVisible) firstVisible = inp;
     }); }
@@ -1729,11 +1729,21 @@ function loadDrawerMeta() {
     var tt = document.querySelector('#rel-overlay .rel-modal-title');
     var hp = document.querySelector('#rel-overlay .rel-help');
     var dv = document.getElementById('rel-tipo-divider');
-    if(isCsv){
+    // O mural tem só uma saída: esconde toda a seção de tipo (modal mais simples).
+    var isMural = (mode==='mural');
+    if(dv) dv.style.display = isMural ? 'none' : '';
+    if(hp) hp.style.display = isMural ? 'none' : '';
+    if(list) list.style.display = isMural ? 'none' : '';
+    if(mode==='csv'){
       if(eb) eb.textContent='Cardápio \u203A Dados';
       if(tt) tt.textContent='Extrair CSV';
       if(hp) hp.textContent='Selecione qual planilha extrair.';
       if(dv) dv.textContent='Tipo de planilha';
+    } else if(isMural){
+      if(eb) eb.textContent='Cardápio \u203A Mural';
+      if(tt) tt.textContent='Cardápio Semanal';
+      var mr = document.querySelector('input[name="rel-tipo"][value="mural"]');
+      if(mr) firstVisible = mr;
     } else {
       if(eb) eb.textContent='Cardápio \u203A Relatórios';
       if(tt) tt.textContent='Gerar Relatório';
@@ -1745,6 +1755,11 @@ function loadDrawerMeta() {
   window.abrirModalRelatoriosPdf = function(){
     _relAbrirBase();
     _relSetMode('pdf');
+  };
+  window.abrirModalMural = function(){
+    // modal simples, só para o mural (cardápio semanal)
+    _relAbrirBase();
+    _relSetMode('mural');
   };
   window.fecharModalRelatoriosPdf = function(){
     document.getElementById('rel-overlay').classList.remove('open');
@@ -2088,6 +2103,8 @@ function loadDrawerMeta() {
     if(b1) b1.addEventListener('click', function(){ if(typeof closeDrawer==='function') closeDrawer(); abrirModalRelatoriosPdf(); });
     var b2 = document.getElementById('btnExtrairCSV');
     if(b2) b2.addEventListener('click', function(){ if(typeof closeDrawer==='function') closeDrawer(); extrairCSVRelatorio(); });
+    var b3 = document.getElementById('btnCardapioMural');
+    if(b3) b3.addEventListener('click', function(){ if(typeof closeDrawer==='function') closeDrawer(); abrirModalMural(); });
   });
 })();
 
