@@ -418,7 +418,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   .rel-tipo-item { display:flex; align-items:flex-start; gap:11px; padding:11px 13px; background:var(--bg); border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:border-color .15s, background .15s; }
   .rel-tipo-item:hover { border-color:var(--carbon); }
   .rel-tipo-item input[type="radio"] { margin-top:3px; cursor:pointer; accent-color:var(--carbon); flex-shrink:0; }
-  .rel-tipo-item.active { border-color:var(--carbon); background:#fff; }
+  .rel-tipo-item.active { border-color:var(--green); background:var(--green-bg); box-shadow:inset 3px 0 0 var(--green); }
   .rel-tipo-name { font-size:13px; font-weight:600; color:var(--carbon); }
   .rel-tipo-desc { font-family:'DM Mono',monospace; font-size:10px; line-height:1.4; color:var(--muted); margin-top:3px; letter-spacing:.3px; }
   .rel-btn { background:var(--carbon); color:var(--citric,#CFFF00); border:none; border-radius:8px; padding:12px 20px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
@@ -780,8 +780,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="drawer-section-label">Ações</div>
       <button class="drawer-sam-btn" id="btnGerarIA" data-aba-id="governanca-kpis-tatahouse-cardapio::gerar-cardapio" style="margin-bottom:8px">Gerar cardápio</button>
       <!-- visíveis no drawer, ainda sem ação (a implementar); controlados pelo painel via data-aba-id -->
-      <button class="drawer-sam-btn" id="btnGerarRelatorios" data-aba-id="governanca-kpis-tatahouse-cardapio::gerar-relatorios" style="margin-bottom:8px">Gerar relatórios</button>
-      <button class="drawer-sam-btn" id="btnExtrairCSV" data-aba-id="governanca-kpis-tatahouse-cardapio::extrair-csv">Extrair CSV</button>
+      <button class="drawer-sam-btn" id="btnGerarRelatorios" data-aba-id="governanca-kpis-tatahouse-cardapio::gerar-relatorios" style="margin-bottom:8px">Gerar relatório (PDF)</button>
+      <button class="drawer-sam-btn" id="btnExtrairCSV" data-aba-id="governanca-kpis-tatahouse-cardapio::extrair-csv" style="margin-bottom:8px">Extrair CSV</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -1702,7 +1702,7 @@ function loadDrawerMeta() {
     if(lbl){ lbl.textContent = (el && el.value && el.value.indexOf('csv')===0) ? 'Baixar CSV' : 'Gerar PDF'; }
   };
 
-  window.abrirModalRelatoriosPdf = function(){
+  function _relAbrirBase(){
     var deEl = document.getElementById('rel-de');
     var ateEl = document.getElementById('rel-ate');
     if(!deEl.value || !ateEl.value){ _relAtalho(30); }
@@ -1711,6 +1711,40 @@ function loadDrawerMeta() {
     document.getElementById('rel-error').textContent='';
     document.getElementById('rel-overlay').classList.add('open');
     document.body.style.overflow='hidden';
+  }
+  // Um único modal, dois modos: 'pdf' (relatórios) e 'csv' (planilhas).
+  // Cada botão abre o modal já no seu modo, escondendo o grupo do outro.
+  function _relSetMode(mode){
+    var isCsv = (mode==='csv');
+    var list = document.getElementById('rel-tipo-list');
+    var firstVisible = null;
+    if(list){ Array.prototype.forEach.call(list.querySelectorAll('.rel-tipo-item'), function(item){
+      var inp = item.querySelector('input[name="rel-tipo"]');
+      var itemIsCsv = inp && inp.value.indexOf('csv')===0;
+      var show = isCsv ? itemIsCsv : !itemIsCsv;
+      item.style.display = show ? '' : 'none';
+      if(show && !firstVisible) firstVisible = inp;
+    }); }
+    var eb = document.querySelector('#rel-overlay .rel-eyebrow');
+    var tt = document.querySelector('#rel-overlay .rel-modal-title');
+    var hp = document.querySelector('#rel-overlay .rel-help');
+    var dv = document.getElementById('rel-tipo-divider');
+    if(isCsv){
+      if(eb) eb.textContent='Cardápio \u203A Dados';
+      if(tt) tt.textContent='Extrair CSV';
+      if(hp) hp.textContent='Selecione qual planilha extrair.';
+      if(dv) dv.textContent='Tipo de planilha';
+    } else {
+      if(eb) eb.textContent='Cardápio \u203A Relatórios';
+      if(tt) tt.textContent='Gerar Relatório';
+      if(hp) hp.textContent='Selecione o formato do relatório a gerar.';
+      if(dv) dv.textContent='Tipo de relatório';
+    }
+    if(firstVisible){ firstVisible.checked=true; _relTipoChg(firstVisible); }
+  }
+  window.abrirModalRelatoriosPdf = function(){
+    _relAbrirBase();
+    _relSetMode('pdf');
   };
   window.fecharModalRelatoriosPdf = function(){
     document.getElementById('rel-overlay').classList.remove('open');
@@ -1926,13 +1960,10 @@ function loadDrawerMeta() {
     return s;
   }
   window.extrairCSVRelatorio = function(){
-    // abre o mesmo modal, mas pré-marcando tipo=csv e período de 60 dias
-    abrirModalRelatoriosPdf();
+    // mesmo modal, modo CSV (só planilhas), período padrão de 60 dias
+    _relAbrirBase();
     _relAtalho(60);
-    var r = document.querySelector('input[name="rel-tipo"][value="csv_cardapios"]');
-    if(r){ r.checked = true; _relTipoChg(r); }
-    var lblEl = document.getElementById('rel-btn-label');
-    if(lblEl) lblEl.textContent = 'Baixar CSV';
+    _relSetMode('csv');
   };
 
   function _abrirPrintMural(html){
@@ -2096,7 +2127,7 @@ function loadDrawerMeta() {
         <button type="button" class="rel-shortcut" onclick="_relAtalho(30)">30 dias</button>
         <button type="button" class="rel-shortcut" onclick="_relAtalhoMes()">Este mês</button>
       </div>
-      <div class="rel-divider">Tipo de relatório</div>
+      <div class="rel-divider" id="rel-tipo-divider">Tipo de relatório</div>
       <div class="rel-help">Selecione o formato do relatório a gerar.</div>
       <div class="rel-tipo-list" id="rel-tipo-list">
         <label class="rel-tipo-item active">
