@@ -139,9 +139,21 @@
         })
       if (ok) {
         card.classList.remove('locked')
+        // Restaura o onclick se ele foi removido num travamento anterior
+        // (ex.: cache defasado trancou, e a rede depois liberou).
+        if (card.dataset.lockedOnclick != null) {
+          card.setAttribute('onclick', card.dataset.lockedOnclick)
+          delete card.dataset.lockedOnclick
+          card.style.cursor = ''
+        }
       } else {
         card.classList.add('locked')
-        card.removeAttribute('onclick')
+        // Guarda o onclick antes de remover, pra poder restaurar se liberar depois.
+        var oc = card.getAttribute('onclick')
+        if (oc != null) {
+          card.dataset.lockedOnclick = oc
+          card.removeAttribute('onclick')
+        }
         card.style.cursor = 'not-allowed'
       }
     })
