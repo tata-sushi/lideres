@@ -846,7 +846,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   function comSupa(cb){ if(window.__lideresSupa){ cb(window.__lideresSupa); return; } window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true }); }
 
   var currentWeekOffset = 0, _monday = null, _semana = [], _editIdx = -1, _catalogo = [], _repertorio = [], _uniElab = '__todas__', _uniProc = '__todas__', _cozinhas = [];
-  var _elabJumped = false; // já pulou pra primeira data com informação (só na carga inicial)
   function cozOrdem(ch){ for(var i=0;i<_cozinhas.length;i++){ if(_cozinhas[i].chave===ch) return i; } return 99; }
   function unisSelecionadas(sel){ return sel==='__todas__' ? _cozinhas.map(function(c){ return c.chave; }) : [sel]; }
   function diaSemCurtoData(dt){ return diaSemanaCurto((dt.getDay()+6)%7); }
@@ -1632,7 +1631,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var _gIA=document.getElementById('ia-gerar'); if(_gIA) _gIA.addEventListener('click', gerarCardapioIA);
     var _mIA=document.getElementById('modal-ia'); if(_mIA) _mIA.addEventListener('click', function(ev){ if(ev.target===this) fecharModalIA(); });
     toggleIABar();
-    var _eu=document.getElementById('ef-unidade'); if(_eu) _eu.addEventListener('change', function(){ _uniElab=this.value; carregarSemana(); });
+    var _eu=document.getElementById('ef-unidade'); if(_eu) _eu.addEventListener('change', function(){ _uniElab=this.value; irParaPrimeiraDataElab(); });
     document.getElementById('md-add').addEventListener('click', function(){ document.getElementById('md-itens').appendChild(mkItemRow({tipo:'principal',item:'',qtd:'',un:'',custo:''})); recalcModal(); });
     var _adDesp=document.getElementById('md-add-desp'); if(_adDesp) _adDesp.addEventListener('click', function(){ document.getElementById('md-desperdicio').appendChild(mkDespRowNovo()); });
     document.getElementById('md-salvar').addEventListener('click', onModalPrimary);
@@ -1643,19 +1642,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.body.insertAdjacentHTML('beforeend', '<datalist id="itens-cat">'+ITENS_EXEMPLO.map(function(x){return '<option value="'+x.nome+'">';}).join('')+'</datalist>');
     var s=window.__lideresSession||{}; if(s.displayName){ var hu=document.getElementById('header-user'); if(hu){ hu.textContent=s.displayName.trim().split(/\s+/)[0]; } }
     (function(){ var d=new Date(); var p=function(n){return String(n).padStart(2,'0');}; var fd=document.getElementById('footer-date'); if(fd) fd.textContent='Atualizado: '+p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+', '+p(d.getHours())+':'+p(d.getMinutes()); })();
-    carregarCozinhas(function(){
-      // Na carga inicial, pula pra primeira semana que tem cardápio pendente de
-      // aprovação (evita abrir numa semana vazia). Só uma vez.
-      if(_elabJumped){ carregarSemana(); return; }
-      _elabJumped=true;
+    // Pula pra primeira semana com cardápio pendente de aprovação (da unidade
+    // selecionada) — na carga inicial E a cada troca de unidade. Evita abrir vazio.
+    function irParaPrimeiraDataElab(){
       comSupa(function(supa){
         supa.schema('tata_plus').rpc('refeicoes_elab_primeira_data',{ p_unidade:_uniElab }).then(function(r){
           var dt=(r&&!r.error&&r.data)?r.data:null;
-          if(dt){ var alvo=mondayOf(new Date(dt+'T12:00:00')); currentWeekOffset=Math.round((alvo-mondayOf(new Date()))/604800000); }
+          currentWeekOffset = dt ? Math.round((mondayOf(new Date(dt+'T12:00:00'))-mondayOf(new Date()))/604800000) : 0;
           carregarSemana();
         }, function(){ carregarSemana(); });
       });
-    });
+    }
+    carregarCozinhas(function(){ irParaPrimeiraDataElab(); });
   });
 })();
 
