@@ -1241,7 +1241,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
-      <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-estoqueadm::nova-solicitacao" onclick="closeDrawer();openModal();">Nova Solicitação</button>
+      <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-estoqueadm::nova-solicitacao" onclick="closeDrawer();openModal('solicitacao');">Nova Solicitação</button>
+      <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-estoqueadm::entrada-estoque" style="margin-top:8px" onclick="closeDrawer();openModal('entrada');">Entrada Estoque</button>
       <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-estoqueadm::termo-troca-epi" style="margin-top:8px" onclick="closeDrawer();openModalEpiColetivo();">Termo troca de EPI</button>
     </div>
   </div>
@@ -1607,7 +1608,7 @@ var KITS = {
 
 /* ══ ALERTS ══ */
 function renderAlerts() {
-  if (!currentUser || currentUser.type !== 'admin') return;
+  if (!currentUser) return;
   var panel = document.getElementById('alert-panel');
   var body  = document.getElementById('alert-body');
   var count = document.getElementById('alert-count');
@@ -1765,7 +1766,6 @@ function onTipoChange() {
   var mat      = document.getElementById('f-matricula');
   var unidSel  = document.getElementById('f-unidade');
   var colabRow = document.getElementById('colab-row');
-  var isLider  = currentUser && currentUser.type === 'lider';
 
   function lockUnidade(val) {
     unidSel.disabled = true;
@@ -1785,29 +1785,27 @@ function onTipoChange() {
   if (tipo === 'Reabastecimento Estoque (entrada)') {
     if (colabRow) colabRow.style.display = 'none';
     sel.value = ''; txt.value = ''; if (mat) mat.value = '';
-    if (isLider) lockUnidade(currentUser.unit);
-    else         unlockUnidade('');
+    unlockUnidade('');
 
   } else if (tipo === 'Bombom Teste (saída)') {
     if (colabRow) colabRow.style.display = '';
     sel.style.display = 'none'; sel.value = '';
     txt.style.display = '';
     if (mat) mat.value = '';
-    unlockUnidade(isLider && currentUser ? currentUser.unit : '');
+    unlockUnidade('');
 
   } else if (tipo === 'Teste/Extra (saída)') {
     if (colabRow) colabRow.style.display = '';
     sel.style.display = 'none'; sel.value = '';
     txt.style.display = '';
     if (mat) mat.value = '';
-    if (isLider) lockUnidade(currentUser.unit);
-    else         unlockUnidade('');
+    unlockUnidade('');
 
   } else {
     if (colabRow) colabRow.style.display = '';
     txt.style.display = 'none'; txt.value = '';
     sel.style.display = '';
-    lockUnidade(isLider && currentUser ? currentUser.unit : '');
+    lockUnidade('');
   }
 }
 
@@ -2206,9 +2204,7 @@ var __colabCache = null;
 async function carregarColaboradores() {
   if (__colabCache) return __colabCache;
   try {
-    var isFullAccess = currentUser && (currentUser.type === 'admin' || currentUser.type === 'analista-rh');
-    var session = window.__lideresSession || JSON.parse(localStorage.getItem('lideres_session') || '{}');
-    var unidade = (!isFullAccess && session && session.unidade) ? session.unidade : '';
+    var unidade = ''; // acesso controlado pelo painel admin; sem escopo por perfil
     var url = COLAB_URL + '?action=listColaboradores&unidade=' + encodeURIComponent(unidade);
     var res = await fetch(url);
     var data = await res.json();
@@ -2257,7 +2253,8 @@ function popularSelectColabsEstoque(colabs) {
 })();
 
 /* ══ MODAL ══ */
-function openModal() {
+function openModal(modo) {
+  modo = (modo === 'entrada') ? 'entrada' : 'solicitacao';
   document.getElementById('f-data').value = new Date().toLocaleDateString('pt-BR');
   document.getElementById('overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -2271,26 +2268,25 @@ function openModal() {
   document.getElementById('f-origem').value  = '';
   document.getElementById('f-destino').value = '';
 
-  var canEntrada = currentUser && (currentUser.type === 'admin' || currentUser.type === 'analista-rh');
+  // Modo do botão: "Entrada Estoque" mostra os tipos de ENTRADA + Transferência;
+  // "Nova Solicitação" mostra os tipos de SAÍDA. Quem vê cada botão é controlado
+  // pelo painel admin (data-aba-id), não mais pelo perfil.
   var tipoSel = document.getElementById('f-tipo');
+  var hasTransfer = Array.from(tipoSel.options).some(function(o){ return o.value === 'Transferência entre unidades'; });
+  if (!hasTransfer) {
+    var _to = document.createElement('option');
+    _to.value = _to.textContent = 'Transferência entre unidades';
+    tipoSel.appendChild(_to);
+  }
+  var modoEntrada = (modo === 'entrada');
   Array.from(tipoSel.options).forEach(function(opt) {
-    opt.hidden = !canEntrada && opt.text.indexOf('(entrada)') !== -1;
+    var ehEntrada = opt.text.indexOf('(entrada)') !== -1 || opt.value === 'Transferência entre unidades';
+    opt.hidden = modoEntrada ? !ehEntrada : ehEntrada;
   });
-  tipoSel.value = canEntrada ? 'Reabastecimento Estoque (entrada)' : 'Reposição Periódica (saída)';
+  tipoSel.value = modoEntrada ? 'Reabastecimento Estoque (entrada)' : 'Reposição Periódica (saída)';
 
   document.getElementById('f-matricula').value = '';
   document.getElementById('f-unidade').value = '';
-  // exibe opção Transferência apenas para admin e analista-rh
-  var tipoSel = document.getElementById('f-tipo');
-  var hasTransfer = Array.from(tipoSel.options).some(function(o){ return o.value === 'Transferência entre unidades'; });
-  var isFullAccess = currentUser && (currentUser.type === 'admin' || currentUser.type === 'analista-rh');
-  if (isFullAccess && !hasTransfer) {
-    var opt = document.createElement('option');
-    opt.value = opt.textContent = 'Transferência entre unidades';
-    tipoSel.appendChild(opt);
-  } else if (!isFullAccess && hasTransfer) {
-    Array.from(tipoSel.options).forEach(function(o){ if (o.value === 'Transferência entre unidades') o.remove(); });
-  }
   livreId = 0; updateLoteCount(); setMode('kit');
   // sincroniza visibilidade do campo colaborador (select vs texto livre) com o tipo
   onTipoChange();
