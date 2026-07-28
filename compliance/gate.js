@@ -344,6 +344,19 @@
     montarSessao(cache.nome, cache.perfil, cache.permitidos)
     trancarAbas(cache.bloqueadas || [], ehAdminDe(cache.perfil))
     libera()
+    // Revalida ao vivo com o token JÁ guardado no cache — mesmo que o Plus não
+    // reenvie a sessão. Corrige cache defasado: se uma página foi concedida
+    // depois que o cache foi salvo, o chip destranca sozinho em vez de ficar
+    // com clique morto. checar() se protege sozinho (validado/revalidando).
+    if (cache.sess && cache.sess.access_token) {
+      ;(function revalDoCache(tent) {
+        if (window.supabase) {
+          checar(cache.sess, cache.nome, cache.perfil)
+          return
+        }
+        if (tent < 40) setTimeout(function () { revalDoCache(tent + 1) }, 100)
+      })(0)
+    }
   }
 
   // 2) Recebe o token vindo do Plus (só dessa origem) e revalida ao vivo.
