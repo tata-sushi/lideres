@@ -1746,7 +1746,8 @@ function loadDrawerMeta() {
     var f = _validaFiltros(); if(!f) return;
     var tipo = (document.querySelector('input[name="rel-tipo"]:checked')||{}).value || 'consolidado';
     _relErr(''); _relSetLoading(true, 'Gerando…');
-    if(tipo.indexOf('csv')===0) _gerarCSV(f, tipo.replace('csv_',''));
+    if(tipo === 'mural')        _gerarCardapioSemanal(f);
+    else if(tipo.indexOf('csv')===0) _gerarCSV(f, tipo.replace('csv_',''));
     else if(tipo === 'consolidado') _gerarConsolidado(f);
     else                            _gerarDetalhado(f);
   };
@@ -1889,6 +1890,48 @@ function loadDrawerMeta() {
     if(lblEl) lblEl.textContent = 'Baixar CSV';
   };
 
+  function _gerarCardapioSemanal(f){
+    if(!window.__lideresSupa){ _relErr('Sessão não carregada.'); _relSetLoading(false,'Gerar PDF'); return; }
+    window.__lideresSupa.schema('tata_plus').rpc('refeicoes_relatorio_detalhado',{ p_unidade:f.uni, p_data_ini:f.de, p_data_fim:f.ate })
+      .then(function(res){
+        if(res.error){ var em=(res.error.message||''); _relErr(/timeout/i.test(em)?'Consulta muito grande — reduza o período.':('Erro: '+(em||JSON.stringify(res.error)))); _relSetLoading(false,'Gerar PDF'); return; }
+        var lista = (res.data||[]).slice().sort(function(a,b){ return a.data < b.data ? -1 : 1; });
+        if(!lista.length){ _relErr('Nenhum cardápio no período.'); _relSetLoading(false,'Gerar PDF'); return; }
+        var DOW = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+        var rows = lista.map(function(d){
+          var pr = d.pratos||[];
+          function itens(t){ return pr.filter(function(x){return x.tipo===t;}).map(function(x){return x.item;}).join(', '); }
+          var dt = new Date(d.data+'T12:00:00');
+          return '<tr>'+
+            '<td><strong>'+DOW[dt.getDay()]+'</strong><br><span style="font-size:10px;color:#666">'+_fmtBR(d.data)+'</span></td>'+
+            '<td>'+_esc(itens('principal')||'—')+'</td>'+
+            '<td>'+_esc(itens('guarnicao')||'—')+'</td>'+
+            '<td>'+_esc(itens('salada')||'—')+'</td>'+
+            '<td>'+_esc(itens('sobremesa')||'—')+'</td>'+
+            '<td>'+_esc(itens('bebida')||'—')+'</td>'+
+            '<td class="c num">'+(d.kcal||'—')+'</td>'+
+          '</tr>';
+        }).join('');
+        var logoSrc = (document.querySelector('.logo-img')||{}).src || '';
+        var html =
+          '<div class="rp-header">'+
+            (logoSrc? '<img class="rp-logo-img" src="'+logoSrc+'" alt="TATÁ">' : '')+
+            '<div class="rp-header-center">'+
+              '<div class="rp-title-main">Cardápio Semanal</div>'+
+              '<div class="rp-subtitle">'+_fmtBR(f.de)+' até '+_fmtBR(f.ate)+' · Refeições TATÁ House</div>'+
+            '</div>'+
+            '<div class="rp-header-right"><div>Unidade: <strong>'+_esc(f.uni)+'</strong></div></div>'+
+          '</div>'+
+          '<table class="rp-table"><thead><tr>'+
+            '<th>Dia</th><th>Prato principal</th><th>Guarnição</th><th>Salada</th><th>Sobremesa</th><th>Bebida</th><th class="c">Kcal</th>'+
+          '</tr></thead><tbody>'+rows+'</tbody></table>'+
+          '<div style="text-align:center;margin-top:10px;font-family:monospace;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:0.5px">Cardápio sujeito a alteração</div>';
+        fecharModalRelatoriosPdf();
+        _relSetLoading(false,'Gerar PDF');
+        _abrirPrintLandscape(html);
+      }, function(e){ _relErr('Erro: '+(e && e.message ? e.message : 'falha.')); _relSetLoading(false,'Gerar PDF'); })
+      .catch(function(e){ _relErr('Erro: '+(e && e.message ? e.message : 'exceção.')); _relSetLoading(false,'Gerar PDF'); });
+  }
   function _gerarCSV(f, qual){
     if(!window.__lideresSupa){ _relErr('Sessão não carregada.'); _relSetLoading(false,'Baixar CSV'); return; }
     window.__lideresSupa.schema('tata_plus').rpc('refeicoes_relatorio_detalhado',{ p_unidade:f.uni, p_data_ini:f.de, p_data_fim:f.ate })
@@ -1996,6 +2039,13 @@ function loadDrawerMeta() {
           <div>
             <div class="rel-tipo-name">Detalhado por dia</div>
             <div class="rel-tipo-desc">Uma seção por dia com pratos, insumos, custo, avaliação e comentários</div>
+          </div>
+        </label>
+        <label class="rel-tipo-item">
+          <input type="radio" name="rel-tipo" value="mural" onchange="_relTipoChg(this)">
+          <div>
+            <div class="rel-tipo-name">Cardápio semanal (mural)</div>
+            <div class="rel-tipo-desc">Menu por dia da semana com bebida e kcal — pra expor aos colaboradores</div>
           </div>
         </label>
         <label class="rel-tipo-item">
