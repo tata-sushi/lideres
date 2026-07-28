@@ -224,6 +224,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .modal-btn-cancel { background: var(--bg); color: var(--mid); border: 1px solid var(--border); }
 .modal-btn-cancel:hover { background: #eee; }
 .modal-btn-save { background: var(--carbon); color: var(--citric); }
+.ia-spin { display:none; width:12px; height:12px; border:2px solid rgba(207,255,0,.35); border-top-color:var(--citric); border-radius:50%; animation:relSpin .7s linear infinite; flex-shrink:0; }
+.modal-btn-save.loading .ia-spin { display:inline-block; }
 .modal-btn-save:hover { opacity: 0.85; }
 @keyframes modalIn { from { opacity:0; transform:scale(.97) translateY(6px); } to { opacity:1; transform:scale(1) translateY(0); } }
 
@@ -652,7 +654,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('modal-ia').classList.remove('active');document.body.style.overflow=''">Cancelar</button>
-      <button class="modal-btn modal-btn-save" id="ia-gerar">Gerar</button>
+      <button class="modal-btn modal-btn-save" id="ia-gerar"><span class="ia-spin"></span><span id="ia-gerar-label">Gerar</span></button>
     </div>
   </div>
 </div>
@@ -1551,19 +1553,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   function toggleIABar(){ var ib=document.getElementById('drawerIA'); if(ib) ib.style.display='block'; /* drawer visível p/ quem tem a página; gate.js esconde os botões bloqueados no painel */ }
   function proximasSemanas(n){ var arr=[]; var base=mondayOf(new Date()); for(var i=1;i<=n;i++){ var m=addDays(base,i*7); arr.push({iso:iso(m), label:'Semana de '+fmtDia(m)+' \u2013 '+fmtDia(addDays(m,6))}); } return arr; }
-  function abrirModalIA(){ var sel=document.getElementById('ia-semana'); sel.innerHTML=''; proximasSemanas(8).forEach(function(w){ var o=document.createElement('option'); o.value=w.iso; o.textContent=w.label; sel.appendChild(o); }); var st=document.getElementById('ia-status'); if(st) st.textContent=''; if(typeof closeDrawer==='function') closeDrawer(); var m=document.getElementById('modal-ia'); m.classList.add('active'); document.body.style.overflow='hidden'; }
-  function fecharModalIA(){ var m=document.getElementById('modal-ia'); if(m) m.classList.remove('active'); document.body.style.overflow=''; }
-  function gerarCardapioIA(){
-    var btn=document.getElementById('ia-gerar'); if(!btn||btn.disabled) return;
-    var inicio=document.getElementById('ia-semana').value; if(!inicio) return;
-    var st=document.getElementById('ia-status'); st.style.color='var(--muted)'; st.textContent='Gerando\u2026 (pode levar alguns segundos)';
-    var txt=btn.textContent; btn.disabled=true; btn.textContent='Gerando\u2026';
-    function done(){ btn.disabled=false; btn.textContent=txt; }
+  function abrirModalIA(){ var sel=document.getElementById('ia-semana'); sel.innerHTML=''; proximasSemanas(8).forEach(function(w){ var o=document.createElement('option'); o.value=w.iso; o.textContent=w.label; sel.appendChild(o); }); var st=document.getElementById('ia-status'); st.style.color=''; st.textContent='';
+    btn.disabled=true; btn.classList.add('loading');
+    function done(){ btn.disabled=false; btn.classList.remove('loading'); }
     function err(msg){ done(); st.style.color='var(--red)'; st.textContent='Erro: '+msg; }
     comSupa(function(supa){
       supa.functions.invoke('gerar-cardapio',{ body:{ inicio:inicio, dias:7, janela:5 } }).then(function(res){
         if(res.error){ var ctx=res.error.context;
-          if(ctx && typeof ctx.json==='function'){ ctx.json().then(function(b){ err((b&&b.error)||res.error.message); }, function(){ err(res.error.message); }); }
+          if(ctx && typeof ctx.text==='function'){ ctx.text().then(function(t){ var m=t; try{ var b=JSON.parse(t); m=(b&&(b.error||b.detail))||t; }catch(e){} err(m||res.error.message); }, function(){ err(res.error.message); }); }
           else err(res.error.message);
           return; }
         done(); var n=(res.data&&res.data.gravadas)||0;
@@ -1572,7 +1569,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         currentWeekOffset=Math.round((alvo-mondayOf(new Date()))/604800000);
         carregarSemana();
         setTimeout(fecharModalIA, 1400);
-      }, function(){ err('falha na chamada'); });
+      }, function(e2){ err((e2&&e2.message)||'falha na chamada'); });
     });
   }
   function _toastInterno(msg){ var t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.add('show'); setTimeout(function(){ t.classList.remove('show'); },2200); }
