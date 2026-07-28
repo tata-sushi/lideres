@@ -32,6 +32,8 @@
   var resolvido = false // já mostrou uma decisão (liberou/negou) e avisou o Plus
   var validado = false // já confirmou pela rede (não precisa re-checar)
   var revalidando = false
+  var _sb = null // cliente Supabase compartilhado (criado uma vez, reusado)
+  var _tentSupa = 0 // tentativas de esperar a lib window.supabase carregar
 
   // Avisa o Plus pra ele esconder o loader dele e revelar a página.
   function notify(tp) {
@@ -255,41 +257,64 @@
     } catch (e) {}
   }
 
-  // Consulta a lista de acessos ao vivo, atualiza o cache e decide/corrige.
-  function checar(sess, nome, perfil) {
-    if (validado || revalidando) return
-    if (!window.supabase || !sess || !sess.access_token) {
+  // Estabelece (ou atualiza) o cliente Supabase com o token MAIS FRESCO do Plus e
+  // valida o acesso uma vez. Dois papéis, propositalmente desacoplados:
+  //  1) SEMPRE deixa window.__lideresSupa vivo com o token atual — o cardápio (a
+  //     única página que consulta o Supabase) depende dele; se ficasse preso à
+  //     validação de acesso, um token velho/atrasado deixava a página travada no
+  //     "Carregando dados…".
+  //  2) A validação de acesso (gov_meus_acessos) roda UMA vez (guarda validado).
+  // O token vem sempre fresco do Plus (postMessage no load e a cada renovação do
+  // autoRefreshToken), então setSession não dispara refresh — não rotaciona o
+  // refresh token compartilhado nem derruba a sessão do app.
+  function estabelecer(sess, nome, perfil) {
+    if (!sess || !sess.access_token) {
       if (!resolvido) nega()
       return
     }
-    revalidando = true
+    // A lib UMD do Supabase pode ainda não ter carregado (CDN lento). Espera e
+    // tenta de novo, em vez de negar na cara (o que travava o cardápio).
+    if (!window.supabase) {
+      if (_tentSupa < 60) {
+        _tentSupa++
+        setTimeout(function () {
+          estabelecer(sess, nome, perfil)
+        }, 100)
+      } else if (!resolvido) {
+        nega()
+      }
+      return
+    }
     var ehAdmin = ehAdminDe(perfil)
     // persistSession:false + autoRefreshToken:false: o iframe NÃO guarda nem
-    // renova a sessão. Se renovasse, rotacionaria o refresh token compartilhado
-    // e derrubaria a sessão do app principal (logout sozinho). O token vem
-    // fresco do Plus a cada carga; o iframe só o usa pra checar o acesso.
-    var sb = window.supabase.createClient(SUPA_URL, SUPA_ANON, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
-    sb.auth
+    // renova a sessão sozinho. O token vem fresco do Plus; aqui só o aplicamos.
+    if (!_sb) {
+      _sb = window.supabase.createClient(SUPA_URL, SUPA_ANON, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      })
+    }
+    _sb.auth
       .setSession(sess)
       .then(function () {
-        // Publica o cliente JÁ autenticado pras páginas que precisam do Supabase
-        // com a sessão do usuário (ex.: editor do cardápio). Puramente aditivo —
-        // não altera nada da resolução de acesso abaixo.
-        window.__lideresSupa = sb
+        // Publica/atualiza o cliente autenticado com o token fresco. Sempre — mesmo
+        // se o acesso já foi validado — pra não deixar o cardápio com token velho.
+        window.__lideresSupa = _sb
         try {
           window.dispatchEvent(new CustomEvent('lideres:supa', { detail: { perfil: perfil } }))
         } catch (e) {}
-        return sb.schema('tata_plus').rpc('gov_meus_acessos')
+        // Validação de acesso: só uma vez.
+        if (validado || revalidando) return null
+        revalidando = true
+        return _sb.schema('tata_plus').rpc('gov_meus_acessos')
       })
       .then(function (r) {
+        if (r === null) return null // só atualizamos o token; acesso já resolvido
         var permitidos = (r && r.data ? r.data : []).map(function (x) {
           return { id: x.pagina_id, url: x.url }
         })
         // Só busca bloqueios de aba se a página tem abas controláveis.
         if (document.querySelector('[data-aba-id]')) {
-          return sb
+          return _sb
             .schema('tata_plus')
             .rpc('gov_minhas_abas_bloqueadas')
             .then(
@@ -309,6 +334,7 @@
         return { permitidos: permitidos, bloqueadas: [] }
       })
       .then(function (res) {
+        if (res === null) return
         validado = true
         revalidando = false
         gravarCache({
@@ -344,41 +370,22 @@
     montarSessao(cache.nome, cache.perfil, cache.permitidos)
     trancarAbas(cache.bloqueadas || [], ehAdminDe(cache.perfil))
     libera()
-    // Revalida ao vivo com o token JÁ guardado no cache — mesmo que o Plus não
-    // reenvie a sessão. Corrige cache defasado: se uma página foi concedida
-    // depois que o cache foi salvo, o chip destranca sozinho em vez de ficar
-    // com clique morto. checar() se protege sozinho (validado/revalidando).
-    if (cache.sess && cache.sess.access_token) {
-      ;(function revalDoCache(tent) {
-        if (window.supabase) {
-          checar(cache.sess, cache.nome, cache.perfil)
-          return
-        }
-        if (tent < 40) setTimeout(function () { revalDoCache(tent + 1) }, 100)
-      })(0)
-    }
+    // NÃO revalidamos com o token guardado no cache: ele pode estar VELHO/expirado
+    // e o setSession tentaria renovar — rotacionando o refresh token compartilhado
+    // (derruba a sessão do app) ou falhando (deixa o cardápio sem cliente Supabase,
+    // travado). A revalidação de acesso E o cliente vêm do token FRESCO que o Plus
+    // manda no gov-session (abaixo), garantido pelo loop de gov-ready.
   }
 
-  // 2) Recebe o token vindo do Plus (só dessa origem) e revalida ao vivo.
+  // 2) Recebe o token FRESCO vindo do Plus (só dessa origem): estabelece o cliente
+  //    Supabase com ele e revalida o acesso. Vale tanto pro primeiro load quanto
+  //    pra cada renovação do token (autoRefreshToken do app) — estabelecer()
+  //    reaplica o token novo no cliente sem re-checar o acesso.
   window.addEventListener('message', function (ev) {
     if (ev.origin !== PLUS_ORIGIN) return
     var d = ev.data || {}
     if (d.tp === 'gov-session' && d.access_token) {
-      // Já validado = o Plus está reenviando um token RENOVADO (autoRefresh do app).
-      // Atualiza o token do cliente pra ele não expirar no iframe (senão as
-      // consultas passam a dar 401 depois de ~1h e a página trava). O access_token
-      // vem fresco do Plus, então setSession não dispara refresh (não rotaciona o
-      // refresh token compartilhado).
-      if (validado && window.__lideresSupa && window.__lideresSupa.auth) {
-        try {
-          window.__lideresSupa.auth.setSession({
-            access_token: d.access_token,
-            refresh_token: d.refresh_token,
-          })
-        } catch (e) {}
-        return
-      }
-      checar({ access_token: d.access_token, refresh_token: d.refresh_token }, d.nome, d.perfil)
+      estabelecer({ access_token: d.access_token, refresh_token: d.refresh_token }, d.nome, d.perfil)
     }
   })
 
