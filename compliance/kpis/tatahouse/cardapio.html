@@ -885,8 +885,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       if(!_catalogo.length){ supa.schema('tata_plus').rpc('catalogo_produtos').then(function(r){ if(!r.error) _catalogo=r.data||[]; }); }
       if(!_repertorio.length){ supa.schema('tata_plus').rpc('refeicoes_itens_repertorio').then(function(r){ if(!r.error) _repertorio=r.data||[]; }); }
       supa.schema('tata_plus').rpc('refeicoes_semana',{ p_inicio:inicio, p_unidade:_uniElab }).then(function(res){
-        if(res.error){ showToast('Erro ao carregar'); return; }
+        if(res.error){ showToast('Erro ao carregar: '+((res.error&&res.error.message)||'sem detalhe')); hideLoading(); return; }
         if(iso(_monday)!==inicio) return;
+        try {
         var dados=res.data||[];
         _semana=[0,1,2,3,4,5,6].map(function(i){
           var dataStr=iso(addDays(_monday,i)); var d=null;
@@ -895,8 +896,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           return { data:dataStr, dia_id:d.dia_id, status:d.status||null, resumo:d.resumo||'', aprovado_em:d.aprovado_em, comprado_em:d.comprado_em, recebido_em:d.recebido_em, n_restricoes:d.n_restricoes, almoco:d.almoco, jantar:d.jantar, marmitas:d.marmitas, obs:d.obs||'',
             itens:(d.itens||[]).map(function(it){ return { tipo:it.tipo||'outro', item:it.item||'', qtd:it.qtd, un:it.un||'', custo:it.custo, insumos:it.insumos||[] }; }) };
         });
-        renderGrid(); hideLoading();
-      }, function(){ showToast('Erro ao carregar'); hideLoading(); });
+        renderGrid();
+        } catch(e){ showToast('Erro ao exibir: '+((e&&e.message)||e)); }
+        hideLoading();
+      }, function(err){ showToast('Erro ao carregar: '+((err&&err.message)||'falha de rede')); hideLoading(); });
     });
   }
 
@@ -1585,8 +1588,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     _toastInterno(msg);
   }
 
-  function showLoading() { var el = document.getElementById('loading-overlay'); if (el) el.classList.add('show'); }
-  function hideLoading() { var el = document.getElementById('loading-overlay'); if (el) el.classList.remove('show'); }
+  var _loadWatchdog=null;
+  function showLoading() { var el = document.getElementById('loading-overlay'); if (el) el.classList.add('show');
+    if(_loadWatchdog) clearTimeout(_loadWatchdog);
+    _loadWatchdog=setTimeout(function(){ var e=document.getElementById('loading-overlay'); if(e && e.classList.contains('show')){ e.classList.remove('show'); showToast('Não foi possível carregar os dados. Sua sessão pode ter expirado — recarregue a página ou entre novamente.'); } }, 12000);
+  }
+  function hideLoading() { var el = document.getElementById('loading-overlay'); if (el) el.classList.remove('show'); if(_loadWatchdog){ clearTimeout(_loadWatchdog); _loadWatchdog=null; } }
 
   document.addEventListener('DOMContentLoaded', function() {
     var tabBtns=document.querySelectorAll('.tab-btn');
