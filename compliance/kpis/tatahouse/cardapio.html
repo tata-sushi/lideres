@@ -1491,13 +1491,17 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       itens.push({ tipo:r.querySelector('.item-tipo').value, item:item, qtd:null, un:null, custo:null, insumos:insumos });
     });
     var _pri=itens.find(function(x){return x.tipo==='principal';}); resumo=(_pri&&_pri.item)||(_semana[i].resumo||'');
-    var btn=document.getElementById('md-salvar'); var _lbl=btn.textContent; btn.disabled=true; btn.textContent='Salvando…';
+    var btn=document.getElementById('md-salvar'); var _lbl=btn.textContent;
     var _enviar=(_semana[i].status==='aguardando_aprovacao');
+    btn.disabled=true;
+    // Ao aprovar (enviar p/ compra): mesmo estilo do botão "Gerar" — círculo girando + "Enviado".
+    if(_enviar){ btn.classList.add('loading'); btn.innerHTML='<span class="ia-spin"></span><span>Enviado</span>'; }
+    else { btn.textContent='Salvando…'; }
+    function _restaura(){ btn.disabled=false; btn.classList.remove('loading'); btn.textContent=_lbl; }
     _supa.schema('tata_plus').rpc('refeicoes_dia_salvar',{ p_data:_semana[i].data, p_resumo:resumo||null, p_almoco:almoco, p_jantar:jantar, p_marmitas:marmitas, p_obs:obs||null, p_itens:itens, p_status:(_enviar?'aguardando_compra':null), p_unidade:_uniElab }).then(function(res){
-      btn.disabled=false; btn.textContent=_lbl;
-      if(res.error){ showToast('Erro: '+(res.error.message||'falha')); return; }
-      fecharModal(); carregarSemana(); showToast(_enviar?'Aprovado para compra ✓':'Salvo ✓');
-    }, function(){ btn.disabled=false; btn.textContent=_lbl; showToast('Erro ao salvar'); });
+      if(res.error){ _restaura(); showToast('Erro: '+(res.error.message||'falha')); return; }
+      fecharModal(); carregarSemana(); showToast(_enviar?'Aprovado para compra ✓':'Salvo ✓'); _restaura();
+    }, function(){ _restaura(); showToast('Erro ao salvar'); });
   }
 
   function notaGeral(av){ return (av && av.total) ? ('★ '+(av.geral==null?'—':av.geral)) : '—'; }
@@ -1588,17 +1592,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       }, function(e2){ err((e2&&e2.message)||'falha na chamada'); });
     });
   }
-  function _toastInterno(msg){ var t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.add('show'); setTimeout(function(){ t.classList.remove('show'); },2200); }
-  // Notificação NATIVA do navegador; cai no toast interno se não houver suporte/permissão.
-  // (é chamada logo após o clique do usuário, então o requestPermission tem gesto válido)
+  // Toast na tela — mesmo padrão do recrutamento (pílula interna, sem notificação
+  // nativa do navegador nem pedido de permissão).
   function showToast(msg){
-    try {
-      if ('Notification' in window) {
-        if (Notification.permission === 'granted') { new Notification('Cardápio Tatá', { body: msg, tag: 'cardapio' }); return; }
-        if (Notification.permission === 'default') { try { Notification.requestPermission(); } catch(e){} }
-      }
-    } catch(e){}
-    _toastInterno(msg);
+    var t=document.getElementById('toast'); if(!t) return;
+    t.textContent=msg;
+    requestAnimationFrame(function(){ t.classList.add('show'); });
+    setTimeout(function(){ t.classList.remove('show'); }, 3500);
   }
 
   var _loadWatchdog=null;
