@@ -1654,7 +1654,7 @@ function loadDrawerMeta() {
     document.querySelectorAll('.rel-tipo-item').forEach(function(i){ i.classList.remove('active'); });
     if(el && el.checked) el.closest('.rel-tipo-item').classList.add('active');
     var lbl = document.getElementById('rel-btn-label');
-    if(lbl){ lbl.textContent = (el && el.value === 'csv') ? 'Baixar CSV' : 'Gerar PDF'; }
+    if(lbl){ lbl.textContent = (el && el.value && el.value.indexOf('csv')===0) ? 'Baixar CSV' : 'Gerar PDF'; }
   };
 
   window.abrirModalRelatoriosPdf = function(){
@@ -1746,7 +1746,7 @@ function loadDrawerMeta() {
     var f = _validaFiltros(); if(!f) return;
     var tipo = (document.querySelector('input[name="rel-tipo"]:checked')||{}).value || 'consolidado';
     _relErr(''); _relSetLoading(true, 'Gerando…');
-    if(tipo === 'csv')          _gerarCSV(f);
+    if(tipo.indexOf('csv')===0) _gerarCSV(f, tipo.replace('csv_',''));
     else if(tipo === 'consolidado') _gerarConsolidado(f);
     else                            _gerarDetalhado(f);
   };
@@ -1883,72 +1883,58 @@ function loadDrawerMeta() {
     // abre o mesmo modal, mas pré-marcando tipo=csv e período de 60 dias
     abrirModalRelatoriosPdf();
     _relAtalho(60);
-    var r = document.querySelector('input[name="rel-tipo"][value="csv"]');
+    var r = document.querySelector('input[name="rel-tipo"][value="csv_cardapios"]');
     if(r){ r.checked = true; _relTipoChg(r); }
     var lblEl = document.getElementById('rel-btn-label');
     if(lblEl) lblEl.textContent = 'Baixar CSV';
   };
 
-  function _gerarCSV(f){
-    if(!window.__lideresSupa){ _relErr('Sessão não carregada.'); _relSetLoading(false,'Gerar PDF'); return; }
+  function _gerarCSV(f, qual){
+    if(!window.__lideresSupa){ _relErr('Sessão não carregada.'); _relSetLoading(false,'Baixar CSV'); return; }
     window.__lideresSupa.schema('tata_plus').rpc('refeicoes_relatorio_detalhado',{ p_unidade:f.uni, p_data_ini:f.de, p_data_fim:f.ate })
       .then(function(res){
-        if(res.error){ var em=(res.error.message||''); var friendly = /timeout/i.test(em) ? 'Consulta muito grande — reduza o período (tente 30 dias) e gere novamente.' : ('Erro: '+(em||res.error.hint||JSON.stringify(res.error))); _relErr(friendly); _relSetLoading(false,'Gerar PDF'); return; }
+        if(res.error){ var em=(res.error.message||''); var friendly = /timeout/i.test(em) ? 'Consulta muito grande — reduza o período (tente 30 dias) e gere de novo.' : ('Erro: '+(em||res.error.hint||JSON.stringify(res.error))); _relErr(friendly); _relSetLoading(false,'Baixar CSV'); return; }
         var lista = res.data || [];
-        if(!lista.length){ _relErr('Nenhum cardápio no período.'); _relSetLoading(false,'Gerar PDF'); return; }
-        var header = ['data','unidade','status','resumo','observacao',
-          'aprovado_em','comprado_em','recebido_em',
-          'almoco_qtd','jantar_qtd','marmitas_qtd','almoco_servido','jantar_servido','marmitas_servido',
-          'servido_total','planejado_total','custo_total_dia','desperdicio_total_dia',
-          'kcal','proteina_g','carb_g','gordura_g','fibra_g','indice_saudavel','porcao_g',
-          'aval_geral','n_avaliacoes','restricoes_afetadas',
-          'tipo_prato','prato','qtd_prato','un_prato','custo_prato','qtd_produzida','qtd_desperdicada',
-          'insumos','comentarios_sugestoes'
-        ];
-        var rows = [header.join(';')];
-        lista.forEach(function(d){
-          var restr = (d.restricoes_afetadas||[]).join(' | ');
-          var coments = (d.comentarios||[]).map(function(c){
+        if(!lista.length){ _relErr('Nenhum cardápio no período.'); _relSetLoading(false,'Baixar CSV'); return; }
+        var header, rows=[], nome;
+        if(qual==='insumos'){
+          nome='insumos';
+          header=['data','unidade','tipo_prato','prato','insumo','qtd','un','custo_prato'];
+          lista.forEach(function(d){ (d.pratos||[]).forEach(function(pr){ (pr.insumos||[]).forEach(function(x){
+            rows.push([_csvEsc(d.data),_csvEsc(d.unidade),_csvEsc(pr.tipo),_csvEsc(pr.item),_csvEsc(x.insumo||x.catalogo_nome||''),_csvEsc(x.qtd||''),_csvEsc(x.un||''),_csvEsc(pr.custo||'')].join(';'));
+          }); }); });
+        } else if(qual==='sugestoes'){
+          nome='sugestoes';
+          header=['data','unidade','fonte','nota','comentario','quando'];
+          lista.forEach(function(d){ (d.comentarios||[]).forEach(function(c){
             var nota = c.voto || [c.qualidade,c.variedade,c.atendimento].filter(Boolean).join('/');
-            return '['+(c.fonte||'')+(nota?' '+nota:'')+'] '+(c.comentario||'');
-          }).join(' || ');
-          var pratos = d.pratos || [];
-          if(!pratos.length){
-            rows.push([_csvEsc(d.data),_csvEsc(d.unidade),_csvEsc(d.status),_csvEsc(d.resumo),_csvEsc(d.observacao),
+            rows.push([_csvEsc(d.data),_csvEsc(d.unidade),_csvEsc(c.fonte||''),_csvEsc(nota),_csvEsc(c.comentario||''),_csvEsc(c.created_at||'')].join(';'));
+          }); });
+        } else {
+          nome='cardapios';
+          header=['data','unidade','prato_principal','status','aprovado_em','comprado_em','recebido_em','almoco_qtd','jantar_qtd','marmitas_qtd','almoco_servido','jantar_servido','marmitas_servido','servido_total','planejado_total','custo_total','desperdicio_total','kcal','proteina_g','carb_g','gordura_g','fibra_g','indice_saudavel','porcao_g','aval_geral','n_avaliacoes','restricoes_afetadas'];
+          lista.forEach(function(d){
+            var restr = (d.restricoes_afetadas||[]).join(' | ');
+            rows.push([_csvEsc(d.data),_csvEsc(d.unidade),_csvEsc(d.resumo||''),_csvEsc(d.status),
               _csvEsc(d.aprovado_em),_csvEsc(d.comprado_em),_csvEsc(d.recebido_em),
               d.almoco_qtd||0,d.jantar_qtd||0,d.marmitas_qtd||0,d.almoco_servido||'',d.jantar_servido||'',d.marmitas_servido||'',
               d.servido_total||0,d.planejado_total||0,_csvEsc(d.custo_total||0),_csvEsc(d.desperdicio_total||0),
               d.kcal||'',d.proteina_g||'',d.carb_g||'',d.gordura_g||'',d.fibra_g||'',d.indice_saudavel||'',d.porcao_g||'',
-              d.aval_geral!=null?d.aval_geral:'',d.n_avaliacoes||0,_csvEsc(restr),
-              '','','','','','','','',_csvEsc(coments)
-            ].join(';'));
-            return;
-          }
-          pratos.forEach(function(p, i){
-            var insumos = (p.insumos||[]).map(function(x){ return (x.insumo||x.catalogo_nome||'')+' '+(x.qtd||'')+' '+(x.un||''); }).join(' | ');
-            rows.push([_csvEsc(d.data),_csvEsc(d.unidade),_csvEsc(d.status),_csvEsc(d.resumo),_csvEsc(d.observacao),
-              _csvEsc(d.aprovado_em),_csvEsc(d.comprado_em),_csvEsc(d.recebido_em),
-              d.almoco_qtd||0,d.jantar_qtd||0,d.marmitas_qtd||0,d.almoco_servido||'',d.jantar_servido||'',d.marmitas_servido||'',
-              d.servido_total||0,d.planejado_total||0,_csvEsc(d.custo_total||0),_csvEsc(d.desperdicio_total||0),
-              d.kcal||'',d.proteina_g||'',d.carb_g||'',d.gordura_g||'',d.fibra_g||'',d.indice_saudavel||'',d.porcao_g||'',
-              d.aval_geral!=null?d.aval_geral:'',d.n_avaliacoes||0,_csvEsc(restr),
-              _csvEsc(p.tipo),_csvEsc(p.item),_csvEsc(p.quantidade||''),_csvEsc(p.unidade||''),_csvEsc(p.custo||''),
-              _csvEsc(p.quantidade_produzida||''),_csvEsc(p.quantidade_desperdicada||''),
-              _csvEsc(insumos), i===0 ? _csvEsc(coments) : ''
-            ].join(';'));
+              d.aval_geral!=null?d.aval_geral:'',d.n_avaliacoes||0,_csvEsc(restr)].join(';'));
           });
-        });
-        var csv = '﻿' + rows.join('\n');
+        }
+        if(!rows.length){ _relErr('Sem dados de "'+nome+'" no período.'); _relSetLoading(false,'Baixar CSV'); return; }
+        var csv = '﻿' + [header.join(';')].concat(rows).join('\n');
         var blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
         var link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'cardapios_'+f.uni+'_'+f.de+'_a_'+f.ate+'.csv';
+        link.download = nome+'_'+f.uni+'_'+f.de+'_a_'+f.ate+'.csv';
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
         URL.revokeObjectURL(link.href);
         fecharModalRelatoriosPdf();
-        _relSetLoading(false,'Gerar PDF');
-      }, function(e){ _relErr('Erro: '+(e && e.message ? e.message : 'falha na chamada.')); _relSetLoading(false,'Gerar PDF'); })
-      .catch(function(e){ _relErr('Erro: '+(e && e.message ? e.message : 'exceção.')); _relSetLoading(false,'Gerar PDF'); });
+        _relSetLoading(false,'Baixar CSV');
+      }, function(e){ _relErr('Erro: '+(e && e.message ? e.message : 'falha na chamada.')); _relSetLoading(false,'Baixar CSV'); })
+      .catch(function(e){ _relErr('Erro: '+(e && e.message ? e.message : 'exceção.')); _relSetLoading(false,'Baixar CSV'); });
   }
 
   // ── Ligar botões do drawer ────────────────────────────────────────
@@ -2013,10 +1999,24 @@ function loadDrawerMeta() {
           </div>
         </label>
         <label class="rel-tipo-item">
-          <input type="radio" name="rel-tipo" value="csv" onchange="_relTipoChg(this)">
+          <input type="radio" name="rel-tipo" value="csv_cardapios" onchange="_relTipoChg(this)">
           <div>
-            <div class="rel-tipo-name">Extração CSV</div>
-            <div class="rel-tipo-desc">1 linha por prato com todos os campos — abre no Excel/Sheets</div>
+            <div class="rel-tipo-name">CSV · Cardápios</div>
+            <div class="rel-tipo-desc">1 linha por dia — processo, status, custo, desperdício, avaliação</div>
+          </div>
+        </label>
+        <label class="rel-tipo-item">
+          <input type="radio" name="rel-tipo" value="csv_insumos" onchange="_relTipoChg(this)">
+          <div>
+            <div class="rel-tipo-name">CSV · Insumos</div>
+            <div class="rel-tipo-desc">1 linha por insumo comprado — Data · Prato · Insumo · Qtd · Un</div>
+          </div>
+        </label>
+        <label class="rel-tipo-item">
+          <input type="radio" name="rel-tipo" value="csv_sugestoes" onchange="_relTipoChg(this)">
+          <div>
+            <div class="rel-tipo-name">CSV · Sugestões</div>
+            <div class="rel-tipo-desc">1 linha por sugestão/comentário — Data · Fonte · Nota · Comentário</div>
           </div>
         </label>
       </div>
