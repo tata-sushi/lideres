@@ -451,13 +451,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="drawer-kpi-grid">
         <div class="drawer-kpi-card">
           <span class="drawer-kpi-card-label">Seções</span>
-          <span class="drawer-kpi-card-number">7</span>
-          <span class="drawer-kpi-card-sub"><strong>27</strong> pág / <strong>13</strong> dash</span>
+          <span class="drawer-kpi-card-number" id="drawer-kpi-secoes">7</span>
+          <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-pags">—</strong> pág / <strong id="drawer-kpi-dash">—</strong> dash</span>
         </div>
         <div class="drawer-kpi-card">
-          <span class="drawer-kpi-card-label">Departamentos</span>
-          <span class="drawer-kpi-card-number">14</span>
-          <span class="drawer-kpi-card-sub"><strong>3</strong> parceiros</span>
+          <span class="drawer-kpi-card-label">Unidades</span>
+          <span class="drawer-kpi-card-number" id="drawer-kpi-unidades">—</span>
+          <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-deptos">—</strong> depto / <strong id="drawer-kpi-colabs">—</strong> colab</span>
         </div>
       </div>
     </div>
@@ -479,6 +479,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.getElementById('drawer').classList.add('open');
     document.getElementById('drawer-overlay').classList.add('open');
     document.body.style.overflow = 'hidden';
+    loadDrawerKPIs();
+    loadDrawerMeta();
   }
   function closeDrawer() {
     document.getElementById('drawer').classList.remove('open');
@@ -486,6 +488,44 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.body.style.overflow = '';
   }
   document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDrawer(); });
+
+  var _drawerKpisLoaded = false;
+  function loadDrawerKPIs() {
+    if (_drawerKpisLoaded) return;
+    fetch('https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec?action=listColaboradores')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.ok) return;
+        var colabs = data.colaboradores;
+        var unidades = new Set(colabs.map(function(c) { return c.unidade; }));
+        var deptos   = new Set(colabs.map(function(c) { return c.departamento; }));
+        document.getElementById('drawer-kpi-unidades').textContent = unidades.size;
+        document.getElementById('drawer-kpi-deptos').textContent   = deptos.size;
+        document.getElementById('drawer-kpi-colabs').textContent   = (data.total - 3);
+        _drawerKpisLoaded = true;
+      })
+      .catch(function() {});
+  }
+  var _drawerMetaLoaded = false;
+  function loadDrawerMeta() {
+    if (_drawerMetaLoaded) return;
+    fetch('https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.tree) return;
+        var pages = 0, dashboards = 0;
+        data.tree.forEach(function(f) {
+          if (f.type !== 'blob' || !f.path.endsWith('.html')) return;
+          if (f.path.indexOf('compliance/kpis/') === 0) dashboards++;
+          else if (f.path.indexOf('compliance/') === 0) pages++;
+        });
+        var el = function(id) { return document.getElementById(id); };
+        if (el('drawer-kpi-pags')) el('drawer-kpi-pags').textContent = pages;
+        if (el('drawer-kpi-dash')) el('drawer-kpi-dash').textContent = dashboards;
+        _drawerMetaLoaded = true;
+      })
+      .catch(function() {});
+  }
 
   /* ── Header user ── */
   (function() {
