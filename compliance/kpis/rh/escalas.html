@@ -361,6 +361,27 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .esc-empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
 .esc-empty-state p { font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; }
 
+/* MOBILE: cards por colaborador (< 768px) vs grade desktop (>= 768px) — padrão absenteísmo */
+.esc-desk { display: none; overflow-x: auto; }
+.esc-mobile { display: flex; flex-direction: column; gap: 10px; }
+@media (min-width: 768px) {
+  .esc-mobile { display: none !important; }
+  .esc-desk { display: block; }
+}
+.esc-pcard-hd { cursor: pointer; }
+.esc-pcard-hd:hover { background: #FAFAFA; }
+.esc-pcard-hd .esc-avatar { width: 34px; height: 34px; }
+.esc-pcard-edit { width: 30px; height: 30px; flex-shrink: 0; border-radius: 6px; background: var(--carbon); display: inline-flex; align-items: center; justify-content: center; }
+.esc-pcard-edit svg { width: 13px; height: 13px; stroke: var(--citric); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.esc-pcard-day { display: grid; grid-template-columns: 58px 1fr; align-items: center; gap: 10px; width: 100%; text-align: left; background: var(--surface); border: none; padding: 11px 16px; cursor: pointer; position: relative; font-family: 'DM Sans', sans-serif; }
+.esc-pcard-day + .esc-pcard-day { border-top: 1px solid var(--border); }
+.esc-pcard-day:hover { background: #FAFAFA; }
+.esc-pcard-day.is-today { background: rgba(207,255,0,0.10); }
+.epd-daycol { display: flex; flex-direction: column; gap: 1px; }
+.epd-dow { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--carbon); letter-spacing: 0.3px; }
+.epd-date { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); }
+.epd-state { justify-self: end; display: flex; align-items: center; gap: 6px; }
+
 /* BOTTOM-SHEET (reusa .modal-overlay/.modal-box do shell) — campos escala */
 .esc-sheet-hd { align-items: center; gap: 10px; }
 .esc-sheet-name { flex: 1; min-width: 0; font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 700; color: var(--carbon); letter-spacing: -0.2px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -705,15 +726,16 @@ function renderEmpty(msg){
     '<div class="esc-empty-state"><p>'+msg+'</p></div>';
 }
 
+function estadoHtml(dia){
+  if (!dia || !dia.definido) return '<span class="ec-empty">+</span>';
+  if (dia.folga) return '<span class="ec-folga" title="Folga">&#9749;</span>';
+  if (dia.entrada == null) return '<span class="ec-trab">Trab.</span>';
+  return '<span class="ec-hours"><b>'+hm(dia.entrada)+'</b><span>'+hm(dia.saida)+'</span></span>';
+}
 function celulaHtml(dia, pi, di, ehHoje){
   var cls = 'esc-cell' + (ehHoje ? ' is-today' : '');
-  var inner;
-  if (!dia || !dia.definido) inner = '<span class="ec-empty">+</span>';
-  else if (dia.folga) inner = '<span class="ec-folga" title="Folga">&#9749;</span>';
-  else if (dia.entrada == null) inner = '<span class="ec-trab">Trab.</span>';
-  else inner = '<span class="ec-hours"><b>'+hm(dia.entrada)+'</b><span>'+hm(dia.saida)+'</span></span>';
   var manual = (dia && dia.origem === 'manual') ? '<span class="ec-manual" title="Ajuste pontual"></span>' : '';
-  return '<td class="'+cls+'" onclick="abrirPontual('+pi+','+di+')">'+manual+inner+'</td>';
+  return '<td class="'+cls+'" onclick="abrirPontual('+pi+','+di+')">'+manual+estadoHtml(dia)+'</td>';
 }
 
 function renderGrade(){
@@ -722,31 +744,58 @@ function renderGrade(){
     return;
   }
   var hojeIso = isoLocal(new Date());
+
+  // ── Desktop (>= 768px): grade colaboradores × 7 dias ──
   var thead = '<tr><th class="esc-col-name">Colaborador</th>';
   for (var i=0;i<7;i++){
     var d = addDias(ST.inicio, i);
-    var isToday = isoLocal(d) === hojeIso;
-    thead += '<th class="'+(isToday?'is-today':'')+'">'+DIAS_CURTO[i]+'<b>'+ddmm(d)+'</b></th>';
+    thead += '<th class="'+(isoLocal(d)===hojeIso?'is-today':'')+'">'+DIAS_CURTO[i]+'<b>'+ddmm(d)+'</b></th>';
   }
   thead += '</tr>';
-
   var body = '';
   ST.equipe.forEach(function(p, pi){
-    var av = p.avatar ? '<img src="'+p.avatar+'" alt="">' : iniciais(p.nome);
+    var av = p.avatar ? '<img src="'+esc(p.avatar)+'" alt="">' : iniciais(p.nome);
     body += '<tr>';
     body += '<td class="esc-col-name"><div class="esc-name-cell" onclick="abrirPadrao('+pi+')">'+
               '<span class="esc-avatar">'+av+'</span>'+
-              '<span class="esc-name-txt"><span class="esc-name-1">'+primeiroNome(p.nome)+'</span>'+
-              '<span class="esc-name-cargo">'+(p.cargo||'')+'</span></span></div></td>';
+              '<span class="esc-name-txt"><span class="esc-name-1">'+esc(primeiroNome(p.nome))+'</span>'+
+              '<span class="esc-name-cargo">'+esc(p.cargo||'')+'</span></span></div></td>';
     for (var di=0; di<7; di++){
       var d2 = addDias(ST.inicio, di);
       body += celulaHtml((p.dias||[])[di], pi, di, isoLocal(d2) === hojeIso);
     }
     body += '</tr>';
   });
+  var desk = '<div class="esc-desk"><table class="esc-grid"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table></div>';
 
-  document.getElementById('esc-content').innerHTML =
-    '<table class="esc-grid"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
+  // ── Mobile (< 768px): um card por colaborador ──
+  var cards = ST.equipe.map(function(p, pi){
+    var av = p.avatar ? '<img src="'+esc(p.avatar)+'" alt="">' : iniciais(p.nome);
+    var dias = '';
+    for (var di=0; di<7; di++){
+      var dd = addDias(ST.inicio, di);
+      var dia = (p.dias||[])[di];
+      var manual = (dia && dia.origem === 'manual') ? '<span class="ec-manual" title="Ajuste pontual" style="position:static;margin-left:2px"></span>' : '';
+      dias += '<button class="esc-pcard-day'+(isoLocal(dd)===hojeIso?' is-today':'')+'" onclick="abrirPontual('+pi+','+di+')">'+
+                '<span class="epd-daycol"><span class="epd-dow">'+DIAS_CURTO[di]+'</span><span class="epd-date">'+ddmm(dd)+'</span></span>'+
+                '<span class="epd-state">'+estadoHtml(dia)+manual+'</span>'+
+              '</button>';
+    }
+    return '<div class="card">'+
+             '<div class="card-header esc-pcard-hd" onclick="abrirPadrao('+pi+')">'+
+               '<div style="display:flex;align-items:center;gap:10px;min-width:0;">'+
+                 '<span class="esc-avatar">'+av+'</span>'+
+                 '<div style="min-width:0;"><div class="candidate-name">'+esc(p.nome)+'</div>'+
+                 '<div class="candidate-mt">'+esc(p.cargo||'')+'</div></div>'+
+               '</div>'+
+               '<span class="esc-pcard-edit"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></span>'+
+             '</div>'+
+             '<div class="esc-pcard-days">'+dias+'</div>'+
+           '</div>';
+  }).join('');
+  var mobile = '<div class="esc-mobile">'+cards+'</div>';
+
+  document.getElementById('esc-content').innerHTML = mobile + desk;
 }
 
 /* ── Confirmar semana (handoff §4.2 escala_semana_confirmar) ─────────────── */
