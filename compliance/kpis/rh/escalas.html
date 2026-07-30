@@ -354,7 +354,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .ec-hours { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
 .ec-hours b { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 600; color: var(--carbon); font-variant-numeric: tabular-nums; }
 .ec-hours span { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); font-variant-numeric: tabular-nums; }
-.ec-folga { font-size: 15px; color: var(--amber); }
+.ec-folga { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; color: var(--amber); background: var(--amber-bg); padding: 3px 8px; border-radius: 100px; white-space: nowrap; }
 .ec-trab { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--green); background: var(--green-bg); padding: 3px 8px; border-radius: 100px; }
 .ec-empty { font-size: 18px; font-weight: 300; color: var(--border); }
 .ec-manual { position: absolute; top: 5px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
@@ -387,9 +387,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .esc-sheet-name { flex: 1; min-width: 0; font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 700; color: var(--carbon); letter-spacing: -0.2px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .esc-sheet-day { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0.2px; }
 .esc-sheet-cargo { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.6px; text-transform: uppercase; }
-.esc-marc-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.esc-marc-row .esc-time { max-width: 120px; }
-.esc-marc-arrow { color: var(--muted); }
+.esc-marc-row { display: flex; align-items: center; flex-wrap: nowrap; gap: 8px; margin-bottom: 8px; }
+.esc-marc-row .esc-time { flex: 1 1 0; min-width: 0; max-width: none; }
+.esc-marc-arrow { color: var(--muted); flex-shrink: 0; }
 .esc-marc-rm { width: 28px; height: 28px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
 .esc-marc-rm:hover { border-color: var(--red); color: var(--red); }
 .esc-addmarc { margin-top: 2px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--mid); background: var(--bg); border: 1px dashed var(--border); border-radius: var(--radius); padding: 8px 12px; cursor: pointer; width: 100%; transition: all .15s; }
@@ -530,11 +530,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div id="pt-marcacoes"></div>
         <button class="esc-addmarc" id="pt-add" onclick="ptAddMarc()">+ incluir marcação</button>
       </div>
+      <div class="esc-field">
+        <span class="esc-field-label">Folga</span>
+        <div class="esc-chips">
+          <button class="esc-chip" onclick="marcarFolga('Folga')">Folga</button>
+          <button class="esc-chip" onclick="marcarFolga('Folga Aniversário')">Folga Aniversário</button>
+          <button class="esc-chip" onclick="marcarFolga('Banco de Horas')">Banco de Horas</button>
+          <button class="esc-chip" onclick="marcarFolga('Folga Feriado')">Folga Feriado</button>
+        </div>
+      </div>
     </div>
     <div class="modal-footer" style="flex-wrap:wrap;gap:8px;">
       <button class="btn-modal-danger" id="pt-reset" onclick="resetPontual()" style="display:none;">Voltar ao padrão</button>
-      <button class="btn-modal-cancelar" onclick="marcarFolga()">Marcar folga</button>
-      <button class="btn-modal-confirmar" onclick="salvarPontual()">Salvar ajuste</button>
+      <button class="btn-modal-confirmar" onclick="salvarPontual()" style="flex:1;">Salvar ajuste</button>
     </div>
   </div>
 </div>
@@ -728,14 +736,13 @@ function renderEmpty(msg){
 
 function estadoHtml(dia){
   if (!dia || !dia.definido) return '<span class="ec-empty">+</span>';
-  if (dia.folga) return '<span class="ec-folga" title="Folga">&#9749;</span>';
+  if (dia.folga) return '<span class="ec-folga">'+esc(dia.tipo_folga || 'Folga')+'</span>';
   if (dia.entrada == null) return '<span class="ec-trab">Trab.</span>';
   return '<span class="ec-hours"><b>'+hm(dia.entrada)+'</b><span>'+hm(dia.saida)+'</span></span>';
 }
 function celulaHtml(dia, pi, di, ehHoje){
   var cls = 'esc-cell' + (ehHoje ? ' is-today' : '');
-  var manual = (dia && dia.origem === 'manual') ? '<span class="ec-manual" title="Ajuste pontual"></span>' : '';
-  return '<td class="'+cls+'" onclick="abrirPontual('+pi+','+di+')">'+manual+estadoHtml(dia)+'</td>';
+  return '<td class="'+cls+'" onclick="abrirPontual('+pi+','+di+')">'+estadoHtml(dia)+'</td>';
 }
 
 function renderGrade(){
@@ -775,10 +782,9 @@ function renderGrade(){
     for (var di=0; di<7; di++){
       var dd = addDias(ST.inicio, di);
       var dia = (p.dias||[])[di];
-      var manual = (dia && dia.origem === 'manual') ? '<span class="ec-manual" title="Ajuste pontual" style="position:static;margin-left:2px"></span>' : '';
       dias += '<button class="esc-pcard-day'+(isoLocal(dd)===hojeIso?' is-today':'')+'" onclick="abrirPontual('+pi+','+di+')">'+
                 '<span class="epd-daycol"><span class="epd-dow">'+DIAS_CURTO[di]+'</span><span class="epd-date">'+ddmm(dd)+'</span></span>'+
-                '<span class="epd-state">'+estadoHtml(dia)+manual+'</span>'+
+                '<span class="epd-state">'+estadoHtml(dia)+'</span>'+
               '</button>';
     }
     return '<div class="card">'+
@@ -1037,13 +1043,16 @@ function salvarPontual(){
     toast('Ajuste salvo.'); fecharPontual(); carregarSemana();
   }, function(e){ hideLoading(); erroRPC(e); });
 }
-function marcarFolga(){
+function marcarFolga(tipo){
   if(!PT) return;
+  tipo = tipo || 'Folga';
   showLoading();
+  // O backend grava folga como booleano; o tipo (Aniversário/Banco de Horas/
+  // Feriado) ainda não é persistido pelo escala_dia_set (a estender).
   TP().rpc('escala_dia_set', { p_matricula:PT.matricula, p_data:PT.data, p_entrada:null, p_saida:null, p_folga:true }).then(function(r){
     hideLoading();
     if (r.error) { erroRPC(r.error); return; }
-    toast('Folga marcada.'); fecharPontual(); carregarSemana();
+    toast(tipo + ' marcada.'); fecharPontual(); carregarSemana();
   }, function(e){ hideLoading(); erroRPC(e); });
 }
 function resetPontual(){
