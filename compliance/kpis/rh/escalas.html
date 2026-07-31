@@ -369,8 +369,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   .esc-desk { display: block; }
 }
 .esc-pcard-hd .esc-avatar { width: 34px; height: 34px; }
-.esc-pcard-foot { justify-content: flex-end; }
+.esc-pcard-foot { justify-content: space-between; }
 .esc-pcard-foot .btn-registrar svg { width: 12px; height: 12px; }
+.esc-pcard-total { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); }
+.esc-pcard-total b { color: var(--carbon); font-weight: 600; }
+.epd-h { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); }
+.epd-h::before { content: '·'; margin-right: 6px; color: var(--border); }
 .esc-pcard-day { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; width: 100%; text-align: left; background: var(--surface); border: none; padding: 11px 16px; cursor: pointer; position: relative; font-family: 'DM Sans', sans-serif; }
 .esc-pcard-day + .esc-pcard-day { border-top: 1px solid var(--border); }
 .esc-pcard-day:hover { background: #FAFAFA; }
@@ -733,6 +737,18 @@ function segunda(offset){
 var hm = function(t){ return t ? String(t).slice(0,5) : ''; };
 function addDias(d, n){ var x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate()+n); return x; }
 function ddmm(d){ return pad(d.getDate())+'/'+pad(d.getMonth()+1); }
+function hmMin(t){ if(!t) return null; var p = String(t).split(':'); return (+p[0])*60 + (+p[1]); }
+function horasDia(dia){
+  if (!dia || !dia.definido || dia.folga || dia.entrada == null) return 0;
+  var a = hmMin(hm(dia.entrada)), b = hmMin(hm(dia.saida));
+  if (a == null || b == null) return 0;
+  var min = b - a; if (min <= 0) min += 1440; // vira meia-noite
+  return min / 60;
+}
+function fmtH(h){
+  var m = Math.round(h*60); var hh = Math.floor(m/60), mm = m%60;
+  return mm ? (hh+'h'+(mm<10?'0':'')+mm) : (hh+'h');
+}
 
 var DIAS_CURTO = ['SEG','TER','QUA','QUI','SEX','SÁB','DOM'];
 var DIAS_NOME  = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
@@ -1065,13 +1081,15 @@ function renderGrade(){
   var cards = ST.equipe.map(function(p, pi){
     if (!_deptoOk(p)) return '';
     var av = p.avatar ? '<img src="'+esc(p.avatar)+'" alt="">' : iniciais(p.nome);
-    var dias = '';
+    var dias = '', totalH = 0;
     for (var di=0; di<7; di++){
       var dd = addDias(ST.inicio, di);
       var dia = (p.dias||[])[di];
+      var hD = horasDia(dia); totalH += hD;
+      var hBadge = hD > 0 ? '<span class="epd-h">'+fmtH(hD)+'</span>' : '';
       dias += '<button class="esc-pcard-day" onclick="abrirPontual('+pi+','+di+')">'+
                 '<span class="epd-daycol"><span class="epd-dow">'+DIAS_CURTO[di]+'</span><span class="epd-date">('+ddmm(dd)+')</span></span>'+
-                '<span class="epd-state">'+estadoHtml(dia)+'</span>'+
+                '<span class="epd-state">'+estadoHtml(dia)+hBadge+'</span>'+
               '</button>';
     }
     return '<div class="card">'+
@@ -1084,6 +1102,7 @@ function renderGrade(){
              '</div>'+
              '<div class="esc-pcard-days">'+dias+'</div>'+
              '<div class="card-footer esc-pcard-foot">'+
+               '<span class="esc-pcard-total">Semana: <b>'+fmtH(totalH)+'</b></span>'+
                '<button class="btn-registrar" onclick="abrirPadrao('+pi+')">'+
                  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>'+
                  'Editar semana</button>'+
@@ -1188,9 +1207,6 @@ function renderPdGrid(){
               '</div>';
     }
     html += '</div>';
-  }
-  if (!PD.controla){
-    html += '<div class="esc-hint">Sem controle de jornada: os dias trabalhados entram sem hora fixa (o colaborador vê apenas "Trabalha").</div>';
   }
   document.getElementById('pd-grid').innerHTML = html;
 }
