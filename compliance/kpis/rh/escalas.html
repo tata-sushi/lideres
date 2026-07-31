@@ -409,14 +409,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .esc-cycle-hd { background: #FAFAFA; padding: 8px 12px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: var(--carbon); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .esc-quickfill { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.3px; text-transform: uppercase; color: var(--mid); background: var(--surface); border: 1px solid var(--border); border-radius: 100px; padding: 3px 9px; cursor: pointer; }
 .esc-quickfill:hover { border-color: var(--carbon); color: var(--carbon); }
-.esc-day-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.esc-day-row { display: flex; align-items: center; flex-wrap: nowrap; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
 .esc-day-row:last-child { border-bottom: none; }
 .esc-day-row.is-folga { background: #FAFAFA; }
 .esc-day-name { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--carbon); width: 30px; flex-shrink: 0; }
 .esc-folga-btn { margin-left: auto; flex-shrink: 0; padding: 7px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.3px; color: var(--mid); cursor: pointer; transition: all .15s; }
 .esc-folga-btn.on { background: var(--carbon); color: var(--citric); border-color: var(--carbon); }
-.esc-day-times { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.esc-pair { display: inline-flex; align-items: center; gap: 3px; }
+.esc-day-times { display: flex; align-items: center; flex-wrap: nowrap; gap: 6px; flex: 1; min-width: 0; overflow-x: auto; }
+.esc-preset-sel { width: auto; min-width: 148px; font-size: 12px; padding-top: 6px; padding-bottom: 6px; }
+.esc-clear-btn { width: 30px; height: 30px; flex-shrink: 0; border: none; border-radius: var(--radius); background: var(--carbon); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: opacity .15s; }
+.esc-clear-btn:hover { opacity: .85; }
+.esc-clear-btn svg { width: 14px; height: 14px; stroke: var(--citric); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.esc-pair { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
 .esc-pair input { width: 70px; border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; font-family: 'DM Mono', monospace; font-size: 12px; background: var(--bg); }
 .esc-pair input:focus { outline: none; border-color: var(--carbon); }
 .esc-pair-sep { color: var(--muted); font-size: 11px; }
@@ -894,8 +898,12 @@ function renderPdGrid(){
   for (var c=0;c<PD.ciclo;c++){
     var titulo = PD.ciclo>1 ? ('Semana '+String.fromCharCode(65+c)) : 'Semana';
     html += '<div class="esc-cycle-wk"><div class="esc-cycle-hd"><span>'+titulo+'</span>'+
-            '<span><button class="esc-quickfill" onclick="pdQuickFill('+c+')">Seg–Sex 09–18</button> '+
-            '<button class="esc-quickfill" onclick="pdLimpar('+c+')">Limpar</button></span></div>';
+            '<span style="display:flex;gap:6px;align-items:center;">'+
+            '<select class="esc-select esc-preset-sel" onchange="pdApplyPreset('+c+',this.value); this.value=\'\';">'+
+            '<option value="">Horário pré-definido…</option>'+
+            PRESETS.map(function(pr){ return '<option value="'+pr[0]+'|'+pr[1]+'">'+pr[0]+' – '+pr[1]+'</option>'; }).join('')+
+            '</select>'+
+            '<button class="esc-clear-btn" onclick="pdLimpar('+c+')" title="Limpar"><svg viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></button></span></div>';
     for (var d=0; d<7; d++){
       var cell = PD.grid[c][d];
       if (!cell.marc || !cell.marc.length) cell.marc = [{ entrada:'', saida:'' }];
@@ -910,8 +918,8 @@ function renderPdGrid(){
             '<input type="time" value="'+(m.saida||'')+'" onchange="pdPairTime('+c+','+d+','+k+',\'saida\',this.value)">'+
             rm+'</span>';
         }).join('');
-        var addBtn = cell.marc.length < 2 ? '<button class="esc-pair-add" onclick="pdAddPair('+c+','+d+')" title="Incluir horário">+</button>' : '';
-        timesHtml = '<div class="esc-day-times">'+pairs+addBtn+'</div>';
+        var addBtn = cell.marc.length < 3 ? '<button class="esc-pair-add" onclick="pdAddPair('+c+','+d+')" title="Incluir marcação">+</button>' : '';
+        timesHtml = '<div class="esc-day-times">'+pairs+'</div>' + addBtn;
       }
       html += '<div class="esc-day-row'+(cell.folga?' is-folga':'')+'">'+
                 '<span class="esc-day-name">'+DIAS_CURTO[d]+'</span>'+
@@ -934,7 +942,13 @@ function pdToggleFolga(c,d){
   renderPdGrid();
 }
 function pdPairTime(c,d,k,f,v){ if(PD && PD.grid[c][d].marc[k]) PD.grid[c][d].marc[k][f] = v; }
-function pdAddPair(c,d){ if(!PD) return; var cell=PD.grid[c][d]; if(cell.marc.length < 2){ cell.marc.push({ entrada:'', saida:'' }); renderPdGrid(); } }
+function pdApplyPreset(c,v){
+  if(!PD || !v) return;
+  var p = v.split('|');
+  for (var d=0; d<7; d++){ var cell = PD.grid[c][d]; if (!cell.folga) cell.marc = [{ entrada:p[0], saida:p[1] }]; }
+  renderPdGrid();
+}
+function pdAddPair(c,d){ if(!PD) return; var cell=PD.grid[c][d]; if(cell.marc.length < 3){ cell.marc.push({ entrada:'', saida:'' }); renderPdGrid(); } }
 function pdRemovePair(c,d,k){ if(!PD) return; var cell=PD.grid[c][d]; if(cell.marc.length > 1){ cell.marc.splice(k,1); renderPdGrid(); } }
 function pdQuickFill(c){
   if(!PD) return;
