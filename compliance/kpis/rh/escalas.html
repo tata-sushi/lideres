@@ -645,6 +645,34 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<!-- ═══ MODAL: CADASTRAR HORÁRIO ═══ -->
+<div class="modal-overlay" id="hor-overlay" onclick="if(event.target===this)fecharCadastroHorario()">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-header esc-sheet-hd">
+      <div class="esc-sheet-name">Cadastrar horário</div>
+      <button onclick="fecharCadastroHorario()" style="width:26px;height:26px;background:var(--bg);border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="esc-field">
+        <span class="esc-field-label">Novo horário pré-definido</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="time" class="esc-select" id="hor-entrada" style="flex:1;">
+          <span style="color:var(--muted);">→</span>
+          <input type="time" class="esc-select" id="hor-saida" style="flex:1;">
+          <button class="btn-modal-confirmar" style="flex:0 0 auto;padding:10px 14px;" onclick="salvarNovoHorario()">Adicionar</button>
+        </div>
+      </div>
+      <div class="esc-field">
+        <span class="esc-field-label">Horários cadastrados</span>
+        <div id="hor-lista"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ DRAWER "Sobre" ═══ -->
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
@@ -686,6 +714,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
+      <button class="drawer-sam-btn" style="margin-bottom:8px;" onclick="closeDrawer(); abrirCadastroHorario();">Cadastrar horário</button>
       <button class="drawer-sam-btn" onclick="closeDrawer(); imprimirEscala();">Imprimir escala</button>
     </div>
   </div>
@@ -744,6 +773,64 @@ function fmtH(h){
 var DIAS_CURTO = ['SEG','TER','QUA','QUI','SEX','SÁB','DOM'];
 var DIAS_NOME  = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 var PRESETS = [['08:00','16:00'],['09:00','18:00'],['10:00','18:00'],['11:00','15:00'],['14:00','22:00'],['16:00','00:00']];
+var HORARIOS = []; // [{id,entrada,saida}] — fonte única no banco (dp_rh.escala_horarios); o array acima é só fallback
+
+/* Carrega os horários pré-definidos do banco e atualiza o seletor do pontual. */
+function carregarHorarios(){
+  return TP().rpc('escala_horarios_listar').then(function(r){
+    if (!r.error && Array.isArray(r.data) && r.data.length){
+      HORARIOS = r.data;
+      PRESETS = r.data.map(function(h){ return [hm(h.entrada), hm(h.saida)]; });
+    }
+    renderPtPreset();
+  }, function(){});
+}
+/* Repopula o <select> de horários do ajuste pontual a partir de PRESETS. */
+function renderPtPreset(){
+  var sel = document.getElementById('pt-preset-sel');
+  if (!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">Selecione um horário…</option>' +
+    PRESETS.map(function(pr){ return '<option value="'+pr[0]+'|'+pr[1]+'">'+pr[0]+' – '+pr[1]+'</option>'; }).join('');
+  sel.value = cur;
+}
+
+/* ── Cadastro de horários pré-definidos (drawer › "Cadastrar horário") ────── */
+function abrirCadastroHorario(){
+  var e = document.getElementById('hor-entrada'); if (e) e.value = '';
+  var s = document.getElementById('hor-saida');   if (s) s.value = '';
+  renderListaHorarios();
+  document.getElementById('hor-overlay').classList.add('open');
+}
+function fecharCadastroHorario(){ document.getElementById('hor-overlay').classList.remove('open'); }
+function renderListaHorarios(){
+  var box = document.getElementById('hor-lista'); if (!box) return;
+  if (!HORARIOS.length){ box.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 0;">Nenhum horário cadastrado.</div>'; return; }
+  box.innerHTML = HORARIOS.map(function(h){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--border);border-radius:4px;margin-bottom:6px;">'+
+      '<span style="font-size:13px;font-weight:600;">'+hm(h.entrada)+' – '+hm(h.saida)+'</span>'+
+      '<button onclick="removerHorario('+h.id+')" title="Remover" style="width:24px;height:24px;background:var(--bg);border:1px solid var(--border);border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);">'+
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
+    '</div>';
+  }).join('');
+}
+function salvarNovoHorario(){
+  var ent = document.getElementById('hor-entrada').value;
+  var sai = document.getElementById('hor-saida').value;
+  if (!ent || !sai){ toast('Informe entrada e saída.'); return; }
+  TP().rpc('escala_horario_add', { p_entrada: ent, p_saida: sai }).then(function(r){
+    if (r.error){ erroRPC(r.error); return; }
+    document.getElementById('hor-entrada').value = '';
+    document.getElementById('hor-saida').value = '';
+    carregarHorarios().then(renderListaHorarios);
+  }, function(e){ erroRPC(e); });
+}
+function removerHorario(id){
+  TP().rpc('escala_horario_remover', { p_id: id }).then(function(r){
+    if (r.error){ erroRPC(r.error); return; }
+    carregarHorarios().then(renderListaHorarios);
+  }, function(e){ erroRPC(e); });
+}
 
 /* ── Estado ──────────────────────────────────────────────────────────────── */
 var ST = { unidade:null, depto:'Todos', inicio:segunda(0), equipe:[], carregando:false, tab:'programacao' };
@@ -816,7 +903,7 @@ function loadDrawerMeta() {
   setInterval(updateFooter, 1000);
 })();
 
-comSupa(function(){ carregarUnidades(); });
+comSupa(function(){ carregarHorarios(); carregarUnidades(); });
 
 function carregarUnidades(){
   showLoading();
