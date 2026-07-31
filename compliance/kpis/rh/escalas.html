@@ -657,18 +657,17 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="modal-body">
       <div class="esc-field">
-        <span class="esc-field-label">Novo horário pré-definido</span>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <input type="time" class="esc-select" id="hor-entrada" style="flex:1;">
-          <span style="color:var(--muted);">→</span>
-          <input type="time" class="esc-select" id="hor-saida" style="flex:1;">
-          <button class="btn-modal-confirmar" style="flex:0 0 auto;padding:10px 14px;" onclick="salvarNovoHorario()">Adicionar</button>
-        </div>
+        <span class="esc-field-label">Marcações (até 3)</span>
+        <div id="hor-marc"></div>
+        <button class="esc-addmarc" id="hor-add" onclick="horAddMarc()">+ incluir marcação</button>
       </div>
       <div class="esc-field">
         <span class="esc-field-label">Horários cadastrados</span>
         <div id="hor-lista"></div>
       </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-confirmar" onclick="salvarNovoHorario()" style="flex:1;">Adicionar horário</button>
     </div>
   </div>
 </div>
@@ -772,15 +771,32 @@ function fmtH(h){
 
 var DIAS_CURTO = ['SEG','TER','QUA','QUI','SEX','SÁB','DOM'];
 var DIAS_NOME  = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
-var PRESETS = [['08:00','16:00'],['09:00','18:00'],['10:00','18:00'],['11:00','15:00'],['14:00','22:00'],['16:00','00:00']];
-var HORARIOS = []; // [{id,entrada,saida}] — fonte única no banco (dp_rh.escala_horarios); o array acima é só fallback
+// Cada preset agora é {marc:[[entrada,saida],...]} (até 3 pares = 6 marcações).
+// Fonte no banco (dp_rh.escala_horarios); estes valores são só fallback.
+var PRESETS = [
+  {marc:[['08:00','16:00']]},{marc:[['09:00','18:00']]},{marc:[['10:00','18:00']]},
+  {marc:[['11:00','15:00']]},{marc:[['14:00','22:00']]},{marc:[['16:00','00:00']]}
+];
+var HORARIOS = []; // bruto do banco: [{id,entrada,saida,marcacoes}]
+var HOR = [];      // marcações em edição no modal de cadastro: [{entrada,saida}]
+
+function marcToPairs(h){
+  return (Array.isArray(h.marcacoes) && h.marcacoes.length)
+    ? h.marcacoes.map(function(m){ return [hm(m.entrada), hm(m.saida)]; })
+    : [[hm(h.entrada), hm(h.saida)]];
+}
+function presetLabel(marc){ return marc.map(function(p){ return p[0]+'–'+p[1]; }).join(' · '); }
+function presetOptionsHtml(placeholder){
+  return '<option value="">'+placeholder+'</option>' +
+    PRESETS.map(function(pr,i){ return '<option value="'+i+'">'+presetLabel(pr.marc)+'</option>'; }).join('');
+}
 
 /* Carrega os horários pré-definidos do banco e atualiza o seletor do pontual. */
 function carregarHorarios(){
   return TP().rpc('escala_horarios_listar').then(function(r){
     if (!r.error && Array.isArray(r.data) && r.data.length){
       HORARIOS = r.data;
-      PRESETS = r.data.map(function(h){ return [hm(h.entrada), hm(h.saida)]; });
+      PRESETS = r.data.map(function(h){ return { id:h.id, marc: marcToPairs(h) }; });
     }
     renderPtPreset();
   }, function(){});
@@ -788,40 +804,52 @@ function carregarHorarios(){
 /* Repopula o <select> de horários do ajuste pontual a partir de PRESETS. */
 function renderPtPreset(){
   var sel = document.getElementById('pt-preset-sel');
-  if (!sel) return;
-  var cur = sel.value;
-  sel.innerHTML = '<option value="">Selecione um horário…</option>' +
-    PRESETS.map(function(pr){ return '<option value="'+pr[0]+'|'+pr[1]+'">'+pr[0]+' – '+pr[1]+'</option>'; }).join('');
-  sel.value = cur;
+  if (sel) sel.innerHTML = presetOptionsHtml('Selecione um horário…');
 }
 
 /* ── Cadastro de horários pré-definidos (drawer › "Cadastrar horário") ────── */
 function abrirCadastroHorario(){
-  var e = document.getElementById('hor-entrada'); if (e) e.value = '';
-  var s = document.getElementById('hor-saida');   if (s) s.value = '';
+  HOR = [{ entrada:'', saida:'' }];
+  renderHorMarc();
   renderListaHorarios();
   document.getElementById('hor-overlay').classList.add('open');
 }
 function fecharCadastroHorario(){ document.getElementById('hor-overlay').classList.remove('open'); }
+function renderHorMarc(){
+  var box = document.getElementById('hor-marc'); if (!box) return;
+  box.innerHTML = HOR.map(function(m,i){
+    var rm = HOR.length > 1 ? '<button class="esc-marc-rm" onclick="horRemoveMarc('+i+')" title="Remover marcação">&times;</button>' : '';
+    return '<div class="esc-marc-row">'+
+      '<input type="time" class="esc-time" value="'+(m.entrada||'')+'" onchange="horMarcTime('+i+',\'entrada\',this.value)">'+
+      '<span class="esc-marc-arrow">&rarr;</span>'+
+      '<input type="time" class="esc-time" value="'+(m.saida||'')+'" onchange="horMarcTime('+i+',\'saida\',this.value)">'+
+      rm + '</div>';
+  }).join('');
+  var add = document.getElementById('hor-add');
+  if (add){ add.disabled = HOR.length >= 3; add.textContent = HOR.length >= 3 ? 'Máximo de 3 marcações' : '+ incluir marcação'; }
+}
+function horMarcTime(i,f,v){ if(HOR[i]) HOR[i][f] = v; }
+function horAddMarc(){ if(HOR.length < 3){ HOR.push({ entrada:'', saida:'' }); renderHorMarc(); } }
+function horRemoveMarc(i){ if(HOR.length > 1){ HOR.splice(i,1); renderHorMarc(); } }
 function renderListaHorarios(){
   var box = document.getElementById('hor-lista'); if (!box) return;
   if (!HORARIOS.length){ box.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 0;">Nenhum horário cadastrado.</div>'; return; }
   box.innerHTML = HORARIOS.map(function(h){
+    var lbl = presetLabel(marcToPairs(h));
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--border);border-radius:4px;margin-bottom:6px;">'+
-      '<span style="font-size:13px;font-weight:600;">'+hm(h.entrada)+' – '+hm(h.saida)+'</span>'+
+      '<span style="font-size:13px;font-weight:600;">'+lbl+'</span>'+
       '<button onclick="removerHorario('+h.id+')" title="Remover" style="width:24px;height:24px;background:var(--bg);border:1px solid var(--border);border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);">'+
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
     '</div>';
   }).join('');
 }
 function salvarNovoHorario(){
-  var ent = document.getElementById('hor-entrada').value;
-  var sai = document.getElementById('hor-saida').value;
-  if (!ent || !sai){ toast('Informe entrada e saída.'); return; }
-  TP().rpc('escala_horario_add', { p_entrada: ent, p_saida: sai }).then(function(r){
+  var marc = HOR.filter(function(m){ return m.entrada && m.saida; });
+  if (!marc.length){ toast('Informe ao menos uma marcação (entrada e saída).'); return; }
+  TP().rpc('escala_horario_add', { p_marcacoes: marc }).then(function(r){
     if (r.error){ erroRPC(r.error); return; }
-    document.getElementById('hor-entrada').value = '';
-    document.getElementById('hor-saida').value = '';
+    HOR = [{ entrada:'', saida:'' }];
+    renderHorMarc();
     carregarHorarios().then(renderListaHorarios);
   }, function(e){ erroRPC(e); });
 }
@@ -1294,8 +1322,7 @@ function renderPdGrid(){
     html += '<div class="esc-cycle-wk"><div class="esc-cycle-hd"><span>'+titulo+'</span>'+
             '<span style="display:flex;gap:6px;align-items:center;">'+
             '<select class="esc-select esc-preset-sel" onchange="pdApplyPreset('+c+',this.value); this.value=\'\';">'+
-            '<option value="">Horário pré-definido…</option>'+
-            PRESETS.map(function(pr){ return '<option value="'+pr[0]+'|'+pr[1]+'">'+pr[0]+' – '+pr[1]+'</option>'; }).join('')+
+            presetOptionsHtml('Horário pré-definido…')+
             '</select>'+
             '<button class="esc-clear-btn" onclick="pdLimpar('+c+')" title="Limpar"><svg viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></button></span></div>';
     for (var d=0; d<7; d++){
@@ -1334,9 +1361,12 @@ function pdToggleFolga(c,d){
 }
 function pdPairTime(c,d,k,f,v){ if(PD && PD.grid[c][d].marc[k]) PD.grid[c][d].marc[k][f] = v; }
 function pdApplyPreset(c,v){
-  if(!PD || !v) return;
-  var p = v.split('|');
-  for (var d=0; d<7; d++){ var cell = PD.grid[c][d]; if (!cell.folga) cell.marc = [{ entrada:p[0], saida:p[1] }]; }
+  if(!PD || v==='' || v==null) return;
+  var pr = PRESETS[+v]; if(!pr || !pr.marc) return;
+  for (var d=0; d<7; d++){
+    var cell = PD.grid[c][d];
+    if (!cell.folga) cell.marc = pr.marc.map(function(p){ return { entrada:p[0], saida:p[1] }; });
+  }
   renderPdGrid();
 }
 function pdAddPair(c,d){ if(!PD) return; var cell=PD.grid[c][d]; if(cell.marc.length < 3){ cell.marc.push({ entrada:'', saida:'' }); renderPdGrid(); } }
@@ -1360,11 +1390,12 @@ function salvarPadrao(){
   for (var c=0;c<PD.ciclo;c++){
     for (var d=0; d<7; d++){
       var cell = PD.grid[c][d];
-      var m0 = (cell.marc && cell.marc[0]) || {};
-      var ent = null, sai = null;
-      // escala_padrao_set grava 1 par entrada/saída por (ciclo, dia); persiste o 1º.
-      if (!cell.folga && PD.controla){ ent = m0.entrada || null; sai = m0.saida || null; }
-      dias.push({ semana_ciclo:c, dia_semana:d, entrada:ent, saida:sai, folga: !!cell.folga });
+      // Persiste todas as marcações (até 3 pares) por (ciclo, dia).
+      var marc = (!cell.folga && PD.controla)
+        ? (cell.marc||[]).filter(function(m){ return m.entrada && m.saida; })
+        : [];
+      var m0 = marc[0] || {};
+      dias.push({ semana_ciclo:c, dia_semana:d, entrada: m0.entrada||null, saida: m0.saida||null, folga: !!cell.folga, marcacoes: marc });
     }
   }
   var btn = document.getElementById('pd-salvar');
@@ -1441,9 +1472,10 @@ function ptPreset(e,s){
   renderMarc();
 }
 function ptPresetSel(v){
-  if(!v) return;
-  var p = v.split('|');
-  ptPreset(p[0], p[1]);
+  if(v==='' || v==null || !PT) return;
+  var pr = PRESETS[+v]; if(!pr || !pr.marc) return;
+  PT.marc = pr.marc.map(function(p){ return { entrada:p[0], saida:p[1] }; });
+  renderMarc();
   var el = document.getElementById('pt-preset-sel'); if (el) el.value = '';
 }
 function ptFolgaSel(v){
@@ -1454,13 +1486,12 @@ function ptFolgaSel(v){
 
 function salvarPontual(){
   if(!PT) return;
-  // O RPC escala_dia_set persiste UMA entrada/saída por dia. As marcações
-  // extras ficam na UI; a 1ª é a persistida (ver nota de backend).
-  var m0 = PT.marc[0] || {};
-  var ent = m0.entrada || null;
-  var sai = m0.saida || null;
+  // Persiste todas as marcações (até 3 pares) via escala_dia_set(p_marcacoes).
+  var marc = PT.marc.filter(function(m){ return m.entrada && m.saida; });
+  if (!marc.length){ toast('Informe ao menos uma marcação (entrada e saída).'); return; }
+  var m0 = marc[0];
   showLoading();
-  TP().rpc('escala_dia_set', { p_matricula:PT.matricula, p_data:PT.data, p_entrada:ent, p_saida:sai, p_folga:false }).then(function(r){
+  TP().rpc('escala_dia_set', { p_matricula:PT.matricula, p_data:PT.data, p_entrada:m0.entrada, p_saida:m0.saida, p_folga:false, p_marcacoes:marc }).then(function(r){
     hideLoading();
     if (r.error) { erroRPC(r.error); return; }
     toast('Ajuste salvo.'); fecharPontual(); carregarSemana();
