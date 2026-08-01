@@ -535,7 +535,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <div class="esc-toolbar">
   <div class="esc-filters-row">
-    <div class="esc-uni">
+    <div class="esc-uni" id="esc-uni-wrap">
       <span class="esc-uni-label">Unidade</span>
       <select class="esc-select" id="esc-unidade" onchange="onUnidadeChange()"></select>
     </div>
@@ -870,7 +870,7 @@ function removerHorario(id){
 }
 
 /* ── Estado ──────────────────────────────────────────────────────────────── */
-var ST = { unidade:null, depto:'Todos', inicio:segunda(0), equipe:[], carregando:false, tab:'programacao' };
+var ST = { unidade:null, depto:'Todos', inicio:segunda(0), equipe:[], carregando:false, tab:'programacao', admin:false };
 
 /* ── Loading / toast ─────────────────────────────────────────────────────── */
 function showLoading(){ var o=document.getElementById('loading-overlay'); if(o) o.classList.add('show'); }
@@ -940,7 +940,24 @@ function loadDrawerMeta() {
   setInterval(updateFooter, 1000);
 })();
 
-comSupa(function(){ carregarHorarios(); carregarUnidades(); });
+comSupa(function(){ carregarHorarios(); iniciarEscala(); });
+
+// Admin: seletor de unidade (vê todo mundo). Líder: sem seletor, carrega a própria subárvore.
+function iniciarEscala(){
+  showLoading();
+  TP().rpc('escala_sou_admin').then(function(r){
+    ST.admin = (!r.error && r.data === true);
+    var wrap = document.getElementById('esc-uni-wrap');
+    if (ST.admin){
+      if (wrap) wrap.style.display = '';
+      carregarUnidades();
+    } else {
+      if (wrap) wrap.style.display = 'none';
+      ST.unidade = '';
+      carregarSemana();
+    }
+  }, function(e){ hideLoading(); erroRPC(e); });
+}
 
 function carregarUnidades(){
   showLoading();
@@ -1155,7 +1172,7 @@ function atualizarLabelSemana(){
 
 function carregarSemana(){
   atualizarLabelSemana();
-  if (!ST.unidade) { renderEmpty('Selecione uma unidade.'); return; }
+  if (ST.admin && !ST.unidade) { renderEmpty('Selecione uma unidade.'); return; }
   showLoading();
   ST.carregando = true;
   TP().rpc('escala_equipe_semana', { p_inicio: isoLocal(ST.inicio), p_unidade: ST.unidade }).then(function(r){
