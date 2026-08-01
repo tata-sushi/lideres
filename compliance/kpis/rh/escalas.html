@@ -332,6 +332,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 /* GRADE EQUIPE × 7 DIAS */
 .esc-grid-wrap { padding: 14px 16px 96px; overflow-x: auto; }
 @media (min-width: 768px) { .esc-grid-wrap { padding: 18px 24px 96px; } }
+.sug-wrap { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 0; }
+.sug-card { display: flex; align-items: center; gap: 10px; background: #FFF; border: 1px solid var(--citric); border-radius: 8px; padding: 8px 12px; }
+.sug-emoji { font-size: 18px; line-height: 1; }
+.sug-info { display: flex; flex-direction: column; line-height: 1.2; }
+.sug-info b { font-size: 13px; font-weight: 700; color: var(--text); }
+.sug-info span { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--mid); }
+.sug-btn { margin-left: 4px; background: var(--carbon); color: var(--citric); border: none; border-radius: 6px; padding: 7px 12px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.sug-btn:hover { opacity: .88; }
+@media (min-width: 768px) { .sug-wrap { padding: 14px 24px 0; } }
 .esc-grid { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 720px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
 .esc-grid th, .esc-grid td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
 .esc-grid th:last-child, .esc-grid td:last-child { border-right: none; }
@@ -555,6 +564,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<div id="esc-sugestoes"></div>
 <main class="esc-grid-wrap" id="esc-content"></main>
 <div class="esc-grid-wrap" id="esc-kpis" style="display:none;"></div>
 
@@ -1181,7 +1191,36 @@ function carregarSemana(){
     ST.equipe = Array.isArray(r.data) ? r.data : [];
     popularDeptos();
     renderGrade();
+    carregarSugestoes();
   }, function(e){ hideLoading(); ST.carregando = false; erroRPC(e); renderEmpty('Não foi possível carregar a escala.'); });
+}
+
+/* ── Sugestões automáticas: folga de aniversário (>60 dias de casa) ─────────── */
+function carregarSugestoes(){
+  TP().rpc('escala_sugestoes_aniversario', { p_inicio: isoLocal(ST.inicio), p_unidade: ST.unidade }).then(function(r){
+    if (r.error) { renderSugestoes([]); return; }
+    renderSugestoes(r.data);
+  }, function(){ renderSugestoes([]); });
+}
+function renderSugestoes(list){
+  var box = document.getElementById('esc-sugestoes'); if (!box) return;
+  if (!Array.isArray(list) || !list.length){ box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="sug-wrap">' + list.map(function(s){
+    var p = String(s.data).split('-'); var dm = p.length===3 ? (p[2]+'/'+p[1]) : s.data;
+    return '<div class="sug-card">'+
+      '<span class="sug-emoji">&#127874;</span>'+
+      '<div class="sug-info"><b>'+esc(primeiroNome(s.nome))+'</b><span>aniversário '+dm+'</span></div>'+
+      '<button class="sug-btn" onclick="aplicarSugestao(\''+esc(s.matricula)+'\',\''+s.data+'\')">Dar folga</button>'+
+    '</div>';
+  }).join('') + '</div>';
+}
+function aplicarSugestao(mat, data){
+  showLoading();
+  TP().rpc('escala_dia_set', { p_matricula:mat, p_data:data, p_entrada:null, p_saida:null, p_folga:true, p_folga_tipo:'Folga Aniversário' }).then(function(r){
+    hideLoading();
+    if (r.error){ erroRPC(r.error); return; }
+    toast('Folga de aniversário aplicada.'); carregarSemana();
+  }, function(e){ hideLoading(); erroRPC(e); });
 }
 
 /* ── Render grade ────────────────────────────────────────────────────────── */
