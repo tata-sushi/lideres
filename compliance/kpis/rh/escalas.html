@@ -355,6 +355,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .ec-hours-multi { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 5px; }
 .ec-pair { display: flex; flex-direction: column; align-items: center; line-height: 1.05; }
 .ec-pair b, .ec-pair i { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; font-style: normal; color: var(--carbon); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* desktop: pares empilhados (entrada – saída em linha), um sobre o outro */
+@media (min-width: 768px) {
+  .ec-hours-multi { flex-direction: column; gap: 2px; }
+  .ec-pair { flex-direction: row; align-items: baseline; }
+  .ec-pair i::before { content: '–'; margin: 0 4px; color: var(--carbon); }
+  .ec-pair b, .ec-pair i { font-size: 11px; }
+}
 .ec-folga { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; color: var(--carbon); line-height: 1.12; }
 .ec-trab { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; color: var(--carbon); line-height: 1.25; text-align: right; }
 .ec-empty { font-size: 18px; font-weight: 300; color: var(--border); }
@@ -1436,7 +1443,7 @@ function abrirPontual(pi, di){
   var p = ST.equipe[pi]; if(!p) return;
   var dia = (p.dias||[])[di] || {};
   var d = addDias(ST.inicio, di);
-  PT = { matricula:p.matricula, nome:p.nome, data:isoLocal(d), origem:dia.origem||null, marc:[] };
+  PT = { matricula:p.matricula, nome:p.nome, data:isoLocal(d), origem:dia.origem||null, marc:[], folga: dia.folga ? (dia.tipo_folga || 'Folga') : null };
   // Nome do colaborador + (dia abreviado dd/mm)
   document.getElementById('pt-nome').innerHTML =
     esc(p.nome) + ' <span class="esc-sheet-day">(' + diaAbrev(di) + ' ' + ddmm(d) + ')</span>';
@@ -1472,8 +1479,8 @@ function renderMarc(){
   add.disabled = PT.marc.length >= 3;
   add.textContent = PT.marc.length >= 3 ? 'Máximo de 3 marcações' : '+ incluir marcação';
 }
-function ptMarcTime(i,f,v){ if(PT && PT.marc[i]) PT.marc[i][f] = v; }
-function ptAddMarc(){ if(PT && PT.marc.length < 3){ PT.marc.push({ entrada:'', saida:'' }); renderMarc(); } }
+function ptMarcTime(i,f,v){ if(PT && PT.marc[i]){ PT.marc[i][f] = v; ptLimpaFolga(); } }
+function ptAddMarc(){ if(PT && PT.marc.length < 3){ PT.marc.push({ entrada:'', saida:'' }); ptLimpaFolga(); renderMarc(); } }
 function ptRemoveMarc(i){ if(PT && PT.marc.length > 1){ PT.marc.splice(i,1); renderMarc(); } }
 function ptPreset(e,s){
   if(!PT) return;
@@ -1487,20 +1494,33 @@ function ptPresetSel(v){
   if(v==='' || v==null || !PT) return;
   var pr = PRESETS[+v]; if(!pr || !pr.marc) return;
   PT.marc = pr.marc.map(function(p){ return { entrada:p[0], saida:p[1] }; });
+  ptLimpaFolga();
   renderMarc();
   var el = document.getElementById('pt-preset-sel'); if (el) el.value = '';
 }
+function ptLimpaFolga(){ if(PT) PT.folga = null; var el = document.getElementById('pt-folga-sel'); if (el) el.value = ''; }
 function ptFolgaSel(v){
-  if(!v) return;
-  var el = document.getElementById('pt-folga-sel'); if (el) el.value = '';
-  marcarFolga(v);
+  // Só seleciona (fica pendente); salva no botão "Salvar ajuste".
+  if(!PT) return;
+  PT.folga = v || null;
+  if (PT.folga){ PT.marc = [{ entrada:'', saida:'' }]; renderMarc(); }
+  var el = document.getElementById('pt-folga-sel'); if (el) el.value = v || '';
 }
 
 function salvarPontual(){
   if(!PT) return;
-  // Persiste todas as marcações (até 3 pares) via escala_dia_set(p_marcacoes).
+  // Se uma folga foi selecionada, salva folga (com o tipo); senão, salva marcações.
+  if (PT.folga){
+    showLoading();
+    TP().rpc('escala_dia_set', { p_matricula:PT.matricula, p_data:PT.data, p_entrada:null, p_saida:null, p_folga:true, p_folga_tipo:PT.folga }).then(function(r){
+      hideLoading();
+      if (r.error) { erroRPC(r.error); return; }
+      toast(PT.folga + ' marcada.'); fecharPontual(); carregarSemana();
+    }, function(e){ hideLoading(); erroRPC(e); });
+    return;
+  }
   var marc = PT.marc.filter(function(m){ return m.entrada && m.saida; });
-  if (!marc.length){ toast('Informe ao menos uma marcação (entrada e saída).'); return; }
+  if (!marc.length){ toast('Selecione um horário/marcação ou uma folga.'); return; }
   var m0 = marc[0];
   showLoading();
   TP().rpc('escala_dia_set', { p_matricula:PT.matricula, p_data:PT.data, p_entrada:m0.entrada, p_saida:m0.saida, p_folga:false, p_marcacoes:marc }).then(function(r){
