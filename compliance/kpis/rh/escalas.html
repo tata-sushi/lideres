@@ -328,6 +328,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .esc-weeklabel { display: flex; flex-direction: column; align-items: center; min-width: 120px; }
 .esc-weeklabel b { font-size: 14px; font-weight: 700; color: var(--carbon); font-variant-numeric: tabular-nums; letter-spacing: -0.2px; }
 .esc-weeklabel span { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); margin-top: 1px; }
+.esc-actions-right { display: flex; align-items: center; gap: 10px; }
+.esc-confirmar-btn { padding: 7px 14px; background: var(--carbon); color: var(--citric); border: none; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
+.esc-confirmar-btn:hover { opacity: .85; }
+.esc-confirmar-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 /* GRADE EQUIPE × 7 DIAS */
 .esc-grid-wrap { padding: 14px 16px 96px; overflow-x: auto; }
@@ -553,7 +557,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
   <div class="filters-actions">
     <button class="btn-clear" onclick="limparFiltros()">Limpar filtros</button>
-    <span class="results-count"><span id="esc-count">0</span> registro(s)</span>
+    <div class="esc-actions-right">
+      <span class="results-count"><span id="esc-count">0</span> registro(s)</span>
+      <button class="esc-confirmar-btn" id="esc-confirmar" onclick="confirmarSemana()">Confirmar semana</button>
+    </div>
   </div>
 </div>
 
@@ -1011,6 +1018,19 @@ function _deptoOk(p){ return ST.depto==='Todos' || !ST.depto || String(p.departa
 
 function navSemana(delta){ ST.inicio = addDias(ST.inicio, delta*7); carregarSemana(); }
 
+/* Líder confirma/revisa a semana → +10 pts por membro do time com escala (idempotente). */
+function confirmarSemana(){
+  var btn = document.getElementById('esc-confirmar');
+  if (btn){ btn.disabled = true; btn.textContent = 'Confirmando…'; }
+  TP().rpc('escala_semana_confirmar', { p_inicio: isoLocal(ST.inicio), p_unidade: ST.unidade }).then(function(r){
+    if (btn){ btn.disabled = false; btn.textContent = 'Confirmar semana'; }
+    if (r.error){ erroRPC(r.error); return; }
+    var d = r.data || {};
+    if ((d.creditados|0) > 0) toast('Semana confirmada · +'+d.pontos+' pts ('+d.revisados+' colaborador'+(d.revisados==1?'':'es')+').');
+    else toast('Semana já confirmada — nada a creditar ('+(d.revisados|0)+' colaborador'+((d.revisados|0)==1?'':'es')+').');
+  }, function(e){ if(btn){ btn.disabled=false; btn.textContent='Confirmar semana'; } erroRPC(e); });
+}
+
 function setTab(tab){
   ST.tab = tab;
   var isK = tab === 'kpis';
@@ -1319,7 +1339,10 @@ function abrirPadrao(pi){
       (m.dias || []).forEach(function(x){
         var sc = x.semana_ciclo|0, ds = x.dia_semana|0;
         if (PD.grid[sc] && PD.grid[sc][ds]){
-          PD.grid[sc][ds] = { folga: !!x.folga, marc: [{ entrada: hm(x.entrada), saida: hm(x.saida) }] };
+          var pares = (Array.isArray(x.marcacoes) && x.marcacoes.length)
+            ? x.marcacoes.slice(0,3).map(function(mm){ return { entrada: hm(mm.entrada), saida: hm(mm.saida) }; })
+            : [{ entrada: hm(x.entrada), saida: hm(x.saida) }];
+          PD.grid[sc][ds] = { folga: !!x.folga, marc: pares };
         }
       });
       document.getElementById('pd-efetivo').value = PD.efetivo;
