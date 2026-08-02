@@ -9,6 +9,43 @@
 3. **Modo atual: só planejar.** Não criar tabela, editar arquivo, editar/criar fluxo ou commitar sem "ok" explícito.
 4. Trabalhar **módulo por módulo**, começando pela Ouvidoria (piloto = modelo dos demais).
 
+## 🔖 PENDÊNCIAS (checklist vivo — atualizar conforme avançamos)
+
+### Ouvidoria (piloto — no ar)
+- [ ] **PR #446** (`tata-sushi/plus`, página ouvidoria do app) — app-side revisar/mergear.
+- [ ] **Kanban da Ouvidoria** (passo 7) — app-side liga `dp_rh.ouvidoria` a um quadro.
+
+### Demandas
+- [ ] **`demandas.html`** (dashboard separado) — migrar p/ `rpc('demandas_lista')` quando o usuário liberar ("demandas não é agora"). RPC já corrigida (725 = 712+7+6).
+- [ ] Definir se a coluna **"Testes"** (2 cards) conta como demanda (hoje "Em andamento" = 6; seria 8 com Testes).
+
+### Report `semanal.html` — fontes ainda no Sheets (migrar uma a uma)
+- [x] Demandas (aba Alinhamentos) → Kanban ✅
+- [x] Transcrição (aba Alinhamentos) → Supabase ✅
+- [ ] HC / headcount (`HC_SCRIPT_URL`)
+- [ ] Colaboradores admissões/demissões → `tata_plus.profiles` (já tem `data_admissao`/`data_demissao`)
+- [ ] Vagas / recrutamento
+- [ ] Banco de Horas
+- [ ] Absenteísmo (Ausências)
+- [ ] Experiências / efetivações
+- [ ] Entrevistas / Testes
+- [ ] asos (Medicina Ocupacional)
+
+### n8n `report_semanal`
+- [x] nó "consulta demandas" → RPC `report_demandas_resumo` (feito na UI pelo usuário)
+- [ ] outros 8 nós de Google Sheets → Supabase (conforme cada fonte migrar)
+
+### Segurança / limpeza
+- [ ] **uazapi token hardcoded** nos fluxos → mover p/ credencial do n8n.
+- [ ] Remover hook `__test_number` do fluxo ouvidoria quando não precisar mais testar.
+- [ ] 25/33 workflows n8n com **"Available in MCP" OFF** — ligar quando for editar.
+- [ ] Outros fluxos **Sheets→Trello** (sanção, asos, feriados, aniversários, etc.) → migrar Trello→Kanban + fonte Supabase.
+
+### Processos contínuos (não é bug)
+- Transcrição: usuário insere novas atas manualmente (INSERT em `dp_rh.alinhamento_transcricao`).
+
+---
+
 ## 1. Arquitetura (3 frentes + Kanban)
 
 ```
