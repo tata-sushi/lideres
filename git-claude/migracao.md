@@ -92,9 +92,9 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 ### Passos do piloto (ordem) — REVISADO pelo guia
 | # | Passo | Camada | Status | Depende de |
 |---|---|---|---|---|
-| 1 | Criar `dp_rh.ouvidoria` (id_externo, matricula, created_at) | Banco | ⏳ | ok do usuário |
-| 2 | RPCs `ouvidoria_registrar` (anon) + `ouvidoria_listar` (auth) | Banco | ⏳ | passo 1 |
-| 3 | Migrar dados da planilha → tabela (upsert por id_externo) | Banco | ⏳ | passos 1-2 |
+| 1 | Criar `dp_rh.ouvidoria` (id_externo, matricula, created_at) | Banco | ✅ FEITO | — |
+| 2 | RPCs `ouvidoria_registrar` (anon) + `ouvidoria_listar` (auth) | Banco | ✅ FEITO | — |
+| 3 | Migrar dados da planilha → tabela (upsert por id_externo) | Banco | ⏳ | **acesso aos dados da planilha** |
 | 4 | Dashboard `kpis/rh/ouvidoria.html`: fetch→`rpc('ouvidoria_listar')` | Front | ⏳ | passos 1-3 |
 | 5 | `ouvidoria-form.html`: POST→`rpc('ouvidoria_registrar')` | Front | ⏳ | **repo do form** |
 | 6 | n8n: **desligar card Trello** + **aviso WhatsApp** via uazapi | n8n | ⏳ | ver decisões abaixo |
@@ -118,4 +118,6 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 3. "Ok" explícito para começar a executar (hoje = só planejar).
 
 ## 5. Log de progresso
-- 2026-08-02 — Mapeamento das 3 frentes concluído. Fluxo n8n da Ouvidoria lido nó a nó. Documento criado. Nenhuma alteração executada.
+- 2026-08-02 — Mapeamento das 3 frentes concluído. Fluxo n8n da Ouvidoria lido nó a nó. Documento criado.
+- 2026-08-02 — Guia do ecossistema incorporado; piloto reencaixado em `dp_rh` + RPCs.
+- 2026-08-02 — **Passo 1+2 EXECUTADOS**: `dp_rh.ouvidoria` (14 col, RLS) + RPCs `ouvidoria_registrar`(anon)/`ouvidoria_listar`(auth) criadas e testadas (insert/upsert/booleanos/data OK; anon não lista; tabela limpa). Objetos aplicados no projeto `aoqsbusfrffapjglpqjk` via migration `ouvidoria_tabela_e_rpcs`.
