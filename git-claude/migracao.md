@@ -94,7 +94,7 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 |---|---|---|---|---|
 | 1 | Criar `dp_rh.ouvidoria` (id_externo, matricula, created_at) | Banco | ✅ FEITO | — |
 | 2 | RPCs `ouvidoria_registrar` (anon) + `ouvidoria_listar` (auth) | Banco | ✅ FEITO | — |
-| 3 | Migrar dados (19 reg.) → tabela (upsert por id_externo) | Banco | ⏳ USUÁRIO | rodar `IMPORTAR_ouvidoria.sql` no SQL Editor |
+| 3 | Migrar dados (19 reg.) → tabela (upsert por id_externo) | Banco | ✅ FEITO | usuário rodou o SQL |
 | 4 | Dashboard `kpis/rh/ouvidoria.html`: fetch→`rpc('ouvidoria_listar')` | Front | ✅ FEITO | validar em tela após import |
 | 5 | `ouvidoria-form.html`: POST→`rpc('ouvidoria_registrar')` | Front | ⏳ | **repo do form** |
 | 6 | n8n: **desligar card Trello** + **aviso WhatsApp** via uazapi | n8n | ⏳ | ver decisões abaixo |
