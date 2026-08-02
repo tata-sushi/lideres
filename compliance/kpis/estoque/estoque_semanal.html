@@ -120,7 +120,7 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 .filter-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
 .filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); cursor: pointer; transition: border-color 0.15s; width: 100%; }
 .filter-select:focus { outline: none; border-color: var(--carbon); }
-@media (min-width: 640px) { .filters-row { grid-template-columns: repeat(2, minmax(0, 240px)); } }
+@media (min-width: 640px) { .filters-row { grid-template-columns: repeat(2, 1fr); } }
 
 /* ── TABELA (padrão do abastecimento.html — desk-table + edição por linha) ── */
 .desk-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow-x: auto; }
@@ -131,10 +131,13 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 .nf-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--carbon); vertical-align: middle; }
 .nf-table td.td-c { text-align: center; }
 .nf-table td.td-r { text-align: right; }
+.nf-table .col-un  { width: 90px; }
+.nf-table .col-min { width: 120px; }
+.nf-table .col-edit { width: 96px; text-align: right; padding-right: 16px; }
 .nf-table tr:last-child td { border-bottom: none; }
 .nf-table tbody tr:hover td { background: #FAFAFA; }
-.nf-val { font-family:'DM Mono',monospace; font-size:12px; color:var(--mid); text-align:right; white-space:nowrap; display:block; padding:5px 0; }
-.nf-edit-input { width:72px; text-align:right; border:1px solid var(--border); border-radius:5px; padding:4px 6px; font-family:'DM Mono',monospace; font-size:12px; color:var(--text); background:var(--bg); display:none; margin-left:auto; }
+.nf-val { font-family:'DM Mono',monospace; font-size:12px; color:var(--mid); text-align:center; white-space:nowrap; display:block; padding:5px 0; }
+.nf-edit-input { width:72px; text-align:center; border:1px solid var(--border); border-radius:5px; padding:4px 6px; font-family:'DM Mono',monospace; font-size:12px; color:var(--text); background:var(--bg); display:none; margin:0 auto; }
 .nf-edit-input:focus { outline:none; border-color:var(--carbon); background:#fff; }
 .nf-edit-input.visible { display:block; }
 .btn-row-edit { width:28px; height:28px; border-radius:6px; border:none; background:var(--carbon); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:opacity 0.15s; flex-shrink:0; opacity:0.9; }
@@ -146,6 +149,8 @@ tr.row-editing td { background:#FAFFF0; }
   .nf-table thead { display: none; }
   .nf-table tbody { display: flex; flex-direction: column; gap: 8px; }
   .nf-table tr { display: grid; grid-template-columns: 1fr auto; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .nf-table .col-un, .nf-table .col-min, .nf-table .col-edit { width: auto; text-align: left; padding-right: 12px; }
+  .nf-table .nf-val { text-align: right; }
   .nf-table tr:last-child td { border-bottom: 1px solid var(--border); }
   .nf-table td { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; text-align: left; grid-column: 1 / -1; }
   .nf-table td:last-child { border-bottom: none; }
@@ -588,34 +593,32 @@ async function renderModalContagem() {
 
 function renderEstoqueMinimoHTML(itens) {
   ESTOQUE_ITENS = itens;
-  var porCategoria = {};
-  itens.forEach(function(it, i) { it._idx = i; (porCategoria[it.catLabel] = porCategoria[it.catLabel] || []).push(it); });
-  var html = '<div class="est-list">';
-  Object.keys(porCategoria).sort(function(a, b) { return a.localeCompare(b, 'pt-BR'); }).forEach(function(catLabel) {
-    html += '<div class="cat-section">' +
-      '<div class="cat-header"><div class="cat-header-left"><span class="cat-name">' + esc(catLabel) + '</span></div></div>' +
-      '<div class="desk-table-wrap"><table class="nf-table"><thead><tr><th>Produto</th><th class="th-c">Un.</th><th class="th-r">Mínimo</th><th></th></tr></thead><tbody>';
-    porCategoria[catLabel].forEach(function(it) {
-      var atual = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome, it.un)];
-      var valorAtual = atual ? atual.estoque_minimo : null;
-      html += '<tr id="est-min-row-' + it._idx + '">' +
-        '<td class="td-nome-cell" data-label="Produto">' + esc(it.nome) + '</td>' +
-        '<td class="td-c" data-label="Un.">' + esc(it.un || '—') + '</td>' +
-        '<td class="td-r" data-label="Mínimo">' +
-          '<span class="nf-val" id="est-min-val-' + it._idx + '">' + (valorAtual != null ? valorAtual : '—') + '</span>' +
-          '<input class="nf-edit-input" type="number" min="0" step="1" id="est-min-inp-' + it._idx + '" value="' + (valorAtual != null ? valorAtual : '') + '">' +
-        '</td>' +
-        '<td class="td-btn-cell" data-label="">' +
-          '<button class="btn-row-edit" id="est-min-btn-' + it._idx + '" title="Editar linha" onclick="toggleEstMinEdit(' + it._idx + ')">' +
-            '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
-          '</button>' +
-        '</td>' +
-        '</tr>';
-    });
-    html += '</tbody></table></div>';
-    html += '</div>';
+  itens.forEach(function(it, i) { it._idx = i; });
+  var html = '<div class="desk-table-wrap"><table class="nf-table">' +
+    '<thead><tr>' +
+      '<th>Produto</th>' +
+      '<th class="th-c col-un">Un.</th>' +
+      '<th class="th-c col-min">Mínimo</th>' +
+      '<th class="col-edit"></th>' +
+    '</tr></thead><tbody>';
+  itens.forEach(function(it) {
+    var atual = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome, it.un)];
+    var valorAtual = atual ? atual.estoque_minimo : null;
+    html += '<tr id="est-min-row-' + it._idx + '">' +
+      '<td class="td-nome-cell" data-label="Produto">' + esc(it.nome) + '</td>' +
+      '<td class="td-c col-un" data-label="Un.">' + esc(it.un || '—') + '</td>' +
+      '<td class="td-c col-min" data-label="Mínimo">' +
+        '<span class="nf-val" id="est-min-val-' + it._idx + '">' + (valorAtual != null ? valorAtual : '—') + '</span>' +
+        '<input class="nf-edit-input" type="number" min="0" step="1" id="est-min-inp-' + it._idx + '" value="' + (valorAtual != null ? valorAtual : '') + '">' +
+      '</td>' +
+      '<td class="td-btn-cell col-edit" data-label="">' +
+        '<button class="btn-row-edit" id="est-min-btn-' + it._idx + '" title="Editar linha" onclick="toggleEstMinEdit(' + it._idx + ')">' +
+          '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
+        '</button>' +
+      '</td>' +
+      '</tr>';
   });
-  html += '</div>';
+  html += '</tbody></table></div>';
   return html;
 }
 
