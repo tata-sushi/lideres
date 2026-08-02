@@ -1949,20 +1949,14 @@ function sortAlignDates(dates){
 }
 function loadAlinhamentosData() {
   if (_alignDemandas&&_alignDemandas.length&&_alignTransc){renderAlinhamentos();return;}
-  var urlD='https://docs.google.com/spreadsheets/d/'+ALIGN_SHEET_ID+'/export?format=csv&gid=1824881932';
-  function fetchCsv(url){return fetch(url).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(function(t){var s=t.trimLeft();if(s.charAt(0)==='<')throw new Error('HTML response');return t;});}
+  // Alinhamentos: demandas + transcrição agora vêm do Supabase (Kanban tata_kanban / dp_rh).
   function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
-  // Transcrição migrada p/ Supabase (dp_rh.alinhamento_transcricao via RPC). Demandas seguem no Sheets por ora.
-  function fetchTransc(){ return new Promise(function(resolve){ comSupa(function(supa){ supa.schema('tata_plus').rpc('alinhamento_transcricao_listar').then(function(res){ resolve(res.error?[]:(res.data||[])); }).catch(function(){ resolve([]); }); }); }); }
-  Promise.all([fetchCsv(urlD),fetchTransc()])
+  function fetchRpc(fn){ return new Promise(function(resolve){ comSupa(function(supa){ supa.schema('tata_plus').rpc(fn).then(function(res){ resolve(res.error?[]:(res.data||[])); }).catch(function(){ resolve([]); }); }); }); }
+  Promise.all([fetchRpc('demandas_lista'),fetchRpc('alinhamento_transcricao_listar')])
   .then(function(results){
-    var csvD=results[0];
-    _alignDemandas=parseAlignSheet(csvD,[
-      {key:'data',    kw:['data'],                                                          fb:2},
-      {key:'status',  kw:['status','situac','estado'],                                     fb:3},
-      {key:'assunto', kw:['assunto','pauta','tema','reuniao','topico','subject'],           fb:4},
-      {key:'demanda', kw:['etiquet','demanda','acao','tarefa','task','descri','ativid'],    fb:5}
-    ]);
+    _alignDemandas=(Array.isArray(results[0])?results[0]:[]).map(function(r){
+      return { data:r.data||'', status:r.status||'', assunto:r.titulo||'', demanda:r.etiqueta||'' };
+    });
     _alignTransc=Array.isArray(results[1])?results[1]:[];
     if (!_alignOpenDates&&_alignDemandas.length){
       var ds=sortAlignDates(_alignDemandas.map(function(r){return r.data;}).filter(Boolean));
