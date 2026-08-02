@@ -352,7 +352,6 @@ body:not([data-view="kpis"]) #view-kpis { display: none; }
 .header { flex-wrap: nowrap; }
 .header-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto; }
-.header-user { font-family:"DM Mono",monospace; font-size:10px; font-weight:500; color:var(--carbon); background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:0 10px; height:28px; display:inline-flex; align-items:center; white-space:nowrap; letter-spacing:0.5px; text-transform:uppercase; margin-left: auto; flex-shrink:0; }
 .header-plus { width:28px; height:28px; background:var(--carbon); border:none; border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
 .header-plus svg { width:14px; height:14px; stroke:var(--citric); fill:none; stroke-width:2.5; stroke-linecap:round; }
 
@@ -581,43 +580,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <h2>Sem acesso</h2>
       <span class="gate-user" id="gate-user"></span>
       <p>Seu perfil não possui permissão para esta página. Procure a Gestão.</p>
-      <a class="gate-btn" href="https://lideres.tatasushi.tech/">← Voltar ao Portal</a>
+      <a class="gate-btn" href="https://lideres.tatasushi.tech/compliance/">← Voltar ao Portal</a>
     </div>
   </div>
 </div>
+<!-- Gate modelo novo: abre so via Tata Plus, com checagem de acesso ao vivo por pagina. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>window.GOV_PAGE_ID = 'governanca-kpis-rh-solicitacoes';</script>
+<script src="/compliance/gate.js"></script>
 <script>
-(function() {
-  document.documentElement.setAttribute('data-auth', 'pending');
-  var PORTAL_URL    = 'https://lideres.tatasushi.tech/';
-  var PAGE_ID       = 'governanca-kpis-rh-solicitacoes';
-  var PAGE_URL_FRAG = '/compliance/kpis/rh/solicitacoes';
-  var session;
-  try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-  if (!session || !session.displayName || !session.expiresAt || session.expiresAt < Date.now()) {
-    window.location.replace(PORTAL_URL); return;
-  }
-  if (typeof session.perfil === 'undefined' || typeof session.paginas === 'undefined') {
-    localStorage.removeItem('lideres_session'); window.location.replace(PORTAL_URL); return;
-  }
-  var perfil  = (session.perfil || '').toLowerCase();
-  var paginas = Array.isArray(session.paginas) ? session.paginas : [];
-  var hasAccess = paginas.some(function(p) {
-    var id  = String(p && p.id  || '').toLowerCase();
-    var url = String(p && p.url || '').toLowerCase();
-    return id === PAGE_ID || url.indexOf(PAGE_URL_FRAG) !== -1;
-  });
-  if (!hasAccess) {
-    document.documentElement.setAttribute('data-auth', 'denied');
-    document.addEventListener('DOMContentLoaded', function() {
-      var u = document.getElementById('gate-user');
-      if (u) u.textContent = session.displayName;
-    });
-    return;
-  }
-  window.__lideresUser    = session.displayName;
-  window.__lideresSession = session;
-  document.documentElement.setAttribute('data-auth', 'ok');
-})();
+
 </script>
 <!-- ══ /AUTH GATE ═══════════════════════════════════════════════ -->
 
@@ -636,10 +608,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
   </div><!-- /header-left -->
   <div class="header-right">
-    <span class="header-user" id="header-user">—</span>
     <button class="header-plus" onclick="location.href='https://lideres.tatasushi.tech/compliance/menucompliance.html'" title="Início">
     <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
   </button>
+  <button class="header-plus" onclick="history.back()" title="Voltar">
+      <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
   <button class="header-plus" onclick="openDrawer()">
       <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </button>
@@ -648,8 +622,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <!-- TABS -->
 <div class="tabs">
-  <button class="tab-btn active" id="tab-btn-solicitacoes" type="button" onclick="setTab('solicitacoes')">Pend&ecirc;ncias</button>
-  <button class="tab-btn" id="tab-btn-kpis" type="button" onclick="setTab('kpis')">KPIs</button>
+  <button data-aba-id="governanca-kpis-rh-solicitacoes::solicitacoes" class="tab-btn active" id="tab-btn-solicitacoes" type="button" onclick="setTab('solicitacoes')">Pend&ecirc;ncias</button>
+  <button data-aba-id="governanca-kpis-rh-solicitacoes::kpis" class="tab-btn" id="tab-btn-kpis" type="button" onclick="setTab('kpis')">KPIs</button>
 </div>
 
 <!-- VIEW: SOLICITAÇÕES -->
@@ -900,7 +874,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
-      <button class="drawer-sam-btn" onclick="closeDrawer(); openModal();">Nova Solicitação</button>
+      <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-solicitacoes::nova-solicitacao" onclick="closeDrawer(); openModal();">Nova Solicitação</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -929,26 +903,29 @@ var currentUser = null;
 
 // ─── SESSÃO / USUÁRIO ────────────────────────────────────────────────────────
 function initApp() {
-  var session = null;
-  try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-
-  if (!session || !session.displayName || !session.expiresAt || session.expiresAt < Date.now()) {
-    window.location.href = 'index.html';
-    return;
+  // Modelo novo: a sessão é publicada pelo app (Tatá Plus) via gate.js em
+  // window.__lideresSession — o localStorage 'lideres_session' fica só como
+  // fallback do modelo antigo. NÃO redireciona mais pra index.html: quem cuida
+  // do acesso é o gate.js/painel (o redirect antigo derrubava todo mundo, pois
+  // o novo fluxo não grava 'lideres_session').
+  function aplicarUsuario() {
+    var session = window.__lideresSession
+      || (function(){ try { return JSON.parse(localStorage.getItem('lideres_session')); } catch(e) { return null; } })();
+    if (!session || !session.displayName) return;
+    var name = session.displayName;
+    var parts = name.split(' ').filter(function(p){ return p.length > 0; });
+    var short = parts.length > 1 ? parts[0] : name;
+    currentUser = { name: name, short: short, role: session.cargo || session.perfil || '' };
+    var hu = document.getElementById('header-user');
+    if (hu) hu.textContent = short;
+    applyVerMaisLock();
   }
 
-  var name = session.displayName;
-  var parts = name.split(' ').filter(function(p){ return p.length > 0; });
-  var short = parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1] : name;
-
-  var cargo = session.cargo || session.perfil || '';
-  currentUser = { name: name, short: short, role: cargo };
-
-  var hu = document.getElementById('header-user');
-  if (hu) hu.textContent = short;
-
+  aplicarUsuario();
+  // O token da sessão pode chegar depois deste init (vem async do app) — reaplica
+  // o usuário assim que o gate.js publicar a sessão.
+  window.addEventListener('lideres:sessao', aplicarUsuario);
   init();
-  applyVerMaisLock();
 }
 
 function isAdminUser() {
