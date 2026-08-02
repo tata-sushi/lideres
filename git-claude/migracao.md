@@ -98,7 +98,7 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 | 3 | Migrar dados (19 reg.) → tabela (upsert por id_externo) | Banco | ✅ FEITO | usuário rodou o SQL |
 | 4 | Dashboard `kpis/rh/ouvidoria.html`: fetch→`rpc('ouvidoria_listar')` | Front | ✅ FEITO | validar em tela após import |
 | 5 | Form `tata-sushi/ouvidoria` `index.html`: POST→`rpc('ouvidoria_registrar')` | Front | ✅ FEITO (PR #37, **não mergeado**) | mergear junto do passo 6 |
-| 6 | n8n: **desligar card Trello** + **aviso WhatsApp** via uazapi | n8n | 🟡 FLUXO PRONTO+TESTADO, falta trigger+publish | ver abaixo |
+| 6 | n8n: **desligar card Trello** + **aviso WhatsApp** via uazapi | n8n | ✅ FEITO (publicado + trigger pg_net + validado 200) | — |
 
 > ⚠️ **SEQUÊNCIA (evitar gap de notificação):** não mergear o form (#37) sozinho. Se o form escrever no Supabase e a planilha parar de receber, o fluxo n8n Trello não dispara e ninguém é avisado. Fazer passo 6 (WhatsApp no insert) e mergear o form JUNTO. Repo form: `tata-sushi/ouvidoria` (branch `claude/ouvidoria-supabase`).
 
@@ -110,7 +110,7 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **n8n:** `https://auto.tatasushi.tech` → webhook `https://auto.tatasushi.tech/webhook/ouvidoria-nova`.
 - **uazapi:** `POST https://tatasushi.uazapi.com/send/text`, header `token: 4b6e534f-...` (hardcoded, mover p/ credencial depois), body `number`+`text`.
 - **Teste:** OK — enviado ao número do usuário (via `__test_number` no payload; produção usa Gerentes). Chegou rápido e formatado.
-- ⚠️ **GAP ABERTO:** flow não publicado + trigger inexistente → novas ouvidorias reais NÃO notificam ninguém até fechar (criar trigger pg_net + publish). Comando do usuário p/ fechar: "fecha".
+- ✅ **GAP FECHADO (02/08):** fluxo **publicado** (activeVersion c8db7334); **trigger** `dp_rh.notifica_ouvidoria` (AFTER INSERT → `dp_rh.tg_ouvidoria_notifica` → `net.http_post` p/ `https://auto.tatasushi.tech/webhook/ouvidoria-nova` com `to_jsonb(NEW)`). Cadeia validada: `net.http_post` retornou **200 "Workflow was started"** (teste roteado ao número do usuário via `__test_number`, sem tocar no grupo). Produção: qualquer insert em `dp_rh.ouvidoria` (form público OU app) → aviso no grupo TATÁ | Gerentes.
 | 7 | Kanban: entregar tabela c/ matrícula+id_externo p/ **agente app-side** ligar | Kanban | ⏳ | agente app-side |
 
 ### Checklist p/ o agente app-side (Ouvidoria)
