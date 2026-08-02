@@ -129,6 +129,13 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 2. Quadro/colunas da Ouvidoria no `tata_kanban` (usuário configura com outro agente).
 3. "Ok" explícito para começar a executar (hoje = só planejar).
 
+## PILOTO OUVIDORIA — CONCLUÍDO ✅ (02/08)
+- Banco, dashboard, form público, fluxo n8n + trigger: tudo no ar.
+- Fluxo n8n em **PRODUÇÃO**: destino = grupo **TATÁ | Gerentes** `120363220385726427@g.us` (activeVersion c1515c08). O `__test_number` no payload segue disponível p/ testes futuros (roteia p/ número avulso sem tocar no grupo).
+- Validado com insert real (trigger→pg_net→n8n = 200).
+- Pendente de terceiros: PR #446 (app, app-side revisa) e Kanban (passo 7, app-side).
+- Rows de teste do usuário na tabela (02/08): "Teste portal", "Eee" — limpar quando autorizado.
+
 ## 5. Log de progresso
 - 2026-08-02 — Mapeamento das 3 frentes concluído. Fluxo n8n da Ouvidoria lido nó a nó. Documento criado.
 - 2026-08-02 — Guia do ecossistema incorporado; piloto reencaixado em `dp_rh` + RPCs.
