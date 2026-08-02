@@ -20,12 +20,33 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **n8n:** 33 workflows. 0 usam Supabase ainda. ~15 criam card no Trello. Quase todos leem Sheets.
 - **Kanban interno:** schema `tata_kanban` já modelado (quadros, colunas, cards, etiquetas, checklists, responsáveis, comentários, atividade). Substitui o Trello.
 
-## 2. Requisitos transversais
+## 2. Convenções do ecossistema (guia do agente app-integrado) — FONTE DA VERDADE
 
-- **Auditoria:** toda gravação do front grava quem/dia/hora. Padrão: `criado_por` (usuário do gate.js) + `criado_em`. Hoje ~68 tabelas sem autor e ~25 sem data → padronizar na migração.
-  - **Exceção Ouvidoria:** identificação é opcional (anônimo permitido). `nome`/`identificado` são do denunciante; sempre grava `criado_em`.
-- **Segredos:** token uazapi (`4b6e534f-…`) aparece hardcoded em fluxos → mover para credencial/secret na migração.
-- **Convenção de schema:** `tata_rh.<modulo>` para dados operacionais de RH.
+> ⚠️ **GitHub pode estar desatualizado.** Antes de editar uma página, conferir contra o script que o usuário mandar.
+
+**Onde criar tabelas:**
+- **`tata_plus`** = schema principal **exposto** ao app (PostgREST). Dado que o app lê direto fica aqui, **com RLS**.
+- **`dp_rh`** = schema **PRIVADO** (não exposto). Dado sensível de RH fica aqui, acessado só via funções **`SECURITY DEFINER`** expostas em `tata_plus` (RPC).
+- Regra: sensível → `dp_rh` + RPC em `tata_plus`. App mostra direto → tabela em `tata_plus` com RLS.
+
+**Chave universal = `matricula` (text):**
+- Toda tabela que fala de gente tem `matricula text` apontando pra **`tata_plus.profiles`** (tabela canônica de pessoas). **Nunca usar nome como chave.**
+- Se a planilha só tem nome → resolver pra matrícula na migração (match por nome normalizado → profiles).
+
+**RLS obrigatório:** sem policy pro role `authenticated`, o app lê vazio. Helper pronto: **`tata_plus.minha_matricula()`** (email do JWT → profiles → matrícula). ✅ existe.
+
+**Convenções de coluna:** `id uuid pk default gen_random_uuid()` · `matricula text` · `created_at timestamptz default now()` · **chave natural `id_externo text unique`** p/ reimportar com **UPSERT** (`on conflict (id_externo) do update`) sem duplicar.
+
+**Encaixes:**
+- Governança (portal líderes) → registrar em `tata_plus.governanca_paginas`. *(Ouvidoria já registrada ✅.)*
+- Dá/tira ponto → razão único `tata_plus.carteira_lancamentos` (+ 1 linha em `carteira_categoria_de` e `carteira_conta_ranking` p/ origem nova).
+- Kanban → **NÃO mexer em `tata_kanban`.** Basta deixar os dados em `tata_plus`/`dp_rh` com `matricula` + chave estável; o vínculo linha→card é feito pelo **agente app-side**.
+
+**Auditoria:** `created_at` sempre. `matricula` = quem fez (quando aplicável). Segredos hardcoded (token uazapi) → mover p/ credencial.
+
+## Divisão de trabalho
+- **Este agente (migração):** cria tabelas/RPC, migra dados, repointa front + n8n.
+- **Agente app-side:** liga os dados aos Quadros/carteira/escala. Recebe de mim o checklist de cada página (schema.tabela+colunas, matrícula/RLS, chave de upsert, o que a página faz).
 
 ## 3. Piloto — Ouvidoria
 
@@ -41,12 +62,16 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 4. **When clicking 'Execute workflow'** — trigger manual (⚠️ só p/ liberar MCP, remover na edição).
 - Lê colunas pelo **nome do cabeçalho** da planilha.
 
-### Modelo de dados alvo — `tata_rh.ouvidoria`
+### Classificação: OUVIDORIA = dado SENSÍVEL → `dp_rh` + RPCs em `tata_plus`
+
+### Modelo de dados alvo — `dp_rh.ouvidoria` (privado)
 | Coluna sheet | Campo Supabase | Tipo |
 |---|---|---|
-| A Carimbo data/hora | `criado_em` | timestamptz default now() |
+| A Carimbo data/hora | `created_at` | timestamptz default now() |
+| — (chave natural = carimbo) | `id_externo` | text **unique** (p/ upsert sem duplicar) |
 | B Deseja identificar-se | `identificado` | boolean |
-| C Nome | `nome` | text (opcional) |
+| C Nome | `nome` | text (opcional/anônimo) |
+| (resolver nome→matrícula qdo identificado) | `matricula` | text null → profiles |
 | D Data do ocorrido | `data_ocorrido` | date |
 | E Feedback/ocorrência | `descricao` | text |
 | F Quer devolutiva? | `quer_devolutiva` | boolean |
@@ -54,21 +79,32 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 | H Dados de contato | `contato` | text |
 | I Devolutiva (equipe) | `devolutiva` | text |
 | — | `id` | uuid pk |
-| — | `status` | text default 'aberta' (p/ Kanban) |
-| — | `kanban_card_id` | uuid (setado pelo n8n) |
-| — | `origem` | text default 'form' |
-| — | `atualizado_em` | timestamptz |
+| — | `status` | text default 'aberta' |
+| — | `updated_at` | timestamptz |
 
-### Passos do piloto (ordem)
+- **matricula nullable** (exceção ouvidoria: reclamante pode ser anônimo). Quando identificado e for colaborador, resolver nome→matrícula.
+- **id_externo** = carimbo (timestamp da submissão) — chave estável p/ reimportar via upsert.
+
+### RPCs expostas em `tata_plus` (SECURITY DEFINER)
+- `tata_plus.ouvidoria_registrar(payload jsonb)` — **grant anon** (form público) → insert em `dp_rh.ouvidoria`.
+- `tata_plus.ouvidoria_listar()` — **grant authenticated** (dashboard líderes) → select das linhas.
+
+### Passos do piloto (ordem) — REVISADO pelo guia
 | # | Passo | Camada | Status | Depende de |
 |---|---|---|---|---|
-| 1 | Criar `tata_rh.ouvidoria` (RLS on) | Banco | ⏳ pendente | ok do usuário |
-| 2 | Definir RLS (insert anônimo / select logado) | Banco | ⏳ | modelo auth gate.js |
-| 3 | Migrar dados da planilha → tabela | Banco | ⏳ | passo 1 |
-| 4 | Dashboard `kpis/rh/ouvidoria.html`: fetch→supabase | Front | ⏳ | passos 1-3 |
-| 5 | `ouvidoria-form.html`: POST→insert supabase | Front | ⏳ | **repo do form** |
-| 6 | Fluxo n8n → insert em `tata_kanban.cards` | n8n | ⏳ | remover trigger manual |
-| 7 | Ligar no Kanban (quadro/colunas Ouvidoria) | Kanban | ⏳ | **config do usuário (outro agente)** |
+| 1 | Criar `dp_rh.ouvidoria` (id_externo, matricula, created_at) | Banco | ⏳ | ok do usuário |
+| 2 | RPCs `ouvidoria_registrar` (anon) + `ouvidoria_listar` (auth) | Banco | ⏳ | passo 1 |
+| 3 | Migrar dados da planilha → tabela (upsert por id_externo) | Banco | ⏳ | passos 1-2 |
+| 4 | Dashboard `kpis/rh/ouvidoria.html`: fetch→`rpc('ouvidoria_listar')` | Front | ⏳ | passos 1-3 |
+| 5 | `ouvidoria-form.html`: POST→`rpc('ouvidoria_registrar')` | Front | ⏳ | **repo do form** |
+| 6 | n8n Trello: **aposentar** (app renderiza card da tabela) | n8n | ⏳ | confirmar c/ usuário |
+| 7 | Kanban: entregar tabela c/ matrícula+id_externo p/ **agente app-side** ligar | Kanban | ⏳ | agente app-side |
+
+### Checklist p/ o agente app-side (Ouvidoria)
+- **schema.tabela:** `dp_rh.ouvidoria` (privado) + RPC `tata_plus.ouvidoria_listar/registrar`
+- **matricula:** sim, nullable (anônimo permitido). **RLS:** tabela privada; acesso via RPC SECURITY DEFINER.
+- **chave upsert:** `id_externo` (= carimbo).
+- **o que a página faz:** mostra dado (dashboard) + entra reclamação (form). Não pontua. Vira card no Kanban (vínculo app-side).
 
 ## 4. Pendências para destravar execução
 1. Repo/arquivo do `ouvidoria-form.html` (não está neste repo).
