@@ -595,6 +595,17 @@ tr.row-editing td { background:#FAFFF0; }
   .modal.modal-wide { max-width: 1140px; }
   @keyframes modalIn { from { opacity: 0; transform: scale(0.97) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 }
+
+/* ── ESTOQUE (inventário / estoque mínimo) ── */
+.est-topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 4px; }
+.est-topbar .cat-select { flex: 0 1 220px; }
+.est-subtabs { display: flex; gap: 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 100px; padding: 3px; width: fit-content; }
+.est-subtab-btn { padding: 7px 16px; border: none; background: transparent; border-radius: 100px; font-family: 'DM Mono', monospace; font-size: 10.5px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+.est-subtab-btn.active { background: var(--carbon); color: var(--citric); }
+.est-info-bar { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--mid); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
+.est-list { display: flex; flex-direction: column; gap: 10px; }
+.cat-col-min { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); width: 60px; text-align: center; flex-shrink: 0; }
+.cat-col-min.deficit { color: #C0392B; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -671,6 +682,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <button data-aba-id="governanca-kpis-compras-abastecimento::processamento" class="tab-btn"        id="tab-processamento" onclick="setTab('processamento')">Processamento</button>
   <button data-aba-id="governanca-kpis-compras-abastecimento::entregas" class="tab-btn"        id="tab-entregas"      onclick="setTab('entregas')">Recebimentos</button>
   <button data-aba-id="governanca-kpis-compras-abastecimento::conferencia" class="tab-btn"        id="tab-conferencia"   onclick="setTab('conferencia')" style="display:none;">Conferência</button>
+  <button data-aba-id="governanca-kpis-compras-abastecimento::estoque" class="tab-btn" id="tab-estoque" onclick="setTab('estoque')">Estoque</button>
   <button data-aba-id="governanca-kpis-compras-abastecimento::kpis" class="tab-btn" id="tab-kpis" onclick="setTab('kpis')">KPIs</button>
 </div>
 
@@ -694,6 +706,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="page" id="page-processamento"></div>
   <div class="page" id="page-entregas"></div>
   <div class="page" id="page-conferencia"></div>
+  <div class="page" id="page-estoque"></div>
   <div class="page" id="page-kpis"></div>
 </main>
 
@@ -1715,8 +1728,11 @@ function setTab(t) {
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   var pg = document.getElementById('page-'+t); if (pg) pg.classList.add('active');
   var fw = document.getElementById('filters-wrap');
-  if (fw) fw.classList.toggle('kpi-mode', t === 'kpis');
+  if (fw) { fw.classList.toggle('kpi-mode', t === 'kpis'); fw.style.display = (t === 'estoque') ? 'none' : ''; }
+  var kw = document.getElementById('kpis-wrap');
+  if (kw) kw.style.display = (t === 'estoque') ? 'none' : '';
   if (t === 'kpis') renderKPIsPage();
+  if (t === 'estoque') renderEstoquePage();
 }
 
 // ── KPI PAGE ──────────────────────────────────────────────────────────────────
@@ -2581,6 +2597,275 @@ async function enviarPedido() {
   activeCats=[]; document.getElementById('cat-sections').innerHTML=''; document.getElementById('modal-obs').value='';
   renderAll(); updateKPIs(); setTab('pedidos');
   setTimeout(function(){gerarPDFPedido(newOrder);},400);
+}
+
+// ── ESTOQUE (inventário / estoque mínimo / contagem semanal) ────────────────────
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+
+var ESTOQUE_SUBTAB = 'contagem';
+var ESTOQUE_DEPTO = '';
+var ESTOQUE_ITENS = [];
+var INVENTARIO_MINIMO_MAP = {};
+
+function chaveInventario(depto, nome) {
+  return (depto || '').trim().toLowerCase() + '::' + (nome || '').trim().toLowerCase();
+}
+
+// Um item único por produto+unidade de medida (o catálogo tem uma linha por fornecedor).
+function getItensCatalogoUnicos() {
+  var vistos = {};
+  var lista = [];
+  Object.keys(CATALOGO).forEach(function(key) {
+    var cat = CATALOGO[key];
+    (cat.produtos || []).forEach(function(p) {
+      var dk = (p.nome || '').trim().toLowerCase() + '::' + (p.un || '').trim().toLowerCase();
+      if (vistos[dk]) return;
+      vistos[dk] = true;
+      lista.push({
+        catKey: key,
+        catLabel: cat.label,
+        subcategoria: p.subcategoria || '',
+        nome: p.nome,
+        un: p.un,
+        valorUnitario: p.valorUnitario || 0
+      });
+    });
+  });
+  return lista.sort(function(a, b) {
+    return String(a.catLabel).localeCompare(String(b.catLabel), 'pt-BR') || String(a.nome).localeCompare(String(b.nome), 'pt-BR');
+  });
+}
+
+async function carregarInventarioMinimo() {
+  INVENTARIO_MINIMO_MAP = {};
+  if (!supa || !UNIDADE) return;
+  try {
+    var res = await supa.from('inventario_minimo').select('*').eq('unidade', UNIDADE);
+    if (res.error) throw new Error(res.error.message);
+    (res.data || []).forEach(function(r) {
+      INVENTARIO_MINIMO_MAP[chaveInventario(r.departamento || '', r.produto_nome)] = r;
+    });
+  } catch(e) { console.warn('Erro ao carregar estoque mínimo:', e.message); }
+}
+
+function setEstoqueSubtab(t) { ESTOQUE_SUBTAB = t; renderEstoquePage(); }
+function setEstoqueDepto(v) { ESTOQUE_DEPTO = v; renderEstoquePage(); }
+
+async function renderEstoquePage() {
+  var container = document.getElementById('page-estoque');
+  if (!container) return;
+  if (!ESTOQUE_DEPTO) ESTOQUE_DEPTO = DEPARTAMENTO || (DEPTOS_DISPONIVEIS[0] || 'Geral');
+
+  if (Object.keys(CATALOGO).length === 0) {
+    container.innerHTML = '<div class="empty"><p>Carregando catálogo...</p></div>';
+    await carregarCatalogo();
+  }
+  if (Object.keys(CATALOGO).length === 0) {
+    container.innerHTML = '<div class="empty"><p>' + esc(catalogoErro || 'Catálogo indisponível.') + '</p></div>';
+    return;
+  }
+  await carregarInventarioMinimo();
+
+  var deptosOpts = (DEPTOS_DISPONIVEIS.length ? DEPTOS_DISPONIVEIS : [ESTOQUE_DEPTO]);
+  var deptoSelectHtml = '<select class="cat-select" onchange="setEstoqueDepto(this.value)">' +
+    deptosOpts.map(function(d) { return '<option value="' + esc(d) + '"' + (d === ESTOQUE_DEPTO ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('') +
+    '</select>';
+
+  var html = '<div class="est-topbar">' +
+    '<div class="est-subtabs">' +
+      '<button class="est-subtab-btn' + (ESTOQUE_SUBTAB === 'contagem' ? ' active' : '') + '" onclick="setEstoqueSubtab(\'contagem\')">Contagem Semanal</button>' +
+      '<button class="est-subtab-btn' + (ESTOQUE_SUBTAB === 'minimo' ? ' active' : '') + '" onclick="setEstoqueSubtab(\'minimo\')">Estoque Mínimo</button>' +
+    '</div>' +
+    deptoSelectHtml +
+  '</div>';
+
+  var itens = getItensCatalogoUnicos();
+  html += (ESTOQUE_SUBTAB === 'minimo') ? renderEstoqueMinimoHTML(itens) : renderEstoqueContagemHTML(itens);
+  container.innerHTML = html;
+}
+
+function renderEstoqueMinimoHTML(itens) {
+  ESTOQUE_ITENS = itens;
+  var porCategoria = {};
+  itens.forEach(function(it, i) { it._idx = i; (porCategoria[it.catLabel] = porCategoria[it.catLabel] || []).push(it); });
+  var html = '<div class="est-list">';
+  Object.keys(porCategoria).sort(function(a, b) { return a.localeCompare(b, 'pt-BR'); }).forEach(function(catLabel) {
+    html += '<div class="cat-section">' +
+      '<div class="cat-header"><div class="cat-header-left"><span class="cat-name">' + esc(catLabel) + '</span></div></div>' +
+      '<div class="cat-item-header"><span class="cat-col-nome hdr">Produto</span><span class="cat-col-num hdr">Un.</span><span class="cat-col-qty hdr" style="margin-left:24px;">Mín.</span></div>';
+    porCategoria[catLabel].forEach(function(it) {
+      var atual = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome)];
+      html += '<div class="cat-item"><div class="cat-item-main">' +
+        '<span class="cat-col-nome">' + esc(it.nome) + '</span>' +
+        '<span class="cat-col-num">' + esc(it.un || '—') + '</span>' +
+        '<span class="cat-col-qty"><input class="qty-input" type="number" min="0" step="1" id="est-min-' + it._idx + '" value="' + (atual ? atual.estoque_minimo : '') + '" onchange="salvarEstoqueMinimo(' + it._idx + ')"></span>' +
+        '</div></div>';
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderEstoqueContagemHTML(itens) {
+  ESTOQUE_ITENS = itens;
+  var hoje = new Date().toLocaleDateString('pt-BR');
+  var porCategoria = {};
+  itens.forEach(function(it, i) { it._idx = i; (porCategoria[it.catLabel] = porCategoria[it.catLabel] || []).push(it); });
+  var html = '<div class="est-info-bar"><span><strong>Unidade:</strong> ' + esc(UNIDADE || '—') + '</span><span><strong>Departamento:</strong> ' + esc(ESTOQUE_DEPTO || '—') + '</span><span><strong>Data:</strong> ' + hoje + '</span></div>';
+  html += '<div class="est-list">';
+  Object.keys(porCategoria).sort(function(a, b) { return a.localeCompare(b, 'pt-BR'); }).forEach(function(catLabel) {
+    html += '<div class="cat-section">' +
+      '<div class="cat-header"><div class="cat-header-left"><span class="cat-name">' + esc(catLabel) + '</span></div></div>' +
+      '<div class="cat-item-header"><span class="cat-col-nome hdr">Produto</span><span class="cat-col-num hdr">Mín.</span><span class="cat-col-qty hdr" style="margin-left:24px;">Atual</span></div>';
+    porCategoria[catLabel].forEach(function(it) {
+      var minRow = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome)];
+      html += '<div class="cat-item"><div class="cat-item-main">' +
+        '<span class="cat-col-nome">' + esc(it.nome) + ' <span style="color:var(--muted);">(' + esc(it.un || '—') + ')</span></span>' +
+        '<span class="cat-col-num">' + (minRow ? minRow.estoque_minimo : '—') + '</span>' +
+        '<span class="cat-col-qty"><input class="qty-input" type="number" min="0" step="1" id="est-atual-' + it._idx + '"></span>' +
+        '</div></div>';
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  html += '<button class="btn-add-cat" style="margin-top:12px;width:100%;" onclick="registrarContagem()">Registrar Contagem</button>';
+  return html;
+}
+
+async function salvarEstoqueMinimo(idx) {
+  var it = ESTOQUE_ITENS[idx];
+  var inp = document.getElementById('est-min-' + idx);
+  if (!it || !inp || !supa) return;
+  var raw = inp.value.trim();
+  if (raw === '') return;
+  var val = parseFloat(raw);
+  if (isNaN(val) || val < 0) { toast('Valor inválido.', true); return; }
+  try {
+    var row = {
+      unidade: UNIDADE,
+      departamento: ESTOQUE_DEPTO || 'Geral',
+      produto_nome: it.nome,
+      categoria: it.catKey,
+      subcategoria: it.subcategoria || null,
+      unidade_medida: it.un || null,
+      estoque_minimo: val,
+      atualizado_por: (currentUser && currentUser.name) || null,
+      updated_at: new Date().toISOString()
+    };
+    var res = await supa.from('inventario_minimo')
+      .upsert(row, { onConflict: 'unidade,departamento,produto_nome' })
+      .select('*').single();
+    if (res.error) throw new Error(res.error.message);
+    INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome)] = res.data;
+    toast('Estoque mínimo salvo.');
+  } catch(e) { toast('Erro ao salvar: ' + e.message, true); }
+}
+
+async function registrarContagem() {
+  if (!ESTOQUE_ITENS || !ESTOQUE_ITENS.length) return;
+  if (!supa) { alert('Supabase não inicializado.'); return; }
+  var dataISO = new Date().toISOString().split('T')[0];
+  var nomeContador = (currentUser && currentUser.name) || 'Líder';
+  var linhas = [];
+  var deficits = [];
+  ESTOQUE_ITENS.forEach(function(it) {
+    var inp = document.getElementById('est-atual-' + it._idx);
+    if (!inp) return;
+    var raw = inp.value.trim();
+    if (raw === '') return;
+    var atual = parseFloat(raw);
+    if (isNaN(atual) || atual < 0) return;
+    var minRow = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome)];
+    linhas.push({
+      unidade: UNIDADE,
+      departamento: ESTOQUE_DEPTO || 'Geral',
+      produto_nome: it.nome,
+      categoria: it.catKey,
+      subcategoria: it.subcategoria || null,
+      unidade_medida: it.un || null,
+      inventario_minimo_id: minRow ? minRow.id : null,
+      estoque_atual: atual,
+      data_contagem: dataISO,
+      contado_por: nomeContador
+    });
+    if (minRow && atual < minRow.estoque_minimo) {
+      deficits.push({
+        catKey: it.catKey,
+        subcategoria: it.subcategoria,
+        nome: it.nome,
+        un: it.un,
+        valorUnitario: it.valorUnitario,
+        qtdSugerida: Math.ceil(minRow.estoque_minimo - atual)
+      });
+    }
+  });
+  if (!linhas.length) { alert('Informe ao menos uma quantidade de estoque atual.'); return; }
+  try {
+    var res = await supa.from('inventario_contagem').insert(linhas).select('id');
+    if (res.error) throw new Error(res.error.message);
+    var ids = (res.data || []).map(function(r) { return r.id; });
+    var msg = 'Contagem registrada: ' + linhas.length + ' itens.';
+    if (deficits.length) {
+      var idPedido = await criarPedidoAutomaticoEstoque(deficits);
+      if (idPedido) {
+        msg += ' ' + deficits.length + ' item(ns) abaixo do mínimo — pedido ' + idPedido + ' gerado automaticamente.';
+        if (ids.length) await supa.from('inventario_contagem').update({ pedido_gerado_id: idPedido }).in('id', ids);
+      } else {
+        msg += ' ' + deficits.length + ' item(ns) abaixo do mínimo, mas houve erro ao gerar o pedido automático.';
+      }
+    } else {
+      msg += ' Nenhum item abaixo do mínimo.';
+    }
+    alert(msg);
+    renderEstoquePage();
+  } catch(e) { toast('Erro ao registrar contagem: ' + e.message, true); }
+}
+
+async function criarPedidoAutomaticoEstoque(deficits) {
+  if (!supa || !deficits.length) return null;
+  try {
+    var newIdDisplay = await gerarIdDisplay(UNIDADE);
+    var nomeSolicitante = (currentUser && currentUser.name) || 'Líder';
+    var now = new Date();
+    var dataISO = now.toISOString().split('T')[0];
+    var commonFields = {
+      id_display: newIdDisplay,
+      unidade: UNIDADE || null,
+      departamento: ESTOQUE_DEPTO || null,
+      solicitante: nomeSolicitante,
+      data_solicitacao: dataISO,
+      status: 'solicitado',
+      obs_solicitante: 'Gerado automaticamente pela contagem semanal de estoque (abaixo do mínimo).',
+      atualizado_por: nomeSolicitante
+    };
+    var rowsToInsert = deficits.map(function(d) {
+      return Object.assign({
+        categoria: d.catKey,
+        subcategoria: d.subcategoria || null,
+        produto_nome: d.nome,
+        unidade_medida: d.un || null,
+        qtd_solicitada: d.qtdSugerida,
+        fornecedor: null,
+        valor_inicial: d.valorUnitario || null
+      }, commonFields);
+    });
+    var res = await supa.from('abastecimento').insert(rowsToInsert).select('id, produto_nome');
+    if (res.error) throw new Error(res.error.message);
+    var itensList = deficits.map(function(d) { return { cat: (CATALOGO[d.catKey] && CATALOGO[d.catKey].label) || d.catKey, nome: d.nome, un: d.un, qty: d.qtdSugerida, fornecedor: '' }; });
+    var cats = Array.from(new Set(deficits.map(function(d) { return ((CATALOGO[d.catKey] && CATALOGO[d.catKey].label) || d.catKey).split(' ')[0]; })));
+    var newOrder = { id: newIdDisplay, idDisplay: newIdDisplay, status: 'b-enviado', label: 'Aguardando compra', cats: cats, data: now.toLocaleDateString('pt-BR'), entrega: '—', obs: commonFields.obs_solicitante, aba: 'processamento', itensList: itensList, raw: Object.assign({}, commonFields, { dataSolicitacao: dataISO }) };
+    ORDERS.unshift(newOrder);
+    renderAll(); updateKPIs();
+    return newIdDisplay;
+  } catch(e) {
+    toast('Erro ao gerar pedido automático: ' + e.message, true);
+    return null;
+  }
 }
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
