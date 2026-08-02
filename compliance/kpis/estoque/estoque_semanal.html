@@ -79,6 +79,31 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 .btn-add-cat { padding: 10px 16px; background: var(--carbon); color: var(--citric); border: none; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.05em; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
 .btn-add-cat:hover { opacity: 0.85; }
 
+/* ── MODAL — flutuante centralizado (compartilhado com abastecimento.html) ── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 400; display: none; align-items: flex-end; justify-content: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: var(--surface); border-radius: 12px 12px 0 0; width: 100%; max-width: 580px; max-height: 92vh; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; display: flex; flex-direction: column; }
+.modal.modal-wide { max-width: 860px; }
+.modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 100px; margin: 12px auto 0; flex-shrink: 0; }
+.modal-header { padding: 14px 20px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; position: sticky; top: 0; background: var(--surface); z-index: 1; flex-shrink: 0; }
+.modal-title { font-size: 18px; font-weight: 700; color: var(--carbon); letter-spacing: -0.3px; line-height: 1.2; }
+.modal-subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 400; }
+.modal-close { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 4px; flex-shrink: 0; }
+.modal-close:hover { color: var(--carbon); }
+.modal-body { padding: 14px 20px; display: flex; flex-direction: column; gap: 11px; }
+.modal-footer { padding: 12px 20px 28px; border-top: 1px solid var(--border); background: var(--surface); display: flex; gap: 8px; position: sticky; bottom: 0; flex-shrink: 0; }
+.modal-btn { flex: 1; height: 40px; padding: 0 12px; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.6px; text-transform: uppercase; cursor: pointer; border: none; transition: opacity 0.15s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.modal-btn-cancel { background: var(--bg); color: var(--mid); border: 1px solid var(--border); }
+.modal-btn-cancel:hover { background: #eee; }
+.modal-btn-save { background: var(--carbon); color: var(--citric); }
+.modal-btn-save:hover { opacity: 0.85; }
+.fg { display: flex; flex-direction: column; gap: 5px; }
+.flbl { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
+@media (min-width: 768px) {
+  .modal-overlay { align-items: center; }
+  .modal { border-radius: 12px; max-height: 88vh; margin: 0 20px; }
+}
+
 /* ── ESTOQUE (inventário / estoque mínimo) ── */
 .est-topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 4px; }
 .est-topbar .cat-select { flex: 0 1 220px; }
@@ -186,14 +211,38 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </header>
 
 <div class="tabs">
-  <button class="tab-btn active" id="tab-contagem" onclick="setTab('contagem')">Contagem Semanal</button>
-  <button class="tab-btn" id="tab-minimo" onclick="setTab('minimo')">Estoque Mínimo</button>
+  <button class="tab-btn active" id="tab-minimo" onclick="setTab('minimo')">Estoque Mínimo</button>
+  <button class="tab-btn" id="tab-kpis" onclick="setTab('kpis')">KPIs</button>
 </div>
 
 <main class="content">
-  <div class="page active" id="page-contagem"></div>
-  <div class="page" id="page-minimo"></div>
+  <div class="page active" id="page-minimo"></div>
+  <div class="page" id="page-kpis"></div>
 </main>
+
+<div class="modal-overlay" id="modal-contagem">
+  <div class="modal modal-wide">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Contagem Semanal</div>
+        <div class="modal-subtitle">Registre o estoque atual de cada item.</div>
+      </div>
+      <button class="modal-close" onclick="fecharModalContagem()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="fg">
+        <label class="flbl">Departamento</label>
+        <select class="cat-select" id="contagem-depto" onchange="mudarDeptoContagem(this.value)"></select>
+      </div>
+      <div id="modal-contagem-body"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="fecharModalContagem()">Cancelar</button>
+      <button class="modal-btn modal-btn-save" onclick="registrarContagem()">Registrar Contagem</button>
+    </div>
+  </div>
+</div>
 
 <!-- LOADING -->
 <div class="loading-overlay show" id="loading-overlay">
@@ -392,13 +441,14 @@ function setTab(t) {
 
 function abaAtiva() {
   var btn = document.querySelector('.tab-btn.active');
-  return btn ? btn.id.replace('tab-', '') : 'contagem';
+  return btn ? btn.id.replace('tab-', '') : 'minimo';
 }
 
 async function renderPaginaAtiva() {
   var tab = abaAtiva();
-  var containerId = tab === 'minimo' ? 'page-minimo' : 'page-contagem';
-  var container = document.getElementById(containerId);
+  if (tab === 'kpis') { renderKPIsPage(); return; }
+
+  var container = document.getElementById('page-minimo');
   if (!container) return;
 
   if (Object.keys(CATALOGO).length === 0) {
@@ -418,7 +468,53 @@ async function renderPaginaAtiva() {
     '</select></div>';
 
   var itens = getItensCatalogoUnicos();
-  container.innerHTML = deptoSelectHtml + (tab === 'minimo' ? renderEstoqueMinimoHTML(itens) : renderEstoqueContagemHTML(itens));
+  container.innerHTML = deptoSelectHtml + renderEstoqueMinimoHTML(itens);
+}
+
+function renderKPIsPage() {
+  var container = document.getElementById('page-kpis');
+  if (!container) return;
+  container.innerHTML = '<div class="empty"><p>KPIs de estoque em construção.</p></div>';
+}
+
+// ── MODAL CONTAGEM SEMANAL (aberto pelo drawer) ──────────────────────────────
+async function abrirModalContagemEstoque() {
+  closeDrawer();
+  document.getElementById('modal-contagem').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  await renderModalContagem();
+}
+
+function fecharModalContagem() {
+  document.getElementById('modal-contagem').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function mudarDeptoContagem(v) { ESTOQUE_DEPTO = v; renderModalContagem(); }
+
+async function renderModalContagem() {
+  var container = document.getElementById('modal-contagem-body');
+  if (!container) return;
+
+  if (Object.keys(CATALOGO).length === 0) {
+    container.innerHTML = '<div class="empty"><p>Carregando catálogo...</p></div>';
+    await carregarCatalogo();
+  }
+  if (Object.keys(CATALOGO).length === 0) {
+    container.innerHTML = '<div class="empty"><p>' + esc(catalogoErro || 'Catálogo indisponível.') + '</p></div>';
+    return;
+  }
+  if (!ESTOQUE_DEPTO) ESTOQUE_DEPTO = DEPARTAMENTO || (DEPTOS_DISPONIVEIS[0] || 'Geral');
+  await carregarInventarioMinimo();
+
+  var sel = document.getElementById('contagem-depto');
+  if (sel) {
+    var deptosOpts = (DEPTOS_DISPONIVEIS.length ? DEPTOS_DISPONIVEIS : [ESTOQUE_DEPTO]);
+    sel.innerHTML = deptosOpts.map(function(d) { return '<option value="' + esc(d) + '"' + (d === ESTOQUE_DEPTO ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('');
+  }
+
+  var itens = getItensCatalogoUnicos();
+  container.innerHTML = renderEstoqueContagemHTML(itens);
 }
 
 function renderEstoqueMinimoHTML(itens) {
@@ -449,7 +545,7 @@ function renderEstoqueContagemHTML(itens) {
   var hoje = new Date().toLocaleDateString('pt-BR');
   var porCategoria = {};
   itens.forEach(function(it, i) { it._idx = i; (porCategoria[it.catLabel] = porCategoria[it.catLabel] || []).push(it); });
-  var html = '<div class="est-info-bar"><span><strong>Unidade:</strong> ' + esc(UNIDADE || '—') + '</span><span><strong>Departamento:</strong> ' + esc(ESTOQUE_DEPTO || '—') + '</span><span><strong>Data:</strong> ' + hoje + '</span></div>';
+  var html = '<div class="est-info-bar"><span><strong>Unidade:</strong> ' + esc(UNIDADE || '—') + '</span><span><strong>Data:</strong> ' + hoje + '</span></div>';
   html += '<div class="est-list">';
   Object.keys(porCategoria).sort(function(a, b) { return a.localeCompare(b, 'pt-BR'); }).forEach(function(catLabel) {
     html += '<div class="cat-section">' +
@@ -466,7 +562,6 @@ function renderEstoqueContagemHTML(itens) {
     html += '</div>';
   });
   html += '</div>';
-  html += '<button class="btn-add-cat" style="margin-top:12px;width:100%;" onclick="registrarContagem()">Registrar Contagem</button>';
   return html;
 }
 
@@ -555,7 +650,7 @@ async function registrarContagem() {
       msg += ' Nenhum item abaixo do mínimo.';
     }
     alert(msg);
-    renderPaginaAtiva();
+    fecharModalContagem();
   } catch(e) { toast('Erro ao registrar contagem: ' + e.message, true); }
 }
 
@@ -705,7 +800,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
-      <button class="drawer-sam-btn" id="btnContagemSemanal">Contagem semanal</button>
+      <button class="drawer-sam-btn" id="btnContagemSemanal" onclick="abrirModalContagemEstoque()">Contagem semanal</button>
     </div>
   </div>
   <div class="drawer-footer">
