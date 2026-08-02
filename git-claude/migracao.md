@@ -139,7 +139,7 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 ## MÓDULO DEMANDAS (em andamento)
 - Dado migrado p/ **Kanban** (`tata_kanban`): quadro "Binho, Cinthia e Victor", colunas **Pendentes / Em andamento / Concluídos** = demandas (Ouvidoria/Testes = outros). Não há tabela separada.
 - **n8n `report_semanal`** (nó "consulta demandas"): trocado de Google Sheets → **HTTP Request** chamando `public.report_demandas_resumo()` (retorna contagens). Feito na UI pelo usuário; Code "consulta demandas1" mapeia p/ shape do Consolidador. Validado (7 pend/6 and/13 total/10 atras).
-- **Dashboard `kpis/rh/demandas.html`**: trocado Sheets API → `comSupa` + `supa.schema('tata_plus').rpc('demandas_lista')`. RPC devolve os cards (status=coluna, data DD/MM/YYYY, etiqueta via card_etiquetas, responsavel via card_responsaveis→profiles). SHEET_ID/API_KEY removidos.
+- **Dashboard `kpis/rh/demandas.html`**: ⚠️ **REVERTIDO** — a migração pro Kanban (`demandas_lista`) estava com **FONTE ERRADA** (o usuário confirmou que as demandas do dashboard vêm de OUTRA tabela, não dos cards do quadro). Voltou a ler da planilha `demandas_trello` até identificarmos a tabela correta. RPCs `demandas_lista`/`report_demandas_resumo` ficam criadas mas o dashboard não as usa por ora. **Reavaliar também o nó n8n** (que aponta p/ report_demandas_resumo) — pode estar na mesma fonte errada.
 - RPCs criadas: `public.report_demandas_resumo()` (anon, contagens p/ n8n) e `tata_plus.demandas_lista()` (authenticated, lista p/ dashboard).
 
 ## 5. Log de progresso
