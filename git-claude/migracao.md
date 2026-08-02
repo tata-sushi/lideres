@@ -139,7 +139,16 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 ## MÓDULO DEMANDAS (em andamento)
 - Dado migrado p/ **Kanban** (`tata_kanban`): quadro "Binho, Cinthia e Victor", colunas **Pendentes / Em andamento / Concluídos** = demandas (Ouvidoria/Testes = outros). Não há tabela separada.
 - **n8n `report_semanal`** (nó "consulta demandas"): trocado de Google Sheets → **HTTP Request** chamando `public.report_demandas_resumo()` (retorna contagens). Feito na UI pelo usuário; Code "consulta demandas1" mapeia p/ shape do Consolidador. Validado (7 pend/6 and/13 total/10 atras).
-- **Dashboard `kpis/rh/demandas.html`**: ⚠️ **REVERTIDO** — a migração pro Kanban (`demandas_lista`) estava com **FONTE ERRADA** (o usuário confirmou que as demandas do dashboard vêm de OUTRA tabela, não dos cards do quadro). Voltou a ler da planilha `demandas_trello` até identificarmos a tabela correta. RPCs `demandas_lista`/`report_demandas_resumo` ficam criadas mas o dashboard não as usa por ora. **Reavaliar também o nó n8n** (que aponta p/ report_demandas_resumo) — pode estar na mesma fonte errada.
+- **Dashboard `kpis/rh/demandas.html`**: ⏸️ **EM ESPERA (a pedido do usuário — "demandas não é agora").** Segue lendo do Sheets por ora. A RPC `demandas_lista` **já está corrigida e pronta** (o "fonte errada" era BUG DE FILTRO: 712 concluídos têm `arquivado=true` e a RPC filtrava `arquivado=false`; corrigida p/ incluir arquivados → devolve **725** = 712+7+6, idêntico ao dashboard). Quando o usuário liberar, é só re-aplicar `git show f1d3e52e:.../demandas.html`. O nó n8n (`report_demandas_resumo`) está correto (só abertas = 13).
+
+### Transcrição dos Alinhamentos (Report `semanal.html`)
+- Aba Alinhamentos lia 2 abas do doc de demandas: demandas (gid 1824881932) + **transcrição (gid 735774123)**.
+- Transcrição = atas dos alinhamentos (data + conteudo), **muito sensível**. Criada `dp_rh.alinhamento_transcricao` (id_externo md5, data_reuniao, conteudo) + RPC `tata_plus.alinhamento_transcricao_listar()` (authenticated).
+- `semanal.html` aba **Alinhamentos** → **TUDO no Supabase/Kanban** (esclarecido pelo usuário: "do kanban é aqui"):
+  - `_alignDemandas` (ASSUNTOS + gráfico DEMANDAS/categorias + KPIs status) via `rpc('demandas_lista')`, mapeando `titulo→assunto`, `etiqueta→demanda`. KPIs: 712 concluído / 6 andamento / 7 pendente.
+  - `_alignTransc` (transcrição) via `rpc('alinhamento_transcricao_listar')`.
+  - NB: o `demandas.html` SEPARADO segue no Sheets (em espera). A migração do Kanban era pra ESTA aba, não pra aquele dashboard.
+- Import histórico (22 reuniões): entregue como `IMPORTAR_transcricao.sql` p/ o usuário rodar no SQL Editor. Próximas o usuário insere manual (grava áudio → transcreve → INSERT).
 - RPCs criadas: `public.report_demandas_resumo()` (anon, contagens p/ n8n) e `tata_plus.demandas_lista()` (authenticated, lista p/ dashboard).
 
 ## 5. Log de progresso
