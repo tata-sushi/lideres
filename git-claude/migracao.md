@@ -139,7 +139,13 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 ## MÓDULO DEMANDAS (em andamento)
 - Dado migrado p/ **Kanban** (`tata_kanban`): quadro "Binho, Cinthia e Victor", colunas **Pendentes / Em andamento / Concluídos** = demandas (Ouvidoria/Testes = outros). Não há tabela separada.
 - **n8n `report_semanal`** (nó "consulta demandas"): trocado de Google Sheets → **HTTP Request** chamando `public.report_demandas_resumo()` (retorna contagens). Feito na UI pelo usuário; Code "consulta demandas1" mapeia p/ shape do Consolidador. Validado (7 pend/6 and/13 total/10 atras).
-- **Dashboard `kpis/rh/demandas.html`**: ⚠️ **REVERTIDO** — a migração pro Kanban (`demandas_lista`) estava com **FONTE ERRADA** (o usuário confirmou que as demandas do dashboard vêm de OUTRA tabela, não dos cards do quadro). Voltou a ler da planilha `demandas_trello` até identificarmos a tabela correta. RPCs `demandas_lista`/`report_demandas_resumo` ficam criadas mas o dashboard não as usa por ora. **Reavaliar também o nó n8n** (que aponta p/ report_demandas_resumo) — pode estar na mesma fonte errada.
+- **Dashboard `kpis/rh/demandas.html`**: ✅ **RE-MIGRADO** p/ `rpc('demandas_lista')` (Kanban). Houve um falso alarme ("fonte errada") — na verdade era **BUG DE FILTRO** na RPC: os **712 concluídos estão `arquivado=true`** e a RPC filtrava `arquivado=false`, escondendo-os (voltava só 13). **Corrigido:** RPC inclui os arquivados/concluídos das colunas Pendentes/Em andamento/Concluídos → devolve **725** (712+7+6), idêntico ao dashboard. O nó n8n (`report_demandas_resumo`, só abertas) está correto (conta só Pendentes/Em andamento = 13).
+
+### Transcrição dos Alinhamentos (Report `semanal.html`)
+- Aba Alinhamentos lia 2 abas do doc de demandas: demandas (gid 1824881932, segue no Sheets por ora) + **transcrição (gid 735774123)**.
+- Transcrição = atas dos alinhamentos (data + conteudo), **muito sensível**. Criada `dp_rh.alinhamento_transcricao` (id_externo md5, data_reuniao, conteudo) + RPC `tata_plus.alinhamento_transcricao_listar()` (authenticated).
+- `semanal.html`: `_alignTransc` agora via `comSupa` + `rpc('alinhamento_transcricao_listar')`; demandas do alinhamento seguem no Sheets.
+- Import histórico (22 reuniões): entregue como `IMPORTAR_transcricao.sql` p/ o usuário rodar no SQL Editor. Próximas o usuário insere manual (grava áudio → transcreve → INSERT).
 - RPCs criadas: `public.report_demandas_resumo()` (anon, contagens p/ n8n) e `tata_plus.demandas_lista()` (authenticated, lista p/ dashboard).
 
 ## 5. Log de progresso

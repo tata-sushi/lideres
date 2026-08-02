@@ -1950,21 +1950,20 @@ function sortAlignDates(dates){
 function loadAlinhamentosData() {
   if (_alignDemandas&&_alignDemandas.length&&_alignTransc){renderAlinhamentos();return;}
   var urlD='https://docs.google.com/spreadsheets/d/'+ALIGN_SHEET_ID+'/export?format=csv&gid=1824881932';
-  var urlT='https://docs.google.com/spreadsheets/d/'+ALIGN_SHEET_ID+'/export?format=csv&gid=735774123';
   function fetchCsv(url){return fetch(url).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(function(t){var s=t.trimLeft();if(s.charAt(0)==='<')throw new Error('HTML response');return t;});}
-  Promise.all([fetchCsv(urlD),fetchCsv(urlT)])
+  function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
+  // Transcrição migrada p/ Supabase (dp_rh.alinhamento_transcricao via RPC). Demandas seguem no Sheets por ora.
+  function fetchTransc(){ return new Promise(function(resolve){ comSupa(function(supa){ supa.schema('tata_plus').rpc('alinhamento_transcricao_listar').then(function(res){ resolve(res.error?[]:(res.data||[])); }).catch(function(){ resolve([]); }); }); }); }
+  Promise.all([fetchCsv(urlD),fetchTransc()])
   .then(function(results){
-    var csvD=results[0],csvT=results[1];
+    var csvD=results[0];
     _alignDemandas=parseAlignSheet(csvD,[
       {key:'data',    kw:['data'],                                                          fb:2},
       {key:'status',  kw:['status','situac','estado'],                                     fb:3},
       {key:'assunto', kw:['assunto','pauta','tema','reuniao','topico','subject'],           fb:4},
       {key:'demanda', kw:['etiquet','demanda','acao','tarefa','task','descri','ativid'],    fb:5}
     ]);
-    _alignTransc=parseAlignSheet(csvT,[
-      {key:'data',     kw:['data'],                          fb:0},
-      {key:'conteudo', kw:['conteud','transcri','texto','content','anotac','descri','nota','observ','ata','minuta','registro'], fb:1}
-    ]);
+    _alignTransc=Array.isArray(results[1])?results[1]:[];
     if (!_alignOpenDates&&_alignDemandas.length){
       var ds=sortAlignDates(_alignDemandas.map(function(r){return r.data;}).filter(Boolean));
       var seenD={};ds=ds.filter(function(d){return seenD[d]?false:(seenD[d]=true);});
