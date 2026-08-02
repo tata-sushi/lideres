@@ -297,8 +297,16 @@ var ESTOQUE_DEPTO = '';
 var ESTOQUE_ITENS = [];
 var INVENTARIO_MINIMO_MAP = {};
 
-function chaveInventario(depto, nome) {
-  return (depto || '').trim().toLowerCase() + '::' + (nome || '').trim().toLowerCase();
+function chaveInventario(depto, nome, un) {
+  return (depto || '').trim().toLowerCase() + '::' + (nome || '').trim().toLowerCase() + '::' + (un || '').trim().toLowerCase();
+}
+
+function dataLocalISO(d) {
+  d = d || new Date();
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var dd = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + dd;
 }
 
 // Um item único por produto+unidade de medida (o catálogo tem uma linha por fornecedor).
@@ -333,7 +341,7 @@ async function carregarInventarioMinimo() {
     var res = await supa.from('inventario_minimo').select('*').eq('unidade', UNIDADE);
     if (res.error) throw new Error(res.error.message);
     (res.data || []).forEach(function(r) {
-      INVENTARIO_MINIMO_MAP[chaveInventario(r.departamento || '', r.produto_nome)] = r;
+      INVENTARIO_MINIMO_MAP[chaveInventario(r.departamento || '', r.produto_nome, r.unidade_medida)] = r;
     });
   } catch(e) { console.warn('Erro ao carregar estoque mínimo:', e.message); }
 }
@@ -391,7 +399,7 @@ function renderEstoqueMinimoHTML(itens) {
       '<div class="cat-header"><div class="cat-header-left"><span class="cat-name">' + esc(catLabel) + '</span></div></div>' +
       '<div class="cat-item-header"><span class="cat-col-nome hdr">Produto</span><span class="cat-col-num hdr">Un.</span><span class="cat-col-qty hdr" style="margin-left:24px;">Mín.</span></div>';
     porCategoria[catLabel].forEach(function(it) {
-      var atual = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome)];
+      var atual = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome, it.un)];
       html += '<div class="cat-item"><div class="cat-item-main">' +
         '<span class="cat-col-nome">' + esc(it.nome) + '</span>' +
         '<span class="cat-col-num">' + esc(it.un || '—') + '</span>' +
@@ -416,7 +424,7 @@ function renderEstoqueContagemHTML(itens) {
       '<div class="cat-header"><div class="cat-header-left"><span class="cat-name">' + esc(catLabel) + '</span></div></div>' +
       '<div class="cat-item-header"><span class="cat-col-nome hdr">Produto</span><span class="cat-col-num hdr">Mín.</span><span class="cat-col-qty hdr" style="margin-left:24px;">Atual</span></div>';
     porCategoria[catLabel].forEach(function(it) {
-      var minRow = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome)];
+      var minRow = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome, it.un)];
       html += '<div class="cat-item"><div class="cat-item-main">' +
         '<span class="cat-col-nome">' + esc(it.nome) + ' <span style="color:var(--muted);">(' + esc(it.un || '—') + ')</span></span>' +
         '<span class="cat-col-num">' + (minRow ? minRow.estoque_minimo : '—') + '</span>' +
@@ -445,16 +453,16 @@ async function salvarEstoqueMinimo(idx) {
       produto_nome: it.nome,
       categoria: it.catKey,
       subcategoria: it.subcategoria || null,
-      unidade_medida: it.un || null,
+      unidade_medida: it.un || '',
       estoque_minimo: val,
       atualizado_por: (currentUser && currentUser.name) || null,
       updated_at: new Date().toISOString()
     };
     var res = await supa.from('inventario_minimo')
-      .upsert(row, { onConflict: 'unidade,departamento,produto_nome' })
+      .upsert(row, { onConflict: 'unidade,departamento,produto_nome,unidade_medida' })
       .select('*').single();
     if (res.error) throw new Error(res.error.message);
-    INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome)] = res.data;
+    INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome, it.un)] = res.data;
     toast('Estoque mínimo salvo.');
   } catch(e) { toast('Erro ao salvar: ' + e.message, true); }
 }
@@ -462,7 +470,7 @@ async function salvarEstoqueMinimo(idx) {
 async function registrarContagem() {
   if (!ESTOQUE_ITENS || !ESTOQUE_ITENS.length) return;
   if (!supa) { alert('Supabase não inicializado.'); return; }
-  var dataISO = new Date().toISOString().split('T')[0];
+  var dataISO = dataLocalISO();
   var nomeContador = (currentUser && currentUser.name) || 'Líder';
   var linhas = [];
   var deficits = [];
@@ -473,7 +481,7 @@ async function registrarContagem() {
     if (raw === '') return;
     var atual = parseFloat(raw);
     if (isNaN(atual) || atual < 0) return;
-    var minRow = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome)];
+    var minRow = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome, it.un)];
     linhas.push({
       unidade: UNIDADE,
       departamento: ESTOQUE_DEPTO || 'Geral',
@@ -525,7 +533,7 @@ async function criarPedidoAutomaticoEstoque(deficits) {
     var newIdDisplay = await gerarIdDisplay(UNIDADE);
     var nomeSolicitante = (currentUser && currentUser.name) || 'Líder';
     var now = new Date();
-    var dataISO = now.toISOString().split('T')[0];
+    var dataISO = dataLocalISO(now);
     var commonFields = {
       id_display: newIdDisplay,
       unidade: UNIDADE || null,
@@ -569,18 +577,22 @@ function toast(msg, isErr) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async function() {
-  var session; try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-  if (!session || !session.displayName) return;
-  var userName = session.displayName;
-  currentUser = { name: userName };
-  PERFIL = String(session.perfil || '').toLowerCase();
-  var headerUserName = userName;
+// O gate.js não escreve mais em localStorage: ele publica window.__lideresSession
+// (às vezes já disponível na hora do DOMContentLoaded, via cache) e dispara o
+// evento 'lideres:sessao' quando resolve pela rede (dentro do iframe do Tatá
+// Plus). Ainda checamos o localStorage antigo como fallback de compatibilidade.
+var _sessaoIniciada = false;
+async function iniciarComSessao(displayName, perfil) {
+  if (_sessaoIniciada || !displayName) return;
+  _sessaoIniciada = true;
+  currentUser = { name: displayName };
+  PERFIL = String(perfil || '').toLowerCase();
+  var headerUserName = displayName;
   var parts = headerUserName.trim().split(/\s+/);
   if (parts.length > 1) headerUserName = parts[0] + ' ' + parts[parts.length - 1];
   var hu = document.getElementById('header-user'); if (hu) hu.textContent = headerUserName;
 
-  await carregarUsuario(session);
+  await carregarUsuario({ displayName: displayName, unidade: '' });
   await renderPaginaAtiva();
 
   var lo = document.getElementById('loading-overlay'); if (lo) lo.classList.remove('show');
@@ -588,6 +600,24 @@ document.addEventListener('DOMContentLoaded', async function() {
   var hoje = new Date();
   var el = document.getElementById('footer-date-updated');
   if (el) el.textContent = 'Atualizado: ' + hoje.toLocaleDateString('pt-BR') + ', ' + hoje.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+
+function tentarIniciarSessao() {
+  if (window.__lideresSession && window.__lideresSession.displayName) {
+    iniciarComSessao(window.__lideresSession.displayName, window.__lideresSession.perfil);
+    return true;
+  }
+  var session; try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
+  if (session && session.displayName) {
+    iniciarComSessao(session.displayName, session.perfil);
+    return true;
+  }
+  return false;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  if (tentarIniciarSessao()) return;
+  window.addEventListener('lideres:sessao', tentarIniciarSessao);
 });
 </script>
 </body>
