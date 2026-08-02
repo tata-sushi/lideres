@@ -142,7 +142,7 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **Dashboard `kpis/rh/demandas.html`**: ⏸️ **EM ESPERA (a pedido do usuário — "demandas não é agora").** Segue lendo do Sheets por ora. A RPC `demandas_lista` **já está corrigida e pronta** (o "fonte errada" era BUG DE FILTRO: 712 concluídos têm `arquivado=true` e a RPC filtrava `arquivado=false`; corrigida p/ incluir arquivados → devolve **725** = 712+7+6, idêntico ao dashboard). Quando o usuário liberar, é só re-aplicar `git show f1d3e52e:.../demandas.html`. O nó n8n (`report_demandas_resumo`) está correto (só abertas = 13).
 
 ### Transcrição dos Alinhamentos (Report `semanal.html`)
-- Aba Alinhamentos lia 2 abas do doc de demandas: demandas (gid 1824881932, segue no Sheets por ora) + **transcrição (gid 735774123)**.
+- Aba Alinhamentos lia 2 abas do doc de demandas: demandas (gid 1824881932) + **transcrição (gid 735774123)**.
 - Transcrição = atas dos alinhamentos (data + conteudo), **muito sensível**. Criada `dp_rh.alinhamento_transcricao` (id_externo md5, data_reuniao, conteudo) + RPC `tata_plus.alinhamento_transcricao_listar()` (authenticated).
 - `semanal.html` aba **Alinhamentos** → **TUDO no Supabase/Kanban** (esclarecido pelo usuário: "do kanban é aqui"):
   - `_alignDemandas` (ASSUNTOS + gráfico DEMANDAS/categorias + KPIs status) via `rpc('demandas_lista')`, mapeando `titulo→assunto`, `etiqueta→demanda`. KPIs: 712 concluído / 6 andamento / 7 pendente.
