@@ -85,9 +85,10 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **matricula nullable** (exceção ouvidoria: reclamante pode ser anônimo). Quando identificado e for colaborador, resolver nome→matrícula.
 - **id_externo** = carimbo (timestamp da submissão) — chave estável p/ reimportar via upsert.
 
-### RPCs expostas em `tata_plus` (SECURITY DEFINER)
-- `tata_plus.ouvidoria_registrar(payload jsonb)` — **grant anon** (form público) → insert em `dp_rh.ouvidoria`.
+### RPCs (SECURITY DEFINER)
+- **`public.ouvidoria_registrar(payload jsonb)`** — **grant anon** (form público) → insert em `dp_rh.ouvidoria`. Fica em `public` (não `tata_plus`): o `anon` NÃO pode ter usage em `tata_plus` porque 186/202 funções de lá têm execute PUBLIC → exporia o app inteiro. Função é **só-escrita** (anon insere, não lê).
 - `tata_plus.ouvidoria_listar()` — **grant authenticated** (dashboard líderes) → select das linhas.
+- ⚠️ **Padrão p/ formulários públicos anônimos:** RPC de escrita vai em `public` (anon já tem usage), nunca em `tata_plus`.
 
 ### Passos do piloto (ordem) — REVISADO pelo guia
 | # | Passo | Camada | Status | Depende de |
@@ -96,14 +97,20 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 | 2 | RPCs `ouvidoria_registrar` (anon) + `ouvidoria_listar` (auth) | Banco | ✅ FEITO | — |
 | 3 | Migrar dados (19 reg.) → tabela (upsert por id_externo) | Banco | ✅ FEITO | usuário rodou o SQL |
 | 4 | Dashboard `kpis/rh/ouvidoria.html`: fetch→`rpc('ouvidoria_listar')` | Front | ✅ FEITO | validar em tela após import |
-| 5 | `ouvidoria-form.html`: POST→`rpc('ouvidoria_registrar')` | Front | ⏳ | **repo do form** |
-| 6 | n8n: **desligar card Trello** + **aviso WhatsApp** via uazapi | n8n | ⏳ | ver decisões abaixo |
+| 5 | Form `tata-sushi/ouvidoria` `index.html`: POST→`rpc('ouvidoria_registrar')` | Front | ✅ FEITO (PR #37, **não mergeado**) | mergear junto do passo 6 |
+| 6 | n8n: **desligar card Trello** + **aviso WhatsApp** via uazapi | n8n | ✅ FEITO (publicado + trigger pg_net + validado 200) | — |
 
-#### Decisões do aviso WhatsApp (Ouvidoria)
-1. **Gatilho:** **automático em tempo real** ao cair a ouvidoria (Database Webhook do Supabase no insert → webhook n8n). Sem polling.
-2. **Destino:** grupo **Gerentes** (pegar o group id de um fluxo uazapi existente, ex.: report_semanal_dp/rh, na hora de executar).
-3. **Conteúdo:** **COMPLETO** — todos os campos (identificado/anônimo, nome, data do ocorrido, descrição, quer devolutiva, forma, contato). *(Decisão do usuário; risco de exposição em grupo foi sinalizado e aceito.)*
-- Remover o nó Trello "Criação do Card" e o trigger manual.
+> ⚠️ **SEQUÊNCIA (evitar gap de notificação):** não mergear o form (#37) sozinho. Se o form escrever no Supabase e a planilha parar de receber, o fluxo n8n Trello não dispara e ninguém é avisado. Fazer passo 6 (WhatsApp no insert) e mergear o form JUNTO. Repo form: `tata-sushi/ouvidoria` (branch `claude/ouvidoria-supabase`).
+
+#### Decisões do aviso WhatsApp (Ouvidoria) — CONFIGURADO
+1. **Gatilho:** automático em tempo real (trigger Postgres `pg_net` no insert de `dp_rh.ouvidoria` → webhook n8n). **FALTA CRIAR.**
+2. **Destino:** grupo **TATÁ | Gerentes** = `120363220385726427@g.us`.
+3. **Conteúdo:** COMPLETO, **SEM EMOJIS** (decisão do usuário).
+- Fluxo `nova_reclamacao_ouvidoria_card_trello` (id `XcJvoCdFlVFJIwiQ`) **reescrito**: Webhook → Code (monta aviso) → HTTP uazapi. Removidos Trello/Wait/Sheets trigger/manual. **Aplicado (update), NÃO publicado ainda.**
+- **n8n:** `https://auto.tatasushi.tech` → webhook `https://auto.tatasushi.tech/webhook/ouvidoria-nova`.
+- **uazapi:** `POST https://tatasushi.uazapi.com/send/text`, header `token: 4b6e534f-...` (hardcoded, mover p/ credencial depois), body `number`+`text`.
+- **Teste:** OK — enviado ao número do usuário (via `__test_number` no payload; produção usa Gerentes). Chegou rápido e formatado.
+- ✅ **GAP FECHADO (02/08):** fluxo **publicado** (activeVersion c8db7334); **trigger** `dp_rh.notifica_ouvidoria` (AFTER INSERT → `dp_rh.tg_ouvidoria_notifica` → `net.http_post` p/ `https://auto.tatasushi.tech/webhook/ouvidoria-nova` com `to_jsonb(NEW)`). Cadeia validada: `net.http_post` retornou **200 "Workflow was started"** (teste roteado ao número do usuário via `__test_number`, sem tocar no grupo). Produção: qualquer insert em `dp_rh.ouvidoria` (form público OU app) → aviso no grupo TATÁ | Gerentes.
 | 7 | Kanban: entregar tabela c/ matrícula+id_externo p/ **agente app-side** ligar | Kanban | ⏳ | agente app-side |
 
 ### Checklist p/ o agente app-side (Ouvidoria)
@@ -112,10 +119,28 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **chave upsert:** `id_externo` (= carimbo).
 - **o que a página faz:** mostra dado (dashboard) + entra reclamação (form). Não pontua. Vira card no Kanban (vínculo app-side).
 
+### Ponto de entrada do APP (Tatá Plus)
+- Repo `tata-sushi/plus`, `src/routes/Ouvidoria.jsx`. Também postava no Apps Script (planilha) → por isso um relato aberto pelo app NÃO caía na base nova.
+- **Corrigido (PR #446, branch `claude/ouvidoria-supabase`):** usa `supabase.schema('public').rpc('ouvidoria_registrar', { payload })`. Cliente app usa schema padrão `tata_plus`, por isso o `.schema('public')` explícito. Anonimato: não envia matrícula.
+- Existem **DOIS pontos de entrada** da ouvidoria: form público (`tata-sushi/ouvidoria`, mergeado) + página do app (`tata-sushi/plus`, PR #446). Ambos → `public.ouvidoria_registrar` → `dp_rh.ouvidoria`.
+
 ## 4. Pendências para destravar execução
 1. Repo/arquivo do `ouvidoria-form.html` (não está neste repo).
 2. Quadro/colunas da Ouvidoria no `tata_kanban` (usuário configura com outro agente).
 3. "Ok" explícito para começar a executar (hoje = só planejar).
+
+## PILOTO OUVIDORIA — CONCLUÍDO ✅ (02/08)
+- Banco, dashboard, form público, fluxo n8n + trigger: tudo no ar.
+- Fluxo n8n em **PRODUÇÃO**: destino = grupo **TATÁ | Gerentes** `120363220385726427@g.us` (activeVersion c1515c08). O `__test_number` no payload segue disponível p/ testes futuros (roteia p/ número avulso sem tocar no grupo).
+- Validado com insert real (trigger→pg_net→n8n = 200).
+- Pendente de terceiros: PR #446 (app, app-side revisa) e Kanban (passo 7, app-side).
+- Rows de teste do usuário na tabela (02/08): "Teste portal", "Eee" — limpar quando autorizado.
+
+## MÓDULO DEMANDAS (em andamento)
+- Dado migrado p/ **Kanban** (`tata_kanban`): quadro "Binho, Cinthia e Victor", colunas **Pendentes / Em andamento / Concluídos** = demandas (Ouvidoria/Testes = outros). Não há tabela separada.
+- **n8n `report_semanal`** (nó "consulta demandas"): trocado de Google Sheets → **HTTP Request** chamando `public.report_demandas_resumo()` (retorna contagens). Feito na UI pelo usuário; Code "consulta demandas1" mapeia p/ shape do Consolidador. Validado (7 pend/6 and/13 total/10 atras).
+- **Dashboard `kpis/rh/demandas.html`**: trocado Sheets API → `comSupa` + `supa.schema('tata_plus').rpc('demandas_lista')`. RPC devolve os cards (status=coluna, data DD/MM/YYYY, etiqueta via card_etiquetas, responsavel via card_responsaveis→profiles). SHEET_ID/API_KEY removidos.
+- RPCs criadas: `public.report_demandas_resumo()` (anon, contagens p/ n8n) e `tata_plus.demandas_lista()` (authenticated, lista p/ dashboard).
 
 ## 5. Log de progresso
 - 2026-08-02 — Mapeamento das 3 frentes concluído. Fluxo n8n da Ouvidoria lido nó a nó. Documento criado.
