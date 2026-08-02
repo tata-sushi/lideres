@@ -98,15 +98,19 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 | 3 | Migrar dados (19 reg.) → tabela (upsert por id_externo) | Banco | ✅ FEITO | usuário rodou o SQL |
 | 4 | Dashboard `kpis/rh/ouvidoria.html`: fetch→`rpc('ouvidoria_listar')` | Front | ✅ FEITO | validar em tela após import |
 | 5 | Form `tata-sushi/ouvidoria` `index.html`: POST→`rpc('ouvidoria_registrar')` | Front | ✅ FEITO (PR #37, **não mergeado**) | mergear junto do passo 6 |
-| 6 | n8n: **desligar card Trello** + **aviso WhatsApp** via uazapi | n8n | ⏳ | ver decisões abaixo |
+| 6 | n8n: **desligar card Trello** + **aviso WhatsApp** via uazapi | n8n | 🟡 FLUXO PRONTO+TESTADO, falta trigger+publish | ver abaixo |
 
 > ⚠️ **SEQUÊNCIA (evitar gap de notificação):** não mergear o form (#37) sozinho. Se o form escrever no Supabase e a planilha parar de receber, o fluxo n8n Trello não dispara e ninguém é avisado. Fazer passo 6 (WhatsApp no insert) e mergear o form JUNTO. Repo form: `tata-sushi/ouvidoria` (branch `claude/ouvidoria-supabase`).
 
-#### Decisões do aviso WhatsApp (Ouvidoria)
-1. **Gatilho:** **automático em tempo real** ao cair a ouvidoria (Database Webhook do Supabase no insert → webhook n8n). Sem polling.
-2. **Destino:** grupo **Gerentes** (pegar o group id de um fluxo uazapi existente, ex.: report_semanal_dp/rh, na hora de executar).
-3. **Conteúdo:** **COMPLETO** — todos os campos (identificado/anônimo, nome, data do ocorrido, descrição, quer devolutiva, forma, contato). *(Decisão do usuário; risco de exposição em grupo foi sinalizado e aceito.)*
-- Remover o nó Trello "Criação do Card" e o trigger manual.
+#### Decisões do aviso WhatsApp (Ouvidoria) — CONFIGURADO
+1. **Gatilho:** automático em tempo real (trigger Postgres `pg_net` no insert de `dp_rh.ouvidoria` → webhook n8n). **FALTA CRIAR.**
+2. **Destino:** grupo **TATÁ | Gerentes** = `120363220385726427@g.us`.
+3. **Conteúdo:** COMPLETO, **SEM EMOJIS** (decisão do usuário).
+- Fluxo `nova_reclamacao_ouvidoria_card_trello` (id `XcJvoCdFlVFJIwiQ`) **reescrito**: Webhook → Code (monta aviso) → HTTP uazapi. Removidos Trello/Wait/Sheets trigger/manual. **Aplicado (update), NÃO publicado ainda.**
+- **n8n:** `https://auto.tatasushi.tech` → webhook `https://auto.tatasushi.tech/webhook/ouvidoria-nova`.
+- **uazapi:** `POST https://tatasushi.uazapi.com/send/text`, header `token: 4b6e534f-...` (hardcoded, mover p/ credencial depois), body `number`+`text`.
+- **Teste:** OK — enviado ao número do usuário (via `__test_number` no payload; produção usa Gerentes). Chegou rápido e formatado.
+- ⚠️ **GAP ABERTO:** flow não publicado + trigger inexistente → novas ouvidorias reais NÃO notificam ninguém até fechar (criar trigger pg_net + publish). Comando do usuário p/ fechar: "fecha".
 | 7 | Kanban: entregar tabela c/ matrícula+id_externo p/ **agente app-side** ligar | Kanban | ⏳ | agente app-side |
 
 ### Checklist p/ o agente app-side (Ouvidoria)
