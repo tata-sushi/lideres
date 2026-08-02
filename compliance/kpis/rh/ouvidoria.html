@@ -479,7 +479,8 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closeDrawer(
 </script>
 
 <script>
-var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVPDROxvIfl4yaIZqNPlRdl5-UTtVSUeUMd5H9GdPn0wXnyaMKtwaLSvn1TdvTMw3Xnw/exec';
+// [migrado p/ Supabase] leitura agora via rpc('ouvidoria_listar') em loadData().
+// var SCRIPT_URL (Apps Script) desativado.
 var DATA = [];
 var filtered = [];
 var displayedRows = [];
@@ -535,21 +536,31 @@ function hideLoading() {
   if (el) el.classList.remove('show');
 }
 
+// Aguarda o cliente Supabase autenticado do gate.js (window.__lideresSupa)
+function comSupa(cb){
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true });
+}
+
 function loadData() {
-  fetch(SCRIPT_URL)
-    .then(function(r){ return r.json(); })
-    .then(function(json){
-      if (!json.ok) { console.error('Erro backend:', json.error); return; }
-      var data = json.data || json.rows || json.records || (Array.isArray(json) ? json : null);
-      if (!Array.isArray(data)) {
-        console.error('Resposta sem array de dados. Chaves recebidas:', Object.keys(json));
-        return;
-      }
-      DATA = data;
-      applyFilter();
-    })
-    .catch(function(e){ console.error('Erro fetch:', e); })
-    .finally(hideLoading);
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('ouvidoria_listar')
+      .then(function(res){
+        if (res.error) { console.error('Erro RPC ouvidoria_listar:', res.error); hideLoading(); return; }
+        DATA = (res.data || []).map(function(r){
+          return {
+            data:         r.data_ocorrido || r.created_at || '',
+            reclamante:   r.nome || '',
+            identificado: r.identificado,
+            ocorrencia:   r.descricao || '',
+            devolutiva:   r.devolutiva || ''
+          };
+        });
+        applyFilter();
+        hideLoading();
+      })
+      .catch(function(e){ console.error('Erro fetch RPC:', e); hideLoading(); });
+  });
 }
 
 
