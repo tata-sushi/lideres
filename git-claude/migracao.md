@@ -136,6 +136,12 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - Pendente de terceiros: PR #446 (app, app-side revisa) e Kanban (passo 7, app-side).
 - Rows de teste do usuário na tabela (02/08): "Teste portal", "Eee" — limpar quando autorizado.
 
+## MÓDULO DEMANDAS (em andamento)
+- Dado migrado p/ **Kanban** (`tata_kanban`): quadro "Binho, Cinthia e Victor", colunas **Pendentes / Em andamento / Concluídos** = demandas (Ouvidoria/Testes = outros). Não há tabela separada.
+- **n8n `report_semanal`** (nó "consulta demandas"): trocado de Google Sheets → **HTTP Request** chamando `public.report_demandas_resumo()` (retorna contagens). Feito na UI pelo usuário; Code "consulta demandas1" mapeia p/ shape do Consolidador. Validado (7 pend/6 and/13 total/10 atras).
+- **Dashboard `kpis/rh/demandas.html`**: trocado Sheets API → `comSupa` + `supa.schema('tata_plus').rpc('demandas_lista')`. RPC devolve os cards (status=coluna, data DD/MM/YYYY, etiqueta via card_etiquetas, responsavel via card_responsaveis→profiles). SHEET_ID/API_KEY removidos.
+- RPCs criadas: `public.report_demandas_resumo()` (anon, contagens p/ n8n) e `tata_plus.demandas_lista()` (authenticated, lista p/ dashboard).
+
 ## 5. Log de progresso
 - 2026-08-02 — Mapeamento das 3 frentes concluído. Fluxo n8n da Ouvidoria lido nó a nó. Documento criado.
 - 2026-08-02 — Guia do ecossistema incorporado; piloto reencaixado em `dp_rh` + RPCs.
