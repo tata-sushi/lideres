@@ -94,8 +94,8 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 |---|---|---|---|---|
 | 1 | Criar `dp_rh.ouvidoria` (id_externo, matricula, created_at) | Banco | ✅ FEITO | — |
 | 2 | RPCs `ouvidoria_registrar` (anon) + `ouvidoria_listar` (auth) | Banco | ✅ FEITO | — |
-| 3 | Migrar dados da planilha → tabela (upsert por id_externo) | Banco | ⏳ | **acesso aos dados da planilha** |
-| 4 | Dashboard `kpis/rh/ouvidoria.html`: fetch→`rpc('ouvidoria_listar')` | Front | ⏳ | passos 1-3 |
+| 3 | Migrar dados (19 reg.) → tabela (upsert por id_externo) | Banco | ⏳ USUÁRIO | rodar `IMPORTAR_ouvidoria.sql` no SQL Editor |
+| 4 | Dashboard `kpis/rh/ouvidoria.html`: fetch→`rpc('ouvidoria_listar')` | Front | ✅ FEITO | validar em tela após import |
 | 5 | `ouvidoria-form.html`: POST→`rpc('ouvidoria_registrar')` | Front | ⏳ | **repo do form** |
 | 6 | n8n: **desligar card Trello** + **aviso WhatsApp** via uazapi | n8n | ⏳ | ver decisões abaixo |
 
@@ -121,3 +121,6 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - 2026-08-02 — Mapeamento das 3 frentes concluído. Fluxo n8n da Ouvidoria lido nó a nó. Documento criado.
 - 2026-08-02 — Guia do ecossistema incorporado; piloto reencaixado em `dp_rh` + RPCs.
 - 2026-08-02 — **Passo 1+2 EXECUTADOS**: `dp_rh.ouvidoria` (14 col, RLS) + RPCs `ouvidoria_registrar`(anon)/`ouvidoria_listar`(auth) criadas e testadas (insert/upsert/booleanos/data OK; anon não lista; tabela limpa). Objetos aplicados no projeto `aoqsbusfrffapjglpqjk` via migration `ouvidoria_tabela_e_rpcs`.
+- 2026-08-02 — **Passo 4 EXECUTADO** (front dashboard): `kpis/rh/ouvidoria.html` agora lê via `comSupa` + `supa.schema('tata_plus').rpc('ouvidoria_listar')`, mapeando p/ {data,reclamante,identificado,ocorrencia,devolutiva}. Apps Script SCRIPT_URL desativado.
+- 2026-08-02 — **Passo 3 (dados)**: rede da sessão bloqueia Supabase (egress policy) e transcrição inline corrompe → gerado `IMPORTAR_ouvidoria.sql` (19 reg., upsert por id_externo) e **entregue ao usuário** p/ rodar no SQL Editor. NOTA: dados históricos são sensíveis; import é do próprio usuário.
+- NOTA CANAL: nesta sessão, escrita no banco só via MCP `execute_sql` (curl bloqueado). Import de dados em massa → entregar `.sql` p/ o SQL Editor do usuário ou para o agente app-side.
