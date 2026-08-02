@@ -97,7 +97,13 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 | 3 | Migrar dados da planilha → tabela (upsert por id_externo) | Banco | ⏳ | passos 1-2 |
 | 4 | Dashboard `kpis/rh/ouvidoria.html`: fetch→`rpc('ouvidoria_listar')` | Front | ⏳ | passos 1-3 |
 | 5 | `ouvidoria-form.html`: POST→`rpc('ouvidoria_registrar')` | Front | ⏳ | **repo do form** |
-| 6 | n8n Trello: **aposentar** (app renderiza card da tabela) | n8n | ⏳ | confirmar c/ usuário |
+| 6 | n8n: **desligar card Trello** + **aviso WhatsApp** via uazapi | n8n | ⏳ | ver decisões abaixo |
+
+#### Decisões do aviso WhatsApp (Ouvidoria)
+1. **Gatilho:** **automático em tempo real** ao cair a ouvidoria (Database Webhook do Supabase no insert → webhook n8n). Sem polling.
+2. **Destino:** grupo **Gerentes** (pegar o group id de um fluxo uazapi existente, ex.: report_semanal_dp/rh, na hora de executar).
+3. **Conteúdo:** **COMPLETO** — todos os campos (identificado/anônimo, nome, data do ocorrido, descrição, quer devolutiva, forma, contato). *(Decisão do usuário; risco de exposição em grupo foi sinalizado e aceito.)*
+- Remover o nó Trello "Criação do Card" e o trigger manual.
 | 7 | Kanban: entregar tabela c/ matrícula+id_externo p/ **agente app-side** ligar | Kanban | ⏳ | agente app-side |
 
 ### Checklist p/ o agente app-side (Ouvidoria)
