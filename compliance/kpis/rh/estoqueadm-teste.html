@@ -674,22 +674,23 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>window.GOV_PAGE_ID = 'governanca-kpis-rh-estoqueadm';</script>
 <script>
-/* ===== PÁGINA DE TESTE (SEM AUTENTICAÇÃO) — remover depois ===== */
-document.documentElement.setAttribute("data-auth","ok");   /* libera o gate interno */
+/* PÁGINA DE TESTE (SEM AUTH) + DEBUG */
+document.documentElement.setAttribute("data-auth","ok");
 (function(){
   var U="https://aoqsbusfrffapjglpqjk.supabase.co";
   var K="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvcXNidXNmcmZmYXBqZ2xwcWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MzcxMjQsImV4cCI6MjA5ODUxMzEyNH0.Dd9Z3SR3-18mQVX_yqUbIi0PG-eltLNjmOZB1Xu7W9o";
-  try { window.__lideresSupa = window.supabase.createClient(U, K); } catch(e){ console.error(e); }
-  window.__lideresSession = { displayName:"TESTE (sem auth)", unidade:null, perfil:"admin", cargo:"Teste" };
+  try { window.__lideresSupa = window.supabase.createClient(U, K); } catch(e){ window.__DBGMSG="createClient FALHOU: "+e; }
+  window.__lideresSession = { displayName:"TESTE", unidade:null, perfil:"admin", cargo:"Teste" };
+  window.__DBG=function(m){ window.__DBGMSG=(window.__DBGMSG?window.__DBGMSG+" || ":"")+m; var d=document.getElementById("__dbg"); if(d) d.textContent="DEBUG: "+window.__DBGMSG; };
   function reveal(){
     var app=document.getElementById("app"); if(app) app.classList.add("visible");
     var g=document.getElementById("auth-gate"); if(g) g.style.display="none";
     try{ window.dispatchEvent(new Event("lideres:supa")); }catch(e){}
     try{ window.dispatchEvent(new Event("lideres:sessao")); }catch(e){}
-    var b=document.createElement("div");
-    b.textContent="PÁGINA DE TESTE — sem autenticação, dados AO VIVO do Supabase";
-    b.style.cssText="position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#b42828;color:#fff;font:600 11px/1.6 monospace;text-align:center;padding:4px";
-    document.body.appendChild(b);
+    var d=document.createElement("div"); d.id="__dbg";
+    d.style.cssText="position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#111;color:#0f0;font:600 11px/1.5 monospace;padding:6px;white-space:pre-wrap;word-break:break-all";
+    d.textContent="DEBUG: (aguardando load) supa="+(!!window.__lideresSupa)+" "+(window.__DBGMSG||"");
+    document.body.appendChild(d);
   }
   if(document.readyState!=="loading") reveal(); else window.addEventListener("DOMContentLoaded", reveal);
 })();
@@ -2402,12 +2403,16 @@ function init() {
 /* ══ LOAD FROM SHEETS ══ */
 function loadFromSheets() {
   comSupa(function(supa) {
+    if(window.__DBG) window.__DBG('comSupa: supa='+(!!supa)+' schemaFn='+(supa&&typeof supa.schema));
     var sb = supa.schema('public');
     Promise.all([
       sb.rpc('estoque_pub_saldo'),
       sb.rpc('estoque_pub_historico', { limite: 5000 })
     ])
     .then(function(results) {
+      var _h=(results[1]&&results[1].data)||[];
+      var _c=_h.filter(function(r){return r.unidade==='TATÁ House'&&r.item==='Camiseta';});
+      if(window.__DBG) window.__DBG('THEN rows='+_h.length+' err0='+(results[0]&&results[0].error&&results[0].error.message)+' err1='+(results[1]&&results[1].error&&results[1].error.message)+' | CamisetaTH linhas='+_c.length+' net='+_c.reduce(function(s,r){return s+(Number(r.quantidade)||0)},0)+' q=['+_c.map(function(r){return r.tamanho+':'+r.quantidade}).join(',')+']');
       if (results[0].error) throw results[0].error;
       if (results[1].error) throw results[1].error;
       // saldo: rows -> { unidade: { item: { qtd, custo_medio, categoria } } }
@@ -2438,6 +2443,7 @@ function loadFromSheets() {
         (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};return 'Atualizado: '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());})();
     })
     .catch(function(err) {
+      if(window.__DBG) window.__DBG('CATCH: '+(err&&err.message||err));
       console.warn('Supabase offline.', err);
       document.getElementById('footer-date').textContent =
         (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};return 'Atualizado: '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds())+' (offline)';})();
