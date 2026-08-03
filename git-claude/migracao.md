@@ -44,7 +44,7 @@
 ### Estoque Admin (Uniformes/EPI) — `estoqueadm.html`
 - [x] Tabela `tata_plus.estoque_admin` (livro de movimentos, RLS authenticated sel/ins) + RPC `estoque_admin_saldo()` (entradas−saídas, custo médio).
 - [x] Front `kpis/rh/estoqueadm.html`: saldo via `rpc('estoque_admin_saldo')`, histórico via `from('estoque_admin').select()`, gravação via `insert(lote)`. Apps Script (`appestoque.gs`) desativado nessas 3 chamadas.
-- [ ] **Importar histórico** da planilha "Gestão de estoque - Administrativo" (aguardando CSV do usuário).
+- [x] **Reconciliação do estoque físico** (RECONCILIAR_estoque_atual.sql): zerou o saldo acumulado do histórico + recontagem com a contagem física do usuário (94 itens / 742 un — EPI's 168, Uniformes 254, Calçados 33, Brindes 287). Saldo do banco = "Estoque atual". Decisão: manter tudo numa tabela e ajustar por movimentos (evita fuzzy-match dos nomes inconsistentes do histórico: Bibico/Bibicos, Único/—, caixa).
 - [ ] `action=mapa` (mapa de liderança, script separado) e `listColaboradores` seguem no Sheets (lookups compartilhados, migração à parte).
 
 ### Processos contínuos (não é bug)
