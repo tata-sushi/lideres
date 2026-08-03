@@ -1702,7 +1702,8 @@ function bars(id, items) {
   if (!el) return;
   if (!items || !items.length) { el.innerHTML = ''; return; }
   var clickable = (id === 'b-u' || id === 'b-c' || id === 'b-e');
-  var max = Math.max.apply(null, items.map(function(i){return i.q;}));
+  var max = Math.max.apply(null, items.map(function(i){return Math.abs(i.q);}));
+  if (!max) max = 1;
   el.innerHTML = items.map(function(it,i){
     var isActive = clickable && activeItemFilter === it.n;
     var rowCls = 'bar-row' + (clickable ? ' clickable' : '') + (isActive ? ' active' : '');
@@ -1711,7 +1712,7 @@ function bars(id, items) {
     var precoStr = custo !== null ? fmtBRL(custo) : '—';
     return '<div class="'+rowCls+'"'+dataAttr+'>' +
       '<div class="bar-name'+(i===0?' top':'')+'">'+escAttr(it.n)+'</div>' +
-      '<div class="bar-track"><div class="bar-fill '+(i===0?'r1':i<2?'r2':i<4?'r3':'')+'" style="width:0" data-w="'+(it.q/max*100).toFixed(1)+'%"></div></div>' +
+      '<div class="bar-track"><div class="bar-fill '+(i===0?'r1':i<2?'r2':i<4?'r3':'')+'" style="width:0" data-w="'+(Math.abs(it.q)/max*100).toFixed(1)+'%"></div></div>' +
       '<div class="bar-qty'+(i===0?' top':'')+'">'+it.q+'</div>' +
       '<div class="bar-price'+(i===0?' top':'')+'">'+precoStr+'</div>' +
       '</div>';
@@ -1729,14 +1730,14 @@ function bars(id, items) {
 function buildSizes(id, data) {
   var el = document.getElementById(id);
   if (!el) return;
-  var max = Math.max.apply(null, data.map(function(s){return s.q;}));
+  var max = Math.max.apply(null, data.map(function(s){return Math.abs(s.q);}));
   if (!max) max = 1;
   el.innerHTML = data.map(function(s){
     var sel = (activeSizeFilter === s.l) ? ' cf-selected' : '';
     return '<div class="size-col'+sel+'" onclick="setSizeFilter(\''+escAttr(s.l)+'\')">' +
       '<div class="size-bar-wrap">' +
         '<div class="size-num">'+s.q+'</div>' +
-        '<div class="size-bar" style="height:0" data-h="'+(s.q/max*100).toFixed(1)+'px"></div>' +
+        '<div class="size-bar" style="height:0" data-h="'+(Math.abs(s.q)/max*100).toFixed(1)+'px"></div>' +
       '</div>' +
       '<div class="size-lbl">'+s.l+'</div>' +
       '</div>';
@@ -2483,11 +2484,9 @@ function recalcData() {
       var items = (net[scope] && net[scope][k]) ? net[scope][k] : {};
       Object.keys(items).forEach(function(item) {
         var q = items[item];
-        newData[scope].kpi[k][0] += q;                                    // saldo líquido
-        if (q > 0) {
-          newData[scope].kpi[k][1] += q * custoDe(scope, item);           // valor do que está em estoque
-          newData[scope].bars[k].push({ n:item, q:q });                   // barras: itens com saldo
-        }
+        newData[scope].kpi[k][0] += q;                                    // saldo líquido (soma crua — reflete a base, inclui negativo)
+        newData[scope].kpi[k][1] += q * custoDe(scope, item);             // valor = saldo × custo médio (mesma conta do saldo)
+        if (q !== 0) newData[scope].bars[k].push({ n:item, q:q });        // barras: todo item com saldo ≠ 0 (inclui negativo)
       });
       newData[scope].bars[k].sort(function(a,b){ return b.q - a.q; });
       newData[scope].bars[k] = newData[scope].bars[k].slice(0, 8);
