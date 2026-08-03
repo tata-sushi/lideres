@@ -1948,7 +1948,9 @@ function checkSaldo(rows) {
 }
 
 /* ══ APPS SCRIPT URL ══ */
+// [migrado p/ Supabase] estoque agora em tata_plus.estoque_admin (RPC saldo + tabela).
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbzZoApfcJiSttXrwi9OtcV6Lv0PmO_moB0JC2FFbXh-5eugKCbWg0yC85gUcEqv2Cq31Q/exec';
+function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
 
 /* ══ SUBMIT ══ */
 var lastRows = []; var lastMeta = {};
@@ -2046,16 +2048,37 @@ function doSubmit() {
   lastRows = rows; lastMeta = meta;
 
   setLoad(true);
-  fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'}, body:JSON.stringify({lote:rows, timestamp:new Date().toISOString()}) })
-    .then(function() {
-      imprimirRecibo();
-      closeModal();
-      showToast(rows.length + (rows.length===1?' item gravado':' itens gravados') + ' no Sheets!', false);
-      // Recarregar dados do Sheets para atualizar dashboard
-      setTimeout(loadFromSheets, 1500);
-    })
-    .catch(function() { showToast('Erro de conexão.', true); })
-    .finally(function() { setLoad(false); });
+  comSupa(function(supa) {
+    var SAIDA_TIPOS = ['Transferência','Perda/Furto','Reposição Periódica','Ajuste de Inventário'];
+    var payload = rows.map(function(r) {
+      var iso = null, d = String(r.data || '');
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) { var p = d.split('/'); iso = p[2]+'-'+p[1]+'-'+p[0]; }
+      else if (/^\d{4}-\d{2}-\d{2}/.test(d)) { iso = d.slice(0,10); }
+      // Convenção: quantidade/custo ASSINADOS — negativos nas saídas.
+      var tl = String(r.tipo || '').toLowerCase();
+      var isSaida = tl.indexOf('saída') !== -1 || tl.indexOf('saida') !== -1 || SAIDA_TIPOS.indexOf(r.tipo) !== -1;
+      var sgn = isSaida ? -1 : 1;
+      var q = Math.abs(Number(r.quantidade) || 0);
+      var c = Math.abs(Number(r.custo_unit) || 0);
+      return {
+        data: iso, unidade: r.unidade||'', colaborador: r.colaborador||'', matricula: r.matricula||'',
+        tipo: r.tipo||'', categoria: r.categoria||'', item: r.item||'', tamanho: r.tamanho||'—',
+        quantidade: sgn*q, custo_unit: sgn*c, custo_total: sgn*q*c,
+        cargo: r.cargo||'', ca: r.ca||'', obs: r.obs||'',
+        origem_ts: new Date().toISOString(), responsavel: r.responsavel||''
+      };
+    });
+    supa.schema('tata_plus').from('estoque_admin').insert(payload)
+      .then(function(res) {
+        if (res.error) { showToast('Erro ao gravar: ' + res.error.message, true); setLoad(false); return; }
+        imprimirRecibo();
+        closeModal();
+        showToast(rows.length + (rows.length===1?' item gravado':' itens gravados') + '!', false);
+        setTimeout(loadFromSheets, 800);
+        setLoad(false);
+      })
+      .catch(function() { showToast('Erro de conexão.', true); setLoad(false); });
+  });
 }
 
 function setLoad(on) {
@@ -2357,29 +2380,49 @@ function init() {
 
 /* ══ LOAD FROM SHEETS ══ */
 function loadFromSheets() {
-  // Buscar saldo e histórico em paralelo
-  Promise.all([
-    fetchJSON(GAS_URL + '?action=saldo', 8000),
-    fetchJSON(GAS_URL + '?action=historico&n=5000', 8000)
-  ])
-  .then(function(results) {
-    SALDO     = results[0];
-    HISTORICO = results[1] || [];
+  comSupa(function(supa) {
+    var sb = supa.schema('tata_plus');
+    Promise.all([
+      sb.rpc('estoque_admin_saldo'),
+      sb.from('estoque_admin').select('*').order('created_at', { ascending: false }).limit(5000)
+    ])
+    .then(function(results) {
+      if (results[0].error) throw results[0].error;
+      if (results[1].error) throw results[1].error;
+      // saldo: rows -> { unidade: { item: { qtd, custo_medio, categoria } } }
+      var saldoObj = {};
+      (results[0].data || []).forEach(function(r) {
+        if (!saldoObj[r.unidade]) saldoObj[r.unidade] = {};
+        saldoObj[r.unidade][r.item] = { qtd: Number(r.qtd) || 0, custo_medio: Number(r.custo_medio) || 0, categoria: r.categoria || '' };
+      });
+      SALDO = saldoObj;
+      // histórico: rows -> shape esperado pela tela (data em DD/MM/YYYY)
+      HISTORICO = (results[1].data || []).map(function(r) {
+        return {
+          data: r.data ? String(r.data).split('-').reverse().join('/') : '',
+          unidade: r.unidade || '', colaborador: r.colaborador || '', matricula: r.matricula || '',
+          tipo: r.tipo || '', categoria: r.categoria || '', item: r.item || '', tamanho: r.tamanho || '',
+          quantidade: Number(r.quantidade) || 0, custo_unit: Number(r.custo_unit) || 0,
+          cargo: r.cargo || '', ca: r.ca || '', obs: r.obs || '',
+          timestamp: r.origem_ts || r.created_at || '', responsavel: r.responsavel || ''
+        };
+      });
 
-    recalcData();
-    renderDash();
-    renderAlerts();
-    recalcSizes();
+      recalcData();
+      renderDash();
+      renderAlerts();
+      recalcSizes();
 
-    document.getElementById('footer-date').textContent =
-      (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};return 'Atualizado: '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());})();
-  })
-  .catch(function(err) {
-    console.warn('Sheets offline.', err);
-    document.getElementById('footer-date').textContent =
-      (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};return 'Atualizado: '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds())+' (offline)';})();
-  })
-  .finally(hideLoading);
+      document.getElementById('footer-date').textContent =
+        (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};return 'Atualizado: '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());})();
+    })
+    .catch(function(err) {
+      console.warn('Supabase offline.', err);
+      document.getElementById('footer-date').textContent =
+        (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};return 'Atualizado: '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds())+' (offline)';})();
+    })
+    .finally(hideLoading);
+  });
 }
 
 /* ══ RECALC DATA a partir do HISTÓRICO ══ */
