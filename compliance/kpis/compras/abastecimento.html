@@ -670,7 +670,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <button data-aba-id="governanca-kpis-compras-abastecimento::pedidos" class="tab-btn active" id="tab-pedidos"       onclick="setTab('pedidos')">Pedidos</button>
   <button data-aba-id="governanca-kpis-compras-abastecimento::processamento" class="tab-btn"        id="tab-processamento" onclick="setTab('processamento')">Processamento</button>
   <button data-aba-id="governanca-kpis-compras-abastecimento::entregas" class="tab-btn"        id="tab-entregas"      onclick="setTab('entregas')">Recebimentos</button>
-  <button data-aba-id="governanca-kpis-compras-abastecimento::conferencia" class="tab-btn"        id="tab-conferencia"   onclick="setTab('conferencia')" style="display:none;">Conferência</button>
+  <button data-aba-id="governanca-kpis-compras-abastecimento::conferencia" class="tab-btn"        id="tab-conferencia"   onclick="setTab('conferencia')">Conferência</button>
   <button data-aba-id="governanca-kpis-compras-abastecimento::kpis" class="tab-btn" id="tab-kpis" onclick="setTab('kpis')">KPIs</button>
 </div>
 
@@ -1258,23 +1258,9 @@ var ORDERS = [];
 var carregando = true;
 var PERFIL = '';
 
-// Ações do drawer "Sobre" são específicas por perfil:
-// líder → criar pedido e relatórios; admin e analista de compras → tudo.
-function ajustarAcoesDrawerPorPerfil() {
-  var isAdmin = PERFIL === 'admin';
-  var isLider = PERFIL === 'lider';
-  var isCompras = PERFIL === 'analista-compras';
-  var vip = isAdmin || isCompras;
-  function set(id, visivel) {
-    var el = document.getElementById(id);
-    if (el) el.style.display = visivel ? '' : 'none';
-  }
-  set('drawer-btn-novo-pedido',  vip || isLider);
-  set('drawer-btn-rel-entregas', vip || isLider);
-  set('drawer-btn-rel-receb',    vip || isLider);
-  set('drawer-btn-export-proc',  vip);
-  set('drawer-btn-export-cat',   vip);
-}
+// (removido) A visibilidade das ações do drawer era decidida por perfil hardcoded.
+// Agora é 100% do painel admin: cada botão tem data-aba-id e o gate esconde os
+// não liberados. Config antiga descontinuada.
 
 var activeCats = [];
 var procOrderId = null;
@@ -1666,23 +1652,23 @@ async function carregarUsuario(session) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async function() {
-  var session; try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-  if (!session || !session.displayName) return;
+// A sessão vem do gate (painel admin) via window.__lideresSession, com fallback
+// pro localStorage antigo (não regride quem já tinha a chave). O gate resolve o
+// acesso de forma assíncrona (o token chega depois), então iniciamos tanto no
+// DOMContentLoaded quanto no evento 'lideres:sessao'. Abas e botões são 100%
+// controlados pelo painel (data-aba-id), então NÃO escondemos mais nada por
+// perfil aqui — isso é config antiga.
+var _appIniciado = false;
+async function iniciarApp(session) {
+  if (_appIniciado || !session || !session.displayName) return;
+  _appIniciado = true;
   var userName = session.displayName;
   currentUser = { name: userName };
   PERFIL = String(session.perfil || '').toLowerCase();
-  // Mostrar aba Conferência para perfil escritorio ou admin
-  var tabConf = document.getElementById('tab-conferencia');
-  if (tabConf) tabConf.style.display = (PERFIL === 'escritorio' || PERFIL === 'admin') ? '' : 'none';
-  ajustarAcoesDrawerPorPerfil();
   var initials = userName.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase();
-  // Abreviar nome: "João Silva Santos" → "João Santos"
-  var headerUserName = userName;
-  var parts = headerUserName.trim().split(/\s+/);
-  if (parts.length > 1) {
-    headerUserName = parts[0];
-  }
+  // Abreviar nome: "João Silva Santos" → "João"
+  var parts = userName.trim().split(/\s+/);
+  var headerUserName = parts.length > 1 ? parts[0] : userName;
   var hu = document.getElementById('header-user'); if (hu) hu.textContent = headerUserName;
   var dn = document.getElementById('drawer-name');   if (dn) dn.textContent = userName;
   var da = document.getElementById('drawer-avatar'); if (da) da.textContent = initials;
@@ -1691,7 +1677,16 @@ document.addEventListener('DOMContentLoaded', async function() {
   carregarCatalogo();
   carregarPedidos();
   carregarRecebedores();
+}
+function obterSessao() {
+  if (window.__lideresSession && window.__lideresSession.displayName) return window.__lideresSession;
+  try { return JSON.parse(localStorage.getItem('lideres_session')); } catch(e) { return null; }
+}
+document.addEventListener('DOMContentLoaded', function() {
+  var s = obterSessao();
+  if (s) iniciarApp(s);
 });
+window.addEventListener('lideres:sessao', function() { iniciarApp(obterSessao()); });
 
 // ── RECEBEDORES — carrega da base de colaboradores (ponto) ────────────────────
 async function carregarRecebedores() {

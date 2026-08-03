@@ -211,6 +211,15 @@
       perfil: perfil || 'lider',
       paginas: permitidos,
     }
+    // Ponte pro modelo antigo: várias páginas de governança ainda leem a sessão
+    // de localStorage('lideres_session') — chave que hoje ninguém mais escreve
+    // (o login antigo do portal foi removido). O gate (painel admin) passa a ser
+    // quem grava essa chave, então toda página recebe a sessão do modelo novo.
+    // No caminho de cache isso roda no <head>, antes do DOMContentLoaded da
+    // página, então a leitura síncrona dela já pega a sessão fresca.
+    try {
+      localStorage.setItem('lideres_session', JSON.stringify(window.__lideresSession))
+    } catch (e) {}
     // Preenche o chip de usuário com o PRIMEIRO nome. Feito aqui (após o gate
     // resolver) porque o script inline de algumas páginas roda antes do token
     // chegar e deixaria o chip em "—".
