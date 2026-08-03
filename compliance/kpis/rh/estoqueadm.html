@@ -2437,51 +2437,61 @@ var CAT_NORM = {'Brinde':'Brindes',"EPI":"EPI's",'Calçado':'Calçados','Uniform
 
 function recalcData() {
   var units = ['Itaim Bibi','Pinheiros','Poke - Pinheiros','TATÁ House','Administrativo'];
-  var newData = { all: { kpi: {u:[0,0,0],c:[0,0,0],e:[0,0,0],b:[0,0,0],p:[0,0,0]}, bars: {u:[],c:[],e:[],b:[],p:[]} } };
-  units.forEach(function(unit) {
-    newData[unit] = { kpi: {u:[0,0,0],c:[0,0,0],e:[0,0,0],b:[0,0,0],p:[0,0,0]}, bars: {u:[],c:[],e:[],b:[],p:[]} };
-  });
+  function mkNode(){ return { kpi:{u:[0,0,0],c:[0,0,0],e:[0,0,0],b:[0,0,0],p:[0,0,0]}, bars:{u:[],c:[],e:[],b:[],p:[]} }; }
+  var newData = { all: mkNode() };
+  units.forEach(function(unit) { newData[unit] = mkNode(); });
 
+  // 1) Saldo LÍQUIDO por escopo/categoria/item (soma assinada — entradas + / saídas −),
+  //    respeitando o cross-filter de tamanho.
+  var net = {}; // net[scope][k][item] = saldo
+  function addNet(scope, k, item, q) {
+    if (!net[scope]) net[scope] = {};
+    if (!net[scope][k]) net[scope][k] = {};
+    net[scope][k][item] = (net[scope][k][item] || 0) + q;
+  }
   (HISTORICO || []).forEach(function(r) {
     var itemName = r.item;
     if (!itemName) return;
-
-    // Cross-filter por tamanho — só registros com aquele tamanho exato
     if (activeSizeFilter && String(r.tamanho || '').trim() !== activeSizeFilter) return;
 
-    var qty   = r.quantidade || 0;
-    var valor = Math.abs(r.custo_unit || 0) * qty;
-
+    var qty = r.quantidade || 0;
     var rawCat  = r.categoria;
     var normCat = rawCat ? (CAT_NORM[rawCat] || rawCat) : null;
     var cat = (normCat && CAT_MAP[normCat]) ? normCat : getCatForItem(itemName);
     var k = CAT_MAP[cat];
     if (!k) return;
 
-    if (newData[r.unidade]) {
-      newData[r.unidade].kpi[k][0] += qty;
-      newData[r.unidade].kpi[k][1] += valor;
-      var barUnit = newData[r.unidade].bars[k];
-      var eu = barUnit.find(function(x){return x.n===itemName;});
-      if (eu) eu.q += qty; else barUnit.push({n:itemName, q:qty});
-    }
-
-    newData['all'].kpi[k][0] += qty;
-    newData['all'].kpi[k][1] += valor;
-    var barAll = newData['all'].bars[k];
-    var ea = barAll.find(function(x){return x.n===itemName;});
-    if (ea) ea.q += qty; else barAll.push({n:itemName, q:qty});
+    if (newData[r.unidade]) addNet(r.unidade, k, itemName, qty);
+    addNet('all', k, itemName, qty);
   });
 
-  units.forEach(function(unit) {
-    ['u','c','e','b','p'].forEach(function(k){
-      newData[unit].bars[k].sort(function(a,b){return b.q-a.q;});
-      newData[unit].bars[k] = newData[unit].bars[k].slice(0,8);
+  // Custo médio POSITIVO do item — vem do SALDO da RPC (avg dos custos de entrada).
+  // Para 'all' (ou item sem saldo na unidade) procura o custo em qualquer unidade.
+  function custoDe(scope, item) {
+    if (scope !== 'all' && SALDO[scope] && SALDO[scope][item]) return SALDO[scope][item].custo_medio || 0;
+    var c = 0;
+    Object.keys(SALDO).forEach(function(u){
+      if (SALDO[u] && SALDO[u][item] && SALDO[u][item].custo_medio) c = SALDO[u][item].custo_medio;
     });
-  });
-  ['u','c','e','b','p'].forEach(function(k){
-    newData['all'].bars[k].sort(function(a,b){return b.q-a.q;});
-    newData['all'].bars[k] = newData['all'].bars[k].slice(0,8);
+    return c;
+  }
+
+  // 2) KPI = saldo atual + VALOR do estoque atual (saldo × custo médio, só saldo > 0).
+  //    Nunca soma o custo de movimentos passados (evita valores negativos/inflados).
+  Object.keys(newData).forEach(function(scope) {
+    ['u','c','e','b','p'].forEach(function(k) {
+      var items = (net[scope] && net[scope][k]) ? net[scope][k] : {};
+      Object.keys(items).forEach(function(item) {
+        var q = items[item];
+        newData[scope].kpi[k][0] += q;                                    // saldo líquido
+        if (q > 0) {
+          newData[scope].kpi[k][1] += q * custoDe(scope, item);           // valor do que está em estoque
+          newData[scope].bars[k].push({ n:item, q:q });                   // barras: itens com saldo
+        }
+      });
+      newData[scope].bars[k].sort(function(a,b){ return b.q - a.q; });
+      newData[scope].bars[k] = newData[scope].bars[k].slice(0, 8);
+    });
   });
 
   DATA = newData;
