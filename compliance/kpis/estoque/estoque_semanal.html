@@ -78,6 +78,10 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 .cat-select:focus { outline: none; border-color: var(--carbon); }
 .btn-add-cat { padding: 10px 16px; background: var(--carbon); color: var(--citric); border: none; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.05em; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
 .btn-add-cat:hover { opacity: 0.85; }
+.cat-add-row { display: flex; gap: 8px; }
+.cat-header { justify-content: space-between; }
+.cat-remove { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; padding: 0 2px; transition: color 0.15s; }
+.cat-remove:hover { color: #C0392B; }
 
 /* ── MODAL — flutuante centralizado (compartilhado com abastecimento.html) ── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 400; display: none; align-items: flex-end; justify-content: center; }
@@ -299,6 +303,37 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-cadastro">
+  <div class="modal modal-wide">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Cadastrar itens</div>
+        <div class="modal-subtitle">Monte a lista de estoque mínimo por departamento.</div>
+      </div>
+      <button class="modal-close" onclick="fecharModalCadastro()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="fg">
+        <label class="flbl">Departamento</label>
+        <select class="cat-select" id="cadastro-depto" onchange="mudarDeptoCadastro(this.value)"></select>
+      </div>
+      <div class="fg">
+        <label class="flbl">Adicionar categoria</label>
+        <div class="cat-add-row">
+          <select class="cat-select" id="cadastro-cat-sel" style="flex:1;"><option value="">Selecione uma categoria…</option></select>
+          <button class="btn-add-cat" onclick="addCategoriaCadastro()">Adicionar</button>
+        </div>
+      </div>
+      <div id="cadastro-cat-sections"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="fecharModalCadastro()">Cancelar</button>
+      <button class="modal-btn modal-btn-save" onclick="salvarCadastro()">Salvar cadastro</button>
+    </div>
+  </div>
+</div>
+
 <!-- LOADING -->
 <div class="loading-overlay show" id="loading-overlay">
   <div class="spinner"></div>
@@ -436,6 +471,7 @@ function esc(v) {
 var ESTOQUE_DEPTO = '';
 var ESTOQUE_ITENS = [];
 var INVENTARIO_MINIMO_MAP = {};
+var INVENTARIO_MINIMO_ROWS = [];
 
 function chaveInventario(depto, nome, un) {
   return (depto || '').trim().toLowerCase() + '::' + (nome || '').trim().toLowerCase() + '::' + (un || '').trim().toLowerCase();
@@ -476,14 +512,69 @@ function getItensCatalogoUnicos() {
 
 async function carregarInventarioMinimo() {
   INVENTARIO_MINIMO_MAP = {};
+  INVENTARIO_MINIMO_ROWS = [];
   if (!supa || !UNIDADE) return;
   try {
     var res = await supa.from('inventario_minimo').select('*').eq('unidade', UNIDADE);
     if (res.error) throw new Error(res.error.message);
-    (res.data || []).forEach(function(r) {
+    INVENTARIO_MINIMO_ROWS = res.data || [];
+    INVENTARIO_MINIMO_ROWS.forEach(function(r) {
       INVENTARIO_MINIMO_MAP[chaveInventario(r.departamento || '', r.produto_nome, r.unidade_medida)] = r;
     });
   } catch(e) { console.warn('Erro ao carregar estoque mínimo:', e.message); }
+}
+
+// Valor unitário do catálogo (para o pedido automático), casando por nome+un.
+function getValorUnitario(nome, un) {
+  var alvoN = (nome || '').trim().toLowerCase();
+  var alvoU = (un || '').trim().toLowerCase();
+  for (var k in CATALOGO) {
+    var ps = CATALOGO[k].produtos || [];
+    for (var i = 0; i < ps.length; i++) {
+      if (String(ps[i].nome || '').trim().toLowerCase() === alvoN &&
+          String(ps[i].un || '').trim().toLowerCase() === alvoU) {
+        return ps[i].valorUnitario || 0;
+      }
+    }
+  }
+  return 0;
+}
+
+// Itens JÁ CADASTRADOS (com estoque mínimo) para a unidade + departamento atual.
+function getItensCadastrados() {
+  var depAlvo = (ESTOQUE_DEPTO || '').trim().toLowerCase();
+  return INVENTARIO_MINIMO_ROWS
+    .filter(function(r) { return (r.departamento || '').trim().toLowerCase() === depAlvo; })
+    .map(function(r) {
+      var catKey = r.categoria || '';
+      var catLabel = (CATALOGO[catKey] && CATALOGO[catKey].label) || r.categoria || 'Sem categoria';
+      return {
+        catKey: catKey,
+        catLabel: catLabel,
+        subcategoria: r.subcategoria || '',
+        nome: r.produto_nome,
+        un: r.unidade_medida || '',
+        estoqueMinimo: r.estoque_minimo,
+        valorUnitario: getValorUnitario(r.produto_nome, r.unidade_medida || '')
+      };
+    })
+    .sort(function(a, b) {
+      return String(a.catLabel).localeCompare(String(b.catLabel), 'pt-BR') || String(a.nome).localeCompare(String(b.nome), 'pt-BR');
+    });
+}
+
+// Produtos únicos (nome+un) de uma categoria do catálogo.
+function getProdutosDaCategoria(key) {
+  var cat = CATALOGO[key];
+  if (!cat) return [];
+  var vistos = {}, lista = [];
+  (cat.produtos || []).forEach(function(p) {
+    var dk = (p.nome || '').trim().toLowerCase() + '::' + (p.un || '').trim().toLowerCase();
+    if (vistos[dk]) return;
+    vistos[dk] = true;
+    lista.push({ catKey: key, catLabel: cat.label, subcategoria: p.subcategoria || '', nome: p.nome, un: p.un, valorUnitario: p.valorUnitario || 0 });
+  });
+  return lista.sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), 'pt-BR'); });
 }
 
 function setEstoqueDepto(v) { ESTOQUE_DEPTO = v; renderPaginaAtiva(); }
@@ -545,7 +636,11 @@ async function renderPaginaAtiva() {
   renderFiltrosEstoque();
   if (wrap) wrap.style.display = '';
 
-  var itens = getItensCatalogoUnicos();
+  var itens = getItensCadastrados();
+  if (!itens.length) {
+    container.innerHTML = '<div class="empty"><p>Nenhum item cadastrado para <strong>' + esc(ESTOQUE_DEPTO) + '</strong> nesta unidade.<br>Abra o menu (☰) e use <strong>Cadastrar itens</strong> para montar a lista.</p></div>';
+    return;
+  }
   container.innerHTML = renderEstoqueMinimoHTML(itens);
 }
 
@@ -591,8 +686,132 @@ async function renderModalContagem() {
     sel.innerHTML = deptosOpts.map(function(d) { return '<option value="' + esc(d) + '"' + (d === ESTOQUE_DEPTO ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('');
   }
 
-  var itens = getItensCatalogoUnicos();
+  var itens = getItensCadastrados();
+  if (!itens.length) {
+    container.innerHTML = '<div class="empty"><p>Nenhum item cadastrado para <strong>' + esc(ESTOQUE_DEPTO) + '</strong>.<br>Use <strong>Cadastrar itens</strong> antes de fazer a contagem.</p></div>';
+    return;
+  }
   container.innerHTML = renderEstoqueContagemHTML(itens);
+}
+
+// ── MODAL CADASTRAR ITENS (aberto pelo drawer) ───────────────────────────────
+var CADASTRO_ROWS = [];        // [{nome, un, catKey, subcategoria}]
+var CADASTRO_CATS_ADDED = {};  // catKey -> true
+
+async function abrirModalCadastro() {
+  closeDrawer();
+  document.getElementById('modal-cadastro').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  await renderModalCadastro();
+}
+
+function fecharModalCadastro() {
+  document.getElementById('modal-cadastro').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function mudarDeptoCadastro(v) {
+  ESTOQUE_DEPTO = v;
+  CADASTRO_ROWS = [];
+  CADASTRO_CATS_ADDED = {};
+  renderModalCadastro();
+}
+
+async function renderModalCadastro() {
+  if (Object.keys(CATALOGO).length === 0) await carregarCatalogo();
+  if (!ESTOQUE_DEPTO) ESTOQUE_DEPTO = DEPARTAMENTO || (DEPTOS_DISPONIVEIS[0] || 'Geral');
+  await carregarInventarioMinimo();
+
+  var selDep = document.getElementById('cadastro-depto');
+  if (selDep) {
+    var deptosOpts = (DEPTOS_DISPONIVEIS.length ? DEPTOS_DISPONIVEIS : [ESTOQUE_DEPTO]);
+    selDep.innerHTML = deptosOpts.map(function(d) { return '<option value="' + esc(d) + '"' + (d === ESTOQUE_DEPTO ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('');
+  }
+  var selCat = document.getElementById('cadastro-cat-sel');
+  if (selCat) {
+    var keys = Object.keys(CATALOGO).sort(function(a, b){ return String(CATALOGO[a].label).localeCompare(String(CATALOGO[b].label), 'pt-BR'); });
+    selCat.innerHTML = '<option value="">Selecione uma categoria…</option>' +
+      keys.map(function(k){ return '<option value="' + esc(k) + '">' + esc(CATALOGO[k].label) + '</option>'; }).join('');
+  }
+  CADASTRO_ROWS = [];
+  CADASTRO_CATS_ADDED = {};
+  var cont = document.getElementById('cadastro-cat-sections');
+  if (cont) cont.innerHTML = '<div class="empty" id="cadastro-vazio"><p>Adicione uma categoria acima para cadastrar os itens e seus mínimos.</p></div>';
+}
+
+function addCategoriaCadastro() {
+  var sel = document.getElementById('cadastro-cat-sel');
+  if (!sel) return;
+  var key = sel.value;
+  if (!key || CADASTRO_CATS_ADDED[key]) return;
+  CADASTRO_CATS_ADDED[key] = true;
+  var vazio = document.getElementById('cadastro-vazio');
+  if (vazio) vazio.remove();
+  var cont = document.getElementById('cadastro-cat-sections');
+  if (!cont) return;
+  var produtos = getProdutosDaCategoria(key);
+  var catLabel = (CATALOGO[key] && CATALOGO[key].label) || key;
+  var html = '<div class="cat-section" id="cad-sec-' + key + '">' +
+    '<div class="cat-header"><div class="cat-header-left"><span class="cat-name">' + esc(catLabel) + '</span></div>' +
+    '<button class="cat-remove" title="Remover categoria" onclick="removerCategoriaCadastro(\'' + key + '\')">✕</button></div>' +
+    '<div class="cat-item-header"><span class="cat-col-nome hdr">Produto</span><span class="cat-col-qty hdr" style="margin-left:24px;">Mínimo</span></div>';
+  produtos.forEach(function(p) {
+    var idx = CADASTRO_ROWS.length;
+    CADASTRO_ROWS.push({ nome: p.nome, un: p.un, catKey: p.catKey, subcategoria: p.subcategoria });
+    var jaCad = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, p.nome, p.un)];
+    var valor = jaCad ? jaCad.estoque_minimo : '';
+    html += '<div class="cat-item"><div class="cat-item-main">' +
+      '<span class="cat-col-nome">' + esc(p.nome) + ' <span style="color:var(--muted);">(' + esc(p.un || '—') + ')</span></span>' +
+      '<span class="cat-col-qty"><input class="qty-input" type="number" min="0" step="1" id="cad-min-' + idx + '" value="' + valor + '"></span>' +
+      '</div></div>';
+  });
+  html += '</div>';
+  cont.insertAdjacentHTML('beforeend', html);
+  sel.value = '';
+}
+
+function removerCategoriaCadastro(key) {
+  var sec = document.getElementById('cad-sec-' + key);
+  if (sec) sec.remove();
+  delete CADASTRO_CATS_ADDED[key];
+  var cont = document.getElementById('cadastro-cat-sections');
+  if (cont && !cont.querySelector('.cat-section')) {
+    cont.innerHTML = '<div class="empty" id="cadastro-vazio"><p>Adicione uma categoria acima para cadastrar os itens e seus mínimos.</p></div>';
+  }
+}
+
+async function salvarCadastro() {
+  if (!supa) { alert('Supabase não inicializado.'); return; }
+  var nome = (currentUser && currentUser.name) || null;
+  var rows = [];
+  CADASTRO_ROWS.forEach(function(it, idx) {
+    var inp = document.getElementById('cad-min-' + idx);
+    if (!inp) return;
+    var raw = inp.value.trim();
+    if (raw === '') return;
+    var val = parseFloat(raw);
+    if (isNaN(val) || val < 0) return;
+    rows.push({
+      unidade: UNIDADE,
+      departamento: ESTOQUE_DEPTO || 'Geral',
+      produto_nome: it.nome,
+      categoria: it.catKey,
+      subcategoria: it.subcategoria || null,
+      unidade_medida: it.un || '',
+      estoque_minimo: val,
+      atualizado_por: nome,
+      updated_at: new Date().toISOString()
+    });
+  });
+  if (!rows.length) { alert('Informe o mínimo de ao menos um item.'); return; }
+  try {
+    var res = await supa.from('inventario_minimo')
+      .upsert(rows, { onConflict: 'unidade,departamento,produto_nome,unidade_medida' });
+    if (res.error) throw new Error(res.error.message);
+    alert(rows.length + ' item(ns) cadastrado(s) para ' + (ESTOQUE_DEPTO || 'Geral') + '.');
+    fecharModalCadastro();
+    await renderPaginaAtiva();
+  } catch(e) { toast('Erro ao cadastrar: ' + e.message, true); }
 }
 
 function renderEstoqueMinimoHTML(itens) {
@@ -924,6 +1143,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
       <button class="drawer-sam-btn" id="btnContagemSemanal" onclick="abrirModalContagemEstoque()">Contagem semanal</button>
+      <button class="drawer-sam-btn" id="btnCadastrarItens" onclick="abrirModalCadastro()" style="margin-top:8px;">Cadastrar itens</button>
     </div>
   </div>
   <div class="drawer-footer">
