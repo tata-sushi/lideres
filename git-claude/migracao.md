@@ -41,6 +41,12 @@
 - [ ] 25/33 workflows n8n com **"Available in MCP" OFF** — ligar quando for editar.
 - [ ] Outros fluxos **Sheets→Trello** (sanção, asos, feriados, aniversários, etc.) → migrar Trello→Kanban + fonte Supabase.
 
+### Estoque Admin (Uniformes/EPI) — `estoqueadm.html`
+- [x] Tabela `tata_plus.estoque_admin` (livro de movimentos, RLS authenticated sel/ins) + RPC `estoque_admin_saldo()` (entradas−saídas, custo médio).
+- [x] Front `kpis/rh/estoqueadm.html`: saldo via `rpc('estoque_admin_saldo')`, histórico via `from('estoque_admin').select()`, gravação via `insert(lote)`. Apps Script (`appestoque.gs`) desativado nessas 3 chamadas.
+- [ ] **Importar histórico** da planilha "Gestão de estoque - Administrativo" (aguardando CSV do usuário).
+- [ ] `action=mapa` (mapa de liderança, script separado) e `listColaboradores` seguem no Sheets (lookups compartilhados, migração à parte).
+
 ### Processos contínuos (não é bug)
 - Transcrição: usuário insere novas atas manualmente (INSERT em `dp_rh.alinhamento_transcricao`).
 
