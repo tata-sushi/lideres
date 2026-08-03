@@ -8,6 +8,8 @@
 2. **Erro = devolver, não insistir.** Se uma criação/edição falhar, parar imediatamente, mostrar o erro ao usuário e corrigir em conjunto. Proibido ficar retentando no escuro.
 3. **Modo atual: só planejar.** Não criar tabela, editar arquivo, editar/criar fluxo ou commitar sem "ok" explícito.
 4. Trabalhar **módulo por módulo**, começando pela Ouvidoria (piloto = modelo dos demais).
+5. **Padrão de dados (fixo):** toda **tabela** de dados fica no schema **`dp_rh`** (privado — o front não acessa direto). O front sempre passa por **RPC** `SECURITY DEFINER` no **`tata_plus`** (exposto, `grant execute` só a `authenticated`, `revoke` de `public`/`anon`). **Nada de tabela em `tata_plus`.** RPCs anônimas (form público) vão no `public`. O nome do schema `dp_rh` **não muda** (renomear cascatearia p/ ~30 funções, incl. módulo Escala + n8n — decidido não fazer).
+6. **Auditoria (fixo):** RPC de escrita carimba a identidade do logado no servidor via `tata_plus.minha_matricula()` (coluna `criado_por`) — não confiar no que o front manda. `created_at default now()`.
 
 ## 🔖 PENDÊNCIAS (checklist vivo — atualizar conforme avançamos)
 
@@ -42,9 +44,12 @@
 - [ ] Outros fluxos **Sheets→Trello** (sanção, asos, feriados, aniversários, etc.) → migrar Trello→Kanban + fonte Supabase.
 
 ### Estoque Admin (Uniformes/EPI) — `estoqueadm.html`
-- [x] Tabela `tata_plus.estoque_admin` (livro de movimentos, RLS authenticated sel/ins) + RPC `estoque_admin_saldo()` (entradas−saídas, custo médio).
-- [x] Front `kpis/rh/estoqueadm.html`: saldo via `rpc('estoque_admin_saldo')`, histórico via `from('estoque_admin').select()`, gravação via `insert(lote)`. Apps Script (`appestoque.gs`) desativado nessas 3 chamadas.
-- [x] **Reconciliação do estoque físico** (RECONCILIAR_estoque_atual.sql): zerou o saldo acumulado do histórico + recontagem com a contagem física do usuário (94 itens / 742 un — EPI's 168, Uniformes 254, Calçados 33, Brindes 287). Saldo do banco = "Estoque atual". Decisão: manter tudo numa tabela e ajustar por movimentos (evita fuzzy-match dos nomes inconsistentes do histórico: Bibico/Bibicos, Único/—, caixa).
+- [x] **Tabela `dp_rh.estoque_admin`** (privada) — livro de movimentos. *Correção: começou em `tata_plus`, movida p/ `dp_rh` conforme o padrão (fixo #5).*
+- [x] RPCs em `tata_plus` (`SECURITY DEFINER`, só `authenticated`): `estoque_admin_saldo()` (soma assinada + custo médio), `estoque_admin_historico(limite)`, `estoque_admin_gravar(movimentos jsonb)`.
+- [x] Front `kpis/rh/estoqueadm.html`: as 3 chamadas via RPC (`rpc('estoque_admin_saldo')`, `rpc('estoque_admin_historico')`, `rpc('estoque_admin_gravar')`). Não toca a tabela direto. Apps Script (`appestoque.gs`) desativado nessas chamadas.
+- [x] **Auditoria server-side:** `estoque_admin_gravar` carimba `criado_por = minha_matricula()` (não falsificável).
+- [x] **Reconciliação do estoque físico** (RECONCILIAR_estoque_atual.sql): zerou o saldo acumulado do histórico + recontagem com a contagem física (94 itens / 742 un — EPI's 168, Uniformes 254, Calçados 33, Brindes 287). Saldo do banco = "Estoque atual".
+- [ ] **Gate de permissão de escrita** (quem pode gravar estoque): hoje qualquer `authenticated` que chegue na página grava (a página já é gated por `PAGE_ID` no front). Definir com o usuário quem pode e, se preciso, um check no `estoque_admin_gravar` (espelhar `escala_pode_gerir_*`).
 - [ ] `action=mapa` (mapa de liderança, script separado) e `listColaboradores` seguem no Sheets (lookups compartilhados, migração à parte).
 
 ### Processos contínuos (não é bug)
