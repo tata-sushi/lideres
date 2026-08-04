@@ -15,6 +15,13 @@
 
 ## 🔖 PENDÊNCIAS (checklist vivo — atualizar conforme avançamos)
 
+### Sanções Disciplinares → Kanban (ADIADO — consulta feita 04/08)
+- [x] **Lookup de colaborador** migrado p/ Supabase (`colaboradores_listar()`), filtro por unidade preservado (#2544). Drawer/gravação/ficha técnica não tocados.
+- [ ] **Pré-requisito:** trazer a base de sanções do Sheets → `dp_rh.sancoes` (usuário vai trazer os pendentes). Hoje a sanção grava no Google Sheets.
+- [ ] **Aposentar o Trello:** fluxo n8n **`nova_sancao__card_trello`** (id `MsVFYQFSlhYItL0l`, ativo, "Available in MCP" **OFF** — ligar p/ inspecionar/inativar via MCP). Cria card no Trello quando cai nova sanção.
+- [ ] **Card no Kanban interno (sem n8n):** copiar o padrão da Ouvidoria — insert em `dp_rh.sancoes` → gatilho (tipo `tg_ouvidoria_para_kanban`) → `insert into tata_kanban.cards`. Card = `quadro_id, coluna_id, titulo, descricao, criado_por`.
+- [ ] **Definir destino do card:** quadro **RH** (`08b636b2-7daf-444b-950a-8255e3049e5f`) — não há coluna "Sanções" ainda (colunas: Admissão, Desligamentos, Outros, Solicitações Líderes, Em andamento, Concluído, Validadas). Criar coluna "Sanções" ou usar "Outros".
+
 ### Ouvidoria (piloto — no ar)
 - [ ] **PR #446** (`tata-sushi/plus`, página ouvidoria do app) — app-side revisar/mergear.
 - [ ] **Kanban da Ouvidoria** (passo 7) — app-side liga `dp_rh.ouvidoria` a um quadro.
