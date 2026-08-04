@@ -433,30 +433,41 @@ function unidadeParaPrefix(unidade) {
 }
 
 async function gerarIdDisplay(unidade) {
-  var prefix = unidadeParaPrefix(unidade);
-  var next = 1;
+  // Continuidade da numeração: reaproveitamos o PREFIXO do último pedido que já
+  // existe na base de abastecimento para essa unidade (o de maior número) — a
+  // mesma base alimentada pelo abastecimento e pela aprovação do cardápio. Não
+  // inventamos prefixo: só quando a unidade não tem NENHUM pedido é que caímos
+  // no unidadeParaPrefix (a mesma semente que o abastecimento usa).
+  var prefix = null;
+  var maxNum = 0;
   if (supa) {
     try {
       var res = await supa.from('abastecimento')
         .select('id_display')
         .eq('unidade', unidade);
       if (!res.error && res.data && res.data.length > 0) {
-        var maxNum = 0;
         var seen = {};
         res.data.forEach(function(row) {
           var id = row.id_display;
           if (!id || seen[id]) return;
           seen[id] = 1;
-          // Aceita sufixo 'c' (pedidos gerados pela contagem de estoque) ao ler o número.
-          var m = id.match(/(\d+)c?$/i);
-          if (m) { var n = parseInt(m[1], 10); if (n > maxNum) maxNum = n; }
+          // Ex.: "#Pinh0007" ou "#Pinh0007c" → prefixo "#Pinh", número 7.
+          // O 'c' (contagem) é ignorado só na leitura do número.
+          var m = String(id).match(/^(.*?)(\d+)c?$/i);
+          if (m) {
+            var n = parseInt(m[2], 10);
+            if (n > maxNum) { maxNum = n; prefix = m[1]; }
+          }
         });
-        next = maxNum + 1;
       }
-    } catch(e) { /* fallback 1 */ }
+    } catch(e) { /* usa a semente abaixo */ }
   }
-  // Sufixo 'c' identifica que o pedido nasceu da contagem semanal de estoque.
-  return '#' + prefix + String(next).padStart(4, '0') + 'c';
+  // Sem nenhum pedido para a unidade: usa o mesmo gerador do abastecimento.
+  if (!prefix) prefix = '#' + unidadeParaPrefix(unidade);
+  var next = maxNum + 1;
+  // Sufixo 'c' identifica que o pedido nasceu da contagem semanal de estoque;
+  // o número continua a sequência do último pedido existente (+1).
+  return prefix + String(next).padStart(4, '0') + 'c';
 }
 
 // ── ESTOQUE (inventário / estoque mínimo / contagem semanal) ────────────────────
