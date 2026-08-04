@@ -367,8 +367,6 @@ var SUPA_URL = 'https://aoqsbusfrffapjglpqjk.supabase.co';
 var SUPA_KEY = 'sb_publishable_X3pKD_F1QLAyxbxFU32HqQ_pRp9p6JQ';
 var supa = window.supabase ? window.supabase.createClient(SUPA_URL, SUPA_KEY, { db: { schema: 'tata_abastecimento' } }) : null;
 
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
-
 // Unidade e departamento do usuário logado — populados em carregarUsuario()
 var UNIDADE = '';
 var DEPARTAMENTO = '';
@@ -412,30 +410,12 @@ async function carregarCatalogo() {
 }
 
 // ── IDENTIFICAÇÃO DO USUÁRIO ─────────────────────────────────────────────────
+// Unidades/departamentos vêm do Supabase (tata_plus.colaboradores_publicos) via
+// carregarColabPairs(); sem dependência de Apps Script.
 async function carregarUsuario(session) {
-  UNIDADE      = String(session.unidade || '').trim();
+  UNIDADE      = String((session && session.unidade) || '').trim();
   DEPARTAMENTO = '';
-  if (!COLAB_URL || !session.displayName) return;
-  try {
-    var res  = await fetch(COLAB_URL + '?action=listColaboradores&t=' + Date.now());
-    var data = await res.json();
-    if (data && data.ok && Array.isArray(data.colaboradores)) {
-      var alvo = String(session.displayName).trim().toLowerCase();
-      var col = data.colaboradores.find(function(c) {
-        return String(c.nome || '').trim().toLowerCase() === alvo;
-      });
-      if (col) {
-        if (!UNIDADE)      UNIDADE      = String(col.unidade      || '').trim();
-        DEPARTAMENTO = String(col.departamento || '').trim();
-      }
-      DEPTOS_DISPONIVEIS = Array.from(new Set(
-        data.colaboradores.map(function(c){ return String(c.departamento || '').trim(); }).filter(Boolean)
-      )).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
-      UNIDADES_DISPONIVEIS = Array.from(new Set(
-        data.colaboradores.map(function(c){ return String(c.unidade || '').trim(); }).filter(Boolean)
-      )).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
-    }
-  } catch(e) { console.warn('Erro ao identificar usuário:', e.message); }
+  await carregarColabPairs();
 }
 
 // ── PEDIDO AUTOMÁTICO (gerado quando a contagem fica abaixo do mínimo) ─────────
@@ -1174,7 +1154,7 @@ async function iniciarComSessao(displayName, perfil) {
   if (parts.length > 1) headerUserName = parts[0] + ' ' + parts[parts.length - 1];
 
   // Renderiza já (usa dados do Supabase); a identificação do usuário/colaboradores
-  // roda em background pra não travar o carregamento no fetch lento do Apps Script.
+  // roda em background pra não travar o carregamento inicial.
   await renderPaginaAtiva();
 
   var lo = document.getElementById('loading-overlay'); if (lo) lo.classList.remove('show');
