@@ -1551,15 +1551,21 @@ function openDrawer() {
     .catch(function(err) { console.warn('[sancoes] falha ao registrar:', err); });
   }
 
+  function _supaReady(){ return new Promise(function(res){ if(window.__lideresSupa){res(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){res(window.__lideresSupa);},{once:true}); }); }
   async function carregarColaboradores() {
     if (__colabCache) return __colabCache;
     try {
+      var supa = await _supaReady();
       var session = window.__lideresSession || JSON.parse(localStorage.getItem('lideres_session') || '{}');
       var unidade = session && session.unidade ? session.unidade : '';
-      var url = COLAB_URL + '?action=listColaboradores&unidade=' + encodeURIComponent(unidade);
-      var res = await fetch(url);
-      var data = await res.json();
-      __colabCache = (data && data.ok && Array.isArray(data.colaboradores)) ? data.colaboradores : [];
+      // Colaboradores do Supabase (perfis ativos), não mais do Google Sheets.
+      var resp = await supa.schema('tata_plus').rpc('colaboradores_listar');
+      var rows = (resp && !resp.error && Array.isArray(resp.data)) ? resp.data : [];
+      if (unidade) rows = rows.filter(function(c){ return c.unidade === unidade; });
+      __colabCache = rows.map(function(c){
+        return { nome:c.nome, matricula:c.matricula, cargo:c.cargo, unidade:c.unidade,
+                 departamento:c.departamento, admissao:c.data_admissao, email:c.email };
+      });
     } catch (e) {
       console.warn('Falha ao carregar colaboradores:', e);
       __colabCache = [];
