@@ -292,14 +292,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="modal-header">
       <div>
         <div class="modal-title">Contagem Semanal</div>
-        <div class="modal-subtitle">Registre o estoque atual de cada item.</div>
+        <div class="modal-subtitle" id="contagem-data">Data: —</div>
       </div>
       <button class="modal-close" onclick="fecharModalContagem()">✕</button>
     </div>
     <div class="modal-body">
-      <div class="fg">
-        <label class="flbl">Departamento</label>
-        <select class="cat-select" id="contagem-depto" onchange="mudarDeptoContagem(this.value)"></select>
+      <div class="filters-row" style="margin-bottom:4px;">
+        <div class="filter-group"><label class="filter-label">Unidade</label>
+          <select class="cat-select" id="contagem-unidade" onchange="mudarUnidadeContagem(this.value)"></select>
+        </div>
+        <div class="filter-group"><label class="filter-label">Departamento</label>
+          <select class="cat-select" id="contagem-depto" onchange="mudarDeptoContagem(this.value)"></select>
+        </div>
       </div>
       <div id="modal-contagem-body"></div>
     </div>
@@ -715,32 +719,40 @@ function fecharModalContagem() {
   document.body.style.overflow = '';
 }
 
+function mudarUnidadeContagem(v) { UNIDADE = v; ESTOQUE_DEPTO = ''; renderModalContagem(); }
 function mudarDeptoContagem(v) { ESTOQUE_DEPTO = v; renderModalContagem(); }
 
 async function renderModalContagem() {
   var container = document.getElementById('modal-contagem-body');
   if (!container) return;
 
+  // Data da contagem (hoje) no subtítulo
+  var elData = document.getElementById('contagem-data');
+  if (elData) elData.textContent = 'Data: ' + new Date().toLocaleDateString('pt-BR');
+
   if (Object.keys(CATALOGO).length === 0) {
     container.innerHTML = '<div class="empty"><p>Carregando catálogo...</p></div>';
     await carregarCatalogo();
   }
-  if (Object.keys(CATALOGO).length === 0) {
-    container.innerHTML = '<div class="empty"><p>' + esc(catalogoErro || 'Catálogo indisponível.') + '</p></div>';
-    return;
-  }
-  if (!ESTOQUE_DEPTO) ESTOQUE_DEPTO = DEPARTAMENTO || DEPTOS_DISPONIVEIS[0] || '';
   await carregarInventarioMinimo();
 
-  var sel = document.getElementById('contagem-depto');
-  if (sel) {
-    var deptosOpts = (DEPTOS_DISPONIVEIS.length ? DEPTOS_DISPONIVEIS : [ESTOQUE_DEPTO]);
-    sel.innerHTML = deptosOpts.map(function(d) { return '<option value="' + esc(d) + '"' + (d === ESTOQUE_DEPTO ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('');
-  }
+  // Unidades/departamentos que JÁ têm item cadastrado
+  var unis = distinctSorted(INVENTARIO_MINIMO_ROWS.map(function(r){ return r.unidade; }));
+  if (!unis.length && UNIDADE) unis = [UNIDADE];
+  if (unis.length && unis.indexOf(UNIDADE) < 0) UNIDADE = unis[0];
+  var deps = distinctSorted(INVENTARIO_MINIMO_ROWS
+    .filter(function(r){ return (r.unidade || '').trim() === (UNIDADE || '').trim(); })
+    .map(function(r){ return r.departamento; }));
+  if (deps.length && deps.indexOf(ESTOQUE_DEPTO) < 0) ESTOQUE_DEPTO = deps[0];
+
+  var selUni = document.getElementById('contagem-unidade');
+  if (selUni) selUni.innerHTML = unis.map(function(u) { return '<option value="' + esc(u) + '"' + (u === UNIDADE ? ' selected' : '') + '>' + esc(u) + '</option>'; }).join('');
+  var selDep = document.getElementById('contagem-depto');
+  if (selDep) selDep.innerHTML = deps.map(function(d) { return '<option value="' + esc(d) + '"' + (d === ESTOQUE_DEPTO ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('');
 
   var itens = getItensCadastrados(UNIDADE, ESTOQUE_DEPTO);
   if (!itens.length) {
-    container.innerHTML = '<div class="empty"><p>Nenhum item cadastrado para <strong>' + esc(ESTOQUE_DEPTO) + '</strong>.<br>Use <strong>Cadastrar estoque mínimo</strong> antes de fazer a contagem.</p></div>';
+    container.innerHTML = '<div class="empty"><p>Nenhum item cadastrado para <strong>' + esc(UNIDADE || '—') + ' / ' + esc(ESTOQUE_DEPTO || '—') + '</strong>.<br>Use <strong>Cadastrar estoque mínimo</strong> antes de fazer a contagem.</p></div>';
     return;
   }
   container.innerHTML = renderEstoqueContagemHTML(itens);
@@ -964,23 +976,16 @@ async function confirmarEstMinEdit(idx) {
 var CONTAGEM_ITENS = [];
 function renderEstoqueContagemHTML(itens) {
   CONTAGEM_ITENS = itens;
-  var hoje = new Date().toLocaleDateString('pt-BR');
-  var porCategoria = {};
-  itens.forEach(function(it, i) { it._idx = i; (porCategoria[it.catLabel] = porCategoria[it.catLabel] || []).push(it); });
-  var html = '<div class="est-info-bar"><span><strong>Unidade:</strong> ' + esc(UNIDADE || '—') + '</span><span><strong>Data:</strong> ' + hoje + '</span></div>';
-  html += '<div class="est-list">';
-  Object.keys(porCategoria).sort(function(a, b) { return a.localeCompare(b, 'pt-BR'); }).forEach(function(catLabel) {
-    html += '<div class="cat-section">' +
-      '<div class="cat-header"><div class="cat-header-left"><span class="cat-name">' + esc(catLabel) + '</span></div></div>' +
-      '<div class="cat-item-header"><span class="cat-col-nome hdr">Produto</span><span class="cat-col-num hdr">Mín.</span><span class="cat-col-qty hdr" style="margin-left:24px;">Atual</span></div>';
-    porCategoria[catLabel].forEach(function(it) {
-      html += '<div class="cat-item"><div class="cat-item-main">' +
-        '<span class="cat-col-nome">' + esc(it.nome) + ' <span style="color:var(--muted);">(' + esc(it.un || '—') + ')</span></span>' +
-        '<span class="cat-col-num">' + (it.estoqueMinimo != null ? it.estoqueMinimo : '—') + '</span>' +
-        '<span class="cat-col-qty"><input class="qty-input" type="number" min="0" step="1" id="est-atual-' + it._idx + '"></span>' +
-        '</div></div>';
-    });
-    html += '</div>';
+  itens.forEach(function(it, i) { it._idx = i; });
+  // Lista única (sem separar por categoria), um item abaixo do outro.
+  var html = '<div class="cat-section">' +
+    '<div class="cat-item-header"><span class="cat-col-nome hdr">Produto</span><span class="cat-col-num hdr">Mín.</span><span class="cat-col-qty hdr" style="margin-left:24px;">Atual</span></div>';
+  itens.forEach(function(it) {
+    html += '<div class="cat-item"><div class="cat-item-main">' +
+      '<span class="cat-col-nome">' + esc(it.nome) + ' <span style="color:var(--muted);">(' + esc(it.un || '—') + ')</span></span>' +
+      '<span class="cat-col-num">' + (it.estoqueMinimo != null ? it.estoqueMinimo : '—') + '</span>' +
+      '<span class="cat-col-qty"><input class="qty-input" type="number" min="0" step="1" id="est-atual-' + it._idx + '"></span>' +
+      '</div></div>';
   });
   html += '</div>';
   return html;
