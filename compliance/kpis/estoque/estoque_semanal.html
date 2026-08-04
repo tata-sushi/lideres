@@ -155,8 +155,10 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 .btn-row-edit.editing { opacity:1; }
 .btn-edit-label { display:none; font-family:'DM Mono',monospace; font-size:10px; font-weight:500; letter-spacing:0.5px; text-transform:uppercase; color:var(--citric); }
 
+.est-grp-title { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); padding: 8px 12px; border-bottom: 1px solid var(--border); }
+
 /* ── MOBILE: um card único por Unidade+Departamento (lista corrida) ── */
-.est-mob { display: none; }
+.est-mob { display: none; margin-bottom: 14px; }
 .est-mob-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .est-mob-head { padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .est-mob-title { font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 700; color: var(--carbon); line-height: 1.3; }
@@ -480,9 +482,14 @@ var ESTOQUE_DEPTO = '';
 var ESTOQUE_ITENS = [];
 var INVENTARIO_MINIMO_MAP = {};
 var INVENTARIO_MINIMO_ROWS = [];
+// Filtro da LISTA (aceita 'Todos'); separado de UNIDADE/ESTOQUE_DEPTO que são a
+// seleção específica usada por contagem/cadastro/pedido.
+var FILTRO_UNIDADE = '';
+var FILTRO_DEPTO = '';
+var TODOS = 'Todos';
 
-function chaveInventario(depto, nome, un) {
-  return (depto || '').trim().toLowerCase() + '::' + (nome || '').trim().toLowerCase() + '::' + (un || '').trim().toLowerCase();
+function chaveInventario(unidade, depto, nome, un) {
+  return (unidade || '').trim().toLowerCase() + '::' + (depto || '').trim().toLowerCase() + '::' + (nome || '').trim().toLowerCase() + '::' + (un || '').trim().toLowerCase();
 }
 
 function dataLocalISO(d) {
@@ -521,13 +528,14 @@ function getItensCatalogoUnicos() {
 async function carregarInventarioMinimo() {
   INVENTARIO_MINIMO_MAP = {};
   INVENTARIO_MINIMO_ROWS = [];
-  if (!supa || !UNIDADE) return;
+  if (!supa) return;
   try {
-    var res = await supa.from('inventario_minimo').select('*').eq('unidade', UNIDADE);
+    // Carrega todas as unidades — a lista filtra no cliente (permite "Todos").
+    var res = await supa.from('inventario_minimo').select('*');
     if (res.error) throw new Error(res.error.message);
     INVENTARIO_MINIMO_ROWS = res.data || [];
     INVENTARIO_MINIMO_ROWS.forEach(function(r) {
-      INVENTARIO_MINIMO_MAP[chaveInventario(r.departamento || '', r.produto_nome, r.unidade_medida)] = r;
+      INVENTARIO_MINIMO_MAP[chaveInventario(r.unidade || '', r.departamento || '', r.produto_nome, r.unidade_medida)] = r;
     });
   } catch(e) { console.warn('Erro ao carregar estoque mínimo:', e.message); }
 }
@@ -548,15 +556,25 @@ function getValorUnitario(nome, un) {
   return 0;
 }
 
-// Itens JÁ CADASTRADOS (com estoque mínimo) para a unidade + departamento atual.
-function getItensCadastrados() {
-  var depAlvo = (ESTOQUE_DEPTO || '').trim().toLowerCase();
+// Itens JÁ CADASTRADOS (com estoque mínimo). uni/dep aceitam 'Todos'.
+function getItensCadastrados(uni, dep) {
+  var uAlvo = (uni || '').trim().toLowerCase();
+  var dAlvo = (dep || '').trim().toLowerCase();
+  var todosU = (uni === TODOS);
+  var todosD = (dep === TODOS);
   return INVENTARIO_MINIMO_ROWS
-    .filter(function(r) { return (r.departamento || '').trim().toLowerCase() === depAlvo; })
+    .filter(function(r) {
+      var okU = todosU || (r.unidade || '').trim().toLowerCase() === uAlvo;
+      var okD = todosD || (r.departamento || '').trim().toLowerCase() === dAlvo;
+      return okU && okD;
+    })
     .map(function(r) {
       var catKey = r.categoria || '';
       var catLabel = (CATALOGO[catKey] && CATALOGO[catKey].label) || r.categoria || 'Sem categoria';
       return {
+        id: r.id,
+        unidade: r.unidade || '',
+        departamento: r.departamento || '',
         catKey: catKey,
         catLabel: catLabel,
         subcategoria: r.subcategoria || '',
@@ -567,7 +585,10 @@ function getItensCadastrados() {
       };
     })
     .sort(function(a, b) {
-      return String(a.catLabel).localeCompare(String(b.catLabel), 'pt-BR') || String(a.nome).localeCompare(String(b.nome), 'pt-BR');
+      return String(a.unidade).localeCompare(String(b.unidade), 'pt-BR') ||
+             String(a.departamento).localeCompare(String(b.departamento), 'pt-BR') ||
+             String(a.catLabel).localeCompare(String(b.catLabel), 'pt-BR') ||
+             String(a.nome).localeCompare(String(b.nome), 'pt-BR');
     });
 }
 
@@ -585,8 +606,8 @@ function getProdutosDaCategoria(key) {
   return lista.sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), 'pt-BR'); });
 }
 
-function setEstoqueDepto(v) { ESTOQUE_DEPTO = v; renderPaginaAtiva(); }
-function setEstoqueUnidade(v) { UNIDADE = v; renderPaginaAtiva(); }
+function setEstoqueDepto(v) { FILTRO_DEPTO = v; renderPaginaAtiva(); }
+function setEstoqueUnidade(v) { FILTRO_UNIDADE = v; renderPaginaAtiva(); }
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
 function setTab(t) {
@@ -606,16 +627,16 @@ function abaAtiva() {
 function renderFiltrosEstoque() {
   var wrap = document.getElementById('est-filters');
   if (!wrap) return;
-  var unidadesOpts = (UNIDADES_DISPONIVEIS.length ? UNIDADES_DISPONIVEIS : [UNIDADE]);
-  var deptosOpts    = (DEPTOS_DISPONIVEIS.length ? DEPTOS_DISPONIVEIS : [ESTOQUE_DEPTO]);
+  var unidadesOpts = [TODOS].concat(UNIDADES_DISPONIVEIS.length ? UNIDADES_DISPONIVEIS : (UNIDADE ? [UNIDADE] : []));
+  var deptosOpts    = [TODOS].concat(DEPTOS_DISPONIVEIS.length ? DEPTOS_DISPONIVEIS : (ESTOQUE_DEPTO ? [ESTOQUE_DEPTO] : []));
   wrap.innerHTML = '<div class="filters-row">' +
     '<div class="filter-group"><label class="filter-label">Unidade</label>' +
     '<select class="filter-select" onchange="setEstoqueUnidade(this.value)">' +
-    unidadesOpts.map(function(u) { return '<option value="' + esc(u) + '"' + (u === UNIDADE ? ' selected' : '') + '>' + esc(u) + '</option>'; }).join('') +
+    unidadesOpts.map(function(u) { return '<option value="' + esc(u) + '"' + (u === FILTRO_UNIDADE ? ' selected' : '') + '>' + esc(u) + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="filter-group"><label class="filter-label">Departamento</label>' +
     '<select class="filter-select" onchange="setEstoqueDepto(this.value)">' +
-    deptosOpts.map(function(d) { return '<option value="' + esc(d) + '"' + (d === ESTOQUE_DEPTO ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('') +
+    deptosOpts.map(function(d) { return '<option value="' + esc(d) + '"' + (d === FILTRO_DEPTO ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('') +
     '</select></div>' +
     '</div>';
 }
@@ -639,17 +660,30 @@ async function renderPaginaAtiva() {
     return;
   }
   if (!ESTOQUE_DEPTO) ESTOQUE_DEPTO = DEPARTAMENTO || (DEPTOS_DISPONIVEIS[0] || 'Geral');
+  if (!FILTRO_UNIDADE) FILTRO_UNIDADE = UNIDADE || TODOS;
+  if (!FILTRO_DEPTO) FILTRO_DEPTO = ESTOQUE_DEPTO || TODOS;
   await carregarInventarioMinimo();
 
   renderFiltrosEstoque();
   if (wrap) wrap.style.display = '';
 
-  var itens = getItensCadastrados();
+  var itens = getItensCadastrados(FILTRO_UNIDADE, FILTRO_DEPTO);
+  ESTOQUE_ITENS = itens;
+  itens.forEach(function(it, i) { it._idx = i; });
   if (!itens.length) {
-    container.innerHTML = '<div class="empty"><p>Nenhum item cadastrado para <strong>' + esc(ESTOQUE_DEPTO) + '</strong> nesta unidade.<br>Abra o menu (☰) e use <strong>Cadastrar itens</strong> para montar a lista.</p></div>';
+    container.innerHTML = '<div class="empty"><p>Nenhum item cadastrado para <strong>' + esc(FILTRO_UNIDADE) + ' / ' + esc(FILTRO_DEPTO) + '</strong>.<br>Abra o menu (☰) e use <strong>Cadastrar estoque mínimo</strong> para montar a lista.</p></div>';
     return;
   }
-  container.innerHTML = renderEstoqueMinimoHTML(itens);
+  // Agrupa por Unidade + Departamento (um bloco por grupo)
+  var grupos = [];
+  var idxGrupo = {};
+  itens.forEach(function(it) {
+    var gk = it.unidade + '::' + it.departamento;
+    if (idxGrupo[gk] == null) { idxGrupo[gk] = grupos.length; grupos.push({ unidade: it.unidade, departamento: it.departamento, itens: [] }); }
+    grupos[idxGrupo[gk]].itens.push(it);
+  });
+  var multi = grupos.length > 1;
+  container.innerHTML = grupos.map(function(g) { return renderEstoqueMinimoHTML(g.itens, g.unidade, g.departamento, multi); }).join('');
 }
 
 function renderKPIsPage() {
@@ -694,9 +728,9 @@ async function renderModalContagem() {
     sel.innerHTML = deptosOpts.map(function(d) { return '<option value="' + esc(d) + '"' + (d === ESTOQUE_DEPTO ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('');
   }
 
-  var itens = getItensCadastrados();
+  var itens = getItensCadastrados(UNIDADE, ESTOQUE_DEPTO);
   if (!itens.length) {
-    container.innerHTML = '<div class="empty"><p>Nenhum item cadastrado para <strong>' + esc(ESTOQUE_DEPTO) + '</strong>.<br>Use <strong>Cadastrar itens</strong> antes de fazer a contagem.</p></div>';
+    container.innerHTML = '<div class="empty"><p>Nenhum item cadastrado para <strong>' + esc(ESTOQUE_DEPTO) + '</strong>.<br>Use <strong>Cadastrar estoque mínimo</strong> antes de fazer a contagem.</p></div>';
     return;
   }
   container.innerHTML = renderEstoqueContagemHTML(itens);
@@ -777,7 +811,7 @@ function addCategoriaCadastro() {
   produtos.forEach(function(p) {
     var idx = CADASTRO_ROWS.length;
     CADASTRO_ROWS.push({ nome: p.nome, un: p.un, catKey: p.catKey, subcategoria: p.subcategoria });
-    var jaCad = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, p.nome, p.un)];
+    var jaCad = INVENTARIO_MINIMO_MAP[chaveInventario(UNIDADE, ESTOQUE_DEPTO, p.nome, p.un)];
     var valor = jaCad ? jaCad.estoque_minimo : '';
     html += '<div class="cat-item">' +
       '<div class="cat-item-main">' +
@@ -832,10 +866,12 @@ async function salvarCadastro() {
   } catch(e) { toast('Erro ao cadastrar: ' + e.message, true); }
 }
 
-function renderEstoqueMinimoHTML(itens) {
-  ESTOQUE_ITENS = itens;
-  itens.forEach(function(it, i) { it._idx = i; });
-  var html = '<div class="desk-table-wrap"><table class="nf-table">' +
+function renderEstoqueMinimoHTML(itens, unidade, depto, multi) {
+  var html = '<div class="desk-table-wrap"' + (multi ? ' style="margin-bottom:16px;"' : '') + '>';
+  if (multi) {
+    html += '<div class="est-grp-title">' + esc(unidade || '—') + ' · ' + esc(depto || '—') + '</div>';
+  }
+  html += '<table class="nf-table">' +
     '<thead><tr>' +
       '<th>Produto</th>' +
       '<th class="th-c col-un">Unidade</th>' +
@@ -843,8 +879,7 @@ function renderEstoqueMinimoHTML(itens) {
       '<th class="col-edit"></th>' +
     '</tr></thead><tbody>';
   itens.forEach(function(it) {
-    var atual = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome, it.un)];
-    var valorAtual = atual ? atual.estoque_minimo : null;
+    var valorAtual = it.estoqueMinimo;
     html += '<tr id="est-min-row-' + it._idx + '">' +
       '<td class="td-nome-cell" data-label="Produto">' + esc(it.nome) + '</td>' +
       '<td class="td-c col-un" data-label="Un.">' + esc(it.un || '—') + '</td>' +
@@ -861,7 +896,7 @@ function renderEstoqueMinimoHTML(itens) {
 
   // Mobile: um card único (Unidade/Departamento no cabeçalho + lista corrida + rodapé)
   html += '<div class="est-mob"><div class="est-mob-card">' +
-    '<div class="est-mob-head"><div class="est-mob-title">' + esc(UNIDADE || '—') + '</div><div class="est-mob-sub">' + esc(ESTOQUE_DEPTO || '—') + '</div></div>' +
+    '<div class="est-mob-head"><div class="est-mob-title">' + esc(unidade || '—') + '</div><div class="est-mob-sub">' + esc(depto || '—') + '</div></div>' +
     '<div class="est-mob-lhead"><span class="emc-nome">Itens</span><span class="emc-un">Unidade</span><span class="emc-qtd">Quantidade</span></div>';
   itens.forEach(function(it) {
     html += '<div class="est-mob-row">' +
@@ -909,15 +944,15 @@ async function confirmarEstMinEdit(idx) {
   if (btn) { btn.classList.remove('editing'); btn.title = 'Editar mínimo'; btn.innerHTML = estMinBtnHTML(false); }
   if (val) {
     var it = ESTOQUE_ITENS[idx];
-    var atual = it ? INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome, it.un)] : null;
-    val.textContent = (atual && atual.estoque_minimo != null) ? atual.estoque_minimo : '—';
+    val.textContent = (it && it.estoqueMinimo != null) ? it.estoqueMinimo : '—';
     val.style.display = '';
   }
   if (inp) inp.classList.remove('visible');
 }
 
+var CONTAGEM_ITENS = [];
 function renderEstoqueContagemHTML(itens) {
-  ESTOQUE_ITENS = itens;
+  CONTAGEM_ITENS = itens;
   var hoje = new Date().toLocaleDateString('pt-BR');
   var porCategoria = {};
   itens.forEach(function(it, i) { it._idx = i; (porCategoria[it.catLabel] = porCategoria[it.catLabel] || []).push(it); });
@@ -928,10 +963,9 @@ function renderEstoqueContagemHTML(itens) {
       '<div class="cat-header"><div class="cat-header-left"><span class="cat-name">' + esc(catLabel) + '</span></div></div>' +
       '<div class="cat-item-header"><span class="cat-col-nome hdr">Produto</span><span class="cat-col-num hdr">Mín.</span><span class="cat-col-qty hdr" style="margin-left:24px;">Atual</span></div>';
     porCategoria[catLabel].forEach(function(it) {
-      var minRow = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome, it.un)];
       html += '<div class="cat-item"><div class="cat-item-main">' +
         '<span class="cat-col-nome">' + esc(it.nome) + ' <span style="color:var(--muted);">(' + esc(it.un || '—') + ')</span></span>' +
-        '<span class="cat-col-num">' + (minRow ? minRow.estoque_minimo : '—') + '</span>' +
+        '<span class="cat-col-num">' + (it.estoqueMinimo != null ? it.estoqueMinimo : '—') + '</span>' +
         '<span class="cat-col-qty"><input class="qty-input" type="number" min="0" step="1" id="est-atual-' + it._idx + '"></span>' +
         '</div></div>';
     });
@@ -949,10 +983,12 @@ async function salvarEstoqueMinimo(idx) {
   if (raw === '') return;
   var val = parseFloat(raw);
   if (isNaN(val) || val < 0) { toast('Valor inválido.', true); return; }
+  var uni = it.unidade || UNIDADE;
+  var dep = it.departamento || ESTOQUE_DEPTO || 'Geral';
   try {
     var row = {
-      unidade: UNIDADE,
-      departamento: ESTOQUE_DEPTO || 'Geral',
+      unidade: uni,
+      departamento: dep,
       produto_nome: it.nome,
       categoria: it.catKey,
       subcategoria: it.subcategoria || null,
@@ -965,26 +1001,27 @@ async function salvarEstoqueMinimo(idx) {
       .upsert(row, { onConflict: 'unidade,departamento,produto_nome,unidade_medida' })
       .select('*').single();
     if (res.error) throw new Error(res.error.message);
-    INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome, it.un)] = res.data;
+    it.estoqueMinimo = val;
+    INVENTARIO_MINIMO_MAP[chaveInventario(uni, dep, it.nome, it.un)] = res.data;
     toast('Estoque mínimo salvo.');
   } catch(e) { toast('Erro ao salvar: ' + e.message, true); }
 }
 
 async function registrarContagem() {
-  if (!ESTOQUE_ITENS || !ESTOQUE_ITENS.length) return;
+  if (!CONTAGEM_ITENS || !CONTAGEM_ITENS.length) return;
   if (!supa) { alert('Supabase não inicializado.'); return; }
   var dataISO = dataLocalISO();
   var nomeContador = (currentUser && currentUser.name) || 'Líder';
   var linhas = [];
   var deficits = [];
-  ESTOQUE_ITENS.forEach(function(it) {
+  CONTAGEM_ITENS.forEach(function(it) {
     var inp = document.getElementById('est-atual-' + it._idx);
     if (!inp) return;
     var raw = inp.value.trim();
     if (raw === '') return;
     var atual = parseFloat(raw);
     if (isNaN(atual) || atual < 0) return;
-    var minRow = INVENTARIO_MINIMO_MAP[chaveInventario(ESTOQUE_DEPTO, it.nome, it.un)];
+    var minimo = it.estoqueMinimo;
     linhas.push({
       unidade: UNIDADE,
       departamento: ESTOQUE_DEPTO || 'Geral',
@@ -992,19 +1029,19 @@ async function registrarContagem() {
       categoria: it.catKey,
       subcategoria: it.subcategoria || null,
       unidade_medida: it.un || null,
-      inventario_minimo_id: minRow ? minRow.id : null,
+      inventario_minimo_id: it.id || null,
       estoque_atual: atual,
       data_contagem: dataISO,
       contado_por: nomeContador
     });
-    if (minRow && atual < minRow.estoque_minimo) {
+    if (minimo != null && atual < minimo) {
       deficits.push({
         catKey: it.catKey,
         subcategoria: it.subcategoria,
         nome: it.nome,
         un: it.un,
         valorUnitario: it.valorUnitario,
-        qtdSugerida: Math.ceil(minRow.estoque_minimo - atual)
+        qtdSugerida: Math.ceil(minimo - atual)
       });
     }
   });
