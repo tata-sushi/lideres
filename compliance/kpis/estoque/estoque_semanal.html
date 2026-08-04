@@ -774,8 +774,34 @@ function fecharModalCadastro() {
   document.body.style.overflow = '';
 }
 
+// Unidades/departamentos vindos do Supabase (tata_plus.colaboradores_publicos).
+var COLAB_PAIRS = null;
+async function carregarColabPairs() {
+  if (COLAB_PAIRS) return COLAB_PAIRS;
+  var client = window.__lideresSupa || supa;
+  if (!client || !client.schema) return (COLAB_PAIRS = []);
+  try {
+    var res = await client.schema('tata_plus').from('colaboradores_publicos').select('unidade, departamento');
+    if (res.error) throw new Error(res.error.message);
+    COLAB_PAIRS = (res.data || []).filter(function(r){ return (r.unidade || '').trim() || (r.departamento || '').trim(); });
+    var us = distinctSorted(COLAB_PAIRS.map(function(r){ return r.unidade; }));
+    var ds = distinctSorted(COLAB_PAIRS.map(function(r){ return r.departamento; }));
+    if (us.length) UNIDADES_DISPONIVEIS = us;
+    if (ds.length) DEPTOS_DISPONIVEIS = ds;
+    return COLAB_PAIRS;
+  } catch(e) { console.warn('colaboradores_publicos:', e.message); return (COLAB_PAIRS = []); }
+}
+function deptosDaUnidade(uni) {
+  if (COLAB_PAIRS && COLAB_PAIRS.length) {
+    var d = distinctSorted(COLAB_PAIRS.filter(function(r){ return (r.unidade || '').trim() === (uni || '').trim(); }).map(function(r){ return r.departamento; }));
+    if (d.length) return d;
+  }
+  return DEPTOS_DISPONIVEIS;
+}
+
 function mudarUnidadeCadastro(v) {
   UNIDADE = v;
+  ESTOQUE_DEPTO = '';
   CADASTRO_ROWS = [];
   CADASTRO_CATS_ADDED = {};
   renderModalCadastro();
@@ -790,19 +816,18 @@ function mudarDeptoCadastro(v) {
 
 async function renderModalCadastro() {
   if (Object.keys(CATALOGO).length === 0) await carregarCatalogo();
-  if (!ESTOQUE_DEPTO) ESTOQUE_DEPTO = DEPARTAMENTO || DEPTOS_DISPONIVEIS[0] || '';
+  await carregarColabPairs();
   await carregarInventarioMinimo();
 
+  var unis = UNIDADES_DISPONIVEIS.length ? UNIDADES_DISPONIVEIS : (UNIDADE ? [UNIDADE] : []);
+  if (unis.length && unis.indexOf(UNIDADE) < 0) UNIDADE = unis[0];
+  var deps = deptosDaUnidade(UNIDADE);
+  if (deps.length && deps.indexOf(ESTOQUE_DEPTO) < 0) ESTOQUE_DEPTO = deps[0];
+
   var selUni = document.getElementById('cadastro-unidade');
-  if (selUni) {
-    var unidadesOpts = (UNIDADES_DISPONIVEIS.length ? UNIDADES_DISPONIVEIS : [UNIDADE]);
-    selUni.innerHTML = unidadesOpts.map(function(u) { return '<option value="' + esc(u) + '"' + (u === UNIDADE ? ' selected' : '') + '>' + esc(u) + '</option>'; }).join('');
-  }
+  if (selUni) selUni.innerHTML = unis.map(function(u) { return '<option value="' + esc(u) + '"' + (u === UNIDADE ? ' selected' : '') + '>' + esc(u) + '</option>'; }).join('');
   var selDep = document.getElementById('cadastro-depto');
-  if (selDep) {
-    var deptosOpts = (DEPTOS_DISPONIVEIS.length ? DEPTOS_DISPONIVEIS : [ESTOQUE_DEPTO]);
-    selDep.innerHTML = deptosOpts.map(function(d) { return '<option value="' + esc(d) + '"' + (d === ESTOQUE_DEPTO ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('');
-  }
+  if (selDep) selDep.innerHTML = deps.map(function(d) { return '<option value="' + esc(d) + '"' + (d === ESTOQUE_DEPTO ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('');
   var selCat = document.getElementById('cadastro-cat-sel');
   if (selCat) {
     var keys = Object.keys(CATALOGO).sort(function(a, b){ return String(CATALOGO[a].label).localeCompare(String(CATALOGO[b].label), 'pt-BR'); });
