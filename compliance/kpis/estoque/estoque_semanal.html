@@ -166,6 +166,7 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 .est-mob-lhead { display: flex; align-items: center; padding: 8px 16px; }
 .est-mob-lhead span { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
 .est-mob-row { display: flex; align-items: center; padding: 7px 16px; }
+.est-mob-row:last-child { padding-bottom: 12px; }
 .emc-nome { flex: 1; min-width: 0; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--carbon); word-break: break-word; line-height: 1.35; }
 .emc-un { width: 84px; flex-shrink: 0; text-align: center; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--carbon); }
 .emc-qtd { width: 84px; flex-shrink: 0; text-align: center; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--carbon); }
@@ -332,6 +333,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <label class="flbl">Departamento</label>
         <select class="cat-select" id="cadastro-depto" onchange="mudarDeptoCadastro(this.value)"></select>
       </div>
+      <div id="cadastro-atuais"></div>
       <div class="fg">
         <label class="flbl">Adicionar categoria</label>
         <div class="cat-add-row">
@@ -818,6 +820,42 @@ async function renderModalCadastro() {
   CADASTRO_CATS_ADDED = {};
   var cont = document.getElementById('cadastro-cat-sections');
   if (cont) cont.innerHTML = '';
+  renderCadastroAtuais();
+}
+
+// Lista dos itens JÁ cadastrados para a unidade+depto, com opção de excluir.
+function renderCadastroAtuais() {
+  var box = document.getElementById('cadastro-atuais');
+  if (!box) return;
+  var itens = getItensCadastrados(UNIDADE, ESTOQUE_DEPTO);
+  if (!itens.length) { box.innerHTML = ''; return; }
+  var html = '<div class="cat-section" style="margin-bottom:12px;">' +
+    '<div class="cat-header"><div class="cat-header-left"><span class="cat-name">Itens cadastrados</span></div></div>' +
+    '<div class="cat-item-header"><span class="cat-col-nome hdr">Produto</span><span class="cat-col-num hdr">Mín.</span><span class="cat-col-qty hdr" style="width:auto;margin-left:12px;">&nbsp;</span></div>';
+  itens.forEach(function(it) {
+    html += '<div class="cat-item"><div class="cat-item-main">' +
+      '<span class="cat-col-nome">' + esc(it.nome) + ' <span style="color:var(--muted);">(' + esc(it.un || '—') + ')</span></span>' +
+      '<span class="cat-col-num">' + (it.estoqueMinimo != null ? it.estoqueMinimo : '—') + '</span>' +
+      '<span class="cat-col-qty" style="width:auto;margin-left:12px;text-align:right;">' +
+        '<button class="cat-remove" title="Excluir item" onclick="excluirItemCadastrado(\'' + esc(it.id) + '\')">×</button>' +
+      '</span>' +
+      '</div></div>';
+  });
+  html += '</div>';
+  box.innerHTML = html;
+}
+
+async function excluirItemCadastrado(id) {
+  if (!id || !supa) return;
+  if (!confirm('Excluir este item do estoque mínimo?')) return;
+  try {
+    var res = await supa.from('inventario_minimo').delete().eq('id', id);
+    if (res.error) throw new Error(res.error.message);
+    await carregarInventarioMinimo();
+    renderCadastroAtuais();
+    toast('Item excluído.');
+    if (abaAtiva() === 'minimo') renderPaginaAtiva();
+  } catch(e) { toast('Erro ao excluir: ' + e.message, true); }
 }
 
 function addCategoriaCadastro() {
@@ -904,25 +942,18 @@ function renderEstoqueMinimoHTML(itens, unidade, depto, multi) {
       '<th>Produto</th>' +
       '<th class="th-c col-un">Unidade</th>' +
       '<th class="th-c col-min">Mínimo</th>' +
-      '<th class="col-edit"></th>' +
     '</tr></thead><tbody>';
   itens.forEach(function(it) {
     var valorAtual = it.estoqueMinimo;
-    html += '<tr id="est-min-row-' + it._idx + '">' +
+    html += '<tr>' +
       '<td class="td-nome-cell" data-label="Produto">' + esc(it.nome) + '</td>' +
       '<td class="td-c col-un" data-label="Un.">' + esc(it.un || '—') + '</td>' +
-      '<td class="td-c col-min" data-label="Mínimo">' +
-        '<span class="nf-val" id="est-min-val-' + it._idx + '">' + (valorAtual != null ? valorAtual : '—') + '</span>' +
-        '<input class="nf-edit-input" type="number" min="0" step="1" id="est-min-inp-' + it._idx + '" value="' + (valorAtual != null ? valorAtual : '') + '">' +
-      '</td>' +
-      '<td class="td-btn-cell col-edit" data-label="">' +
-        '<button class="btn-row-edit" id="est-min-btn-' + it._idx + '" title="Editar mínimo" onclick="toggleEstMinEdit(' + it._idx + ')">' + estMinBtnHTML(false) + '</button>' +
-      '</td>' +
+      '<td class="td-c col-min" data-label="Mínimo">' + (valorAtual != null ? valorAtual : '—') + '</td>' +
       '</tr>';
   });
   html += '</tbody></table></div>';
 
-  // Mobile: um card único (Unidade/Departamento no cabeçalho + lista corrida + rodapé)
+  // Mobile: um card único (Unidade/Departamento no cabeçalho + lista corrida)
   html += '<div class="est-mob"><div class="est-mob-card">' +
     '<div class="est-mob-head"><div class="est-mob-title">' + esc(unidade || '—') + '</div><div class="est-mob-sub">' + esc(depto || '—') + '</div></div>' +
     '<div class="est-mob-lhead"><span class="emc-nome">Itens</span><span class="emc-un">Unidade</span><span class="emc-qtd">Quantidade</span></div>';
@@ -933,10 +964,7 @@ function renderEstoqueMinimoHTML(itens, unidade, depto, multi) {
       '<span class="emc-qtd">' + (it.estoqueMinimo != null ? it.estoqueMinimo : '—') + '</span>' +
       '</div>';
   });
-  html += '<div class="est-mob-foot">' +
-      '<button class="btn-row-edit" title="Editar mínimo" onclick="abrirModalCadastro()">' + estMinBtnHTML(false) + '</button>' +
-    '</div>' +
-  '</div></div>';
+  html += '</div></div>';
   return html;
 }
 
