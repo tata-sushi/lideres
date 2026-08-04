@@ -1245,41 +1245,32 @@ function closeDrawer() {
 document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDrawer(); });
 
 var _drawerKpisLoaded = false;
+function _kpiShowErr(msg){
+  var sub = document.querySelector('#drawer-kpi-colabs');
+  if (sub && sub.parentNode) {
+    sub.parentNode.innerHTML = '<span style="color:#c00;font-size:9px;font-family:\'DM Mono\',monospace;line-height:1.3;word-break:break-word">'+ String(msg).replace(/</g,'&lt;') +'</span>';
+  }
+}
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
-  function setKpis(unidades, deptos, colabs){
-    document.getElementById('drawer-kpi-unidades').textContent = unidades;
-    document.getElementById('drawer-kpi-deptos').textContent   = deptos;
-    document.getElementById('drawer-kpi-colabs').textContent   = colabs;
-    _drawerKpisLoaded = true;
-  }
-  function fallbackAppsScript(){
-    fetch('https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec?action=listColaboradores')
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        if (!data.ok || _drawerKpisLoaded) return;
-        var us = new Set(data.colaboradores.map(function(c){ return c.unidade; }));
-        var ds = new Set(data.colaboradores.map(function(c){ return c.departamento; }));
-        setKpis(us.size, ds.size, data.total - 3);
-      }).catch(function(){});
-  }
   function trySupabase(supa){
-    console.log('[drawer-kpi] tentando Supabase colaboradores_publicos...');
     supa.from('colaboradores_publicos').select('unidade, departamento')
       .then(function(r){
-        console.log('[drawer-kpi] resposta supabase:', r);
-        if (r.error) { console.warn('[drawer-kpi] erro supabase:', r.error); fallbackAppsScript(); return; }
-        if (!Array.isArray(r.data) || r.data.length === 0) { fallbackAppsScript(); return; }
+        if (r.error) { _kpiShowErr('ERRO: '+(r.error.message||JSON.stringify(r.error))); return; }
+        if (!Array.isArray(r.data)) { _kpiShowErr('resposta não é array'); return; }
+        if (r.data.length === 0)   { _kpiShowErr('sem linhas retornadas'); return; }
         var colabs = r.data;
         var us = new Set(colabs.map(function(c){ return c.unidade; }).filter(Boolean));
         var ds = new Set(colabs.map(function(c){ return c.departamento; }).filter(Boolean));
-        setKpis(us.size, ds.size, colabs.length - 3);
-      });
+        document.getElementById('drawer-kpi-unidades').textContent = us.size;
+        document.getElementById('drawer-kpi-deptos').textContent   = ds.size;
+        document.getElementById('drawer-kpi-colabs').textContent   = (colabs.length - 3);
+        _drawerKpisLoaded = true;
+      }, function(err){ _kpiShowErr('rejeitou: '+(err && err.message || err)); });
   }
-  if (window.__lideresSupa) { trySupabase(window.__lideresSupa); }
-  else { window.addEventListener('lideres:supa', function(){ trySupabase(window.__lideresSupa); }, { once:true }); }
-  // Fallback se em 2.5s nada foi carregado
-  setTimeout(function(){ if (!_drawerKpisLoaded) fallbackAppsScript(); }, 2500);
+  if (window.__lideresSupa) { trySupabase(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ trySupabase(window.__lideresSupa); }, { once:true });
+  setTimeout(function(){ if (!_drawerKpisLoaded && !window.__lideresSupa) _kpiShowErr('sem __lideresSupa em 3s'); }, 3000);
 }
 var _drawerMetaLoaded = false;
 function loadDrawerMeta() {
