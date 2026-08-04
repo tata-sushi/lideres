@@ -669,7 +669,7 @@ async function renderPaginaAtiva() {
     container.innerHTML = '<div class="empty"><p>' + esc(catalogoErro || 'Catálogo indisponível.') + '</p></div>';
     return;
   }
-  if (!ESTOQUE_DEPTO) ESTOQUE_DEPTO = DEPARTAMENTO || (DEPTOS_DISPONIVEIS[0] || 'Geral');
+  if (!ESTOQUE_DEPTO) ESTOQUE_DEPTO = DEPARTAMENTO || DEPTOS_DISPONIVEIS[0] || '';
   if (!FILTRO_UNIDADE) FILTRO_UNIDADE = UNIDADE || TODOS;
   if (!FILTRO_DEPTO) FILTRO_DEPTO = DEPARTAMENTO || TODOS;
   await carregarInventarioMinimo();
@@ -729,7 +729,7 @@ async function renderModalContagem() {
     container.innerHTML = '<div class="empty"><p>' + esc(catalogoErro || 'Catálogo indisponível.') + '</p></div>';
     return;
   }
-  if (!ESTOQUE_DEPTO) ESTOQUE_DEPTO = DEPARTAMENTO || (DEPTOS_DISPONIVEIS[0] || 'Geral');
+  if (!ESTOQUE_DEPTO) ESTOQUE_DEPTO = DEPARTAMENTO || DEPTOS_DISPONIVEIS[0] || '';
   await carregarInventarioMinimo();
 
   var sel = document.getElementById('contagem-depto');
@@ -778,7 +778,7 @@ function mudarDeptoCadastro(v) {
 
 async function renderModalCadastro() {
   if (Object.keys(CATALOGO).length === 0) await carregarCatalogo();
-  if (!ESTOQUE_DEPTO) ESTOQUE_DEPTO = DEPARTAMENTO || (DEPTOS_DISPONIVEIS[0] || 'Geral');
+  if (!ESTOQUE_DEPTO) ESTOQUE_DEPTO = DEPARTAMENTO || DEPTOS_DISPONIVEIS[0] || '';
   await carregarInventarioMinimo();
 
   var selUni = document.getElementById('cadastro-unidade');
@@ -844,6 +844,7 @@ function removerCategoriaCadastro(key) {
 
 async function salvarCadastro() {
   if (!supa) { alert('Supabase não inicializado.'); return; }
+  if (!UNIDADE || !ESTOQUE_DEPTO) { alert('Selecione a unidade e o departamento.'); return; }
   var nome = (currentUser && currentUser.name) || null;
   var rows = [];
   CADASTRO_ROWS.forEach(function(it, idx) {
@@ -855,7 +856,7 @@ async function salvarCadastro() {
     if (isNaN(val) || val < 0) return;
     rows.push({
       unidade: UNIDADE,
-      departamento: ESTOQUE_DEPTO || 'Geral',
+      departamento: ESTOQUE_DEPTO,
       produto_nome: it.nome,
       categoria: it.catKey,
       subcategoria: it.subcategoria || null,
@@ -870,7 +871,7 @@ async function salvarCadastro() {
     var res = await supa.from('inventario_minimo')
       .upsert(rows, { onConflict: 'unidade,departamento,produto_nome,unidade_medida' });
     if (res.error) throw new Error(res.error.message);
-    alert(rows.length + ' item(ns) cadastrado(s) para ' + (ESTOQUE_DEPTO || 'Geral') + '.');
+    alert(rows.length + ' item(ns) cadastrado(s) para ' + ESTOQUE_DEPTO + '.');
     fecharModalCadastro();
     await renderPaginaAtiva();
   } catch(e) { toast('Erro ao cadastrar: ' + e.message, true); }
@@ -994,7 +995,7 @@ async function salvarEstoqueMinimo(idx) {
   var val = parseFloat(raw);
   if (isNaN(val) || val < 0) { toast('Valor inválido.', true); return; }
   var uni = it.unidade || UNIDADE;
-  var dep = it.departamento || ESTOQUE_DEPTO || 'Geral';
+  var dep = it.departamento || ESTOQUE_DEPTO;
   try {
     var row = {
       unidade: uni,
@@ -1020,6 +1021,7 @@ async function salvarEstoqueMinimo(idx) {
 async function registrarContagem() {
   if (!CONTAGEM_ITENS || !CONTAGEM_ITENS.length) return;
   if (!supa) { alert('Supabase não inicializado.'); return; }
+  if (!UNIDADE || !ESTOQUE_DEPTO) { alert('Selecione a unidade e o departamento.'); return; }
   var dataISO = dataLocalISO();
   var nomeContador = (currentUser && currentUser.name) || 'Líder';
   var linhas = [];
@@ -1034,7 +1036,7 @@ async function registrarContagem() {
     var minimo = it.estoqueMinimo;
     linhas.push({
       unidade: UNIDADE,
-      departamento: ESTOQUE_DEPTO || 'Geral',
+      departamento: ESTOQUE_DEPTO,
       produto_nome: it.nome,
       categoria: it.catKey,
       subcategoria: it.subcategoria || null,
@@ -1141,10 +1143,16 @@ async function iniciarComSessao(displayName, perfil) {
   var parts = headerUserName.trim().split(/\s+/);
   if (parts.length > 1) headerUserName = parts[0] + ' ' + parts[parts.length - 1];
 
-  await carregarUsuario({ displayName: displayName, unidade: '' });
+  // Renderiza já (usa dados do Supabase); a identificação do usuário/colaboradores
+  // roda em background pra não travar o carregamento no fetch lento do Apps Script.
   await renderPaginaAtiva();
 
   var lo = document.getElementById('loading-overlay'); if (lo) lo.classList.remove('show');
+
+  carregarUsuario({ displayName: displayName, unidade: '' }).then(function() {
+    // Atualiza os filtros/selects agora que unidade/departamentos chegaram.
+    if (abaAtiva() === 'minimo') renderFiltrosEstoque();
+  });
 
   var hoje = new Date();
   var el = document.getElementById('footer-date-updated');
