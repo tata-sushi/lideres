@@ -1434,23 +1434,42 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
   /* ── DRAWER ── */
-  var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
+  /* Colaboradores agora vêm do Supabase (perfis ativos) via RPC, não mais do Google Sheets. */
+  function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
+  var _colabsCache = null;
+  function carregarColaboradores() {
+    if (_colabsCache) return Promise.resolve(_colabsCache);
+    return new Promise(function(resolve) {
+      comSupa(function(supa) {
+        supa.schema('tata_plus').rpc('colaboradores_listar')
+          .then(function(res) {
+            if (res.error || !res.data) { resolve([]); return; }
+            _colabsCache = res.data.map(function(c) {
+              return {
+                id: c.matricula, matricula: c.matricula, nome: c.nome,
+                cargo: c.cargo, unidade: c.unidade, departamento: c.departamento,
+                admissao: c.data_admissao, email: c.email, status: c.status
+              };
+            });
+            resolve(_colabsCache);
+          })
+          .catch(function() { resolve([]); });
+      });
+    });
+  }
+
   var _drawerKpisLoaded = false;
   function loadDrawerKPIs() {
     if (_drawerKpisLoaded) return;
-    fetch(COLAB_URL + '?action=listColaboradores')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (!data.ok) return;
-        var colabs = data.colaboradores;
-        var unidades = new Set(colabs.map(function(c) { return c.unidade; }));
-        var deptos   = new Set(colabs.map(function(c) { return c.departamento; }));
-        document.getElementById('drawer-kpi-unidades').textContent = unidades.size;
-        document.getElementById('drawer-kpi-deptos').textContent   = deptos.size;
-        document.getElementById('drawer-kpi-colabs').textContent   = (data.total - 3);
-        _drawerKpisLoaded = true;
-      })
-      .catch(function() {});
+    carregarColaboradores().then(function(colabs) {
+      if (!colabs.length) return;
+      var unidades = new Set(colabs.map(function(c) { return c.unidade; }));
+      var deptos   = new Set(colabs.map(function(c) { return c.departamento; }));
+      document.getElementById('drawer-kpi-unidades').textContent = unidades.size;
+      document.getElementById('drawer-kpi-deptos').textContent   = deptos.size;
+      document.getElementById('drawer-kpi-colabs').textContent   = colabs.length;
+      _drawerKpisLoaded = true;
+    });
   }
   
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
@@ -1552,24 +1571,21 @@ function openDrawer() {
 
   function _admLoadColaboradores() {
     if (_admColabLoaded) return;
-    fetch(COLAB_URL + '?action=listColaboradores')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (!data.ok) return;
-        var sel = document.getElementById('adm-colab');
-        sel.innerHTML = '<option value="">— Selecione —</option>';
-        data.colaboradores.forEach(function(c) {
-          var key = c.id || c.nome;
-          _admColabMap[key] = c;
-          var opt = document.createElement('option');
-          opt.value = key;
-          opt.textContent = c.nome;
-          sel.appendChild(opt);
-        });
-        _admColabLoaded = true;
-        _admEnriquecerAdmissao();
-      })
-      .catch(function() {});
+    carregarColaboradores().then(function(colabs) {
+      if (!colabs.length) return;
+      var sel = document.getElementById('adm-colab');
+      sel.innerHTML = '<option value="">— Selecione —</option>';
+      colabs.forEach(function(c) {
+        var key = c.id || c.nome;
+        _admColabMap[key] = c;
+        var opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = c.nome;
+        sel.appendChild(opt);
+      });
+      _admColabLoaded = true;
+      // admissão agora vem do profiles (c.admissao = data_admissao); não precisa mais do organograma
+    });
   }
 
   function _admBuildDocList() {
