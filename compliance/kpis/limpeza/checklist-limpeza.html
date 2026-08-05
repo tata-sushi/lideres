@@ -1442,25 +1442,40 @@ function loadDrawerMeta() {
     }, function(){ cb([]); });
   }
 
+  function _rlPopulaBanheiros(unidadeSel){
+    var sel = document.getElementById('rl-banheiro');
+    if(!sel) return;
+    var list = _rlBanheirosCache || [];
+    var filtrada = unidadeSel ? list.filter(function(b){ return (b.unidade||'') === unidadeSel; }) : list;
+    var opts = ['<option value="">Todos os banheiros</option>'];
+    filtrada.slice().sort(function(a,b){
+      var oa = (a.ordem||0)-(b.ordem||0);
+      if(oa!==0) return oa;
+      return (a.nome||'').localeCompare(b.nome||'');
+    }).forEach(function(b){
+      opts.push('<option value="'+b.id+'">'+_rlEsc(b.nome || '#'+b.id)+'</option>');
+    });
+    sel.innerHTML = opts.join('');
+    sel.value = '';
+  }
+  window._rlOnUnidadeChange = function(){
+    var uni = document.getElementById('rl-unidade').value;
+    _rlPopulaBanheiros(uni);
+  };
   window.abrirModalRelatorioLimpeza = function(){
     _rlErr('');
     if(!document.getElementById('rl-de').value){ _rlAtalho(30); }
     _rlCarregaBanheiros(function(list){
-      var sel = document.getElementById('rl-banheiro');
-      var uniAtual = (typeof UNIDADE !== 'undefined' && UNIDADE) ? UNIDADE : '';
-      var opts = ['<option value="">Todos os banheiros</option>'];
-      // ordena por unidade → ordem → nome
-      list.slice().sort(function(a,b){
-        var ua = (a.unidade||'').localeCompare(b.unidade||'');
-        if(ua!==0) return ua;
-        var oa = (a.ordem||0)-(b.ordem||0);
-        if(oa!==0) return oa;
-        return (a.nome||'').localeCompare(b.nome||'');
-      }).forEach(function(b){
-        var lbl = (b.unidade? '['+b.unidade+'] ' : '') + (b.nome || '#'+b.id);
-        opts.push('<option value="'+b.id+'">'+_rlEsc(lbl)+'</option>');
-      });
-      sel.innerHTML = opts.join('');
+      // Popula unidades distinct
+      var selU = document.getElementById('rl-unidade');
+      var uniSet = {};
+      list.forEach(function(b){ if(b.unidade) uniSet[b.unidade] = true; });
+      var uniList = Object.keys(uniSet).sort(function(a,b){ return a.localeCompare(b); });
+      var uniOpts = ['<option value="">Todas as unidades</option>'];
+      uniList.forEach(function(u){ uniOpts.push('<option value="'+_rlEsc(u)+'">'+_rlEsc(u)+'</option>'); });
+      selU.innerHTML = uniOpts.join('');
+      selU.value = '';
+      _rlPopulaBanheiros('');
     });
     document.getElementById('rl-overlay').classList.add('open');
     document.body.style.overflow = 'hidden';
@@ -1572,8 +1587,11 @@ function loadDrawerMeta() {
           if(!q) return false;
           return q >= deISO && q <= ateISO;
         });
-        // filtra por unidade da sessão (se houver). Se admin (sem UNIDADE), não filtra.
-        var uniAtual = (typeof UNIDADE !== 'undefined' && UNIDADE) ? UNIDADE : '';
+        // filtra por unidade selecionada no modal; fallback pra unidade da sessão se admin não escolheu
+        var uniSelEl = document.getElementById('rl-unidade');
+        var uniSel   = uniSelEl ? uniSelEl.value : '';
+        var uniSess  = (typeof UNIDADE !== 'undefined' && UNIDADE) ? UNIDADE : '';
+        var uniAtual = uniSel || uniSess || '';
         if(uniAtual){
           lista = lista.filter(function(c){ return !c.unidade || c.unidade === uniAtual; });
         }
@@ -1658,13 +1676,18 @@ function loadDrawerMeta() {
       <button class="rl-close-btn" onclick="fecharModalRelatorioLimpeza()">✕</button>
     </div>
     <div class="rl-modal-body">
-      <div class="rl-divider">Banheiro</div>
       <div class="rl-form-row">
+        <label class="rl-form-label" for="rl-unidade">Unidade</label>
+        <select class="rl-form-input" id="rl-unidade" onchange="_rlOnUnidadeChange()">
+          <option value="">Todas as unidades</option>
+        </select>
+      </div>
+      <div class="rl-form-row">
+        <label class="rl-form-label" for="rl-banheiro">Banheiro</label>
         <select class="rl-form-input" id="rl-banheiro">
           <option value="">Todos os banheiros</option>
         </select>
       </div>
-      <div class="rl-divider">Período</div>
       <div class="rl-period">
         <div class="rl-form-row">
           <label class="rl-form-label" for="rl-de">De</label>
