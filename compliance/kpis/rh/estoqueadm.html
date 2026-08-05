@@ -2221,11 +2221,16 @@ var __colabCache = null;
 async function carregarColaboradores() {
   if (__colabCache) return __colabCache;
   try {
-    var unidade = ''; // acesso controlado pelo painel admin; sem escopo por perfil
-    var url = COLAB_URL + '?action=listColaboradores&unidade=' + encodeURIComponent(unidade);
-    var res = await fetch(url);
-    var data = await res.json();
-    __colabCache = (data && data.ok && Array.isArray(data.colaboradores)) ? data.colaboradores : [];
+    // Colaboradores do Supabase (perfis ativos) — traz a unidade certa do profiles.
+    var supa = await new Promise(function(resolve){
+      if (window.__lideresSupa) { resolve(window.__lideresSupa); return; }
+      window.addEventListener('lideres:supa', function(){ resolve(window.__lideresSupa); }, { once:true });
+    });
+    var resp = await supa.schema('tata_plus').rpc('colaboradores_listar');
+    var rows = (resp && !resp.error && Array.isArray(resp.data)) ? resp.data : [];
+    __colabCache = rows.map(function(c){
+      return { nome:c.nome, matricula:c.matricula, cargo:c.cargo, unidade:c.unidade, departamento:c.departamento };
+    });
   } catch (e) {
     console.warn('Falha ao carregar colaboradores:', e);
     __colabCache = [];
