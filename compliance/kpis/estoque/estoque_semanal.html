@@ -897,9 +897,9 @@ async function excluirItemCadastrado(id) {
     var res = await supa.from('inventario_minimo').delete().eq('id', id).select('id');
     if (res.error) throw new Error(res.error.message);
     if (!res.data || !res.data.length) { toast('Não foi possível excluir (sem permissão no banco).', true); return; }
+    // Sem toast de sucesso: o item some da lista na hora (feedback suficiente).
     await carregarInventarioMinimo();
     renderCadastroAtuais();
-    toast('Item excluído.');
     if (abaAtiva() === 'minimo') renderPaginaAtiva();
   } catch(e) { toast('Erro ao excluir: ' + e.message, true); }
 }
@@ -959,6 +959,28 @@ async function salvarCadastro() {
   if (!UNIDADE || !ESTOQUE_DEPTO) { alert('Selecione a unidade e o departamento.'); return; }
   var nome = (currentUser && currentUser.name) || null;
   var rows = [];
+  var vistos = {};
+  function chaveProd(n, u) { return (n || '').trim().toLowerCase() + '||' + (u || '').trim().toLowerCase(); }
+  function addRow(prod) { rows.push(prod); vistos[chaveProd(prod.produto_nome, prod.unidade_medida)] = 1; }
+
+  // 1) Itens JÁ cadastrados (lista "Itens cadastrados") — lê os inputs de edição,
+  //    para o SALVAR CADASTRO enxergar/persistir os valores já preenchidos.
+  getItensCadastrados(UNIDADE, ESTOQUE_DEPTO).forEach(function(it) {
+    var inp = document.getElementById('cadedit-min-' + it.id);
+    if (!inp) return;
+    var raw = inp.value.trim();
+    if (raw === '') return;
+    var val = parseFloat(raw);
+    if (isNaN(val) || val < 0) return;
+    addRow({
+      unidade: UNIDADE, departamento: ESTOQUE_DEPTO, produto_nome: it.nome,
+      categoria: it.catKey, subcategoria: it.subcategoria || null,
+      unidade_medida: it.un || '', estoque_minimo: val,
+      atualizado_por: nome, updated_at: new Date().toISOString()
+    });
+  });
+
+  // 2) Itens de categorias recém-adicionadas (não duplica os já contabilizados).
   CADASTRO_ROWS.forEach(function(it, idx) {
     var inp = document.getElementById('cad-min-' + idx);
     if (!inp) return;
@@ -966,16 +988,12 @@ async function salvarCadastro() {
     if (raw === '') return;
     var val = parseFloat(raw);
     if (isNaN(val) || val < 0) return;
-    rows.push({
-      unidade: UNIDADE,
-      departamento: ESTOQUE_DEPTO,
-      produto_nome: it.nome,
-      categoria: it.catKey,
-      subcategoria: it.subcategoria || null,
-      unidade_medida: it.un || '',
-      estoque_minimo: val,
-      atualizado_por: nome,
-      updated_at: new Date().toISOString()
+    if (vistos[chaveProd(it.nome, it.un)]) return;
+    addRow({
+      unidade: UNIDADE, departamento: ESTOQUE_DEPTO, produto_nome: it.nome,
+      categoria: it.catKey, subcategoria: it.subcategoria || null,
+      unidade_medida: it.un || '', estoque_minimo: val,
+      atualizado_por: nome, updated_at: new Date().toISOString()
     });
   });
   if (!rows.length) { alert('Informe o mínimo de ao menos um item.'); return; }
