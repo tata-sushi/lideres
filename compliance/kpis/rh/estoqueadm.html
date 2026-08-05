@@ -1015,43 +1015,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
-<!-- Config URL modal -->
-<div class="overlay" id="cfg-overlay" onclick="if(event.target===this)closeUrlConfig()">
-  <div class="modal" id="cfg-modal" style="max-height:70vh;overflow-y:auto">
-    <div class="modal-handle"></div>
-    <div class="modal-header">
-      <div class="modal-eyebrow">Configuração · TATÁ Sushi</div>
-      <div class="modal-title">Apps Script</div>
-    </div>
-    <div style="padding:0 20px 20px">
-      <p style="font-size:12px;color:var(--mid);margin-bottom:14px;line-height:1.5">Cole abaixo a URL de implantação do Google Apps Script. Ela é salva localmente neste dispositivo.</p>
-      <div class="field" style="margin-bottom:12px">
-        <label>URL do Apps Script</label>
-        <input type="url" id="cfg-url-input" placeholder="https://script.google.com/macros/s/…/exec" style="font-family:'DM Mono',monospace;font-size:11px;word-break:break-all">
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button id="cfg-test-btn" onclick="testUrlConfig()" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;color:var(--mid);text-transform:uppercase;letter-spacing:0.5px">Testar conexão</button>
-        <button onclick="saveUrlConfig()" style="flex:1;padding:8px 12px;background:var(--carbon);color:var(--citric);border:none;border-radius:var(--radius);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;text-transform:uppercase;letter-spacing:0.5px;font-weight:500">Salvar</button>
-      </div>
-      <div style="margin-top:14px;padding:10px 12px;background:var(--blue-bg);border:1px solid #BFDBFE;border-radius:var(--radius)">
-        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--blue);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Como implantar</div>
-        <ol style="font-size:11px;color:var(--mid);line-height:1.6;padding-left:16px;margin:0">
-          <li>Abra o Apps Script (script.google.com)</li>
-          <li>Cole o código do arquivo <strong>Code.gs</strong></li>
-          <li>Clique em <strong>Implantar → Nova implantação</strong></li>
-          <li>Tipo: <strong>App da Web</strong> · Acesso: <strong>Qualquer pessoa</strong></li>
-          <li>Copie a URL gerada e cole aqui</li>
-        </ol>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <div class="btn-row">
-        <button class="btn-cancel" onclick="closeUrlConfig()">Fechar</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- ══ MODAL EPI COLETIVO — Termo digital → PDF ══ -->
 <div class="epc-overlay" id="epc-overlay" onclick="if(event.target===this)closeModalEpiColetivo()">
   <div class="epc-modal">
@@ -1256,7 +1219,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </aside>
 
 <script>
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
@@ -1335,21 +1297,20 @@ function initApp() {
     return;
   }
 
-  // Carregar mapa de liderança da planilha Google Sheets
-  fetchJSON('https://script.google.com/macros/s/AKfycbykOWkQ3ceH_50bmc_3dcLjUrE9V4Ropbraxc0yykMIp6W8eDVtpyo2XmN1Y_KJQzol/exec?action=mapa', 8000)
-    .then(function(data) {
-      var lista = (data && data.usuarios) ? data.usuarios : [];
-      var mapaObj = {};
-      lista.forEach(function(u) { mapaObj[u.nome] = u; });
-      _inicializar(session, mapaObj);
-    })
-    .catch(function() { _inicializar(session, {}); });
+  // Perfil do logado vem do Supabase (profiles) — substitui o "mapa de liderança" do Sheets.
+  comSupa(function(supa) {
+    supa.schema('tata_plus').rpc('colaborador_logado')
+      .then(function(res) {
+        var p = (res && !res.error && res.data && res.data[0]) ? res.data[0] : null;
+        _inicializar(session, p);
+      })
+      .catch(function() { _inicializar(session, null); });
+  });
 }
 
-function _inicializar(session, mapaObj) {
-  var entrada = mapaObj[session.displayName];
-  var info = entrada
-    ? { unit: entrada.unidade, type: entrada.perfil, role: entrada.role }
+function _inicializar(session, perfil) {
+  var info = perfil
+    ? { unit: perfil.unidade, type: perfil.perfil || session.perfil || 'lider', role: perfil.cargo || session.cargo || 'Líder' }
     : { unit: session.unidade || null, type: session.perfil || 'lider', role: session.cargo || 'Líder' };
   var parts = session.displayName.trim().split(/\s+/);
   var short = parts.length > 1 ? parts[0] : parts[0];
@@ -1410,8 +1371,8 @@ var DATA = {
 var SZ_R = []; // preenchido pelo recalcSizes() a partir dos lançamentos reais
 var SZ_C = []; // preenchido pelo recalcSizes() a partir dos lançamentos reais
 
-var SALDO = {}; // preenchido pelo Apps Script via action=saldo
-var HISTORICO = []; // preenchido pelo fetch do Apps Script
+var SALDO = {}; // preenchido pelo Supabase (RPC estoque_admin_saldo)
+var HISTORICO = []; // preenchido pelo Supabase (RPC estoque_admin_posicao)
 
 /* ══ CATALOG ══ */
 var CATALOG = {
@@ -1951,18 +1912,12 @@ function checkSaldo(rows) {
   return []; // aviso de saldo do líder desabilitado (não usamos mais)
 }
 
-/* ══ APPS SCRIPT URL ══ */
-// [migrado p/ Supabase] estoque agora em tata_plus.estoque_admin (RPC saldo + tabela).
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbzZoApfcJiSttXrwi9OtcV6Lv0PmO_moB0JC2FFbXh-5eugKCbWg0yC85gUcEqv2Cq31Q/exec';
 function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
 
 /* ══ SUBMIT ══ */
 var lastRows = []; var lastMeta = {};
 
 function doSubmit() {
-  var url = GAS_URL || localStorage.getItem('tata_url') || '';
-  if (!url) { showToast('Configure a URL do Apps Script no menu do perfil.', true); return; }
-
   var meta = {
     data:         document.getElementById('f-data').value,
     unidade:      document.getElementById('f-unidade').value,
@@ -2215,7 +2170,6 @@ function imprimirRecibo() {
 }
 
 /* ══ COLABORADORES ══ */
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var __colabCache = null;
 
 async function carregarColaboradores() {
@@ -2328,52 +2282,6 @@ function showToast(msg, err) {
   document.getElementById('toast-icon').textContent = err ? '✕' : '✓';
   t.className = 'toast' + (err ? ' err' : '') + ' show';
   setTimeout(function(){t.className='toast'+(err?' err':'');}, 3500);
-}
-
-/* ══ CONFIG URL ══ */
-function openUrlConfig() {
-  document.getElementById('profile-menu').classList.remove('open');
-  var saved = localStorage.getItem('tata_url') || '';
-  document.getElementById('cfg-url-input').value = saved;
-  document.getElementById('cfg-overlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-
-function closeUrlConfig() {
-  document.getElementById('cfg-overlay').classList.remove('open');
-  document.body.style.overflow = '';
-}
-
-function saveUrlConfig() {
-  var url = document.getElementById('cfg-url-input').value.trim();
-  if (!url) { showToast('Cole a URL do Apps Script.', true); return; }
-  localStorage.setItem('tata_url', url);
-  showToast('URL salva com sucesso!', false);
-  closeUrlConfig();
-}
-
-function testUrlConfig() {
-  var url = document.getElementById('cfg-url-input').value.trim() || GAS_URL;
-  if (!url) { showToast('Cole a URL antes de testar.', true); return; }
-  var btn = document.getElementById('cfg-test-btn');
-  btn.textContent = 'Testando…';
-  btn.disabled = true;
-  fetch(url + '?action=debug')
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      btn.textContent = 'Testar conexão';
-      btn.disabled = false;
-      if (d && (d.primeiras_linhas || d.saldo !== undefined)) {
-        showToast('Conexão OK — Apps Script respondendo!', false);
-      } else {
-        showToast('Conectou, mas resposta inesperada.', true);
-      }
-    })
-    .catch(function(){
-      btn.textContent = 'Testar conexão';
-      btn.disabled = false;
-      showToast('Erro de conexão. Verifique a URL.', true);
-    });
 }
 
 /* ══ INIT ══ */
