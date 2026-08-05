@@ -85,6 +85,8 @@ html.body-locked, html.body-locked body { overflow: hidden; }
 .cat-header { justify-content: space-between; }
 .cat-remove { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; padding: 0 2px; transition: color 0.15s; }
 .cat-remove:hover { color: #C0392B; }
+.cat-save { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; line-height: 1; padding: 0 4px; transition: color 0.15s; }
+.cat-save:hover { color: #5FA82B; }
 
 /* ── MODAL — flutuante centralizado (compartilhado com abastecimento.html) ── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 400; display: none; align-items: flex-end; justify-content: center; }
@@ -849,11 +851,14 @@ function renderCadastroAtuais() {
     '<div class="cat-header"><div class="cat-header-left"><span class="cat-name">Itens cadastrados</span></div></div>' +
     '<div class="cat-item-header"><span class="cat-col-nome hdr">Produto</span><span class="cat-col-num hdr">Mín.</span><span class="cat-col-qty hdr" style="width:auto;margin-left:12px;">&nbsp;</span></div>';
   itens.forEach(function(it) {
+    var idSafe = esc(it.id);
+    var valor = it.estoqueMinimo != null ? it.estoqueMinimo : '';
     html += '<div class="cat-item"><div class="cat-item-main">' +
       '<span class="cat-col-nome">' + esc(it.nome) + ' <span style="color:var(--muted);">(' + esc(it.un || '—') + ')</span></span>' +
-      '<span class="cat-col-num">' + (it.estoqueMinimo != null ? it.estoqueMinimo : '—') + '</span>' +
-      '<span class="cat-col-qty" style="width:auto;margin-left:12px;text-align:right;">' +
-        '<button class="cat-remove" title="Excluir item" onclick="excluirItemCadastrado(\'' + esc(it.id) + '\')">×</button>' +
+      '<span class="cat-col-qty" style="width:64px;"><input class="qty-input" type="number" min="0" step="1" id="cadedit-min-' + idSafe + '" value="' + valor + '" onkeydown="if(event.key===\'Enter\'){event.preventDefault();salvarMinimoCadastrado(\'' + idSafe + '\');}"></span>' +
+      '<span class="cat-col-qty" style="width:auto;margin-left:8px;text-align:right;white-space:nowrap;">' +
+        '<button class="cat-save" title="Salvar quantidade" onclick="salvarMinimoCadastrado(\'' + idSafe + '\')">✓</button>' +
+        '<button class="cat-remove" title="Excluir item" onclick="excluirItemCadastrado(\'' + idSafe + '\')">×</button>' +
       '</span>' +
       '</div></div>';
   });
@@ -861,12 +866,37 @@ function renderCadastroAtuais() {
   box.innerHTML = html;
 }
 
+async function salvarMinimoCadastrado(id) {
+  if (!id || !supa) return;
+  var inp = document.getElementById('cadedit-min-' + id);
+  if (!inp) return;
+  var raw = inp.value.trim();
+  if (raw === '') { toast('Informe a quantidade.', true); return; }
+  var val = parseFloat(raw);
+  if (isNaN(val) || val < 0) { toast('Valor inválido.', true); return; }
+  try {
+    var res = await supa.from('inventario_minimo')
+      .update({ estoque_minimo: val, atualizado_por: (currentUser && currentUser.name) || null, updated_at: new Date().toISOString() })
+      .eq('id', id).select('*');
+    if (res.error) throw new Error(res.error.message);
+    if (!res.data || !res.data.length) { toast('Não foi possível salvar (sem permissão no banco).', true); return; }
+    await carregarInventarioMinimo();
+    renderCadastroAtuais();
+    toast('Estoque mínimo atualizado.');
+    if (abaAtiva() === 'minimo') renderPaginaAtiva();
+  } catch(e) { toast('Erro ao salvar: ' + e.message, true); }
+}
+
 async function excluirItemCadastrado(id) {
   if (!id || !supa) return;
   if (!confirm('Excluir este item do estoque mínimo?')) return;
   try {
-    var res = await supa.from('inventario_minimo').delete().eq('id', id);
+    // .select() faz o Supabase retornar as linhas realmente apagadas. Se a RLS
+    // bloquear o delete, ele volta vazio SEM erro — por isso conferimos o length
+    // em vez de assumir sucesso (evita o toast "excluído" quando nada foi apagado).
+    var res = await supa.from('inventario_minimo').delete().eq('id', id).select('id');
     if (res.error) throw new Error(res.error.message);
+    if (!res.data || !res.data.length) { toast('Não foi possível excluir (sem permissão no banco).', true); return; }
     await carregarInventarioMinimo();
     renderCadastroAtuais();
     toast('Item excluído.');
@@ -894,10 +924,13 @@ function addCategoriaCadastro() {
     CADASTRO_ROWS.push({ nome: p.nome, un: p.un, catKey: p.catKey, subcategoria: p.subcategoria });
     var jaCad = INVENTARIO_MINIMO_MAP[chaveInventario(UNIDADE, ESTOQUE_DEPTO, p.nome, p.un)];
     var valor = jaCad ? jaCad.estoque_minimo : '';
-    html += '<div class="cat-item">' +
+    html += '<div class="cat-item" id="cadrow-' + idx + '">' +
       '<div class="cat-item-main">' +
         '<span class="cat-col-nome">' + esc(p.nome) + '</span>' +
         '<span class="cat-col-qty"><input class="qty-input" type="number" min="0" step="1" id="cad-min-' + idx + '" value="' + valor + '"></span>' +
+        '<span class="cat-col-qty" style="width:auto;margin-left:8px;text-align:right;">' +
+          '<button class="cat-remove" title="Remover este item" onclick="removerItemCadastro(' + idx + ')">×</button>' +
+        '</span>' +
       '</div>' +
       '<div class="cat-item-sub"><div class="cat-sub-line"><span class="cat-sub-lbl">Unidade</span> ' + esc(p.un || '—') + '</div></div>' +
       '</div>';
@@ -911,6 +944,14 @@ function removerCategoriaCadastro(key) {
   var sec = document.getElementById('cad-sec-' + key);
   if (sec) sec.remove();
   delete CADASTRO_CATS_ADDED[key];
+}
+
+// Remove um único item da categoria recém-adicionada (antes de salvar). Como o
+// salvarCadastro procura o input por id e pula quando ele não existe, basta tirar
+// a linha do DOM para o item não entrar no cadastro.
+function removerItemCadastro(idx) {
+  var row = document.getElementById('cadrow-' + idx);
+  if (row) row.remove();
 }
 
 async function salvarCadastro() {
