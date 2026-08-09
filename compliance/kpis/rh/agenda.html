@@ -229,12 +229,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <button class="btn-nav" onclick="changeMonth(1)" aria-label="Próximo mês">
       <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
     </button>
-    <button class="btn-today" onclick="goToday()">Hoje</button>
   </div>
 </div>
-
-<!-- CATEGORY CHIPS -->
-<div class="cat-chips" id="cat-chips"></div>
 
 <!-- CALENDAR -->
 <div class="calendar">
@@ -329,10 +325,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 /* ─── CONFIG ────────────────────────────────────────────────────────────── */
-// Quando o endpoint Apps Script estiver pronto, preencha AGENDA_URL.
-// Esperado: GET ?action=listEventos → { ok:true, eventos:[{id,titulo,data,horaInicio,horaFim,local,categoria,descricao,responsavel}, ...] }
-var AGENDA_URL = '';
-var COLAB_URL  = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
+// Fonte dos eventos: Supabase (RPC tata_plus.agenda_rh_eventos_listar).
+// Consumido via window.__lideresSupa (gate.js). Sem dependência de Google/Apps Script.
 
 /* ─── CATEGORIAS ───────────────────────────────────────────────────────── */
 var CATEGORIAS = [
@@ -342,21 +336,6 @@ var CATEGORIAS = [
   { id:'feriado',     label:'Feriado',     cls:'evt-feriado' },
   { id:'outro',       label:'Outro',       cls:'evt-outro' }
 ];
-
-/* ─── MOCK (fallback enquanto não há backend) ──────────────────────────── */
-function mockEventos() {
-  var hoje = new Date();
-  var y = hoje.getFullYear(), m = hoje.getMonth();
-  function d(dia, mes) { return ymd(new Date(y, (mes==null?m:mes), dia)); }
-  return [
-    { id:'1', titulo:'Reunião de Gestão',        data:d(5),    horaInicio:'14:00', horaFim:'16:00', local:'Sede — Sala 2',  categoria:'reuniao',     responsavel:'Victor Carvalho', descricao:'Alinhamento mensal de indicadores e prioridades.' },
-    { id:'2', titulo:'Treinamento Sushiman',     data:d(8),    horaInicio:'09:00', horaFim:'12:00', local:'Unidade Centro', categoria:'treinamento', responsavel:'Chef Tatá',       descricao:'Capacitação de novos sushimen — turma 03.' },
-    { id:'3', titulo:'Aniversário TATÁ 10 anos', data:d(12),   horaInicio:'19:00', horaFim:'23:00', local:'Todas as unidades', categoria:'evento',   responsavel:'Marketing',       descricao:'Comemoração dos 10 anos do TATÁ Sushi.' },
-    { id:'4', titulo:'Feriado — Corpus Christi', data:d(4,5),  horaInicio:'',      horaFim:'',      local:'',                categoria:'feriado',     responsavel:'',                descricao:'Funcionamento conforme escala especial.' },
-    { id:'5', titulo:'Reunião de Liderança',     data:d(19),   horaInicio:'10:00', horaFim:'11:30', local:'Online (Meet)',   categoria:'reuniao',     responsavel:'Gestão',          descricao:'Pauta: férias coletivas e inventário.' },
-    { id:'6', titulo:'Inventário mensal',        data:d(28),   horaInicio:'08:00', horaFim:'14:00', local:'Estoque central', categoria:'outro',       responsavel:'Estoque',         descricao:'Contagem física obrigatória.' }
-  ];
-}
 
 /* ─── STATE ────────────────────────────────────────────────────────────── */
 var STATE = {
@@ -471,31 +450,6 @@ function changeMonth(delta) {
   renderCalendar();
   renderList();
 }
-function goToday() {
-  STATE.view     = new Date();
-  STATE.selected = new Date();
-  renderCalendar();
-  renderList();
-}
-
-/* ─── CATEGORIAS (CHIPS) ───────────────────────────────────────────────── */
-function renderCatChips() {
-  var wrap = document.getElementById('cat-chips');
-  var html = '<div class="cat-chip ' + (STATE.category==='all'?'active':'') + '" onclick="setCategory(\'all\')"><span class="cat-dot" style="background:var(--carbon)"></span>Todos</div>';
-  CATEGORIAS.forEach(function(c) {
-    var dotColor = ({reuniao:'var(--blue)',treinamento:'var(--green)',evento:'var(--purple)',feriado:'var(--red)',outro:'var(--amber)'})[c.id];
-    html += '<div class="cat-chip ' + (STATE.category===c.id?'active':'') + '" onclick="setCategory(\'' + c.id + '\')">' +
-              '<span class="cat-dot" style="background:' + dotColor + '"></span>' + c.label + '</div>';
-  });
-  wrap.innerHTML = html;
-}
-function setCategory(id) {
-  STATE.category = id;
-  renderCatChips();
-  renderCalendar();
-  renderList();
-}
-
 /* ─── LISTA ────────────────────────────────────────────────────────────── */
 function renderList() {
   var body  = document.getElementById('list-body');
@@ -643,43 +597,35 @@ function loadDrawerMeta() {
 }
 
 /* ─── BOOT ─────────────────────────────────────────────────────────────── */
-(function() {
-  var session;
-  try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-  if (session && session.displayName) {
-    var hu = document.getElementById('header-user');
-    if (hu) {
-      var parts = session.displayName.trim().split(/\s+/);
-      var abbrev = parts.length > 1 ? parts[0] : parts[0];
-      hu.textContent = abbrev;
-    }
-  }
-})();
-
 function loadEventos() {
-  if (!AGENDA_URL) {
-    STATE.eventos = mockEventos();
-    renderAll();
-    return;
+  function withSupa(supa) {
+    supa.schema('tata_plus').rpc('agenda_rh_eventos_listar').then(function(r) {
+      if (r.error) { STATE.eventos = []; renderAll(); return; }
+      var rows = Array.isArray(r.data) ? r.data : [];
+      STATE.eventos = rows.map(function(e) {
+        return {
+          id:         e.id,
+          titulo:     e.titulo,
+          data:       e.data,
+          horaInicio: e.hora_inicio || '',
+          horaFim:    e.hora_fim || '',
+          local:      e.local || '',
+          categoria:  e.categoria || 'outro',
+          responsavel:e.responsavel || '',
+          descricao:  e.descricao || ''
+        };
+      });
+      renderAll();
+    }, function() { STATE.eventos = []; renderAll(); });
   }
-  fetch(AGENDA_URL + '?action=listEventos')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      STATE.eventos = (data && data.ok && Array.isArray(data.eventos)) ? data.eventos : mockEventos();
-      renderAll();
-    })
-    .catch(function() {
-      STATE.eventos = mockEventos();
-      renderAll();
-    });
+  if (window.__lideresSupa) withSupa(window.__lideresSupa);
+  else window.addEventListener('lideres:supa', function() { withSupa(window.__lideresSupa); }, { once:true });
 }
 function renderAll() {
-  renderCatChips();
   renderCalendar();
   renderList();
 }
 
-renderCatChips();
 renderCalendar();
 renderList();
 loadEventos();
