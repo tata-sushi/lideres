@@ -1466,7 +1466,7 @@ function cardVaga(r) {
   var sf = slugVagaStatus(r.status);
   var sfLabel = r.status || 'Sem status';
   var subtitle = [r.departamento, r.unidade].filter(Boolean).join(' - ');
-  var footer = isAdmin ? '<div class="card-footer" style="justify-content:flex-end"><button class="btn-avaliar" onclick="openEditVaga(\''+r._linha+'\')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar vaga</button></div>' : '';
+  var footer = '<div class="card-footer" style="justify-content:flex-end"><button class="btn-avaliar" onclick="openEditVaga(\''+r.id+'\')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar vaga</button></div>';
   return '<div class="card">'+
     '<div class="card-header"><div>'+
     '<div class="candidate-name">'+escH(r.cargo || 'Vaga sem título')+'</div>'+
@@ -1625,78 +1625,37 @@ var _evObs           = null; // { unidade: { ptG, ptP } }
 var _evLideres       = null;
 var _evColaboradores = null;
 
+// SANDBOX: fontes do modal vêm do próprio array `vagas` (endpoints EV_* estão bloqueados)
 function _loadEvCargos(callback) {
-  if (_evCargos) { callback(_evCargos); return; }
-  fetch(EV_CARGOS_URL + '?action=getAll')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      // monta lookup de valor de ponto gorjeta/prêmio por unidade
-      _evObs = {};
-      (data.obs || []).forEach(function(o) {
-        if (o.loja_nome) _evObs[o.loja_nome.trim()] = {
-          ptG: o.valor_pt_gorjeta || 0,
-          ptP: o.valor_pt_premio  || 0
-        };
-      });
-      var seenMap = {};
-      _evCargos = (data.salarios || [])
-        .map(function(s) {
-          return {
-            unidade: (s.unidade || '').trim(),
-            dept:    (s.departamento || '').trim(),
-            nome:    ((s.cargo || '') + (s.niveis ? ' ' + s.niveis : '')).trim(),
-            fixo:    s.salario_fixo     || 0,
-            peric:   s.periculosidade   || 0,
-            insal:   s.insalubridade    || 0,
-            gorjeta: s.ponto_gorjeta    || 0,
-            premio:  s.ponto_premio     || 0,
-            bruto:   s.bruto_aproximado || 0
-          };
-        })
-        .filter(function(c) {
-          if (!c.nome) return false;
-          var key = c.unidade + '|' + c.dept + '|' + c.nome;
-          if (seenMap[key]) {
-            if (c.bruto > seenMap[key].bruto) {
-              seenMap[key].fixo = c.fixo; seenMap[key].peric = c.peric;
-              seenMap[key].insal = c.insal; seenMap[key].gorjeta = c.gorjeta;
-              seenMap[key].premio = c.premio; seenMap[key].bruto = c.bruto;
-            }
-            return false;
-          }
-          seenMap[key] = c;
-          return true;
-        });
-      callback(_evCargos);
-    })
-    .catch(function() { _evCargos = []; _evObs = {}; callback([]); });
+  _evObs = {};
+  var seen = {}, out = [];
+  (vagas || []).forEach(function(v) {
+    if (!v.cargo) return;
+    var key = (v.unidade || '') + '|' + (v.departamento || '') + '|' + (v.cargo || '');
+    if (seen[key]) return; seen[key] = 1;
+    out.push({
+      unidade: v.unidade || '', dept: v.departamento || '', nome: v.cargo || '',
+      fixo: v.salario_fixo || 0, peric: 0, insal: 0, gorjeta: 0, premio: 0,
+      bruto: v.salario_bruto || 0
+    });
+  });
+  _evCargos = out;
+  callback(_evCargos);
 }
 
 function _loadEvLideres(callback) {
-  if (_evLideres) { callback(_evLideres); return; }
-  fetch(EV_MAPA_URL + '?action=listUsers')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      _evLideres = (data.usuarios || [])
-        .filter(Boolean)
-        .sort();
-      callback(_evLideres);
-    })
-    .catch(function() { _evLideres = []; callback([]); });
+  _evLideres = _evUniqSorted((vagas || []).map(function(v) { return v.lider; }).filter(Boolean));
+  callback(_evLideres);
 }
 
 function _loadEvColaboradores(callback) {
-  if (_evColaboradores) { callback(_evColaboradores); return; }
-  fetch(EV_COLAB_URL + '?action=listColaboradores')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      _evColaboradores = (data.colaboradores || [])
-        .map(function(c) { return c.nome || ''; })
-        .filter(Boolean)
-        .sort();
-      callback(_evColaboradores);
-    })
-    .catch(function() { _evColaboradores = []; callback([]); });
+  var names = [];
+  (vagas || []).forEach(function(v) {
+    if (v.colaborador_anterior) names.push(v.colaborador_anterior);
+    if (v.colaborador_contratado) names.push(v.colaborador_contratado);
+  });
+  _evColaboradores = _evUniqSorted(names);
+  callback(_evColaboradores);
 }
 
 function _evSalaryForCargo(unidade, dept, nome) {
@@ -1910,18 +1869,18 @@ function openNewVaga() {
   document.getElementById('ev-overlay').classList.add('active');
 }
 
-function openEditVaga(linha) {
+function openEditVaga(id) {
   document.querySelectorAll('#ev-overlay .ev-field-error').forEach(function(el) { el.classList.remove('ev-field-error'); });
   var r = null;
-  for (var i = 0; i < _vagaRows.length; i++) {
-    if (String(_vagaRows[i]._linha) === String(linha)) { r = _vagaRows[i]; break; }
+  for (var i = 0; i < vagas.length; i++) {
+    if (String(vagas[i].id) === String(id)) { r = vagas[i]; break; }
   }
   if (!r) return;
   var l = document.getElementById('ev-mode-label');
   var t = document.getElementById('ev-cargo-title');
   if (l) l.textContent = 'Editar Vaga';
   if (t) t.textContent = r.cargo || 'Vaga sem título';
-  document.getElementById('ev-linha').value   = r._linha || '';
+  document.getElementById('ev-linha').value   = r.id || '';
   document.getElementById('ev-escala').value  = (r.escala || '').indexOf('5x2') >= 0 ? '5x2' : '6x1';
   document.getElementById('ev-horario').value = r.horario || '';
   var _u = r.unidade || '', _d = r.departamento || '', _c = r.cargo || '';
@@ -1979,48 +1938,32 @@ function salvarEditVaga() {
 
   var btn = document.getElementById('ev-save');
   btn.disabled = true; btn.textContent = 'Salvando…';
-  var _linha = document.getElementById('ev-linha').value;
-  var isNew = !_linha;
+  var _id = document.getElementById('ev-linha').value || null;
   var colabContratado = isFechada ? colabContratadoRaw : '';
-  var dataContratacao = isFechada ? _evTodayBR() : '';
-  var payload = {
-    action:       isNew ? 'addVaga' : 'updateVaga',
-    row_index:    _linha,
-    cargo:        document.getElementById('ev-cargo').value,
-    departamento: document.getElementById('ev-departamento').value,
-    unidade:      document.getElementById('ev-unidade').value,
-    escala:       document.getElementById('ev-escala').value,
-    horario:      document.getElementById('ev-horario').value,
-    lider:               document.getElementById('ev-lider').value,
-    colaborador_anterior: document.getElementById('ev-colaborador').value,
-    salario_fixo:        (document.getElementById('ev-salario-fixo') || {}).value || '',
-    salario_bruto:       (document.getElementById('ev-salario-bruto') || {}).value || '',
-    status:                statusVal,
-    colaborador_contratado: colabContratado,
-    data_contratacao:       dataContratacao
+  function _money(v) { v = String(v || '').replace(/R\$|\s|\./g, '').replace(',', '.'); var n = parseFloat(v); return isNaN(n) ? null : n; }
+  var args = {
+    p_id: _id,
+    p_cargo:        document.getElementById('ev-cargo').value,
+    p_departamento: document.getElementById('ev-departamento').value,
+    p_unidade:      document.getElementById('ev-unidade').value,
+    p_escala:       document.getElementById('ev-escala').value,
+    p_horario:      document.getElementById('ev-horario').value,
+    p_lider:                 document.getElementById('ev-lider').value,
+    p_colaborador_anterior:  document.getElementById('ev-colaborador').value,
+    // só envia salário se pode ver (senão null → coalesce no servidor preserva o valor atual)
+    p_salario_fixo:  window.__podeVerValores ? _money((document.getElementById('ev-salario-fixo') || {}).value) : null,
+    p_salario_bruto: window.__podeVerValores ? _money((document.getElementById('ev-salario-bruto') || {}).value) : null,
+    p_status:                statusVal,
+    p_colaborador_contratado: colabContratado || null
   };
-  var _params = Object.keys(payload).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(payload[k]); }).join('&');
-  fetch(VAGAS_EDIT_URL + '?' + _params)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data.ok) {
-        btn.disabled = false; btn.textContent = 'Salvar';
-        alert('Erro ao salvar: ' + (data.error || 'desconhecido'));
-        return;
-      }
-      // Recarrega vagas do sheet para pegar a linha recém-criada
-      // (no addVaga não temos row_index) e re-renderiza o tab.
-      fetchSheetVagas(function(list) {
-        vagas = list || [];
-        btn.disabled = false; btn.textContent = 'Salvar';
-        closeEditVaga();
-        render();
-      });
-    })
-    .catch(function(err) {
-      btn.disabled = false; btn.textContent = 'Salvar';
-      alert('Erro de conexão: ' + err);
-    });
+  var SB = window.__lideresSupa;
+  if (!SB) { btn.disabled = false; btn.textContent = 'Salvar'; alert('Supabase indisponível'); return; }
+  SB.rpc('vagas_sandbox_salvar', args).then(function(res) {
+    btn.disabled = false; btn.textContent = 'Salvar';
+    if (res.error) { alert('Erro ao salvar: ' + res.error.message); return; }
+    closeEditVaga();
+    loadAllData();
+  }, function() { btn.disabled = false; btn.textContent = 'Salvar'; alert('Erro de conexão'); });
 }
 
 function emptyState() {
