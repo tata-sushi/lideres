@@ -15,6 +15,7 @@ Registro das páginas do front que deixaram de consumir Google Sheets/Apps Scrip
 | `compliance/kpis/rh/solicitacoes2.html` | Solicitações (Power BI) | Drawer "Sobre" (contagens) | `tata_plus.colaboradores_listar()` | #2539 | ✅ merge |
 | `compliance/areas/rh/admissao.html` | Admissão & Integração | Lista de colaboradores (drawer + select) + data de admissão | `tata_plus.colaboradores_listar()` (perfis ativos) | #2542 | ✅ merge |
 | `compliance/areas/rh/sancoes.html` | Sanções Disciplinares | Dropdown de colaborador (com filtro por unidade) | `tata_plus.colaboradores_listar()` | #2544 | ✅ merge |
+| `compliance/kpis/rh/agenda.html` | Agenda / Calendário RH | Eventos do calendário (era mock/Apps Script) → Supabase; removido `COLAB_URL` (Apps Script morto) | tabela `dp_rh.agenda_eventos` + `agenda_rh_eventos_listar()` (drawer já usava `colaboradores_publicos`) | — | ⏳ branch |
 
 ## Outros repositórios
 
@@ -30,12 +31,13 @@ Registro das páginas do front que deixaram de consumir Google Sheets/Apps Scrip
 | `tata_plus.colaboradores_listar()` | Lookup de colaboradores (dropdowns, contagens) — **reutilizável** | `tata_plus.profiles` (status = Ativo) |
 | `tata_plus.ouvidoria_listar()` | Dashboard de ouvidoria | `dp_rh.ouvidoria` |
 | `tata_plus.demandas_lista()` | Demandas (Kanban) | `tata_kanban` |
+| `tata_plus.agenda_rh_eventos_listar(p_de,p_ate)` | Agenda/Calendário RH (eventos, filtro de período opcional) | `dp_rh.agenda_eventos` |
 | `tata_plus.alinhamento_transcricao_listar()` | Transcrição de alinhamentos | `dp_rh.alinhamento_transcricao` |
 | `tata_plus.estoque_admin_saldo()` / `estoque_admin_posicao()` / `estoque_admin_historico()` / `estoque_admin_gravar()` | Estoque | `dp_rh.estoque_admin` |
 | `public.ouvidoria_registrar(payload)` | Gravação anônima da ouvidoria | `dp_rh.ouvidoria` |
 
 ## Ainda no Google Sheets (candidatas, mesmo padrão)
 
-- **Lookup de colaboradores** (`action=listColaboradores`) ainda em: `agenda`, `bancodehoras`, `beneficios`, `feriados`, `armarios`, `ferias`, `hc`, `medicina`, `experiencias`, e o lookup do `estoqueadm`. → troca mecânica por `colaboradores_listar()`.
+- **Lookup de colaboradores** (`action=listColaboradores`) ainda em: `bancodehoras`, `beneficios`, `feriados`, `armarios`, `ferias`, `hc`, `medicina`, `experiencias`. → troca mecânica por `colaboradores_listar()`.
 - **Report `semanal.html`**: ainda tem fontes no Sheets (HC, admissões/demissões→profiles, Vagas, Banco de Horas, Absenteísmo, Experiências, Entrevistas, ASOs).
 - **Sanções → Kanban**: adiado (ver `migracao.md`).

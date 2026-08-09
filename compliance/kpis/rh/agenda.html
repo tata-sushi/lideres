@@ -329,10 +329,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 /* ─── CONFIG ────────────────────────────────────────────────────────────── */
-// Quando o endpoint Apps Script estiver pronto, preencha AGENDA_URL.
-// Esperado: GET ?action=listEventos → { ok:true, eventos:[{id,titulo,data,horaInicio,horaFim,local,categoria,descricao,responsavel}, ...] }
-var AGENDA_URL = '';
-var COLAB_URL  = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
+// Fonte dos eventos: Supabase (RPC tata_plus.agenda_rh_eventos_listar).
+// Consumido via window.__lideresSupa (gate.js). Sem dependência de Google/Apps Script.
 
 /* ─── CATEGORIAS ───────────────────────────────────────────────────────── */
 var CATEGORIAS = [
@@ -657,21 +655,28 @@ function loadDrawerMeta() {
 })();
 
 function loadEventos() {
-  if (!AGENDA_URL) {
-    STATE.eventos = mockEventos();
-    renderAll();
-    return;
+  function withSupa(supa) {
+    supa.schema('tata_plus').rpc('agenda_rh_eventos_listar').then(function(r) {
+      if (r.error) { STATE.eventos = mockEventos(); renderAll(); return; }
+      var rows = Array.isArray(r.data) ? r.data : [];
+      STATE.eventos = rows.map(function(e) {
+        return {
+          id:         e.id,
+          titulo:     e.titulo,
+          data:       e.data,
+          horaInicio: e.hora_inicio || '',
+          horaFim:    e.hora_fim || '',
+          local:      e.local || '',
+          categoria:  e.categoria || 'outro',
+          responsavel:e.responsavel || '',
+          descricao:  e.descricao || ''
+        };
+      });
+      renderAll();
+    }, function() { STATE.eventos = mockEventos(); renderAll(); });
   }
-  fetch(AGENDA_URL + '?action=listEventos')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      STATE.eventos = (data && data.ok && Array.isArray(data.eventos)) ? data.eventos : mockEventos();
-      renderAll();
-    })
-    .catch(function() {
-      STATE.eventos = mockEventos();
-      renderAll();
-    });
+  if (window.__lideresSupa) withSupa(window.__lideresSupa);
+  else window.addEventListener('lideres:supa', function() { withSupa(window.__lideresSupa); }, { once:true });
 }
 function renderAll() {
   renderCatChips();
