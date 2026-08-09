@@ -1007,14 +1007,36 @@ function fetchSheet(sheetName, normFn, callback) {
     .catch(function(err) { callback(null, err.message || 'Erro de rede'); });
 }
 
-// ─── SANDBOX: dados vêm do Supabase (dp_rh.rec_candidaturas via RPC público) ───
+// ─── SANDBOX: dados vêm do Supabase (rec_candidaturas + vagas via RPCs públicos) ───
 function loadAllData() {
   state.loading = true; state.error = null;
   showLoading();
   var SB = window.__lideresSupa;
   if (!SB) { window.addEventListener('lideres:supa', loadAllData, { once: true }); return; }
-  SB.rpc('rec_candidaturas_sandbox_listar').then(function (res) {
-    if (res.error) { entrevistas = []; testes = []; vagas = []; finishLoad(['Supabase: ' + res.error.message]); return; }
+  Promise.all([
+    SB.rpc('rec_candidaturas_sandbox_listar'),
+    (isAdmin || isLider) ? SB.rpc('vagas_sandbox_listar') : Promise.resolve({ data: [] })
+  ]).then(function (results) {
+    var res = results[0], vres = results[1];
+    // ── Vagas ──
+    if (!vres || vres.error || !Array.isArray(vres.data)) { vagas = []; }
+    else {
+      vagas = vres.data.map(function (v) {
+        return {
+          id: v.id, _linha: null,
+          cargo: v.cargo || '', unidade: v.unidade || '', departamento: v.departamento || '',
+          status: v.status_vaga || '', data: v.data_solicitacao || '',
+          lider: v.lider_responsavel || '', responsavel: v.lider_responsavel || '',
+          escala: v.escala || '', horario: v.horario || '',
+          salario_fixo: v.salario_fixo, salario_bruto: v.salario_bruto,
+          colaborador_anterior: v.colaborador_anterior || '', colaborador_contratado: v.colaborador_contratado || '',
+          data_contratacao: v.data_contratacao || '', observacoes: v.observacao || '',
+          beneficios: v.beneficios || ''
+        };
+      });
+    }
+    // ── Candidaturas (entrevistas/testes) ──
+    if (res.error) { entrevistas = []; testes = []; finishLoad(['Supabase: ' + res.error.message]); return; }
     var rows = Array.isArray(res.data) ? res.data : [];
     entrevistas = []; testes = [];
     rows.forEach(function (r) {
@@ -1049,7 +1071,6 @@ function loadAllData() {
         }));
       }
     });
-    vagas = []; // Vagas é outra trilha (tabela própria) — migramos depois
     finishLoad([]);
   }, function () {
     entrevistas = []; testes = []; vagas = [];
