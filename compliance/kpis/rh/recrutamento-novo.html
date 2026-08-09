@@ -1014,6 +1014,13 @@ function fetchSheet(sheetName, normFn, callback) {
     .catch(function(err) { callback(null, err.message || 'Erro de rede'); });
 }
 
+// Colaboradores (profiles) — raiz dos dropdowns do modal de vaga
+var _colabs = [];
+function _colabUnidades()  { return _evUniqSorted(_colabs.map(function(c){ return c.unidade; }).filter(Boolean)); }
+function _colabNomes()     { return _evUniqSorted(_colabs.map(function(c){ return c.nome; }).filter(Boolean)); }
+function _colabLideres()   { var l=_colabs.filter(function(c){return c.lider;}).map(function(c){return c.nome;}); return _evUniqSorted(l.length?l:_colabNomes()); }
+function _evPopulateUnidades(current) { _evPopulateSelect('ev-unidade', _colabUnidades(), current || ''); }
+
 // ─── Permissão de ver valores (sandbox: matrícula DEV via localStorage) ───
 function _sandboxMatricula() {
   try { return localStorage.getItem('sandbox_matricula') || null; } catch (e) { return null; }
@@ -1032,9 +1039,11 @@ function loadAllData() {
   if (!SB) { window.addEventListener('lideres:supa', loadAllData, { once: true }); return; }
   Promise.all([
     SB.rpc('rec_candidaturas_sandbox_listar'),
-    SB.rpc('vagas_sandbox_listar', { p_matricula: _sandboxMatricula() })   // matrícula DEV p/ testar permissão de valores
+    SB.rpc('vagas_sandbox_listar', { p_matricula: _sandboxMatricula() }),   // matrícula DEV p/ testar permissão de valores
+    SB.rpc('colaboradores_sandbox_listar')   // raiz (profiles) dos dropdowns do modal
   ]).then(function (results) {
-    var res = results[0], vres = results[1];
+    var res = results[0], vres = results[1], cres = results[2];
+    _colabs = (cres && !cres.error && Array.isArray(cres.data)) ? cres.data : [];
     // ── Vagas ── (RPC devolve { pode_ver, vagas }; salários mascarados no servidor se não pode ver)
     var vd = (vres && !vres.error && vres.data) ? vres.data : {};
     window.__podeVerValores = !!vd.pode_ver;
@@ -1644,17 +1653,12 @@ function _loadEvCargos(callback) {
 }
 
 function _loadEvLideres(callback) {
-  _evLideres = _evUniqSorted((vagas || []).map(function(v) { return v.lider; }).filter(Boolean));
+  _evLideres = _colabLideres();   // líderes de profiles
   callback(_evLideres);
 }
 
 function _loadEvColaboradores(callback) {
-  var names = [];
-  (vagas || []).forEach(function(v) {
-    if (v.colaborador_anterior) names.push(v.colaborador_anterior);
-    if (v.colaborador_contratado) names.push(v.colaborador_contratado);
-  });
-  _evColaboradores = _evUniqSorted(names);
+  _evColaboradores = _colabNomes();   // colaboradores de profiles
   callback(_evColaboradores);
 }
 
@@ -1787,18 +1791,17 @@ function _evUniqSorted(arr) {
   return out.sort();
 }
 
+// Departamento/Cargo vêm de profiles (_colabs). Salário ainda de _evCargos (vagas) até migrar Cargos & Salários.
 function _evDeptsForUnidade(unidade) {
-  if (!_evCargos) return [];
-  return _evUniqSorted(_evCargos.filter(function(c) {
+  return _evUniqSorted(_colabs.filter(function(c) {
     return !unidade || c.unidade === unidade;
-  }).map(function(c) { return c.dept; }));
+  }).map(function(c) { return c.departamento; }).filter(Boolean));
 }
 
 function _evCargosForUnidadeDepto(unidade, dept) {
-  if (!_evCargos) return [];
-  return _evUniqSorted(_evCargos.filter(function(c) {
-    return (!unidade || c.unidade === unidade) && (!dept || c.dept === dept);
-  }).map(function(c) { return c.nome; }));
+  return _evUniqSorted(_colabs.filter(function(c) {
+    return (!unidade || c.unidade === unidade) && (!dept || c.departamento === dept);
+  }).map(function(c) { return c.cargo; }).filter(Boolean));
 }
 
 function _evPopulateSelect(id, options, current) {
@@ -1851,6 +1854,7 @@ function openNewVaga() {
   var t = document.getElementById('ev-cargo-title');
   if (l) l.textContent = 'Nova Vaga';
   if (t) t.textContent = 'Preencha os campos abaixo';
+  _evPopulateUnidades('');
   document.getElementById('ev-linha').value   = '';
   document.getElementById('ev-escala').value  = '6x1';
   document.getElementById('ev-horario').value = '';
@@ -1880,6 +1884,7 @@ function openEditVaga(id) {
   var t = document.getElementById('ev-cargo-title');
   if (l) l.textContent = 'Editar Vaga';
   if (t) t.textContent = r.cargo || 'Vaga sem título';
+  _evPopulateUnidades(r.unidade || '');
   document.getElementById('ev-linha').value   = r.id || '';
   document.getElementById('ev-escala').value  = (r.escala || '').indexOf('5x2') >= 0 ? '5x2' : '6x1';
   document.getElementById('ev-horario').value = r.horario || '';
