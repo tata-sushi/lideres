@@ -72,9 +72,8 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .evt-outro      { background:var(--amber-bg);  color:var(--amber); }
 
 /* LIST */
-.list-section { padding:20px 16px 0; }
-.list-title { font-size:13px; font-weight:700; color:var(--carbon); letter-spacing:-0.1px; text-transform:uppercase; margin-bottom:10px; padding-bottom:8px; border-bottom:2px solid var(--carbon); display:inline-block; }
-.list-empty { padding:30px 12px; text-align:center; font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); letter-spacing:0.5px; text-transform:uppercase; background:var(--surface); border:1px dashed var(--border); border-radius:var(--radius); }
+.list-section { padding:20px 12px 0; }
+.evt-table td.evt-empty { text-align:center; font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); letter-spacing:0.5px; text-transform:uppercase; padding:26px 12px; }
 /* TABELA DE EVENTOS (padrão dashboard — ref. .desk-table/.kpi-items-table de abastecimento.html) */
 .evt-table { width:100%; border-collapse:collapse; background:var(--surface); }
 .evt-table thead th { font-family:'DM Mono',monospace; font-size:9px; font-weight:500; text-transform:uppercase; letter-spacing:0.8px; color:var(--muted); padding:8px 10px; text-align:left; background:var(--surface); border-bottom:2px solid var(--carbon); white-space:nowrap; }
@@ -155,10 +154,10 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   .header { padding:14px 40px; }
   .toolbar { padding:18px 40px 12px; }
   .cat-chips { padding:14px 40px 16px; }
-  .calendar { margin:20px 40px 0; max-width:1100px; margin-left:auto; margin-right:auto; }
+  .calendar { margin:20px auto 0; max-width:1100px; width:calc(100% - 80px); }
   .cal-day { min-height:90px; padding:6px 6px 4px; }
   .cal-evt { font-size:11px; padding:2px 6px; }
-  .list-section { max-width:1100px; margin:0 auto; padding:24px 40px 0; }
+  .list-section { max-width:1100px; width:calc(100% - 80px); margin:0 auto; padding:24px 0 0; }
   .month-label { font-size:18px; }
 }
 </style>
@@ -250,7 +249,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <!-- LIST -->
 <section class="list-section">
-  <div class="list-title" id="list-title">Próximos eventos</div>
   <div id="list-body"></div>
 </section>
 
@@ -453,27 +451,29 @@ function selectDay(key) {
 
 function changeMonth(delta) {
   STATE.view = new Date(STATE.view.getFullYear(), STATE.view.getMonth() + delta, 1);
+  STATE.selected = null; // volta a lista para "próximos eventos" do mês visualizado
   renderCalendar();
   renderList();
 }
 /* ─── LISTA ────────────────────────────────────────────────────────────── */
 function renderList() {
-  var body  = document.getElementById('list-body');
-  var title = document.getElementById('list-title');
-  var items;
+  var body = document.getElementById('list-body');
+  var items, col2, empty;
   if (STATE.selected) {
-    title.textContent = 'Eventos · ' + fmtFullDate(STATE.selected);
+    col2  = fmtFullDate(STATE.selected);
     items = eventosOfDay(STATE.selected).sort(byDataHora);
-    if (!items.length) { body.innerHTML = '<div class="list-empty">Nenhum evento neste dia</div>'; return; }
+    empty = 'Nenhum evento neste dia';
   } else {
-    title.textContent = 'Próximos eventos';
+    col2  = 'Próximos eventos';
     var today = new Date(); today.setHours(0,0,0,0);
+    var vy = STATE.view.getFullYear(), vm = STATE.view.getMonth();
     items = filteredEventos().filter(function(e) {
-      var d = parseYMD(e.data); return d && d >= today;
-    }).sort(byDataHora).slice(0, 20);
-    if (!items.length) { body.innerHTML = '<div class="list-empty">Nenhum evento futuro</div>'; return; }
+      var d = parseYMD(e.data);
+      return d && d.getFullYear() === vy && d.getMonth() === vm && d >= today;
+    }).sort(byDataHora);
+    empty = 'Nenhum evento futuro neste mês';
   }
-  body.innerHTML = renderEvtTable(items);
+  body.innerHTML = renderEvtTable(items, col2, empty);
 }
 
 function byDataHora(a, b) {
@@ -483,12 +483,15 @@ function byDataHora(a, b) {
 
 var CAT_COLOR = { reuniao:'var(--blue)', treinamento:'var(--green)', evento:'var(--purple)', feriado:'var(--red)', outro:'var(--amber)' };
 
-function renderEvtTable(items) {
+function renderEvtTable(items, col2Title, emptyText) {
+  var rows = items.length
+    ? items.map(renderEvtRow).join('')
+    : '<tr><td class="evt-empty" colspan="3">' + escapeHtml(emptyText) + '</td></tr>';
   return '<table class="evt-table">' +
     '<thead><tr>' +
-      '<th>Data</th><th>Evento</th><th>Categoria</th>' +
+      '<th>Data</th><th>' + escapeHtml(col2Title) + '</th><th>Categoria</th>' +
     '</tr></thead><tbody>' +
-      items.map(renderEvtRow).join('') +
+      rows +
     '</tbody></table>';
 }
 
