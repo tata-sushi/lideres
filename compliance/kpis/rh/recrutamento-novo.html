@@ -104,6 +104,7 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .card-field { display: flex; flex-direction: column; gap: 1px; }
 .field-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
 .field-value { font-size: 13px; color: var(--carbon); font-weight: 500; }
+.valor-oculto { filter: blur(5px); -webkit-user-select: none; user-select: none; pointer-events: none; }
 
 .card-footer { border-top: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #FAFAFA; }
 .meta-pill { display: flex; align-items: center; gap: 6px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); }
@@ -467,8 +468,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     };
     document.addEventListener('DOMContentLoaded', function () {
       var b = document.createElement('div');
-      b.textContent = 'SANDBOX • sem dados de produção';
-      b.style.cssText = 'position:fixed;bottom:8px;left:8px;z-index:100000;background:#7A1A1A;color:#fff;font:600 10px/1 "DM Mono",monospace;letter-spacing:.5px;padding:6px 10px;border-radius:6px;opacity:.9;pointer-events:none';
+      b.style.cssText = 'position:fixed;bottom:8px;left:8px;z-index:100000;background:#7A1A1A;color:#fff;font:600 10px/1.4 "DM Mono",monospace;letter-spacing:.3px;padding:6px 10px;border-radius:6px;opacity:.95;display:flex;align-items:center;gap:8px';
+      b.appendChild(document.createTextNode('SANDBOX • matríc. teste:'));
+      var cur = ''; try { cur = localStorage.getItem('sandbox_matricula') || ''; } catch (e) {}
+      var inp = document.createElement('input');
+      inp.value = cur; inp.placeholder = '(bloqueado)';
+      inp.style.cssText = 'width:96px;font:inherit;color:#111;background:#fff;border:none;border-radius:4px;padding:2px 6px';
+      inp.onchange = function () { try { localStorage.setItem('sandbox_matricula', inp.value.trim()); } catch (e) {} location.reload(); };
+      b.appendChild(inp);
       document.body.appendChild(b);
     });
   })();
@@ -1007,6 +1014,16 @@ function fetchSheet(sheetName, normFn, callback) {
     .catch(function(err) { callback(null, err.message || 'Erro de rede'); });
 }
 
+// ─── Permissão de ver valores (sandbox: matrícula DEV via localStorage) ───
+function _sandboxMatricula() {
+  try { return localStorage.getItem('sandbox_matricula') || null; } catch (e) { return null; }
+}
+function fmtValor(v) {
+  // Autorizado → valor real; bloqueado → placeholder borrado (o número real nem vem do servidor)
+  if (window.__podeVerValores) return v ? _fmtMoney(v) : '—';
+  return '<span class="valor-oculto">R$ 0.000,00</span>';
+}
+
 // ─── SANDBOX: dados vêm do Supabase (rec_candidaturas + vagas via RPCs públicos) ───
 function loadAllData() {
   state.loading = true; state.error = null;
@@ -1015,13 +1032,15 @@ function loadAllData() {
   if (!SB) { window.addEventListener('lideres:supa', loadAllData, { once: true }); return; }
   Promise.all([
     SB.rpc('rec_candidaturas_sandbox_listar'),
-    SB.rpc('vagas_sandbox_listar')   // sandbox: sem trava de perfil
+    SB.rpc('vagas_sandbox_listar', { p_matricula: _sandboxMatricula() })   // matrícula DEV p/ testar permissão de valores
   ]).then(function (results) {
     var res = results[0], vres = results[1];
-    // ── Vagas ──
-    if (!vres || vres.error || !Array.isArray(vres.data)) { vagas = []; }
-    else {
-      vagas = vres.data.map(function (v) {
+    // ── Vagas ── (RPC devolve { pode_ver, vagas }; salários mascarados no servidor se não pode ver)
+    var vd = (vres && !vres.error && vres.data) ? vres.data : {};
+    window.__podeVerValores = !!vd.pode_ver;
+    var vrows = Array.isArray(vd.vagas) ? vd.vagas : [];
+    {
+      vagas = vrows.map(function (v) {
         return {
           id: v.id, _linha: null,
           cargo: v.cargo || '', unidade: v.unidade || '', departamento: v.departamento || '',
@@ -1458,8 +1477,8 @@ function cardVaga(r) {
     '<div class="card-field"><span class="field-label">Colab. contratado</span><span class="field-value">'+escH(r.colaborador_contratado || '—')+'</span></div>'+
     (r.escala ? '<div class="card-field"><span class="field-label">Escala</span><span class="field-value">'+escH(r.escala)+'</span></div>' : '<div class="card-field"></div>')+
     (r.horario ? '<div class="card-field"><span class="field-label">Horário</span><span class="field-value">'+escH(r.horario)+'</span></div>' : '<div class="card-field"></div>')+
-    '<div class="card-field"><span class="field-label">Sal. Fixo</span><span class="field-value">'+(r.salario_fixo ? _fmtMoney(r.salario_fixo) : '—')+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Sal. Bruto</span><span class="field-value">'+(r.salario_bruto ? _fmtMoney(r.salario_bruto) : '—')+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Sal. Fixo</span><span class="field-value">'+fmtValor(r.salario_fixo)+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Sal. Bruto</span><span class="field-value">'+fmtValor(r.salario_bruto)+'</span></div>'+
     '<div class="card-field"><span class="field-label">Data de abertura</span><span class="field-value">'+(r.data ? escH(fmtDateBR(r.data)) : '—')+'</span></div>'+
     '<div class="card-field"><span class="field-label">Data de fechamento</span><span class="field-value">'+(r.data_contratacao ? escH(fmtDateBR(r.data_contratacao)) : '—')+'</span></div>'+
     (r.lider ? '<div class="card-field"><span class="field-label">Líder responsável</span><span class="field-value">'+escH(r.lider)+'</span></div>' : '<div class="card-field"></div>')+
