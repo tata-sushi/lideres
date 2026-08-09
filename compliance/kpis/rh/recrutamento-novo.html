@@ -444,6 +444,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <script>
   document.documentElement.setAttribute('data-auth', 'ok');
   window.__lideresSession = window.__lideresSession || { displayName: 'DEV (sandbox)', perfil: 'admin', unidade: '', matricula: '' };
+  // Cliente Supabase (chave anon pública; RLS protege). SANDBOX: lê via RPC público descartável.
+  try {
+    if (window.supabase && window.supabase.createClient) {
+      window.__lideresSupa = window.supabase.createClient(
+        'https://aoqsbusfrffapjglpqjk.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvcXNidXNmcmZmYXBqZ2xwcWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MzcxMjQsImV4cCI6MjA5ODUxMzEyNH0.Dd9Z3SR3-18mQVX_yqUbIi0PG-eltLNjmOZB1Xu7W9o'
+      );
+      window.dispatchEvent(new Event('lideres:supa'));
+    }
+  } catch (e) { console.warn('supa init', e); }
   (function () {
     var _fetch = window.fetch;
     window.fetch = function (u) {
@@ -997,25 +1007,52 @@ function fetchSheet(sheetName, normFn, callback) {
     .catch(function(err) { callback(null, err.message || 'Erro de rede'); });
 }
 
+// ─── SANDBOX: dados vêm do Supabase (dp_rh.rec_candidaturas via RPC público) ───
 function loadAllData() {
   state.loading = true; state.error = null;
   showLoading();
-  var total = (isAdmin || isLider) ? 3 : 2;
-  var done = 0, errors = [];
-  fetchSheet(SHEET_ENTREVISTAS, normEntrevista, function(data, err) {
-    if (err) errors.push('Entrevistas: ' + err); else entrevistas = data || [];
-    if (++done === total) finishLoad(errors);
-  });
-  fetchSheet(SHEET_TESTES, normTeste, function(data, err) {
-    if (err) errors.push('Testes: ' + err); else testes = data || [];
-    if (++done === total) finishLoad(errors);
-  });
-  if (isAdmin || isLider) {
-    fetchSheetVagas(function(data) {
-      vagas = data || [];
-      if (++done === total) finishLoad(errors);
+  var SB = window.__lideresSupa;
+  if (!SB) { window.addEventListener('lideres:supa', loadAllData, { once: true }); return; }
+  SB.rpc('rec_candidaturas_sandbox_listar').then(function (res) {
+    if (res.error) { entrevistas = []; testes = []; vagas = []; finishLoad(['Supabase: ' + res.error.message]); return; }
+    var rows = Array.isArray(res.data) ? res.data : [];
+    entrevistas = []; testes = [];
+    rows.forEach(function (r) {
+      var dias = [r.teste_dia1, r.teste_dia2, r.teste_dia3, r.teste_dia4, r.teste_dia5].filter(Boolean);
+      var temTeste = dias.length > 0;
+      var finalizado = !!r.status_final;
+      var base = {
+        id: r.id, link: '',
+        recrutador: r.responsavel || '', nome: r.nome || '', contato: r.contato || '',
+        unidade: r.unidade || '', departamento: r.departamento || '', cargo: r.cargo || '',
+        pretensao: r.pretensao_salarial || '', selecionado: r.selecionado || '',
+        entrevistador: r.entrevistador || '', status_final: r.status_final || ''
+      };
+      // Aba Entrevistas: sem dia de teste ainda e não finalizado
+      if (!temTeste && !finalizado) {
+        entrevistas.push(Object.assign({}, base, {
+          data: r.data_entrevista || '', horario: r.horarios || '',
+          status_entrevista: r.status_entrevista || '', observacoes: r.observacoes_entrevista || '',
+          referencia: r.tipo_referencia || ''
+        }));
+      }
+      // Aba Testes: já tem dia de teste agendado
+      if (temTeste) {
+        testes.push(Object.assign({}, base, {
+          data: dias[0], horario: r.horario_teste || '',
+          status_entrevista: r.status_teste || '', observacoes: r.observacoes_teste || '',
+          camiseta: r.camiseta || '', valor_diaria: r.valor_diaria,
+          _dias: dias, _pagos: [r.pago_dia1, r.pago_dia2, r.pago_dia3, r.pago_dia4, r.pago_dia5],
+          pagamento_completo: r.pagamento_completo
+        }));
+      }
     });
-  }
+    vagas = []; // Vagas é outra trilha (tabela própria) — migramos depois
+    finishLoad([]);
+  }, function () {
+    entrevistas = []; testes = []; vagas = [];
+    finishLoad(['Supabase indisponível']);
+  });
 }
 
 function finishLoad(errors) {
