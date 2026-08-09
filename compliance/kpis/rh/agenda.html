@@ -49,6 +49,9 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 
 /* CALENDAR */
 .calendar { background:var(--surface); margin:16px 12px 0; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
+.cal-month { min-width:0; }
+.cal-month-2nd { display:none; }            /* mobile: só um mês */
+.cal-month-label { display:none; }          /* mobile: rótulo vem da toolbar */
 .cal-weekdays { display:grid; grid-template-columns:repeat(7,1fr); border-bottom:1px solid var(--border); background:var(--bg); }
 .cal-weekday { padding:8px 4px; font-family:'DM Mono',monospace; font-size:10px; font-weight:500; letter-spacing:0.6px; text-transform:uppercase; color:var(--muted); text-align:center; }
 .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); }
@@ -154,7 +157,10 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   .header { padding:14px 40px; }
   .toolbar { padding:18px 40px 12px; }
   .cat-chips { padding:14px 40px 16px; }
-  .calendar { margin:20px auto 0; max-width:1100px; width:calc(100% - 80px); }
+  .calendar { margin:20px auto 0; max-width:1100px; width:calc(100% - 80px); display:flex; align-items:stretch; }
+  .cal-month { flex:1; min-width:0; }
+  .cal-month-2nd { display:block; border-left:1px solid var(--border); }
+  .cal-month-label { display:block; text-align:center; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:700; color:var(--carbon); letter-spacing:-0.2px; padding:10px; background:var(--surface); border-bottom:1px solid var(--border); }
   .cal-day { min-height:90px; padding:6px 6px 4px; }
   .cal-evt { font-size:11px; padding:2px 6px; }
   .list-section { max-width:1100px; width:calc(100% - 80px); margin:0 auto; padding:24px 0 0; }
@@ -235,16 +241,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <!-- CALENDAR -->
 <div class="calendar">
-  <div class="cal-weekdays">
-    <div class="cal-weekday">Dom</div>
-    <div class="cal-weekday">Seg</div>
-    <div class="cal-weekday">Ter</div>
-    <div class="cal-weekday">Qua</div>
-    <div class="cal-weekday">Qui</div>
-    <div class="cal-weekday">Sex</div>
-    <div class="cal-weekday">Sáb</div>
-  </div>
-  <div class="cal-grid" id="cal-grid"></div>
+  <div class="cal-month" id="cal-month-0"></div>
+  <div class="cal-month cal-month-2nd" id="cal-month-1"></div>
 </div>
 
 <!-- LIST -->
@@ -371,6 +369,10 @@ function fmtShortDate(d) {
   var dias = ['dom','seg','ter','qua','qui','sex','sáb'];
   return dias[d.getDay()] + ', ' + pad(d.getDate()) + '/' + pad(d.getMonth()+1);
 }
+function fmtMonthYearCap(d) {
+  var meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  return meses[d.getMonth()] + ' ' + d.getFullYear();
+}
 
 /* ─── FILTERS ──────────────────────────────────────────────────────────── */
 function filteredEventos() {
@@ -388,8 +390,16 @@ function renderMonthLabel() {
 }
 function renderCalendar() {
   renderMonthLabel();
-  var grid  = document.getElementById('cal-grid');
-  var view  = STATE.view;
+  // Painel 0 = mês visualizado; Painel 1 = mês seguinte (só aparece no desktop)
+  renderMonthPanel(document.getElementById('cal-month-0'), STATE.view);
+  renderMonthPanel(document.getElementById('cal-month-1'),
+    new Date(STATE.view.getFullYear(), STATE.view.getMonth() + 1, 1));
+}
+
+var CAL_WEEKDAYS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+function renderMonthPanel(el, view) {
+  if (!el) return;
   var year  = view.getFullYear();
   var month = view.getMonth();
   var firstWeekday = new Date(year, month, 1).getDay(); // 0=Dom
@@ -406,14 +416,14 @@ function renderCalendar() {
   for (var d = 1; d <= daysInMonth; d++) {
     cells.push({ date:new Date(year, month, d), otherMonth:false });
   }
-  // Next month head (complete grid to multiple of 7)
-  while (cells.length % 7 !== 0) {
+  // Next month head — sempre 6 semanas (42 células) para os dois painéis
+  // terem a mesma altura lado a lado no desktop
+  while (cells.length < 42) {
     var idx = cells.length - (firstWeekday + daysInMonth) + 1;
     cells.push({ date:new Date(year, month+1, idx), otherMonth:true });
   }
 
-  var html = '';
-  cells.forEach(function(c) {
+  var grid = cells.map(function(c) {
     var key  = ymd(c.date);
     var evs  = eventosOfDay(c.date);
     var cls  = 'cal-day';
@@ -431,12 +441,18 @@ function renderCalendar() {
       evsHtml += '<div class="cal-evt-more">+' + (evs.length - show.length) + ' mais</div>';
     }
 
-    html += '<div class="' + cls + '" data-date="' + key + '" onclick="selectDay(\'' + key + '\')">' +
-              '<span class="cal-day-num">' + c.date.getDate() + '</span>' +
-              '<div class="cal-day-events">' + evsHtml + '</div>' +
-            '</div>';
-  });
-  grid.innerHTML = html;
+    return '<div class="' + cls + '" data-date="' + key + '" onclick="selectDay(\'' + key + '\')">' +
+             '<span class="cal-day-num">' + c.date.getDate() + '</span>' +
+             '<div class="cal-day-events">' + evsHtml + '</div>' +
+           '</div>';
+  }).join('');
+
+  var weekdays = CAL_WEEKDAYS.map(function(w) { return '<div class="cal-weekday">' + w + '</div>'; }).join('');
+
+  el.innerHTML =
+    '<div class="cal-month-label">' + fmtMonthYearCap(view) + '</div>' +
+    '<div class="cal-weekdays">' + weekdays + '</div>' +
+    '<div class="cal-grid">' + grid + '</div>';
 }
 
 function selectDay(key) {
