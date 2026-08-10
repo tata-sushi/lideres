@@ -1698,8 +1698,6 @@ function evNivelChanged() {
   var br = document.getElementById('ev-salario-bruto');
   if (fx) fx.value = sal.fixo ? _fmtMoney(sal.fixo) : '';
   if (br) br.value = sal.bruto ? _fmtMoney(sal.bruto) : '';
-  var t = document.getElementById('ev-cargo-title');
-  if (t && nome) t.textContent = nome + (nivel ? ' ' + nivel : '');
 }
 
 function _fmtMoney(v) {
@@ -1822,17 +1820,25 @@ function _evNiveisForCargo(unidade, dept, cargo) {
   }).map(function(c) { return c.nivel; }).filter(Boolean));
 }
 
+// normaliza nome de cargo p/ comparar apesar de grafia (minúsculo, sem acento, sem "de/da/do")
+function _evNorm(s) {
+  return (s == null ? '' : String(s)).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\b(de|da|do|dos|das|e)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
 // separa o cargo salvo (ex.: "Atendente de Delivery Jr") em cargo base + nível, casando com C&S
 function _evSplitCargo(unidade, dept, fullCargo) {
   fullCargo = (fullCargo || '').trim();
   if (!fullCargo) return { cargo: '', nivel: '' };
-  var exact = null, byName = null, low = fullCargo.toLowerCase();
+  var target = _evNorm(fullCargo), exact = null, byName = null;
   (_evCargos || []).forEach(function(c) {
     if (unidade && c.unidade !== unidade) return;
     if (dept && c.dept !== dept) return;
-    var full = (c.nome + (c.nivel ? ' ' + c.nivel : '')).toLowerCase();
-    if (full === low) exact = { cargo: c.nome, nivel: c.nivel };
-    if (c.nome.toLowerCase() === low) byName = { cargo: c.nome, nivel: '' };
+    if (_evNorm(c.nome + ' ' + c.nivel) === target) exact = { cargo: c.nome, nivel: c.nivel };
+    if (_evNorm(c.nome) === target) byName = { cargo: c.nome, nivel: '' };
   });
   return exact || byName || { cargo: fullCargo, nivel: '' };
 }
@@ -1883,10 +1889,8 @@ function evDeptoChanged() {
 
 function openNewVaga() {
   document.querySelectorAll('#ev-overlay .ev-field-error').forEach(function(el) { el.classList.remove('ev-field-error'); });
-  var l = document.getElementById('ev-mode-label');
   var t = document.getElementById('ev-cargo-title');
-  if (l) l.textContent = 'Nova Vaga';
-  if (t) t.textContent = 'Preencha os campos abaixo';
+  if (t) t.textContent = 'Nova Vaga';
   _evPopulateUnidades('');
   document.getElementById('ev-linha').value   = '';
   document.getElementById('ev-escala').value  = '6x1';
@@ -1914,10 +1918,8 @@ function openEditVaga(id) {
     if (String(vagas[i].id) === String(id)) { r = vagas[i]; break; }
   }
   if (!r) return;
-  var l = document.getElementById('ev-mode-label');
   var t = document.getElementById('ev-cargo-title');
-  if (l) l.textContent = 'Editar Vaga';
-  if (t) t.textContent = r.cargo || 'Vaga sem título';
+  if (t) t.textContent = 'Editar Vaga';
   _evPopulateUnidades(r.unidade || '');
   document.getElementById('ev-linha').value   = r.id || '';
   document.getElementById('ev-escala').value  = (r.escala || '').indexOf('5x2') >= 0 ? '5x2' : '6x1';
@@ -3335,8 +3337,7 @@ function enviarSolicitacao() {
   <div class="modal">
     <div class="modal-header">
       <div class="modal-header-info">
-        <div id="ev-mode-label" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Editar Vaga</div>
-        <div class="candidate-name" id="ev-cargo-title">—</div>
+        <div class="candidate-name" id="ev-cargo-title">Editar Vaga</div>
       </div>
       <button class="modal-close" onclick="closeEditVaga()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
