@@ -967,22 +967,24 @@ function loadAllData() {
       }
       // Aba Testes: já tem dia de teste agendado (dados por dia vêm de r.dias)
       if (temTeste) {
-        var d0 = dias[0] || {};
-        testes.push(Object.assign({}, base, {
-          // dados do DIA de teste vêm da filha (rec_teste_dias), não da mãe
-          unidade: d0.unidade || r.unidade || '',
-          cargo: d0.cargo || r.cargo || '',
-          recrutador: d0.responsavel || r.responsavel || '',   // "Turno" = responsável do dia (filha)
-          data: d0.data_teste || '', horario: d0.horario || '',
-          valor_diaria: d0.valor_diaria,
-          status_teste_dia: d0.status || '',                   // status do dia (filha)
-          pago: d0.pago,
-          status_entrevista: r.status_teste || '', observacoes: d0.observacoes || '',
-          camiseta: r.camiseta || '',
-          _dias: dias,                                  // [{data_teste,unidade,cargo,pago,valor_diaria,status,...}]
-          _pagos: dias.map(function (d) { return d.pago; }),
-          pagamento_completo: r.pagamento_completo
-        }));
+        // 1 linha por DIA de teste (filha rec_teste_dias) — dados do dia vêm da filha
+        dias.forEach(function (dia) {
+          testes.push(Object.assign({}, base, {
+            unidade: dia.unidade || r.unidade || '',
+            cargo: dia.cargo || r.cargo || '',
+            recrutador: dia.responsavel || r.responsavel || '',   // "Turno" = responsável do dia (filha)
+            data: dia.data_teste || '', horario: dia.horario || '',
+            valor_diaria: dia.valor_diaria,
+            status_teste_dia: dia.status || '',                   // status do dia (filha)
+            pago: dia.pago,
+            status_entrevista: r.status_teste || '', observacoes: dia.observacoes || '',
+            camiseta: r.camiseta || '',
+            _dia_id: dia.id,                              // id do dia (a linha = 1 dia de teste)
+            _dias: dias,
+            _pagos: dias.map(function (d) { return d.pago; }),
+            pagamento_completo: r.pagamento_completo
+          }));
+        });
       }
     });
     finishLoad([]);
@@ -1140,10 +1142,6 @@ function getFiltered() {
       if (st.indexOf('nao entrou')>=0 || st.indexOf('nao realizada')>=0) return false;
       if (st==='nao selecionado' || st==='aprovado para teste') return false;
     }
-    if (state.tab==='testes') {
-      var stT = norm((r.status_teste_dia||'').toLowerCase().trim());
-      if (stT==='cancelado' || stT==='nao contratado' || stT==='nao compareceu' || stT==='contratado') return false;
-    }
     if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
     if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
     if (f.data!=='Todos' && r.data!==f.data) return false;
@@ -1163,12 +1161,6 @@ function getStatusOpts() {
     src = src.filter(function(r){
       var st = norm((r.status_entrevista||'').toLowerCase().trim());
       return st.indexOf('nao entrou')<0 && st.indexOf('nao realizada')<0 && st!=='nao selecionado' && st!=='aprovado para teste';
-    });
-  }
-  if (state.tab==='testes') {
-    src = src.filter(function(r){
-      var st = norm((r.status_teste_dia||'').toLowerCase().trim());
-      return st!=='cancelado' && st!=='nao contratado' && st!=='nao compareceu' && st!=='contratado';
     });
   }
   return unique(src.map(function(r){ return state.tab==='entrevistas' ? r.status_entrevista : state.tab==='testes' ? r.status_teste_dia : r.status_final; }));
@@ -1340,7 +1332,7 @@ function cardTeste(r) {
   var sf=slugTeste(r.status_teste_dia), sfLabel=r.status_teste_dia||'Aguardando';
   var horOk=r.horario&&r.horario!=='0:00'&&r.horario!=='0'&&r.horario!=='00:00';
   var isAguardandoAprov = sf==='aguardando-aprovacao';
-  var editBtn='<button class="btn-avaliar" data-aba-id="governanca-kpis-rh-recrutamento::editar-teste" onclick="abrirEditarTeste(\''+escH(r.id)+'\')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar</button>';
+  var editBtn='<button class="btn-avaliar" data-aba-id="governanca-kpis-rh-recrutamento::editar-teste" onclick="abrirEditarTeste(\''+escH(r._dia_id)+'\')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar</button>';
   var footer;
   if (isAguardandoAprov) {
     var idx=_testeCache.length;
@@ -1499,7 +1491,7 @@ function renderTestesTableHtml(rows) {
     var sf = slugTeste(r.status_teste_dia), sfLabel = r.status_teste_dia || 'Aguardando';
     var isAguardandoAprov = sf==='aguardando-aprovacao';
     var horOk = r.horario && r.horario!=='0:00' && r.horario!=='0' && r.horario!=='00:00';
-    var acoes = '<button class="btn-editar" data-aba-id="governanca-kpis-rh-recrutamento::editar-teste" title="Editar" onclick="abrirEditarTeste(\''+escH(r.id)+'\')">'+_editSvg+'</button>';
+    var acoes = '<button class="btn-editar" data-aba-id="governanca-kpis-rh-recrutamento::editar-teste" title="Editar" onclick="abrirEditarTeste(\''+escH(r._dia_id)+'\')">'+_editSvg+'</button>';
     if (isAguardandoAprov) {
       var idx = _testeCache.length;
       _testeCache.push({id:r.id,nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,turno:r.recrutador,valor:r.valor_diaria});
@@ -2195,14 +2187,13 @@ function salvarNovoCandidato() {
 // ─── EDITAR TESTE (dados básicos + agendamento) ──────────────────────────────
 function _etResetNivel() { var nv=document.getElementById('et-nivel'); if(nv) nv.innerHTML='<option value="">—</option>'; }
 
-function abrirEditarTeste(id) {
+function abrirEditarTeste(diaId) {
   var r = null;
-  for (var i=0;i<testes.length;i++){ if(String(testes[i].id)===String(id)){ r=testes[i]; break; } }
+  for (var i=0;i<testes.length;i++){ if(String(testes[i]._dia_id)===String(diaId)){ r=testes[i]; break; } }
   if (!r) return;
   document.querySelectorAll('#et-overlay .ev-field-error').forEach(function(el){ el.classList.remove('ev-field-error'); });
-  var dia0 = (r._dias && r._dias[0]) ? r._dias[0] : {};
   document.getElementById('et-cand-id').value = r.id;
-  document.getElementById('et-dia-id').value  = dia0.id || '';
+  document.getElementById('et-dia-id').value  = r._dia_id || '';
   var _b=document.getElementById('et-save'); _b.textContent='Salvar'; _b.disabled=false;
   document.getElementById('et-nome').value    = r.nome || '';
   document.getElementById('et-contato').value = r.contato || '';
