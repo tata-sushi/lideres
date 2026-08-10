@@ -1339,6 +1339,8 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
   .cs-table td[data-col="pct"]::before   { content:"% Bruto"; }
   .cs-table td[data-col="bruto"]::before { content:"Bruto Aprox."; color:rgba(255,255,255,.4); font-size:8px; font-weight:500; }
 }
+/* valor borrado para quem não tem permissão (perm_ver_valores). O número não vem do servidor — o blur é só visual. */
+.valor-oculto { filter:blur(5px); -webkit-user-select:none; user-select:none; pointer-events:none; }
 
 /* ── NIVEL PILLS ── */
 .nivel-pill { display:inline-block; font-family:"DM Mono",monospace; font-size:8px; font-weight:500; letter-spacing:.06em; text-transform:uppercase; padding:3px 8px; border-radius:100px; }
@@ -2005,8 +2007,16 @@ var CS_DESCRICOES = {};
 
 /* ── HELPERS ── */
 var _isAdmin = (function(){ return ((window.__lideresPerfil||'')+'').toLowerCase() === 'admin'; })();
-var BRL_LOCKED = '<span class="brl-locked" title="Apenas admin">••••••</span>';
-function brl(n){ if(!_isAdmin) return BRL_LOCKED; return "R$ " + parseFloat(n).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+// Permissão de ver valores (R$): definida pela RPC mascarada tata_plus.cargos_salarios_listar().
+// Server-side: quem não está liberado recebe os valores como null — o número não chega aqui.
+var _podeVerValores = false;
+var VALOR_BLUR = '<span class="valor-oculto">R$ 0.000,00</span>';
+function brl(n){
+  if(!_podeVerValores) return VALOR_BLUR;
+  var x = parseFloat(n);
+  if(isNaN(x)) return '<span style="color:rgba(255,255,255,.25)">—</span>';
+  return "R$ " + x.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
 
 function nivelCls(n){
   return {N1:"n1",N2:"n2",N3:"n3",N4:"n4",NS:"ns"}[n] || "n1";
@@ -2076,7 +2086,8 @@ function csRecalc() {
     var peric = parseFloat(c.periculosidade) || 0;
     var gorj  = parseFloat(c.gorjeta)        || 0;
     var prem  = parseFloat(c.premio)         || 0;
-    var bruto = fixo + insal + peric + (gorj * ptG) + (prem * ptP);
+    // bruto vem calculado (e mascarado) da view; fallback recalcula no front
+    var bruto = (c.bruto != null && c.bruto !== '') ? parseFloat(c.bruto) : (fixo + insal + peric + (gorj * ptG) + (prem * ptP));
     var tr = document.createElement("tr");
     var dash = '<span style="color:rgba(255,255,255,.25)">—</span>';
     var chevronSvg = '<svg class="cs-mob-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>';
@@ -2088,12 +2099,12 @@ function csRecalc() {
       '</div>'+
       '<td class="cargo-name">'+c.nome+'</td>'+
       '<td class="right mono" data-col="fixo">'+brl(fixo)+'</td>'+
-      '<td class="right mono'+(insal?'':' hidden-dash')+'" data-col="insal">'+(insal ? brl(insal) : dash)+'</td>'+
-      '<td class="right mono'+(peric?'':' hidden-dash')+'" data-col="peric">'+(peric ? brl(peric) : dash)+'</td>'+
-      '<td class="right gorjeta-pts'+(gorj?'':' hidden-dash')+'" data-col="gorj">'+(_isAdmin ? (gorj || dash) : BRL_LOCKED)+'</td>'+
-      '<td class="right premio-pts'+(prem?'':' hidden-dash')+'" data-col="prem">'+(_isAdmin ? (prem || dash) : BRL_LOCKED)+'</td>'+
+      '<td class="right mono'+(insal?'':' hidden-dash')+'" data-col="insal">'+(_podeVerValores ? (insal ? brl(insal) : dash) : VALOR_BLUR)+'</td>'+
+      '<td class="right mono'+(peric?'':' hidden-dash')+'" data-col="peric">'+(_podeVerValores ? (peric ? brl(peric) : dash) : VALOR_BLUR)+'</td>'+
+      '<td class="right gorjeta-pts'+(gorj?'':' hidden-dash')+'" data-col="gorj">'+(gorj || dash)+'</td>'+
+      '<td class="right premio-pts'+(prem?'':' hidden-dash')+'" data-col="prem">'+(prem || dash)+'</td>'+
       '<td class="right valor calculado" data-col="bruto">'+brl(bruto)+'</td>'+
-      '<td class="right mono" data-col="pct">'+(_isAdmin ? (c.pct_bruto ? ((parseFloat(c.pct_bruto)*100).toFixed(2)+'%') : '<span style="color:rgba(255,255,255,.25)">—</span>') : BRL_LOCKED)+'</td>';
+      '<td class="right mono" data-col="pct">'+(_podeVerValores ? (c.pct_bruto ? ((parseFloat(c.pct_bruto)*100).toFixed(2)+'%') : dash) : VALOR_BLUR)+'</td>';
     // mobile: seta expande/recolhe; nome abre detalhes
     (function(cargo, row) {
       var preview = row.querySelector('.cs-mob-preview');
@@ -2261,59 +2272,57 @@ function hideLoading() {
   if (el) el.classList.remove('show');
 }
 
+// Leitura de Cargos & Salários direto do Supabase (view dp_rh.cargos_salarios),
+// já com os valores em R$ mascarados no servidor (RPC tata_plus.cargos_salarios_listar).
+// Mantém o nome csSyncSheets p/ os pontos de chamada existentes (init + refresh pós-edição).
 function csSyncSheets() {
-  if (!CS_SHEETS_URL) { hideLoading(); return; }
-  fetch(CS_SHEETS_URL + "?action=getAll")
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      if (data && data.salarios && data.salarios.length) {
-        CS_CARGOS = data.salarios.map(function(s, i) {
-          var nivel = csNormalizeNivel(s.niveis, s.cargo);
-          return {
-            id:             s.cargo_id || ("c" + i),
-            nome:           s.cargo + (s.niveis ? " " + s.niveis : ""),
-            cargo_base:     s.cargo,
-            nivel:          nivel,
-            niveis_raw:     s.niveis,
-            dept:           s.departamento,
-            unidade:        s.unidade,
-            cbo:            (function(v){ if(v==null||v==="") return ""; var s=String(v); var m=s.match(/\d{4}-?\d{0,2}/); return m?m[0]:s; })(s.cbo),
-            hierarquia:     s.hierarquia,
-            fixo:           s.salario_fixo,
-            insalubridade:  s.insalubridade,
-            periculosidade: s.periculosidade,
-            gorjeta:        s.ponto_gorjeta,
-            premio:         s.ponto_premio,
-            bruto_sheet:    s.bruto_aproximado,
-            pct_bruto:      s.pct_bruto,
-            obs:            s.obs,
-            icone:          csInferIcon(s.cargo, s.departamento)
-          };
-        });
-      }
-      if (data && data.cargos && data.cargos.length) {
-        CS_DESCRICOES = {};
-        data.cargos.forEach(function(c) {
-          var key = c.cargo_id;
-          CS_DESCRICOES[key] = {
-            objetivos:                   c.objetivos    || "",
-            responsabilidades:           _splitBullets(c.responsabilidades),
-            formacao:                    c.formacao     || "",
-            experiencia:                 c.experiencia  || "",
-            comp_tec:                    c.comp_tec     || "",
-            comp_comp:                   c.comp_comp    || "",
-            uniformes:                   c.uniformes    || "",
-            epis:                        c.epis         || ""
-          };
-        });
-      }
-      if (data && data.obs) CS_OBS = data.obs;
-      csPopulateDeptFilter();
-      csRecalc();
-      csRenderCargos();
-    })
-    .catch(function() {})
-    .finally(hideLoading);
+  var SB = window.__lideresSupa;
+  if (!SB) { window.addEventListener('lideres:supa', csSyncSheets, { once: true }); return; }
+  SB.schema('tata_plus').rpc('cargos_salarios_listar').then(function(res) {
+    if (res.error) { console.warn('cargos_salarios_listar:', res.error.message); hideLoading(); return; }
+    var data = res.data || {};
+    _podeVerValores = !!data.pode_ver;
+    var rows = Array.isArray(data.cargos) ? data.cargos : [];
+    CS_CARGOS = rows.map(function(s, i) {
+      return {
+        id:             s.cargo_id || ("c" + i),
+        nome:           s.cargo + (s.niveis ? " " + s.niveis : ""),
+        cargo_base:     s.cargo,
+        nivel:          csNormalizeNivel(s.niveis, s.cargo),
+        niveis_raw:     s.niveis,
+        dept:           s.departamento,
+        unidade:        s.unidade,
+        cbo:            (function(v){ if(v==null||v==="") return ""; var t=String(v); var m=t.match(/\d{4}-?\d{0,2}/); return m?m[0]:t; })(s.cbo),
+        hierarquia:     s.hierarquia,
+        fixo:           s.salario_fixo,        // null se sem permissão (mascarado no servidor)
+        insalubridade:  s.insalubridade,
+        periculosidade: s.periculosidade,
+        gorjeta:        s.ponto_gorjeta,       // quantidade de pontos (não é R$)
+        premio:         s.ponto_premio,
+        bruto:          s.bruto,               // calculado e mascarado na view
+        pct_bruto:      s.pct_bruto,
+        obs:            s.obs,
+        icone:          csInferIcon(s.cargo, s.departamento)
+      };
+    });
+    CS_DESCRICOES = {};
+    rows.forEach(function(c) {
+      CS_DESCRICOES[c.cargo_id] = {
+        objetivos:         c.objetivos || "",
+        responsabilidades: _splitBullets(c.responsabilidades),
+        formacao:          c.formacao || "",
+        experiencia:       c.experiencia || "",
+        comp_tec:          c.comp_tecnicas || "",
+        comp_comp:         c.comp_comportamentais || "",
+        uniformes:         c.uniforme || "",
+        epis:              c.epis || ""
+      };
+    });
+    csPopulateDeptFilter();
+    csRecalc();
+    csRenderCargos();
+    hideLoading();
+  }, function(err) { console.warn(err); hideLoading(); });
 }
 
 function _splitBullets(text) {
