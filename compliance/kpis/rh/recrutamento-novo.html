@@ -1019,6 +1019,7 @@ function slugTeste(s) {
   var l = norm(s.toLowerCase().trim());
   if (l.indexOf('aguardando teste')>=0)     return 'aguardando-teste';
   if (l.indexOf('aguardando aprovacao')>=0) return 'aguardando-aprovacao';
+  if (l.indexOf('aguardando feedback')>=0)  return 'aguardando-aprovacao';  // teste em aberto = aguardando avaliação
   if (l.indexOf('cancelado')>=0)            return 'cancelado';
   if (l.indexOf('nao compareceu')>=0) return 'nao-compareceu';
   if (l === 'contratado')                   return 'contratado';
@@ -1324,13 +1325,14 @@ function cardTeste(r) {
   var sf=slugTeste(r.status_final), sfLabel=r.status_final||'Aguardando';
   var horOk=r.horario&&r.horario!=='0:00'&&r.horario!=='0'&&r.horario!=='00:00';
   var isAguardandoAprov = sf==='aguardando-aprovacao' || (r.status_final && norm(r.status_final.toLowerCase()).indexOf('aguardando aprovacao')>=0);
-  var footer='';
-  if (sf==='contratado') {
-    footer='<div class="card-footer"><span class="check-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Contratado</span></div>';
-  } else if (isAguardandoAprov) {
+  var editBtn='<button class="btn-avaliar" data-aba-id="governanca-kpis-rh-recrutamento::editar-teste" onclick="abrirEditarTeste(\''+escH(r.id)+'\')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar</button>';
+  var footer;
+  if (isAguardandoAprov) {
     var idx=_testeCache.length;
     _testeCache.push({id:r.id,nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,turno:r.recrutador,valor:r.valor_diaria});
-    footer='<div class="card-footer">'+'<div class="meta-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Aguardando avaliação</div>'+'<button class="btn-avaliar" onclick="abrirModal('+idx+')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Avaliar teste</button>'+'</div>';
+    footer='<div class="card-footer" style="justify-content:flex-end;gap:8px">'+editBtn+'<button class="btn-avaliar" data-aba-id="governanca-kpis-rh-recrutamento::avaliar-teste" onclick="abrirModal('+idx+')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Avaliar teste</button></div>';
+  } else {
+    footer='<div class="card-footer" style="justify-content:flex-end">'+editBtn+'</div>';
   }
   return '<div class="card">'+
     '<div class="card-header"><div>'+
@@ -1482,11 +1484,11 @@ function renderTestesTableHtml(rows) {
     var sf = slugTeste(r.status_final), sfLabel = r.status_final || 'Aguardando';
     var isAguardandoAprov = sf==='aguardando-aprovacao' || (r.status_final && norm(r.status_final.toLowerCase()).indexOf('aguardando aprovacao')>=0);
     var horOk = r.horario && r.horario!=='0:00' && r.horario!=='0' && r.horario!=='00:00';
-    var acoes = '';
+    var acoes = '<button class="btn-editar" data-aba-id="governanca-kpis-rh-recrutamento::editar-teste" title="Editar" onclick="abrirEditarTeste(\''+escH(r.id)+'\')">'+_editSvg+'</button>';
     if (isAguardandoAprov) {
       var idx = _testeCache.length;
       _testeCache.push({id:r.id,nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,turno:r.recrutador,valor:r.valor_diaria});
-      acoes = '<button class="btn-editar" data-aba-id="governanca-kpis-rh-recrutamento::avaliar-teste" title="Avaliar teste" onclick="abrirModal('+idx+')">'+_clipSvg+'</button>';
+      acoes = '<button class="btn-editar" data-aba-id="governanca-kpis-rh-recrutamento::avaliar-teste" title="Avaliar teste" onclick="abrirModal('+idx+')">'+_clipSvg+'</button>' + acoes;
     }
     return '<tr>'+
       '<td class="ett-nome">'+escH(r.nome||'—')+'</td>'+
@@ -2173,6 +2175,110 @@ function salvarNovoCandidato() {
     btn.disabled = false; btn.textContent = _label;
     alert('Erro de conexão:\n' + (err && err.message || err));
   });
+}
+
+// ─── EDITAR TESTE (dados básicos + agendamento) ──────────────────────────────
+function _etResetNivel() { var nv=document.getElementById('et-nivel'); if(nv) nv.innerHTML='<option value="">—</option>'; }
+
+function abrirEditarTeste(id) {
+  var r = null;
+  for (var i=0;i<testes.length;i++){ if(String(testes[i].id)===String(id)){ r=testes[i]; break; } }
+  if (!r) return;
+  document.querySelectorAll('#et-overlay .ev-field-error').forEach(function(el){ el.classList.remove('ev-field-error'); });
+  var dia0 = (r._dias && r._dias[0]) ? r._dias[0] : {};
+  document.getElementById('et-cand-id').value = r.id;
+  document.getElementById('et-dia-id').value  = dia0.id || '';
+  var _b=document.getElementById('et-save'); _b.textContent='Salvar'; _b.disabled=false;
+  document.getElementById('et-nome').value    = r.nome || '';
+  document.getElementById('et-contato').value = r.contato || '';
+  document.getElementById('et-data').value    = _toDateInput(r.data);
+  document.getElementById('et-horario').value = _toTimeInput(r.horario);
+  document.getElementById('et-valor').value   = (window.__podeVerValores ? (r.valor_diaria!=null ? _fmtMoney(r.valor_diaria) : '') : 'R$ 0.000,00');
+  var u=r.unidade||'', dp=r.departamento||'', cargoFull=r.cargo||'';
+  _evPopulateSelect('et-unidade', _csUnidades(), u);
+  document.getElementById('et-unidade').value = u;
+  _loadEvCargos(function(){
+    var split = _evSplitCargo(u, dp, cargoFull);
+    _evPopulateSelect('et-departamento', u ? _evDeptsForUnidade(u) : [], dp);
+    _evPopulateSelect('et-cargo', (u&&dp) ? _evCargosForUnidadeDepto(u,dp) : [], split.cargo);
+    var niveis = (u&&dp&&split.cargo) ? _evNiveisForCargo(u,dp,split.cargo) : [];
+    if (niveis.length) _evPopulateSelect('et-nivel', niveis, split.nivel); else _etResetNivel();
+  });
+  document.getElementById('et-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeEditarTeste() {
+  document.getElementById('et-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function etUnidadeChanged() {
+  _evClearFieldError('et-unidade');
+  var u = (document.getElementById('et-unidade')||{}).value || '';
+  if (!u) {
+    document.getElementById('et-departamento').innerHTML = '<option value="">Selecione a unidade primeiro</option>';
+    document.getElementById('et-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
+    _etResetNivel();
+    return;
+  }
+  _evPopulateSelect('et-departamento', _evDeptsForUnidade(u), '');
+  document.getElementById('et-departamento').value = '';
+  document.getElementById('et-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
+  _etResetNivel();
+}
+
+function etDeptoChanged() {
+  _evClearFieldError('et-departamento');
+  var u=(document.getElementById('et-unidade')||{}).value||'', dp=(document.getElementById('et-departamento')||{}).value||'';
+  _etResetNivel();
+  if (!u || !dp) { document.getElementById('et-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>'; return; }
+  _evPopulateSelect('et-cargo', _evCargosForUnidadeDepto(u,dp), '');
+  document.getElementById('et-cargo').value = '';
+}
+
+function etCargoChanged() {
+  _evClearFieldError('et-cargo');
+  var u=(document.getElementById('et-unidade')||{}).value||'', dp=(document.getElementById('et-departamento')||{}).value||'', cargo=(document.getElementById('et-cargo')||{}).value||'';
+  var niveis = cargo ? _evNiveisForCargo(u,dp,cargo) : [];
+  if (niveis.length) _evPopulateSelect('et-nivel', niveis, niveis.length===1?niveis[0]:''); else _etResetNivel();
+}
+
+function salvarEditarTeste() {
+  document.querySelectorAll('#et-overlay .ev-field-error').forEach(function(el){ el.classList.remove('ev-field-error'); });
+  var required = [
+    {id:'et-nome',label:'Nome'},{id:'et-contato',label:'Contato'},
+    {id:'et-unidade',label:'Unidade'},{id:'et-departamento',label:'Departamento'},
+    {id:'et-cargo',label:'Cargo'},{id:'et-data',label:'Data do teste'},{id:'et-horario',label:'Horário'}
+  ];
+  var invalidos=[];
+  required.forEach(function(f){ var el=document.getElementById(f.id); if(!el||!el.value.trim()){ invalidos.push(f.label); if(el){var w=el.closest('.ev-field'); if(w) w.classList.add('ev-field-error');} } });
+  var _nvSel=document.getElementById('et-nivel');
+  var _nvTem=_nvSel && Array.prototype.some.call(_nvSel.options,function(o){return o.value;});
+  if (_nvTem && !(_nvSel.value||'').trim()) { invalidos.push('Nível'); var _nw=_nvSel.closest('.ev-field'); if(_nw)_nw.classList.add('ev-field-error'); }
+  if (invalidos.length) { var p=document.querySelector('#et-overlay .ev-field-error'); if(p) p.scrollIntoView({behavior:'smooth',block:'center'}); return; }
+  var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
+  var btn=document.getElementById('et-save'); btn.disabled=true; btn.textContent='Salvando…';
+  function _money(v){ v=String(v||'').replace(/R\$|\s|\./g,'').replace(',','.'); var n=parseFloat(v); return isNaN(n)?null:n; }
+  var _cargo=document.getElementById('et-cargo').value; var _niv=(document.getElementById('et-nivel')||{}).value||'';
+  var args = {
+    p_candidatura_id: document.getElementById('et-cand-id').value,
+    p_nome:         document.getElementById('et-nome').value.trim(),
+    p_contato:      document.getElementById('et-contato').value.trim(),
+    p_unidade:      document.getElementById('et-unidade').value,
+    p_departamento: document.getElementById('et-departamento').value,
+    p_cargo:        _cargo + (_niv ? ' ' + _niv : ''),
+    p_dia_id:       document.getElementById('et-dia-id').value || null,
+    p_data_teste:   document.getElementById('et-data').value || null,
+    p_horario:      document.getElementById('et-horario').value.trim(),
+    p_valor_diaria: window.__podeVerValores ? _money(document.getElementById('et-valor').value) : null,
+    p_por: _sandboxMatricula()
+  };
+  SB.rpc('rec_teste_sandbox_salvar', args).then(function(res){
+    btn.disabled=false; btn.textContent='Salvar';
+    if (res.error) { alert('Erro ao salvar:\n'+res.error.message); return; }
+    closeEditarTeste(); loadAllData();
+  }, function(err){ btn.disabled=false; btn.textContent='Salvar'; alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
 
 function emptyState() {
@@ -3676,6 +3782,75 @@ function enviarSolicitacao() {
     <div class="modal-footer">
       <button class="modal-btn modal-btn-cancel" onclick="closeNovoCandidato()">Cancelar</button>
       <button class="modal-btn modal-btn-save" id="nc-save" onclick="salvarNovoCandidato()">Cadastrar candidato</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDITAR TESTE -->
+<div class="modal-overlay" id="et-overlay" onclick="if(event.target===this)closeEditarTeste()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-header-info">
+        <div class="candidate-name">Editar Teste</div>
+      </div>
+      <button class="modal-close" onclick="closeEditarTeste()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <input type="hidden" id="et-cand-id">
+    <input type="hidden" id="et-dia-id">
+    <div class="modal-body">
+      <!-- Grupo 1: candidato -->
+      <div class="modal-info-grid">
+        <div class="ev-field" style="grid-column:1/-1">
+          <span class="modal-section-title">Nome <span style="color:var(--red);">*</span></span>
+          <input type="text" class="modal-input" id="et-nome" placeholder="Nome completo" oninput="_evClearFieldError('et-nome')">
+        </div>
+        <div class="ev-field" style="grid-column:1/-1">
+          <span class="modal-section-title">Contato / WhatsApp <span style="color:var(--red);">*</span></span>
+          <input type="tel" class="modal-input" id="et-contato" placeholder="(11) 9 0000-0000" oninput="_evClearFieldError('et-contato')">
+        </div>
+      </div>
+      <hr class="modal-divider">
+      <!-- Grupo 2: vaga -->
+      <div class="modal-info-grid">
+        <div class="ev-field">
+          <span class="modal-section-title">Unidade <span style="color:var(--red);">*</span></span>
+          <select class="modal-select" id="et-unidade" onchange="etUnidadeChanged()"><option value="">Selecione</option></select>
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Departamento <span style="color:var(--red);">*</span></span>
+          <select class="modal-select" id="et-departamento" onchange="etDeptoChanged()"><option value="">Selecione a unidade primeiro</option></select>
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Cargo <span style="color:var(--red);">*</span></span>
+          <select class="modal-select" id="et-cargo" onchange="etCargoChanged()"><option value="">Selecione o departamento primeiro</option></select>
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Nível</span>
+          <select class="modal-select" id="et-nivel" onchange="_evClearFieldError('et-nivel')"><option value="">—</option></select>
+        </div>
+      </div>
+      <hr class="modal-divider">
+      <!-- Grupo 3: agendamento do teste -->
+      <div class="modal-info-grid">
+        <div class="ev-field">
+          <span class="modal-section-title">Data do teste <span style="color:var(--red);">*</span></span>
+          <input type="date" class="modal-input" id="et-data" oninput="_evClearFieldError('et-data')">
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Horário <span style="color:var(--red);">*</span></span>
+          <input type="time" class="modal-input" id="et-horario" step="60" oninput="_evClearFieldError('et-horario')">
+        </div>
+        <div class="ev-field" style="grid-column:1/-1">
+          <span class="modal-section-title">Valor da diária</span>
+          <input type="text" class="modal-input" id="et-valor" placeholder="Ex: R$ 100,00">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="closeEditarTeste()">Cancelar</button>
+      <button class="modal-btn modal-btn-save" id="et-save" onclick="salvarEditarTeste()">Salvar</button>
     </div>
   </div>
 </div>
