@@ -1643,10 +1643,10 @@ function _loadEvCargos(callback) {
   var seen = {}, out = [];
   (_csCargos || []).forEach(function(c) {
     if (!c.cargo) return;
-    var key = (c.unidade || '') + '|' + (c.departamento || '') + '|' + (c.cargo || '');
+    var key = (c.unidade || '') + '|' + (c.departamento || '') + '|' + (c.cargo || '') + '|' + (c.niveis || '');
     if (seen[key]) return; seen[key] = 1;
     out.push({
-      unidade: c.unidade || '', dept: c.departamento || '', nome: c.cargo || '',
+      unidade: c.unidade || '', dept: c.departamento || '', nome: c.cargo || '', nivel: c.niveis || '',
       fixo: c.salario_fixo || 0, bruto: c.bruto || 0
     });
   });
@@ -1664,11 +1664,12 @@ function _loadEvColaboradores(callback) {
   callback(_evColaboradores);
 }
 
-function _evSalaryForCargo(unidade, dept, nome) {
+function _evSalaryForCargo(unidade, dept, nome, nivel) {
   if (!_evCargos) return { fixo: '', bruto: '' };
   for (var i = 0; i < _evCargos.length; i++) {
     var c = _evCargos[i];
-    if (c.nome === nome && (!unidade || c.unidade === unidade) && (!dept || c.dept === dept)) {
+    if (c.nome === nome && (!unidade || c.unidade === unidade) && (!dept || c.dept === dept)
+        && (nivel == null || nivel === '' || c.nivel === nivel)) {
       return { fixo: c.fixo || '', bruto: c.bruto || '' };  // bruto já calculado na view de C&S
     }
   }
@@ -1680,11 +1681,25 @@ function evCargoChanged() {
   var unidade = (document.getElementById('ev-unidade') || {}).value || '';
   var dept    = (document.getElementById('ev-departamento') || {}).value || '';
   var nome    = (document.getElementById('ev-cargo') || {}).value || '';
-  var sal = _evSalaryForCargo(unidade, dept, nome);
+  var niveis  = nome ? _evNiveisForCargo(unidade, dept, nome) : [];
+  // preenche o dropdown de nível; se só houver um, já seleciona
+  if (niveis.length) _evPopulateSelect('ev-nivel', niveis, niveis.length === 1 ? niveis[0] : '');
+  else { var nv = document.getElementById('ev-nivel'); if (nv) nv.innerHTML = '<option value="">—</option>'; }
+  evNivelChanged();
+}
+
+function evNivelChanged() {
+  var unidade = (document.getElementById('ev-unidade') || {}).value || '';
+  var dept    = (document.getElementById('ev-departamento') || {}).value || '';
+  var nome    = (document.getElementById('ev-cargo') || {}).value || '';
+  var nivel   = (document.getElementById('ev-nivel') || {}).value || '';
+  var sal = _evSalaryForCargo(unidade, dept, nome, nivel);
   var fx = document.getElementById('ev-salario-fixo');
   var br = document.getElementById('ev-salario-bruto');
   if (fx) fx.value = sal.fixo ? _fmtMoney(sal.fixo) : '';
   if (br) br.value = sal.bruto ? _fmtMoney(sal.bruto) : '';
+  var t = document.getElementById('ev-cargo-title');
+  if (t && nome) t.textContent = nome + (nivel ? ' ' + nivel : '');
 }
 
 function _fmtMoney(v) {
@@ -1801,6 +1816,27 @@ function _evCargosForUnidadeDepto(unidade, dept) {
   }).map(function(c) { return c.cargo; }).filter(Boolean));
 }
 
+function _evNiveisForCargo(unidade, dept, cargo) {
+  return _evUniqSorted((_evCargos || []).filter(function(c) {
+    return c.nome === cargo && (!unidade || c.unidade === unidade) && (!dept || c.dept === dept);
+  }).map(function(c) { return c.nivel; }).filter(Boolean));
+}
+
+// separa o cargo salvo (ex.: "Atendente de Delivery Jr") em cargo base + nível, casando com C&S
+function _evSplitCargo(unidade, dept, fullCargo) {
+  fullCargo = (fullCargo || '').trim();
+  if (!fullCargo) return { cargo: '', nivel: '' };
+  var exact = null, byName = null, low = fullCargo.toLowerCase();
+  (_evCargos || []).forEach(function(c) {
+    if (unidade && c.unidade !== unidade) return;
+    if (dept && c.dept !== dept) return;
+    var full = (c.nome + (c.nivel ? ' ' + c.nivel : '')).toLowerCase();
+    if (full === low) exact = { cargo: c.nome, nivel: c.nivel };
+    if (c.nome.toLowerCase() === low) byName = { cargo: c.nome, nivel: '' };
+  });
+  return exact || byName || { cargo: fullCargo, nivel: '' };
+}
+
 function _evPopulateSelect(id, options, current) {
   var sel = document.getElementById(id);
   if (!sel) return;
@@ -1861,6 +1897,7 @@ function openNewVaga() {
   _loadEvCargos(function() {
     document.getElementById('ev-departamento').innerHTML = '<option value="">Selecione a unidade primeiro</option>';
     document.getElementById('ev-cargo').innerHTML = '<option value="">Selecione o departamento</option>';
+    var nv = document.getElementById('ev-nivel'); if (nv) nv.innerHTML = '<option value="">—</option>';
   });
   _loadEvLideres(function(list) { _evPopulateSelect('ev-lider', list, ''); });
   _loadEvColaboradores(function() { _evPopulateColaboradorSelect('Vaga Nova'); });
@@ -1885,12 +1922,14 @@ function openEditVaga(id) {
   document.getElementById('ev-linha').value   = r.id || '';
   document.getElementById('ev-escala').value  = (r.escala || '').indexOf('5x2') >= 0 ? '5x2' : '6x1';
   document.getElementById('ev-horario').value = r.horario || '';
-  var _u = r.unidade || '', _d = r.departamento || '', _c = r.cargo || '';
+  var _u = r.unidade || '', _d = r.departamento || '', _cargoFull = r.cargo || '';
   document.getElementById('ev-unidade').value = _u;
   _loadEvCargos(function() {
+    var split = _evSplitCargo(_u, _d, _cargoFull);
     _evPopulateSelect('ev-departamento', _u ? _evDeptsForUnidade(_u) : [], _d);
-    _evPopulateSelect('ev-cargo', (_u && _d) ? _evCargosForUnidadeDepto(_u, _d) : [], _c);
-    var sal = _evSalaryForCargo(_u, _d, _c);
+    _evPopulateSelect('ev-cargo', (_u && _d) ? _evCargosForUnidadeDepto(_u, _d) : [], split.cargo);
+    _evPopulateSelect('ev-nivel', (_u && _d && split.cargo) ? _evNiveisForCargo(_u, _d, split.cargo) : [], split.nivel);
+    var sal = _evSalaryForCargo(_u, _d, split.cargo, split.nivel);
     var fx = document.getElementById('ev-salario-fixo');
     var br = document.getElementById('ev-salario-bruto');
     if (fx) fx.value = sal.fixo ? _fmtMoney(sal.fixo) : (r.salario_fixo ? _fmtMoney(r.salario_fixo) : '');
@@ -1943,9 +1982,11 @@ function salvarEditVaga() {
   var _id = document.getElementById('ev-linha').value || null;
   var colabContratado = isFechada ? colabContratadoRaw : '';
   function _money(v) { v = String(v || '').replace(/R\$|\s|\./g, '').replace(',', '.'); var n = parseFloat(v); return isNaN(n) ? null : n; }
+  var _cargoBase = document.getElementById('ev-cargo').value;
+  var _nivel = (document.getElementById('ev-nivel') || {}).value || '';
   var args = {
     p_id: _id,
-    p_cargo:        document.getElementById('ev-cargo').value,
+    p_cargo:        _cargoBase + (_nivel ? ' ' + _nivel : ''),   // grava cargo + nível juntos (ex.: "Atendente de Delivery Jr")
     p_departamento: document.getElementById('ev-departamento').value,
     p_unidade:      document.getElementById('ev-unidade').value,
     p_escala:       document.getElementById('ev-escala').value,
@@ -3303,48 +3344,32 @@ function enviarSolicitacao() {
     </div>
     <input type="hidden" id="ev-linha">
     <div class="modal-body">
+      <!-- Grupo 1: vaga + cargo & salário -->
       <div class="modal-info-grid">
-        <div class="ev-field" style="grid-column:1/-1">
+        <div class="ev-field">
           <span class="modal-section-title">Unidade</span>
           <select class="modal-select" id="ev-unidade" onchange="evUnidadeChanged()">
             <option value="">Selecione</option>
           </select>
         </div>
-      </div>
-      <hr class="modal-divider">
-      <div class="ev-field">
-        <span class="modal-section-title">Departamento</span>
-        <select class="modal-select" id="ev-departamento" onchange="evDeptoChanged()">
-          <option value="">Selecione a unidade primeiro</option>
-        </select>
-      </div>
-      <hr class="modal-divider">
-      <div class="ev-field">
-        <span class="modal-section-title">Colaborador Anterior</span>
-        <select class="modal-select" id="ev-colaborador">
-          <option value="Vaga Nova">Vaga Nova</option>
-        </select>
-      </div>
-      <hr class="modal-divider">
-      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--carbon);font-weight:600;margin-bottom:10px;">Cargos &amp; Salários</div>
-      <div class="ev-field">
-        <span class="modal-section-title">Cargo</span>
-        <select class="modal-select" id="ev-cargo" onchange="evCargoChanged()">
-          <option value="">Selecione o departamento primeiro</option>
-        </select>
-      </div>
-      <div class="modal-info-grid" style="margin-top:12px">
         <div class="ev-field">
-          <span class="modal-section-title">Salário Fixo</span>
-          <input type="text" class="modal-input" id="ev-salario-fixo" readonly style="background:#F4F4F4;color:var(--muted);cursor:default;" placeholder="Automático pelo cargo">
+          <span class="modal-section-title">Departamento</span>
+          <select class="modal-select" id="ev-departamento" onchange="evDeptoChanged()">
+            <option value="">Selecione a unidade primeiro</option>
+          </select>
         </div>
         <div class="ev-field">
-          <span class="modal-section-title">Salário Bruto</span>
-          <input type="text" class="modal-input" id="ev-salario-bruto" readonly style="background:#F4F4F4;color:var(--muted);cursor:default;" placeholder="Automático pelo cargo">
+          <span class="modal-section-title">Cargo</span>
+          <select class="modal-select" id="ev-cargo" onchange="evCargoChanged()">
+            <option value="">Selecione o departamento primeiro</option>
+          </select>
         </div>
-      </div>
-      <hr class="modal-divider">
-      <div class="modal-info-grid">
+        <div class="ev-field">
+          <span class="modal-section-title">Nível</span>
+          <select class="modal-select" id="ev-nivel" onchange="evNivelChanged()">
+            <option value="">—</option>
+          </select>
+        </div>
         <div class="ev-field">
           <span class="modal-section-title">Escala</span>
           <select class="modal-select" id="ev-escala">
@@ -3356,29 +3381,42 @@ function enviarSolicitacao() {
           <span class="modal-section-title">Horário</span>
           <input type="text" class="modal-input" id="ev-horario" placeholder="Ex: 15:00 às 23:20" oninput="_evClearFieldError('ev-horario')">
         </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Salário Fixo</span>
+          <input type="text" class="modal-input" id="ev-salario-fixo" readonly style="background:#F4F4F4;color:var(--muted);cursor:default;" placeholder="Automático pelo cargo">
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Salário Bruto</span>
+          <input type="text" class="modal-input" id="ev-salario-bruto" readonly style="background:#F4F4F4;color:var(--muted);cursor:default;" placeholder="Automático pelo cargo">
+        </div>
       </div>
       <hr class="modal-divider">
-      <div class="ev-field">
-        <span class="modal-section-title">Líder responsável</span>
-        <select class="modal-select" id="ev-lider" onchange="_evClearFieldError('ev-lider')">
-          <option value="">Carregando...</option>
-        </select>
-      </div>
-      <hr class="modal-divider">
-      <div class="ev-field">
-        <span class="modal-section-title">Status da vaga</span>
-        <select class="modal-select" id="ev-status" onchange="evStatusChanged()">
-          <option value="Aberta">Aberta</option>
-          <option value="Fechada">Fechada</option>
-        </select>
-      </div>
-      <div class="ev-field" id="ev-colab-contratado-wrap" style="margin-top:12px;">
-        <span class="modal-section-title">Colaborador contratado</span>
-        <select class="modal-select" id="ev-colab-contratado" onchange="evColabContratadoChanged()">
-          <option value="">Nenhum — vaga segue em aberto</option>
-        </select>
-        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.4px;color:var(--muted);margin-top:6px;text-transform:uppercase;">
-          Ao selecionar, a vaga é marcada como <strong>Fechada</strong> em <span id="ev-data-fechamento-label">—</span>
+      <!-- Grupo 2: pessoas + status -->
+      <div class="modal-info-grid">
+        <div class="ev-field">
+          <span class="modal-section-title">Líder responsável</span>
+          <select class="modal-select" id="ev-lider" onchange="_evClearFieldError('ev-lider')">
+            <option value="">Carregando...</option>
+          </select>
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Colaborador Anterior</span>
+          <select class="modal-select" id="ev-colaborador">
+            <option value="Vaga Nova">Vaga Nova</option>
+          </select>
+        </div>
+        <div class="ev-field" id="ev-colab-contratado-wrap">
+          <span class="modal-section-title">Colaborador contratado</span>
+          <select class="modal-select" id="ev-colab-contratado" onchange="evColabContratadoChanged()">
+            <option value="">Nenhum — vaga segue em aberto</option>
+          </select>
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Status da vaga</span>
+          <select class="modal-select" id="ev-status" onchange="evStatusChanged()">
+            <option value="Aberta">Aberta</option>
+            <option value="Fechada">Fechada</option>
+          </select>
         </div>
       </div>
     </div>
