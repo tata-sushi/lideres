@@ -874,7 +874,7 @@ function _colabUnidades()  { return _evUniqSorted(_colabs.map(function(c){ retur
 function _colabNomes()     { return _evUniqSorted(_colabs.map(function(c){ return c.nome; }).filter(Boolean)); }
 function _colabLideres()   { return _evUniqSorted(_colabs.filter(function(c){ return c.lider || (c.perfil||'').toLowerCase()==='admin'; }).map(function(c){ return c.nome; }).filter(Boolean)); }   // líder (profiles.lider=true) ou admin
 function _csUnidades()     { return _evUniqSorted(_csCargos.map(function(c){ return c.unidade; }).filter(Boolean)); }
-function _evPopulateUnidades(current) { _evPopulateSelect('ev-unidade', _csUnidades(), current || ''); }
+function _evPopulateUnidades(current) { _evPopulateCascade('ev-unidade', _csUnidades(), current || '', 'Selecione'); }
 
 // ─── Permissão de ver valores (sandbox: matrícula DEV via localStorage) ───
 function _sandboxMatricula() {
@@ -1710,22 +1710,24 @@ function _evUniqSorted(arr) {
   return out.sort();
 }
 
-// Departamento/Cargo vêm de profiles (_colabs). Salário ainda de _evCargos (vagas) até migrar Cargos & Salários.
+function _evIsAll(v) { return !v || v === 'Todos'; }
+
+// Departamento/Cargo vêm de Cargos & Salários (_csCargos). "Todos" = curinga (sem filtro).
 function _evDeptsForUnidade(unidade) {
   return _evUniqSorted(_csCargos.filter(function(c) {
-    return !unidade || c.unidade === unidade;
+    return _evIsAll(unidade) || c.unidade === unidade;
   }).map(function(c) { return c.departamento; }).filter(Boolean));
 }
 
 function _evCargosForUnidadeDepto(unidade, dept) {
   return _evUniqSorted(_csCargos.filter(function(c) {
-    return (!unidade || c.unidade === unidade) && (!dept || c.departamento === dept);
+    return (_evIsAll(unidade) || c.unidade === unidade) && (_evIsAll(dept) || c.departamento === dept);
   }).map(function(c) { return c.cargo; }).filter(Boolean));
 }
 
 function _evNiveisForCargo(unidade, dept, cargo) {
   return _evUniqSorted((_evCargos || []).filter(function(c) {
-    return c.nome === cargo && (!unidade || c.unidade === unidade) && (!dept || c.dept === dept);
+    return c.nome === cargo && (_evIsAll(unidade) || c.unidade === unidade) && (_evIsAll(dept) || c.dept === dept);
   }).map(function(c) { return c.nivel; }).filter(Boolean));
 }
 
@@ -1764,6 +1766,50 @@ function _evPopulateSelect(id, options, current) {
   if (current) sel.value = current;
 }
 
+// Como _evPopulateSelect, mas com placeholder + opção "Todos" no topo (Unidade/Departamento da vaga)
+function _evPopulateCascade(id, options, current, placeholder) {
+  var sel = document.getElementById(id);
+  if (!sel) return;
+  var list = ['Todos'].concat(options);
+  var found = list.indexOf(current) >= 0;
+  var html = '<option value="">' + escH(placeholder || 'Selecione') + '</option>';
+  if (!found && current) html += '<option value="'+escH(current)+'" selected>'+escH(current)+'</option>';
+  html += list.map(function(o) {
+    return '<option value="'+escH(o)+'"'+(o===current?' selected':'')+'>'+escH(o)+'</option>';
+  }).join('');
+  sel.innerHTML = html;
+  sel.value = current || '';
+}
+
+// "Todos" em unidade/depto é só ajuda de busca: resolve os valores reais a partir do cargo escolhido
+function _evResolveVagaScope(unidade, dept, cargoBase) {
+  var uAll = _evIsAll(unidade), dAll = _evIsAll(dept);
+  if (!uAll && !dAll) return { unidade: unidade, departamento: dept };
+  var match = null;
+  for (var i = 0; i < _csCargos.length; i++) {
+    var c = _csCargos[i];
+    if (c.cargo !== cargoBase) continue;
+    if (!uAll && c.unidade !== unidade) continue;
+    if (!dAll && c.departamento !== dept) continue;
+    match = c; break;
+  }
+  return {
+    unidade:      uAll ? (match ? match.unidade : '') : unidade,
+    departamento: dAll ? (match ? match.departamento : '') : dept
+  };
+}
+
+function _evSetSalario(el, val) {
+  if (!el) return;
+  if (window.__podeVerValores) {
+    el.value = val ? _fmtMoney(val) : '';
+    el.classList.remove('valor-oculto');
+  } else {
+    el.value = 'R$ 0.000,00';
+    el.classList.add('valor-oculto');
+  }
+}
+
 function _evClearFieldError(id) {
   var el = document.getElementById(id);
   if (el) { var f = el.closest('.ev-field'); if (f) f.classList.remove('ev-field-error'); }
@@ -1778,7 +1824,7 @@ function evUnidadeChanged() {
     evCargoChanged();
     return;
   }
-  _evPopulateSelect('ev-departamento', _evDeptsForUnidade(unidade), '');
+  _evPopulateCascade('ev-departamento', _evDeptsForUnidade(unidade), '', 'Selecione');
   document.getElementById('ev-cargo').innerHTML = '<option value="">Selecione o departamento</option>';
   evCargoChanged();
 }
@@ -1837,14 +1883,14 @@ function openEditVaga(id) {
   document.getElementById('ev-unidade').value = _u;
   _loadEvCargos(function() {
     var split = _evSplitCargo(_u, _d, _cargoFull);
-    _evPopulateSelect('ev-departamento', _u ? _evDeptsForUnidade(_u) : [], _d);
+    _evPopulateCascade('ev-departamento', _u ? _evDeptsForUnidade(_u) : [], _d, 'Selecione');
     _evPopulateSelect('ev-cargo', (_u && _d) ? _evCargosForUnidadeDepto(_u, _d) : [], split.cargo);
     _evPopulateSelect('ev-nivel', (_u && _d && split.cargo) ? _evNiveisForCargo(_u, _d, split.cargo) : [], split.nivel);
     var sal = _evSalaryForCargo(_u, _d, split.cargo, split.nivel);
     var fx = document.getElementById('ev-salario-fixo');
     var br = document.getElementById('ev-salario-bruto');
-    if (fx) fx.value = sal.fixo ? _fmtMoney(sal.fixo) : (r.salario_fixo ? _fmtMoney(r.salario_fixo) : '');
-    if (br) br.value = sal.bruto ? _fmtMoney(sal.bruto) : (r.salario_bruto ? _fmtMoney(r.salario_bruto) : '');
+    _evSetSalario(fx, sal.fixo || r.salario_fixo);
+    _evSetSalario(br, sal.bruto || r.salario_bruto);
   });
   _loadEvLideres(function(list) { _evPopulateSelect('ev-lider', list, r.lider || ''); });
   _loadEvColaboradores(function() { _evPopulateColaboradorSelect(r.colaborador_anterior || ''); });
@@ -1866,10 +1912,17 @@ function salvarEditVaga() {
   // Selecionar um colaborador contratado equivale a fechar a vaga
   var isFechada = colabContratadoRaw !== '' || statusRaw.toLowerCase() === 'fechada';
   var statusVal = isFechada ? 'Fechada' : 'Aberta';
+  var _cargoSel = (document.getElementById('ev-cargo') || {}).value || '';
+  // "Todos" na unidade/depto é só ajuda de busca: resolve os valores reais a partir do cargo escolhido
+  var _scope = _evResolveVagaScope(
+    (document.getElementById('ev-unidade') || {}).value || '',
+    (document.getElementById('ev-departamento') || {}).value || '',
+    _cargoSel
+  );
   var required = [
-    { id: 'ev-unidade',      label: 'Unidade' },
-    { id: 'ev-departamento', label: 'Departamento' },
-    { id: 'ev-cargo',        label: 'Cargo' },
+    { id: 'ev-cargo',        label: 'Cargo',        value: _cargoSel },
+    { id: 'ev-unidade',      label: 'Unidade',      value: _scope.unidade },
+    { id: 'ev-departamento', label: 'Departamento', value: _scope.departamento },
     { id: 'ev-horario',      label: 'Horário' },
     { id: 'ev-lider',        label: 'Líder responsável' }
   ];
@@ -1877,7 +1930,8 @@ function salvarEditVaga() {
   var invalidos = [];
   required.forEach(function(f) {
     var el = document.getElementById(f.id);
-    if (!el || !el.value.trim()) {
+    var val = (f.value != null ? f.value : (el ? el.value : '')) || '';
+    if (!val.trim() || val === 'Todos') {
       invalidos.push(f.label);
       if (el) el.closest('.ev-field').classList.add('ev-field-error');
     }
@@ -1898,8 +1952,8 @@ function salvarEditVaga() {
   var args = {
     p_id: _id,
     p_cargo:        _cargoBase + (_nivel ? ' ' + _nivel : ''),   // grava cargo + nível juntos (ex.: "Atendente de Delivery Jr")
-    p_departamento: document.getElementById('ev-departamento').value,
-    p_unidade:      document.getElementById('ev-unidade').value,
+    p_departamento: _scope.departamento,
+    p_unidade:      _scope.unidade,
     p_escala:       document.getElementById('ev-escala').value,
     p_horario:      document.getElementById('ev-horario').value,
     p_lider:                 document.getElementById('ev-lider').value,
