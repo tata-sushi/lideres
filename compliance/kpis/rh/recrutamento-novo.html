@@ -772,6 +772,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
       <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::novo-candidato" onclick="closeDrawer(); openNovoCandidato()">Novo Candidato</button>
         <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::nova-solicitacao" onclick="closeDrawer(); openNovaSolicitacao()">Nova Solicitação</button>
         <div id="drawer-acoes-section">
           <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::nova-vaga" onclick="closeDrawer(); openNewVaga()">Nova Vaga</button>
@@ -1842,6 +1843,108 @@ function salvarEditVaga() {
     closeEditVaga();
     loadAllData();
   }, function() { btn.disabled = false; btn.textContent = 'Salvar'; alert('Erro de conexão'); });
+}
+
+// ─── NOVO CANDIDATO (cadastro de entrevista) ─────────────────────────────────
+function openNovoCandidato() {
+  document.querySelectorAll('#nc-overlay .ev-field-error').forEach(function(el){ el.classList.remove('ev-field-error'); });
+  ['nc-nome','nc-contato','nc-cpf','nc-pretensao','nc-horario'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  var d=document.getElementById('nc-data'); if(d) d.value='';
+  // cascata unidade→depto→cargo (mesma fonte Cargos&Salários do modal de vaga)
+  _evPopulateSelect('nc-unidade', _csUnidades(), '');
+  document.getElementById('nc-unidade').value = '';
+  document.getElementById('nc-departamento').innerHTML = '<option value="">Selecione a unidade primeiro</option>';
+  document.getElementById('nc-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
+  _loadEvCargos(function(){});
+  // entrevistador + recrutador = líderes/admins de profiles
+  _loadEvLideres(function(list){
+    _evPopulateSelect('nc-entrevistador', list, ''); document.getElementById('nc-entrevistador').value = '';
+    _evPopulateSelect('nc-responsavel',   list, ''); document.getElementById('nc-responsavel').value   = '';
+  });
+  document.getElementById('nc-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeNovoCandidato() {
+  document.getElementById('nc-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function ncUnidadeChanged() {
+  _evClearFieldError('nc-unidade');
+  var u = (document.getElementById('nc-unidade')||{}).value || '';
+  if (!u) {
+    document.getElementById('nc-departamento').innerHTML = '<option value="">Selecione a unidade primeiro</option>';
+    document.getElementById('nc-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
+    return;
+  }
+  _evPopulateSelect('nc-departamento', _evDeptsForUnidade(u), '');
+  document.getElementById('nc-departamento').value = '';
+  document.getElementById('nc-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
+}
+
+function ncDeptoChanged() {
+  _evClearFieldError('nc-departamento');
+  var u = (document.getElementById('nc-unidade')||{}).value || '';
+  var dp = (document.getElementById('nc-departamento')||{}).value || '';
+  if (!u || !dp) {
+    document.getElementById('nc-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
+    return;
+  }
+  _evPopulateSelect('nc-cargo', _evCargosForUnidadeDepto(u, dp), '');
+  document.getElementById('nc-cargo').value = '';
+}
+
+function salvarNovoCandidato() {
+  document.querySelectorAll('#nc-overlay .ev-field-error').forEach(function(el){ el.classList.remove('ev-field-error'); });
+  var required = [
+    { id:'nc-nome', label:'Nome' }, { id:'nc-contato', label:'Contato' },
+    { id:'nc-unidade', label:'Unidade' }, { id:'nc-departamento', label:'Departamento' },
+    { id:'nc-cargo', label:'Cargo' }, { id:'nc-data', label:'Data da entrevista' },
+    { id:'nc-horario', label:'Horário' }, { id:'nc-entrevistador', label:'Entrevistador' }
+  ];
+  var invalidos = [];
+  required.forEach(function(f){
+    var el = document.getElementById(f.id);
+    if (!el || !el.value.trim()) {
+      invalidos.push(f.label);
+      if (el) { var w = el.closest('.ev-field'); if (w) w.classList.add('ev-field-error'); }
+    }
+  });
+  if (invalidos.length) {
+    var primeiro = document.querySelector('#nc-overlay .ev-field-error');
+    if (primeiro) primeiro.scrollIntoView({ behavior:'smooth', block:'center' });
+    return;
+  }
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Supabase indisponível.'); return; }
+  var btn = document.getElementById('nc-save');
+  btn.disabled = true; btn.textContent = 'Cadastrando…';
+  var args = {
+    p_id: null,
+    p_nome:            document.getElementById('nc-nome').value.trim(),
+    p_contato:         document.getElementById('nc-contato').value.trim(),
+    p_cpf:             document.getElementById('nc-cpf').value.trim(),
+    p_responsavel:     document.getElementById('nc-responsavel').value,
+    p_pretensao:       document.getElementById('nc-pretensao').value.trim(),
+    p_unidade:         document.getElementById('nc-unidade').value,
+    p_departamento:    document.getElementById('nc-departamento').value,
+    p_cargo:           document.getElementById('nc-cargo').value,
+    p_data_entrevista: document.getElementById('nc-data').value || null,
+    p_horarios:        document.getElementById('nc-horario').value.trim(),
+    p_entrevistador:   document.getElementById('nc-entrevistador').value,
+    p_status_entrevista: 'Aguardando Entrevista',
+    p_por: _sandboxMatricula()
+  };
+  SB.rpc('rec_candidatura_sandbox_salvar', args).then(function(res){
+    btn.disabled = false; btn.textContent = 'Cadastrar candidato';
+    if (res.error) { alert('Erro ao cadastrar:\n' + res.error.message); return; }
+    closeNovoCandidato();
+    loadAllData();
+  }, function(err){
+    btn.disabled = false; btn.textContent = 'Cadastrar candidato';
+    alert('Erro de conexão:\n' + (err && err.message || err));
+  });
 }
 
 function emptyState() {
@@ -3256,6 +3359,92 @@ function enviarSolicitacao() {
     <div class="modal-footer">
       <button class="modal-btn modal-btn-cancel" onclick="closeEditVaga()">Cancelar</button>
       <button class="modal-btn modal-btn-save" id="ev-save" onclick="salvarEditVaga()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- NOVO CANDIDATO -->
+<div class="modal-overlay" id="nc-overlay" onclick="if(event.target===this)closeNovoCandidato()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-header-info">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Cadastro de entrevista</div>
+        <div class="candidate-name">Novo Candidato</div>
+      </div>
+      <button class="modal-close" onclick="closeNovoCandidato()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <!-- Grupo 1: candidato -->
+      <div class="modal-info-grid">
+        <div class="ev-field" style="grid-column:1/-1">
+          <span class="modal-section-title">Nome <span style="color:var(--red);">*</span></span>
+          <input type="text" class="modal-input" id="nc-nome" placeholder="Nome completo" oninput="_evClearFieldError('nc-nome')">
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Contato / WhatsApp <span style="color:var(--red);">*</span></span>
+          <input type="tel" class="modal-input" id="nc-contato" placeholder="(11) 9 0000-0000" oninput="_evClearFieldError('nc-contato')">
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">CPF</span>
+          <input type="text" class="modal-input" id="nc-cpf" placeholder="Opcional">
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Pretensão salarial</span>
+          <input type="text" class="modal-input" id="nc-pretensao" placeholder="Opcional — ex: R$ 1.800">
+        </div>
+      </div>
+      <hr class="modal-divider">
+      <!-- Grupo 2: vaga -->
+      <div class="modal-info-grid">
+        <div class="ev-field">
+          <span class="modal-section-title">Unidade <span style="color:var(--red);">*</span></span>
+          <select class="modal-select" id="nc-unidade" onchange="ncUnidadeChanged()">
+            <option value="">Selecione</option>
+          </select>
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Departamento <span style="color:var(--red);">*</span></span>
+          <select class="modal-select" id="nc-departamento" onchange="ncDeptoChanged()">
+            <option value="">Selecione a unidade primeiro</option>
+          </select>
+        </div>
+        <div class="ev-field" style="grid-column:1/-1">
+          <span class="modal-section-title">Cargo <span style="color:var(--red);">*</span></span>
+          <select class="modal-select" id="nc-cargo" onchange="_evClearFieldError('nc-cargo')">
+            <option value="">Selecione o departamento primeiro</option>
+          </select>
+        </div>
+      </div>
+      <hr class="modal-divider">
+      <!-- Grupo 3: agendamento -->
+      <div class="modal-info-grid">
+        <div class="ev-field">
+          <span class="modal-section-title">Data da entrevista <span style="color:var(--red);">*</span></span>
+          <input type="date" class="modal-input" id="nc-data" oninput="_evClearFieldError('nc-data')">
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Horário <span style="color:var(--red);">*</span></span>
+          <input type="text" class="modal-input" id="nc-horario" placeholder="Ex: 15:00" oninput="_evClearFieldError('nc-horario')">
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Entrevistador <span style="color:var(--red);">*</span></span>
+          <select class="modal-select" id="nc-entrevistador" onchange="_evClearFieldError('nc-entrevistador')">
+            <option value="">Carregando...</option>
+          </select>
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Recrutador / Responsável</span>
+          <select class="modal-select" id="nc-responsavel">
+            <option value="">—</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="closeNovoCandidato()">Cancelar</button>
+      <button class="modal-btn modal-btn-save" id="nc-save" onclick="salvarNovoCandidato()">Cadastrar candidato</button>
     </div>
   </div>
 </div>
