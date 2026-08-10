@@ -1595,7 +1595,39 @@ function _anlGroups() {
   return g;
 }
 
+var ANL_PAGE = 50;         // pagina p/ não travar (a base tem milhares de candidaturas × dezenas de colunas)
+var _anlRows = [];
+var _anlShown = ANL_PAGE;
+
+function _anlRowsHtml() {
+  var groups = _anlGroups();
+  var totalCols = 2 + groups.reduce(function(a,g){ return a + g.cols.length; }, 0); // Nome + colunas + Ações
+  var display = _anlRows.slice(0, _anlShown);
+  var html = display.map(function(r){
+    var tds = '<td class="anl-sticky">'+_anlTxt(r.nome)+'</td>';
+    groups.forEach(function(gr){ gr.cols.forEach(function(c){ tds += '<td>'+c[1](r)+'</td>'; }); });
+    tds += '<td class="anl-acoes"><button class="btn-editar" title="Editar candidato" data-aba-id="governanca-kpis-rh-recrutamento::editar-candidato" onclick="abrirEditarCandidato(\''+escH(r.id)+'\')">'+_editSvg+'</button></td>';
+    return '<tr>'+tds+'</tr>';
+  }).join('');
+  var resto = _anlRows.length - _anlShown;
+  if (resto > 0) {
+    var prox = Math.min(ANL_PAGE, resto);
+    html += '<tr><td colspan="'+totalCols+'" style="text-align:center;padding:14px;border-right:none">'+
+      '<button onclick="showMoreAnl()" style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:7px 16px;cursor:pointer">Ver mais ('+prox+')</button>'+
+      '<span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted);margin-left:10px">'+resto+' restantes</span>'+
+      '</td></tr>';
+  }
+  return html;
+}
+
+function showMoreAnl() {
+  _anlShown += ANL_PAGE;
+  var tb = document.getElementById('anl-tbody');
+  if (tb) tb.innerHTML = _anlRowsHtml();
+}
+
 function renderAnaliticoTableHtml(rows) {
+  _anlRows = rows; _anlShown = ANL_PAGE;
   var groups = _anlGroups();
   // Cabeçalho: linha de grupos + linha de subcolunas (Nome e Ações fixos com rowspan)
   var grpRow = '<th class="anl-sticky" rowspan="2">Nome</th>';
@@ -1606,18 +1638,11 @@ function renderAnaliticoTableHtml(rows) {
   });
   grpRow += '<th rowspan="2">Ações</th>';
 
-  var body = rows.map(function(r){
-    var tds = '<td class="anl-sticky">'+_anlTxt(r.nome)+'</td>';
-    groups.forEach(function(gr){ gr.cols.forEach(function(c){ tds += '<td>'+c[1](r)+'</td>'; }); });
-    tds += '<td class="anl-acoes"><button class="btn-editar" title="Editar candidato" data-aba-id="governanca-kpis-rh-recrutamento::editar-candidato" onclick="abrirEditarCandidato(\''+escH(r.id)+'\')">'+_editSvg+'</button></td>';
-    return '<tr>'+tds+'</tr>';
-  }).join('');
-
   var n = rows.length;
   return '<div class="anl-count">'+n+' candidato'+(n!==1?'s':'')+' · jornada completa</div>'+
     '<div class="anl-wrap"><table class="ent-table anl-table">'+
     '<thead><tr class="anl-grp-row">'+grpRow+'</tr><tr class="anl-sub-row">'+subRow+'</tr></thead>'+
-    '<tbody>'+body+'</tbody></table></div>';
+    '<tbody id="anl-tbody">'+_anlRowsHtml()+'</tbody></table></div>';
 }
 
 function renderVagasTableRows() {
