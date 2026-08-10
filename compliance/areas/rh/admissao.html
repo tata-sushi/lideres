@@ -616,6 +616,9 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
   transition:border-color .15s; outline:none; appearance:none;
 }
 .form-input:focus,.form-select:focus,.form-textarea:focus { border-color:var(--carbon); }
+.form-input.is-locked,.form-select.is-locked { background:var(--bg); color:var(--t2); cursor:not-allowed; }
+.form-input.is-locked:focus,.form-select.is-locked:focus { border-color:var(--border); }
+.form-select.is-locked::-webkit-calendar-picker-indicator { display:none; }
 .form-textarea { resize:vertical; min-height:90px; line-height:1.6; }
 .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .form-divider {
@@ -1354,7 +1357,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="adm-modal-body">
       <div class="form-row">
         <label class="form-label" for="adm-colab">Colaborador</label>
-        <select class="form-select" id="adm-colab">
+        <select class="form-select" id="adm-colab" onchange="_admSyncDataAdmissao()">
           <option value="">— Selecione —</option>
         </select>
       </div>
@@ -1363,7 +1366,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="adm-doc-list" id="adm-doc-list"></div>
       <div class="form-row" style="margin-top:16px;">
         <label class="form-label" for="adm-data-doc">Data da admissão</label>
-        <input class="form-select" type="date" id="adm-data-doc">
+        <input class="form-select is-locked" type="date" id="adm-data-doc" readonly tabindex="-1" aria-readonly="true" onkeydown="return false" title="Puxada automaticamente do cadastro do colaborador">
+        <p style="font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);margin-top:6px;letter-spacing:.04em;line-height:1.5;">Puxada automaticamente do cadastro do colaborador.</p>
       </div>
     </div>
     <div class="adm-modal-footer">
@@ -1551,13 +1555,33 @@ function openDrawer() {
       .catch(function() {});
   }
 
+  // Normaliza a data de admissão para o formato YYYY-MM-DD exigido pelo <input type="date">.
+  // Aceita ISO (YYYY-MM-DD[THH:MM...]) vindo do Supabase e o formato BR (DD/MM/YYYY) legado.
+  function _admNormalizarData(s) {
+    if (!s) return '';
+    s = String(s).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (m) return m[3] + '-' + m[2] + '-' + m[1];
+    return '';
+  }
+
+  // Puxa a data de admissão do colaborador selecionado (base Supabase: data_admissao)
+  // e mantém o campo travado — o valor não é digitado manualmente.
+  function _admSyncDataAdmissao() {
+    var sel   = document.getElementById('adm-colab');
+    var campo = document.getElementById('adm-data-doc');
+    if (!sel || !campo) return;
+    var c = _admColabMap[sel.value];
+    campo.value = c ? _admNormalizarData(c.admissao) : '';
+  }
+
   function openModalAdmissao() {
     closeDrawer();
     _admLoadColaboradores();
     _admBuildDocList();
     document.getElementById('adm-colab').value = '';
-    var _today = new Date(); var _pad = function(n){return String(n).padStart(2,'0');};
-    document.getElementById('adm-data-doc').value = _today.getFullYear()+'-'+_pad(_today.getMonth()+1)+'-'+_pad(_today.getDate());
+    _admSyncDataAdmissao();
     _admSetLoading(false, 'Gerar PDF');
     _admShowError('');
     document.getElementById('adm-overlay').classList.add('open');
