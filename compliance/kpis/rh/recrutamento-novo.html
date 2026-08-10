@@ -1016,10 +1016,12 @@ function fetchSheet(sheetName, normFn, callback) {
 
 // Colaboradores (profiles) — raiz dos dropdowns do modal de vaga
 var _colabs = [];
+var _csCargos = [];   // Cargos & Salários (fonte da cascata unidade→depto→cargo + salário no modal de vaga)
 function _colabUnidades()  { return _evUniqSorted(_colabs.map(function(c){ return c.unidade; }).filter(Boolean)); }
 function _colabNomes()     { return _evUniqSorted(_colabs.map(function(c){ return c.nome; }).filter(Boolean)); }
 function _colabLideres()   { return _colabNomes(); }   // líder responsável = colaboradores de profiles (raiz)
-function _evPopulateUnidades(current) { _evPopulateSelect('ev-unidade', _colabUnidades(), current || ''); }
+function _csUnidades()     { return _evUniqSorted(_csCargos.map(function(c){ return c.unidade; }).filter(Boolean)); }
+function _evPopulateUnidades(current) { _evPopulateSelect('ev-unidade', _csUnidades(), current || ''); }
 
 // ─── Permissão de ver valores (sandbox: matrícula DEV via localStorage) ───
 function _sandboxMatricula() {
@@ -1040,10 +1042,12 @@ function loadAllData() {
   Promise.all([
     SB.rpc('rec_candidaturas_sandbox_listar', { p_matricula: _sandboxMatricula() }),  // máscara da pretensão/diária
     SB.rpc('vagas_sandbox_listar', { p_matricula: _sandboxMatricula() }),   // matrícula DEV p/ testar permissão de valores
-    SB.rpc('colaboradores_sandbox_listar')   // raiz (profiles) dos dropdowns do modal
+    SB.rpc('colaboradores_sandbox_listar'),   // raiz (profiles) → líder/colaborador do modal
+    SB.rpc('cargos_salarios_sandbox_listar', { p_matricula: _sandboxMatricula() })  // cargo + salário do modal
   ]).then(function (results) {
-    var res = results[0], vres = results[1], cres = results[2];
+    var res = results[0], vres = results[1], cres = results[2], csres = results[3];
     _colabs = (cres && !cres.error && Array.isArray(cres.data)) ? cres.data : [];
+    _csCargos = (csres && !csres.error && csres.data && Array.isArray(csres.data.cargos)) ? csres.data.cargos : [];
     // ── Vagas ── (RPC devolve { pode_ver, vagas }; salários mascarados no servidor se não pode ver)
     var vd = (vres && !vres.error && vres.data) ? vres.data : {};
     window.__podeVerValores = !!vd.pode_ver;
@@ -1636,16 +1640,14 @@ var _evColaboradores = null;
 
 // SANDBOX: fontes do modal vêm do próprio array `vagas` (endpoints EV_* estão bloqueados)
 function _loadEvCargos(callback) {
-  _evObs = {};
   var seen = {}, out = [];
-  (vagas || []).forEach(function(v) {
-    if (!v.cargo) return;
-    var key = (v.unidade || '') + '|' + (v.departamento || '') + '|' + (v.cargo || '');
+  (_csCargos || []).forEach(function(c) {
+    if (!c.cargo) return;
+    var key = (c.unidade || '') + '|' + (c.departamento || '') + '|' + (c.cargo || '');
     if (seen[key]) return; seen[key] = 1;
     out.push({
-      unidade: v.unidade || '', dept: v.departamento || '', nome: v.cargo || '',
-      fixo: v.salario_fixo || 0, peric: 0, insal: 0, gorjeta: 0, premio: 0,
-      bruto: v.salario_bruto || 0
+      unidade: c.unidade || '', dept: c.departamento || '', nome: c.cargo || '',
+      fixo: c.salario_fixo || 0, bruto: c.bruto || 0
     });
   });
   _evCargos = out;
@@ -1667,12 +1669,7 @@ function _evSalaryForCargo(unidade, dept, nome) {
   for (var i = 0; i < _evCargos.length; i++) {
     var c = _evCargos[i];
     if (c.nome === nome && (!unidade || c.unidade === unidade) && (!dept || c.dept === dept)) {
-      var obs = (_evObs && _evObs[c.unidade]) || { ptG: 0, ptP: 0 };
-      var brutoCalc = (c.fixo || 0) + (c.insal || 0) + (c.peric || 0)
-                    + ((c.gorjeta || 0) * obs.ptG)
-                    + ((c.premio  || 0) * obs.ptP);
-      var bruto = brutoCalc > 0 ? brutoCalc : (c.bruto || 0);
-      return { fixo: c.fixo || '', bruto: bruto || '' };
+      return { fixo: c.fixo || '', bruto: c.bruto || '' };  // bruto já calculado na view de C&S
     }
   }
   return { fixo: '', bruto: '' };
@@ -1793,13 +1790,13 @@ function _evUniqSorted(arr) {
 
 // Departamento/Cargo vêm de profiles (_colabs). Salário ainda de _evCargos (vagas) até migrar Cargos & Salários.
 function _evDeptsForUnidade(unidade) {
-  return _evUniqSorted(_colabs.filter(function(c) {
+  return _evUniqSorted(_csCargos.filter(function(c) {
     return !unidade || c.unidade === unidade;
   }).map(function(c) { return c.departamento; }).filter(Boolean));
 }
 
 function _evCargosForUnidadeDepto(unidade, dept) {
-  return _evUniqSorted(_colabs.filter(function(c) {
+  return _evUniqSorted(_csCargos.filter(function(c) {
     return (!unidade || c.unidade === unidade) && (!dept || c.departamento === dept);
   }).map(function(c) { return c.cargo; }).filter(Boolean));
 }
