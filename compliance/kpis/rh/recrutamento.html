@@ -104,6 +104,7 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .card-field { display: flex; flex-direction: column; gap: 1px; }
 .field-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
 .field-value { font-size: 13px; color: var(--carbon); font-weight: 500; }
+.valor-oculto { filter: blur(5px); -webkit-user-select: none; user-select: none; pointer-events: none; }
 
 .card-footer { border-top: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #FAFAFA; }
 .meta-pill { display: flex; align-items: center; gap: 6px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); }
@@ -925,30 +926,19 @@ function normVaga(obj) {
   };
 }
 
-function fetchSheetVagas(callback) {
-  if (!SHEET_VAGAS_ID && !SHEET_ID) { callback([], null); return; }
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/'
-    + (SHEET_VAGAS_ID || SHEET_ID)
-    + '/values/' + encodeURIComponent(SHEET_VAGAS + '!A:Z')
-    + '?key=' + API_KEY;
-  fetch(url)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.error) { callback([], null); return; }
-      var rows = data.values || [];
-      if (rows.length < 2) { callback([], null); return; }
-      var headers = rows[0];
-      var result = [];
-      for (var i = 1; i < rows.length; i++) {
-        if (rows[i].some(function(c){return c && c.trim();})) {
-          var obj = normVaga(rowToObj(headers, rows[i]));
-          obj._linha = i + 1;
-          result.push(obj);
-        }
-      }
-      callback(result, null);
-    })
-    .catch(function() { callback([], null); });
+// Colaboradores (profiles) — raiz dos dropdowns do modal de vaga
+var _colabs = [];
+var _csCargos = [];   // Cargos & Salários (fonte da cascata unidade→depto→cargo + salário no modal de vaga)
+function _colabUnidades()  { return _evUniqSorted(_colabs.map(function(c){ return c.unidade; }).filter(Boolean)); }
+function _colabNomes()     { return _evUniqSorted(_colabs.map(function(c){ return c.nome; }).filter(Boolean)); }
+function _colabLideres()   { return _evUniqSorted(_colabs.filter(function(c){ return c.lider || (c.perfil||'').toLowerCase()==='admin'; }).map(function(c){ return c.nome; }).filter(Boolean)); }   // líder (profiles.lider=true) ou admin
+function _csUnidades()     { return _evUniqSorted(_csCargos.map(function(c){ return c.unidade; }).filter(Boolean)); }
+function _evPopulateUnidades(current) { _evPopulateSelect('ev-unidade', _csUnidades(), current || ''); }
+
+function fmtValor(v) {
+  // Autorizado → valor real; bloqueado → placeholder borrado (o número real nem vem do servidor)
+  if (window.__podeVerValores) return v ? _fmtMoney(v) : '—';
+  return '<span class="valor-oculto">R$ 0.000,00</span>';
 }
 
 function fetchSheet(sheetName, normFn, callback) {
@@ -975,22 +965,60 @@ function fetchSheet(sheetName, normFn, callback) {
 function loadAllData() {
   state.loading = true; state.error = null;
   showLoading();
-  var total = (isAdmin || isLider) ? 3 : 2;
+  // Entrevistas/Testes continuam vindo do Google (fetchSheet); Vagas vem do Supabase (sempre).
+  var total = 3;
   var done = 0, errors = [];
+  function step() { if (++done === total) finishLoad(errors); }
   fetchSheet(SHEET_ENTREVISTAS, normEntrevista, function(data, err) {
     if (err) errors.push('Entrevistas: ' + err); else entrevistas = data || [];
-    if (++done === total) finishLoad(errors);
+    step();
   });
   fetchSheet(SHEET_TESTES, normTeste, function(data, err) {
     if (err) errors.push('Testes: ' + err); else testes = data || [];
-    if (++done === total) finishLoad(errors);
+    step();
   });
-  if (isAdmin || isLider) {
-    fetchSheetVagas(function(data) {
-      vagas = data || [];
-      if (++done === total) finishLoad(errors);
+  loadVagasSupabase(function(err) {
+    if (err) errors.push('Vagas: ' + err);
+    step();
+  });
+}
+
+// ─── Vagas + Cargos & Salários + Colaboradores via Supabase (RPCs autenticadas tata_plus) ───
+function loadVagasSupabase(cb) {
+  // vagas abertas a todo usuário logado; salário é mascarado no servidor p/ quem não tem permissão
+  var SB = window.__lideresSupa;
+  if (!SB) { window.addEventListener('lideres:supa', function(){ loadVagasSupabase(cb); }, { once: true }); return; }
+  var TP = SB.schema('tata_plus');
+  Promise.all([
+    TP.rpc('vagas_listar'),            // jsonb { pode_ver, vagas:[...] }
+    TP.rpc('cargos_para_vaga'),        // jsonb { pode_ver, cargos:[...] }
+    TP.rpc('colaboradores_para_vaga')  // TABLE → array de { nome,cargo,unidade,departamento,lider,perfil }
+  ]).then(function (results) {
+    var vres = results[0], csres = results[1], cres = results[2];
+    _colabs = (cres && !cres.error && Array.isArray(cres.data)) ? cres.data : [];
+    _csCargos = (csres && !csres.error && csres.data && Array.isArray(csres.data.cargos)) ? csres.data.cargos : [];
+    // ── Vagas ── (RPC devolve { pode_ver, vagas }; salários mascarados no servidor se não pode ver)
+    var vd = (vres && !vres.error && vres.data) ? vres.data : {};
+    window.__podeVerValores = !!vd.pode_ver;
+    var vrows = Array.isArray(vd.vagas) ? vd.vagas : [];
+    vagas = vrows.map(function (v) {
+      return {
+        id: v.id, _linha: null,
+        cargo: v.cargo || '', unidade: v.unidade || '', departamento: v.departamento || '',
+        status: v.status_vaga || '', data: v.data_solicitacao || '',
+        lider: v.lider_responsavel || '', responsavel: v.lider_responsavel || '',
+        escala: v.escala || '', horario: v.horario || '',
+        salario_fixo: v.salario_fixo, salario_bruto: v.salario_bruto,
+        colaborador_anterior: v.colaborador_anterior || '', colaborador_contratado: v.colaborador_contratado || '',
+        data_contratacao: v.data_contratacao || '', observacoes: v.observacao || '',
+        beneficios: v.beneficios || ''
+      };
     });
-  }
+    cb((vres && vres.error) ? vres.error.message : null);
+  }, function () {
+    vagas = [];
+    cb('Supabase indisponível');
+  });
 }
 
 function finishLoad(errors) {
@@ -1102,11 +1130,10 @@ function getFiltered() {
   var src=getSrc(), f=state.filters;
   if (state.tab === 'vagas') {
     return src.filter(function(r) {
-      var s = norm((r.status||'').toLowerCase().trim());
-      if (s !== 'aberta' && s !== 'aberto' && s.indexOf('andamento') < 0) return false;
       if (isLider && !_liderMatchVaga(r)) return false;
       if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
       if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
+      if (f.status!=='Todos' && (r.status||'')!==f.status) return false;
       return true;
     });
   }
@@ -1232,7 +1259,7 @@ function renderFilters() {
 }
 
 function renderVagasFilters() {
-  var src=vagas.filter(function(v){ var s=norm((v.status||'').toLowerCase().trim()); return (s==='aberta'||s==='aberto'||s.indexOf('andamento')>=0) && (!isLider||_liderMatchVaga(v)); }), f=state.filters, filtered=getFiltered();
+  var src=vagas.filter(function(v){ return (!isLider||_liderMatchVaga(v)); }), f=state.filters, filtered=getFiltered();
   function sel(label, key, opts, curVal) {
     var h='<div class="filter-group"><label class="filter-label">'+label+'</label><select class="filter-select" onchange="setFilter(\''+key+'\',this.value)">';
     h+='<option value="Todos"'+(curVal==='Todos'?' selected':'')+'>Todos</option>';
@@ -1359,20 +1386,24 @@ function cardVaga(r) {
   var sf = slugVagaStatus(r.status);
   var sfLabel = r.status || 'Sem status';
   var subtitle = [r.departamento, r.unidade].filter(Boolean).join(' - ');
-  var footer = isAdmin ? '<div class="card-footer" style="justify-content:flex-end"><button class="btn-avaliar" onclick="openEditVaga(\''+r._linha+'\')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar vaga</button></div>' : '';
+  var footer = '<div class="card-footer" style="justify-content:flex-end"><button class="btn-avaliar" onclick="openEditVaga(\''+r.id+'\')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar vaga</button></div>';
   return '<div class="card">'+
     '<div class="card-header"><div>'+
     '<div class="candidate-name">'+escH(r.cargo || 'Vaga sem título')+'</div>'+
     '<div class="candidate-contact">'+escH(subtitle)+'</div></div>'+
     '<span class="status-badge sf-'+sf+'">'+escH(sfLabel)+'</span></div>'+
     '<div class="card-body card-body-2col">'+
+    '<div class="card-field"><span class="field-label">Colaborador ant.</span><span class="field-value">'+escH(r.colaborador_anterior || '—')+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Colab. contratado</span><span class="field-value">'+escH(r.colaborador_contratado || '—')+'</span></div>'+
     (r.escala ? '<div class="card-field"><span class="field-label">Escala</span><span class="field-value">'+escH(r.escala)+'</span></div>' : '<div class="card-field"></div>')+
     (r.horario ? '<div class="card-field"><span class="field-label">Horário</span><span class="field-value">'+escH(r.horario)+'</span></div>' : '<div class="card-field"></div>')+
-    (isAdmin ? '<div class="card-field"><span class="field-label">Sal. Fixo</span><span class="field-value" style="font-family:\'DM Mono\',monospace;font-size:11px">'+(r.salario_fixo ? _fmtMoney(r.salario_fixo) : '—')+'</span></div>' : '')+
-    (isAdmin ? '<div class="card-field"><span class="field-label">Sal. Bruto</span><span class="field-value" style="font-family:\'DM Mono\',monospace;font-size:11px">'+(r.salario_bruto ? _fmtMoney(r.salario_bruto) : '—')+'</span></div>' : '')+
+    '<div class="card-field"><span class="field-label">Sal. Fixo</span><span class="field-value">'+fmtValor(r.salario_fixo)+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Sal. Bruto</span><span class="field-value">'+fmtValor(r.salario_bruto)+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Data de abertura</span><span class="field-value">'+(r.data ? escH(fmtDateBR(r.data)) : '—')+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Data de fechamento</span><span class="field-value">'+(r.data_contratacao ? escH(fmtDateBR(r.data_contratacao)) : '—')+'</span></div>'+
     (r.lider ? '<div class="card-field"><span class="field-label">Líder responsável</span><span class="field-value">'+escH(r.lider)+'</span></div>' : '<div class="card-field"></div>')+
-    (r.data ? '<div class="card-field"><span class="field-label">Data de Abertura</span><span class="field-value">'+escH(fmtDateBR(r.data))+'</span></div>' : '<div class="card-field"></div>')+
-    (isAdmin ? '<div class="card-field" style="grid-column:span 2"><span class="field-label">Colaborador Ant.</span><span class="field-value">'+escH(r.colaborador_anterior || '—')+'</span></div>' : '')+
+    '<div class="card-field"><span class="field-label">Observação</span><span class="field-value">'+escH(r.observacoes || '—')+'</span></div>'+
+    (r.beneficios ? '<div class="card-field" style="grid-column:span 2"><span class="field-label">Benefícios</span><span class="field-value">'+escH(r.beneficios)+'</span></div>' : '')+
     '</div>'+footer+'</div>';
 }
 
@@ -1411,7 +1442,7 @@ function renderVagasTableHtml(rows) {
   _vagaSortDir = 1;
   var n = rows.length;
   var countLabel = n + ' vaga' + (n !== 1 ? 's' : '');
-  var wA = isAdmin;
+  var wA = true;   // colunas de salário/colaborador/editar sempre visíveis (salário respeita a permissão via fmtValor)
   return '<div class="vaga-table-wrap">'+
     '<div class="vaga-table-title">Vagas abertas <span class="vaga-table-count">— '+countLabel+'</span></div>'+
     '<table class="vaga-table"><thead><tr>'+
@@ -1439,7 +1470,7 @@ function renderVagasTableRows() {
   if (!tbody) return;
   var sorted = _vagaSortedRows();
   var display = sorted.slice(0, _vagaShown);
-  var cols = isAdmin ? 12 : 8;
+  var cols = 12;
   var html = display.map(function(r) {
     var sf = slugVagaStatus(r.status);
     return '<tr>'+
@@ -1449,12 +1480,12 @@ function renderVagasTableRows() {
       '<td><div class="vt-cargo">'+escH(r.cargo || 'Vaga sem título')+'</div></td>'+
       '<td>'+escH(r.escala || '—')+'</td>'+
       '<td>'+escH(r.horario || '—')+'</td>'+
-      (isAdmin ? '<td style="font-family:\'DM Mono\',monospace;font-size:11px">'+(r.salario_fixo ? _fmtMoney(r.salario_fixo) : '—')+'</td>' : '')+
-      (isAdmin ? '<td style="font-family:\'DM Mono\',monospace;font-size:11px">'+(r.salario_bruto ? _fmtMoney(r.salario_bruto) : '—')+'</td>' : '')+
-      (isAdmin ? '<td>'+escH(r.colaborador_anterior || '—')+'</td>' : '')+
+      '<td style="font-family:\'DM Mono\',monospace;font-size:11px">'+fmtValor(r.salario_fixo)+'</td>'+
+      '<td style="font-family:\'DM Mono\',monospace;font-size:11px">'+fmtValor(r.salario_bruto)+'</td>'+
+      '<td>'+escH(r.colaborador_anterior || '—')+'</td>'+
       '<td>'+escH(r.lider || '—')+'</td>'+
       '<td><span class="status-badge sf-'+sf+'">'+escH(r.status || 'Sem status')+'</span></td>'+
-      (isAdmin ? '<td><button class="btn-editar" title="Editar" onclick="openEditVaga(\''+r._linha+'\')">'+_editSvg+'</button></td>' : '')+
+      '<td><button class="btn-editar" title="Editar" onclick="openEditVaga(\''+r.id+'\')">'+_editSvg+'</button></td>'+
       '</tr>';
   }).join('');
   var resto = sorted.length - _vagaShown;
@@ -1514,91 +1545,39 @@ var _evObs           = null; // { unidade: { ptG, ptP } }
 var _evLideres       = null;
 var _evColaboradores = null;
 
+// Fontes do modal vêm dos arrays já carregados via Supabase (_csCargos / _colabs)
 function _loadEvCargos(callback) {
-  if (_evCargos) { callback(_evCargos); return; }
-  fetch(EV_CARGOS_URL + '?action=getAll')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      // monta lookup de valor de ponto gorjeta/prêmio por unidade
-      _evObs = {};
-      (data.obs || []).forEach(function(o) {
-        if (o.loja_nome) _evObs[o.loja_nome.trim()] = {
-          ptG: o.valor_pt_gorjeta || 0,
-          ptP: o.valor_pt_premio  || 0
-        };
-      });
-      var seenMap = {};
-      _evCargos = (data.salarios || [])
-        .map(function(s) {
-          return {
-            unidade: (s.unidade || '').trim(),
-            dept:    (s.departamento || '').trim(),
-            nome:    ((s.cargo || '') + (s.niveis ? ' ' + s.niveis : '')).trim(),
-            fixo:    s.salario_fixo     || 0,
-            peric:   s.periculosidade   || 0,
-            insal:   s.insalubridade    || 0,
-            gorjeta: s.ponto_gorjeta    || 0,
-            premio:  s.ponto_premio     || 0,
-            bruto:   s.bruto_aproximado || 0
-          };
-        })
-        .filter(function(c) {
-          if (!c.nome) return false;
-          var key = c.unidade + '|' + c.dept + '|' + c.nome;
-          if (seenMap[key]) {
-            if (c.bruto > seenMap[key].bruto) {
-              seenMap[key].fixo = c.fixo; seenMap[key].peric = c.peric;
-              seenMap[key].insal = c.insal; seenMap[key].gorjeta = c.gorjeta;
-              seenMap[key].premio = c.premio; seenMap[key].bruto = c.bruto;
-            }
-            return false;
-          }
-          seenMap[key] = c;
-          return true;
-        });
-      callback(_evCargos);
-    })
-    .catch(function() { _evCargos = []; _evObs = {}; callback([]); });
+  var seen = {}, out = [];
+  (_csCargos || []).forEach(function(c) {
+    if (!c.cargo) return;
+    var key = (c.unidade || '') + '|' + (c.departamento || '') + '|' + (c.cargo || '') + '|' + (c.niveis || '');
+    if (seen[key]) return; seen[key] = 1;
+    out.push({
+      unidade: c.unidade || '', dept: c.departamento || '', nome: c.cargo || '', nivel: c.niveis || '',
+      fixo: c.salario_fixo || 0, bruto: c.bruto || 0
+    });
+  });
+  _evCargos = out;
+  callback(_evCargos);
 }
 
 function _loadEvLideres(callback) {
-  if (_evLideres) { callback(_evLideres); return; }
-  fetch(EV_MAPA_URL + '?action=listUsers')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      _evLideres = (data.usuarios || [])
-        .filter(Boolean)
-        .sort();
-      callback(_evLideres);
-    })
-    .catch(function() { _evLideres = []; callback([]); });
+  _evLideres = _colabLideres();   // líderes de profiles
+  callback(_evLideres);
 }
 
 function _loadEvColaboradores(callback) {
-  if (_evColaboradores) { callback(_evColaboradores); return; }
-  fetch(EV_COLAB_URL + '?action=listColaboradores')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      _evColaboradores = (data.colaboradores || [])
-        .map(function(c) { return c.nome || ''; })
-        .filter(Boolean)
-        .sort();
-      callback(_evColaboradores);
-    })
-    .catch(function() { _evColaboradores = []; callback([]); });
+  _evColaboradores = _colabNomes();   // colaboradores de profiles
+  callback(_evColaboradores);
 }
 
-function _evSalaryForCargo(unidade, dept, nome) {
+function _evSalaryForCargo(unidade, dept, nome, nivel) {
   if (!_evCargos) return { fixo: '', bruto: '' };
   for (var i = 0; i < _evCargos.length; i++) {
     var c = _evCargos[i];
-    if (c.nome === nome && (!unidade || c.unidade === unidade) && (!dept || c.dept === dept)) {
-      var obs = (_evObs && _evObs[c.unidade]) || { ptG: 0, ptP: 0 };
-      var brutoCalc = (c.fixo || 0) + (c.insal || 0) + (c.peric || 0)
-                    + ((c.gorjeta || 0) * obs.ptG)
-                    + ((c.premio  || 0) * obs.ptP);
-      var bruto = brutoCalc > 0 ? brutoCalc : (c.bruto || 0);
-      return { fixo: c.fixo || '', bruto: bruto || '' };
+    if (c.nome === nome && (!unidade || c.unidade === unidade) && (!dept || c.dept === dept)
+        && (nivel == null || nivel === '' || c.nivel === nivel)) {
+      return { fixo: c.fixo || '', bruto: c.bruto || '' };  // bruto já calculado na view de C&S
     }
   }
   return { fixo: '', bruto: '' };
@@ -1609,7 +1588,19 @@ function evCargoChanged() {
   var unidade = (document.getElementById('ev-unidade') || {}).value || '';
   var dept    = (document.getElementById('ev-departamento') || {}).value || '';
   var nome    = (document.getElementById('ev-cargo') || {}).value || '';
-  var sal = _evSalaryForCargo(unidade, dept, nome);
+  var niveis  = nome ? _evNiveisForCargo(unidade, dept, nome) : [];
+  // preenche o dropdown de nível; se só houver um, já seleciona
+  if (niveis.length) _evPopulateSelect('ev-nivel', niveis, niveis.length === 1 ? niveis[0] : '');
+  else { var nv = document.getElementById('ev-nivel'); if (nv) nv.innerHTML = '<option value="">—</option>'; }
+  evNivelChanged();
+}
+
+function evNivelChanged() {
+  var unidade = (document.getElementById('ev-unidade') || {}).value || '';
+  var dept    = (document.getElementById('ev-departamento') || {}).value || '';
+  var nome    = (document.getElementById('ev-cargo') || {}).value || '';
+  var nivel   = (document.getElementById('ev-nivel') || {}).value || '';
+  var sal = _evSalaryForCargo(unidade, dept, nome, nivel);
   var fx = document.getElementById('ev-salario-fixo');
   var br = document.getElementById('ev-salario-bruto');
   if (fx) fx.value = sal.fixo ? _fmtMoney(sal.fixo) : '';
@@ -1717,18 +1708,46 @@ function _evUniqSorted(arr) {
   return out.sort();
 }
 
+// Departamento/Cargo vêm de Cargos & Salários (_csCargos). Níveis/salário de _evCargos (derivado de _csCargos).
 function _evDeptsForUnidade(unidade) {
-  if (!_evCargos) return [];
-  return _evUniqSorted(_evCargos.filter(function(c) {
+  return _evUniqSorted(_csCargos.filter(function(c) {
     return !unidade || c.unidade === unidade;
-  }).map(function(c) { return c.dept; }));
+  }).map(function(c) { return c.departamento; }).filter(Boolean));
 }
 
 function _evCargosForUnidadeDepto(unidade, dept) {
-  if (!_evCargos) return [];
-  return _evUniqSorted(_evCargos.filter(function(c) {
-    return (!unidade || c.unidade === unidade) && (!dept || c.dept === dept);
-  }).map(function(c) { return c.nome; }));
+  return _evUniqSorted(_csCargos.filter(function(c) {
+    return (!unidade || c.unidade === unidade) && (!dept || c.departamento === dept);
+  }).map(function(c) { return c.cargo; }).filter(Boolean));
+}
+
+function _evNiveisForCargo(unidade, dept, cargo) {
+  return _evUniqSorted((_evCargos || []).filter(function(c) {
+    return c.nome === cargo && (!unidade || c.unidade === unidade) && (!dept || c.dept === dept);
+  }).map(function(c) { return c.nivel; }).filter(Boolean));
+}
+
+// normaliza nome de cargo p/ comparar apesar de grafia (minúsculo, sem acento, sem "de/da/do")
+function _evNorm(s) {
+  return (s == null ? '' : String(s)).toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\b(de|da|do|dos|das|e)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
+// separa o cargo salvo (ex.: "Atendente de Delivery Jr") em cargo base + nível, casando com C&S
+function _evSplitCargo(unidade, dept, fullCargo) {
+  fullCargo = (fullCargo || '').trim();
+  if (!fullCargo) return { cargo: '', nivel: '' };
+  var target = _evNorm(fullCargo), exact = null, byName = null;
+  (_evCargos || []).forEach(function(c) {
+    if (unidade && c.unidade !== unidade) return;
+    if (dept && c.dept !== dept) return;
+    if (_evNorm(c.nome + ' ' + c.nivel) === target) exact = { cargo: c.nome, nivel: c.nivel };
+    if (_evNorm(c.nome) === target) byName = { cargo: c.nome, nivel: '' };
+  });
+  return exact || byName || { cargo: fullCargo, nivel: '' };
 }
 
 function _evPopulateSelect(id, options, current) {
@@ -1777,10 +1796,9 @@ function evDeptoChanged() {
 
 function openNewVaga() {
   document.querySelectorAll('#ev-overlay .ev-field-error').forEach(function(el) { el.classList.remove('ev-field-error'); });
-  var l = document.getElementById('ev-mode-label');
   var t = document.getElementById('ev-cargo-title');
-  if (l) l.textContent = 'Nova Vaga';
-  if (t) t.textContent = 'Preencha os campos abaixo';
+  if (t) t.textContent = 'Nova Vaga';
+  _evPopulateUnidades('');
   document.getElementById('ev-linha').value   = '';
   document.getElementById('ev-escala').value  = '6x1';
   document.getElementById('ev-horario').value = '';
@@ -1790,6 +1808,7 @@ function openNewVaga() {
   _loadEvCargos(function() {
     document.getElementById('ev-departamento').innerHTML = '<option value="">Selecione a unidade primeiro</option>';
     document.getElementById('ev-cargo').innerHTML = '<option value="">Selecione o departamento</option>';
+    var nv = document.getElementById('ev-nivel'); if (nv) nv.innerHTML = '<option value="">—</option>';
   });
   _loadEvLideres(function(list) { _evPopulateSelect('ev-lider', list, ''); });
   _loadEvColaboradores(function() { _evPopulateColaboradorSelect('Vaga Nova'); });
@@ -1799,26 +1818,27 @@ function openNewVaga() {
   document.getElementById('ev-overlay').classList.add('active');
 }
 
-function openEditVaga(linha) {
+function openEditVaga(id) {
   document.querySelectorAll('#ev-overlay .ev-field-error').forEach(function(el) { el.classList.remove('ev-field-error'); });
   var r = null;
-  for (var i = 0; i < _vagaRows.length; i++) {
-    if (String(_vagaRows[i]._linha) === String(linha)) { r = _vagaRows[i]; break; }
+  for (var i = 0; i < vagas.length; i++) {
+    if (String(vagas[i].id) === String(id)) { r = vagas[i]; break; }
   }
   if (!r) return;
-  var l = document.getElementById('ev-mode-label');
   var t = document.getElementById('ev-cargo-title');
-  if (l) l.textContent = 'Editar Vaga';
-  if (t) t.textContent = r.cargo || 'Vaga sem título';
-  document.getElementById('ev-linha').value   = r._linha || '';
+  if (t) t.textContent = 'Editar Vaga';
+  _evPopulateUnidades(r.unidade || '');
+  document.getElementById('ev-linha').value   = r.id || '';
   document.getElementById('ev-escala').value  = (r.escala || '').indexOf('5x2') >= 0 ? '5x2' : '6x1';
   document.getElementById('ev-horario').value = r.horario || '';
-  var _u = r.unidade || '', _d = r.departamento || '', _c = r.cargo || '';
+  var _u = r.unidade || '', _d = r.departamento || '', _cargoFull = r.cargo || '';
   document.getElementById('ev-unidade').value = _u;
   _loadEvCargos(function() {
+    var split = _evSplitCargo(_u, _d, _cargoFull);
     _evPopulateSelect('ev-departamento', _u ? _evDeptsForUnidade(_u) : [], _d);
-    _evPopulateSelect('ev-cargo', (_u && _d) ? _evCargosForUnidadeDepto(_u, _d) : [], _c);
-    var sal = _evSalaryForCargo(_u, _d, _c);
+    _evPopulateSelect('ev-cargo', (_u && _d) ? _evCargosForUnidadeDepto(_u, _d) : [], split.cargo);
+    _evPopulateSelect('ev-nivel', (_u && _d && split.cargo) ? _evNiveisForCargo(_u, _d, split.cargo) : [], split.nivel);
+    var sal = _evSalaryForCargo(_u, _d, split.cargo, split.nivel);
     var fx = document.getElementById('ev-salario-fixo');
     var br = document.getElementById('ev-salario-bruto');
     if (fx) fx.value = sal.fixo ? _fmtMoney(sal.fixo) : (r.salario_fixo ? _fmtMoney(r.salario_fixo) : '');
@@ -1868,48 +1888,34 @@ function salvarEditVaga() {
 
   var btn = document.getElementById('ev-save');
   btn.disabled = true; btn.textContent = 'Salvando…';
-  var _linha = document.getElementById('ev-linha').value;
-  var isNew = !_linha;
+  var _id = document.getElementById('ev-linha').value || null;
   var colabContratado = isFechada ? colabContratadoRaw : '';
-  var dataContratacao = isFechada ? _evTodayBR() : '';
-  var payload = {
-    action:       isNew ? 'addVaga' : 'updateVaga',
-    row_index:    _linha,
-    cargo:        document.getElementById('ev-cargo').value,
-    departamento: document.getElementById('ev-departamento').value,
-    unidade:      document.getElementById('ev-unidade').value,
-    escala:       document.getElementById('ev-escala').value,
-    horario:      document.getElementById('ev-horario').value,
-    lider:               document.getElementById('ev-lider').value,
-    colaborador_anterior: document.getElementById('ev-colaborador').value,
-    salario_fixo:        (document.getElementById('ev-salario-fixo') || {}).value || '',
-    salario_bruto:       (document.getElementById('ev-salario-bruto') || {}).value || '',
-    status:                statusVal,
-    colaborador_contratado: colabContratado,
-    data_contratacao:       dataContratacao
+  function _money(v) { v = String(v || '').replace(/R\$|\s|\./g, '').replace(',', '.'); var n = parseFloat(v); return isNaN(n) ? null : n; }
+  var _cargoBase = document.getElementById('ev-cargo').value;
+  var _nivel = (document.getElementById('ev-nivel') || {}).value || '';
+  var args = {
+    p_id: _id,
+    p_cargo:        _cargoBase + (_nivel ? ' ' + _nivel : ''),   // grava cargo + nível juntos (ex.: "Atendente de Delivery Jr")
+    p_departamento: document.getElementById('ev-departamento').value,
+    p_unidade:      document.getElementById('ev-unidade').value,
+    p_escala:       document.getElementById('ev-escala').value,
+    p_horario:      document.getElementById('ev-horario').value,
+    p_lider:                 document.getElementById('ev-lider').value,
+    p_colaborador_anterior:  document.getElementById('ev-colaborador').value,
+    // só envia salário se pode ver (senão null → coalesce no servidor preserva o valor atual)
+    p_salario_fixo:  window.__podeVerValores ? _money((document.getElementById('ev-salario-fixo') || {}).value) : null,
+    p_salario_bruto: window.__podeVerValores ? _money((document.getElementById('ev-salario-bruto') || {}).value) : null,
+    p_status:                statusVal,
+    p_colaborador_contratado: colabContratado || null
   };
-  var _params = Object.keys(payload).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(payload[k]); }).join('&');
-  fetch(VAGAS_EDIT_URL + '?' + _params)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data.ok) {
-        btn.disabled = false; btn.textContent = 'Salvar';
-        alert('Erro ao salvar: ' + (data.error || 'desconhecido'));
-        return;
-      }
-      // Recarrega vagas do sheet para pegar a linha recém-criada
-      // (no addVaga não temos row_index) e re-renderiza o tab.
-      fetchSheetVagas(function(list) {
-        vagas = list || [];
-        btn.disabled = false; btn.textContent = 'Salvar';
-        closeEditVaga();
-        render();
-      });
-    })
-    .catch(function(err) {
-      btn.disabled = false; btn.textContent = 'Salvar';
-      alert('Erro de conexão: ' + err);
-    });
+  var SB = window.__lideresSupa;
+  if (!SB) { btn.disabled = false; btn.textContent = 'Salvar'; alert('Supabase indisponível'); return; }
+  SB.schema('tata_plus').rpc('vagas_salvar', args).then(function(res) {
+    btn.disabled = false; btn.textContent = 'Salvar';
+    if (res.error) { alert('Erro ao salvar: ' + res.error.message); return; }
+    closeEditVaga();
+    loadAllData();
+  }, function() { btn.disabled = false; btn.textContent = 'Salvar'; alert('Erro de conexão'); });
 }
 
 function emptyState() {
@@ -2575,6 +2581,8 @@ function render() {
 function setTab(tab) {
   state.tab=tab;
   state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos'};
+  // Vagas entra com o filtro de Status já em "Aberta" (o usuário pode limpar/trocar).
+  if (tab==='vagas') state.filters.status='Aberta';
   _cfMes=null;
   _cfFunilIdx=null;
   _cfRecrutador=null;
@@ -3278,8 +3286,7 @@ function enviarSolicitacao() {
   <div class="modal">
     <div class="modal-header">
       <div class="modal-header-info">
-        <div id="ev-mode-label" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Editar Vaga</div>
-        <div class="candidate-name" id="ev-cargo-title">—</div>
+        <div class="candidate-name" id="ev-cargo-title">Editar Vaga</div>
       </div>
       <button class="modal-close" onclick="closeEditVaga()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -3287,21 +3294,14 @@ function enviarSolicitacao() {
     </div>
     <input type="hidden" id="ev-linha">
     <div class="modal-body">
+      <!-- Grupo 1: vaga + cargo & salário -->
       <div class="modal-info-grid">
-        <div class="ev-field" style="grid-column:1/-1">
+        <div class="ev-field">
           <span class="modal-section-title">Unidade</span>
           <select class="modal-select" id="ev-unidade" onchange="evUnidadeChanged()">
             <option value="">Selecione</option>
-            <option>Itaim</option>
-            <option>Pinheiros</option>
-            <option>Poke - Pinheiros</option>
-            <option>Administrativo</option>
-            <option>Tatá House</option>
           </select>
         </div>
-      </div>
-      <hr class="modal-divider">
-      <div class="modal-info-grid">
         <div class="ev-field">
           <span class="modal-section-title">Departamento</span>
           <select class="modal-select" id="ev-departamento" onchange="evDeptoChanged()">
@@ -3311,30 +3311,15 @@ function enviarSolicitacao() {
         <div class="ev-field">
           <span class="modal-section-title">Cargo</span>
           <select class="modal-select" id="ev-cargo" onchange="evCargoChanged()">
-            <option value="">Carregando...</option>
+            <option value="">Selecione o departamento primeiro</option>
           </select>
         </div>
-      </div>
-      <hr class="modal-divider">
-      <div class="ev-field">
-        <span class="modal-section-title">Colaborador Anterior</span>
-        <select class="modal-select" id="ev-colaborador">
-          <option value="Vaga Nova">Vaga Nova</option>
-        </select>
-      </div>
-      <hr class="modal-divider">
-      <div class="modal-info-grid">
         <div class="ev-field">
-          <span class="modal-section-title">Salário Fixo</span>
-          <input type="text" class="modal-input" id="ev-salario-fixo" readonly style="background:#F4F4F4;color:var(--muted);cursor:default;" placeholder="Automático pelo cargo">
+          <span class="modal-section-title">Nível</span>
+          <select class="modal-select" id="ev-nivel" onchange="evNivelChanged()">
+            <option value="">—</option>
+          </select>
         </div>
-        <div class="ev-field">
-          <span class="modal-section-title">Salário Bruto</span>
-          <input type="text" class="modal-input" id="ev-salario-bruto" readonly style="background:#F4F4F4;color:var(--muted);cursor:default;" placeholder="Automático pelo cargo">
-        </div>
-      </div>
-      <hr class="modal-divider">
-      <div class="modal-info-grid">
         <div class="ev-field">
           <span class="modal-section-title">Escala</span>
           <select class="modal-select" id="ev-escala">
@@ -3346,29 +3331,42 @@ function enviarSolicitacao() {
           <span class="modal-section-title">Horário</span>
           <input type="text" class="modal-input" id="ev-horario" placeholder="Ex: 15:00 às 23:20" oninput="_evClearFieldError('ev-horario')">
         </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Salário Fixo</span>
+          <input type="text" class="modal-input" id="ev-salario-fixo" readonly style="background:#F4F4F4;color:var(--muted);cursor:default;" placeholder="Automático pelo cargo">
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Salário Bruto</span>
+          <input type="text" class="modal-input" id="ev-salario-bruto" readonly style="background:#F4F4F4;color:var(--muted);cursor:default;" placeholder="Automático pelo cargo">
+        </div>
       </div>
       <hr class="modal-divider">
-      <div class="ev-field">
-        <span class="modal-section-title">Líder responsável</span>
-        <select class="modal-select" id="ev-lider" onchange="_evClearFieldError('ev-lider')">
-          <option value="">Carregando...</option>
-        </select>
-      </div>
-      <hr class="modal-divider">
-      <div class="ev-field">
-        <span class="modal-section-title">Status da vaga</span>
-        <select class="modal-select" id="ev-status" onchange="evStatusChanged()">
-          <option value="Aberta">Aberta</option>
-          <option value="Fechada">Fechada</option>
-        </select>
-      </div>
-      <div class="ev-field" id="ev-colab-contratado-wrap" style="margin-top:12px;">
-        <span class="modal-section-title">Colaborador contratado</span>
-        <select class="modal-select" id="ev-colab-contratado" onchange="evColabContratadoChanged()">
-          <option value="">Nenhum — vaga segue em aberto</option>
-        </select>
-        <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.4px;color:var(--muted);margin-top:6px;text-transform:uppercase;">
-          Ao selecionar, a vaga é marcada como <strong>Fechada</strong> em <span id="ev-data-fechamento-label">—</span>
+      <!-- Grupo 2: pessoas + status -->
+      <div class="modal-info-grid">
+        <div class="ev-field" style="grid-column:1/-1">
+          <span class="modal-section-title">Líder responsável</span>
+          <select class="modal-select" id="ev-lider" onchange="_evClearFieldError('ev-lider')">
+            <option value="">Carregando...</option>
+          </select>
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Colaborador Anterior</span>
+          <select class="modal-select" id="ev-colaborador">
+            <option value="Vaga Nova">Vaga Nova</option>
+          </select>
+        </div>
+        <div class="ev-field" id="ev-colab-contratado-wrap">
+          <span class="modal-section-title">Colaborador contratado</span>
+          <select class="modal-select" id="ev-colab-contratado" onchange="evColabContratadoChanged()">
+            <option value="">Nenhum — vaga segue em aberto</option>
+          </select>
+        </div>
+        <div class="ev-field" style="grid-column:1/-1">
+          <span class="modal-section-title">Status da vaga</span>
+          <select class="modal-select" id="ev-status" onchange="evStatusChanged()">
+            <option value="Aberta">Aberta</option>
+            <option value="Fechada">Fechada</option>
+          </select>
         </div>
       </div>
     </div>
