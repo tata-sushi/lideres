@@ -2259,13 +2259,12 @@ function csCloseDesc() {
   document.body.style.overflow = "";
 }
 
-/* ── GOOGLE SHEETS SYNC ──
-   Backend: git-claude/ces-apps-script.gs
-   Planilha: docs.google.com/spreadsheets/d/17MboMur_B_pxMKK4M7VfTsKUQIVCtEEIa72HSOF6Jvw
+/* ── DADOS: Supabase (dp_rh.cargos / dp_rh.cargos_loja_pontos via schema tata_plus) ──
+   Leitura : tata_plus.cargos_salarios_listar()  (valores em R$ mascarados no servidor)
+   Escrita : tata_plus.cargos_salvar() / tata_plus.cargos_loja_pontos_salvar()
+   (antes: Apps Script / planilha 17MboMur_B_pxMKK4M7VfTsKUQIVCtEEIa72HSOF6Jvw)
 */
-var CS_SHEETS_URL = "https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec";
-
-var CS_OBS = []; // referências por loja (salário mín, pisos, valor do pt)
+var CS_OBS = []; // referências por loja (salário mín, pisos, valor do pt) — vindas do Supabase
 
 function hideLoading() {
   var el = document.getElementById('loading-overlay');
@@ -2306,6 +2305,7 @@ function csSyncSheets() {
       };
     });
     CS_DESCRICOES = {};
+    var obsMap = {};
     rows.forEach(function(c) {
       CS_DESCRICOES[c.cargo_id] = {
         objetivos:         c.objetivos || "",
@@ -2317,7 +2317,19 @@ function csSyncSheets() {
         uniformes:         c.uniforme || "",
         epis:              c.epis || ""
       };
+      // referências por loja (pontos/pisos) p/ o modal de obs — valores mascarados no servidor
+      if (c.unidade && !obsMap[c.unidade]) {
+        obsMap[c.unidade] = {
+          loja_nome:        c.unidade,
+          salario_min:      c.salario_min,
+          piso_cct:         c.piso_cct,
+          piso_tata:        c.piso_tata,
+          valor_pt_gorjeta: c.valor_pt_gorjeta,
+          valor_pt_premio:  c.valor_pt_premio
+        };
+      }
     });
+    CS_OBS = Object.keys(obsMap).map(function(k){ return obsMap[k]; });
     csPopulateDeptFilter();
     csRecalc();
     csRenderCargos();
@@ -3115,43 +3127,36 @@ function closeEditModal() {
 }
 
 function cesSubmitEdit() {
-  if (!CS_SHEETS_URL) { _cesShowError('ces-edit-error', 'CS_SHEETS_URL não configurada'); return; }
-  var modo = document.getElementById("em-modo").value;
-  var payload = {
-    action:         modo === "editar" ? "saveSalario" : "addSalario",
-    cargo_id:       document.getElementById("em-cargo-id").value ||
-                    (document.getElementById("em-cargo").value + "-" +
-                     document.getElementById("em-departamento").value + "-" +
-                     document.getElementById("em-unidade").value).replace(/\s+/g,"-"),
-    cargo:          document.getElementById("em-cargo").value.trim(),
-    niveis:         document.getElementById("em-niveis").value,
-    departamento:   document.getElementById("em-departamento").value.trim(),
-    unidade:        document.getElementById("em-unidade").value,
-    cbo:            document.getElementById("em-cbo").value.trim(),
-    hierarquia:     document.getElementById("em-hierarquia").value,
-    salario_fixo:   document.getElementById("em-fixo").value,
-    insalubridade:  document.getElementById("em-insalubridade").value,
-    periculosidade: document.getElementById("em-periculosidade").value,
-    ponto_gorjeta:  document.getElementById("em-gorjeta").value,
-    ponto_premio:   document.getElementById("em-premio").value,
-    obs:            document.getElementById("em-obs").value.trim()
-  };
-  if (!payload.cargo) { _cesShowError('ces-edit-error', 'Informe o nome do cargo.'); return; }
+  var SB = window.__lideresSupa;
+  if (!SB) { _cesShowError('ces-edit-error', 'Supabase indisponível. Recarregue a página.'); return; }
+  var cargo = document.getElementById("em-cargo").value.trim();
+  if (!cargo) { _cesShowError('ces-edit-error', 'Informe o nome do cargo.'); return; }
   _cesClearError('ces-edit-error');
   _setCesBtnLoading('ces-edit-spin', 'ces-edit-label', 'ces-modal-save-btn', true, 'Salvando…');
-  fetch(CS_SHEETS_URL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify(payload)
-  })
-  .then(function() {
-    setTimeout(function() {
-      closeEditModal();
-      csSyncSheets();
-    }, 800);
-  })
-  .catch(function() {
+  // cargo_id vazio => o RPC gera o slug (cargo-departamento-unidade)
+  SB.schema('tata_plus').rpc('cargos_salvar', {
+    p_cargo_id:       document.getElementById("em-cargo-id").value || '',
+    p_cargo:          cargo,
+    p_niveis:         document.getElementById("em-niveis").value,
+    p_departamento:   document.getElementById("em-departamento").value.trim(),
+    p_unidade:        document.getElementById("em-unidade").value,
+    p_cbo:            document.getElementById("em-cbo").value.trim(),
+    p_hierarquia:     document.getElementById("em-hierarquia").value,
+    p_salario_fixo:   document.getElementById("em-fixo").value,
+    p_insalubridade:  document.getElementById("em-insalubridade").value,
+    p_periculosidade: document.getElementById("em-periculosidade").value,
+    p_ponto_gorjeta:  document.getElementById("em-gorjeta").value,
+    p_ponto_premio:   document.getElementById("em-premio").value,
+    p_obs:            document.getElementById("em-obs").value.trim()
+  }).then(function(res) {
+    if (res.error) {
+      _setCesBtnLoading('ces-edit-spin', 'ces-edit-label', 'ces-modal-save-btn', false, 'Salvar');
+      _cesShowError('ces-edit-error', 'Erro ao salvar: ' + res.error.message);
+      return;
+    }
+    closeEditModal();
+    csSyncSheets();
+  }, function() {
     _setCesBtnLoading('ces-edit-spin', 'ces-edit-label', 'ces-modal-save-btn', false, 'Salvar');
     _cesShowError('ces-edit-error', 'Erro ao salvar. Tente novamente.');
   });
@@ -3227,28 +3232,28 @@ function closeObsModal() {
 }
 
 function cesSubmitObs() {
-  if (!CS_SHEETS_URL) { _cesShowError('ces-obs-error', 'CS_SHEETS_URL não configurada'); return; }
+  var SB = window.__lideresSupa;
+  if (!SB) { _cesShowError('ces-obs-error', 'Supabase indisponível. Recarregue a página.'); return; }
   var loja = _obsLojas[_obsLojaSel];
-  var payload = {
-    action:           "saveObs",
-    loja_nome:        loja.loja_nome,
-    salario_min:      document.getElementById("obs-sal-min").value,
-    piso_cct:         document.getElementById("obs-piso-cct").value,
-    piso_tata:        document.getElementById("obs-piso-tata").value,
-    valor_pt_gorjeta: document.getElementById("obs-pt-gorj").value,
-    valor_pt_premio:  document.getElementById("obs-pt-prem").value
-  };
   _cesClearError('ces-obs-error');
   _setCesBtnLoading('ces-obs-spin', 'ces-obs-label', 'ces-obs-save-btn', true, 'Salvando…');
-  fetch(CS_SHEETS_URL, {
-    method: "POST", mode: "no-cors",
-    headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify(payload)
-  })
-  .then(function() {
-    setTimeout(function() { closeObsModal(); csSyncSheets(); }, 800);
-  })
-  .catch(function() {
+  // grava com histórico: linha nova por dia (vigente_desde), sobrescreve a de hoje
+  SB.schema('tata_plus').rpc('cargos_loja_pontos_salvar', {
+    p_loja_nome:        loja.loja_nome,
+    p_salario_min:      document.getElementById("obs-sal-min").value,
+    p_piso_cct:         document.getElementById("obs-piso-cct").value,
+    p_piso_tata:        document.getElementById("obs-piso-tata").value,
+    p_valor_pt_gorjeta: document.getElementById("obs-pt-gorj").value,
+    p_valor_pt_premio:  document.getElementById("obs-pt-prem").value
+  }).then(function(res) {
+    if (res.error) {
+      _setCesBtnLoading('ces-obs-spin', 'ces-obs-label', 'ces-obs-save-btn', false, 'Salvar');
+      _cesShowError('ces-obs-error', 'Erro ao salvar: ' + res.error.message);
+      return;
+    }
+    closeObsModal();
+    csSyncSheets();
+  }, function() {
     _setCesBtnLoading('ces-obs-spin', 'ces-obs-label', 'ces-obs-save-btn', false, 'Salvar');
     _cesShowError('ces-obs-error', 'Erro ao salvar. Tente novamente.');
   });
