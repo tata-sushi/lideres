@@ -247,16 +247,36 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .ent-table tbody tr:hover { background: #FAFAFA; }
 .ent-table .ett-nome { font-weight: 600; }
 .ent-table .ett-acoes button { margin: 0 3px; vertical-align: middle; }
+
+/* ── ANALÍTICO (tabela gigante, rolagem lateral) ── */
+.anl-wrap { overflow: auto; max-height: calc(100vh - 250px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.anl-table { border-collapse: separate; border-spacing: 0; white-space: nowrap; font-size: 12.5px; }
+.anl-table th, .anl-table td { padding: 8px 11px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); text-align: left; vertical-align: middle; color: var(--carbon); }
+.anl-table thead th { position: sticky; top: 0; z-index: 2; background: var(--surface); font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.anl-table thead tr.anl-grp-row th { top: 0; font-size: 10px; letter-spacing: .08em; color: var(--carbon); background: #EEF0EC; text-align: center; border-bottom: 2px solid var(--carbon); font-weight: 700; }
+.anl-table thead tr.anl-sub-row th { top: 27px; border-bottom: 2px solid var(--border-strong, #CDD2C9); }
+.anl-sticky { position: sticky; left: 0; z-index: 1; background: var(--surface); box-shadow: 1px 0 0 var(--border); font-weight: 600; }
+.anl-table thead th.anl-sticky { z-index: 5; }
+.anl-table thead tr.anl-sub-row th.anl-sticky { z-index: 5; }
+.anl-table tbody tr:hover td { background: #FAFAFA; }
+.anl-table tbody tr:hover td.anl-sticky { background: #F4F5F2; }
+.anl-long { max-width: 240px; display: inline-block; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.anl-acoes { text-align: center; }
+.anl-count { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; margin: 0 0 10px; }
 @media (min-width: 768px) {
   body[data-view="entrevistas"] .ent-table-wrap,
   body[data-view="testes"] .ent-table-wrap { display: block; }
   body[data-view="entrevistas"] .vagas-cards-wrap,
   body[data-view="testes"] .vagas-cards-wrap { display: none; }
   body[data-view="entrevistas"] .content,
-  body[data-view="testes"] .content { max-width: none; padding-left: 20px; padding-right: 20px; }
+  body[data-view="testes"] .content,
+  body[data-view="analitico"] .content { max-width: none; padding-left: 20px; padding-right: 20px; }
   body[data-view="entrevistas"] .filters-wrap,
-  body[data-view="testes"] .filters-wrap { max-width: none; }
+  body[data-view="testes"] .filters-wrap,
+  body[data-view="analitico"] .filters-wrap { max-width: none; }
 }
+/* Analítico ocupa a largura toda em qualquer viewport */
+body[data-view="analitico"] .content { max-width: none; }
 
 /* ── AGENDA LÍDERES (KPI's) ── */
 .agenda-table-wrap { overflow-x: auto; }
@@ -527,6 +547,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="tabs">
   <button class="tab-btn active" id="tab-entrevistas" data-aba-id="governanca-kpis-rh-recrutamento::entrevistas" onclick="setTab('entrevistas')">Entrevistas</button>
   <button class="tab-btn" id="tab-testes" data-aba-id="governanca-kpis-rh-recrutamento::testes" onclick="setTab('testes')">Testes</button>
+  <button class="tab-btn" id="tab-analitico" data-aba-id="governanca-kpis-rh-recrutamento::analitico" onclick="setTab('analitico')">Analítico</button>
   <button class="tab-btn" id="tab-vagas" data-aba-id="governanca-kpis-rh-recrutamento::vagas" onclick="setTab('vagas')">Vagas</button>
   <button class="tab-btn" id="tab-dashboard" data-aba-id="governanca-kpis-rh-recrutamento::dashboard" onclick="setTab('dashboard')">KPI's</button>
 </div>
@@ -861,6 +882,7 @@ function _liderMatchVaga(r) {
 // (removido) lockVerMais — acesso deixa de ser hardcoded p/ admin; controle fica na config de acessos do app (data-aba-id)
 var entrevistas = [];
 var testes = [];
+var analitico = [];   // candidaturas cruas (mãe + dias) para a aba Analítico e edição
 var vagas = [];
 var _testeCache = [];
 var _entrevistaCache = [];
@@ -940,9 +962,9 @@ function loadAllData() {
       });
     }
     // ── Candidaturas (entrevistas/testes) ──
-    if (res.error) { entrevistas = []; testes = []; finishLoad(['Supabase: ' + res.error.message]); return; }
+    if (res.error) { entrevistas = []; testes = []; analitico = []; finishLoad(['Supabase: ' + res.error.message]); return; }
     var rows = Array.isArray(res.data) ? res.data : [];
-    entrevistas = []; testes = [];
+    entrevistas = []; testes = []; analitico = rows;   // Analítico usa a candidatura crua (mãe + dias)
     rows.forEach(function (r) {
       var dias = Array.isArray(r.dias) ? r.dias : []; // filha rec_teste_dias (aninhada pelo RPC)
       var temTeste = dias.length > 0;
@@ -986,7 +1008,7 @@ function loadAllData() {
     });
     finishLoad([]);
   }, function () {
-    entrevistas = []; testes = []; vagas = [];
+    entrevistas = []; testes = []; analitico = []; vagas = [];
     finishLoad(['Supabase indisponível']);
   });
 }
@@ -1101,6 +1123,7 @@ function contactHTML(c) {
 function getSrc() {
   return state.tab==='entrevistas' ? entrevistas :
          state.tab==='testes'      ? testes      :
+         state.tab==='analitico'   ? analitico   :
          vagas;
 }
 
@@ -1124,6 +1147,15 @@ function getFiltered() {
       if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
       if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
       if (f.status!=='Todos' && (r.status||'')!==f.status) return false;
+      return true;
+    });
+  }
+  if (state.tab === 'analitico') {
+    return src.filter(function(r) {
+      if (f.unidade!=='Todos' && (r.unidade||'')!==f.unidade) return false;
+      if (f.departamento!=='Todos' && (r.departamento||'')!==f.departamento) return false;
+      if (f.entrevistador!=='Todos' && (r.entrevistador||'')!==f.entrevistador) return false;
+      if (f.status!=='Todos' && (r.status_final||'')!==f.status) return false;
       return true;
     });
   }
@@ -1495,6 +1527,97 @@ function renderTestesTableHtml(rows) {
     '<th>Nome</th><th>Contato</th><th>Unidade</th><th>Departamento</th><th>Cargo</th>'+
     '<th>Data</th><th>Turno</th><th>Valor Diária</th><th>Status</th><th>Ações</th>'+
     '</tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+// ─── ANALÍTICO: jornada completa do candidato (mãe + até 5 dias de teste) ─────
+var ANL_MAX_DIAS = 5;
+function _anlTxt(v){ v=(v==null?'':String(v)).trim(); return v ? escH(v) : '—'; }
+function _anlLong(v){ v=(v==null?'':String(v)).trim(); if(!v) return '—'; var t=escH(v); return '<span class="anl-long" title="'+t+'">'+t+'</span>'; }
+function _anlBool(v){ return v===true ? 'Sim' : (v===false ? 'Não' : '—'); }
+function _anlHora(v){ v=(v==null?'':String(v)).trim(); return v ? escH(fmtHora(v)) : '—'; }
+function _anlData(v){ v=(v==null?'':String(v)).trim(); return v ? escH(fmtDateBR(v)) : '—'; }
+function _anlDataHora(v){ if(!v) return '—'; var m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/); return m ? (m[3]+'/'+m[2]+'/'+m[1]+' '+m[4]+'h'+m[5]) : escH(fmtDateBR(v)); }
+function _anlPret(v){ if(!window.__podeVerValores) return '<span class="valor-oculto">R$ •••</span>'; return (v && !isValorZero(v)) ? escH(_fmtMoney(v)) : '—'; }
+function _anlBadge(v, cls){ v=(v==null?'':String(v)).trim(); return v ? '<span class="status-badge '+cls+'">'+escH(v)+'</span>' : '—'; }
+
+function _anlGroups() {
+  var g = [
+    { name:'Candidato', cols:[
+      ['Contato', function(r){ return _anlTxt(r.contato); }],
+      ['CPF', function(r){ return _anlTxt(r.cpf); }],
+      ['Recrutador', function(r){ return _anlTxt(r.responsavel); }],
+      ['Unidade', function(r){ return _anlTxt(r.unidade); }],
+      ['Departamento', function(r){ return _anlTxt(r.departamento); }],
+      ['Cargo', function(r){ return _anlTxt(r.cargo); }],
+      ['Pretensão', function(r){ return _anlPret(r.pretensao_salarial); }]
+    ]},
+    { name:'Entrevista', cols:[
+      ['Data', function(r){ return _anlData(r.data_entrevista); }],
+      ['Horário', function(r){ return _anlHora(r.horarios); }],
+      ['Entrevistador', function(r){ return _anlTxt(r.entrevistador); }],
+      ['Status', function(r){ return _anlBadge(r.status_entrevista, 's-'+slugStatus(r.status_entrevista)); }],
+      ['Selecionado', function(r){ return _anlTxt(r.selecionado); }],
+      ['Observações', function(r){ return _anlLong(r.observacoes_entrevista); }]
+    ]},
+    { name:'Referências', cols:[
+      ['Tipo', function(r){ return _anlTxt(r.tipo_referencia); }],
+      ['Contato', function(r){ return _anlTxt(r.contato_referencia); }],
+      ['Empresa/Líder ant.', function(r){ return _anlTxt(r.empresa_anterior_lider); }],
+      ['Check', function(r){ return _anlTxt(r.check_referencia); }],
+      ['Feedback', function(r){ return _anlLong(r.feedback_referencia); }],
+      ['Observações', function(r){ return _anlLong(r.observacoes_referencia); }],
+      ['Processos', function(r){ return _anlLong(r.processos); }],
+      ['Resumo', function(r){ return _anlLong(r.resumo); }]
+    ]}
+  ];
+  for (var i=0;i<ANL_MAX_DIAS;i++){
+    (function(idx){
+      g.push({ name:'Teste '+(idx+1), cols:[
+        ['Data',        function(r){ var d=(r.dias||[])[idx]; return d?_anlData(d.data_teste):'—'; }],
+        ['Horário',     function(r){ var d=(r.dias||[])[idx]; return d?_anlHora(d.horario):'—'; }],
+        ['Responsável', function(r){ var d=(r.dias||[])[idx]; return d?_anlTxt(d.responsavel):'—'; }],
+        ['Valor',       function(r){ var d=(r.dias||[])[idx]; return d?fmtValor(d.valor_diaria):'—'; }],
+        ['Status',      function(r){ var d=(r.dias||[])[idx]; return d?_anlBadge(d.status,'sf-'+slugTeste(d.status)):'—'; }],
+        ['Pago',        function(r){ var d=(r.dias||[])[idx]; return d?_anlBool(d.pago):'—'; }]
+      ]});
+    })(i);
+  }
+  g.push({ name:'Teste (geral)', cols:[
+    ['Camiseta', function(r){ return _anlTxt(r.camiseta); }],
+    ['Status teste', function(r){ return _anlTxt(r.status_teste); }],
+    ['Pagto completo', function(r){ return _anlBool(r.pagamento_completo); }]
+  ]});
+  g.push({ name:'Status final', cols:[
+    ['Resultado', function(r){ return _anlBadge(r.status_final, 'sf-'+slugFinal(r.status_final)); }],
+    ['Por', function(r){ return _anlTxt(r.status_final_por); }],
+    ['Em', function(r){ return _anlDataHora(r.status_final_em); }]
+  ]});
+  return g;
+}
+
+function renderAnaliticoTableHtml(rows) {
+  var groups = _anlGroups();
+  // Cabeçalho: linha de grupos + linha de subcolunas (Nome e Ações fixos com rowspan)
+  var grpRow = '<th class="anl-sticky" rowspan="2">Nome</th>';
+  var subRow = '';
+  groups.forEach(function(gr){
+    grpRow += '<th class="anl-grp" colspan="'+gr.cols.length+'">'+escH(gr.name)+'</th>';
+    gr.cols.forEach(function(c){ subRow += '<th>'+escH(c[0])+'</th>'; });
+  });
+  grpRow += '<th rowspan="2">Ações</th>';
+
+  var body = rows.map(function(r){
+    var tds = '<td class="anl-sticky">'+_anlTxt(r.nome)+'</td>';
+    groups.forEach(function(gr){ gr.cols.forEach(function(c){ tds += '<td>'+c[1](r)+'</td>'; }); });
+    tds += '<td class="anl-acoes"><button class="btn-editar" title="Editar candidato" data-aba-id="governanca-kpis-rh-recrutamento::editar-candidato" onclick="abrirEditarCandidato(\''+escH(r.id)+'\')">'+_editSvg+'</button></td>';
+    return '<tr>'+tds+'</tr>';
+  }).join('');
+
+  var n = rows.length;
+  return '<div class="anl-count">'+n+' candidato'+(n!==1?'s':'')+' · jornada completa</div>'+
+    '<div class="anl-wrap"><table class="ent-table anl-table">'+
+    '<thead><tr class="anl-grp-row">'+grpRow+'</tr><tr class="anl-sub-row">'+subRow+'</tr></thead>'+
+    '<tbody>'+body+'</tbody></table></div>';
 }
 
 function renderVagasTableRows() {
@@ -2029,8 +2152,9 @@ function closeNovoCandidato() {
 }
 
 function abrirEditarCandidato(id) {
+  // busca na base crua (analitico = todas as candidaturas) — funciona de qualquer aba
   var r = null;
-  for (var i=0;i<entrevistas.length;i++){ if(String(entrevistas[i].id)===String(id)){ r=entrevistas[i]; break; } }
+  for (var i=0;i<analitico.length;i++){ if(String(analitico[i].id)===String(id)){ r=analitico[i]; break; } }
   if (!r) return;
   document.querySelectorAll('#nc-overlay .ev-field-error').forEach(function(el){ el.classList.remove('ev-field-error'); });
   document.getElementById('nc-id').value = r.id;
@@ -2039,9 +2163,9 @@ function abrirEditarCandidato(id) {
   document.getElementById('nc-nome').value      = r.nome || '';
   document.getElementById('nc-contato').value   = r.contato || '';
   document.getElementById('nc-cpf').value       = r.cpf || '';
-  document.getElementById('nc-pretensao').value = (r.pretensao != null ? r.pretensao : '');
-  document.getElementById('nc-data').value      = _toDateInput(r.data);
-  document.getElementById('nc-horario').value   = _toTimeInput(r.horario);
+  document.getElementById('nc-pretensao').value = (r.pretensao_salarial != null ? r.pretensao_salarial : '');
+  document.getElementById('nc-data').value      = _toDateInput(r.data_entrevista);
+  document.getElementById('nc-horario').value   = _toTimeInput(r.horarios);
   var u=r.unidade||'', dp=r.departamento||'', cargoFull=r.cargo||'';
   _evPopulateSelect('nc-unidade', _csUnidades(), u);
   document.getElementById('nc-unidade').value = u;
@@ -2930,6 +3054,8 @@ function render() {
   } else if (state.tab === 'entrevistas') {
     var entCards = filtered.map(cardEntrevista).join('');
     c.innerHTML = '<div class="vagas-cards-wrap">'+entCards+'</div>' + renderEntrevistasTableHtml(filtered);
+  } else if (state.tab === 'analitico') {
+    c.innerHTML = renderAnaliticoTableHtml(filtered);
   } else {
     var tstCards = filtered.map(cardTeste).join('');
     c.innerHTML = '<div class="vagas-cards-wrap">'+tstCards+'</div>' + renderTestesTableHtml(filtered);
@@ -2947,6 +3073,7 @@ function setTab(tab) {
   document.body.dataset.view = tab;
   document.getElementById('tab-entrevistas').classList.toggle('active',tab==='entrevistas');
   document.getElementById('tab-testes').classList.toggle('active',tab==='testes');
+  document.getElementById('tab-analitico').classList.toggle('active',tab==='analitico');
   document.getElementById('tab-dashboard').classList.toggle('active',tab==='dashboard');
   document.getElementById('tab-vagas').classList.toggle('active',tab==='vagas');
   render();
