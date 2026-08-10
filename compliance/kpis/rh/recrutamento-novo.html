@@ -1855,6 +1855,7 @@ function openNovoCandidato() {
   document.getElementById('nc-unidade').value = '';
   document.getElementById('nc-departamento').innerHTML = '<option value="">Selecione a unidade primeiro</option>';
   document.getElementById('nc-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
+  _ncResetNivel();
   _loadEvCargos(function(){});
   // entrevistador + recrutador = líderes/admins de profiles
   _loadEvLideres(function(list){
@@ -1869,29 +1870,47 @@ function closeNovoCandidato() {
   document.body.style.overflow = '';
 }
 
+function _ncResetNivel() {
+  var nv = document.getElementById('nc-nivel');
+  if (nv) nv.innerHTML = '<option value="">—</option>';
+}
+
 function ncUnidadeChanged() {
   _evClearFieldError('nc-unidade');
   var u = (document.getElementById('nc-unidade')||{}).value || '';
   if (!u) {
     document.getElementById('nc-departamento').innerHTML = '<option value="">Selecione a unidade primeiro</option>';
     document.getElementById('nc-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
+    _ncResetNivel();
     return;
   }
   _evPopulateSelect('nc-departamento', _evDeptsForUnidade(u), '');
   document.getElementById('nc-departamento').value = '';
   document.getElementById('nc-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
+  _ncResetNivel();
 }
 
 function ncDeptoChanged() {
   _evClearFieldError('nc-departamento');
   var u = (document.getElementById('nc-unidade')||{}).value || '';
   var dp = (document.getElementById('nc-departamento')||{}).value || '';
+  _ncResetNivel();
   if (!u || !dp) {
     document.getElementById('nc-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
     return;
   }
   _evPopulateSelect('nc-cargo', _evCargosForUnidadeDepto(u, dp), '');
   document.getElementById('nc-cargo').value = '';
+}
+
+function ncCargoChanged() {
+  _evClearFieldError('nc-cargo');
+  var u  = (document.getElementById('nc-unidade')||{}).value || '';
+  var dp = (document.getElementById('nc-departamento')||{}).value || '';
+  var cargo = (document.getElementById('nc-cargo')||{}).value || '';
+  var niveis = cargo ? _evNiveisForCargo(u, dp, cargo) : [];
+  if (niveis.length) _evPopulateSelect('nc-nivel', niveis, niveis.length === 1 ? niveis[0] : '');
+  else _ncResetNivel();
 }
 
 function salvarNovoCandidato() {
@@ -1911,6 +1930,13 @@ function salvarNovoCandidato() {
       if (el) { var w = el.closest('.ev-field'); if (w) w.classList.add('ev-field-error'); }
     }
   });
+  // Nível é obrigatório apenas quando o cargo escolhido tem níveis
+  var _nvSel = document.getElementById('nc-nivel');
+  var _nvTemOpcoes = _nvSel && Array.prototype.some.call(_nvSel.options, function(o){ return o.value; });
+  if (_nvTemOpcoes && !(_nvSel.value||'').trim()) {
+    invalidos.push('Nível');
+    var _nw = _nvSel.closest('.ev-field'); if (_nw) _nw.classList.add('ev-field-error');
+  }
   if (invalidos.length) {
     var primeiro = document.querySelector('#nc-overlay .ev-field-error');
     if (primeiro) primeiro.scrollIntoView({ behavior:'smooth', block:'center' });
@@ -1928,7 +1954,7 @@ function salvarNovoCandidato() {
     p_pretensao:       document.getElementById('nc-pretensao').value.trim(),
     p_unidade:         document.getElementById('nc-unidade').value,
     p_departamento:    document.getElementById('nc-departamento').value,
-    p_cargo:           document.getElementById('nc-cargo').value,
+    p_cargo:           (function(){ var c=document.getElementById('nc-cargo').value; var n=(document.getElementById('nc-nivel')||{}).value||''; return c + (n ? ' ' + n : ''); })(),
     p_data_entrevista: document.getElementById('nc-data').value || null,
     p_horarios:        document.getElementById('nc-horario').value.trim(),
     p_entrevistador:   document.getElementById('nc-entrevistador').value,
@@ -3367,8 +3393,7 @@ function enviarSolicitacao() {
   <div class="modal">
     <div class="modal-header">
       <div class="modal-header-info">
-        <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Cadastro de entrevista</div>
-        <div class="candidate-name">Novo Candidato</div>
+        <div class="candidate-name">Cadastrar Candidato</div>
       </div>
       <button class="modal-close" onclick="closeNovoCandidato()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -3409,10 +3434,16 @@ function enviarSolicitacao() {
             <option value="">Selecione a unidade primeiro</option>
           </select>
         </div>
-        <div class="ev-field" style="grid-column:1/-1">
+        <div class="ev-field">
           <span class="modal-section-title">Cargo <span style="color:var(--red);">*</span></span>
-          <select class="modal-select" id="nc-cargo" onchange="_evClearFieldError('nc-cargo')">
+          <select class="modal-select" id="nc-cargo" onchange="ncCargoChanged()">
             <option value="">Selecione o departamento primeiro</option>
+          </select>
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Nível</span>
+          <select class="modal-select" id="nc-nivel" onchange="_evClearFieldError('nc-nivel')">
+            <option value="">—</option>
           </select>
         </div>
       </div>
@@ -3425,7 +3456,7 @@ function enviarSolicitacao() {
         </div>
         <div class="ev-field">
           <span class="modal-section-title">Horário <span style="color:var(--red);">*</span></span>
-          <input type="text" class="modal-input" id="nc-horario" placeholder="Ex: 15:00" oninput="_evClearFieldError('nc-horario')">
+          <input type="time" class="modal-input" id="nc-horario" step="60" oninput="_evClearFieldError('nc-horario')">
         </div>
         <div class="ev-field" style="grid-column:1/-1">
           <span class="modal-section-title">Entrevistador <span style="color:var(--red);">*</span></span>
