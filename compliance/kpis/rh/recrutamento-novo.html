@@ -112,6 +112,8 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .btn-devolutiva:hover { opacity: 0.85; }
 .btn-avaliar { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: var(--carbon); color: var(--citric); border: none; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; cursor: pointer; text-transform: uppercase; transition: opacity 0.15s; white-space: nowrap; text-decoration: none; }
 .btn-avaliar:hover { opacity: 0.85; }
+.btn-editar { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: transparent; color: var(--carbon); border: 1px solid var(--border); border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; cursor: pointer; text-transform: uppercase; transition: all 0.15s; white-space: nowrap; }
+.btn-editar:hover { border-color: var(--carbon); background: var(--bg); }
 
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
 .modal-overlay.active { opacity: 1; visibility: visible; }
@@ -921,6 +923,7 @@ function loadAllData() {
       var base = {
         id: r.id, link: '',
         recrutador: r.responsavel || '', nome: r.nome || '', contato: r.contato || '',
+        cpf: r.cpf || '',
         unidade: r.unidade || '', departamento: r.departamento || '', cargo: r.cargo || '',
         pretensao: r.pretensao_salarial || '', selecionado: r.selecionado || '',
         entrevistador: r.entrevistador || '', status_final: r.status_final || ''
@@ -1027,6 +1030,22 @@ function fmtDateBR(s) {
   var mm = ('0'+(d.getMonth()+1)).slice(-2);
   var yyyy = d.getFullYear();
   return dd+'/'+mm+'/'+yyyy;
+}
+// "19:02" → "19h02" (padroniza hora nos cards)
+function fmtHora(h) {
+  var m = String(h||'').trim().match(/^(\d{1,2}):(\d{2})/);
+  return m ? (('0'+m[1]).slice(-2)+'h'+m[2]) : String(h||'');
+}
+// normaliza para os inputs do modal de edição
+function _toDateInput(s) {
+  s = String(s||'').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  var d = parseDateBR(s);
+  return (d && !isNaN(d.getTime())) ? d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2) : '';
+}
+function _toTimeInput(h) {
+  var m = String(h||'').trim().match(/^(\d{1,2}):(\d{2})/);
+  return m ? (('0'+m[1]).slice(-2)+':'+m[2]) : '';
 }
 function waLink(contato) {
   var num = (contato||'').replace(/\D/g,'');
@@ -1257,13 +1276,17 @@ function cardEntrevista(r) {
   var horOk=r.horario&&r.horario!=='0:00'&&r.horario!=='0'&&r.horario!=='00:00';
   var sfFinal=slugFinal(r.status_final);
   var isAguardandoDev = r.status_entrevista && norm(r.status_entrevista.toLowerCase()).indexOf('aguardando devolutiva')>=0;
-  var footer='';
+  var editBtn='<button class="btn-editar" onclick="abrirEditarCandidato(\''+escH(r.id)+'\')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar</button>';
+  var clockIcon='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+  var footer;
   if (sfFinal==='contratado') {
-    footer='<div class="card-footer"><span class="check-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Contratado</span></div>';
+    footer='<div class="card-footer"><span class="check-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Contratado</span>'+editBtn+'</div>';
   } else if (isAguardandoDev) {
     var idx=_entrevistaCache.length;
     _entrevistaCache.push({id:r.id,nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,entrevistador:r.entrevistador,recrutador:r.recrutador,pretensao:r.pretensao});
-    footer='<div class="card-footer">'+'<div class="meta-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Devolutiva pendente</div>'+'<button class="btn-avaliar" onclick="abrirModalEntrevista('+idx+')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Enviar devolutiva</button>'+'</div>';
+    footer='<div class="card-footer"><div class="meta-pill">'+clockIcon+' Devolutiva pendente</div><div style="display:flex;gap:8px;align-items:center">'+editBtn+'<button class="btn-avaliar" onclick="abrirModalEntrevista('+idx+')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Enviar devolutiva</button></div></div>';
+  } else {
+    footer='<div class="card-footer"><div class="meta-pill">'+clockIcon+' '+escH(sfLabel)+'</div>'+editBtn+'</div>';
   }
   return '<div class="card">'+
     '<div class="card-header"><div>'+
@@ -1274,7 +1297,7 @@ function cardEntrevista(r) {
     '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+escH(r.unidade)+'</span></div>'+
     '<div class="card-field"><span class="field-label">Departamento</span><span class="field-value">'+escH(r.departamento)+'</span></div>'+
     '<div class="card-field"><span class="field-label">Cargo</span><span class="field-value">'+escH(r.cargo)+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Data</span><span class="field-value">'+escH(r.data)+(horOk?' · '+escH(r.horario):'')+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Data</span><span class="field-value">'+escH(fmtDateBR(r.data))+(horOk?' · '+escH(fmtHora(r.horario)):'')+'</span></div>'+
     '<div class="card-field"><span class="field-label">Entrevistador</span><span class="field-value">'+escH(r.entrevistador)+'</span></div>'+
     '<div class="card-field"><span class="field-label">Recrutador</span><span class="field-value">'+escH(r.recrutador)+'</span></div>'+
     '<div class="card-field"><span class="field-label">Pretensão</span><span class="field-value">'+(window.__podeVerValores ? (r.pretensao && !isValorZero(r.pretensao) ? escH(r.pretensao) : 'Não informou') : '<span class="valor-oculto">R$ 0.000,00</span>')+'</span></div>'+
@@ -1853,6 +1876,9 @@ function salvarEditVaga() {
 // ─── NOVO CANDIDATO (cadastro de entrevista) ─────────────────────────────────
 function openNovoCandidato() {
   document.querySelectorAll('#nc-overlay .ev-field-error').forEach(function(el){ el.classList.remove('ev-field-error'); });
+  document.getElementById('nc-id').value = '';
+  document.getElementById('nc-title').textContent = 'Cadastrar Candidato';
+  var _b=document.getElementById('nc-save'); _b.textContent='Cadastrar candidato'; _b.disabled=false;
   ['nc-nome','nc-contato','nc-cpf','nc-pretensao','nc-horario'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
   var d=document.getElementById('nc-data'); if(d) d.value='';
   // cascata unidade→depto→cargo (mesma fonte Cargos&Salários do modal de vaga)
@@ -1873,6 +1899,35 @@ function openNovoCandidato() {
 function closeNovoCandidato() {
   document.getElementById('nc-overlay').classList.remove('active');
   document.body.style.overflow = '';
+}
+
+function abrirEditarCandidato(id) {
+  var r = null;
+  for (var i=0;i<entrevistas.length;i++){ if(String(entrevistas[i].id)===String(id)){ r=entrevistas[i]; break; } }
+  if (!r) return;
+  document.querySelectorAll('#nc-overlay .ev-field-error').forEach(function(el){ el.classList.remove('ev-field-error'); });
+  document.getElementById('nc-id').value = r.id;
+  document.getElementById('nc-title').textContent = 'Editar Candidato';
+  var _b=document.getElementById('nc-save'); _b.textContent='Salvar'; _b.disabled=false;
+  document.getElementById('nc-nome').value      = r.nome || '';
+  document.getElementById('nc-contato').value   = r.contato || '';
+  document.getElementById('nc-cpf').value       = r.cpf || '';
+  document.getElementById('nc-pretensao').value = (r.pretensao != null ? r.pretensao : '');
+  document.getElementById('nc-data').value      = _toDateInput(r.data);
+  document.getElementById('nc-horario').value   = _toTimeInput(r.horario);
+  var u=r.unidade||'', dp=r.departamento||'', cargoFull=r.cargo||'';
+  _evPopulateSelect('nc-unidade', _csUnidades(), u);
+  document.getElementById('nc-unidade').value = u;
+  _loadEvCargos(function(){
+    var split = _evSplitCargo(u, dp, cargoFull);
+    _evPopulateSelect('nc-departamento', u ? _evDeptsForUnidade(u) : [], dp);
+    _evPopulateSelect('nc-cargo', (u&&dp) ? _evCargosForUnidadeDepto(u,dp) : [], split.cargo);
+    var niveis = (u&&dp&&split.cargo) ? _evNiveisForCargo(u,dp,split.cargo) : [];
+    if (niveis.length) _evPopulateSelect('nc-nivel', niveis, split.nivel); else _ncResetNivel();
+  });
+  _loadEvLideres(function(list){ _evPopulateSelect('nc-entrevistador', list, r.entrevistador||''); document.getElementById('nc-entrevistador').value = r.entrevistador||''; });
+  document.getElementById('nc-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
 }
 
 function _ncResetNivel() {
@@ -1949,31 +2004,36 @@ function salvarNovoCandidato() {
   }
   var SB = window.__lideresSupa;
   if (!SB) { alert('Supabase indisponível.'); return; }
+  var _id = document.getElementById('nc-id').value || null;
+  var _editando = !!_id;
+  var _label = _editando ? 'Salvar' : 'Cadastrar candidato';
   var btn = document.getElementById('nc-save');
-  btn.disabled = true; btn.textContent = 'Cadastrando…';
+  btn.disabled = true; btn.textContent = _editando ? 'Salvando…' : 'Cadastrando…';
   var args = {
-    p_id: null,
+    p_id: _id,
     p_nome:            document.getElementById('nc-nome').value.trim(),
     p_contato:         document.getElementById('nc-contato').value.trim(),
     p_cpf:             document.getElementById('nc-cpf').value.trim(),
     p_pretensao:       document.getElementById('nc-pretensao').value.trim(),
-    p_responsavel:     _usuarioLogadoNome(),   // recrutador = usuário logado
+    // recrutador = usuário logado (só no cadastro; na edição preserva o original)
+    p_responsavel:     _editando ? null : _usuarioLogadoNome(),
     p_unidade:         document.getElementById('nc-unidade').value,
     p_departamento:    document.getElementById('nc-departamento').value,
     p_cargo:           (function(){ var c=document.getElementById('nc-cargo').value; var n=(document.getElementById('nc-nivel')||{}).value||''; return c + (n ? ' ' + n : ''); })(),
     p_data_entrevista: document.getElementById('nc-data').value || null,
     p_horarios:        document.getElementById('nc-horario').value.trim(),
     p_entrevistador:   document.getElementById('nc-entrevistador').value,
-    p_status_entrevista: 'Aguardando Entrevista',
+    // status inicial só no cadastro; na edição preserva o status atual
+    p_status_entrevista: _editando ? null : 'Aguardando Entrevista',
     p_por: _sandboxMatricula()
   };
   SB.rpc('rec_candidatura_sandbox_salvar', args).then(function(res){
-    btn.disabled = false; btn.textContent = 'Cadastrar candidato';
-    if (res.error) { alert('Erro ao cadastrar:\n' + res.error.message); return; }
+    btn.disabled = false; btn.textContent = _label;
+    if (res.error) { alert('Erro ao salvar:\n' + res.error.message); return; }
     closeNovoCandidato();
     loadAllData();
   }, function(err){
-    btn.disabled = false; btn.textContent = 'Cadastrar candidato';
+    btn.disabled = false; btn.textContent = _label;
     alert('Erro de conexão:\n' + (err && err.message || err));
   });
 }
@@ -3399,12 +3459,13 @@ function enviarSolicitacao() {
   <div class="modal">
     <div class="modal-header">
       <div class="modal-header-info">
-        <div class="candidate-name">Cadastrar Candidato</div>
+        <div class="candidate-name" id="nc-title">Cadastrar Candidato</div>
       </div>
       <button class="modal-close" onclick="closeNovoCandidato()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
+    <input type="hidden" id="nc-id">
     <div class="modal-body">
       <!-- Grupo 1: candidato -->
       <div class="modal-info-grid">
