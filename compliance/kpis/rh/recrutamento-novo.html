@@ -1016,10 +1016,12 @@ function fetchSheet(sheetName, normFn, callback) {
 
 // Colaboradores (profiles) — raiz dos dropdowns do modal de vaga
 var _colabs = [];
+var _csCargos = [];   // Cargos & Salários (fonte da cascata unidade→depto→cargo + salário no modal de vaga)
 function _colabUnidades()  { return _evUniqSorted(_colabs.map(function(c){ return c.unidade; }).filter(Boolean)); }
 function _colabNomes()     { return _evUniqSorted(_colabs.map(function(c){ return c.nome; }).filter(Boolean)); }
 function _colabLideres()   { return _colabNomes(); }   // líder responsável = colaboradores de profiles (raiz)
-function _evPopulateUnidades(current) { _evPopulateSelect('ev-unidade', _colabUnidades(), current || ''); }
+function _csUnidades()     { return _evUniqSorted(_csCargos.map(function(c){ return c.unidade; }).filter(Boolean)); }
+function _evPopulateUnidades(current) { _evPopulateSelect('ev-unidade', _csUnidades(), current || ''); }
 
 // ─── Permissão de ver valores (sandbox: matrícula DEV via localStorage) ───
 function _sandboxMatricula() {
@@ -1038,12 +1040,14 @@ function loadAllData() {
   var SB = window.__lideresSupa;
   if (!SB) { window.addEventListener('lideres:supa', loadAllData, { once: true }); return; }
   Promise.all([
-    SB.rpc('rec_candidaturas_sandbox_listar'),
+    SB.rpc('rec_candidaturas_sandbox_listar', { p_matricula: _sandboxMatricula() }),  // máscara da pretensão/diária
     SB.rpc('vagas_sandbox_listar', { p_matricula: _sandboxMatricula() }),   // matrícula DEV p/ testar permissão de valores
-    SB.rpc('colaboradores_sandbox_listar')   // raiz (profiles) dos dropdowns do modal
+    SB.rpc('colaboradores_sandbox_listar'),   // raiz (profiles) → líder/colaborador do modal
+    SB.rpc('cargos_salarios_sandbox_listar', { p_matricula: _sandboxMatricula() })  // cargo + salário do modal
   ]).then(function (results) {
-    var res = results[0], vres = results[1], cres = results[2];
+    var res = results[0], vres = results[1], cres = results[2], csres = results[3];
     _colabs = (cres && !cres.error && Array.isArray(cres.data)) ? cres.data : [];
+    _csCargos = (csres && !csres.error && csres.data && Array.isArray(csres.data.cargos)) ? csres.data.cargos : [];
     // ── Vagas ── (RPC devolve { pode_ver, vagas }; salários mascarados no servidor se não pode ver)
     var vd = (vres && !vres.error && vres.data) ? vres.data : {};
     window.__podeVerValores = !!vd.pode_ver;
@@ -1415,7 +1419,7 @@ function cardEntrevista(r) {
     footer='<div class="card-footer"><span class="check-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Contratado</span></div>';
   } else if (isAguardandoDev) {
     var idx=_entrevistaCache.length;
-    _entrevistaCache.push({nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,entrevistador:r.entrevistador,recrutador:r.recrutador,pretensao:r.pretensao});
+    _entrevistaCache.push({id:r.id,nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,entrevistador:r.entrevistador,recrutador:r.recrutador,pretensao:r.pretensao});
     footer='<div class="card-footer">'+'<div class="meta-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Devolutiva pendente</div>'+'<button class="btn-avaliar" onclick="abrirModalEntrevista('+idx+')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Enviar devolutiva</button>'+'</div>';
   }
   return '<div class="card">'+
@@ -1430,7 +1434,7 @@ function cardEntrevista(r) {
     '<div class="card-field"><span class="field-label">Data</span><span class="field-value">'+escH(r.data)+(horOk?' · '+escH(r.horario):'')+'</span></div>'+
     '<div class="card-field"><span class="field-label">Entrevistador</span><span class="field-value">'+escH(r.entrevistador)+'</span></div>'+
     '<div class="card-field"><span class="field-label">Recrutador</span><span class="field-value">'+escH(r.recrutador)+'</span></div>'+
-    (isAdmin ? '<div class="card-field"><span class="field-label">Pretensão</span><span class="field-value">'+(r.pretensao && !isValorZero(r.pretensao) ? escH(r.pretensao) : 'Não informou')+'</span></div>' : '')+
+    '<div class="card-field"><span class="field-label">Pretensão</span><span class="field-value">'+(window.__podeVerValores ? (r.pretensao && !isValorZero(r.pretensao) ? escH(r.pretensao) : 'Não informou') : '<span class="valor-oculto">R$ 0.000,00</span>')+'</span></div>'+
     '</div>'+footer+'</div>';
 }
 
@@ -1443,7 +1447,7 @@ function cardTeste(r) {
     footer='<div class="card-footer"><span class="check-ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Contratado</span></div>';
   } else if (isAguardandoAprov) {
     var idx=_testeCache.length;
-    _testeCache.push({nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,turno:r.recrutador,valor:r.pretensao});
+    _testeCache.push({id:r.id,nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,turno:r.recrutador,valor:r.valor_diaria});
     footer='<div class="card-footer">'+'<div class="meta-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Aguardando avaliação</div>'+'<button class="btn-avaliar" onclick="abrirModal('+idx+')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Avaliar teste</button>'+'</div>';
   }
   return '<div class="card">'+
@@ -1457,7 +1461,7 @@ function cardTeste(r) {
     '<div class="card-field"><span class="field-label">Cargo</span><span class="field-value">'+escH(r.cargo)+'</span></div>'+
     '<div class="card-field"><span class="field-label">Data</span><span class="field-value">'+escH(r.data)+(horOk?' · '+escH(r.horario):'')+'</span></div>'+
     '<div class="card-field"><span class="field-label">Turno</span><span class="field-value">'+escH(r.recrutador)+'</span></div>'+
-    '<div class="card-field"><span class="field-label">Valor Diária</span><span class="field-value">'+escH(r.pretensao)+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Valor Diária</span><span class="field-value">'+fmtValor(r.valor_diaria)+'</span></div>'+
     '</div>'+footer+'</div>';
 }
 
@@ -1531,7 +1535,7 @@ function renderVagasTableHtml(rows) {
   _vagaSortDir = 1;
   var n = rows.length;
   var countLabel = n + ' vaga' + (n !== 1 ? 's' : '');
-  var wA = isAdmin;
+  var wA = true;   // colunas de salário/colaborador/editar sempre visíveis (salário respeita a permissão via fmtValor)
   return '<div class="vaga-table-wrap">'+
     '<div class="vaga-table-title">Vagas abertas <span class="vaga-table-count">— '+countLabel+'</span></div>'+
     '<table class="vaga-table"><thead><tr>'+
@@ -1559,7 +1563,7 @@ function renderVagasTableRows() {
   if (!tbody) return;
   var sorted = _vagaSortedRows();
   var display = sorted.slice(0, _vagaShown);
-  var cols = isAdmin ? 12 : 8;
+  var cols = 12;
   var html = display.map(function(r) {
     var sf = slugVagaStatus(r.status);
     return '<tr>'+
@@ -1569,12 +1573,12 @@ function renderVagasTableRows() {
       '<td><div class="vt-cargo">'+escH(r.cargo || 'Vaga sem título')+'</div></td>'+
       '<td>'+escH(r.escala || '—')+'</td>'+
       '<td>'+escH(r.horario || '—')+'</td>'+
-      (isAdmin ? '<td style="font-family:\'DM Mono\',monospace;font-size:11px">'+(r.salario_fixo ? _fmtMoney(r.salario_fixo) : '—')+'</td>' : '')+
-      (isAdmin ? '<td style="font-family:\'DM Mono\',monospace;font-size:11px">'+(r.salario_bruto ? _fmtMoney(r.salario_bruto) : '—')+'</td>' : '')+
-      (isAdmin ? '<td>'+escH(r.colaborador_anterior || '—')+'</td>' : '')+
+      '<td style="font-family:\'DM Mono\',monospace;font-size:11px">'+fmtValor(r.salario_fixo)+'</td>'+
+      '<td style="font-family:\'DM Mono\',monospace;font-size:11px">'+fmtValor(r.salario_bruto)+'</td>'+
+      '<td>'+escH(r.colaborador_anterior || '—')+'</td>'+
       '<td>'+escH(r.lider || '—')+'</td>'+
       '<td><span class="status-badge sf-'+sf+'">'+escH(r.status || 'Sem status')+'</span></td>'+
-      (isAdmin ? '<td><button class="btn-editar" title="Editar" onclick="openEditVaga(\''+r._linha+'\')">'+_editSvg+'</button></td>' : '')+
+      '<td><button class="btn-editar" title="Editar" onclick="openEditVaga(\''+r.id+'\')">'+_editSvg+'</button></td>'+
       '</tr>';
   }).join('');
   var resto = sorted.length - _vagaShown;
@@ -1636,16 +1640,14 @@ var _evColaboradores = null;
 
 // SANDBOX: fontes do modal vêm do próprio array `vagas` (endpoints EV_* estão bloqueados)
 function _loadEvCargos(callback) {
-  _evObs = {};
   var seen = {}, out = [];
-  (vagas || []).forEach(function(v) {
-    if (!v.cargo) return;
-    var key = (v.unidade || '') + '|' + (v.departamento || '') + '|' + (v.cargo || '');
+  (_csCargos || []).forEach(function(c) {
+    if (!c.cargo) return;
+    var key = (c.unidade || '') + '|' + (c.departamento || '') + '|' + (c.cargo || '');
     if (seen[key]) return; seen[key] = 1;
     out.push({
-      unidade: v.unidade || '', dept: v.departamento || '', nome: v.cargo || '',
-      fixo: v.salario_fixo || 0, peric: 0, insal: 0, gorjeta: 0, premio: 0,
-      bruto: v.salario_bruto || 0
+      unidade: c.unidade || '', dept: c.departamento || '', nome: c.cargo || '',
+      fixo: c.salario_fixo || 0, bruto: c.bruto || 0
     });
   });
   _evCargos = out;
@@ -1667,12 +1669,7 @@ function _evSalaryForCargo(unidade, dept, nome) {
   for (var i = 0; i < _evCargos.length; i++) {
     var c = _evCargos[i];
     if (c.nome === nome && (!unidade || c.unidade === unidade) && (!dept || c.dept === dept)) {
-      var obs = (_evObs && _evObs[c.unidade]) || { ptG: 0, ptP: 0 };
-      var brutoCalc = (c.fixo || 0) + (c.insal || 0) + (c.peric || 0)
-                    + ((c.gorjeta || 0) * obs.ptG)
-                    + ((c.premio  || 0) * obs.ptP);
-      var bruto = brutoCalc > 0 ? brutoCalc : (c.bruto || 0);
-      return { fixo: c.fixo || '', bruto: bruto || '' };
+      return { fixo: c.fixo || '', bruto: c.bruto || '' };  // bruto já calculado na view de C&S
     }
   }
   return { fixo: '', bruto: '' };
@@ -1793,13 +1790,13 @@ function _evUniqSorted(arr) {
 
 // Departamento/Cargo vêm de profiles (_colabs). Salário ainda de _evCargos (vagas) até migrar Cargos & Salários.
 function _evDeptsForUnidade(unidade) {
-  return _evUniqSorted(_colabs.filter(function(c) {
+  return _evUniqSorted(_csCargos.filter(function(c) {
     return !unidade || c.unidade === unidade;
   }).map(function(c) { return c.departamento; }).filter(Boolean));
 }
 
 function _evCargosForUnidadeDepto(unidade, dept) {
-  return _evUniqSorted(_colabs.filter(function(c) {
+  return _evUniqSorted(_csCargos.filter(function(c) {
     return (!unidade || c.unidade === unidade) && (!dept || c.departamento === dept);
   }).map(function(c) { return c.cargo; }).filter(Boolean));
 }
@@ -2669,7 +2666,7 @@ function abrirModal(idx) {
   var horOk = d.horario && d.horario!=='0:00' && d.horario!=='0' && d.horario!=='00:00';
   document.getElementById('modal-data').textContent = (d.data||'') + (horOk ? ' · '+d.horario : '');
   document.getElementById('modal-turno').textContent = d.turno || '';
-  document.getElementById('modal-valor').textContent = d.valor || '';
+  document.getElementById('modal-valor').innerHTML = fmtValor(d.valor);
   // reset form
   document.getElementById('modal-avaliacao-status').value = '';
   document.getElementById('modal-obs').value = '';
@@ -2773,53 +2770,31 @@ function popularVagasSelect() {
 function salvarAvaliacao() {
   var valor = document.getElementById('modal-avaliacao-status').value;
   if (!valor) { alert('Selecione uma opção de avaliação.'); return; }
-  var vagaVinculada = '';
-  if (valor === 'Contratado') {
-    vagaVinculada = document.getElementById('modal-vaga-select').value;
-    if (!vagaVinculada) { alert('Selecione a vaga vinculada à contratação.'); return; }
-  }
   var obs = document.getElementById('modal-obs').value.trim();
   if (!obs) { alert('Preencha o feedback antes de salvar.'); document.getElementById('modal-obs').focus(); return; }
   var d = _testeCache[_modalTesteIdx];
-  if (!d) { alert('Erro: dados do candidato não encontrados.'); return; }
-
-  if (!APPS_SCRIPT_URL) {
-    alert('URL do Apps Script não configurada.');
-    return;
-  }
+  if (!d || !d.id) { alert('Erro: dados do candidato não encontrados.'); return; }
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Supabase indisponível.'); return; }
 
   var btnSalvar = document.querySelector('#modal-avaliacao .modal-btn-save');
   btnSalvar.textContent = 'Salvando...';
   btnSalvar.disabled = true;
 
-  var params = new URLSearchParams({
-    acao:          'avaliar-teste',
-    linha:         d.linha || '',
-    nome:          d.nome,
-    contato:       d.contato,
-    status:        valor,
-    obs:           obs,
-    vaga_vinculada: vagaVinculada
+  // status_teste (líder) + carimba devolutiva nos dias sem status. Vínculo de vaga fica p/ go-live (falta coluna vaga_id).
+  SB.rpc('rec_devolutiva_teste_sandbox', {
+    p_id: d.id, p_status: valor, p_obs: obs, p_por: _sandboxMatricula()
+  }).then(function(res) {
+    btnSalvar.textContent = 'Salvar';
+    btnSalvar.disabled = false;
+    if (res.error) { alert('Erro ao salvar:\n' + res.error.message); return; }
+    fecharModal();
+    loadAllData();
+  }, function(err) {
+    btnSalvar.textContent = 'Salvar';
+    btnSalvar.disabled = false;
+    alert('Erro de conexão:\n' + (err && err.message || err));
   });
-
-  fetch(APPS_SCRIPT_URL + '?' + params.toString())
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      btnSalvar.textContent = 'Salvar';
-      btnSalvar.disabled = false;
-      if (data.success) {
-        alert('Avaliação salva!\n\nCandidato: ' + d.nome + '\nStatus: ' + valor);
-        fecharModal();
-        loadAllData();
-      } else {
-        alert('Erro ao salvar:\n' + (data.message || 'resposta inválida'));
-      }
-    })
-    .catch(function(err) {
-      btnSalvar.textContent = 'Salvar';
-      btnSalvar.disabled = false;
-      alert('Erro de conexão:\n' + err.message);
-    });
 }
 
 // ─── Modal de Entrevista ─────────────────────────────────────────────────────
@@ -2938,11 +2913,6 @@ function popularVagasSelectEnt() {
 function salvarEntrevista() {
   var status = document.getElementById('modal-ent-status').value;
   if (!status) { alert('Selecione o status da entrevista.'); return; }
-  var vagaVinculada = '';
-  if (status === 'Aprovado para teste') {
-    vagaVinculada = document.getElementById('modal-ent-vaga-select').value;
-    if (!vagaVinculada) { alert('Selecione a vaga para qual o candidato foi aprovado.'); return; }
-  }
   var feedback  = document.getElementById('modal-ent-feedback').value.trim();
   if (!feedback) { alert('Preencha o feedback da entrevista.'); return; }
   var ref1nome  = document.getElementById('modal-ent-ref1-nome').value.trim();
@@ -2951,44 +2921,31 @@ function salvarEntrevista() {
   var ref2tel   = document.getElementById('modal-ent-ref2-tel').value.trim();
 
   var d = _entrevistaCache[_modalEntrevistaIdx];
-  if (!d) { alert('Erro: dados do candidato não encontrados.'); return; }
+  if (!d || !d.id) { alert('Erro: dados do candidato não encontrados.'); return; }
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Supabase indisponível.'); return; }
 
   var btnSalvar = document.querySelector('#modal-entrevista .modal-btn-save');
   btnSalvar.textContent = 'Salvando...';
   btnSalvar.disabled = true;
 
-  var params = new URLSearchParams({
-    acao:           'avaliar-entrevista',
-    linha:          d.linha || '',
-    nome:           d.nome,
-    contato:        d.contato,
-    status:         status,
-    vaga_vinculada: vagaVinculada,
-    feedback:       feedback,
-    ref1nome:       ref1nome,
-    ref1tel:        ref1tel,
-    ref2nome:       ref2nome,
-    ref2tel:        ref2tel
+  // status_entrevista + feedback + referências. Vínculo de vaga fica p/ go-live (falta coluna vaga_id).
+  SB.rpc('rec_devolutiva_entrevista_sandbox', {
+    p_id: d.id, p_status: status, p_feedback: feedback,
+    p_ref1_nome: ref1nome, p_ref1_tel: ref1tel,
+    p_ref2_nome: ref2nome, p_ref2_tel: ref2tel,
+    p_por: _sandboxMatricula()
+  }).then(function(res) {
+    btnSalvar.textContent = 'Enviar feedback';
+    btnSalvar.disabled = false;
+    if (res.error) { alert('Erro ao salvar:\n' + res.error.message); return; }
+    fecharModalEntrevista();
+    loadAllData();
+  }, function(err) {
+    btnSalvar.textContent = 'Enviar feedback';
+    btnSalvar.disabled = false;
+    alert('Erro de conexão:\n' + (err && err.message || err));
   });
-
-  fetch(APPS_SCRIPT_URL + '?' + params.toString())
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      btnSalvar.textContent = 'Enviar feedback';
-      btnSalvar.disabled = false;
-      if (data.success) {
-        alert('Devolutiva registrada!\n\nCandidato: ' + d.nome + '\nStatus: ' + status);
-        fecharModalEntrevista();
-        loadAllData();
-      } else {
-        alert('Erro ao salvar:\n' + (data.message || 'resposta inválida'));
-      }
-    })
-    .catch(function(err) {
-      btnSalvar.textContent = 'Enviar feedback';
-      btnSalvar.disabled = false;
-      alert('Erro de conexão:\n' + err.message);
-    });
 }
 
 // ─── DRAWER ──────────────────────────────────────────────────────────────────
