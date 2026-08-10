@@ -798,15 +798,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div id="recibo"></div>
 
 <script>
-// ─── CONFIG DO GOOGLE SHEETS ─────────────────────────────────────────────────
-// ─── CONFIG ──────────────────────────────────────────────────────────────────
-var SHEET_ID          = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
-var API_KEY           = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
-var SHEET_ENTREVISTAS = 'CONTROLE DE ENTREVISTAS';
-var SHEET_TESTES      = 'CONTROLE DE TESTES';
-var SHEET_VAGAS_ID    = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
-var SHEET_VAGAS       = 'CONTROLE DE VAGAS ABERTAS';
-var APPS_SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbw-opeZERkGF-qKzt44UWv2alrwWoF3bBshzwADG3d9SIl5k19jGJ7Fs7A76EVJxKI/exec';
 
 // ─── Estado ──────────────────────────────────────────────────────────────────
 var isAdmin = (function(){ var p=(window.__lideresPerfil||''); return p==='admin'||p==='analista-rh'; })();
@@ -857,162 +848,6 @@ var _cfSelectedBarIdx = -1;
 var _cfFunilIdx = null;
 var _cfRecrutador = null;
 
-// ─── Fetch Sheets ─────────────────────────────────────────────────────────────
-function sheetURL(sheetName) {
-  return 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID
-       + '/values/' + encodeURIComponent(sheetName + '!A:Z')
-       + '?key=' + API_KEY;
-}
-
-function rowToObj(headers, row) {
-  var obj = {};
-  headers.forEach(function(h, i) {
-    obj[h.toLowerCase().trim()
-         .replace(/[áàâã]/g,'a').replace(/[éê]/g,'e')
-         .replace(/[í]/g,'i').replace(/[óôõ]/g,'o')
-         .replace(/[ú]/g,'u').replace(/[ç]/g,'c')
-         .replace(/\s+/g,'_')] = (row[i] || '').trim();
-  });
-  return obj;
-}
-
-// Mapeia linha da aba CONTROLE DE ENTREVISTAS
-// Colunas: F1670 | NOME | CONTATO | ETENSÃO SALARI | UNIDADE | DEPARTAMENTO | CARGO | SELECIONADO | DATA DA ENTREVISTA | HORARIO | CPF | ...
-// A col F1670 é o recrutador (nome do recrutador está na col A)
-function normEntrevista(obj) {
-  // tenta várias grafias possíveis de cada campo
-  function v() {
-    for (var i=0; i<arguments.length; i++) {
-      if (obj[arguments[i]] !== undefined && obj[arguments[i]] !== '') return obj[arguments[i]];
-    }
-    return '';
-  }
-  return {
-    recrutador:        v('responsavel','f1670','recrutador','nome_do_recrutador'),
-    nome:              v('nome','candidato','nome_candidato'),
-    contato:           v('contato','telefone','whatsapp','celular'),
-    pretensao:         v('etensao_salari','extensao_salarial','pretensao','pretensao_salarial','valor'),
-    unidade:           v('unidade'),
-    departamento:      v('departamento','depto'),
-    cargo:             v('cargo','vaga','funcao'),
-    selecionado:       v('selecionado'),
-    data:              v('data_da_entrevista','data_entrevista','data'),
-    horario:           v('horarios','horario','hora','horario_entrevista','horario_do_teste'),
-    status_entrevista: v('status_da_entrevista','status_entrevista','status','resultado','situacao'),
-    entrevistador:     v('entrevistador','entrevistadora'),
-    observacoes:       v('observacoes_das_entrevistas','observacoes','observacao','obs','feedback'),
-    status_final:      v('status_final','resultado_final','contratado'),
-    referencia:        v('tipo_de_referencia','tipo_referencia','referencia'),
-    id:                v('id'),
-    link:              v('link_feedback','link','url')
-  };
-}
-
-// Mapeia linha da aba CONTROLE DE TESTES
-// Colunas: NOME | CONTATO | UNIDADE | CARGO | MISE | DEPARTAMENTO | VALOR DA DIÁRIA | DIAS DE TESTE | HORÁRIO DO TESTE | STATUS | OBSERVAÇÕES
-function normTeste(obj) {
-  function v() {
-    for (var i=0; i<arguments.length; i++) {
-      if (obj[arguments[i]] !== undefined && obj[arguments[i]] !== '') return obj[arguments[i]];
-    }
-    return '';
-  }
-  return {
-    recrutador:        v('recrutador','mise','turno'),
-    nome:              v('nome','candidato'),
-    contato:           v('contato','telefone','whatsapp','celular'),
-    pretensao:         v('valor_da_diaria','valor_diaria','valor'),
-    unidade:           v('unidade'),
-    departamento:      v('departamento','depto'),
-    cargo:             v('cargo','funcao','vaga'),
-    selecionado:       '',
-    data:              v('dias_de_teste','data_teste','data'),
-    horario:           v('horario_do_teste','horario','hora'),
-    status_entrevista: v('status','resultado','situacao'),
-    entrevistador:     v('entrevistador','avaliador'),
-    observacoes:       v('observacoes','observacao','obs'),
-    status_final:      v('status','resultado','situacao'),
-    id:                v('id'),
-    link:              v('link_feedback','link','url')
-  };
-}
-
-function normVaga(obj) {
-  function v() {
-    for (var i=0; i<arguments.length; i++) {
-      if (obj[arguments[i]] !== undefined && obj[arguments[i]] !== '') return obj[arguments[i]];
-    }
-    return '';
-  }
-  return {
-    cargo:        v('cargo','vaga','funcao','posicao','titulo'),
-    unidade:      v('unidade','loja','local','filial'),
-    departamento: v('departamento','depto','setor','area'),
-    status:       v('status_da_vaga','status','situacao','estado'),
-    data:         v('data_da_solicitacao','data_de_solicitacao','data_solicitacao','data_abertura','data_de_abertura','data_da_abertura','data','abertura'),
-    responsavel:  v('responsavel','recrutador'),
-    lider:        v('lider','lider_responsavel','responsavel_lider','lider_da_area','gestor','gestor_direto'),
-    quantidade:   v('quantidade','qtd','numero_vagas','n_de_vagas'),
-    escala:       v('escala','turno','escala_de_trabalho','regime'),
-    horario:      v('horario','hora','horario_de_trabalho','horario_do_cargo'),
-    observacoes:         v('observacoes','observacao','obs','descricao'),
-    prioridade:          v('prioridade','urgencia'),
-    salario:             v('salario','remuneracao','valor','faixa_salarial'),
-    salario_fixo:        v('salario_fixo'),
-    salario_bruto:       v('salario_bruto'),
-    colaborador_anterior: v('colaborador_anterior','colaborador'),
-    colaborador_contratado: v('colaborador_contratado','colaborador_admitido','colaborador_novo','contratado'),
-    data_contratacao:      v('data_da_contratacao','data_contratacao','data_de_contratacao','data_fechamento','data_de_fechamento','conclusao'),
-    id:                  v('id')
-  };
-}
-
-function fetchSheetVagas(callback) {
-  if (!SHEET_VAGAS_ID && !SHEET_ID) { callback([], null); return; }
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/'
-    + (SHEET_VAGAS_ID || SHEET_ID)
-    + '/values/' + encodeURIComponent(SHEET_VAGAS + '!A:Z')
-    + '?key=' + API_KEY;
-  fetch(url)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.error) { callback([], null); return; }
-      var rows = data.values || [];
-      if (rows.length < 2) { callback([], null); return; }
-      var headers = rows[0];
-      var result = [];
-      for (var i = 1; i < rows.length; i++) {
-        if (rows[i].some(function(c){return c && c.trim();})) {
-          var obj = normVaga(rowToObj(headers, rows[i]));
-          obj._linha = i + 1;
-          result.push(obj);
-        }
-      }
-      callback(result, null);
-    })
-    .catch(function() { callback([], null); });
-}
-
-function fetchSheet(sheetName, normFn, callback) {
-  fetch(sheetURL(sheetName))
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.error) { callback(null, data.error.message); return; }
-      var rows = data.values || [];
-      if (rows.length < 2) { callback([], null); return; }
-      var headers = rows[0];
-      var result = [];
-      for (var i = 1; i < rows.length; i++) {
-        if (rows[i].some(function(c){return c && c.trim();})) {
-          var obj = normFn(rowToObj(headers, rows[i]));
-          obj._linha = i + 1; // linha real na planilha (header = linha 1)
-          result.push(obj);
-        }
-      }
-      callback(result, null);
-    })
-    .catch(function(err) { callback(null, err.message || 'Erro de rede'); });
-}
 
 // Colaboradores (profiles) — raiz dos dropdowns do modal de vaga
 var _colabs = [];
@@ -1631,10 +1466,6 @@ function showMoreVagas() {
 }
 
 // ─── Edit Vaga ────────────────────────────────────────────────────────────────
-var VAGAS_EDIT_URL = 'https://script.google.com/macros/s/AKfycbwMUonqH1hJH-Duj09zS01UX_fxgEmle-AQffXYy9L8SqdvFJjkFVajMNCBjtCLJyFqMg/exec';
-var EV_CARGOS_URL  = 'https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec';
-var EV_MAPA_URL    = 'https://script.google.com/macros/s/AKfycbykOWkQ3ceH_50bmc_3dcLjUrE9V4Ropbraxc0yykMIp6W8eDVtpyo2XmN1Y_KJQzol/exec';
-var EV_COLAB_URL   = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _evCargos        = null;
 var _evObs           = null; // { unidade: { ptG, ptP } }
 var _evLideres       = null;
@@ -2994,7 +2825,6 @@ function salvarEntrevista() {
 }
 
 // ─── DRAWER ──────────────────────────────────────────────────────────────────
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
