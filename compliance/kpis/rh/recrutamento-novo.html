@@ -270,7 +270,22 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .anl-table tbody tr:hover td.anl-sticky { background: #F4F5F2; }
 .anl-table .anl-gsep { border-left: 2px solid var(--muted); }
 .anl-long { max-width: 240px; display: inline-block; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
-.anl-acoes { text-align: center; }
+/* coluna Ações fixada à direita */
+.anl-table td.anl-acoes, .anl-table th.anl-acoes-h { position: sticky; right: 0; z-index: 3; background: var(--surface); text-align: center; box-shadow: -1px 0 0 var(--border); }
+.anl-table thead th.anl-acoes-h { z-index: 7; }
+.anl-table tbody tr:hover td.anl-acoes { background: #F4F5F2; }
+/* modal seccionado (edição a partir do Analítico) */
+.ae-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); padding: 0 4px; -webkit-overflow-scrolling: touch; }
+.ae-tab { flex: 0 0 auto; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; padding: 10px 12px; cursor: pointer; white-space: nowrap; }
+.ae-tab.active { color: var(--carbon); border-bottom-color: var(--carbon); font-weight: 600; }
+.ae-panel { display: none; padding: 4px 2px; }
+.ae-panel.active { display: block; }
+.ae-row { display: grid; grid-template-columns: 120px 1fr; gap: 6px 14px; padding: 8px 2px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.ae-row:last-child { border-bottom: none; }
+.ae-row .ae-k { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); align-self: center; }
+.ae-row .ae-v { color: var(--carbon); word-break: break-word; }
+.ae-sub { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); margin: 14px 0 2px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.ae-note { font-size: 11px; color: var(--muted); padding: 8px 2px; }
 .anl-count { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; margin: 0 0 10px; }
 @media (min-width: 768px) {
   body[data-view="entrevistas"] .ent-table-wrap,
@@ -1724,11 +1739,12 @@ var _anlShown = ANL_PAGE;
 
 function _anlRowsHtml() {
   var cols = _anlCols();
-  var totalCols = cols.length + 1; // Nome + colunas (Analítico é só visual, sem edição)
+  var totalCols = cols.length + 2; // Nome (esq. fixa) + colunas + Ações (dir. fixa)
   var display = _anlRows.slice(0, _anlShown);
   var html = display.map(function(r){
     var tds = '<td class="anl-sticky">'+_anlTxt(r.nome)+'</td>';
     for (var i=0;i<cols.length;i++){ tds += '<td'+(cols[i].sep?' class="anl-gsep"':'')+'>'+cols[i].f(r)+'</td>'; }
+    tds += '<td class="anl-acoes"><button class="btn-editar" title="Editar" data-aba-id="governanca-kpis-rh-recrutamento::editar-candidato" onclick="abrirAnaliticoEditar(\''+escH(r.id)+'\')">'+_editSvg+'</button></td>';
     return '<tr>'+tds+'</tr>';
   }).join('');
   var resto = _anlRows.length - _anlShown;
@@ -1772,10 +1788,55 @@ function renderAnaliticoTableHtml(rows) {
   var cols = _anlCols();
   var head = '<th class="anl-sticky">Nome</th>';
   for (var i=0;i<cols.length;i++){ head += '<th'+(cols[i].sep?' class="anl-gsep"':'')+'>'+escH(cols[i].l)+'</th>'; }
+  head += '<th class="anl-acoes-h">Ações</th>';
   return '<div class="anl-wrap"><table class="ent-table anl-table">'+
     '<thead><tr>'+head+'</tr></thead>'+
     '<tbody id="anl-tbody">'+_anlRowsHtml()+'</tbody></table></div>';
 }
+
+// ─── Editar a partir do Analítico (modal seccionado) ──────────────────────────
+var _aeTab = 'candidato';
+function _aeRow(k, v){ return '<div class="ae-row"><span class="ae-k">'+escH(k)+'</span><span class="ae-v">'+((v==null||v==='')?'—':v)+'</span></div>'; }
+function _aeRenderPanels(r){
+  function P(name, inner){ return '<div class="ae-panel'+(name===_aeTab?' active':'')+'" data-ae="'+name+'">'+inner+'</div>'; }
+  var cand = _aeRow('Nome',_anlTxt(r.nome))+_aeRow('Contato',_anlTxt(r.contato))+_aeRow('CPF',_anlTxt(r.cpf))
+    +_aeRow('Recrutador',_anlTxt(r.responsavel))+_aeRow('Unidade',_anlTxt(r.unidade))+_aeRow('Departamento',_anlTxt(r.departamento))
+    +_aeRow('Cargo',_anlTxt(r.cargo))+_aeRow('Horário da vaga',_anlTxt(r.horario_vaga))+_aeRow('Pretensão',_anlPret(r.pretensao_salarial));
+  var entr = _aeRow('Data',_anlData(r.data_entrevista))+_aeRow('Hora',_anlHora(r.horarios))+_aeRow('Entrevistador',_anlTxt(r.entrevistador))
+    +_aeRow('Status',_anlTxt(r.status_entrevista))+_aeRow('Selecionado',_anlTxt(r.selecionado))+_aeRow('Observações',_anlTxt(r.observacoes_entrevista));
+  var dias = r.dias||[], tst = '';
+  if (!dias.length) tst += '<div class="ae-note">Nenhum dia de teste agendado.</div>';
+  dias.forEach(function(d, i){
+    var hr = d.horario ? fmtHora(d.horario)+(d.horario_saida?' às '+fmtHora(d.horario_saida):'') : '';
+    tst += '<div class="ae-sub">Dia '+(i+1)+'</div>'+_aeRow('Data',_anlData(d.data_teste))+_aeRow('Horário',escH(hr))
+      +_aeRow('Responsável',_anlTxt(d.responsavel))+_aeRow('Valor',fmtValor(d.valor_diaria))
+      +_aeRow('Status',_anlTxt(d.status))+_aeRow('Pago',_anlBool(d.pago));
+  });
+  tst += '<div class="ae-sub">Geral</div>'+_aeRow('Camiseta',_anlTxt(r.camiseta))+_aeRow('Status teste',_anlTxt(r.status_teste))+_aeRow('Pagamento completo',_anlBool(r.pagamento_completo));
+  var proc = _aeRow('Processos',_anlTxt(r.processos))+_aeRow('Resumo',_anlTxt(r.resumo));
+  var refs = _aeRow('Tipo',_anlTxt(r.tipo_referencia))+_aeRow('Contato',_anlTxt(r.contato_referencia))+_aeRow('Empresa/Líder ant.',_anlTxt(r.empresa_anterior_lider))
+    +_aeRow('Check',_anlTxt(r.check_referencia))+_aeRow('Feedback',_anlTxt(r.feedback_referencia))+_aeRow('Observações',_anlTxt(r.observacoes_referencia));
+  var fin = _aeRow('Status final',_anlTxt(r.status_final))+_aeRow('Final por',_anlTxt(r.status_final_por))+_aeRow('Final em',_anlDataHora(r.status_final_em));
+  var note = '<div class="ae-note">Pré-visualização por seção — os campos editáveis serão ativados a seguir.</div>';
+  document.getElementById('ae-body').innerHTML = note + P('candidato',cand)+P('entrevista',entr)+P('testes',tst)+P('processos',proc)+P('referencias',refs)+P('final',fin);
+}
+function abrirAnaliticoEditar(id){
+  var r=null; for (var i=0;i<analitico.length;i++){ if (String(analitico[i].id)===String(id)){ r=analitico[i]; break; } }
+  if (!r) return;
+  document.getElementById('ae-id').value = r.id;
+  document.getElementById('ae-title').textContent = 'Editar — '+(r.nome||'Candidato');
+  _aeTab='candidato';
+  _aeRenderPanels(r);
+  aeTab('candidato');
+  document.getElementById('ae-overlay').classList.add('active');
+  document.body.style.overflow='hidden';
+}
+function aeTab(name){
+  _aeTab=name;
+  document.querySelectorAll('#ae-tabs .ae-tab').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-ae')===name); });
+  document.querySelectorAll('#ae-body .ae-panel').forEach(function(p){ p.classList.toggle('active', p.getAttribute('data-ae')===name); });
+}
+function closeAeModal(){ document.getElementById('ae-overlay').classList.remove('active'); document.body.style.overflow=''; }
 
 function renderVagasTableRows() {
   var tbody = document.getElementById('tbody-vagas');
@@ -4040,6 +4101,33 @@ function enviarSolicitacao() {
     <div class="modal-footer">
       <button class="modal-btn modal-btn-cancel" onclick="closeEditVaga()">Cancelar</button>
       <button class="modal-btn modal-btn-save" id="ev-save" onclick="salvarEditVaga()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDITAR (Analítico) — modal seccionado -->
+<div class="modal-overlay" id="ae-overlay" onclick="if(event.target===this)closeAeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-header-info">
+        <div class="candidate-name" id="ae-title">Editar Candidato</div>
+      </div>
+      <button class="modal-close" onclick="closeAeModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <input type="hidden" id="ae-id">
+    <div class="ae-tabs" id="ae-tabs">
+      <button class="ae-tab active" data-ae="candidato" onclick="aeTab('candidato')">Vaga</button>
+      <button class="ae-tab" data-ae="entrevista" onclick="aeTab('entrevista')">Entrevista</button>
+      <button class="ae-tab" data-ae="testes" onclick="aeTab('testes')">Testes</button>
+      <button class="ae-tab" data-ae="processos" onclick="aeTab('processos')">Processos</button>
+      <button class="ae-tab" data-ae="referencias" onclick="aeTab('referencias')">Referências</button>
+      <button class="ae-tab" data-ae="final" onclick="aeTab('final')">Final</button>
+    </div>
+    <div class="modal-body" id="ae-body"></div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="closeAeModal()">Fechar</button>
     </div>
   </div>
 </div>
