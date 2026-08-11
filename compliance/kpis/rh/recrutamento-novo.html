@@ -1823,9 +1823,10 @@ function _aeRenderPanels(r){
     _aeSelect('Nível','ae-c-nivel','_aeCFillHorario()')+
     _aeSelect('Horário da vaga','ae-c-horario-vaga','')+
     _aeInput('Pretensão','ae-c-pretensao')+
-    _aeTextarea('Benefícios','ae-c-beneficios')+
-    _aeTextarea('Observações','ae-c-observacoes')+
     '</div>';
+  var vaga = '<div class="ae-fields">'+
+    '<div class="ev-field"><span class="modal-section-title">Qual vaga?</span><select class="modal-select" id="ae-v-vaga" onchange="_aeVagaChanged()"><option value="">Selecione</option></select></div>'+
+    '</div><div id="ae-v-info" style="margin-top:12px"></div>';
   var entr = '<div class="ae-fields">'+
     '<div class="ev-field"><span class="modal-section-title">Data da entrevista</span><input type="date" class="modal-input" id="ae-e-data"></div>'+
     '<div class="ev-field"><span class="modal-section-title">Hora</span><input type="time" class="modal-input" id="ae-e-hora" step="60"></div>'+
@@ -1854,8 +1855,8 @@ function _aeRenderPanels(r){
   var refs = _aeRow('Tipo',_anlTxt(r.tipo_referencia))+_aeRow('Contato',_anlTxt(r.contato_referencia))+_aeRow('Empresa/Líder ant.',_anlTxt(r.empresa_anterior_lider))
     +_aeRow('Check',_anlTxt(r.check_referencia))+_aeRow('Feedback',_anlTxt(r.feedback_referencia))+_aeRow('Observações',_anlTxt(r.observacoes_referencia)) + _aeEmBreve();
   var fin = _aeRow('Status final',_anlTxt(r.status_final))+_aeRow('Final por',_anlTxt(r.status_final_por))+_aeRow('Final em',_anlDataHora(r.status_final_em)) + _aeEmBreve();
-  var note = '<div class="ae-note">Vaga e Entrevista já editam aqui (Salvar no rodapé). Processos, Referências e Final em breve.</div>';
-  document.getElementById('ae-body').innerHTML = note + P('candidato',cand)+P('entrevista',entr)+P('testes',tst)+P('processos',proc)+P('referencias',refs)+P('final',fin);
+  var note = '<div class="ae-note">Candidato, Vaga e Entrevista já editam aqui (Salvar no rodapé). Processos, Referências e Final em breve.</div>';
+  document.getElementById('ae-body').innerHTML = note + P('candidato',cand)+P('vaga',vaga)+P('entrevista',entr)+P('testes',tst)+P('processos',proc)+P('referencias',refs)+P('final',fin);
 }
 function abrirAnaliticoEditar(id){
   var r=null; for (var i=0;i<analitico.length;i++){ if (String(analitico[i].id)===String(id)){ r=analitico[i]; break; } }
@@ -1865,6 +1866,7 @@ function abrirAnaliticoEditar(id){
   _aeTab='candidato';
   _aeRenderPanels(r);
   _aeInitCandidato(r);
+  _aeInitVaga(r);
   _aeInitEntrevista(r);
   aeTab('candidato');
   document.getElementById('ae-overlay').classList.add('active');
@@ -1872,7 +1874,44 @@ function abrirAnaliticoEditar(id){
 }
 function _aeSalvar(){
   if (_aeTab==='candidato') _aeSalvarCandidato();
+  else if (_aeTab==='vaga') _aeSalvarVaga();
   else if (_aeTab==='entrevista') _aeSalvarEntrevista();
+}
+// ── Aba Vaga: vincula a candidatura a uma vaga e reflete as infos (leitura) ──
+function _aeVagaInfoHtml(v){
+  if(!v) return '<div class="ae-note">Selecione uma vaga para ver as informações.</div>';
+  return _aeRow('Unidade',escH(v.unidade||'—'))+_aeRow('Departamento',escH(v.departamento||'—'))+_aeRow('Cargo',escH(v.cargo||'—'))
+    +_aeRow('Escala',escH(v.escala||'—'))+_aeRow('Horário',escH(v.horario||'—'))
+    +_aeRow('Salário Fixo',fmtValor(v.salario_fixo))+_aeRow('Salário Bruto',fmtValor(v.salario_bruto))
+    +_aeRow('Benefícios',escH(v.beneficios||'—'))+_aeRow('Observação',escH(v.observacoes||'—'))
+    +_aeRow('Colaborador anterior',escH(v.colaborador_anterior||'—'))+_aeRow('Colaborador contratado',escH(v.colaborador_contratado||'—'))
+    +_aeRow('Líder responsável',escH(v.lider||'—'))+_aeRow('Status',escH(v.status||'—'));
+}
+function _aeInitVaga(r){
+  var sel=document.getElementById('ae-v-vaga'); if(!sel) return;
+  var list=(vagas||[]).filter(function(v){ return norm((v.status||'').toLowerCase()).indexOf('abert')>=0; });
+  if(r.vaga_id && !list.some(function(v){ return String(v.id)===String(r.vaga_id); })){
+    var vl=(vagas||[]).filter(function(v){ return String(v.id)===String(r.vaga_id); })[0];
+    if(vl) list=[vl].concat(list);
+  }
+  var html='<option value="">Selecione</option>';
+  list.forEach(function(v){ html+='<option value="'+escH(v.id)+'">'+escH((v.unidade||'')+' · '+(v.departamento||'')+' · '+(v.cargo||''))+'</option>'; });
+  sel.innerHTML=html;
+  sel.value=r.vaga_id||'';
+  _aeVagaChanged();
+}
+function _aeVagaChanged(){
+  var id=(document.getElementById('ae-v-vaga')||{}).value||'';
+  var v=(vagas||[]).filter(function(x){ return String(x.id)===String(id); })[0];
+  document.getElementById('ae-v-info').innerHTML=_aeVagaInfoHtml(v);
+}
+function _aeSalvarVaga(){
+  var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
+  var id=document.getElementById('ae-v-vaga').value||null;
+  SB.rpc('rec_candidatura_vincular_vaga_sandbox', { p_id: document.getElementById('ae-id').value, p_vaga_id: id, p_por: _sandboxMatricula() }).then(function(res){
+    if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
+    closeAeModal(); loadAllData();
+  }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
 // ── Aba Vaga/Candidato: edição inline (RPC rec_candidatura_sandbox_salvar) ──
 function _aeInitCandidato(r){
@@ -1881,8 +1920,6 @@ function _aeInitCandidato(r){
   document.getElementById('ae-c-cpf').value        = r.cpf || '';
   document.getElementById('ae-c-recrutador').value = r.responsavel || '';
   document.getElementById('ae-c-pretensao').value  = (r.pretensao_salarial != null ? r.pretensao_salarial : '');
-  document.getElementById('ae-c-beneficios').value = r.beneficios || '';
-  document.getElementById('ae-c-observacoes').value = r.observacoes_vaga || '';
   var u=r.unidade||'', dp=r.departamento||'', cargoFull=r.cargo||'';
   _evPopulateSelect('ae-c-unidade', _csUnidades(), u);
   document.getElementById('ae-c-unidade').value = u;
@@ -1938,8 +1975,6 @@ function _aeSalvarCandidato(){
     p_unidade: v('ae-c-unidade'), p_departamento: v('ae-c-departamento'),
     p_cargo: _cargo + (_niv?' '+_niv:''),
     p_horario_vaga: v('ae-c-horario-vaga'),
-    p_beneficios: v('ae-c-beneficios').trim(),
-    p_observacoes_vaga: v('ae-c-observacoes').trim(),
     p_por: _sandboxMatricula()
   };
   SB.rpc('rec_candidatura_sandbox_salvar', args).then(function(res){
@@ -1951,7 +1986,7 @@ function aeTab(name){
   _aeTab=name;
   document.querySelectorAll('#ae-tabs .ae-tab').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-ae')===name); });
   document.querySelectorAll('#ae-body .ae-panel').forEach(function(p){ p.classList.toggle('active', p.getAttribute('data-ae')===name); });
-  var sv=document.getElementById('ae-save'); if(sv) sv.style.display = (name==='candidato'||name==='entrevista') ? '' : 'none';
+  var sv=document.getElementById('ae-save'); if(sv) sv.style.display = (name==='candidato'||name==='vaga'||name==='entrevista') ? '' : 'none';
 }
 function _aeInitEntrevista(r){
   document.getElementById('ae-e-data').value = _toDateInput(r.data_entrevista);
@@ -4261,7 +4296,8 @@ function enviarSolicitacao() {
     </div>
     <input type="hidden" id="ae-id">
     <div class="ae-tabs" id="ae-tabs">
-      <button class="ae-tab active" data-ae="candidato" onclick="aeTab('candidato')">Vaga</button>
+      <button class="ae-tab active" data-ae="candidato" onclick="aeTab('candidato')">Candidato</button>
+      <button class="ae-tab" data-ae="vaga" onclick="aeTab('vaga')">Vaga</button>
       <button class="ae-tab" data-ae="entrevista" onclick="aeTab('entrevista')">Entrevista</button>
       <button class="ae-tab" data-ae="testes" onclick="aeTab('testes')">Testes</button>
       <button class="ae-tab" data-ae="processos" onclick="aeTab('processos')">Processos</button>
