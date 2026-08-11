@@ -1827,14 +1827,7 @@ function _aeRenderPanels(r){
   var vaga = '<div class="ae-fields">'+
     '<div class="ev-field"><span class="modal-section-title">Qual vaga?</span><select class="modal-select" id="ae-v-vaga" onchange="_aeVagaChanged()"><option value="">Selecione</option></select></div>'+
     '</div><div id="ae-v-info" style="margin-top:12px"></div>';
-  var entr = '<div class="ae-fields">'+
-    '<div class="ev-field"><span class="modal-section-title">Data da entrevista</span><input type="date" class="modal-input" id="ae-e-data"></div>'+
-    '<div class="ev-field"><span class="modal-section-title">Hora</span><input type="time" class="modal-input" id="ae-e-hora" step="60"></div>'+
-    _aeSelect('Entrevistador','ae-e-entrevistador','')+
-    '<div class="ev-field"><span class="modal-section-title">Selecionado</span><select class="modal-select" id="ae-e-selecionado">'+_aeOpts(_AE_SELECIONADO)+'</select></div>'+
-    '<div class="ev-field"><span class="modal-section-title">Status da entrevista</span><select class="modal-select" id="ae-e-status">'+_aeOpts(_AE_STATUS_ENT)+'</select></div>'+
-    _aeTextarea('Observações','ae-e-obs')+
-    '</div>';
+  var entr = _aeEntPanelHtml(r);
   var dias = r.dias||[], tst = '';
   // Submódulos fixos: Dia 1 → Dia 5 (mesmo os ainda não agendados)
   for (var di=0; di<ANL_MAX_DIAS; di++){
@@ -1866,7 +1859,7 @@ function abrirAnaliticoEditar(id){
   _aeRenderPanels(r);
   _aeInitCandidato(r);
   _aeInitVaga(r);
-  _aeInitEntrevista(r);
+  _aeInitEntrevistas(r);
   aeTab('candidato');
   document.getElementById('ae-overlay').classList.add('active');
   document.body.style.overflow='hidden';
@@ -1874,7 +1867,6 @@ function abrirAnaliticoEditar(id){
 function _aeSalvar(){
   if (_aeTab==='candidato') _aeSalvarCandidato();
   else if (_aeTab==='vaga') _aeSalvarVaga();
-  else if (_aeTab==='entrevista') _aeSalvarEntrevista();
 }
 // ── Aba Vaga: vincula a candidatura a uma vaga e reflete as infos (leitura) ──
 function _aeVagaInfoHtml(v){
@@ -1985,31 +1977,68 @@ function aeTab(name){
   _aeTab=name;
   document.querySelectorAll('#ae-tabs .ae-tab').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-ae')===name); });
   document.querySelectorAll('#ae-body .ae-panel').forEach(function(p){ p.classList.toggle('active', p.getAttribute('data-ae')===name); });
-  var sv=document.getElementById('ae-save'); if(sv) sv.style.display = (name==='candidato'||name==='vaga'||name==='entrevista') ? '' : 'none';
+  var sv=document.getElementById('ae-save'); if(sv) sv.style.display = (name==='candidato'||name==='vaga') ? '' : 'none';
 }
-function _aeInitEntrevista(r){
-  document.getElementById('ae-e-data').value = _toDateInput(r.data_entrevista);
-  document.getElementById('ae-e-hora').value = _toTimeInput(r.horarios);
-  document.getElementById('ae-e-obs').value  = r.observacoes_entrevista || '';
-  _aeSetSelect('ae-e-status', r.status_entrevista||'');
-  _aeSetSelect('ae-e-selecionado', r.selecionado||'');
-  _loadEvLideres(function(list){ _evPopulateSelect('ae-e-entrevistador', list, r.entrevistador||''); _aeSetSelect('ae-e-entrevistador', r.entrevistador||''); });
+// ── Aba Entrevista: multi-entrevista (tabela-filha rec_entrevistas) ──
+var _aeEntList = [];
+function _aeEntPanelHtml(r){
+  var list = r.entrevistas||[];
+  var html='';
+  if(!list.length) html+='<div class="ae-note">Nenhuma entrevista registrada.</div>';
+  list.forEach(function(e,i){
+    html += '<div class="ae-sub">Entrevista '+(i+1)+'</div>'+
+      '<div class="ae-fields">'+
+      '<div class="ev-field"><span class="modal-section-title">Data</span><input type="date" class="modal-input" id="ae-ent-'+i+'-data"></div>'+
+      '<div class="ev-field"><span class="modal-section-title">Hora</span><input type="time" class="modal-input" id="ae-ent-'+i+'-hora" step="60"></div>'+
+      _aeSelect('Entrevistador','ae-ent-'+i+'-entrevistador','')+
+      '<div class="ev-field"><span class="modal-section-title">Selecionado</span><select class="modal-select" id="ae-ent-'+i+'-selecionado">'+_aeOpts(_AE_SELECIONADO)+'</select></div>'+
+      '<div class="ev-field"><span class="modal-section-title">Status da entrevista</span><select class="modal-select" id="ae-ent-'+i+'-status">'+_aeOpts(_AE_STATUS_ENT)+'</select></div>'+
+      _aeTextarea('Observações','ae-ent-'+i+'-obs')+
+      '</div>'+_aeBtn('_aeSalvarEnt('+i+')','Salvar Entrevista '+(i+1));
+  });
+  html += '<div style="padding:14px 2px 2px;border-top:1px dashed var(--border);margin-top:12px"><button onclick="_aeAddEntrevista()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:9px 16px;font-family:\'DM Mono\',monospace;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--carbon);cursor:pointer">+ Adicionar entrevista</button></div>';
+  return html;
 }
-function _aeSalvarEntrevista(){
+function _aeInitEntrevistas(r){
+  _aeEntList = r.entrevistas||[];
+  _aeEntList.forEach(function(e,i){
+    var d=document.getElementById('ae-ent-'+i+'-data'); if(d) d.value=_toDateInput(e.data);
+    var h=document.getElementById('ae-ent-'+i+'-hora'); if(h) h.value=_toTimeInput(e.hora);
+    var o=document.getElementById('ae-ent-'+i+'-obs'); if(o) o.value=e.observacoes||'';
+    _aeSetSelect('ae-ent-'+i+'-status', e.status||'');
+    _aeSetSelect('ae-ent-'+i+'-selecionado', e.selecionado||'');
+  });
+  _loadEvLideres(function(list){
+    _aeEntList.forEach(function(e,i){
+      _evPopulateSelect('ae-ent-'+i+'-entrevistador', list, e.entrevistador||'');
+      _aeSetSelect('ae-ent-'+i+'-entrevistador', e.entrevistador||'');
+    });
+  });
+}
+function _aeSalvarEnt(i){
   var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
+  var e=_aeEntList[i]; if(!e) return;
   function v(id){ return (document.getElementById(id)||{}).value||''; }
   var args={
-    p_id: document.getElementById('ae-id').value,
-    p_data_entrevista: v('ae-e-data')||null,
-    p_horarios: v('ae-e-hora').trim(),
-    p_entrevistador: v('ae-e-entrevistador'),
-    p_status_entrevista: v('ae-e-status'),
-    p_selecionado: v('ae-e-selecionado'),
-    p_observacoes_entrevista: v('ae-e-obs').trim(),
+    p_entrevista_id: e.id,
+    p_candidatura_id: document.getElementById('ae-id').value,
+    p_data: v('ae-ent-'+i+'-data')||null,
+    p_hora: v('ae-ent-'+i+'-hora').trim(),
+    p_entrevistador: v('ae-ent-'+i+'-entrevistador'),
+    p_status: v('ae-ent-'+i+'-status'),
+    p_selecionado: v('ae-ent-'+i+'-selecionado'),
+    p_observacoes: v('ae-ent-'+i+'-obs').trim(),
     p_por: _sandboxMatricula()
   };
-  SB.rpc('rec_candidatura_sandbox_salvar', args).then(function(res){
+  SB.rpc('rec_entrevista_sandbox_salvar', args).then(function(res){
     if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
+    closeAeModal(); loadAllData();
+  }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
+}
+function _aeAddEntrevista(){
+  var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
+  SB.rpc('rec_entrevista_sandbox_salvar', { p_entrevista_id:null, p_candidatura_id: document.getElementById('ae-id').value, p_status:'Aguardando Entrevista', p_por:_sandboxMatricula() }).then(function(res){
+    if(res.error){ alert('Erro ao adicionar:\n'+res.error.message); return; }
     closeAeModal(); loadAllData();
   }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
