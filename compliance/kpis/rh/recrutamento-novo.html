@@ -286,6 +286,7 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .ae-row .ae-v { color: var(--carbon); word-break: break-word; }
 .ae-sub { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); margin: 14px 0 2px; padding-top: 10px; border-top: 1px dashed var(--border); }
 .ae-note { font-size: 11px; color: var(--muted); padding: 8px 2px; }
+.ae-fields { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
 .anl-count { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; margin: 0 0 10px; }
 @media (min-width: 768px) {
   body[data-view="entrevistas"] .ent-table-wrap,
@@ -1799,12 +1800,21 @@ var _aeTab = 'candidato';
 function _aeRow(k, v){ return '<div class="ae-row"><span class="ae-k">'+escH(k)+'</span><span class="ae-v">'+((v==null||v==='')?'—':v)+'</span></div>'; }
 function _aeBtn(onclick, label){ return '<div style="padding:12px 2px 2px"><button onclick="'+onclick+'" style="background:var(--carbon);color:var(--citric);border:none;border-radius:6px;padding:10px 18px;font-family:\'DM Mono\',monospace;font-size:11px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer">'+escH(label)+'</button></div>'; }
 function _aeEmBreve(){ return '<div class="ae-note" style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border)">Edição desta seção em breve.</div>'; }
+function _aeInput(label, id){ return '<div class="ev-field"><span class="modal-section-title">'+escH(label)+'</span><input type="text" class="modal-input" id="'+id+'"></div>'; }
+function _aeSelect(label, id, onchange){ return '<div class="ev-field"><span class="modal-section-title">'+escH(label)+'</span><select class="modal-select" id="'+id+'"'+(onchange?' onchange="'+onchange+'"':'')+'><option value="">—</option></select></div>'; }
+function _aeSaveBtn(onclick){ return '<div style="padding:14px 2px 2px"><button onclick="'+onclick+'" style="background:var(--carbon);color:var(--citric);border:none;border-radius:6px;padding:11px 22px;font-family:\'DM Mono\',monospace;font-size:11px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer">Salvar</button></div>'; }
 function _aeRenderPanels(r){
   function P(name, inner){ return '<div class="ae-panel'+(name===_aeTab?' active':'')+'" data-ae="'+name+'">'+inner+'</div>'; }
-  var cand = _aeRow('Nome',_anlTxt(r.nome))+_aeRow('Contato',_anlTxt(r.contato))+_aeRow('CPF',_anlTxt(r.cpf))
-    +_aeRow('Recrutador',_anlTxt(r.responsavel))+_aeRow('Unidade',_anlTxt(r.unidade))+_aeRow('Departamento',_anlTxt(r.departamento))
-    +_aeRow('Cargo',_anlTxt(r.cargo))+_aeRow('Horário da vaga',_anlTxt(r.horario_vaga))+_aeRow('Pretensão',_anlPret(r.pretensao_salarial));
-  cand += _aeBtn("closeAeModal();abrirEditarCandidato('"+r.id+"')", 'Editar dados do candidato');
+  var cand = '<div class="ae-fields">'+
+    _aeInput('Nome','ae-c-nome')+_aeInput('Contato','ae-c-contato')+_aeInput('CPF','ae-c-cpf')+
+    _aeInput('Recrutador','ae-c-recrutador')+
+    _aeSelect('Unidade','ae-c-unidade','_aeCUnidadeChanged()')+
+    _aeSelect('Departamento','ae-c-departamento','_aeCDeptoChanged()')+
+    _aeSelect('Cargo','ae-c-cargo','_aeCCargoChanged()')+
+    _aeSelect('Nível','ae-c-nivel','_aeCFillHorario()')+
+    _aeSelect('Horário da vaga','ae-c-horario-vaga','')+
+    _aeInput('Pretensão','ae-c-pretensao')+
+    '</div>'+_aeSaveBtn('_aeSalvarCandidato()');
   var entr = _aeRow('Data',_anlData(r.data_entrevista))+_aeRow('Hora',_anlHora(r.horarios))+_aeRow('Entrevistador',_anlTxt(r.entrevistador))
     +_aeRow('Status',_anlTxt(r.status_entrevista))+_aeRow('Selecionado',_anlTxt(r.selecionado))+_aeRow('Observações',_anlTxt(r.observacoes_entrevista));
   entr += _aeBtn("closeAeModal();abrirEditarCandidato('"+r.id+"')", 'Editar dados da entrevista');
@@ -1838,9 +1848,79 @@ function abrirAnaliticoEditar(id){
   document.getElementById('ae-title').textContent = 'Editar — '+(r.nome||'Candidato');
   _aeTab='candidato';
   _aeRenderPanels(r);
+  _aeInitCandidato(r);
   aeTab('candidato');
   document.getElementById('ae-overlay').classList.add('active');
   document.body.style.overflow='hidden';
+}
+// ── Aba Vaga/Candidato: edição inline (RPC rec_candidatura_sandbox_salvar) ──
+function _aeInitCandidato(r){
+  document.getElementById('ae-c-nome').value       = r.nome || '';
+  document.getElementById('ae-c-contato').value    = r.contato || '';
+  document.getElementById('ae-c-cpf').value        = r.cpf || '';
+  document.getElementById('ae-c-recrutador').value = r.responsavel || '';
+  document.getElementById('ae-c-pretensao').value  = (r.pretensao_salarial != null ? r.pretensao_salarial : '');
+  var u=r.unidade||'', dp=r.departamento||'', cargoFull=r.cargo||'';
+  _evPopulateSelect('ae-c-unidade', _csUnidades(), u);
+  document.getElementById('ae-c-unidade').value = u;
+  _loadEvCargos(function(){
+    var split=_evSplitCargo(u,dp,cargoFull);
+    _evPopulateSelect('ae-c-departamento', u?_evDeptsForUnidade(u):[], dp);
+    _evPopulateSelect('ae-c-cargo', (u&&dp)?_evCargosForUnidadeDepto(u,dp):[], split.cargo);
+    _evPopulateSelect('ae-c-nivel', (u&&dp&&split.cargo)?_evNiveisForCargo(u,dp,split.cargo):[], split.nivel);
+    _aeCFillHorario(r.horario_vaga||'');
+  });
+}
+function _aeCUnidadeChanged(){
+  var u=(document.getElementById('ae-c-unidade')||{}).value||'';
+  _evPopulateSelect('ae-c-departamento', u?_evDeptsForUnidade(u):[], '');
+  document.getElementById('ae-c-cargo').innerHTML='<option value="">—</option>';
+  document.getElementById('ae-c-nivel').innerHTML='<option value="">—</option>';
+  _aeCFillHorario('');
+}
+function _aeCDeptoChanged(){
+  var u=(document.getElementById('ae-c-unidade')||{}).value||'', dp=(document.getElementById('ae-c-departamento')||{}).value||'';
+  _evPopulateSelect('ae-c-cargo', (u&&dp)?_evCargosForUnidadeDepto(u,dp):[], '');
+  document.getElementById('ae-c-nivel').innerHTML='<option value="">—</option>';
+  _aeCFillHorario('');
+}
+function _aeCCargoChanged(){
+  var u=(document.getElementById('ae-c-unidade')||{}).value||'', dp=(document.getElementById('ae-c-departamento')||{}).value||'', c=(document.getElementById('ae-c-cargo')||{}).value||'';
+  var niveis=c?_evNiveisForCargo(u,dp,c):[];
+  _evPopulateSelect('ae-c-nivel', niveis, niveis.length===1?niveis[0]:'');
+  _aeCFillHorario('');
+}
+function _aeCFillHorario(keep){
+  var sel=document.getElementById('ae-c-horario-vaga'); if(!sel) return;
+  var u=(document.getElementById('ae-c-unidade')||{}).value||'';
+  var dp=(document.getElementById('ae-c-departamento')||{}).value||'';
+  var c=(document.getElementById('ae-c-cargo')||{}).value||'';
+  var n=(document.getElementById('ae-c-nivel')||{}).value||'';
+  var full=c+(n?' '+n:'');
+  var cur=keep!=null?keep:sel.value;
+  var opts=_horariosVagasAbertas(u,dp,full), has=false;
+  var html='<option value="">Selecione</option>';
+  opts.forEach(function(h){ html+='<option value="'+escH(h)+'">'+escH(h)+'</option>'; if(h===cur)has=true; });
+  if(cur&&!has) html+='<option value="'+escH(cur)+'">'+escH(cur)+'</option>';
+  sel.innerHTML=html; sel.value=cur||'';
+}
+function _aeSalvarCandidato(){
+  var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
+  function v(id){ return (document.getElementById(id)||{}).value||''; }
+  var _cargo=v('ae-c-cargo'), _niv=v('ae-c-nivel');
+  var args={
+    p_id: document.getElementById('ae-id').value,
+    p_nome: v('ae-c-nome').trim(), p_contato: v('ae-c-contato').trim(), p_cpf: v('ae-c-cpf').trim(),
+    p_responsavel: v('ae-c-recrutador').trim(), p_pretensao: v('ae-c-pretensao').trim(),
+    p_unidade: v('ae-c-unidade'), p_departamento: v('ae-c-departamento'),
+    p_cargo: _cargo + (_niv?' '+_niv:''),
+    p_horario_vaga: v('ae-c-horario-vaga'),
+    p_por: _sandboxMatricula()
+  };
+  SB.rpc('rec_candidatura_sandbox_salvar', args).then(function(res){
+    if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
+    closeAeModal(); loadAllData();
+  }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
 function aeTab(name){
   _aeTab=name;
