@@ -1103,6 +1103,23 @@ function fmtTurno(r) {
   if (ent && sai) return ent+' às '+sai;
   return ent || sai || '';
 }
+// combina dois horários (inputs "HH:MM") numa faixa "08h00 às 18h00"
+function _combinaHora(ent, sai) {
+  var e = _horaOk(ent) ? fmtHora(ent) : '';
+  var s = _horaOk(sai) ? fmtHora(sai) : '';
+  if (e && s) return e+' às '+s;
+  return e || s || '';
+}
+// extrai "HH:MM" de "08h00" ou "08:00"
+function _horaParaInput(s) {
+  var m = String(s||'').match(/(\d{1,2})[h:](\d{2})/);
+  return m ? (('0'+m[1]).slice(-2)+':'+m[2]) : '';
+}
+// separa "08h00 às 18h00" em {ent,sai} prontos para inputs type=time
+function _splitFaixaHora(s) {
+  var parts = String(s||'').split(/\s*[àa]s\s*/i);
+  return { ent: _horaParaInput(parts[0]||''), sai: _horaParaInput(parts[1]||'') };
+}
 // normaliza para os inputs do modal de edição
 function _toDateInput(s) {
   s = String(s||'').trim();
@@ -2220,7 +2237,7 @@ function openNovoCandidato() {
   document.getElementById('nc-id').value = '';
   document.getElementById('nc-title').textContent = 'Cadastrar Candidato';
   var _b=document.getElementById('nc-save'); _b.textContent='Cadastrar candidato'; _b.disabled=false;
-  ['nc-nome','nc-contato','nc-cpf','nc-pretensao','nc-horario','nc-horario-vaga'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  ['nc-nome','nc-contato','nc-cpf','nc-pretensao','nc-horario','nc-hv-entrada','nc-hv-saida'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
   var d=document.getElementById('nc-data'); if(d) d.value='';
   // cascata unidade→depto→cargo (mesma fonte Cargos&Salários do modal de vaga)
   _evPopulateSelect('nc-unidade', _csUnidades(), '');
@@ -2257,7 +2274,9 @@ function abrirEditarCandidato(id) {
   document.getElementById('nc-pretensao').value = (r.pretensao_salarial != null ? r.pretensao_salarial : '');
   document.getElementById('nc-data').value      = _toDateInput(r.data_entrevista);
   document.getElementById('nc-horario').value   = _toTimeInput(r.horarios);
-  document.getElementById('nc-horario-vaga').value = r.horario_vaga || '';
+  var _hv = _splitFaixaHora(r.horario_vaga);
+  document.getElementById('nc-hv-entrada').value = _hv.ent;
+  document.getElementById('nc-hv-saida').value   = _hv.sai;
   var u=r.unidade||'', dp=r.departamento||'', cargoFull=r.cargo||'';
   _evPopulateSelect('nc-unidade', _csUnidades(), u);
   document.getElementById('nc-unidade').value = u;
@@ -2365,7 +2384,7 @@ function salvarNovoCandidato() {
     p_cargo:           (function(){ var c=document.getElementById('nc-cargo').value; var n=(document.getElementById('nc-nivel')||{}).value||''; return c + (n ? ' ' + n : ''); })(),
     p_data_entrevista: document.getElementById('nc-data').value || null,
     p_horarios:        document.getElementById('nc-horario').value.trim(),
-    p_horario_vaga:    document.getElementById('nc-horario-vaga').value.trim(),
+    p_horario_vaga:    _combinaHora(document.getElementById('nc-hv-entrada').value, document.getElementById('nc-hv-saida').value),
     p_entrevistador:   document.getElementById('nc-entrevistador').value,
     // status inicial só no cadastro; na edição preserva o status atual
     p_status_entrevista: _editando ? null : 'Aguardando Entrevista',
@@ -3971,9 +3990,13 @@ function enviarSolicitacao() {
             <option value="">—</option>
           </select>
         </div>
-        <div class="ev-field" style="grid-column:1/-1">
-          <span class="modal-section-title">Horário da vaga</span>
-          <input type="text" class="modal-input" id="nc-horario-vaga" placeholder="Ex: 15:00 às 23:20">
+        <div class="ev-field">
+          <span class="modal-section-title">Horário da vaga · Entrada</span>
+          <input type="time" class="modal-input" id="nc-hv-entrada" step="60">
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Horário da vaga · Saída</span>
+          <input type="time" class="modal-input" id="nc-hv-saida" step="60">
         </div>
       </div>
       <hr class="modal-divider">
