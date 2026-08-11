@@ -1812,6 +1812,7 @@ function _aeSetSelect(id, val){
 }
 var _AE_STATUS_ENT = ['Aguardando Entrevista','Aguardando devolutiva','Aprovado para teste','Não realizada','Não entrou','Não selecionado'];
 var _AE_SELECIONADO = ['Sim','Não','Não respondeu','Não aceitou a proposta'];
+var _AE_STATUS_TESTE = ['Aguardando teste','Aguardando aprovação','Contratado','Não contratado','Não compareceu','Cancelado'];
 function _aeRenderPanels(r){
   function P(name, inner){ return '<div class="ae-panel'+(name===_aeTab?' active':'')+'" data-ae="'+name+'">'+inner+'</div>'; }
   var cand = '<div class="ae-fields">'+
@@ -1828,22 +1829,7 @@ function _aeRenderPanels(r){
     '<div class="ev-field"><span class="modal-section-title">Qual vaga?</span><select class="modal-select" id="ae-v-vaga" onchange="_aeVagaChanged()"><option value="">Selecione</option></select></div>'+
     '</div><div id="ae-v-info" style="margin-top:12px"></div>';
   var entr = _aeEntPanelHtml(r);
-  var dias = r.dias||[], tst = '';
-  // Submódulos fixos: Dia 1 → Dia 5 (mesmo os ainda não agendados)
-  for (var di=0; di<ANL_MAX_DIAS; di++){
-    var d = dias[di];
-    tst += '<div class="ae-sub">Dia '+(di+1)+'</div>';
-    if (d){
-      var hr = d.horario ? fmtHora(d.horario)+(d.horario_saida?' às '+fmtHora(d.horario_saida):'') : '';
-      tst += _aeRow('Data',_anlData(d.data_teste))+_aeRow('Horário',escH(hr))
-        +_aeRow('Responsável',_anlTxt(d.responsavel))+_aeRow('Valor',fmtValor(d.valor_diaria))
-        +_aeRow('Status',_anlTxt(d.status))+_aeRow('Pago',_anlBool(d.pago));
-      tst += _aeBtn("closeAeModal();abrirEditarTeste('"+d.id+"')", 'Editar Dia '+(di+1));
-    } else {
-      tst += '<div class="ae-note">Sem teste agendado neste dia.</div>';
-    }
-  }
-  tst += '<div class="ae-sub">Geral</div>'+_aeRow('Camiseta',_anlTxt(r.camiseta))+_aeRow('Status teste',_anlTxt(r.status_teste))+_aeRow('Pagamento completo',_anlBool(r.pagamento_completo));
+  var tst = _aeTestePanelHtml(r);
   var proc = _aeRow('Processos',_anlTxt(r.processos))+_aeRow('Resumo',_anlTxt(r.resumo)) + _aeEmBreve();
   var refs = _aeRow('Tipo',_anlTxt(r.tipo_referencia))+_aeRow('Contato',_anlTxt(r.contato_referencia))+_aeRow('Empresa/Líder ant.',_anlTxt(r.empresa_anterior_lider))
     +_aeRow('Check',_anlTxt(r.check_referencia))+_aeRow('Feedback',_anlTxt(r.feedback_referencia))+_aeRow('Observações',_anlTxt(r.observacoes_referencia)) + _aeEmBreve();
@@ -1860,6 +1846,7 @@ function abrirAnaliticoEditar(id){
   _aeInitCandidato(r);
   _aeInitVaga(r);
   _aeInitEntrevistas(r);
+  _aeInitTestes(r);
   aeTab('candidato');
   document.getElementById('ae-overlay').classList.add('active');
   document.body.style.overflow='hidden';
@@ -2018,6 +2005,66 @@ function _aeInitEntrevistas(r){
       _aeSetSelect('ae-ent-'+i+'-entrevistador', e.entrevistador||'');
     }
   });
+}
+// ── Aba Testes: slots Dia 1..5 editáveis (tabela-filha rec_teste_dias) ──
+var _aeTesteList = [];
+function _aeTesteCount(r){ return Math.max(ANL_MAX_DIAS, ((r&&r.dias)||[]).length); }
+function _aeTestePanelHtml(r){
+  var dias=r.dias||[], n=_aeTesteCount(r), html='';
+  for (var i=0;i<n;i++){
+    html += '<div class="ae-sub">Dia '+(i+1)+' <span style="font-size:9px;letter-spacing:0;text-transform:none;color:var(--muted)">(opcional)</span></div>'+
+      '<div class="ae-fields">'+
+      '<div class="ev-field"><span class="modal-section-title">Data</span><input type="date" class="modal-input" id="ae-t-'+i+'-data"></div>'+
+      '<div class="ev-field"><span class="modal-section-title">Entrada</span><input type="time" class="modal-input" id="ae-t-'+i+'-entrada" step="60"></div>'+
+      '<div class="ev-field"><span class="modal-section-title">Saída</span><input type="time" class="modal-input" id="ae-t-'+i+'-saida" step="60"></div>'+
+      _aeSelect('Responsável','ae-t-'+i+'-responsavel','')+
+      '<div class="ev-field"><span class="modal-section-title">Valor diária</span><input type="text" class="modal-input" id="ae-t-'+i+'-valor" placeholder="R$"></div>'+
+      '<div class="ev-field"><span class="modal-section-title">Status</span><select class="modal-select" id="ae-t-'+i+'-status">'+_aeOpts(_AE_STATUS_TESTE)+'</select></div>'+
+      '<div class="ev-field"><span class="modal-section-title">Pago</span><select class="modal-select" id="ae-t-'+i+'-pago"><option value="">—</option><option>Sim</option><option>Não</option></select></div>'+
+      '</div>'+_aeBtn('_aeSalvarTeste('+i+')',(dias[i]?'Salvar':'Agendar')+' Dia '+(i+1));
+  }
+  html += '<div class="ae-sub">Geral</div>'+_aeRow('Camiseta',_anlTxt(r.camiseta))+_aeRow('Status teste',_anlTxt(r.status_teste))+_aeRow('Pagamento completo',_anlBool(r.pagamento_completo));
+  return html;
+}
+function _aeInitTestes(r){
+  _aeTesteList=r.dias||[];
+  var n=_aeTesteCount(r), pode=window.__podeVerValores, el;
+  for (var i=0;i<n;i++){
+    var d=_aeTesteList[i]||{};
+    el=document.getElementById('ae-t-'+i+'-data'); if(el) el.value=_toDateInput(d.data_teste);
+    el=document.getElementById('ae-t-'+i+'-entrada'); if(el) el.value=_toTimeInput(d.horario);
+    el=document.getElementById('ae-t-'+i+'-saida'); if(el) el.value=_toTimeInput(d.horario_saida);
+    el=document.getElementById('ae-t-'+i+'-valor'); if(el) el.value = pode ? (d.valor_diaria!=null?_fmtMoney(d.valor_diaria):'') : 'R$ 0.000,00';
+    _aeSetSelect('ae-t-'+i+'-status', d.status||'');
+    _aeSetSelect('ae-t-'+i+'-pago', d.pago===true?'Sim':(d.pago===false?'Não':''));
+  }
+  _loadEvLideres(function(list){
+    for (var i=0;i<n;i++){ var d=_aeTesteList[i]||{}; _evPopulateSelect('ae-t-'+i+'-responsavel', list, d.responsavel||''); _aeSetSelect('ae-t-'+i+'-responsavel', d.responsavel||''); }
+  });
+}
+function _aeSalvarTeste(i){
+  var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
+  function v(id){ return (document.getElementById(id)||{}).value||''; }
+  function _money(x){ x=String(x||'').replace(/R\$|\s|\./g,'').replace(',','.'); var nn=parseFloat(x); return isNaN(nn)?null:nn; }
+  var d=_aeTesteList[i], data=v('ae-t-'+i+'-data');
+  if(!d && !data){ alert('Informe ao menos a data para agendar este dia de teste.'); return; }
+  var pv=v('ae-t-'+i+'-pago'), pago = pv==='Sim'?true:(pv==='Não'?false:null);
+  var args={
+    p_candidatura_id: document.getElementById('ae-id').value,
+    p_dia_id: d ? d.id : null,
+    p_data_teste: data||null,
+    p_horario: v('ae-t-'+i+'-entrada').trim(),
+    p_horario_saida: v('ae-t-'+i+'-saida').trim(),
+    p_valor_diaria: window.__podeVerValores ? _money(v('ae-t-'+i+'-valor')) : null,
+    p_status: v('ae-t-'+i+'-status'),
+    p_responsavel: v('ae-t-'+i+'-responsavel'),
+    p_pago: pago,
+    p_por: _sandboxMatricula()
+  };
+  SB.rpc('rec_teste_sandbox_salvar', args).then(function(res){
+    if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
+    closeAeModal(); loadAllData();
+  }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
 function _aeSalvarEnt(i){
   var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
