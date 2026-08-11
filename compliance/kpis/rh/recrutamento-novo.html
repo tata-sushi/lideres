@@ -1103,22 +1103,55 @@ function fmtTurno(r) {
   if (ent && sai) return ent+' às '+sai;
   return ent || sai || '';
 }
-// combina dois horários (inputs "HH:MM") numa faixa "08h00 às 18h00"
-function _combinaHora(ent, sai) {
-  var e = _horaOk(ent) ? fmtHora(ent) : '';
-  var s = _horaOk(sai) ? fmtHora(sai) : '';
+// faixa de horário "15:00 às 23:20" (mantém o formato usado nas vagas) a partir de dois inputs
+function _combinaFaixaHora(ent, sai) {
+  var e=(ent||'').trim(), s=(sai||'').trim();
   if (e && s) return e+' às '+s;
   return e || s || '';
 }
-// extrai "HH:MM" de "08h00" ou "08:00"
+// extrai "HH:MM" de "15:00" ou "15h00"
 function _horaParaInput(s) {
   var m = String(s||'').match(/(\d{1,2})[h:](\d{2})/);
   return m ? (('0'+m[1]).slice(-2)+':'+m[2]) : '';
 }
-// separa "08h00 às 18h00" em {ent,sai} prontos para inputs type=time
+// separa "15:00 às 23:20" (ou "ás") em {ent,sai} para inputs type=time
 function _splitFaixaHora(s) {
   var parts = String(s||'').split(/\s*[àa]s\s*/i);
   return { ent: _horaParaInput(parts[0]||''), sai: _horaParaInput(parts[1]||'') };
+}
+// horários distintos das VAGAS ABERTAS que casam com a seleção (cascata), com fallback por depto
+function _horariosVagasAbertas(u, dp, cargoFull) {
+  var N = function(x){ return String(x||'').trim().toLowerCase(); };
+  if (!N(u) || !N(dp)) return [];
+  var abertas = (vagas||[]).filter(function(v){ return N(v.status).indexOf('abert')>=0 && (v.horario||'').trim(); });
+  var nu=N(u), nd=N(dp), ncg=N(cargoFull);
+  var tiers = [
+    function(v){ return N(v.unidade)===nu && N(v.departamento)===nd && N(v.cargo)===ncg; },
+    function(v){ return N(v.unidade)===nu && N(v.departamento)===nd; }
+  ];
+  for (var i=0;i<tiers.length;i++) {
+    var seen={}, out=[];
+    abertas.filter(tiers[i]).forEach(function(v){ var h=(v.horario||'').trim(); if(!seen[h]){ seen[h]=true; out.push(h); } });
+    if (out.length) return out;
+  }
+  return [];
+}
+// preenche o <select> de Horário da vaga a partir das vagas abertas; keep = valor a preservar
+function _ncFillHorarioVaga(keep) {
+  var sel = document.getElementById('nc-horario-vaga'); if (!sel) return;
+  var u  = (document.getElementById('nc-unidade')||{}).value||'';
+  var dp = (document.getElementById('nc-departamento')||{}).value||'';
+  var c  = (document.getElementById('nc-cargo')||{}).value||'';
+  var n  = (document.getElementById('nc-nivel')||{}).value||'';
+  var full = c + (n ? ' '+n : '');
+  var cur = keep!=null ? keep : sel.value;
+  var opts = _horariosVagasAbertas(u, dp, full);
+  var has = false;
+  var html = '<option value="">Selecione</option>';
+  opts.forEach(function(h){ html += '<option value="'+escH(h)+'">'+escH(h)+'</option>'; if(h===cur) has=true; });
+  if (cur && !has) html += '<option value="'+escH(cur)+'">'+escH(cur)+'</option>';   // preserva valor fora da lista
+  sel.innerHTML = html;
+  sel.value = cur || '';
 }
 // normaliza para os inputs do modal de edição
 function _toDateInput(s) {
@@ -2106,7 +2139,8 @@ function openNewVaga() {
   _evPopulateUnidades('');
   document.getElementById('ev-linha').value   = '';
   document.getElementById('ev-escala').value  = '6x1';
-  document.getElementById('ev-horario').value = '';
+  document.getElementById('ev-hora-entrada').value = '';
+  document.getElementById('ev-hora-saida').value   = '';
   document.getElementById('ev-unidade').value = '';
   var fx = document.getElementById('ev-salario-fixo'); if (fx) fx.value = '';
   var br = document.getElementById('ev-salario-bruto'); if (br) br.value = '';
@@ -2135,7 +2169,9 @@ function openEditVaga(id) {
   _evPopulateUnidades(r.unidade || '');
   document.getElementById('ev-linha').value   = r.id || '';
   document.getElementById('ev-escala').value  = (r.escala || '').indexOf('5x2') >= 0 ? '5x2' : '6x1';
-  document.getElementById('ev-horario').value = r.horario || '';
+  var _evh = _splitFaixaHora(r.horario);
+  document.getElementById('ev-hora-entrada').value = _evh.ent;
+  document.getElementById('ev-hora-saida').value   = _evh.sai;
   var _u = r.unidade || '', _d = r.departamento || '', _cargoFull = r.cargo || '';
   document.getElementById('ev-unidade').value = _u;
   _loadEvCargos(function() {
@@ -2180,7 +2216,8 @@ function salvarEditVaga() {
     { id: 'ev-cargo',        label: 'Cargo',        value: _cargoSel },
     { id: 'ev-unidade',      label: 'Unidade',      value: _scope.unidade },
     { id: 'ev-departamento', label: 'Departamento', value: _scope.departamento },
-    { id: 'ev-horario',      label: 'Horário' },
+    { id: 'ev-hora-entrada', label: 'Horário · Entrada' },
+    { id: 'ev-hora-saida',   label: 'Horário · Saída' },
     { id: 'ev-lider',        label: 'Líder responsável' }
   ];
   if (isFechada && !colabContratadoRaw) required.push({ id: 'ev-colab-contratado', label: 'Colaborador contratado' });
@@ -2212,7 +2249,7 @@ function salvarEditVaga() {
     p_departamento: _scope.departamento,
     p_unidade:      _scope.unidade,
     p_escala:       document.getElementById('ev-escala').value,
-    p_horario:      document.getElementById('ev-horario').value,
+    p_horario:      _combinaFaixaHora(document.getElementById('ev-hora-entrada').value, document.getElementById('ev-hora-saida').value),
     p_lider:                 document.getElementById('ev-lider').value,
     p_colaborador_anterior:  document.getElementById('ev-colaborador').value,
     // só envia salário se pode ver (senão null → coalesce no servidor preserva o valor atual)
@@ -2237,7 +2274,7 @@ function openNovoCandidato() {
   document.getElementById('nc-id').value = '';
   document.getElementById('nc-title').textContent = 'Cadastrar Candidato';
   var _b=document.getElementById('nc-save'); _b.textContent='Cadastrar candidato'; _b.disabled=false;
-  ['nc-nome','nc-contato','nc-cpf','nc-pretensao','nc-horario','nc-hv-entrada','nc-hv-saida'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  ['nc-nome','nc-contato','nc-cpf','nc-pretensao','nc-horario'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
   var d=document.getElementById('nc-data'); if(d) d.value='';
   // cascata unidade→depto→cargo (mesma fonte Cargos&Salários do modal de vaga)
   _evPopulateSelect('nc-unidade', _csUnidades(), '');
@@ -2245,6 +2282,7 @@ function openNovoCandidato() {
   document.getElementById('nc-departamento').innerHTML = '<option value="">Selecione a unidade primeiro</option>';
   document.getElementById('nc-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
   _ncResetNivel();
+  _ncFillHorarioVaga('');
   _loadEvCargos(function(){});
   // entrevistador + recrutador = líderes/admins de profiles
   _loadEvLideres(function(list){
@@ -2274,9 +2312,6 @@ function abrirEditarCandidato(id) {
   document.getElementById('nc-pretensao').value = (r.pretensao_salarial != null ? r.pretensao_salarial : '');
   document.getElementById('nc-data').value      = _toDateInput(r.data_entrevista);
   document.getElementById('nc-horario').value   = _toTimeInput(r.horarios);
-  var _hv = _splitFaixaHora(r.horario_vaga);
-  document.getElementById('nc-hv-entrada').value = _hv.ent;
-  document.getElementById('nc-hv-saida').value   = _hv.sai;
   var u=r.unidade||'', dp=r.departamento||'', cargoFull=r.cargo||'';
   _evPopulateSelect('nc-unidade', _csUnidades(), u);
   document.getElementById('nc-unidade').value = u;
@@ -2286,6 +2321,7 @@ function abrirEditarCandidato(id) {
     _evPopulateSelect('nc-cargo', (u&&dp) ? _evCargosForUnidadeDepto(u,dp) : [], split.cargo);
     var niveis = (u&&dp&&split.cargo) ? _evNiveisForCargo(u,dp,split.cargo) : [];
     if (niveis.length) _evPopulateSelect('nc-nivel', niveis, split.nivel); else _ncResetNivel();
+    _ncFillHorarioVaga(r.horario_vaga || '');   // opções vêm das vagas abertas; preserva o valor salvo
   });
   _loadEvLideres(function(list){ _evPopulateSelect('nc-entrevistador', list, r.entrevistador||''); document.getElementById('nc-entrevistador').value = r.entrevistador||''; });
   document.getElementById('nc-overlay').classList.add('active');
@@ -2304,12 +2340,14 @@ function ncUnidadeChanged() {
     document.getElementById('nc-departamento').innerHTML = '<option value="">Selecione a unidade primeiro</option>';
     document.getElementById('nc-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
     _ncResetNivel();
+    _ncFillHorarioVaga('');
     return;
   }
   _evPopulateSelect('nc-departamento', _evDeptsForUnidade(u), '');
   document.getElementById('nc-departamento').value = '';
   document.getElementById('nc-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
   _ncResetNivel();
+  _ncFillHorarioVaga('');
 }
 
 function ncDeptoChanged() {
@@ -2319,10 +2357,12 @@ function ncDeptoChanged() {
   _ncResetNivel();
   if (!u || !dp) {
     document.getElementById('nc-cargo').innerHTML = '<option value="">Selecione o departamento primeiro</option>';
+    _ncFillHorarioVaga('');
     return;
   }
   _evPopulateSelect('nc-cargo', _evCargosForUnidadeDepto(u, dp), '');
   document.getElementById('nc-cargo').value = '';
+  _ncFillHorarioVaga('');
 }
 
 function ncCargoChanged() {
@@ -2333,6 +2373,7 @@ function ncCargoChanged() {
   var niveis = cargo ? _evNiveisForCargo(u, dp, cargo) : [];
   if (niveis.length) _evPopulateSelect('nc-nivel', niveis, niveis.length === 1 ? niveis[0] : '');
   else _ncResetNivel();
+  _ncFillHorarioVaga();   // atualiza opções de horário conforme a vaga selecionada
 }
 
 function salvarNovoCandidato() {
@@ -2384,7 +2425,7 @@ function salvarNovoCandidato() {
     p_cargo:           (function(){ var c=document.getElementById('nc-cargo').value; var n=(document.getElementById('nc-nivel')||{}).value||''; return c + (n ? ' ' + n : ''); })(),
     p_data_entrevista: document.getElementById('nc-data').value || null,
     p_horarios:        document.getElementById('nc-horario').value.trim(),
-    p_horario_vaga:    _combinaHora(document.getElementById('nc-hv-entrada').value, document.getElementById('nc-hv-saida').value),
+    p_horario_vaga:    document.getElementById('nc-horario-vaga').value,
     p_entrevistador:   document.getElementById('nc-entrevistador').value,
     // status inicial só no cadastro; na edição preserva o status atual
     p_status_entrevista: _editando ? null : 'Aguardando Entrevista',
@@ -3874,7 +3915,7 @@ function enviarSolicitacao() {
             <option value="">—</option>
           </select>
         </div>
-        <div class="ev-field">
+        <div class="ev-field" style="grid-column:1/-1">
           <span class="modal-section-title">Escala</span>
           <select class="modal-select" id="ev-escala">
             <option value="6x1">6x1</option>
@@ -3882,8 +3923,12 @@ function enviarSolicitacao() {
           </select>
         </div>
         <div class="ev-field">
-          <span class="modal-section-title">Horário</span>
-          <input type="text" class="modal-input" id="ev-horario" placeholder="Ex: 15:00 às 23:20" oninput="_evClearFieldError('ev-horario')">
+          <span class="modal-section-title">Horário · Entrada</span>
+          <input type="time" class="modal-input" id="ev-hora-entrada" step="60" oninput="_evClearFieldError('ev-hora-entrada')">
+        </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Horário · Saída</span>
+          <input type="time" class="modal-input" id="ev-hora-saida" step="60" oninput="_evClearFieldError('ev-hora-saida')">
         </div>
         <div class="ev-field">
           <span class="modal-section-title">Salário Fixo</span>
@@ -3986,17 +4031,15 @@ function enviarSolicitacao() {
         </div>
         <div class="ev-field">
           <span class="modal-section-title">Nível</span>
-          <select class="modal-select" id="nc-nivel" onchange="_evClearFieldError('nc-nivel')">
+          <select class="modal-select" id="nc-nivel" onchange="_evClearFieldError('nc-nivel');_ncFillHorarioVaga()">
             <option value="">—</option>
           </select>
         </div>
-        <div class="ev-field">
-          <span class="modal-section-title">Horário da vaga · Entrada</span>
-          <input type="time" class="modal-input" id="nc-hv-entrada" step="60">
-        </div>
-        <div class="ev-field">
-          <span class="modal-section-title">Horário da vaga · Saída</span>
-          <input type="time" class="modal-input" id="nc-hv-saida" step="60">
+        <div class="ev-field" style="grid-column:1/-1">
+          <span class="modal-section-title">Horário da vaga</span>
+          <select class="modal-select" id="nc-horario-vaga" onchange="_evClearFieldError('nc-horario-vaga')">
+            <option value="">Selecione</option>
+          </select>
         </div>
       </div>
       <hr class="modal-divider">
