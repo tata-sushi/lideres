@@ -54,6 +54,11 @@ body:not([data-view="dashboard"]) .kpis-wrap,
 body:not([data-view="dashboard"]) .dash-filters-wrap,
 body[data-view="dashboard"] .filters-wrap,
 body[data-view="dashboard"] .content { display: none; }
+/* KPIs por aba: Entrevistas mostra só o card de entrevistas; Testes só o de testes */
+body[data-view="entrevistas"] .kpis-wrap,
+body[data-view="testes"] .kpis-wrap { display: grid; grid-template-columns: 1fr; }
+body[data-view="entrevistas"] .kpi-card-teste,
+body[data-view="testes"] .kpi-card-entrev { display: none; }
 body:not([data-view="dashboard"]) #dashboard { display: none; }
 .dash-filters-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
 
@@ -552,12 +557,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <button class="tab-btn" id="tab-dashboard" data-aba-id="governanca-kpis-rh-recrutamento::dashboard" onclick="setTab('dashboard')">KPI's</button>
 </div>
 <div class="kpis-wrap" id="kpis-wrap">
-  <div class="kpi-card">
+  <div class="kpi-card kpi-card-entrev">
     <span class="kpi-label">Entrevistas na semana</span>
     <span class="kpi-number" id="kpi-entrev-semana">—</span>
     <span class="kpi-sub"><strong id="kpi-entrev-hoje">0</strong> hoje / <strong id="kpi-entrev-mes">0</strong> mês</span>
   </div>
-  <div class="kpi-card">
+  <div class="kpi-card kpi-card-teste">
     <span class="kpi-label">Testes na semana</span>
     <span class="kpi-number" id="kpi-teste-semana">—</span>
     <span class="kpi-sub"><strong id="kpi-teste-hoje">0</strong> hoje / <strong id="kpi-teste-mes">0</strong> mês</span>
@@ -836,13 +841,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
       <div style="display:flex;flex-direction:column;gap:8px;">
-        <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::novo-candidato" onclick="closeDrawer(); openNovoCandidato()">Novo Candidato</button>
-        <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::nova-solicitacao" onclick="closeDrawer(); openNovaSolicitacao()">Nova Solicitação</button>
         <div id="drawer-acoes-section">
-          <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::nova-vaga" onclick="closeDrawer(); openNewVaga()">Nova Vaga</button>
+          <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::nova-vaga" onclick="closeDrawer(); openNewVaga()">Abrir Vaga</button>
         </div>
+        <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::novo-candidato" onclick="closeDrawer(); openNovoCandidato()">Cadastrar Candidatura</button>
+        <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::nova-solicitacao" onclick="closeDrawer(); openNovaSolicitacao()">Solicitar Abertura de Vaga</button>
         <div id="drawer-vagas-actions" style="display:flex;flex-direction:column;gap:8px;">
-          <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::relacao-vagas" onclick="closeDrawer(); gerarRelatorioVagas()">Relação de Vagas</button>
+          <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::relacao-vagas" onclick="closeDrawer(); gerarRelatorioVagas()">Relação de Vagas Abertas</button>
         </div>
       </div>
     </div>
@@ -2147,7 +2152,7 @@ function evDeptoChanged() {
 function openNewVaga() {
   document.querySelectorAll('#ev-overlay .ev-field-error').forEach(function(el) { el.classList.remove('ev-field-error'); });
   var t = document.getElementById('ev-cargo-title');
-  if (t) t.textContent = 'Nova Vaga';
+  if (t) t.textContent = 'Abrir Vaga';
   _evPopulateUnidades('');
   document.getElementById('ev-linha').value   = '';
   document.getElementById('ev-escala').value  = '6x1';
@@ -2286,7 +2291,7 @@ function salvarEditVaga() {
 function openNovoCandidato() {
   document.querySelectorAll('#nc-overlay .ev-field-error').forEach(function(el){ el.classList.remove('ev-field-error'); });
   document.getElementById('nc-id').value = '';
-  document.getElementById('nc-title').textContent = 'Cadastrar Candidato';
+  document.getElementById('nc-title').textContent = 'Cadastrar Candidatura';
   var _b=document.getElementById('nc-save'); _b.textContent='Cadastrar candidato'; _b.disabled=false;
   ['nc-nome','nc-contato','nc-cpf','nc-pretensao','nc-horario'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
   var d=document.getElementById('nc-data'); if(d) d.value='';
@@ -2318,7 +2323,7 @@ function abrirEditarCandidato(id) {
   if (!r) return;
   document.querySelectorAll('#nc-overlay .ev-field-error').forEach(function(el){ el.classList.remove('ev-field-error'); });
   document.getElementById('nc-id').value = r.id;
-  document.getElementById('nc-title').textContent = 'Editar Candidato';
+  document.getElementById('nc-title').textContent = 'Editar Candidatura';
   var _b=document.getElementById('nc-save'); _b.textContent='Salvar'; _b.disabled=false;
   document.getElementById('nc-nome').value      = r.nome || '';
   document.getElementById('nc-contato').value   = r.contato || '';
@@ -3196,6 +3201,21 @@ function renderFunil() {
   });
 }
 
+// ─── Paginação dos cards (mobile) ────────────────────────────────────────────
+var CARD_PAGE = 10;
+var _cardsShown = CARD_PAGE;
+function _renderCards(rows, cardFn) {
+  var html = rows.slice(0, _cardsShown).map(cardFn).join('');
+  if (rows.length > _cardsShown) {
+    var prox = Math.min(CARD_PAGE, rows.length - _cardsShown);
+    html += '<div style="display:flex;justify-content:center;padding:4px 0 2px">'+
+      '<button onclick="_verMaisCards()" style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:9px 20px;cursor:pointer">Ver mais ('+prox+')</button>'+
+      '</div>';
+  }
+  return html;
+}
+function _verMaisCards() { _cardsShown += CARD_PAGE; render(); }
+
 // ─── Render ───────────────────────────────────────────────────────────────────
 function render() {
   if (state.loading) { showLoading(); return; }
@@ -3225,28 +3245,25 @@ function render() {
   if (!filtered.length) { c.innerHTML=emptyState(); return; }
   _testeCache=[];_entrevistaCache=[];
   if (state.tab === 'vagas') {
-    var cardsHtml = filtered.map(cardVaga).join('');
-    c.innerHTML = '<div class="vagas-cards-wrap">'+cardsHtml+'</div>' + renderVagasTableHtml(filtered);
+    c.innerHTML = '<div class="vagas-cards-wrap">'+_renderCards(filtered, cardVaga)+'</div>' + renderVagasTableHtml(filtered);
     renderVagasTableRows();
     _initVagaColResizers();
   } else if (state.tab === 'entrevistas') {
-    var entCards = filtered.map(cardEntrevista).join('');
-    c.innerHTML = '<div class="vagas-cards-wrap">'+entCards+'</div>' + renderEntrevistasTableHtml(filtered);
+    c.innerHTML = '<div class="vagas-cards-wrap">'+_renderCards(filtered, cardEntrevista)+'</div>' + renderEntrevistasTableHtml(filtered);
   } else if (state.tab === 'analitico') {
     c.innerHTML = renderAnaliticoTableHtml(filtered);
     _anlFitHeight();
     requestAnimationFrame(_anlFitHeight);   // recalcula após o layout assentar
   } else {
-    var tstCards = filtered.map(cardTeste).join('');
-    c.innerHTML = '<div class="vagas-cards-wrap">'+tstCards+'</div>' + renderTestesTableHtml(filtered);
+    c.innerHTML = '<div class="vagas-cards-wrap">'+_renderCards(filtered, cardTeste)+'</div>' + renderTestesTableHtml(filtered);
   }
 }
 
 function setTab(tab) {
   state.tab=tab;
-  // Cada aba abre já filtrada pelo status de entrada; "Limpar filtros" (Todos) mostra o histórico completo.
-  state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',
-    status: tab==='vagas' ? 'Aberta' : tab==='entrevistas' ? 'Aguardando Entrevista' : tab==='testes' ? 'Aguardando teste' : 'Todos'};
+  // Sem forçar status: cada aba abre mostrando tudo; a pessoa ajusta os filtros conforme precisar.
+  state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos'};
+  _cardsShown=CARD_PAGE;
   _cfMes=null;
   _cfFunilIdx=null;
   _cfRecrutador=null;
@@ -3263,10 +3280,12 @@ function setTab(tab) {
 function setFilter(key,val) {
   state.filters[key]=val;
   if(key==='unidade') state.filters.departamento='Todos';
+  _cardsShown=CARD_PAGE;
   render();
 }
 function clearFilters() {
   state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos'};
+  _cardsShown=CARD_PAGE;
   render();
 }
 
@@ -3813,7 +3832,7 @@ function enviarSolicitacao() {
     <div class="ns-modal-header">
       <div>
         <div class="ns-modal-eyebrow">Recrutamento &amp; Seleção · TATÁ Sushi</div>
-        <div class="ns-modal-title">Nova Solicitação</div>
+        <div class="ns-modal-title">Solicitar Abertura de Vaga</div>
       </div>
       <button class="ns-modal-close" onclick="closeNovaSolicitacao()">&times;</button>
     </div>
@@ -3997,7 +4016,7 @@ function enviarSolicitacao() {
   <div class="modal">
     <div class="modal-header">
       <div class="modal-header-info">
-        <div class="candidate-name" id="nc-title">Cadastrar Candidato</div>
+        <div class="candidate-name" id="nc-title">Cadastrar Candidatura</div>
       </div>
       <button class="modal-close" onclick="closeNovoCandidato()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
