@@ -241,6 +241,8 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .ent-table { width: 100%; border-collapse: collapse; }
 .ent-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 9px 8px; text-align: center; border-bottom: 2px solid var(--carbon); background: var(--surface); white-space: nowrap; }
 .ent-table thead th:first-child { text-align: left; }
+.ent-table thead th[onclick]:hover { color: var(--carbon); }
+.ent-table thead th .sort-ind { opacity: .55; font-size: 10px; }
 .ent-table tbody td { padding: 10px 8px; font-size: 13px; border-bottom: 1px solid var(--border); color: var(--carbon); vertical-align: middle; white-space: nowrap; text-align: center; }
 .ent-table tbody td:first-child { text-align: left; }
 .ent-table tbody tr:last-child td { border-bottom: none; }
@@ -947,7 +949,7 @@ function loadAllData() {
     {
       vagas = vrows.map(function (v) {
         return {
-          id: v.id, _linha: null,
+          id: v.id, _linha: null, _created: v.created_at || v.data_solicitacao || '',
           cargo: v.cargo || '', unidade: v.unidade || '', departamento: v.departamento || '',
           status: v.status_vaga || '', data: v.data_solicitacao || '',
           lider: v.lider_responsavel || '', responsavel: v.lider_responsavel || '',
@@ -967,7 +969,7 @@ function loadAllData() {
       var dias = Array.isArray(r.dias) ? r.dias : []; // filha rec_teste_dias (aninhada pelo RPC)
       var temTeste = dias.length > 0;
       var base = {
-        id: r.id, link: '',
+        id: r.id, link: '', _created: r.created_at || '',   // ordem de inserção (mais recente no topo)
         recrutador: r.responsavel || '', nome: r.nome || '', contato: r.contato || '',
         cpf: r.cpf || '',
         unidade: r.unidade || '', departamento: r.departamento || '', cargo: r.cargo || '',
@@ -1414,10 +1416,11 @@ function cardVaga(r) {
 var VAGA_PAGE = 10;
 var _vagaShown = VAGA_PAGE;
 var _vagaRows = [];
-var _vagaSortCol = 'cargo';
+var _vagaSortCol = null;   // null = ordem padrão (mais recentes primeiro)
 var _vagaSortDir = 1;
 
 function _vagaSortedRows() {
+  if (!_vagaSortCol) return _vagaRows.slice();   // preserva ordem de inserção (recentes no topo)
   return _vagaRows.slice().sort(function(a, b) {
     var av = ((a[_vagaSortCol] || '') + '').toLowerCase();
     var bv = ((b[_vagaSortCol] || '') + '').toLowerCase();
@@ -1442,7 +1445,7 @@ function toggleVagaSort(col) {
 function renderVagasTableHtml(rows) {
   _vagaRows = rows;
   _vagaShown = VAGA_PAGE;
-  _vagaSortCol = 'cargo';
+  _vagaSortCol = null;
   _vagaSortDir = 1;
   var n = rows.length;
   var countLabel = n + ' vaga' + (n !== 1 ? 's' : '');
@@ -1468,6 +1471,38 @@ function renderVagasTableHtml(rows) {
 
 var _editSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
 var _sendSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+
+// ─── Ordenação por coluna (Entrevistas / Testes) ─────────────────────────────
+// col=null → ordem padrão (mais recentes primeiro); clique no cabeçalho ordena/inverte.
+var _listSort = { entrevistas:{col:null,dir:1}, testes:{col:null,dir:1} };
+var _LIST_NUM_COLS = { pretensao:1, valor_diaria:1 };
+var _LIST_DATE_COLS = { data:1 };
+function toggleListSort(col) {
+  var s = _listSort[state.tab]; if (!s) return;
+  if (s.col === col) { s.dir = -s.dir; } else { s.col = col; s.dir = 1; }
+  render();
+}
+function _listComparator(col, dir) {
+  return function(a, b) {
+    var av = a[col], bv = b[col], r;
+    if (_LIST_NUM_COLS[col])       r = (parseFloat(av)||0) - (parseFloat(bv)||0);
+    else if (_LIST_DATE_COLS[col]) r = String(av||'').localeCompare(String(bv||''));
+    else r = String(av==null?'':av).toLowerCase().localeCompare(String(bv==null?'':bv).toLowerCase(), 'pt');
+    return r * dir;
+  };
+}
+function _sortListRows(rows) {
+  var s = _listSort[state.tab];
+  var out = rows.slice();
+  if (s && s.col) out.sort(_listComparator(s.col, s.dir));
+  else out.sort(function(a,b){ return String(b._created||'').localeCompare(String(a._created||'')); });
+  return out;
+}
+function _sortTh(label, col) {
+  var s = _listSort[state.tab] || {};
+  var ind = s.col === col ? (s.dir === 1 ? '↑' : '↓') : '↕';
+  return '<th style="cursor:pointer" onclick="toggleListSort(\''+col+'\')">'+escH(label)+' <span class="sort-ind">'+ind+'</span></th>';
+}
 
 // Tabela de Entrevistas (desktop) — espelha o layout da vaga-table
 function renderEntrevistasTableHtml(rows) {
@@ -1498,8 +1533,10 @@ function renderEntrevistasTableHtml(rows) {
       '</tr>';
   }).join('');
   return '<div class="ent-table-wrap"><table class="ent-table"><thead><tr>'+
-    '<th>Nome</th><th>Contato</th><th>Unidade</th><th>Departamento</th><th>Cargo</th>'+
-    '<th>Data</th><th>Entrevistador</th><th>Recrutador</th><th>Pretensão</th><th>Status</th><th>Ações</th>'+
+    _sortTh('Nome','nome')+_sortTh('Contato','contato')+_sortTh('Unidade','unidade')+
+    _sortTh('Departamento','departamento')+_sortTh('Cargo','cargo')+_sortTh('Data','data')+
+    _sortTh('Entrevistador','entrevistador')+_sortTh('Recrutador','recrutador')+
+    _sortTh('Pretensão','pretensao')+_sortTh('Status','status_entrevista')+'<th>Ações</th>'+
     '</tr></thead><tbody>'+body+'</tbody></table></div>';
 }
 
@@ -1531,8 +1568,10 @@ function renderTestesTableHtml(rows) {
       '</tr>';
   }).join('');
   return '<div class="ent-table-wrap"><table class="ent-table"><thead><tr>'+
-    '<th>Nome</th><th>Contato</th><th>Unidade</th><th>Departamento</th><th>Cargo</th>'+
-    '<th>Data</th><th>Turno</th><th>Valor Diária</th><th>Status</th><th>Ações</th>'+
+    _sortTh('Nome','nome')+_sortTh('Contato','contato')+_sortTh('Unidade','unidade')+
+    _sortTh('Departamento','departamento')+_sortTh('Cargo','cargo')+_sortTh('Data','data')+
+    _sortTh('Turno','horario')+_sortTh('Valor Diária','valor_diaria')+
+    _sortTh('Status','status_teste_dia')+'<th>Ações</th>'+
     '</tr></thead><tbody>'+body+'</tbody></table></div>';
 }
 
@@ -3094,6 +3133,14 @@ function render() {
   }
   renderKPIs();
   var filtered=getFiltered();
+  // Ordem padrão: mais recentes primeiro (último inserido no topo); cabeçalhos ordenam por coluna.
+  if (state.tab==='entrevistas' || state.tab==='testes') {
+    filtered=_sortListRows(filtered);
+  } else if (state.tab==='vagas') {
+    filtered=filtered.slice().sort(function(a,b){
+      return String(b._created||'').localeCompare(String(a._created||''));
+    });
+  }
   renderFilters();
   var c=document.getElementById('content');
   if (!filtered.length) { c.innerHTML=emptyState(); return; }
@@ -3123,6 +3170,8 @@ function setTab(tab) {
   _cfMes=null;
   _cfFunilIdx=null;
   _cfRecrutador=null;
+  if (_listSort.entrevistas) _listSort.entrevistas.col=null;
+  if (_listSort.testes) _listSort.testes.col=null;
   document.body.dataset.view = tab;
   document.getElementById('tab-entrevistas').classList.toggle('active',tab==='entrevistas');
   document.getElementById('tab-testes').classList.toggle('active',tab==='testes');
