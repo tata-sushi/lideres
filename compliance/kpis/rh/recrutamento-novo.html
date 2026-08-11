@@ -1802,7 +1802,16 @@ function _aeBtn(onclick, label){ return '<div style="padding:12px 2px 2px"><butt
 function _aeEmBreve(){ return '<div class="ae-note" style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border)">Edição desta seção em breve.</div>'; }
 function _aeInput(label, id){ return '<div class="ev-field"><span class="modal-section-title">'+escH(label)+'</span><input type="text" class="modal-input" id="'+id+'"></div>'; }
 function _aeSelect(label, id, onchange){ return '<div class="ev-field"><span class="modal-section-title">'+escH(label)+'</span><select class="modal-select" id="'+id+'"'+(onchange?' onchange="'+onchange+'"':'')+'><option value="">—</option></select></div>'; }
-function _aeSaveBtn(onclick){ return '<div style="padding:14px 2px 2px"><button onclick="'+onclick+'" style="background:var(--carbon);color:var(--citric);border:none;border-radius:6px;padding:11px 22px;font-family:\'DM Mono\',monospace;font-size:11px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer">Salvar</button></div>'; }
+function _aeTextarea(label, id){ return '<div class="ev-field"><span class="modal-section-title">'+escH(label)+'</span><textarea class="modal-input" id="'+id+'" rows="2"></textarea></div>'; }
+function _aeOpts(arr){ return '<option value="">—</option>'+arr.map(function(o){ return '<option>'+escH(o)+'</option>'; }).join(''); }
+function _aeSetSelect(id, val){
+  var sel=document.getElementById(id); if(!sel) return;
+  if(val && !Array.prototype.some.call(sel.options,function(o){return o.value===val;}))
+    sel.insertAdjacentHTML('afterbegin','<option value="'+escH(val)+'">'+escH(val)+'</option>');
+  sel.value=val;
+}
+var _AE_STATUS_ENT = ['Aguardando Entrevista','Aguardando devolutiva','Aprovado para teste','Não realizada','Não entrou','Não selecionado'];
+var _AE_SELECIONADO = ['Sim','Não','Não respondeu','Não aceitou a proposta'];
 function _aeRenderPanels(r){
   function P(name, inner){ return '<div class="ae-panel'+(name===_aeTab?' active':'')+'" data-ae="'+name+'">'+inner+'</div>'; }
   var cand = '<div class="ae-fields">'+
@@ -1814,10 +1823,17 @@ function _aeRenderPanels(r){
     _aeSelect('Nível','ae-c-nivel','_aeCFillHorario()')+
     _aeSelect('Horário da vaga','ae-c-horario-vaga','')+
     _aeInput('Pretensão','ae-c-pretensao')+
-    '</div>'+_aeSaveBtn('_aeSalvarCandidato()');
-  var entr = _aeRow('Data',_anlData(r.data_entrevista))+_aeRow('Hora',_anlHora(r.horarios))+_aeRow('Entrevistador',_anlTxt(r.entrevistador))
-    +_aeRow('Status',_anlTxt(r.status_entrevista))+_aeRow('Selecionado',_anlTxt(r.selecionado))+_aeRow('Observações',_anlTxt(r.observacoes_entrevista));
-  entr += _aeBtn("closeAeModal();abrirEditarCandidato('"+r.id+"')", 'Editar dados da entrevista');
+    _aeTextarea('Benefícios','ae-c-beneficios')+
+    _aeTextarea('Observações','ae-c-observacoes')+
+    '</div>';
+  var entr = '<div class="ae-fields">'+
+    '<div class="ev-field"><span class="modal-section-title">Data da entrevista</span><input type="date" class="modal-input" id="ae-e-data"></div>'+
+    '<div class="ev-field"><span class="modal-section-title">Hora</span><input type="time" class="modal-input" id="ae-e-hora" step="60"></div>'+
+    _aeSelect('Entrevistador','ae-e-entrevistador','')+
+    '<div class="ev-field"><span class="modal-section-title">Status da entrevista</span><select class="modal-select" id="ae-e-status">'+_aeOpts(_AE_STATUS_ENT)+'</select></div>'+
+    '<div class="ev-field"><span class="modal-section-title">Selecionado</span><select class="modal-select" id="ae-e-selecionado">'+_aeOpts(_AE_SELECIONADO)+'</select></div>'+
+    _aeTextarea('Observações','ae-e-obs')+
+    '</div>';
   var dias = r.dias||[], tst = '';
   // Submódulos fixos: Dia 1 → Dia 5 (mesmo os ainda não agendados)
   for (var di=0; di<ANL_MAX_DIAS; di++){
@@ -1838,7 +1854,7 @@ function _aeRenderPanels(r){
   var refs = _aeRow('Tipo',_anlTxt(r.tipo_referencia))+_aeRow('Contato',_anlTxt(r.contato_referencia))+_aeRow('Empresa/Líder ant.',_anlTxt(r.empresa_anterior_lider))
     +_aeRow('Check',_anlTxt(r.check_referencia))+_aeRow('Feedback',_anlTxt(r.feedback_referencia))+_aeRow('Observações',_anlTxt(r.observacoes_referencia)) + _aeEmBreve();
   var fin = _aeRow('Status final',_anlTxt(r.status_final))+_aeRow('Final por',_anlTxt(r.status_final_por))+_aeRow('Final em',_anlDataHora(r.status_final_em)) + _aeEmBreve();
-  var note = '<div class="ae-note">Use o botão de cada seção para editar. Processos, Referências e Final serão ativados em seguida.</div>';
+  var note = '<div class="ae-note">Vaga e Entrevista já editam aqui (Salvar no rodapé). Processos, Referências e Final em breve.</div>';
   document.getElementById('ae-body').innerHTML = note + P('candidato',cand)+P('entrevista',entr)+P('testes',tst)+P('processos',proc)+P('referencias',refs)+P('final',fin);
 }
 function abrirAnaliticoEditar(id){
@@ -1849,9 +1865,14 @@ function abrirAnaliticoEditar(id){
   _aeTab='candidato';
   _aeRenderPanels(r);
   _aeInitCandidato(r);
+  _aeInitEntrevista(r);
   aeTab('candidato');
   document.getElementById('ae-overlay').classList.add('active');
   document.body.style.overflow='hidden';
+}
+function _aeSalvar(){
+  if (_aeTab==='candidato') _aeSalvarCandidato();
+  else if (_aeTab==='entrevista') _aeSalvarEntrevista();
 }
 // ── Aba Vaga/Candidato: edição inline (RPC rec_candidatura_sandbox_salvar) ──
 function _aeInitCandidato(r){
@@ -1860,6 +1881,8 @@ function _aeInitCandidato(r){
   document.getElementById('ae-c-cpf').value        = r.cpf || '';
   document.getElementById('ae-c-recrutador').value = r.responsavel || '';
   document.getElementById('ae-c-pretensao').value  = (r.pretensao_salarial != null ? r.pretensao_salarial : '');
+  document.getElementById('ae-c-beneficios').value = r.beneficios || '';
+  document.getElementById('ae-c-observacoes').value = r.observacoes_vaga || '';
   var u=r.unidade||'', dp=r.departamento||'', cargoFull=r.cargo||'';
   _evPopulateSelect('ae-c-unidade', _csUnidades(), u);
   document.getElementById('ae-c-unidade').value = u;
@@ -1915,6 +1938,8 @@ function _aeSalvarCandidato(){
     p_unidade: v('ae-c-unidade'), p_departamento: v('ae-c-departamento'),
     p_cargo: _cargo + (_niv?' '+_niv:''),
     p_horario_vaga: v('ae-c-horario-vaga'),
+    p_beneficios: v('ae-c-beneficios').trim(),
+    p_observacoes_vaga: v('ae-c-observacoes').trim(),
     p_por: _sandboxMatricula()
   };
   SB.rpc('rec_candidatura_sandbox_salvar', args).then(function(res){
@@ -1926,6 +1951,33 @@ function aeTab(name){
   _aeTab=name;
   document.querySelectorAll('#ae-tabs .ae-tab').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-ae')===name); });
   document.querySelectorAll('#ae-body .ae-panel').forEach(function(p){ p.classList.toggle('active', p.getAttribute('data-ae')===name); });
+  var sv=document.getElementById('ae-save'); if(sv) sv.style.display = (name==='candidato'||name==='entrevista') ? '' : 'none';
+}
+function _aeInitEntrevista(r){
+  document.getElementById('ae-e-data').value = _toDateInput(r.data_entrevista);
+  document.getElementById('ae-e-hora').value = _toTimeInput(r.horarios);
+  document.getElementById('ae-e-obs').value  = r.observacoes_entrevista || '';
+  _aeSetSelect('ae-e-status', r.status_entrevista||'');
+  _aeSetSelect('ae-e-selecionado', r.selecionado||'');
+  _loadEvLideres(function(list){ _evPopulateSelect('ae-e-entrevistador', list, r.entrevistador||''); _aeSetSelect('ae-e-entrevistador', r.entrevistador||''); });
+}
+function _aeSalvarEntrevista(){
+  var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
+  function v(id){ return (document.getElementById(id)||{}).value||''; }
+  var args={
+    p_id: document.getElementById('ae-id').value,
+    p_data_entrevista: v('ae-e-data')||null,
+    p_horarios: v('ae-e-hora').trim(),
+    p_entrevistador: v('ae-e-entrevistador'),
+    p_status_entrevista: v('ae-e-status'),
+    p_selecionado: v('ae-e-selecionado'),
+    p_observacoes_entrevista: v('ae-e-obs').trim(),
+    p_por: _sandboxMatricula()
+  };
+  SB.rpc('rec_candidatura_sandbox_salvar', args).then(function(res){
+    if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
+    closeAeModal(); loadAllData();
+  }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
 function closeAeModal(){ document.getElementById('ae-overlay').classList.remove('active'); document.body.style.overflow=''; }
 
@@ -4218,7 +4270,8 @@ function enviarSolicitacao() {
     </div>
     <div class="modal-body" id="ae-body"></div>
     <div class="modal-footer">
-      <button class="modal-btn modal-btn-cancel" onclick="closeAeModal()">Fechar</button>
+      <button class="modal-btn modal-btn-cancel" onclick="closeAeModal()">Cancelar</button>
+      <button class="modal-btn modal-btn-save" id="ae-save" onclick="_aeSalvar()">Salvar</button>
     </div>
   </div>
 </div>
