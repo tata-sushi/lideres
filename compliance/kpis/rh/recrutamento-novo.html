@@ -303,6 +303,8 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .ae-note { font-size: 11px; color: var(--muted); padding: 8px 2px; }
 .ae-fields { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
 .anl-count { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; margin: 0 0 10px; }
+.anl-more { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 10px 0 2px; }
+.anl-more:empty { display: none; }
 @media (min-width: 768px) {
   body[data-view="entrevistas"] .ent-table-wrap,
   body[data-view="testes"] .ent-table-wrap { display: block; }
@@ -1791,29 +1793,28 @@ var _anlShown = ANL_PAGE;
 
 function _anlRowsHtml() {
   var cols = _anlCols();
-  var totalCols = cols.length + 2; // Nome (esq. fixa) + colunas + Ações (dir. fixa)
   var display = _anlRows.slice(0, _anlShown);
-  var html = display.map(function(r){
+  return display.map(function(r){
     var tds = '<td class="anl-sticky">'+_anlTxt(r.nome)+'</td>';
     for (var i=0;i<cols.length;i++){ tds += '<td'+(cols[i].sep?' class="anl-gsep"':'')+'>'+cols[i].f(r)+'</td>'; }
     tds += '<td class="anl-acoes"><button class="btn-editar" title="Editar" data-aba-id="governanca-kpis-rh-recrutamento::editar-candidato" onclick="abrirAnaliticoEditar(\''+escH(r.id)+'\')">'+_editSvg+'</button></td>';
     return '<tr>'+tds+'</tr>';
   }).join('');
+}
+// "Ver mais" fica FORA da rolagem lateral (abaixo da tabela), sempre visível/clicável
+function _anlMoreHtml() {
   var resto = _anlRows.length - _anlShown;
-  if (resto > 0) {
-    var prox = Math.min(ANL_PAGE, resto);
-    html += '<tr><td colspan="'+totalCols+'" style="text-align:center;padding:14px;border-right:none">'+
-      '<button onclick="showMoreAnl()" style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:7px 16px;cursor:pointer">Ver mais ('+prox+')</button>'+
-      '<span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted);margin-left:10px">'+resto+' restantes</span>'+
-      '</td></tr>';
-  }
-  return html;
+  if (resto <= 0) return '';
+  var prox = Math.min(ANL_PAGE, resto);
+  return '<button onclick="showMoreAnl()" style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:8px 18px;cursor:pointer">Ver mais ('+prox+')</button>'+
+    '<span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted);margin-left:10px">'+resto+' restantes</span>';
 }
 
 function showMoreAnl() {
   _anlShown += ANL_PAGE;
-  var tb = document.getElementById('anl-tbody');
-  if (tb) tb.innerHTML = _anlRowsHtml();
+  var tb = document.getElementById('anl-tbody'); if (tb) tb.innerHTML = _anlRowsHtml();
+  var mo = document.getElementById('anl-more'); if (mo) mo.innerHTML = _anlMoreHtml();
+  _anlFitHeight();
 }
 
 // Ajusta a altura do box pra caber na viewport (barra de rolagem lateral acessível, sem vazar do rodapé)
@@ -1824,7 +1825,9 @@ function _anlFitHeight() {
   var footer = document.querySelector('.footer');
   // usa a posição REAL do topo do rodapé fixo (evita erro de innerHeight no mobile)
   var footTop = footer ? footer.getBoundingClientRect().top : window.innerHeight;
-  var h = footTop - top - 12;
+  var moreEl = document.getElementById('anl-more');
+  var moreH = moreEl ? moreEl.offsetHeight : 0;
+  var h = footTop - top - 12 - moreH;
   if (h > 200) w.style.maxHeight = h + 'px';
 }
 window.addEventListener('resize', function(){ if (state.tab === 'analitico') _anlFitHeight(); });
@@ -1847,7 +1850,8 @@ function renderAnaliticoTableHtml(rows) {
   for (var i=0;i<cols.length;i++){ head += '<th'+(cols[i].sep?' class="anl-gsep"':'')+'>'+escH(cols[i].l)+'</th>'; }
   return '<div class="anl-wrap"><table class="ent-table anl-table">'+
     '<thead><tr class="anl-grp">'+grp+'</tr><tr class="anl-crow">'+head+'</tr></thead>'+
-    '<tbody id="anl-tbody">'+_anlRowsHtml()+'</tbody></table></div>';
+    '<tbody id="anl-tbody">'+_anlRowsHtml()+'</tbody></table></div>'+
+    '<div id="anl-more" class="anl-more">'+_anlMoreHtml()+'</div>';
 }
 
 // ─── Editar a partir do Analítico (modal seccionado) ──────────────────────────
