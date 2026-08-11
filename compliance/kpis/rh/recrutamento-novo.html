@@ -274,6 +274,8 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .anl-table td.anl-acoes, .anl-table th.anl-acoes-h { position: sticky; right: 0; z-index: 3; background: var(--surface); text-align: center; box-shadow: -1px 0 0 var(--border); }
 .anl-table thead th.anl-acoes-h { z-index: 7; }
 .anl-table tbody tr:hover td.anl-acoes { background: #F4F5F2; }
+/* linha de grupo (seções) acima do cabeçalho */
+.anl-table thead tr.anl-grp th { position: static; text-align: center; font-weight: 700; color: var(--carbon); background: #F4F5F2; border-bottom: 1px solid var(--border); padding: 6px 11px; }
 /* modal seccionado (edição a partir do Analítico) */
 .ae-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); padding: 0 4px; -webkit-overflow-scrolling: touch; }
 .ae-tab { flex: 0 0 auto; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; padding: 10px 12px; cursor: pointer; white-space: nowrap; }
@@ -1673,19 +1675,18 @@ function _anlPret(v){ if(!window.__podeVerValores) return '<span class="valor-oc
 function _anlBadge(v, cls){ v=(v==null?'':String(v)).trim(); return v ? '<span class="status-badge '+cls+'">'+escH(v)+'</span>' : '—'; }
 
 var _anlColsCache = null;
-function _anlCols() {
-  if (_anlColsCache) return _anlColsCache;
+var _anlGroupsCache = null;
+function _anlBuildCols() {
   var groups = [
-    { cols:[  // Candidato
+    { label:'Candidato', cols:[
       ['Contato', function(r){ return _anlTxt(r.contato); }],
       ['CPF', function(r){ return _anlTxt(r.cpf); }],
-      ['Recrutador', function(r){ return _anlTxt(r.responsavel); }],
-      ['Unidade', function(r){ return _anlTxt(r.unidade); }],
-      ['Departamento', function(r){ return _anlTxt(r.departamento); }],
-      ['Cargo', function(r){ return _anlTxt(r.cargo); }],
+      ['Unidade de interesse', function(r){ return _anlTxt(r.unidade); }],
+      ['Departamento de interesse', function(r){ return _anlTxt(r.departamento); }],
+      ['Cargo de interesse', function(r){ return _anlTxt(r.cargo); }],
       ['Pretensão', function(r){ return _anlPret(r.pretensao_salarial); }]
     ]},
-    { cols:[  // Entrevista
+    { label:'Entrevista', cols:[
       ['Entrev. Data', function(r){ return _anlData(r.data_entrevista); }],
       ['Entrev. Hora', function(r){ return _anlHora(r.horarios); }],
       ['Entrevistador', function(r){ return _anlTxt(r.entrevistador); }],
@@ -1693,7 +1694,7 @@ function _anlCols() {
       ['Entrev. Status', function(r){ return _anlBadge(r.status_entrevista, 's-'+slugStatus(r.status_entrevista)); }],
       ['Entrev. Obs', function(r){ return _anlLong(r.observacoes_entrevista); }]
     ]},
-    { cols:[  // Referências
+    { label:'Referências', cols:[
       ['Ref. Tipo', function(r){ return _anlTxt(r.tipo_referencia); }],
       ['Ref. Contato', function(r){ return _anlTxt(r.contato_referencia); }],
       ['Empresa/Líder ant.', function(r){ return _anlTxt(r.empresa_anterior_lider); }],
@@ -1707,7 +1708,7 @@ function _anlCols() {
   for (var i=0;i<ANL_MAX_DIAS;i++){
     (function(idx){
       var p = 'T'+(idx+1)+' ';
-      groups.push({ cols:[
+      groups.push({ label:'Teste · Dia '+(idx+1), cols:[
         [p+'Data',   function(r){ var d=(r.dias||[])[idx]; return d?_anlData(d.data_teste):'—'; }],
         [p+'Hora',   function(r){ var d=(r.dias||[])[idx]; return d?_anlHora(d.horario):'—'; }],
         [p+'Resp.',  function(r){ var d=(r.dias||[])[idx]; return d?_anlTxt(d.responsavel):'—'; }],
@@ -1717,22 +1718,24 @@ function _anlCols() {
       ]});
     })(i);
   }
-  groups.push({ cols:[  // Teste geral
+  groups.push({ label:'Teste', cols:[
     ['Camiseta', function(r){ return _anlTxt(r.camiseta); }],
     ['Status teste', function(r){ return _anlTxt(r.status_teste); }],
     ['Pagto completo', function(r){ return _anlBool(r.pagamento_completo); }]
   ]});
-  groups.push({ cols:[  // Final
+  groups.push({ label:'Final', cols:[
     ['Status final', function(r){ return _anlBadge(r.status_final, 'sf-'+slugFinal(r.status_final)); }],
     ['Final por', function(r){ return _anlTxt(r.status_final_por); }],
-    ['Final em', function(r){ return _anlDataHora(r.status_final_em); }]
+    ['Final em', function(r){ return _anlDataHora(r.status_final_em); }],
+    ['Recrutador', function(r){ return _anlTxt(r.responsavel); }]
   ]});
-  // achata em lista única, marcando a 1ª coluna de cada grupo (separador visual)
   var flat = [];
   groups.forEach(function(gr){ gr.cols.forEach(function(c, i){ flat.push({ l:c[0], f:c[1], sep:i===0 }); }); });
   _anlColsCache = flat;
-  return flat;
+  _anlGroupsCache = groups.map(function(g){ return { label:g.label, count:g.cols.length }; });
 }
+function _anlCols() { if (!_anlColsCache) _anlBuildCols(); return _anlColsCache; }
+function _anlGroups() { if (!_anlGroupsCache) _anlBuildCols(); return _anlGroupsCache; }
 
 var ANL_PAGE = 50;         // pagina p/ não travar (a base tem milhares de candidaturas × dezenas de colunas)
 var _anlRows = [];
@@ -1787,11 +1790,16 @@ function renderAnaliticoTableHtml(rows) {
   });
   _anlShown = ANL_PAGE;
   var cols = _anlCols();
+  // linha 1: rótulos de grupo (seções)
+  var grp = '<th></th>';
+  _anlGroups().forEach(function(g){ grp += '<th class="anl-gsep anl-ghead" colspan="'+g.count+'">'+escH(g.label)+'</th>'; });
+  grp += '<th></th>';
+  // linha 2: cabeçalho das colunas
   var head = '<th class="anl-sticky">Nome</th>';
   for (var i=0;i<cols.length;i++){ head += '<th'+(cols[i].sep?' class="anl-gsep"':'')+'>'+escH(cols[i].l)+'</th>'; }
   head += '<th class="anl-acoes-h">Ações</th>';
   return '<div class="anl-wrap"><table class="ent-table anl-table">'+
-    '<thead><tr>'+head+'</tr></thead>'+
+    '<thead><tr class="anl-grp">'+grp+'</tr><tr>'+head+'</tr></thead>'+
     '<tbody id="anl-tbody">'+_anlRowsHtml()+'</tbody></table></div>';
 }
 
