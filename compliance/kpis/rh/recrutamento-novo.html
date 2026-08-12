@@ -2058,6 +2058,10 @@ function abrirAnaliticoEditar(id){
 function _aeSalvar(){
   if (_aeTab==='candidato') _aeSalvarCandidato();
   else if (_aeTab==='vaga') _aeSalvarVaga();
+  else if (_aeTab==='entrevista') _aeSalvarEntrevistas();
+  else if (_aeTab==='testes') _aeSalvarTestes();
+  else if (_aeTab==='processos') _aeSalvarProcessos();
+  else if (_aeTab==='referencias') _aeSalvarReferencias();
 }
 // ── Aba Vaga: vincula a candidatura a uma vaga e reflete as infos (leitura) ──
 function _aeVagaInfoHtml(v){
@@ -2188,8 +2192,7 @@ function _aeProcPanelHtml(r){
       '<div class="ae-sub">Tipos de processo <span style="font-size:9px;letter-spacing:0;text-transform:none;color:var(--muted)">(marque e informe a quantidade)</span></div>'+
       tipos+
     '</div>'+
-    '<div class="ae-fields" style="margin-top:12px">'+_aeTextarea('Resumo dos processos','ae-p-resumo')+'</div>'+
-    _aeBtn('_aeSalvarProcessos()','Salvar Processos');
+    '<div class="ae-fields" style="margin-top:12px">'+_aeTextarea('Resumo dos processos','ae-p-resumo')+'</div>';
 }
 function _aeProcSituacaoChanged(){
   var s=(document.getElementById('ae-p-situacao')||{}).value;
@@ -2266,8 +2269,7 @@ function _aeRefPanelHtml(){
       '<div class="ev-field"><span class="modal-section-title">Líder pegou a referência?</span><select class="modal-select" id="ae-r-check">'+_aeOpts(_AE_REF_CHECK)+'</select></div>'+
       '<div class="ev-field"><span class="modal-section-title">Avaliação da referência</span><select class="modal-select" id="ae-r-tipo">'+_aeOpts(_AE_REF_TIPO)+'</select></div>'+
       _aeTextarea('Resumo do feedback','ae-r-feedback')+
-    '</div>'+
-    _aeBtn('_aeSalvarReferencias()','Salvar Referências');
+    '</div>';
 }
 function _aeParseRefContatos(str){
   var s=String(str==null?'':str).trim();
@@ -2311,7 +2313,7 @@ function aeTab(name){
   _aeTab=name;
   document.querySelectorAll('#ae-tabs .ae-tab').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-ae')===name); });
   document.querySelectorAll('#ae-body .ae-panel').forEach(function(p){ p.classList.toggle('active', p.getAttribute('data-ae')===name); });
-  var sv=document.getElementById('ae-save'); if(sv) sv.style.display = (name==='candidato'||name==='vaga') ? '' : 'none';
+  var sv=document.getElementById('ae-save'); if(sv) sv.style.display = (name==='final') ? 'none' : '';
 }
 // ── Aba Entrevista: multi-entrevista (tabela-filha rec_entrevistas) ──
 var _aeEntList = [];
@@ -2330,7 +2332,7 @@ function _aeEntPanelHtml(r){
       _aeSelect('Entrevistador','ae-ent-'+i+'-entrevistador','')+
       '<div class="ev-field"><span class="modal-section-title">Status da entrevista</span><select class="modal-select" id="ae-ent-'+i+'-status">'+_aeOpts(_AE_STATUS_ENT)+'</select></div>'+
       _aeTextarea('Observações','ae-ent-'+i+'-obs')+
-      '</div>'+_aeBtn('_aeSalvarEnt('+i+')',(list[i]?'Salvar':'Agendar')+' Entrevista '+(i+1));
+      '</div>';
   }
   return html;
 }
@@ -2362,6 +2364,7 @@ var _aeTesteList = [];
 function _aeTesteCount(r){ return Math.max(ANL_MAX_DIAS, ((r&&r.dias)||[]).length); }
 function _aeTestePanelHtml(r){
   var dias=r.dias||[], n=_aeTesteCount(r), html='';
+  html += '<div class="ae-sub">Uniforme</div>'+_aeRow('Tamanho da camiseta',_anlTxt(r.camiseta));
   for (var i=0;i<n;i++){
     html += '<div class="ae-sub">Dia '+(i+1)+' <span style="font-size:9px;letter-spacing:0;text-transform:none;color:var(--muted)">(opcional)</span></div>'+
       '<div class="ae-fields">'+
@@ -2372,9 +2375,8 @@ function _aeTestePanelHtml(r){
       '<div class="ev-field"><span class="modal-section-title">Valor diária</span><input type="text" class="modal-input" id="ae-t-'+i+'-valor" placeholder="R$"></div>'+
       '<div class="ev-field"><span class="modal-section-title">Status</span><select class="modal-select" id="ae-t-'+i+'-status">'+_aeOpts(_AE_STATUS_TESTE)+'</select></div>'+
       '<div class="ev-field"><span class="modal-section-title">Pago</span><select class="modal-select" id="ae-t-'+i+'-pago"><option value="">—</option><option>Sim</option><option>Não</option></select></div>'+
-      '</div>'+_aeBtn('_aeSalvarTeste('+i+')',(dias[i]?'Salvar':'Agendar')+' Dia '+(i+1));
+      '</div>';
   }
-  html += '<div class="ae-sub">Geral</div>'+_aeRow('Camiseta',_anlTxt(r.camiseta))+_aeRow('Status teste',_anlTxt(r.status_teste))+_aeRow('Pagamento completo',_anlBool(r.pagamento_completo));
   return html;
 }
 function _aeInitTestes(r){
@@ -2393,52 +2395,64 @@ function _aeInitTestes(r){
     for (var i=0;i<n;i++){ var d=_aeTesteList[i]||{}; _evPopulateSelect('ae-t-'+i+'-responsavel', list, d.responsavel||''); _aeSetSelect('ae-t-'+i+'-responsavel', d.responsavel||''); }
   });
 }
-function _aeSalvarTeste(i){
+// executa vários saves (RPC) em paralelo; fecha e recarrega ao terminar
+function _aeRunSaves(rpc, argsList){
   var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
+  var btn=document.getElementById('ae-save');
+  if(btn){ btn.disabled=true; btn.textContent='Salvando…'; }
+  function done(){ if(btn){ btn.disabled=false; btn.textContent='Salvar'; } }
+  Promise.all(argsList.map(function(a){ return SB.rpc(rpc, a); })).then(function(results){
+    done();
+    for(var i=0;i<results.length;i++){ if(results[i] && results[i].error){ alert('Erro ao salvar:\n'+results[i].error.message); return; } }
+    closeAeModal(); loadAllData();
+  }, function(err){ done(); alert('Erro de conexão:\n'+(err&&err.message||err)); });
+}
+// Salva todas as entrevistas preenchidas (uma só ação, botão do rodapé)
+function _aeSalvarEntrevistas(){
+  function v(id){ return (document.getElementById(id)||{}).value||''; }
+  var candId=document.getElementById('ae-id').value, sel=v('ae-ent-selecionado'), jobs=[];
+  for(var i=0; document.getElementById('ae-ent-'+i+'-data'); i++){
+    var e=_aeEntList[i], data=v('ae-ent-'+i+'-data'), existing=e&&e.id;
+    if(!existing && !data) continue;   // slot sem filha e sem data → ignora
+    jobs.push({
+      p_entrevista_id: existing ? e.id : null,
+      p_candidatura_id: candId,
+      p_data: data||null,
+      p_hora: v('ae-ent-'+i+'-hora').trim(),
+      p_entrevistador: v('ae-ent-'+i+'-entrevistador'),
+      p_status: v('ae-ent-'+i+'-status'),
+      p_selecionado: sel,
+      p_observacoes: v('ae-ent-'+i+'-obs').trim(),
+      p_por: _sandboxMatricula()
+    });
+  }
+  if(!jobs.length){ closeAeModal(); return; }
+  _aeRunSaves('rec_entrevista_sandbox_salvar', jobs);
+}
+// Salva todos os dias de teste preenchidos (uma só ação, botão do rodapé)
+function _aeSalvarTestes(){
   function v(id){ return (document.getElementById(id)||{}).value||''; }
   function _money(x){ x=String(x||'').replace(/R\$|\s|\./g,'').replace(',','.'); var nn=parseFloat(x); return isNaN(nn)?null:nn; }
-  var d=_aeTesteList[i], data=v('ae-t-'+i+'-data');
-  if(!d && !data){ alert('Informe ao menos a data para agendar este dia de teste.'); return; }
-  var pv=v('ae-t-'+i+'-pago'), pago = pv==='Sim'?true:(pv==='Não'?false:null);
-  var args={
-    p_candidatura_id: document.getElementById('ae-id').value,
-    p_dia_id: d ? d.id : null,
-    p_data_teste: data||null,
-    p_horario: v('ae-t-'+i+'-entrada').trim(),
-    p_horario_saida: v('ae-t-'+i+'-saida').trim(),
-    p_valor_diaria: window.__podeVerValores ? _money(v('ae-t-'+i+'-valor')) : null,
-    p_status: v('ae-t-'+i+'-status'),
-    p_responsavel: v('ae-t-'+i+'-responsavel'),
-    p_pago: pago,
-    p_por: _sandboxMatricula()
-  };
-  SB.rpc('rec_teste_sandbox_salvar', args).then(function(res){
-    if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
-    closeAeModal(); loadAllData();
-  }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
-}
-function _aeSalvarEnt(i){
-  var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
-  function v(id){ return (document.getElementById(id)||{}).value||''; }
-  var e=_aeEntList[i];
-  var data=v('ae-ent-'+i+'-data');
-  // 2ª/3ª são opcionais: só cria se houver ao menos a data
-  if(!e && !data){ alert('Informe ao menos a data para agendar esta entrevista.'); return; }
-  var args={
-    p_entrevista_id: e ? e.id : null,
-    p_candidatura_id: document.getElementById('ae-id').value,
-    p_data: data||null,
-    p_hora: v('ae-ent-'+i+'-hora').trim(),
-    p_entrevistador: v('ae-ent-'+i+'-entrevistador'),
-    p_status: v('ae-ent-'+i+'-status'),
-    p_selecionado: v('ae-ent-selecionado'),
-    p_observacoes: v('ae-ent-'+i+'-obs').trim(),
-    p_por: _sandboxMatricula()
-  };
-  SB.rpc('rec_entrevista_sandbox_salvar', args).then(function(res){
-    if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
-    closeAeModal(); loadAllData();
-  }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
+  var candId=document.getElementById('ae-id').value, jobs=[];
+  for(var i=0; document.getElementById('ae-t-'+i+'-data'); i++){
+    var d=_aeTesteList[i], data=v('ae-t-'+i+'-data'), existing=d&&d.id;
+    if(!existing && !data) continue;
+    var pv=v('ae-t-'+i+'-pago'), pago = pv==='Sim'?true:(pv==='Não'?false:null);
+    jobs.push({
+      p_candidatura_id: candId,
+      p_dia_id: existing ? d.id : null,
+      p_data_teste: data||null,
+      p_horario: v('ae-t-'+i+'-entrada').trim(),
+      p_horario_saida: v('ae-t-'+i+'-saida').trim(),
+      p_valor_diaria: window.__podeVerValores ? _money(v('ae-t-'+i+'-valor')) : null,
+      p_status: v('ae-t-'+i+'-status'),
+      p_responsavel: v('ae-t-'+i+'-responsavel'),
+      p_pago: pago,
+      p_por: _sandboxMatricula()
+    });
+  }
+  if(!jobs.length){ closeAeModal(); return; }
+  _aeRunSaves('rec_teste_sandbox_salvar', jobs);
 }
 function closeAeModal(){ document.getElementById('ae-overlay').classList.remove('active'); document.body.style.overflow=''; }
 
