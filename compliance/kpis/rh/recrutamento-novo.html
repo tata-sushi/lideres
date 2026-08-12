@@ -134,6 +134,8 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .ev-check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
 .ev-check { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--carbon); cursor: pointer; line-height: 1.25; }
 .ev-check input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--carbon); flex: 0 0 auto; cursor: pointer; margin: 0; }
+.ev-check-nota { color: var(--muted); font-size: 10.5px; }
+#ev-benef-grid { grid-template-columns: 1fr; }
 .ev-check-hint { display: block; margin-top: 6px; font-size: 10.5px; color: var(--muted); }
 @media (max-width: 560px) { .ev-check-grid { grid-template-columns: 1fr; } }
 .ev-collapse { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -2641,7 +2643,30 @@ function evDeptoChanged() {
 }
 
 // ─── Benefícios / Contrato / Intervalo (seleção) na vaga ─────────────────────
-var _BENEF_OPTS = ['Seguro de Vida','VT','Refeição no local','Desconto para consumação no Restaurante','Gympass','Plataforma de treinamento com brindes','Convênio Sesc'];
+// Catálogo oficial de benefícios (Governança). `nota` = condição de elegibilidade.
+var _BENEF_OPTS = [
+  { label:'Assistência Médica' },
+  { label:'Assistência Médica', nota:'após 6 meses' },
+  { label:'Seguro de Vida' },
+  { label:'Cesta Natalidade' },
+  { label:'Convênio SESC' },
+  { label:'Wellhub', nota:'após a experiência' },
+  { label:'Tatá House' },
+  { label:'Folga Aniversário', nota:'após a experiência' },
+  { label:'Aniversário de Empresa' },
+  { label:'Vale-Transporte' },
+  { label:'PLR' },
+  { label:'Desconto no Restaurante' },
+  { label:'Aniversariantes do Mês' },
+  { label:'Tatá Plus' },
+  { label:'Vale Alimentação' },
+  { label:'Vale Combustível' },
+  { label:'Desconto Odontológico' },
+  { label:'Apoio Financeiro ao Colaborador', nota:'acima de 6 meses' }
+];
+function _benefStr(o){ return o.label + (o.nota ? ' (' + o.nota + ')' : ''); }
+// aliases de valores antigos → rótulo novo (normalizado) p/ marcar corretamente ao editar
+var _BENEF_ALIAS = { 'vt':'vale-transporte', 'gympass':'wellhub', 'plataforma de treinamento com brindes':'tata plus', 'desconto para consumacao no restaurante':'desconto no restaurante' };
 var _CONTRATO_OPTS = ['CLT','Estágio','Jovem Aprendiz','PJ'];
 var _INTERVALO_OPTS = ['15 minutos','30 minutos','1 hora','2 horas','3 horas','4 horas'];
 var _evObsLegacy = '';    // texto livre pré-existente na observação (preservado no roundtrip)
@@ -2652,7 +2677,7 @@ function _evCollapseAll(){ ['ev-benef-group','ev-contrato-group','ev-intervalo-g
 function _evBuildChecks(){
   var bg = document.getElementById('ev-benef-grid');
   if (bg && !bg.getAttribute('data-built')) {
-    bg.innerHTML = _BENEF_OPTS.map(function(o,i){ return '<label class="ev-check"><input type="checkbox" id="ev-benef-'+i+'" value="'+escH(o)+'" onchange="_evUpdateSums()"><span>'+escH(o)+'</span></label>'; }).join('');
+    bg.innerHTML = _BENEF_OPTS.map(function(o,i){ var nota=o.nota?' <span class="ev-check-nota">('+escH(o.nota)+')</span>':''; return '<label class="ev-check"><input type="checkbox" id="ev-benef-'+i+'" value="'+escH(_benefStr(o))+'" onchange="_evUpdateSums()"><span>'+escH(o.label)+nota+'</span></label>'; }).join('');
     bg.setAttribute('data-built','1');
   }
   var cg = document.getElementById('ev-contrato-grid');
@@ -2675,15 +2700,15 @@ function _evUpdateSums(){
 }
 function _evGetBeneficios(){
   var out = [];
-  _BENEF_OPTS.forEach(function(o,i){ var c=document.getElementById('ev-benef-'+i); if(c&&c.checked) out.push(o); });
+  _BENEF_OPTS.forEach(function(o,i){ var c=document.getElementById('ev-benef-'+i); if(c&&c.checked) out.push(_benefStr(o)); });
   if(_evBenefLegacy) out.push(_evBenefLegacy);
   return out.join(', ');
 }
 function _evSetBeneficios(str){
   var toks = String(str||'').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
-  var known = {}; _BENEF_OPTS.forEach(function(o,i){ known[_evNorm(o)] = i; });
+  var known = {}; _BENEF_OPTS.forEach(function(o,i){ if(!known.hasOwnProperty(_evNorm(_benefStr(o)))) known[_evNorm(_benefStr(o))] = i; });
   var checked = {}, leftover = [];
-  toks.forEach(function(t){ var k=_evNorm(t); if(known.hasOwnProperty(k)) checked[known[k]]=1; else leftover.push(t); });
+  toks.forEach(function(t){ var k=_evNorm(t); if(_BENEF_ALIAS[k]) k=_BENEF_ALIAS[k]; if(known.hasOwnProperty(k)) checked[known[k]]=1; else leftover.push(t); });
   _BENEF_OPTS.forEach(function(o,i){ var c=document.getElementById('ev-benef-'+i); if(c) c.checked = !!checked[i]; });
   _evBenefLegacy = leftover.join(', ');
 }
