@@ -908,6 +908,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::nova-solicitacao" disabled title="Temporariamente indisponível — será reativado após a migração da página de solicitações" style="opacity:.5;cursor:not-allowed">Solicitar Abertura de Vaga <span style="font-size:9px;text-transform:none;letter-spacing:0">(em breve)</span></button>
         <div id="drawer-vagas-actions" style="display:flex;flex-direction:column;gap:8px;">
           <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::relacao-vagas" onclick="closeDrawer(); gerarRelatorioVagas()">Relação de Vagas Abertas</button>
+          <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-recrutamento::relatorio-testes" onclick="closeDrawer(); abrirModalRelTestes()">Relatório de Testes</button>
         </div>
       </div>
     </div>
@@ -4603,6 +4604,155 @@ function gerarRelatorioVagas() {
   }
 }
 
+// ─── Relatório de Testes (por semana ISO segunda→domingo) ────────────────────
+function _relTestesSemanaAtualISO() {
+  var d = new Date();
+  var day = d.getDay() || 7;  // domingo → 7
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate() + 4 - day); // vai pra quinta-feira dessa semana ISO
+  var yearStart = new Date(d.getFullYear(),0,1);
+  var week = Math.ceil((((d - yearStart)/86400000) + 1)/7);
+  return d.getFullYear() + '-W' + String(week).padStart(2,'0');
+}
+function _relTestesSemanaToRange(w) {
+  var m = /^(\d{4})-W(\d{1,2})$/.exec(w||'');
+  if (!m) return null;
+  var year = parseInt(m[1],10), week = parseInt(m[2],10);
+  // ISO week 1 = semana que contém 4 de janeiro. Descobre segunda dessa semana.
+  var jan4 = new Date(year, 0, 4);
+  var jan4Day = jan4.getDay() || 7;  // 1..7 (seg..dom)
+  var mondayW1 = new Date(jan4); mondayW1.setDate(jan4.getDate() - (jan4Day - 1));
+  var monday = new Date(mondayW1); monday.setDate(mondayW1.getDate() + (week-1)*7);
+  var sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  return { ini: monday, fim: sunday };
+}
+function _relTestesFmtBR(d) {
+  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+}
+function _relTestesAtualizaPreview() {
+  var w = document.getElementById('rel-testes-semana').value;
+  var r = _relTestesSemanaToRange(w);
+  var el = document.getElementById('rel-testes-periodo');
+  if (!r) { el.textContent = '—'; return; }
+  el.textContent = _relTestesFmtBR(r.ini) + ' – ' + _relTestesFmtBR(r.fim);
+}
+function abrirModalRelTestes() {
+  var inp = document.getElementById('rel-testes-semana');
+  if (!inp.value) inp.value = _relTestesSemanaAtualISO();
+  inp.oninput = _relTestesAtualizaPreview;
+  _relTestesAtualizaPreview();
+  document.getElementById('modal-rel-testes').classList.add('active');
+}
+function fecharModalRelTestes() {
+  document.getElementById('modal-rel-testes').classList.remove('active');
+}
+function _relTestesParseData(v) {
+  if (!v) return null;
+  var s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) { var p = s.slice(0,10).split('-'); return new Date(+p[0], +p[1]-1, +p[2]); }
+  if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) { var q = s.slice(0,10).split('/'); return new Date(+q[2], +q[1]-1, +q[0]); }
+  var d = new Date(s); return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function gerarRelatorioTestes() {
+  var w = document.getElementById('rel-testes-semana').value;
+  var r = _relTestesSemanaToRange(w);
+  if (!r) { alert('Selecione a semana.'); return; }
+  var ini = r.ini, fim = r.fim;
+  ini.setHours(0,0,0,0); fim.setHours(23,59,59,999);
+
+  var lista = (window.testes || []).filter(function(t) {
+    var d = _relTestesParseData(t.data);
+    return d && d >= ini && d <= fim;
+  });
+  lista.sort(function(a,b){
+    var da = _relTestesParseData(a.data), db = _relTestesParseData(b.data);
+    if (da - db !== 0) return da - db;
+    return (a.nome||'').localeCompare(b.nome||'');
+  });
+
+  if (!lista.length) { alert('Nenhum teste na semana ' + _relTestesFmtBR(ini) + ' – ' + _relTestesFmtBR(fim) + '.'); return; }
+
+  var sess = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'));}catch(e){return null;}})();
+  var solicitante = (sess && sess.displayName) ? sess.displayName : '—';
+  var hoje = new Date().toLocaleString('pt-BR');
+
+  var rowsHtml = '';
+  var totalValor = 0;
+  lista.forEach(function(t){
+    var v = Number(t.valor_diaria || 0); totalValor += isFinite(v) ? v : 0;
+    rowsHtml +=
+      '<tr>' +
+        '<td>' + escH(fmtDateBR(t.data)) + '</td>' +
+        '<td>' + escH(t.unidade || '—') + '</td>' +
+        '<td>' + escH(t.cargo || '—') + '</td>' +
+        '<td>' + escH(t.nome || '—') + '</td>' +
+        '<td>' + fmtValor(t.valor_diaria) + '</td>' +
+        '<td>' + escH(t.status_teste_dia || 'Aguardando') + '</td>' +
+        '<td class="rp-check-cell"><span class="rp-check-box"></span></td>' +
+      '</tr>';
+  });
+
+  var periodoTxt = _relTestesFmtBR(ini) + ' – ' + _relTestesFmtBR(fim);
+  var html =
+    '<div class="rp-header">' +
+      '<img id="rp-logo-testes" class="rp-logo-img" alt="TATÁ Sushi">' +
+      '<div class="rp-header-center">' +
+        '<div class="rp-title-main">Relatório de Testes</div>' +
+        '<div class="rp-subtitle">Recrutamento &amp; Seleção</div>' +
+      '</div>' +
+      '<div class="rp-header-right">' +
+        '<div class="rp-meta-line"><strong>Solicitante:</strong> ' + escH(solicitante) + '</div>' +
+        '<div class="rp-meta-line"><strong>Semana:</strong> ' + periodoTxt + '</div>' +
+        '<div class="rp-meta-line"><strong>Emitido em:</strong> ' + hoje + '</div>' +
+        '<div class="rp-meta-line">' + lista.length + ' teste' + (lista.length !== 1 ? 's' : '') + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="rp-section">Testes da Semana</div>' +
+    '<table class="rp-table rp-table-nowrap"><thead><tr>' +
+      '<th>Data</th>' +
+      '<th>Unidade</th>' +
+      '<th>Cargo</th>' +
+      '<th>Nome</th>' +
+      '<th>Valor</th>' +
+      '<th>Status</th>' +
+      '<th class="center" style="width:30px">✓</th>' +
+    '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+    '<div class="rp-totais">' +
+      '<span><span class="rp-totais-lbl">Total de Testes</span><span class="rp-totais-val">' + lista.length + '</span></span>' +
+      '<span><span class="rp-totais-lbl">Valor Total</span><span class="rp-totais-val">' + fmtValor(totalValor) + '</span></span>' +
+    '</div>';
+
+  var reciboEl = document.getElementById('recibo');
+  reciboEl.innerHTML = html;
+  reciboEl.classList.add('landscape');
+  reciboEl.classList.add('rp-compact');
+  var orientStyle = document.getElementById('print-orient-landscape');
+  if (!orientStyle) {
+    orientStyle = document.createElement('style');
+    orientStyle.id = 'print-orient-landscape';
+    orientStyle.textContent = '@page { size: A4 landscape; margin: 8mm; }';
+    document.head.appendChild(orientStyle);
+  }
+  function _restoreOrient() {
+    reciboEl.classList.remove('landscape');
+    reciboEl.classList.remove('rp-compact');
+    if (orientStyle && orientStyle.parentNode) orientStyle.parentNode.removeChild(orientStyle);
+    window.removeEventListener('afterprint', _restoreOrient);
+  }
+  window.addEventListener('afterprint', _restoreOrient);
+
+  fecharModalRelTestes();
+  var logoSrc = (document.querySelector('.logo-img') || {}).src || '';
+  var logoEl  = document.getElementById('rp-logo-testes');
+  if (logoEl && logoSrc) {
+    logoEl.onload  = function(){ window.print(); };
+    logoEl.onerror = function(){ window.print(); };
+    logoEl.src = logoSrc;
+  } else {
+    setTimeout(function(){ window.print(); }, 100);
+  }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 loadAllData();
 (function(){
@@ -4746,6 +4896,31 @@ function enviarSolicitacao() {
   </div>
 </div>
 <div class="ns-toast" id="ns-toast"></div>
+
+<!-- Modal Relatório de Testes -->
+<div class="modal-overlay" id="modal-rel-testes">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-header-info">
+        <div class="candidate-name">Relatório de Testes</div>
+      </div>
+      <button class="modal-close" onclick="fecharModalRelTestes()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="ev-field">
+        <span class="modal-section-title">Semana <span style="color:var(--red);font-size:12px;">*</span></span>
+        <input type="week" class="modal-select" id="rel-testes-semana" style="margin-top:8px;">
+        <div id="rel-testes-periodo" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);margin-top:6px;">—</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-cancel" onclick="fecharModalRelTestes()">Cancelar</button>
+      <button class="modal-btn modal-btn-save" onclick="gerarRelatorioTestes()">Gerar PDF</button>
+    </div>
+  </div>
+</div>
 
 <!-- EDIT VAGA -->
 <div class="modal-overlay" id="ev-overlay">
