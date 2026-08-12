@@ -936,7 +936,7 @@ var _entrevistaCache = [];
 var state = {
   tab: 'entrevistas',
   dashSrc: 'entrevistas',
-  filters: { unidade: 'Todos', departamento: 'Todos', data: 'Todos', entrevistador: 'Todos', status: 'Todos' },
+  filters: { unidade: 'Todos', departamento: 'Todos', data: 'Todos', entrevistador: 'Todos', status: 'Todos', data_entrevista: 'Todos', data_teste: 'Todos', status_entrevista: 'Todos', status_teste: 'Todos', status_processo: 'Todos' },
   dashFilters: { unidade: 'Todos', departamento: 'Todos', periodo: 'Todos' },
   loading: true,
   error: null
@@ -1263,7 +1263,11 @@ function getFiltered() {
       if (f.unidade!=='Todos' && (r.unidade||'')!==f.unidade) return false;
       if (f.departamento!=='Todos' && (r.departamento||'')!==f.departamento) return false;
       if (f.entrevistador!=='Todos' && (r.entrevistador||'')!==f.entrevistador) return false;
-      if (f.status!=='Todos' && (r.status_final||'')!==f.status) return false;
+      if (f.data_entrevista!=='Todos' && (r.data_entrevista||'')!==f.data_entrevista) return false;
+      if (f.data_teste!=='Todos' && !(r.dias||[]).some(function(d){ return (d.data_teste||'')===f.data_teste; })) return false;
+      if (f.status_entrevista!=='Todos' && (r.status_entrevista||'')!==f.status_entrevista) return false;
+      if (f.status_teste!=='Todos' && !(r.dias||[]).some(function(d){ return (d.status||'')===f.status_teste; })) return false;
+      if (f.status_processo!=='Todos' && (r.status_final||'')!==f.status_processo) return false;
       return true;
     });
   }
@@ -1331,6 +1335,7 @@ function showError(msg) {
 // ─── Filtros UI ───────────────────────────────────────────────────────────────
 function renderFilters() {
   if (state.tab === 'vagas') { renderVagasFilters(); return; }
+  if (state.tab === 'analitico') { renderAnaliticoFilters(); return; }
   var src=getSrc(), f=state.filters, filtered=getFiltered();
   function sel(label, key, opts, curVal) {
     var h='<div class="filter-group"><label class="filter-label">'+label+'</label><select class="filter-select" onchange="setFilter(\''+key+'\',this.value)">';
@@ -1357,6 +1362,39 @@ function renderFilters() {
   html+=sel('Entrevistador','entrevistador',unique(src.map(function(r){return r.entrevistador;})),f.entrevistador);
   html+=sel('Status','status',getStatusOpts(),f.status);
   html+='</div><div class="filters-actions"><button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>';
+  html+='<span class="results-count"><span>'+filtered.length+'</span> resultado(s)</span></div>';
+  document.getElementById('filters-wrap').innerHTML=html;
+}
+
+function renderAnaliticoFilters() {
+  var src=analitico, f=state.filters, filtered=getFiltered();
+  function sel(label, key, opts, curVal, fmt) {
+    var h='<div class="filter-group"><label class="filter-label">'+label+'</label><select class="filter-select" onchange="setFilter(\''+key+'\',this.value)">';
+    h+='<option value="Todos"'+(curVal==='Todos'?' selected':'')+'>Todos</option>';
+    opts.forEach(function(o){ h+='<option value="'+escH(o)+'"'+(curVal===o?' selected':'')+'>'+escH(fmt?fmt(o):o)+'</option>'; });
+    return h+'</select></div>';
+  }
+  function uniq(arr){ var seen={},out=[]; arr.forEach(function(v){ v=(v==null?'':String(v)).trim(); if(v && !seen[v]){seen[v]=true;out.push(v);} }); return out; }
+  function uniqSort(arr){ return uniq(arr).sort(); }
+  function uniqDatesDesc(arr){ return uniq(arr).sort(function(a,b){ return String(b).localeCompare(String(a)); }); }
+  var deptSrc = f.unidade==='Todos' ? src : src.filter(function(r){ return r.unidade===f.unidade; });
+  var diasAll = []; src.forEach(function(r){ (r.dias||[]).forEach(function(d){ diasAll.push(d); }); });
+  var html='';
+  html+='<div class="filters-row">';
+  html+=sel('Unidade','unidade',uniqSort(src.map(function(r){return r.unidade;})),f.unidade);
+  html+=sel('Departamento','departamento',uniqSort(deptSrc.map(function(r){return r.departamento;})),f.departamento);
+  html+=sel('Entrevistador','entrevistador',uniqSort(src.map(function(r){return r.entrevistador;})),f.entrevistador);
+  html+='</div>';
+  html+='<div class="filters-row">';
+  html+=sel('Data da entrevista','data_entrevista',uniqDatesDesc(src.map(function(r){return r.data_entrevista;})),f.data_entrevista,fmtDateBR);
+  html+=sel('Data do teste','data_teste',uniqDatesDesc(diasAll.map(function(d){return d.data_teste;})),f.data_teste,fmtDateBR);
+  html+='</div>';
+  html+='<div class="filters-row">';
+  html+=sel('Status da entrevista','status_entrevista',uniqSort(src.map(function(r){return r.status_entrevista;})),f.status_entrevista);
+  html+=sel('Status do teste','status_teste',uniqSort(diasAll.map(function(d){return d.status;})),f.status_teste);
+  html+=sel('Status do processo','status_processo',uniqSort(src.map(function(r){return r.status_final;})),f.status_processo);
+  html+='</div>';
+  html+='<div class="filters-actions"><button class="btn-clear" onclick="clearFilters()">Limpar filtros</button>';
   html+='<span class="results-count"><span>'+filtered.length+'</span> resultado(s)</span></div>';
   document.getElementById('filters-wrap').innerHTML=html;
 }
@@ -3660,7 +3698,7 @@ function render() {
 function setTab(tab) {
   state.tab=tab;
   // Sem forçar status: cada aba abre mostrando tudo; a pessoa ajusta os filtros conforme precisar.
-  state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos'};
+  state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos',data_entrevista:'Todos',data_teste:'Todos',status_entrevista:'Todos',status_teste:'Todos',status_processo:'Todos'};
   _cardsShown=CARD_PAGE;
   _cfMes=null;
   _cfFunilIdx=null;
@@ -3682,7 +3720,7 @@ function setFilter(key,val) {
   render();
 }
 function clearFilters() {
-  state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos'};
+  state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos',data_entrevista:'Todos',data_teste:'Todos',status_entrevista:'Todos',status_teste:'Todos',status_processo:'Todos'};
   _cardsShown=CARD_PAGE;
   render();
 }
