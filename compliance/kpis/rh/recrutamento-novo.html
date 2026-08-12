@@ -138,9 +138,9 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 #ev-benef-grid { grid-template-columns: 1fr; }
 .ae-proc-tipo { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; cursor: pointer; }
 .ae-proc-tipo > input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--carbon); flex: 0 0 auto; cursor: pointer; margin: 0; }
-.ae-proc-tipo > span { flex: 1; font-size: 13px; color: var(--carbon); }
-.ae-proc-qty { width: 78px; flex: 0 0 auto; text-align: center; }
-.ae-proc-qty:disabled { background: #F4F4F4; color: var(--muted); }
+.ae-proc-tipo > span { flex: 1 1 auto; min-width: 0; font-size: 13px; color: var(--carbon); }
+.ae-proc-tipo .ae-proc-qty { flex: 0 0 84px; width: 84px; text-align: center; }
+.ae-proc-tipo .ae-proc-qty:disabled { background: #F4F4F4; color: var(--muted); }
 .ev-check-hint { display: block; margin-top: 6px; font-size: 10.5px; color: var(--muted); }
 @media (max-width: 560px) { .ev-check-grid { grid-template-columns: 1fr; } }
 .ev-collapse { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -151,6 +151,7 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .ev-collapse.collapsed .ev-chevron { transform: rotate(-90deg); }
 .ev-collapse-body { padding: 12px; }
 .ev-collapse.collapsed .ev-collapse-body { display: none; }
+[id^="ae-ent-grp-"], [id^="ae-t-grp-"] { margin-bottom: 8px; }
 
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
 .modal-overlay.active { opacity: 1; visibility: visible; }
@@ -316,7 +317,7 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .anl-table thead th.anl-sticky[rowspan], .anl-table thead th.anl-acoes-h[rowspan] { top: 0; vertical-align: middle; }
 .anl-table thead th.anl-sticky[rowspan] { font-size: 12.6px; }
 /* modal seccionado (edição a partir do Analítico) */
-.ae-modal { max-width: 546px; }   /* +30% em relação aos demais modais (420px) */
+.ae-modal { max-width: 655px; }   /* modais padrão 420px; este é bem mais largo p/ as seções */
 .ae-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); padding: 0 4px; -webkit-overflow-scrolling: touch; }
 .ae-tab { flex: 0 0 auto; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; padding: 10px 12px; cursor: pointer; white-space: nowrap; }
 .ae-tab.active { color: var(--carbon); border-bottom-color: var(--carbon); font-weight: 600; }
@@ -2016,6 +2017,7 @@ function _aeSetSelect(id, val){
 var _AE_STATUS_ENT = ['Aguardando Entrevista','Aguardando devolutiva','Aprovado para teste','Não realizada','Não entrou','Não selecionado'];
 var _AE_SELECIONADO = ['Sim','Não','Não respondeu','Não aceitou a proposta'];
 var _AE_STATUS_TESTE = ['Aguardando teste','Aguardando aprovação','Contratado','Não contratado','Não compareceu','Cancelado'];
+var _AE_STATUS_FINAL = ['Aguardando feedback','Contratado','Não contratado','Desligado'];
 function _aeRenderPanels(r){
   function P(name, inner){ return '<div class="ae-panel'+(name===_aeTab?' active':'')+'" data-ae="'+name+'">'+inner+'</div>'; }
   var cand = '<div class="ae-fields">'+
@@ -2035,7 +2037,9 @@ function _aeRenderPanels(r){
   var tst = _aeTestePanelHtml(r);
   var proc = _aeProcPanelHtml(r);
   var refs = _aeRefPanelHtml();
-  var fin = _aeRow('Status final',_anlTxt(r.status_final))+_aeRow('Final por',_anlTxt(r.status_final_por))+_aeRow('Final em',_anlDataHora(r.status_final_em)) + _aeEmBreve();
+  var fin = '<div class="ae-fields"><div class="ev-field" style="grid-column:1/-1"><span class="modal-section-title">Status final</span><select class="modal-select" id="ae-f-status">'+_aeOpts(_AE_STATUS_FINAL)+'</select></div></div>'+
+    '<div style="margin-top:10px">'+_aeRow('Concluído em',_anlDataHora(r.status_final_em))+_aeRow('Final por',_anlTxt(r.status_final_por))+_aeRow('Recrutador',_anlTxt(r.responsavel))+'</div>'+
+    '<div class="ae-note" style="margin-top:8px;padding-top:10px;border-top:1px dashed var(--border);font-size:11px">Ao salvar, a data e o usuário são preenchidos automaticamente.</div>';
   document.getElementById('ae-body').innerHTML = P('candidato',cand)+P('vaga',vaga)+P('entrevista',entr)+P('testes',tst)+P('processos',proc)+P('referencias',refs)+P('final',fin);
 }
 function abrirAnaliticoEditar(id){
@@ -2051,6 +2055,7 @@ function abrirAnaliticoEditar(id){
   _aeInitTestes(r);
   _aeInitProcessos(r);
   _aeInitReferencias(r);
+  _aeInitFinal(r);
   aeTab('candidato');
   document.getElementById('ae-overlay').classList.add('active');
   document.body.style.overflow='hidden';
@@ -2062,6 +2067,7 @@ function _aeSalvar(){
   else if (_aeTab==='testes') _aeSalvarTestes();
   else if (_aeTab==='processos') _aeSalvarProcessos();
   else if (_aeTab==='referencias') _aeSalvarReferencias();
+  else if (_aeTab==='final') _aeSalvarFinal();
 }
 // ── Aba Vaga: vincula a candidatura a uma vaga e reflete as infos (leitura) ──
 function _aeVagaInfoHtml(v){
@@ -2313,7 +2319,7 @@ function aeTab(name){
   _aeTab=name;
   document.querySelectorAll('#ae-tabs .ae-tab').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-ae')===name); });
   document.querySelectorAll('#ae-body .ae-panel').forEach(function(p){ p.classList.toggle('active', p.getAttribute('data-ae')===name); });
-  var sv=document.getElementById('ae-save'); if(sv) sv.style.display = (name==='final') ? 'none' : '';
+  var sv=document.getElementById('ae-save'); if(sv) sv.style.display = '';
 }
 // ── Aba Entrevista: multi-entrevista (tabela-filha rec_entrevistas) ──
 var _aeEntList = [];
@@ -2322,17 +2328,24 @@ function _aeEntCount(r){ return Math.max(AE_ENT_MAX, ((r&&r.entrevistas)||[]).le
 function _aeEntPanelHtml(r){
   var list = r.entrevistas||[], n=_aeEntCount(r), html='';
   html += '<div class="ae-fields"><div class="ev-field" style="grid-column:1/-1"><span class="modal-section-title">Selecionado</span><select class="modal-select" id="ae-ent-selecionado">'+_aeOpts(_AE_SELECIONADO)+'</select></div></div>';
+  var maeHasEnt = !!(r.data_entrevista||r.horarios||r.entrevistador||r.status_entrevista||r.observacoes_entrevista);
   for (var i=0;i<n;i++){
     var marca = i===0 ? ' <span style="color:var(--red)">*</span>'
                       : ' <span style="font-size:9px;letter-spacing:0;text-transform:none;color:var(--muted)">(opcional)</span>';
-    html += '<div class="ae-sub">Entrevista '+(i+1)+marca+'</div>'+
-      '<div class="ae-fields">'+
-      '<div class="ev-field"><span class="modal-section-title">Data</span><input type="date" class="modal-input" id="ae-ent-'+i+'-data"></div>'+
-      '<div class="ev-field"><span class="modal-section-title">Hora</span><input type="time" class="modal-input" id="ae-ent-'+i+'-hora" step="60"></div>'+
-      _aeSelect('Entrevistador','ae-ent-'+i+'-entrevistador','')+
-      '<div class="ev-field"><span class="modal-section-title">Status da entrevista</span><select class="modal-select" id="ae-ent-'+i+'-status">'+_aeOpts(_AE_STATUS_ENT)+'</select></div>'+
-      _aeTextarea('Observações','ae-ent-'+i+'-obs')+
-      '</div>';
+    var col = (list[i] || (i===0 && maeHasEnt)) ? '' : ' collapsed';
+    html += '<div class="ev-collapse'+col+'" id="ae-ent-grp-'+i+'">'+
+      '<button type="button" class="ev-collapse-head" onclick="_evToggleCollapse(\'ae-ent-grp-'+i+'\')">'+
+        '<span class="modal-section-title" style="flex:1">Entrevista '+(i+1)+marca+'</span>'+
+        '<svg class="ev-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>'+
+      '</button>'+
+      '<div class="ev-collapse-body"><div class="ae-fields">'+
+        '<div class="ev-field"><span class="modal-section-title">Data</span><input type="date" class="modal-input" id="ae-ent-'+i+'-data"></div>'+
+        '<div class="ev-field"><span class="modal-section-title">Hora</span><input type="time" class="modal-input" id="ae-ent-'+i+'-hora" step="60"></div>'+
+        _aeSelect('Entrevistador','ae-ent-'+i+'-entrevistador','')+
+        '<div class="ev-field"><span class="modal-section-title">Status da entrevista</span><select class="modal-select" id="ae-ent-'+i+'-status">'+_aeOpts(_AE_STATUS_ENT)+'</select></div>'+
+        _aeTextarea('Observações','ae-ent-'+i+'-obs')+
+      '</div></div>'+
+    '</div>';
   }
   return html;
 }
@@ -2364,23 +2377,30 @@ var _aeTesteList = [];
 function _aeTesteCount(r){ return Math.max(ANL_MAX_DIAS, ((r&&r.dias)||[]).length); }
 function _aeTestePanelHtml(r){
   var dias=r.dias||[], n=_aeTesteCount(r), html='';
-  html += '<div class="ae-sub">Uniforme</div>'+_aeRow('Tamanho da camiseta',_anlTxt(r.camiseta));
+  html += '<div class="ae-fields"><div class="ev-field" style="grid-column:1/-1"><span class="modal-section-title">Tamanho do uniforme</span><select class="modal-select" id="ae-t-camiseta">'+_aeOpts(['PP','P','M','G','GG'])+'</select></div></div>';
   for (var i=0;i<n;i++){
-    html += '<div class="ae-sub">Dia '+(i+1)+' <span style="font-size:9px;letter-spacing:0;text-transform:none;color:var(--muted)">(opcional)</span></div>'+
-      '<div class="ae-fields">'+
-      '<div class="ev-field"><span class="modal-section-title">Data</span><input type="date" class="modal-input" id="ae-t-'+i+'-data"></div>'+
-      '<div class="ev-field"><span class="modal-section-title">Entrada</span><input type="time" class="modal-input" id="ae-t-'+i+'-entrada" step="60"></div>'+
-      '<div class="ev-field"><span class="modal-section-title">Saída</span><input type="time" class="modal-input" id="ae-t-'+i+'-saida" step="60"></div>'+
-      _aeSelect('Responsável','ae-t-'+i+'-responsavel','')+
-      '<div class="ev-field"><span class="modal-section-title">Valor diária</span><input type="text" class="modal-input" id="ae-t-'+i+'-valor" placeholder="R$"></div>'+
-      '<div class="ev-field"><span class="modal-section-title">Status</span><select class="modal-select" id="ae-t-'+i+'-status">'+_aeOpts(_AE_STATUS_TESTE)+'</select></div>'+
-      '<div class="ev-field"><span class="modal-section-title">Pago</span><select class="modal-select" id="ae-t-'+i+'-pago"><option value="">—</option><option>Sim</option><option>Não</option></select></div>'+
-      '</div>';
+    var col = dias[i] ? '' : ' collapsed';
+    html += '<div class="ev-collapse'+col+'" id="ae-t-grp-'+i+'">'+
+      '<button type="button" class="ev-collapse-head" onclick="_evToggleCollapse(\'ae-t-grp-'+i+'\')">'+
+        '<span class="modal-section-title" style="flex:1">Dia '+(i+1)+' <span style="font-size:9px;letter-spacing:0;text-transform:none;color:var(--muted)">(opcional)</span></span>'+
+        '<svg class="ev-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>'+
+      '</button>'+
+      '<div class="ev-collapse-body"><div class="ae-fields">'+
+        '<div class="ev-field"><span class="modal-section-title">Data</span><input type="date" class="modal-input" id="ae-t-'+i+'-data"></div>'+
+        '<div class="ev-field"><span class="modal-section-title">Entrada</span><input type="time" class="modal-input" id="ae-t-'+i+'-entrada" step="60"></div>'+
+        '<div class="ev-field"><span class="modal-section-title">Saída</span><input type="time" class="modal-input" id="ae-t-'+i+'-saida" step="60"></div>'+
+        _aeSelect('Responsável','ae-t-'+i+'-responsavel','')+
+        '<div class="ev-field"><span class="modal-section-title">Valor diária</span><input type="text" class="modal-input" id="ae-t-'+i+'-valor" placeholder="R$"></div>'+
+        '<div class="ev-field"><span class="modal-section-title">Status</span><select class="modal-select" id="ae-t-'+i+'-status">'+_aeOpts(_AE_STATUS_TESTE)+'</select></div>'+
+        '<div class="ev-field"><span class="modal-section-title">Pago</span><select class="modal-select" id="ae-t-'+i+'-pago"><option value="">—</option><option>Sim</option><option>Não</option></select></div>'+
+      '</div></div>'+
+    '</div>';
   }
   return html;
 }
 function _aeInitTestes(r){
   _aeTesteList=r.dias||[];
+  _aeSetSelect('ae-t-camiseta', r.camiseta||'');
   var n=_aeTesteCount(r), pode=window.__podeVerValores, el;
   for (var i=0;i<n;i++){
     var d=_aeTesteList[i]||{};
@@ -2395,13 +2415,14 @@ function _aeInitTestes(r){
     for (var i=0;i<n;i++){ var d=_aeTesteList[i]||{}; _evPopulateSelect('ae-t-'+i+'-responsavel', list, d.responsavel||''); _aeSetSelect('ae-t-'+i+'-responsavel', d.responsavel||''); }
   });
 }
-// executa vários saves (RPC) em paralelo; fecha e recarrega ao terminar
-function _aeRunSaves(rpc, argsList){
+// executa vários saves (lista de {rpc,args}) em paralelo; fecha e recarrega ao terminar
+function _aeRunSaves(calls){
   var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
+  if(!calls.length){ closeAeModal(); return; }
   var btn=document.getElementById('ae-save');
   if(btn){ btn.disabled=true; btn.textContent='Salvando…'; }
   function done(){ if(btn){ btn.disabled=false; btn.textContent='Salvar'; } }
-  Promise.all(argsList.map(function(a){ return SB.rpc(rpc, a); })).then(function(results){
+  Promise.all(calls.map(function(c){ return SB.rpc(c.rpc, c.args); })).then(function(results){
     done();
     for(var i=0;i<results.length;i++){ if(results[i] && results[i].error){ alert('Erro ao salvar:\n'+results[i].error.message); return; } }
     closeAeModal(); loadAllData();
@@ -2410,11 +2431,11 @@ function _aeRunSaves(rpc, argsList){
 // Salva todas as entrevistas preenchidas (uma só ação, botão do rodapé)
 function _aeSalvarEntrevistas(){
   function v(id){ return (document.getElementById(id)||{}).value||''; }
-  var candId=document.getElementById('ae-id').value, sel=v('ae-ent-selecionado'), jobs=[];
+  var candId=document.getElementById('ae-id').value, sel=v('ae-ent-selecionado'), calls=[];
   for(var i=0; document.getElementById('ae-ent-'+i+'-data'); i++){
     var e=_aeEntList[i], data=v('ae-ent-'+i+'-data'), existing=e&&e.id;
     if(!existing && !data) continue;   // slot sem filha e sem data → ignora
-    jobs.push({
+    calls.push({ rpc:'rec_entrevista_sandbox_salvar', args:{
       p_entrevista_id: existing ? e.id : null,
       p_candidatura_id: candId,
       p_data: data||null,
@@ -2424,21 +2445,21 @@ function _aeSalvarEntrevistas(){
       p_selecionado: sel,
       p_observacoes: v('ae-ent-'+i+'-obs').trim(),
       p_por: _sandboxMatricula()
-    });
+    }});
   }
-  if(!jobs.length){ closeAeModal(); return; }
-  _aeRunSaves('rec_entrevista_sandbox_salvar', jobs);
+  _aeRunSaves(calls);
 }
-// Salva todos os dias de teste preenchidos (uma só ação, botão do rodapé)
+// Salva o uniforme + todos os dias de teste preenchidos (uma só ação, botão do rodapé)
 function _aeSalvarTestes(){
   function v(id){ return (document.getElementById(id)||{}).value||''; }
   function _money(x){ x=String(x||'').replace(/R\$|\s|\./g,'').replace(',','.'); var nn=parseFloat(x); return isNaN(nn)?null:nn; }
-  var candId=document.getElementById('ae-id').value, jobs=[];
+  var candId=document.getElementById('ae-id').value, calls=[];
+  var cam=v('ae-t-camiseta'); if(cam) calls.push({ rpc:'rec_camiseta_sandbox_salvar', args:{ p_id:candId, p_camiseta:cam, p_por:_sandboxMatricula() }});
   for(var i=0; document.getElementById('ae-t-'+i+'-data'); i++){
     var d=_aeTesteList[i], data=v('ae-t-'+i+'-data'), existing=d&&d.id;
     if(!existing && !data) continue;
     var pv=v('ae-t-'+i+'-pago'), pago = pv==='Sim'?true:(pv==='Não'?false:null);
-    jobs.push({
+    calls.push({ rpc:'rec_teste_sandbox_salvar', args:{
       p_candidatura_id: candId,
       p_dia_id: existing ? d.id : null,
       p_data_teste: data||null,
@@ -2449,10 +2470,16 @@ function _aeSalvarTestes(){
       p_responsavel: v('ae-t-'+i+'-responsavel'),
       p_pago: pago,
       p_por: _sandboxMatricula()
-    });
+    }});
   }
-  if(!jobs.length){ closeAeModal(); return; }
-  _aeRunSaves('rec_teste_sandbox_salvar', jobs);
+  _aeRunSaves(calls);
+}
+function _aeInitFinal(r){ _aeSetSelect('ae-f-status', (r.status_final && r.status_final!=='—') ? r.status_final : ''); }
+// Salva o status final (data e usuário preenchidos automaticamente)
+function _aeSalvarFinal(){
+  var st=(document.getElementById('ae-f-status')||{}).value||'';
+  if(!st){ alert('Selecione o status final.'); return; }
+  _aeRunSaves([{ rpc:'rec_status_final_sandbox_salvar', args:{ p_id:document.getElementById('ae-id').value, p_status_final:st, p_por:_usuarioLogadoNome() }}]);
 }
 function closeAeModal(){ document.getElementById('ae-overlay').classList.remove('active'); document.body.style.overflow=''; }
 
