@@ -136,6 +136,11 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .ev-check input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--carbon); flex: 0 0 auto; cursor: pointer; margin: 0; }
 .ev-check-nota { color: var(--muted); font-size: 10.5px; }
 #ev-benef-grid { grid-template-columns: 1fr; }
+.ae-proc-tipo { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; cursor: pointer; }
+.ae-proc-tipo > input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--carbon); flex: 0 0 auto; cursor: pointer; margin: 0; }
+.ae-proc-tipo > span { flex: 1; font-size: 13px; color: var(--carbon); }
+.ae-proc-qty { width: 78px; flex: 0 0 auto; text-align: center; }
+.ae-proc-qty:disabled { background: #F4F4F4; color: var(--muted); }
 .ev-check-hint { display: block; margin-top: 6px; font-size: 10.5px; color: var(--muted); }
 @media (max-width: 560px) { .ev-check-grid { grid-template-columns: 1fr; } }
 .ev-collapse { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -1999,7 +2004,7 @@ function _aeRenderPanels(r){
     '</div><div id="ae-v-info" style="margin-top:12px"></div>';
   var entr = _aeEntPanelHtml(r);
   var tst = _aeTestePanelHtml(r);
-  var proc = _aeRow('Processos',_anlTxt(r.processos))+_aeRow('Resumo',_anlTxt(r.resumo)) + _aeEmBreve();
+  var proc = _aeProcPanelHtml(r);
   var refs = _aeRow('Tipo',_anlTxt(r.tipo_referencia))+_aeRow('Contato',_anlTxt(r.contato_referencia))+_aeRow('Empresa/Líder ant.',_anlTxt(r.empresa_anterior_lider))
     +_aeRow('Check',_anlTxt(r.check_referencia))+_aeRow('Feedback',_anlTxt(r.feedback_referencia))+_aeRow('Observações',_anlTxt(r.observacoes_referencia)) + _aeEmBreve();
   var fin = _aeRow('Status final',_anlTxt(r.status_final))+_aeRow('Final por',_anlTxt(r.status_final_por))+_aeRow('Final em',_anlDataHora(r.status_final_em)) + _aeEmBreve();
@@ -2016,6 +2021,7 @@ function abrirAnaliticoEditar(id){
   _aeInitVaga(r);
   _aeInitEntrevistas(r);
   _aeInitTestes(r);
+  _aeInitProcessos(r);
   aeTab('candidato');
   document.getElementById('ae-overlay').classList.add('active');
   document.body.style.overflow='hidden';
@@ -2125,6 +2131,92 @@ function _aeSalvarCandidato(){
     p_por: _sandboxMatricula()
   };
   SB.rpc('rec_candidatura_sandbox_salvar', args).then(function(res){
+    if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
+    closeAeModal(); loadAllData();
+  }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
+}
+// ── Aba Processos: situação + tipos com quantidade + resumo (rec_candidaturas) ──
+var _AE_PROC_TIPOS = [
+  { key:'trabalhista', label:'Trabalhista', aliases:['trabalhista','trablhista'] },
+  { key:'civel',       label:'Cível',       aliases:['civel','civil','cvel'] },
+  { key:'criminal',    label:'Criminal',    aliases:['criminal','ciminal'] },
+  { key:'transito',    label:'Trânsito',    aliases:['transito','trnsito'] }
+];
+function _aeProcPanelHtml(r){
+  var tipos = _AE_PROC_TIPOS.map(function(t,i){
+    return '<label class="ae-proc-tipo"><input type="checkbox" id="ae-p-t-'+i+'" onchange="_aeProcTipoChanged('+i+')"><span>'+escH(t.label)+'</span>'+
+      '<input type="number" min="1" step="1" class="modal-input ae-proc-qty" id="ae-p-q-'+i+'" placeholder="qtd" disabled></label>';
+  }).join('');
+  return '<div class="ae-fields">'+
+      '<div class="ev-field" style="grid-column:1/-1"><span class="modal-section-title">Situação</span>'+
+      '<select class="modal-select" id="ae-p-situacao" onchange="_aeProcSituacaoChanged()">'+
+        '<option value="Não consultado">Não consultado</option>'+
+        '<option value="Nada consta">Nada consta</option>'+
+        '<option value="Sim">Sim, possui processo(s)</option>'+
+      '</select></div>'+
+    '</div>'+
+    '<div id="ae-p-tipos" style="margin-top:8px;display:none">'+
+      '<div class="ae-sub">Tipos de processo <span style="font-size:9px;letter-spacing:0;text-transform:none;color:var(--muted)">(marque e informe a quantidade)</span></div>'+
+      tipos+
+    '</div>'+
+    '<div class="ae-fields" style="margin-top:12px">'+_aeTextarea('Resumo dos processos','ae-p-resumo')+'</div>'+
+    _aeBtn('_aeSalvarProcessos()','Salvar Processos');
+}
+function _aeProcSituacaoChanged(){
+  var s=(document.getElementById('ae-p-situacao')||{}).value;
+  var box=document.getElementById('ae-p-tipos'); if(box) box.style.display = (s==='Sim') ? '' : 'none';
+}
+function _aeProcTipoChanged(i){
+  var c=document.getElementById('ae-p-t-'+i), q=document.getElementById('ae-p-q-'+i);
+  if(!c||!q) return;
+  q.disabled=!c.checked;
+  if(c.checked){ if(!q.value) q.value='1'; } else { q.value=''; }
+}
+// parser tolerante do campo processos → { situacao, tipos:{key:{qty}} }
+function _aeParseProc(str){
+  var s=String(str==null?'':str).trim(), l=norm(s.toLowerCase());
+  if(!s || l==='—') return { situacao:'Não consultado', tipos:{} };
+  if(l.indexOf('sim')===0){
+    var tipos={};
+    _AE_PROC_TIPOS.forEach(function(t){
+      var found=false, qty='';
+      t.aliases.forEach(function(a){
+        var idx=l.indexOf(a);
+        if(idx>=0){ found=true; var m=l.slice(idx).match(/^[a-z]+\s*\((\d+)\)/); if(m) qty=m[1]; }
+      });
+      if(found) tipos[t.key]={ qty:qty };
+    });
+    return { situacao:'Sim', tipos:tipos };
+  }
+  if(l.indexOf('nada consta')>=0 || l.indexOf('nao')===0) return { situacao:'Nada consta', tipos:{} };
+  return { situacao:'Não consultado', tipos:{} };   // consultado / remarcar / outros
+}
+function _aeInitProcessos(r){
+  var p=_aeParseProc(r.processos);
+  _aeSetSelect('ae-p-situacao', p.situacao||'Não consultado');
+  _AE_PROC_TIPOS.forEach(function(t,i){
+    var on=p.tipos.hasOwnProperty(t.key);
+    var c=document.getElementById('ae-p-t-'+i); if(c) c.checked=on;
+    var q=document.getElementById('ae-p-q-'+i); if(q){ q.disabled=!on; q.value = on ? (p.tipos[t.key].qty||'1') : ''; }
+  });
+  var rz=document.getElementById('ae-p-resumo'); if(rz) rz.value=r.resumo||'';
+  _aeProcSituacaoChanged();
+}
+function _aeSalvarProcessos(){
+  var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
+  function v(id){ return (document.getElementById(id)||{}).value||''; }
+  var sit=v('ae-p-situacao'), processos;
+  if(sit==='Sim'){
+    var parts=[];
+    _AE_PROC_TIPOS.forEach(function(t,i){
+      var c=document.getElementById('ae-p-t-'+i);
+      if(c&&c.checked){ var q=v('ae-p-q-'+i).trim()||'1'; parts.push(t.label+' ('+q+')'); }
+    });
+    if(!parts.length){ alert('Selecione ao menos um tipo de processo.'); return; }
+    processos='Sim: '+parts.join(', ');
+  } else { processos=sit; }
+  var args={ p_id: document.getElementById('ae-id').value, p_processos: processos, p_resumo: v('ae-p-resumo').trim(), p_por: _sandboxMatricula() };
+  SB.rpc('rec_processos_sandbox_salvar', args).then(function(res){
     if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
     closeAeModal(); loadAllData();
   }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
