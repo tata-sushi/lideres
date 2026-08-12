@@ -136,6 +136,14 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .ev-check input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--carbon); flex: 0 0 auto; cursor: pointer; margin: 0; }
 .ev-check-hint { display: block; margin-top: 6px; font-size: 10.5px; color: var(--muted); }
 @media (max-width: 560px) { .ev-check-grid { grid-template-columns: 1fr; } }
+.ev-collapse { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.ev-collapse-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #FAFAFA; border: none; cursor: pointer; text-align: left; }
+.ev-collapse-head .modal-section-title { margin: 0; }
+.ev-collapse-sum { flex: 1; font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; text-transform: none; letter-spacing: 0; }
+.ev-chevron { width: 16px; height: 16px; color: var(--muted); transition: transform 0.18s; flex: 0 0 auto; }
+.ev-collapse.collapsed .ev-chevron { transform: rotate(-90deg); }
+.ev-collapse-body { padding: 12px; }
+.ev-collapse.collapsed .ev-collapse-body { display: none; }
 
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
 .modal-overlay.active { opacity: 1; visibility: visible; }
@@ -1636,18 +1644,20 @@ function _enderecoUnidade(u){
 function copiarProposta(id){
   var v=null; for(var i=0;i<(vagas||[]).length;i++){ if(String(vagas[i].id)===String(id)){ v=vagas[i]; break; } }
   if(!v) return;
+  var pv=_parseVagaObs(v.observacoes);
   var L=[];
   L.push('*'+(v.cargo||'')+'*');
   if(v.escala) L.push('Escala: '+v.escala);
   var _end=_enderecoUnidade(v.unidade); if(_end) L.push('Unidade: '+_end);
-  if(v.horario) L.push('Horário: '+v.horario);
+  if(v.horario){ var h='Horário: '+v.horario; if(pv.intervalo) h+=' (intervalo de '+pv.intervalo+')'; L.push(h); }
   if(window.__podeVerValores && v.salario_fixo!=null){
     var s='Salário: '+_fmtMoney(v.salario_fixo);
     if(v.salario_bruto!=null) s+=' + Prêmio (Bruto aprox.: '+_fmtMoney(v.salario_bruto)+')';
     L.push(s);
   }
   if(v.beneficios) L.push('Benefícios: '+v.beneficios);
-  if(v.observacoes) L.push('Observações: '+v.observacoes);
+  if(pv.contratos.length) L.push('Contrato: '+pv.contratos.join(', '));
+  if(pv.livre) L.push('Observações: '+pv.livre);
   _copiarTexto(L.join('\n'));
 }
 function _copiarTexto(txt){
@@ -2630,45 +2640,56 @@ function evDeptoChanged() {
   evCargoChanged();
 }
 
-// ─── Benefícios (checkbox) e Tipo de contrato (checkbox → observação) ─────────
+// ─── Benefícios / Contrato / Intervalo (seleção) na vaga ─────────────────────
 var _BENEF_OPTS = ['Seguro de Vida','VT','Refeição no local','Desconto para consumação no Restaurante','Gympass','Plataforma de treinamento com brindes','Convênio Sesc'];
 var _CONTRATO_OPTS = ['CLT','Estágio','Jovem Aprendiz','PJ'];
+var _INTERVALO_OPTS = ['15 minutos','30 minutos','1 hora','2 horas','3 horas','4 horas'];
+var _evObsLegacy = '';    // texto livre pré-existente na observação (preservado no roundtrip)
+var _evBenefLegacy = '';  // benefícios fora da lista padrão (preservados no roundtrip)
 function _evNorm(s){ return norm(String(s==null?'':s).toLowerCase()).replace(/[\.\s]+$/,'').trim(); }
+function _evToggleCollapse(id){ var g=document.getElementById(id); if(g) g.classList.toggle('collapsed'); }
+function _evCollapseAll(){ ['ev-benef-group','ev-contrato-group','ev-intervalo-group'].forEach(function(id){ var g=document.getElementById(id); if(g) g.classList.add('collapsed'); }); }
 function _evBuildChecks(){
   var bg = document.getElementById('ev-benef-grid');
   if (bg && !bg.getAttribute('data-built')) {
-    bg.innerHTML = _BENEF_OPTS.map(function(o,i){ return '<label class="ev-check"><input type="checkbox" id="ev-benef-'+i+'" value="'+escH(o)+'"><span>'+escH(o)+'</span></label>'; }).join('');
+    bg.innerHTML = _BENEF_OPTS.map(function(o,i){ return '<label class="ev-check"><input type="checkbox" id="ev-benef-'+i+'" value="'+escH(o)+'" onchange="_evUpdateSums()"><span>'+escH(o)+'</span></label>'; }).join('');
     bg.setAttribute('data-built','1');
   }
   var cg = document.getElementById('ev-contrato-grid');
   if (cg && !cg.getAttribute('data-built')) {
-    cg.innerHTML = _CONTRATO_OPTS.map(function(o,i){ return '<label class="ev-check"><input type="checkbox" id="ev-contrato-'+i+'" value="'+escH(o)+'"><span>'+escH(o)+'</span></label>'; }).join('');
+    cg.innerHTML = _CONTRATO_OPTS.map(function(o,i){ return '<label class="ev-check"><input type="checkbox" id="ev-contrato-'+i+'" value="'+escH(o)+'" onchange="_evUpdateSums()"><span>'+escH(o)+'</span></label>'; }).join('');
     cg.setAttribute('data-built','1');
   }
+  var ig = document.getElementById('ev-intervalo-grid');
+  if (ig && !ig.getAttribute('data-built')) {
+    ig.innerHTML = _INTERVALO_OPTS.map(function(o,i){ return '<label class="ev-check"><input type="checkbox" id="ev-intervalo-'+i+'" value="'+escH(o)+'" onchange="_evPickIntervalo('+i+')"><span>'+escH(o)+'</span></label>'; }).join('');
+    ig.setAttribute('data-built','1');
+  }
+}
+function _evUpdateSums(){
+  var nb=0; _BENEF_OPTS.forEach(function(o,i){ var c=document.getElementById('ev-benef-'+i); if(c&&c.checked) nb++; });
+  if(_evBenefLegacy) nb++;
+  var bs=document.getElementById('ev-benef-sum'); if(bs) bs.textContent = nb ? (nb+' marcado'+(nb>1?'s':'')) : 'nenhum';
+  var ct=_evGetContratos(); var cs=document.getElementById('ev-contrato-sum'); if(cs) cs.textContent = ct.length ? ct.join(', ') : 'nenhum';
+  var iv=_evGetIntervalo(); var is=document.getElementById('ev-intervalo-sum'); if(is) is.textContent = iv || 'nenhum';
 }
 function _evGetBeneficios(){
   var out = [];
   _BENEF_OPTS.forEach(function(o,i){ var c=document.getElementById('ev-benef-'+i); if(c&&c.checked) out.push(o); });
-  var extra = ((document.getElementById('ev-benef-outros')||{}).value||'').trim();
-  if (extra) out.push(extra);
+  if(_evBenefLegacy) out.push(_evBenefLegacy);
   return out.join(', ');
 }
 function _evSetBeneficios(str){
   var toks = String(str||'').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
-  var known = {};
-  _BENEF_OPTS.forEach(function(o,i){ known[_evNorm(o)] = i; });
-  var leftover = [];
-  var checked = {};
-  toks.forEach(function(t){
-    var k = _evNorm(t);
-    if (known.hasOwnProperty(k)) checked[known[k]] = 1; else leftover.push(t);
-  });
+  var known = {}; _BENEF_OPTS.forEach(function(o,i){ known[_evNorm(o)] = i; });
+  var checked = {}, leftover = [];
+  toks.forEach(function(t){ var k=_evNorm(t); if(known.hasOwnProperty(k)) checked[known[k]]=1; else leftover.push(t); });
   _BENEF_OPTS.forEach(function(o,i){ var c=document.getElementById('ev-benef-'+i); if(c) c.checked = !!checked[i]; });
-  var ex = document.getElementById('ev-benef-outros'); if(ex) ex.value = leftover.join(', ');
+  _evBenefLegacy = leftover.join(', ');
 }
 function _evCheckAllBenef(){
   _BENEF_OPTS.forEach(function(o,i){ var c=document.getElementById('ev-benef-'+i); if(c) c.checked = true; });
-  var ex = document.getElementById('ev-benef-outros'); if(ex) ex.value = '';
+  _evBenefLegacy = '';
 }
 function _evGetContratos(){
   var out = [];
@@ -2679,28 +2700,47 @@ function _evSetContratos(arr){
   var have = {}; (arr||[]).forEach(function(t){ have[_evNorm(t)] = 1; });
   _CONTRATO_OPTS.forEach(function(o,i){ var c=document.getElementById('ev-contrato-'+i); if(c) c.checked = !!have[_evNorm(o)]; });
 }
-// separa a linha "Contrato: ..." do restante do texto livre da observação
-function _evParseObservacao(str){
-  var lines = String(str||'').split('\n');
-  var contratos = [], rest = [];
+function _evPickIntervalo(sel){
+  _INTERVALO_OPTS.forEach(function(o,i){ if(i!==sel){ var c=document.getElementById('ev-intervalo-'+i); if(c) c.checked=false; } });
+  _evUpdateSums();
+}
+function _evGetIntervalo(){
+  for(var i=0;i<_INTERVALO_OPTS.length;i++){ var c=document.getElementById('ev-intervalo-'+i); if(c&&c.checked) return _INTERVALO_OPTS[i]; }
+  return '';
+}
+function _evSetIntervalo(val){
+  var k=_evNorm(val);
+  _INTERVALO_OPTS.forEach(function(o,i){ var c=document.getElementById('ev-intervalo-'+i); if(c) c.checked = (!!val && _evNorm(o)===k); });
+}
+// parser puro da observação da vaga → { contratos, intervalo, livre }
+function _parseVagaObs(str){
+  var lines = String(str||'').split('\n'); var contratos=[], intervalo='', livre=[];
   lines.forEach(function(ln){
-    var m = ln.match(/^\s*Contrato:\s*(.+)$/i);
-    if (m) { contratos = m[1].split(',').map(function(s){ return s.trim(); }).filter(Boolean); }
-    else rest.push(ln);
+    var mc = ln.match(/^\s*Contrato:\s*(.+)$/i);
+    var mi = ln.match(/^\s*Intervalo:\s*(.+)$/i);
+    if(mc){ contratos = mc[1].split(',').map(function(s){ return s.trim(); }).filter(Boolean); }
+    else if(mi){ intervalo = mi[1].trim(); }
+    else livre.push(ln);
   });
-  _evSetContratos(contratos);
-  var ob = document.getElementById('ev-observacao'); if(ob) ob.value = rest.join('\n').replace(/^\n+|\n+$/g,'');
+  return { contratos:contratos, intervalo:intervalo, livre: livre.join('\n').replace(/^\n+|\n+$/g,'') };
+}
+function _evLoadObservacao(str){
+  var p = _parseVagaObs(str);
+  _evSetContratos(p.contratos);
+  _evSetIntervalo(p.intervalo);
+  _evObsLegacy = p.livre;
 }
 function _evComposeObservacao(){
-  var contratos = _evGetContratos();
-  var livre = ((document.getElementById('ev-observacao')||{}).value||'').trim();
-  var linha = contratos.length ? 'Contrato: ' + contratos.join(', ') : '';
-  return [linha, livre].filter(Boolean).join('\n');
+  var out = [];
+  var ct = _evGetContratos(); if(ct.length) out.push('Contrato: ' + ct.join(', '));
+  var iv = _evGetIntervalo(); if(iv) out.push('Intervalo: ' + iv);
+  if(_evObsLegacy) out.push(_evObsLegacy);
+  return out.join('\n');
 }
 
 function openNewVaga() {
   document.querySelectorAll('#ev-overlay .ev-field-error').forEach(function(el) { el.classList.remove('ev-field-error'); });
-  _evBuildChecks();
+  _evBuildChecks(); _evCollapseAll();
   var t = document.getElementById('ev-cargo-title');
   if (t) t.textContent = 'Abrir Vaga';
   _evPopulateUnidades('');
@@ -2710,7 +2750,9 @@ function openNewVaga() {
   document.getElementById('ev-hora-saida').value   = '';
   _evCheckAllBenef();
   _evSetContratos([]);
-  document.getElementById('ev-observacao').value = '';
+  _evSetIntervalo('');
+  _evObsLegacy = '';
+  _evUpdateSums();
   document.getElementById('ev-unidade').value = '';
   var fx = document.getElementById('ev-salario-fixo'); if (fx) fx.value = '';
   var br = document.getElementById('ev-salario-bruto'); if (br) br.value = '';
@@ -2735,7 +2777,7 @@ function openEditVaga(id) {
     if (String(vagas[i].id) === String(id)) { r = vagas[i]; break; }
   }
   if (!r) return;
-  _evBuildChecks();
+  _evBuildChecks(); _evCollapseAll();
   var t = document.getElementById('ev-cargo-title');
   if (t) t.textContent = 'Editar Vaga';
   _evPopulateUnidades(r.unidade || '');
@@ -2745,7 +2787,8 @@ function openEditVaga(id) {
   document.getElementById('ev-hora-entrada').value = _evh.ent;
   document.getElementById('ev-hora-saida').value   = _evh.sai;
   _evSetBeneficios(r.beneficios || '');
-  _evParseObservacao(r.observacoes || '');
+  _evLoadObservacao(r.observacoes || '');
+  _evUpdateSums();
   var _u = r.unidade || '', _d = r.departamento || '', _cargoFull = r.cargo || '';
   document.getElementById('ev-unidade').value = _u;
   _loadEvCargos(function() {
@@ -4543,7 +4586,41 @@ function enviarSolicitacao() {
         </div>
       </div>
       <hr class="modal-divider">
-      <!-- Grupo 2: pessoas + status -->
+      <!-- Grupo 2: benefícios / contrato / intervalo (recolhíveis) -->
+      <div class="modal-info-grid">
+        <div class="ev-field" style="grid-column:1/-1">
+          <div class="ev-collapse collapsed" id="ev-benef-group">
+            <button type="button" class="ev-collapse-head" onclick="_evToggleCollapse('ev-benef-group')">
+              <span class="modal-section-title">Benefícios</span>
+              <span class="ev-collapse-sum" id="ev-benef-sum"></span>
+              <svg class="ev-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="ev-collapse-body"><div class="ev-check-grid" id="ev-benef-grid"></div></div>
+          </div>
+        </div>
+        <div class="ev-field" style="grid-column:1/-1">
+          <div class="ev-collapse collapsed" id="ev-contrato-group">
+            <button type="button" class="ev-collapse-head" onclick="_evToggleCollapse('ev-contrato-group')">
+              <span class="modal-section-title">Tipo de contrato</span>
+              <span class="ev-collapse-sum" id="ev-contrato-sum"></span>
+              <svg class="ev-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="ev-collapse-body"><div class="ev-check-grid" id="ev-contrato-grid"></div></div>
+          </div>
+        </div>
+        <div class="ev-field" style="grid-column:1/-1">
+          <div class="ev-collapse collapsed" id="ev-intervalo-group">
+            <button type="button" class="ev-collapse-head" onclick="_evToggleCollapse('ev-intervalo-group')">
+              <span class="modal-section-title">Intervalo</span>
+              <span class="ev-collapse-sum" id="ev-intervalo-sum"></span>
+              <svg class="ev-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="ev-collapse-body"><div class="ev-check-grid" id="ev-intervalo-grid"></div></div>
+          </div>
+        </div>
+      </div>
+      <hr class="modal-divider">
+      <!-- Grupo 3: pessoas + status -->
       <div class="modal-info-grid">
         <div class="ev-field" style="grid-column:1/-1">
           <span class="modal-section-title">Colaborador Anterior</span>
@@ -4562,20 +4639,6 @@ function enviarSolicitacao() {
           <select class="modal-select" id="ev-colab-contratado" onchange="evColabContratadoChanged()">
             <option value="">Nenhum — vaga segue em aberto</option>
           </select>
-        </div>
-        <div class="ev-field" style="grid-column:1/-1">
-          <span class="modal-section-title">Benefícios</span>
-          <div class="ev-check-grid" id="ev-benef-grid"></div>
-          <input type="text" class="modal-input" id="ev-benef-outros" placeholder="Outros benefícios (opcional)" style="margin-top:8px">
-        </div>
-        <div class="ev-field" style="grid-column:1/-1">
-          <span class="modal-section-title">Tipo de contrato</span>
-          <div class="ev-check-grid" id="ev-contrato-grid"></div>
-          <span class="ev-check-hint">Os tipos marcados entram automaticamente na observação da vaga.</span>
-        </div>
-        <div class="ev-field" style="grid-column:1/-1">
-          <span class="modal-section-title">Observações</span>
-          <textarea class="modal-input" id="ev-observacao" rows="2" placeholder="Observações sobre a vaga"></textarea>
         </div>
         <div class="ev-field" id="ev-status-wrap" style="grid-column:1/-1">
           <span class="modal-section-title">Status da vaga</span>
