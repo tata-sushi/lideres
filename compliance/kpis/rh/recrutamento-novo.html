@@ -1854,17 +1854,26 @@ function _anlVagaLink(r){
   for(var i=0;i<(vagas||[]).length;i++){ if(String(vagas[i].id)===String(r.vaga_id)) return vagas[i]; }
   return null;
 }
+// entrevista efetiva do índice idx: usa a tabela-filha; se não houver e idx=0, cai nos campos-espelho da mãe
+function _anlEnt(r, idx){
+  var e=(r.entrevistas||[])[idx];
+  if(e) return e;
+  if(idx===0 && (r.data_entrevista||r.horarios||r.entrevistador||r.status_entrevista||r.observacoes_entrevista)){
+    return { data:r.data_entrevista, hora:r.horarios, entrevistador:r.entrevistador, status:r.status_entrevista, observacoes:r.observacoes_entrevista };
+  }
+  return null;
+}
 function _anlBuildCols() {
   var ANL_MAX_ENT = 3;
   var entrCols = [ ['Selecionado', function(r){ return _anlSel(r.selecionado); }] ];
   for (var _e=0;_e<ANL_MAX_ENT;_e++){
     (function(idx){
       var p='E'+(idx+1)+' ';
-      entrCols.push([p+'Data',         function(r){ var e=(r.entrevistas||[])[idx]; return e?_anlData(e.data):'—'; }]);
-      entrCols.push([p+'Hora',         function(r){ var e=(r.entrevistas||[])[idx]; return e?_anlHora(e.hora):'—'; }]);
-      entrCols.push([p+'Entrevistador',function(r){ var e=(r.entrevistas||[])[idx]; return e?_anlTxt(e.entrevistador):'—'; }]);
-      entrCols.push([p+'Observação',   function(r){ var e=(r.entrevistas||[])[idx]; return e?_anlLong(e.observacoes):'—'; }]);
-      entrCols.push([p+'Status',       function(r){ var e=(r.entrevistas||[])[idx]; return e?_anlBadge(e.status,'s-'+slugStatus(e.status)):'—'; }]);
+      entrCols.push([p+'Data',         function(r){ var e=_anlEnt(r,idx); return e?_anlData(e.data):'—'; }]);
+      entrCols.push([p+'Hora',         function(r){ var e=_anlEnt(r,idx); return e?_anlHora(e.hora):'—'; }]);
+      entrCols.push([p+'Entrevistador',function(r){ var e=_anlEnt(r,idx); return e?_anlTxt(e.entrevistador):'—'; }]);
+      entrCols.push([p+'Observação',   function(r){ var e=_anlEnt(r,idx); return e?_anlLong(e.observacoes):'—'; }]);
+      entrCols.push([p+'Status',       function(r){ var e=_anlEnt(r,idx); return e?_anlBadge(e.status,'s-'+slugStatus(e.status)):'—'; }]);
     })(_e);
   }
   var groups = [
@@ -2326,7 +2335,11 @@ function _aeEntPanelHtml(r){
   return html;
 }
 function _aeInitEntrevistas(r){
-  _aeEntList = r.entrevistas||[];
+  _aeEntList = (r.entrevistas||[]).slice();
+  // Entrevista 1: sem filha → traz os dados já preenchidos no registro-mãe (candidatos novos/antigos sem filha)
+  if(!_aeEntList[0] && (r.data_entrevista||r.horarios||r.entrevistador||r.status_entrevista||r.observacoes_entrevista)){
+    _aeEntList[0] = { data:r.data_entrevista, hora:r.horarios, entrevistador:r.entrevistador, status:r.status_entrevista, observacoes:r.observacoes_entrevista };
+  }
   var n=_aeEntCount(r);
   _aeSetSelect('ae-ent-selecionado', r.selecionado||'');   // Selecionado é do candidato (uma vez só)
   for (var i=0;i<n;i++){
@@ -4923,6 +4936,16 @@ function enviarSolicitacao() {
           <span class="modal-section-title">Pretensão salarial <span style="color:var(--red);">*</span></span>
           <input type="text" class="modal-input" id="nc-pretensao" placeholder="Ex: R$ 1.800" oninput="_evClearFieldError('nc-pretensao')">
         </div>
+        <div class="ev-field">
+          <span class="modal-section-title">Selecionado</span>
+          <select class="modal-select" id="nc-selecionado">
+            <option value="">—</option>
+            <option>Sim</option>
+            <option>Não</option>
+            <option>Não respondeu</option>
+            <option>Não aceitou a proposta</option>
+          </select>
+        </div>
       </div>
       <hr class="modal-divider">
       <!-- Grupo 2: vaga -->
@@ -4973,16 +4996,6 @@ function enviarSolicitacao() {
           <span class="modal-section-title">Entrevistador <span style="color:var(--red);">*</span></span>
           <select class="modal-select" id="nc-entrevistador" onchange="_evClearFieldError('nc-entrevistador')">
             <option value="">Carregando...</option>
-          </select>
-        </div>
-        <div class="ev-field" style="grid-column:1/-1">
-          <span class="modal-section-title">Selecionado</span>
-          <select class="modal-select" id="nc-selecionado">
-            <option value="">—</option>
-            <option>Sim</option>
-            <option>Não</option>
-            <option>Não respondeu</option>
-            <option>Não aceitou a proposta</option>
           </select>
         </div>
       </div>
