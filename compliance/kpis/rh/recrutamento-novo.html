@@ -1855,6 +1855,18 @@ function _anlVagaLink(r){
   return null;
 }
 function _anlBuildCols() {
+  var ANL_MAX_ENT = 3;
+  var entrCols = [ ['Selecionado', function(r){ return _anlSel(r.selecionado); }] ];
+  for (var _e=0;_e<ANL_MAX_ENT;_e++){
+    (function(idx){
+      var p='E'+(idx+1)+' ';
+      entrCols.push([p+'Data',         function(r){ var e=(r.entrevistas||[])[idx]; return e?_anlData(e.data):'—'; }]);
+      entrCols.push([p+'Hora',         function(r){ var e=(r.entrevistas||[])[idx]; return e?_anlHora(e.hora):'—'; }]);
+      entrCols.push([p+'Entrevistador',function(r){ var e=(r.entrevistas||[])[idx]; return e?_anlTxt(e.entrevistador):'—'; }]);
+      entrCols.push([p+'Observação',   function(r){ var e=(r.entrevistas||[])[idx]; return e?_anlLong(e.observacoes):'—'; }]);
+      entrCols.push([p+'Status',       function(r){ var e=(r.entrevistas||[])[idx]; return e?_anlBadge(e.status,'s-'+slugStatus(e.status)):'—'; }]);
+    })(_e);
+  }
   var groups = [
     { label:'Informações de candidatos', cols:[
       ['Contato', function(r){ return _anlTxt(r.contato); }],
@@ -1873,14 +1885,7 @@ function _anlBuildCols() {
       ['Salário bruto', function(r){ var v=_anlVagaLink(r); return v?fmtValor(v.salario_bruto):'—'; }],
       ['Status', function(r){ var v=_anlVagaLink(r); return v?_anlBadge(v.status,'sf-'+slugVagaStatus(v.status)):'—'; }]
     ]},
-    { label:'Informações de entrevistas', cols:[
-      ['Selecionado', function(r){ return _anlSel(r.selecionado); }],
-      ['Data', function(r){ return _anlData(r.data_entrevista); }],
-      ['Hora', function(r){ return _anlHora(r.horarios); }],
-      ['Entrevistador', function(r){ return _anlTxt(r.entrevistador); }],
-      ['Observação', function(r){ return _anlLong(r.observacoes_entrevista); }],
-      ['Status', function(r){ return _anlBadge(r.status_entrevista, 's-'+slugStatus(r.status_entrevista)); }]
-    ]},
+    { label:'Informações de entrevistas', cols: entrCols },
     { label:'Informações de referências', cols:[
       ['Check', function(r){ return _anlCheck(r.check_referencia); }],
       ['Contato', function(r){ return _anlTxt(r.contato_referencia); }],
@@ -2305,6 +2310,7 @@ var AE_ENT_MAX = 3;   // até 3 entrevistas: 1ª obrigatória, 2ª/3ª opcionais
 function _aeEntCount(r){ return Math.max(AE_ENT_MAX, ((r&&r.entrevistas)||[]).length); }
 function _aeEntPanelHtml(r){
   var list = r.entrevistas||[], n=_aeEntCount(r), html='';
+  html += '<div class="ae-fields"><div class="ev-field" style="grid-column:1/-1"><span class="modal-section-title">Selecionado</span><select class="modal-select" id="ae-ent-selecionado">'+_aeOpts(_AE_SELECIONADO)+'</select></div></div>';
   for (var i=0;i<n;i++){
     var marca = i===0 ? ' <span style="color:var(--red)">*</span>'
                       : ' <span style="font-size:9px;letter-spacing:0;text-transform:none;color:var(--muted)">(opcional)</span>';
@@ -2313,7 +2319,6 @@ function _aeEntPanelHtml(r){
       '<div class="ev-field"><span class="modal-section-title">Data</span><input type="date" class="modal-input" id="ae-ent-'+i+'-data"></div>'+
       '<div class="ev-field"><span class="modal-section-title">Hora</span><input type="time" class="modal-input" id="ae-ent-'+i+'-hora" step="60"></div>'+
       _aeSelect('Entrevistador','ae-ent-'+i+'-entrevistador','')+
-      '<div class="ev-field"><span class="modal-section-title">Selecionado</span><select class="modal-select" id="ae-ent-'+i+'-selecionado">'+_aeOpts(_AE_SELECIONADO)+'</select></div>'+
       '<div class="ev-field"><span class="modal-section-title">Status da entrevista</span><select class="modal-select" id="ae-ent-'+i+'-status">'+_aeOpts(_AE_STATUS_ENT)+'</select></div>'+
       _aeTextarea('Observações','ae-ent-'+i+'-obs')+
       '</div>'+_aeBtn('_aeSalvarEnt('+i+')',(list[i]?'Salvar':'Agendar')+' Entrevista '+(i+1));
@@ -2323,13 +2328,13 @@ function _aeEntPanelHtml(r){
 function _aeInitEntrevistas(r){
   _aeEntList = r.entrevistas||[];
   var n=_aeEntCount(r);
+  _aeSetSelect('ae-ent-selecionado', r.selecionado||'');   // Selecionado é do candidato (uma vez só)
   for (var i=0;i<n;i++){
     var e=_aeEntList[i]||{};
     var d=document.getElementById('ae-ent-'+i+'-data'); if(d) d.value=_toDateInput(e.data);
     var h=document.getElementById('ae-ent-'+i+'-hora'); if(h) h.value=_toTimeInput(e.hora);
     var o=document.getElementById('ae-ent-'+i+'-obs'); if(o) o.value=e.observacoes||'';
     _aeSetSelect('ae-ent-'+i+'-status', e.status||'');
-    _aeSetSelect('ae-ent-'+i+'-selecionado', e.selecionado||'');
   }
   _loadEvLideres(function(list){
     for (var i=0;i<n;i++){
@@ -2413,7 +2418,7 @@ function _aeSalvarEnt(i){
     p_hora: v('ae-ent-'+i+'-hora').trim(),
     p_entrevistador: v('ae-ent-'+i+'-entrevistador'),
     p_status: v('ae-ent-'+i+'-status'),
-    p_selecionado: v('ae-ent-'+i+'-selecionado'),
+    p_selecionado: v('ae-ent-selecionado'),
     p_observacoes: v('ae-ent-'+i+'-obs').trim(),
     p_por: _sandboxMatricula()
   };
@@ -3095,6 +3100,7 @@ function openNovoCandidato() {
   var _b=document.getElementById('nc-save'); _b.textContent='Cadastrar candidato'; _b.disabled=false;
   ['nc-nome','nc-contato','nc-cpf','nc-pretensao','nc-horario'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
   var d=document.getElementById('nc-data'); if(d) d.value='';
+  var sc=document.getElementById('nc-selecionado'); if(sc) sc.value='';
   // cascata unidade→depto→cargo (mesma fonte Cargos&Salários do modal de vaga)
   _evPopulateSelect('nc-unidade', _csUnidades(), '');
   document.getElementById('nc-unidade').value = '';
@@ -3131,6 +3137,7 @@ function abrirEditarCandidato(id) {
   document.getElementById('nc-pretensao').value = (r.pretensao_salarial != null ? r.pretensao_salarial : '');
   document.getElementById('nc-data').value      = _toDateInput(r.data_entrevista);
   document.getElementById('nc-horario').value   = _toTimeInput(r.horarios);
+  _aeSetSelect('nc-selecionado', r.selecionado || '');
   var u=r.unidade||'', dp=r.departamento||'', cargoFull=r.cargo||'';
   _evPopulateSelect('nc-unidade', _csUnidades(), u);
   document.getElementById('nc-unidade').value = u;
@@ -3247,6 +3254,7 @@ function salvarNovoCandidato() {
     p_horarios:        document.getElementById('nc-horario').value.trim(),
     p_horario_vaga:    document.getElementById('nc-horario-vaga').value,
     p_entrevistador:   document.getElementById('nc-entrevistador').value,
+    p_selecionado:     document.getElementById('nc-selecionado').value,
     // status inicial só no cadastro; na edição preserva o status atual
     p_status_entrevista: _editando ? null : 'Aguardando Entrevista',
     p_por: _sandboxMatricula()
@@ -4965,6 +4973,16 @@ function enviarSolicitacao() {
           <span class="modal-section-title">Entrevistador <span style="color:var(--red);">*</span></span>
           <select class="modal-select" id="nc-entrevistador" onchange="_evClearFieldError('nc-entrevistador')">
             <option value="">Carregando...</option>
+          </select>
+        </div>
+        <div class="ev-field" style="grid-column:1/-1">
+          <span class="modal-section-title">Selecionado</span>
+          <select class="modal-select" id="nc-selecionado">
+            <option value="">—</option>
+            <option>Sim</option>
+            <option>Não</option>
+            <option>Não respondeu</option>
+            <option>Não aceitou a proposta</option>
           </select>
         </div>
       </div>
