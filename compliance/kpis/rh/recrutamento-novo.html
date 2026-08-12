@@ -2005,8 +2005,7 @@ function _aeRenderPanels(r){
   var entr = _aeEntPanelHtml(r);
   var tst = _aeTestePanelHtml(r);
   var proc = _aeProcPanelHtml(r);
-  var refs = _aeRow('Tipo',_anlTxt(r.tipo_referencia))+_aeRow('Contato',_anlTxt(r.contato_referencia))+_aeRow('Empresa/Líder ant.',_anlTxt(r.empresa_anterior_lider))
-    +_aeRow('Check',_anlTxt(r.check_referencia))+_aeRow('Feedback',_anlTxt(r.feedback_referencia))+_aeRow('Observações',_anlTxt(r.observacoes_referencia)) + _aeEmBreve();
+  var refs = _aeRefPanelHtml();
   var fin = _aeRow('Status final',_anlTxt(r.status_final))+_aeRow('Final por',_anlTxt(r.status_final_por))+_aeRow('Final em',_anlDataHora(r.status_final_em)) + _aeEmBreve();
   document.getElementById('ae-body').innerHTML = P('candidato',cand)+P('vaga',vaga)+P('entrevista',entr)+P('testes',tst)+P('processos',proc)+P('referencias',refs)+P('final',fin);
 }
@@ -2022,6 +2021,7 @@ function abrirAnaliticoEditar(id){
   _aeInitEntrevistas(r);
   _aeInitTestes(r);
   _aeInitProcessos(r);
+  _aeInitReferencias(r);
   aeTab('candidato');
   document.getElementById('ae-overlay').classList.add('active');
   document.body.style.overflow='hidden';
@@ -2217,6 +2217,63 @@ function _aeSalvarProcessos(){
   } else { processos=sit; }
   var args={ p_id: document.getElementById('ae-id').value, p_processos: processos, p_resumo: v('ae-p-resumo').trim(), p_por: _sandboxMatricula() };
   SB.rpc('rec_processos_sandbox_salvar', args).then(function(res){
+    if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
+    closeAeModal(); loadAllData();
+  }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
+}
+// ── Aba Referências: 2 contatos (da devolutiva) + check + avaliação + resumo ──
+var _AE_REF_CHECK = ['Sim','Não','Consultar','Não realizada'];
+var _AE_REF_TIPO  = ['Ótima','Boa','Ruim','Não fornecida','Não realizada'];
+function _aeRefPanelHtml(){
+  return '<div class="ae-sub">Contatos de referência <span style="font-size:9px;letter-spacing:0;text-transform:none;color:var(--muted)">(informados na devolutiva da entrevista)</span></div>'+
+    '<div class="ae-fields">'+
+      '<div class="ev-field"><span class="modal-section-title">Contato 1 · Nome</span><input type="text" class="modal-input" id="ae-r-c1-nome"></div>'+
+      '<div class="ev-field"><span class="modal-section-title">Contato 1 · Telefone</span><input type="text" class="modal-input" id="ae-r-c1-tel"></div>'+
+      '<div class="ev-field"><span class="modal-section-title">Contato 2 · Nome</span><input type="text" class="modal-input" id="ae-r-c2-nome"></div>'+
+      '<div class="ev-field"><span class="modal-section-title">Contato 2 · Telefone</span><input type="text" class="modal-input" id="ae-r-c2-tel"></div>'+
+    '</div>'+
+    '<div class="ae-sub" style="margin-top:12px">Avaliação</div>'+
+    '<div class="ae-fields">'+
+      '<div class="ev-field"><span class="modal-section-title">Líder pegou a referência?</span><select class="modal-select" id="ae-r-check">'+_aeOpts(_AE_REF_CHECK)+'</select></div>'+
+      '<div class="ev-field"><span class="modal-section-title">Avaliação da referência</span><select class="modal-select" id="ae-r-tipo">'+_aeOpts(_AE_REF_TIPO)+'</select></div>'+
+      _aeTextarea('Resumo do feedback','ae-r-feedback')+
+    '</div>'+
+    _aeBtn('_aeSalvarReferencias()','Salvar Referências');
+}
+function _aeParseRefContatos(str){
+  var s=String(str==null?'':str).trim();
+  if(!s || s==='—') return [{nome:'',tel:''},{nome:'',tel:''}];
+  var parts=s.split('|').map(function(x){ return x.trim(); });
+  function one(p){ if(!p) return {nome:'',tel:''}; var idx=p.indexOf(':'); if(idx<0) return {nome:p,tel:''}; return { nome:p.slice(0,idx).trim(), tel:p.slice(idx+1).trim() }; }
+  return [ one(parts[0]||''), one(parts[1]||'') ];
+}
+function _aeComposeRefContatos(){
+  function v(id){ return (document.getElementById(id)||{}).value.trim(); }
+  function one(n,t){ if(!n && !t) return ''; return [n,t].filter(Boolean).join(': '); }
+  var a=one(v('ae-r-c1-nome'),v('ae-r-c1-tel')), b=one(v('ae-r-c2-nome'),v('ae-r-c2-tel'));
+  return [a,b].filter(Boolean).join(' | ');
+}
+function _aeInitReferencias(r){
+  var cts=_aeParseRefContatos(r.contato_referencia);
+  function set(id,val){ var e=document.getElementById(id); if(e) e.value=val||''; }
+  set('ae-r-c1-nome',cts[0].nome); set('ae-r-c1-tel',cts[0].tel);
+  set('ae-r-c2-nome',cts[1].nome); set('ae-r-c2-tel',cts[1].tel);
+  _aeSetSelect('ae-r-check', (r.check_referencia && r.check_referencia!=='—') ? r.check_referencia : '');
+  _aeSetSelect('ae-r-tipo',  (r.tipo_referencia  && r.tipo_referencia !=='—') ? r.tipo_referencia  : '');
+  set('ae-r-feedback', (r.feedback_referencia && r.feedback_referencia!=='—') ? r.feedback_referencia : '');
+}
+function _aeSalvarReferencias(){
+  var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
+  function v(id){ return (document.getElementById(id)||{}).value||''; }
+  var args={
+    p_id: document.getElementById('ae-id').value,
+    p_contato_referencia: _aeComposeRefContatos(),
+    p_check_referencia: v('ae-r-check'),
+    p_tipo_referencia: v('ae-r-tipo'),
+    p_feedback_referencia: v('ae-r-feedback').trim(),
+    p_por: _sandboxMatricula()
+  };
+  SB.rpc('rec_referencias_sandbox_salvar', args).then(function(res){
     if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
     closeAeModal(); loadAllData();
   }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
