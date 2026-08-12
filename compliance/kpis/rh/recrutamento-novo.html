@@ -97,6 +97,7 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .candidate-name { font-size: 14px; font-weight: 700; color: var(--carbon); letter-spacing: -0.1px; line-height: 1.3; text-transform: uppercase; }
 .btn-copia-card { display: inline-flex; align-items: center; justify-content: center; padding: 0; background: none; border: none; color: var(--carbon); cursor: pointer; flex: 0 0 auto; opacity: 0.75; }
 .btn-copia-card:hover { opacity: 1; }
+.ent-num { display: inline-block; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; color: var(--muted); background: #F0F0F0; border-radius: 4px; padding: 1px 5px; vertical-align: middle; margin-left: 4px; }
 .candidate-contact { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); margin-top: 3px; display: flex; align-items: center; gap: 5px; }
 .status-badge { display: inline-flex; align-items: center; flex-shrink: 0; padding: 3px 9px; border-radius: 100px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; }
 
@@ -1052,14 +1053,21 @@ function loadAllData() {
         pretensao: r.pretensao_salarial || '', selecionado: r.selecionado || '',
         entrevistador: r.entrevistador || '', status_final: r.status_final || ''
       };
-      // Aba Entrevistas: todo candidato SEM dia de teste (histórico completo; visão pelo filtro de status)
+      // Aba Entrevistas: 1 LINHA POR ENTREVISTA (tabela-filha rec_entrevistas), p/ candidato SEM dia de teste
       if (!temTeste) {
-        entrevistas.push(Object.assign({}, base, {
-          data: r.data_entrevista || '', horario: r.horarios || '',
-          horario_vaga: r.horario_vaga || '',
-          status_entrevista: r.status_entrevista || '', observacoes: r.observacoes_entrevista || '',
-          referencia: r.tipo_referencia || ''
-        }));
+        var ents = Array.isArray(r.entrevistas) ? r.entrevistas : [];
+        ents.forEach(function (ent, ei) {
+          entrevistas.push(Object.assign({}, base, {
+            _created: ent.created_at || r.created_at || '',
+            _ent_id: ent.id, _ent_num: ei + 1, _ent_total: ents.length,
+            data: ent.data || '', horario: ent.hora || '',
+            horario_vaga: r.horario_vaga || '',
+            entrevistador: ent.entrevistador || r.entrevistador || '',
+            selecionado: ent.selecionado || r.selecionado || '',
+            status_entrevista: ent.status || '', observacoes: ent.observacoes || '',
+            referencia: r.tipo_referencia || ''
+          }));
+        });
       }
       // Aba Testes: já tem dia de teste agendado (dados por dia vêm de r.dias)
       if (temTeste) {
@@ -1489,14 +1497,14 @@ function cardEntrevista(r) {
   var footer;
   if (isAguardandoDev) {
     var idx=_entrevistaCache.length;
-    _entrevistaCache.push({id:r.id,nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,entrevistador:r.entrevistador,recrutador:r.recrutador,pretensao:r.pretensao});
+    _entrevistaCache.push({id:r.id,ent_id:r._ent_id,ent_num:r._ent_num,nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,entrevistador:r.entrevistador,recrutador:r.recrutador,pretensao:r.pretensao});
     footer='<div class="card-footer" style="justify-content:flex-end;gap:8px">'+editBtn+'<button class="btn-avaliar" data-aba-id="governanca-kpis-rh-recrutamento::enviar-devolutiva" onclick="abrirModalEntrevista('+idx+')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Enviar devolutiva</button></div>';
   } else {
     footer='<div class="card-footer" style="justify-content:flex-end">'+editBtn+'</div>';
   }
   return '<div class="card">'+
     '<div class="card-header"><div>'+
-    '<div class="candidate-name">'+escH(r.nome)+'</div>'+
+    '<div class="candidate-name">'+escH(r.nome)+(r._ent_total>1?' <span class="ent-num">E'+r._ent_num+'</span>':'')+'</div>'+
     '<div class="candidate-contact">'+contactHTML(r.contato)+'</div></div>'+
     '<span class="status-badge s-'+sf+'">'+escH(sfLabel)+'</span></div>'+
     '<div class="card-body">'+
@@ -1721,11 +1729,11 @@ function renderEntrevistasTableHtml(rows) {
     var acoes = '<button class="btn-editar" data-aba-id="governanca-kpis-rh-recrutamento::editar-candidato" title="Editar" onclick="abrirEditarCandidato(\''+escH(r.id)+'\')">'+_editSvg+'</button>';
     if (isAguardandoDev) {
       var idx = _entrevistaCache.length;
-      _entrevistaCache.push({id:r.id,nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,entrevistador:r.entrevistador,recrutador:r.recrutador,pretensao:r.pretensao});
+      _entrevistaCache.push({id:r.id,ent_id:r._ent_id,ent_num:r._ent_num,nome:r.nome,contato:r.contato,linha:r._linha,unidade:r.unidade,departamento:r.departamento,cargo:r.cargo,data:r.data,horario:r.horario,entrevistador:r.entrevistador,recrutador:r.recrutador,pretensao:r.pretensao});
       acoes = '<button class="btn-editar" data-aba-id="governanca-kpis-rh-recrutamento::enviar-devolutiva" title="Enviar devolutiva" onclick="abrirModalEntrevista('+idx+')">'+_sendSvg+'</button>' + acoes;
     }
     return '<tr>'+
-      '<td class="ett-nome">'+escH(r.nome||'—')+'</td>'+
+      '<td class="ett-nome">'+escH(r.nome||'—')+(r._ent_total>1?' <span class="ent-num">E'+r._ent_num+'</span>':'')+'</td>'+
       '<td>'+escH(r.contato||'—')+'</td>'+
       '<td>'+escH(r.unidade||'—')+'</td>'+
       '<td>'+escH(r.departamento||'—')+'</td>'+
@@ -1873,15 +1881,8 @@ function _anlRefTels(v){
   var cts=_aeParseRefContatos(v), t=cts.map(function(c){return c.tel;}).filter(Boolean);
   return t.length ? escH(t.join(', ')) : '—';
 }
-// entrevista efetiva do índice idx: usa a tabela-filha; se não houver e idx=0, cai nos campos-espelho da mãe
-function _anlEnt(r, idx){
-  var e=(r.entrevistas||[])[idx];
-  if(e) return e;
-  if(idx===0 && (r.data_entrevista||r.horarios||r.entrevistador||r.status_entrevista||r.observacoes_entrevista)){
-    return { data:r.data_entrevista, hora:r.horarios, entrevistador:r.entrevistador, status:r.status_entrevista, observacoes:r.observacoes_entrevista };
-  }
-  return null;
-}
+// entrevista do índice idx (tabela-filha rec_entrevistas)
+function _anlEnt(r, idx){ return (r.entrevistas||[])[idx] || null; }
 function _anlBuildCols() {
   var ANL_MAX_ENT = 3;
   var entrCols = [ ['Selecionado', function(r){ return _anlSel(r.selecionado); }] ];
@@ -2335,11 +2336,10 @@ function _aeEntCount(r){ return Math.max(AE_ENT_MAX, ((r&&r.entrevistas)||[]).le
 function _aeEntPanelHtml(r){
   var list = r.entrevistas||[], n=_aeEntCount(r), html='';
   html += '<div class="ae-fields" style="margin-bottom:16px"><div class="ev-field" style="grid-column:1/-1"><span class="modal-section-title">Selecionado</span><select class="modal-select" id="ae-ent-selecionado">'+_aeOpts(_AE_SELECIONADO)+'</select></div></div>';
-  var maeHasEnt = !!(r.data_entrevista||r.horarios||r.entrevistador||r.status_entrevista||r.observacoes_entrevista);
   for (var i=0;i<n;i++){
     var marca = i===0 ? ' <span style="color:var(--red)">*</span>'
                       : ' <span style="font-size:9px;letter-spacing:0;text-transform:none;color:var(--muted)">(opcional)</span>';
-    var col = (list[i] || (i===0 && maeHasEnt)) ? '' : ' collapsed';
+    var col = list[i] ? '' : ' collapsed';
     html += '<div class="ev-collapse'+col+'" id="ae-ent-grp-'+i+'">'+
       '<button type="button" class="ev-collapse-head" onclick="_evToggleCollapse(\'ae-ent-grp-'+i+'\')">'+
         '<span class="modal-section-title" style="flex:1">Entrevista '+(i+1)+marca+'</span>'+
@@ -2358,10 +2358,6 @@ function _aeEntPanelHtml(r){
 }
 function _aeInitEntrevistas(r){
   _aeEntList = (r.entrevistas||[]).slice();
-  // Entrevista 1: sem filha → traz os dados já preenchidos no registro-mãe (candidatos novos/antigos sem filha)
-  if(!_aeEntList[0] && (r.data_entrevista||r.horarios||r.entrevistador||r.status_entrevista||r.observacoes_entrevista)){
-    _aeEntList[0] = { data:r.data_entrevista, hora:r.horarios, entrevistador:r.entrevistador, status:r.status_entrevista, observacoes:r.observacoes_entrevista };
-  }
   var n=_aeEntCount(r);
   _aeSetSelect('ae-ent-selecionado', r.selecionado||'');   // Selecionado é do candidato (uma vez só)
   for (var i=0;i<n;i++){
@@ -4437,7 +4433,8 @@ function salvarEntrevista() {
     p_id: d.id, p_status: status, p_feedback: feedback,
     p_ref1_nome: ref1nome, p_ref1_tel: ref1tel,
     p_ref2_nome: ref2nome, p_ref2_tel: ref2tel,
-    p_por: _sandboxMatricula()
+    p_por: _sandboxMatricula(),
+    p_entrevista_id: d.ent_id || null
   }).then(function(res) {
     btnSalvar.textContent = 'Enviar feedback';
     btnSalvar.disabled = false;
