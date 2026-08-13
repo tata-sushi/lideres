@@ -4900,21 +4900,19 @@ function gerarRecibosPDF() {
     var valorTxt = 'R$ ' + valor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}).replace('.',',');
     var extenso = _recExtenso(valor);
     var dataTeste = fmtDateBR(t.data);
-    return '<div class="rec-slot">'+
-      '<div>'+
-        '<div class="rec-slot-head">'+
-          (logoSrc? '<img class="rec-slot-logo" src="'+logoSrc+'" alt="TATÁ">' : '')+
-          '<div class="rec-slot-title">Recibo de Pagamento</div>'+
-          '<div class="rec-slot-num">Nº '+String(i+1).padStart(4,'0')+'</div>'+
-        '</div>'+
-        '<div class="rec-slot-valor">'+valorTxt+'</div>'+
-        '<div class="rec-slot-corpo">'+
-          'Recebi de <strong>TATÁ SUSHI</strong> a quantia de <strong>'+valorTxt+'</strong> '+
-          '('+extenso+'), referente ao valor de diária pelo <strong>teste realizado no dia '+dataTeste+'</strong>'+
-          (t.cargo ? ' para o cargo de <strong>'+escH(t.cargo)+'</strong>' : '')+
-          (t.unidade ? ' na unidade <strong>'+escH(t.unidade)+'</strong>' : '')+
-          '. Dou plena e geral quitação pelo valor recebido.'+
-        '</div>'+
+    var cargoUn = [t.cargo, t.unidade].filter(Boolean).map(escH).join(' · ');
+    return '<div class="rec-slot"><div class="rec-slot-inner">'+
+      '<div class="rec-slot-topbar">'+
+        '<div class="rec-slot-num-box">Nº <strong>'+String(i+1).padStart(4,'0')+'</strong></div>'+
+        '<div class="rec-slot-title">RECIBO</div>'+
+        '<div class="rec-slot-val-box">R$ <strong>'+valor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}).replace('.',',')+'</strong></div>'+
+      '</div>'+
+      '<div class="rec-slot-linhas">'+
+        '<div class="rec-line"><span class="rec-lbl">Recebi de:</span><span class="rec-val"><strong>TATÁ SUSHI</strong></span></div>'+
+        '<div class="rec-line"><span class="rec-lbl">Nome:</span><span class="rec-val">'+escH(t.nome||'')+'</span></div>'+
+        '<div class="rec-line rec-line-hi"><span class="rec-lbl">A importância de:</span><span class="rec-val"><strong>'+valorTxt+'</strong> ('+extenso+')</span></div>'+
+        '<div class="rec-line"><span class="rec-lbl">Referente a:</span><span class="rec-val">Diária de teste realizado em <strong>'+dataTeste+'</strong>'+(cargoUn?' — '+cargoUn:'')+'</span></div>'+
+        '<div class="rec-line"><span class="rec-lbl">E para maior clareza firmo o presente em:</span><span class="rec-val">'+cidade+', '+dataEmit+'</span></div>'+
       '</div>'+
       '<div class="rec-slot-foot">'+
         '<div class="rec-slot-ass">'+
@@ -4922,12 +4920,12 @@ function gerarRecibosPDF() {
           '<div class="rec-slot-ass-name">'+escH(t.nome||'—')+'</div>'+
           '<div class="rec-slot-ass-lbl">Assinatura do colaborador</div>'+
         '</div>'+
-        '<div class="rec-slot-cidade">'+cidade+', '+dataEmit+'</div>'+
+        (logoSrc? '<img class="rec-slot-logo" src="'+logoSrc+'" alt="TATÁ">' : '')+
       '</div>'+
-    '</div>';
+    '</div></div>';
   }
 
-  // agrupa em páginas de 4
+  // agrupa em páginas de 4 (grid 2x2)
   var pages = [];
   for (var i = 0; i < sel.length; i += 4) {
     var slots = sel.slice(i, i+4).map(function(t, k){ return slotHtml(t, i+k); }).join('');
@@ -4937,14 +4935,13 @@ function gerarRecibosPDF() {
   var html = pages.join('');
   var reciboEl = document.getElementById('recibo');
   reciboEl.innerHTML = html;
-  // este PDF é RETRATO — remove classes de landscape
   reciboEl.classList.remove('landscape');
   reciboEl.classList.remove('rp-compact');
-  var orientStyle = document.getElementById('print-orient-portrait-recibos');
+  var orientStyle = document.getElementById('print-orient-landscape-recibos');
   if (!orientStyle) {
     orientStyle = document.createElement('style');
-    orientStyle.id = 'print-orient-portrait-recibos';
-    orientStyle.textContent = '@page { size: A4 portrait; margin: 0; }';
+    orientStyle.id = 'print-orient-landscape-recibos';
+    orientStyle.textContent = '@page { size: A4 landscape; margin: 0; }';
     document.head.appendChild(orientStyle);
   }
   function _restore() {
@@ -5170,23 +5167,37 @@ function enviarSolicitacao() {
   .rec-item-nome { flex:1; font-size:13px; color:var(--carbon); font-weight:500; }
   .rec-item-val { font-family:'DM Mono',monospace; font-size:12px; color:var(--carbon); font-weight:600; }
   @media print {
-    .rec-page { width: 100%; height: 297mm; padding: 6mm 8mm; box-sizing: border-box; display: flex; flex-direction: column; }
+    /* PAISAGEM A4: 297 × 210mm — grid 2×2 de recibos */
+    .rec-page { width: 100%; height: 210mm; padding: 6mm; box-sizing: border-box; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 5mm; }
     .rec-page:not(:last-child) { page-break-after: always; }
-    .rec-slot { flex: 1; padding: 8mm 6mm; border-bottom: 1.5px dashed #999; display: flex; flex-direction: column; justify-content: space-between; }
-    .rec-slot:last-child { border-bottom: none; }
-    .rec-slot-head { display: flex; align-items: center; gap: 12px; }
-    .rec-slot-logo { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
-    .rec-slot-title { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #111; }
-    .rec-slot-num { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 10px; color: #555; }
-    .rec-slot-valor { margin-top: 10px; padding: 6px 12px; background: #35383F !important; color: #fff !important; border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 700; display: inline-block; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    .rec-slot-corpo { font-size: 12px; line-height: 1.7; color: #222; margin-top: 10px; }
-    .rec-slot-corpo strong { color: #111; }
-    .rec-slot-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-top: auto; padding-top: 10px; }
-    .rec-slot-ass { flex: 1; text-align: center; max-width: 320px; }
-    .rec-slot-ass-line { border-top: 1.5px solid #000; margin-bottom: 4px; }
-    .rec-slot-ass-lbl { font-family: 'DM Mono', monospace; font-size: 9px; color: #555; letter-spacing: .3px; text-transform: uppercase; }
-    .rec-slot-ass-name { font-size: 11px; font-weight: 600; color: #111; margin-top: 2px; }
-    .rec-slot-cidade { font-family: 'DM Mono', monospace; font-size: 10px; color: #555; text-align: right; white-space: nowrap; }
+    /* Slot com moldura tracejada (para recortar) */
+    .rec-slot { border: 1.5px dashed #666; border-radius: 4px; padding: 3mm; overflow: hidden; box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .rec-slot-inner { border: 1px solid #111; height: 100%; display: flex; flex-direction: column; padding: 4mm 5mm; box-sizing: border-box; }
+
+    /* Barra do topo: Nº | RECIBO | R$ */
+    .rec-slot-topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid #ccc; }
+    .rec-slot-num-box, .rec-slot-val-box { border: 1px solid #666; border-radius: 3px; padding: 3px 8px; font-family: 'DM Mono', monospace; font-size: 10px; color: #333; min-width: 60px; }
+    .rec-slot-num-box strong, .rec-slot-val-box strong { color: #111; font-weight: 700; letter-spacing: .3px; }
+    .rec-slot-val-box { text-align: right; background: #F4F4F4 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .rec-slot-title { flex: 1; text-align: center; font-size: 22px; font-weight: 700; letter-spacing: .15em; color: #111; }
+
+    /* Linhas do corpo — cada linha com label + valor sublinhado */
+    .rec-slot-linhas { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+    .rec-line { display: flex; align-items: baseline; gap: 6px; font-size: 10.5px; line-height: 1.4; color: #222; border-bottom: 1px solid #999; padding-bottom: 3px; }
+    .rec-lbl { color: #555; font-size: 9.5px; white-space: nowrap; flex-shrink: 0; }
+    .rec-val { flex: 1; color: #111; }
+    .rec-val strong { color: #111; font-weight: 700; }
+    /* Linha do valor (importância) destacada */
+    .rec-line-hi { background: #F0F8FF !important; padding: 4px 6px 4px 6px !important; border-radius: 3px; border-bottom: 1px solid #B0C8E0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .rec-line-hi .rec-val { font-size: 11px; }
+
+    /* Rodapé: assinatura + logo */
+    .rec-slot-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: auto; padding-top: 10px; }
+    .rec-slot-ass { flex: 1; max-width: 260px; }
+    .rec-slot-ass-line { border-top: 1.5px solid #000; margin-bottom: 3px; }
+    .rec-slot-ass-lbl { font-family: 'DM Mono', monospace; font-size: 8px; color: #555; letter-spacing: .3px; text-transform: uppercase; }
+    .rec-slot-ass-name { font-size: 10px; font-weight: 600; color: #111; margin-top: 1px; }
+    .rec-slot-logo { width: 32px; height: 32px; object-fit: contain; flex-shrink: 0; opacity: .85; }
   }
 </style>
 
