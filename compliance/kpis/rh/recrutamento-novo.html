@@ -1077,6 +1077,7 @@ function loadAllData() {
             pago: dia.pago,
             status_entrevista: r.status_teste || '', observacoes: dia.observacoes || '',
             camiseta: r.camiseta || '',
+            recibo_status: dia.recibo_status || '',
             _dia_id: dia.id,                              // id do dia (a linha = 1 dia de teste)
             _dias: dias,
             _pagos: dias.map(function (d) { return d.pago; }),
@@ -1799,7 +1800,14 @@ function _noPlace(v){
 function _anlTxt(v){ v=_noPlace(v); return v ? escH(v) : '—'; }
 function _anlLong(v){ v=_noPlace(v); if(!v) return '—'; var t=escH(v); return '<span class="anl-long" title="'+t+'">'+t+'</span>'; }
 function _anlBool(v){ return v===true ? 'Sim' : (v===false ? 'Não' : '—'); }
-function _anlRecibo(pago){ return pago===true ? _anlBadge('OK','sel-sim') : _anlBadge('Pendente','sel-red'); }
+function _anlRecibo(v){
+  var s=(v==null?'':String(v)).trim(); if(!s) return _anlBadge('Pendente','sel-red');
+  var l=norm(s.toLowerCase());
+  if(l==='ok') return _anlBadge('OK','sel-sim');
+  if(l==='unidade') return _anlBadge('Unidade','sel-blue');
+  if(l.indexOf('pend')===0) return _anlBadge('Pendente','sel-red');
+  return _anlBadge(s,'sel-amber');
+}
 function _anlHora(v){ v=(v==null?'':String(v)).trim(); return v ? escH(fmtHora(v)) : '—'; }
 function _anlData(v){ v=(v==null?'':String(v)).trim(); return v ? escH(fmtDateBR(v)) : '—'; }
 function _anlDataHora(v){ if(!v) return '—'; var m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/); return m ? (m[3]+'/'+m[2]+'/'+m[1]+' '+m[4]+'h'+m[5]) : escH(fmtDateBR(v)); }
@@ -1928,7 +1936,7 @@ function _anlBuildCols() {
       testeCols.push([p+'Depto',  function(r){ var d=(r.dias||[])[idx]; return d?_anlTxt(d.departamento||r.departamento):'—'; }]);
       testeCols.push([p+'Valor',  function(r){ var d=(r.dias||[])[idx]; return d?fmtValor(d.valor_diaria):'—'; }]);
       testeCols.push([p+'Status', function(r){ var d=(r.dias||[])[idx]; return d?_anlBadge(d.status,'sf-'+slugTeste(d.status)):'—'; }]);
-      testeCols.push([p+'Recibo', function(r){ var d=(r.dias||[])[idx]; return d?_anlRecibo(d.pago):'—'; }]);
+      testeCols.push([p+'Recibo', function(r){ var d=(r.dias||[])[idx]; return d?_anlRecibo(d.recibo_status):'—'; }]);
     })(i);
   }
   groups.push({ label:'Informações de testes', cols: testeCols });
@@ -2388,7 +2396,7 @@ function _aeTestePanelHtml(r){
         _aeSelect('Responsável','ae-t-'+i+'-responsavel','')+
         '<div class="ev-field"><span class="modal-section-title">Valor diária</span><input type="text" class="modal-input" id="ae-t-'+i+'-valor" placeholder="R$"></div>'+
         '<div class="ev-field"><span class="modal-section-title">Status</span><select class="modal-select" id="ae-t-'+i+'-status">'+_aeOpts(_AE_STATUS_TESTE)+'</select></div>'+
-        '<div class="ev-field"><span class="modal-section-title">Pago</span><select class="modal-select" id="ae-t-'+i+'-pago"><option value="">—</option><option>Sim</option><option>Não</option></select></div>'+
+        '<div class="ev-field"><span class="modal-section-title">Recibo</span><select class="modal-select" id="ae-t-'+i+'-recibo"><option value="">—</option><option>Pendente</option><option>OK</option><option>Unidade</option></select></div>'+
       '</div></div>'+
     '</div>';
   }
@@ -2405,7 +2413,7 @@ function _aeInitTestes(r){
     el=document.getElementById('ae-t-'+i+'-saida'); if(el) el.value=_toTimeInput(d.horario_saida);
     el=document.getElementById('ae-t-'+i+'-valor'); if(el) el.value = pode ? (d.valor_diaria!=null?_fmtMoney(d.valor_diaria):'') : 'R$ 0.000,00';
     _aeSetSelect('ae-t-'+i+'-status', d.status||'');
-    _aeSetSelect('ae-t-'+i+'-pago', d.pago===true?'Sim':(d.pago===false?'Não':''));
+    _aeSetSelect('ae-t-'+i+'-recibo', d.recibo_status||'');
   }
   _loadEvLideres(function(list){
     for (var i=0;i<n;i++){ var d=_aeTesteList[i]||{}; _evPopulateSelect('ae-t-'+i+'-responsavel', list, d.responsavel||''); _aeSetSelect('ae-t-'+i+'-responsavel', d.responsavel||''); }
@@ -2454,7 +2462,6 @@ function _aeSalvarTestes(){
   for(var i=0; document.getElementById('ae-t-'+i+'-data'); i++){
     var d=_aeTesteList[i], data=v('ae-t-'+i+'-data'), existing=d&&d.id;
     if(!existing && !data) continue;
-    var pv=v('ae-t-'+i+'-pago'), pago = pv==='Sim'?true:(pv==='Não'?false:null);
     calls.push({ rpc:'rec_teste_sandbox_salvar', args:{
       p_candidatura_id: candId,
       p_dia_id: existing ? d.id : null,
@@ -2464,7 +2471,7 @@ function _aeSalvarTestes(){
       p_valor_diaria: window.__podeVerValores ? _money(v('ae-t-'+i+'-valor')) : null,
       p_status: v('ae-t-'+i+'-status'),
       p_responsavel: v('ae-t-'+i+'-responsavel'),
-      p_pago: pago,
+      p_recibo_status: v('ae-t-'+i+'-recibo'),
       p_por: _sandboxMatricula()
     }});
   }
