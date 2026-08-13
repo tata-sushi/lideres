@@ -4679,21 +4679,38 @@ function gerarRelatorioTestes() {
   var solicitante = (sess && sess.displayName) ? sess.displayName : '—';
   var hoje = new Date().toLocaleString('pt-BR');
 
-  var rowsHtml = '';
-  var totalValor = 0;
-  lista.forEach(function(t){
-    var v = Number(t.valor_diaria || 0); totalValor += isFinite(v) ? v : 0;
-    rowsHtml +=
-      '<tr>' +
+  // ── deriva status do recibo (OK / Pendente / Unidade) ──
+  function _relTestesReciboStatus(t) {
+    if (t.recibo_status) return String(t.recibo_status).trim();  // campo novo (definido na base)
+    if (t.pago === true) return 'OK';
+    return 'Pendente';
+  }
+
+  function _relTestesRowHtml(t){
+    return '<tr>' +
         '<td>' + escH(fmtDateBR(t.data)) + '</td>' +
         '<td>' + escH(t.unidade || '—') + '</td>' +
         '<td>' + escH(t.cargo || '—') + '</td>' +
         '<td>' + escH(t.nome || '—') + '</td>' +
         '<td>' + fmtValor(t.valor_diaria) + '</td>' +
         '<td>' + escH(t.status_teste_dia || 'Aguardando') + '</td>' +
-        '<td class="rp-check-cell"><span class="rp-check-box' + (t.pago === true ? ' checked' : '') + '"></span></td>' +
+        '<td class="center">' + escH(_relTestesReciboStatus(t)) + '</td>' +
       '</tr>';
+  }
+
+  var rowsHtml = '';
+  var totalValor = 0;
+  var listaOk = [];
+  var totalOk = 0;
+  lista.forEach(function(t){
+    var v = Number(t.valor_diaria || 0); totalValor += isFinite(v) ? v : 0;
+    rowsHtml += _relTestesRowHtml(t);
+    if (_relTestesReciboStatus(t) === 'OK') {
+      listaOk.push(t);
+      totalOk += isFinite(v) ? v : 0;
+    }
   });
+  var rowsOkHtml = listaOk.map(_relTestesRowHtml).join('');
 
   var periodoTxt = _relTestesFmtBR(ini) + ' – ' + _relTestesFmtBR(fim);
   var html =
@@ -4722,7 +4739,23 @@ function gerarRelatorioTestes() {
     '<div class="rp-totais">' +
       '<span><span class="rp-totais-lbl">Total de Testes</span><span class="rp-totais-val">' + lista.length + '</span></span>' +
       '<span><span class="rp-totais-lbl">Valor Total</span><span class="rp-totais-val">' + fmtValor(totalValor) + '</span></span>' +
-    '</div>';
+    '</div>' +
+    (listaOk.length ? (
+      '<div class="rp-section" style="margin-top:20px;">Recibos com Status OK</div>' +
+      '<table class="rp-table rp-table-nowrap"><thead><tr>' +
+        '<th>Data</th>' +
+        '<th>Unidade</th>' +
+        '<th>Cargo</th>' +
+        '<th>Nome</th>' +
+        '<th>Valor</th>' +
+        '<th>Status</th>' +
+        '<th class="center" style="width:60px">Recibo</th>' +
+      '</tr></thead><tbody>' + rowsOkHtml + '</tbody></table>' +
+      '<div class="rp-totais">' +
+        '<span><span class="rp-totais-lbl">Total OK</span><span class="rp-totais-val">' + listaOk.length + '</span></span>' +
+        '<span><span class="rp-totais-lbl">Valor Total (OK)</span><span class="rp-totais-val">' + fmtValor(totalOk) + '</span></span>' +
+      '</div>'
+    ) : '');
 
   var reciboEl = document.getElementById('recibo');
   reciboEl.innerHTML = html;
