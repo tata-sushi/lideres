@@ -3864,7 +3864,7 @@ function _funilDentroPeriodo(r) {
 // ─── Info dos gráficos ("como é calculado") ──────────────────────────────────
 var _INFO_GRAFICOS = {
   funil:
-    '<div class="info-note">Dados do Supabase, a partir de <b>2026</b>. Etapas 1-5 vêm das <b>Entrevistas</b>; 6-9 dos <b>Testes</b> (dedup por nome).</div>'+
+    '<div class="info-note">Dados do Supabase, a partir de <b>2026</b>. Conta <b>candidatos únicos</b> (1 linha = 1 pessoa); as etapas 6-9 filtram quem já tem teste.</div>'+
     '<table class="info-table"><thead><tr><th>#</th><th>Etapa</th><th>Conta quem…</th></tr></thead><tbody>'+
     '<tr><td>1</td><td>Candidatos contatados</td><td>tem nome</td></tr>'+
     '<tr><td>2</td><td>Candidatos que responderam</td><td>Selecionado = Sim, Não ou Não aceitou a proposta</td></tr>'+
@@ -3889,89 +3889,49 @@ function abrirInfoGrafico(key){
 }
 function closeInfoGrafico(){ document.getElementById('info-overlay').classList.remove('active'); document.body.style.overflow=''; }
 
+// candidato tem entrevista no período do funil (2026) — pela mãe ou pela filha
+function _funilEntNoPeriodo(r) {
+  var d = parseDateBR(r.data_entrevista);
+  if (d && d >= FUNIL_DATA_INICIO) return true;
+  var ents = r.entrevistas || [];
+  for (var i=0;i<ents.length;i++){ var e=parseDateBR(ents[i].data); if (e && e >= FUNIL_DATA_INICIO) return true; }
+  return false;
+}
+// Funil a partir do analítico: 1 linha = 1 CANDIDATO (dedup natural), inclui quem tem teste.
 function buildFunnelData() {
-  var entrevistasBase = applyDashFilters(entrevistas).filter(_funilDentroPeriodo);
-  var testesBase      = applyDashFilters(testes).filter(_funilDentroPeriodo);
-  if (_cfMes) {
-    entrevistasBase = entrevistasBase.filter(function(r){ return dataToMY(r.data) === _cfMes; });
-    testesBase      = testesBase.filter(function(r){ return dataToMY(r.data) === _cfMes; });
-  }
-  if (_cfRecrutador) {
-    entrevistasBase = entrevistasBase.filter(function(r){ return (r.recrutador||'').trim() === _cfRecrutador; });
-    testesBase      = testesBase.filter(function(r){ return (r.recrutador||'').trim() === _cfRecrutador; });
-  }
-
-  var contatados = entrevistasBase.filter(function(r){
-    return r.nome && r.nome.trim();
+  var f = state.dashFilters || {};
+  var base = (analitico||[]).filter(function(r){
+    if (!r.nome || !r.nome.trim()) return false;              // precisa ter nome
+    if (!_funilEntNoPeriodo(r)) return false;                 // entrevista em 2026+
+    if (f.unidade && f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
+    if (f.departamento && f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
+    if (f.periodo && f.periodo!=='Todos' && dataToMY(r.data_entrevista)!==f.periodo) return false;
+    if (_cfMes && dataToMY(r.data_entrevista)!==_cfMes) return false;
+    if (_cfRecrutador && (r.responsavel||'').trim()!==_cfRecrutador) return false;
+    return true;
   });
+  function nrm(v){ return norm((v==null?'':String(v)).toLowerCase().trim()); }
 
-  var responderam = contatados.filter(function(r){
-    var s = norm((r.selecionado||'').toLowerCase());
-    return s === 'sim' || s === 'nao' || s === 'nao aceitou a proposta';
-  });
+  var responderam = base.filter(function(r){ var s=nrm(r.selecionado); return s==='sim'||s==='nao'||s==='nao aceitou a proposta'; });
+  var agendadas   = base.filter(function(r){ return nrm(r.selecionado)==='sim'; });
+  var realizadas  = base.filter(function(r){ var s=nrm(r.status_entrevista); return s==='aprovado para teste'||s==='nao selecionado'; });
+  var aprovados   = base.filter(function(r){ return nrm(r.status_entrevista)==='aprovado para teste'; });
 
-  var agendadas = contatados.filter(function(r){
-    return norm((r.selecionado||'').toLowerCase()) === 'sim';
-  });
-
-  var realizadas = contatados.filter(function(r){
-    var s = norm((r.status_entrevista||'').toLowerCase());
-    return s === 'aprovado para teste' || s === 'nao selecionado';
-  });
-
-  var aprovados = contatados.filter(function(r){
-    return norm((r.status_entrevista||'').toLowerCase()) === 'aprovado para teste';
-  });
-
-  function _dedupeByNome(arr) {
-    var seen = {};
-    return arr.filter(function(r){
-      var k = norm((r.nome||'').toLowerCase().trim());
-      if (!k || seen[k]) return false;
-      seen[k] = true;
-      return true;
-    });
-  }
-
-  var testesAgendados = testesBase.filter(function(r){
-    return r.nome && r.nome.trim();
-  });
-  var testesAgendadosUnicos = _dedupeByNome(testesAgendados);
-
-  var testesRealizados = testesAgendados.filter(function(r){
-    var s = norm((r.status_final||'').toLowerCase());
-    return s === 'contratado' || s === 'nao contratado';
-  });
-  var testesRealizadosUnicos = _dedupeByNome(testesRealizados);
-
-  // Mapa nome → referencia (vem da aba entrevistas)
-  var refMap = {};
-  entrevistasBase.forEach(function(r){
-    var k = norm((r.nome||'').toLowerCase().trim());
-    if (!k || refMap[k]) return;
-    refMap[k] = norm((r.referencia||'').toLowerCase().trim());
-  });
-  // Referências aprovadas = testes realizados (únicos) - referências ruins
-  var refs = testesRealizadosUnicos.filter(function(r){
-    var k = norm((r.nome||'').toLowerCase().trim());
-    return refMap[k] !== 'ruim';
-  });
-
-  var contratadosFiltrados = testesAgendados.filter(function(r){
-    return norm((r.status_final||'').toLowerCase()) === 'contratado';
-  });
-  var contratadosUnicos = _dedupeByNome(contratadosFiltrados);
+  var comTeste    = base.filter(function(r){ return (r.dias||[]).length>0; });
+  var testesReal  = comTeste.filter(function(r){ var s=nrm(r.status_final); return s==='contratado'||s==='nao contratado'; });
+  var refs        = testesReal.filter(function(r){ return nrm(r.tipo_referencia)!=='ruim'; });
+  var contratados = comTeste.filter(function(r){ return nrm(r.status_final)==='contratado'; });
 
   return [
-    { label: 'Candidatos contatados',      count: contatados.length             },
-    { label: 'Candidatos que responderam', count: responderam.length            },
-    { label: 'Entrevistas agendadas',      count: agendadas.length              },
-    { label: 'Entrevistas realizadas',     count: realizadas.length             },
-    { label: 'Aprovados na entrevista',    count: aprovados.length              },
-    { label: 'Testes agendados',           count: testesAgendadosUnicos.length  },
-    { label: 'Testes realizados',          count: testesRealizadosUnicos.length },
-    { label: 'Referências aprovadas',      count: refs.length                   },
-    { label: 'Contratações',               count: contratadosUnicos.length      }
+    { label: 'Candidatos contatados',      count: base.length          },
+    { label: 'Candidatos que responderam', count: responderam.length   },
+    { label: 'Entrevistas agendadas',      count: agendadas.length     },
+    { label: 'Entrevistas realizadas',     count: realizadas.length    },
+    { label: 'Aprovados na entrevista',    count: aprovados.length     },
+    { label: 'Testes agendados',           count: comTeste.length      },
+    { label: 'Testes realizados',          count: testesReal.length    },
+    { label: 'Referências aprovadas',      count: refs.length          },
+    { label: 'Contratações',               count: contratados.length   }
   ];
 }
 
