@@ -3939,6 +3939,16 @@ function _funilEntNoPeriodo(r) {
   for (var i=0;i<ents.length;i++){ var e=parseDateBR(ents[i].data); if (e && e >= FUNIL_DATA_INICIO) return true; }
   return false;
 }
+// deduplica candidaturas por nome (mantém a 1ª ocorrência) — p/ etapas de teste do funil
+function _dedupeFunilNome(arr){
+  var seen={}, out=[];
+  for (var i=0;i<arr.length;i++){
+    var k=norm((arr[i].nome||'').toLowerCase().trim());
+    if(!k||seen[k]) continue;
+    seen[k]=true; out.push(arr[i]);
+  }
+  return out;
+}
 // Funil a partir do analítico: 1 linha = 1 CANDIDATO (dedup natural), inclui quem tem teste.
 function buildFunnelData() {
   var f = state.dashFilters || {};
@@ -3959,7 +3969,25 @@ function buildFunnelData() {
   var realizadas  = base.filter(function(r){ var s=nrm(r.status_entrevista); return s==='aprovado para teste'||s==='nao selecionado'; });
   var aprovados   = base.filter(function(r){ return nrm(r.status_entrevista)==='aprovado para teste'; });
 
-  var comTeste    = base.filter(function(r){ return (r.dias||[]).length>0; });
+  // Etapas de teste (6-9): janela pela DATA DO TESTE em 2026+, deduplicado por
+  // nome — independente do período da entrevista (mesma regra do app antigo:
+  // testesBase = testes.filter(_funilDentroPeriodo) deduplicado por nome).
+  var perMes = _cfMes || (f.periodo && f.periodo!=='Todos' ? f.periodo : null);
+  function _diaNoFunil(d){
+    var dt = parseDateBR(d && d.data_teste);
+    if (!dt || dt < FUNIL_DATA_INICIO) return false;
+    if (perMes && dataToMY(d.data_teste) !== perMes) return false;
+    return true;
+  }
+  var testeBase = (analitico||[]).filter(function(r){
+    if (!r.nome || !r.nome.trim()) return false;
+    if (!(r.dias||[]).some(_diaNoFunil)) return false;
+    if (f.unidade && f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
+    if (f.departamento && f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
+    if (_cfRecrutador && (r.responsavel||'').trim()!==_cfRecrutador) return false;
+    return true;
+  });
+  var comTeste    = _dedupeFunilNome(testeBase);
   var testesReal  = comTeste.filter(function(r){ var s=nrm(r.status_final); return s==='contratado'||s==='nao contratado'; });
   var refs        = testesReal.filter(function(r){ return nrm(r.tipo_referencia)!=='ruim'; });
   var contratados = comTeste.filter(function(r){ return nrm(r.status_final)==='contratado'; });
