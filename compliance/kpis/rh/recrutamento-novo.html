@@ -334,6 +334,13 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 /* Nome/Ações mesclados nos 2 níveis: fixos no topo e na lateral */
 .anl-table thead th.anl-sticky[rowspan], .anl-table thead th.anl-acoes-h[rowspan] { top: 0; vertical-align: middle; }
 .anl-table thead th.anl-sticky[rowspan] { font-size: 12.6px; }
+/* seções recolhíveis: cabeçalho de grupo clicável + coluna recolhida estreita */
+.anl-table thead tr.anl-grp th.anl-ghead { cursor: pointer; user-select: none; -webkit-user-select: none; }
+.anl-table thead tr.anl-grp th.anl-ghead:hover { background: #F1F2EE; }
+.anl-table thead tr.anl-grp th.anl-ghead .anl-gchev { color: var(--muted); font-weight: 700; margin-left: 2px; }
+.anl-table thead tr.anl-grp th.anl-ghead-col { min-width: 34px; width: 34px; padding: 8px 6px; }
+.anl-table thead tr.anl-grp th.anl-ghead-col .anl-gchev { margin: 0; font-size: 12px; }
+.anl-table th.anl-ccol, .anl-table td.anl-ccol { min-width: 34px; width: 34px; text-align: center; color: var(--muted); padding-left: 6px; padding-right: 6px; }
 /* modal seccionado (edição a partir do Analítico) */
 .ae-modal { max-width: 655px; }   /* modais padrão 420px; este é bem mais largo p/ as seções */
 .ae-tabs { display: flex; justify-content: center; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); padding: 0 4px; -webkit-overflow-scrolling: touch; }
@@ -1890,6 +1897,8 @@ function _anlProc(v){
 
 var _anlColsCache = null;
 var _anlGroupsCache = null;
+var _anlGroupsFull = null;      // grupos completos (label + cols) p/ recolher/expandir seções
+var _anlCollapsed = {};         // { índice do grupo: true } → grupo recolhido
 // resolve a vaga vinculada ao candidato (por vaga_id) a partir da lista global de vagas
 function _anlVagaLink(r){
   if(!r || !r.vaga_id) return null;
@@ -1972,23 +1981,27 @@ function _anlBuildCols() {
   groups.forEach(function(gr){ gr.cols.forEach(function(c, i){ flat.push({ l:c[0], f:c[1], sep:i===0 }); }); });
   _anlColsCache = flat;
   _anlGroupsCache = groups.map(function(g){ return { label:g.label, count:g.cols.length }; });
+  _anlGroupsFull = groups;
 }
 function _anlCols() { if (!_anlColsCache) _anlBuildCols(); return _anlColsCache; }
 function _anlGroups() { if (!_anlGroupsCache) _anlBuildCols(); return _anlGroupsCache; }
+function _anlGroupsF() { if (!_anlGroupsFull) _anlBuildCols(); return _anlGroupsFull; }
 
 var ANL_PAGE = 50;         // pagina p/ não travar (a base tem milhares de candidaturas × dezenas de colunas)
 var _anlRows = [];
 var _anlShown = ANL_PAGE;
 
+function _anlRowHtml(r) {
+  var tds = '<td class="anl-sticky">'+_anlTxt(r.nome)+'</td>';
+  _anlGroupsF().forEach(function(g, gi){
+    if (_anlCollapsed[gi]) { tds += '<td class="anl-gsep anl-ccol">·</td>'; return; }
+    g.cols.forEach(function(c, ci){ tds += '<td'+(ci===0?' class="anl-gsep"':'')+'>'+c[1](r)+'</td>'; });
+  });
+  tds += '<td class="anl-acoes"><button class="btn-editar" title="Editar" data-aba-id="governanca-kpis-rh-recrutamento::editar-candidato" onclick="abrirAnaliticoEditar(\''+escH(r.id)+'\')">'+_editSvg+'</button></td>';
+  return '<tr>'+tds+'</tr>';
+}
 function _anlRowsHtml() {
-  var cols = _anlCols();
-  var display = _anlRows.slice(0, _anlShown);
-  return display.map(function(r){
-    var tds = '<td class="anl-sticky">'+_anlTxt(r.nome)+'</td>';
-    for (var i=0;i<cols.length;i++){ tds += '<td'+(cols[i].sep?' class="anl-gsep"':'')+'>'+cols[i].f(r)+'</td>'; }
-    tds += '<td class="anl-acoes"><button class="btn-editar" title="Editar" data-aba-id="governanca-kpis-rh-recrutamento::editar-candidato" onclick="abrirAnaliticoEditar(\''+escH(r.id)+'\')">'+_editSvg+'</button></td>';
-    return '<tr>'+tds+'</tr>';
-  }).join('');
+  return _anlRows.slice(0, _anlShown).map(_anlRowHtml).join('');
 }
 // "Ver mais" fica FORA da rolagem lateral (abaixo da tabela), sempre visível/clicável
 function _anlMoreHtml() {
@@ -2021,6 +2034,33 @@ function _anlFitHeight() {
 window.addEventListener('resize', function(){ if (state.tab === 'analitico') _anlFitHeight(); });
 window.addEventListener('scroll', function(){ if (state.tab === 'analitico') _anlFitHeight(); }, { passive: true });
 
+// Cabeçalho (2 níveis): grupos recolhíveis. Grupo recolhido vira 1 coluna estreita.
+function _anlHeadHtml() {
+  var grp = '<th class="anl-sticky" rowspan="2">Nome</th>';
+  var head = '';
+  _anlGroupsF().forEach(function(g, gi){
+    if (_anlCollapsed[gi]) {
+      grp += '<th class="anl-gsep anl-ghead anl-ghead-col" colspan="1" onclick="toggleAnlGroup('+gi+')" title="Expandir: '+escH(g.label)+'"><span class="anl-gchev">＋</span></th>';
+      head += '<th class="anl-gsep anl-ccol"></th>';
+    } else {
+      grp += '<th class="anl-gsep anl-ghead" colspan="'+g.cols.length+'" onclick="toggleAnlGroup('+gi+')" title="Recolher seção"><span class="anl-glabel">'+escH(g.label)+'</span> <span class="anl-gchev">–</span></th>';
+      g.cols.forEach(function(c, ci){ head += '<th'+(ci===0?' class="anl-gsep"':'')+'>'+escH(c[0])+'</th>'; });
+    }
+  });
+  grp += '<th class="anl-acoes-h" rowspan="2">Ações</th>';
+  return '<tr class="anl-grp">'+grp+'</tr><tr class="anl-crow">'+head+'</tr>';
+}
+function _anlTableHtml() {
+  return '<div class="anl-box"><div class="anl-wrap"><table class="ent-table anl-table">'+
+    '<thead>'+_anlHeadHtml()+'</thead>'+
+    '<tbody id="anl-tbody">'+_anlRowsHtml()+'</tbody></table></div>'+
+    '<div id="anl-more" class="anl-more">'+_anlMoreHtml()+'</div></div>';
+}
+function toggleAnlGroup(gi) {
+  _anlCollapsed[gi] = !_anlCollapsed[gi];
+  var box = document.querySelector('.anl-box');
+  if (box) { box.outerHTML = _anlTableHtml(); _anlFitHeight(); requestAnimationFrame(_anlFitHeight); }
+}
 function renderAnaliticoTableHtml(rows) {
   // mais recentes primeiro (por data da entrevista; sem data vão para o fim)
   _anlRows = rows.slice().sort(function(a,b){
@@ -2028,18 +2068,7 @@ function renderAnaliticoTableHtml(rows) {
     return (db?db.getTime():-Infinity) - (da?da.getTime():-Infinity);
   });
   _anlShown = ANL_PAGE;
-  var cols = _anlCols();
-  // linha 1: Nome (mesclado nos 2 níveis) + rótulos de grupo (seções) + Ações (mesclado)
-  var grp = '<th class="anl-sticky" rowspan="2">Nome</th>';
-  _anlGroups().forEach(function(g){ grp += '<th class="anl-gsep anl-ghead" colspan="'+g.count+'">'+escH(g.label)+'</th>'; });
-  grp += '<th class="anl-acoes-h" rowspan="2">Ações</th>';
-  // linha 2: cabeçalho das colunas (sem Nome/Ações — cobertos pelo rowspan)
-  var head = '';
-  for (var i=0;i<cols.length;i++){ head += '<th'+(cols[i].sep?' class="anl-gsep"':'')+'>'+escH(cols[i].l)+'</th>'; }
-  return '<div class="anl-box"><div class="anl-wrap"><table class="ent-table anl-table">'+
-    '<thead><tr class="anl-grp">'+grp+'</tr><tr class="anl-crow">'+head+'</tr></thead>'+
-    '<tbody id="anl-tbody">'+_anlRowsHtml()+'</tbody></table></div>'+
-    '<div id="anl-more" class="anl-more">'+_anlMoreHtml()+'</div></div>';
+  return _anlTableHtml();
 }
 
 // ─── Editar a partir do Analítico (modal seccionado) ──────────────────────────
