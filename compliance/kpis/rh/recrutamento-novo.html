@@ -3915,9 +3915,9 @@ var _INFO_GRAFICOS = {
     '<tr><td>4</td><td>Entrevistas realizadas</td><td>Status = Aprovado para teste ou Não selecionado</td></tr>'+
     '<tr><td>5</td><td>Aprovados na entrevista</td><td>Status = Aprovado para teste</td></tr>'+
     '<tr><td>6</td><td>Testes agendados</td><td>Candidatos aprovados sem processos</td></tr>'+
-    '<tr><td>7</td><td>Testes realizados</td><td>Status final = Contratado ou Não contratado</td></tr>'+
+    '<tr><td>7</td><td>Testes realizados</td><td>Resultado do teste = Contratado ou Não contratado</td></tr>'+
     '<tr><td>8</td><td>Referências aprovadas</td><td>testes realizados menos referência "Ruim"</td></tr>'+
-    '<tr><td>9</td><td>Contratações</td><td>Status final = Contratado</td></tr>'+
+    '<tr><td>9</td><td>Contratações</td><td>Resultado do teste = Contratado</td></tr>'+
     '</tbody></table>',
   mes: '<div class="info-note">Registros dos últimos 24 meses.</div>',
   status: '<div class="info-note">Resumo de Status</div>',
@@ -3988,10 +3988,19 @@ function buildFunnelData() {
     return true;
   });
   var comTeste    = _dedupeFunilNome(testeBase);
-  // "Desligado" = foi contratado e depois desligado → conta como contratação (e como teste realizado).
-  var testesReal  = comTeste.filter(function(r){ var s=nrm(r.status_final); return s==='contratado'||s==='nao contratado'||s==='desligado'; });
+  // O desfecho vem do STATUS DO DIA DE TESTE (rec_teste_dias.status) — o resultado
+  // real — e não do status_final da candidatura (que a migração preencheu como
+  // "Não contratado" até para quem não compareceu/cancelou). Usa o dia de teste de
+  // 2026 mais recente do candidato. "Contratado" no dia já cobre quem foi desligado
+  // depois (o dia continua "Contratado").
+  function _outcomeTeste(r){
+    var ds = (r.dias||[]).filter(_diaNoFunil);
+    if (!ds.length) return '';
+    return nrm(ds[ds.length-1].status);   // dias vêm ordenados por data_teste asc → último = mais recente
+  }
+  var testesReal  = comTeste.filter(function(r){ var s=_outcomeTeste(r); return s==='contratado'||s==='nao contratado'; });
   var refs        = testesReal.filter(function(r){ return nrm(r.tipo_referencia)!=='ruim'; });
-  var contratados = comTeste.filter(function(r){ var s=nrm(r.status_final); return s==='contratado'||s==='desligado'; });
+  var contratados = comTeste.filter(function(r){ return _outcomeTeste(r)==='contratado'; });
 
   return [
     { label: 'Candidatos contatados',      count: base.length          },
