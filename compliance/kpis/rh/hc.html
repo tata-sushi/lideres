@@ -173,6 +173,29 @@ body:not([data-view="cruzamento"]) #cruzamento { display: none; }
 body[data-view="cruzamento"] .filters-wrap,
 body[data-view="cruzamento"] #content,
 body[data-view="cruzamento"] #kpi-section { display: none; }
+body:not([data-view="colaboradores"]) #colaboradores { display: none; }
+body[data-view="colaboradores"] .filters-wrap,
+body[data-view="colaboradores"] #content,
+body[data-view="colaboradores"] #kpi-section { display: none; }
+.colab-section { padding: 14px 20px 80px; }
+@media (min-width: 900px){ .colab-section { max-width: 1100px; margin: 0 auto; } }
+.colab-filtros { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.colab-filtros .fg { flex: 1 1 150px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.colab-filtros label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+.colab-filtros select { width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); background: var(--surface); outline: none; }
+.colab-busca { width: 100%; box-sizing: border-box; height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); background: var(--surface); outline: none; margin-bottom: 10px; }
+.colab-busca:focus, .colab-filtros select:focus { border-color: var(--carbon); }
+.colab-count { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+.colab-tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.colab-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.colab-tbl th { position: sticky; top: 0; background: #FAFAFA; text-align: left; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; z-index: 1; }
+.colab-tbl td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--carbon); white-space: nowrap; }
+.colab-tbl tr:last-child td { border-bottom: none; }
+.colab-tbl tr:hover td { background: #FAFAFA; }
+.colab-tbl td.nome { font-weight: 600; white-space: normal; }
+.st-ativo { background: var(--green-bg); color: var(--green); }
+.st-inativo { background: var(--red-bg); color: var(--red); }
+.st-bot { background: var(--bg); color: var(--muted); }
 .cruzamento-section { padding: 14px 20px 80px; display: flex; flex-direction: column; gap: 14px; }
 .cruz-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px 16px; display: flex; flex-direction: column; box-shadow: var(--shadow); }
 .cruz-card-header { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 14px; }
@@ -318,6 +341,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="tabs">
   <button data-aba-id="governanca-kpis-rh-hc::dashboard" class="tab-btn active" id="tab-dashboard" onclick="setTab('dashboard')">KPI's</button>
   <button data-aba-id="governanca-kpis-rh-hc::cruzamento" class="tab-btn" id="tab-cruzamento" onclick="setTab('cruzamento')">Headcount</button>
+  <button data-aba-id="governanca-kpis-rh-hc::colaboradores" class="tab-btn" id="tab-colaboradores" onclick="setTab('colaboradores')">Colaboradores</button>
 </div>
 
 <div id="kpi-section"></div>
@@ -373,6 +397,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <div class="cruzamento-section" id="cruzamento">
   <div id="cruzamento-content" style="display:flex;flex-direction:column;gap:14px;"></div>
+</div>
+
+<div class="colab-section" id="colaboradores">
+  <div id="colaboradores-content"></div>
 </div>
 
 <!-- LOADING -->
@@ -661,13 +689,93 @@ function setTab(tab) {
   state.tab = tab;
   document.getElementById('tab-dashboard').classList.toggle('active', tab==='dashboard');
   document.getElementById('tab-cruzamento').classList.toggle('active', tab==='cruzamento');
+  var _tc=document.getElementById('tab-colaboradores'); if(_tc) _tc.classList.toggle('active', tab==='colaboradores');
   if (tab==='cruzamento') {
     document.body.setAttribute('data-view','cruzamento');
     carregarCruzamento();
+  } else if (tab==='colaboradores') {
+    document.body.setAttribute('data-view','colaboradores');
+    carregarColaboradores();
   } else {
     document.body.setAttribute('data-view','dashboard');
     renderDashboard();
   }
+}
+
+// ─── COLABORADORES (consulta) — profiles via RPC hc_colaboradores_listar ─────
+var _hcColabs = null;
+var _hcCF = { status:'Todos', unidade:'Todos', departamento:'Todos', busca:'' };
+function carregarColaboradores(){
+  var host=document.getElementById('colaboradores-content'); if(!host) return;
+  if (_hcColabs !== null) { renderColaboradores(); return; }
+  host.innerHTML='<div style="padding:40px 0;text-align:center"><div style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--carbon);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px"></div><p style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--muted)">Carregando colaboradores…</p></div>';
+  function go(supa){
+    if(!supa){ host.innerHTML='<div class="colab-count">Supabase indisponível.</div>'; return; }
+    supa.rpc('hc_colaboradores_listar').then(function(res){
+      if(res.error){ host.innerHTML='<div class="colab-count">Erro ao carregar: '+escH(res.error.message)+'</div>'; return; }
+      _hcColabs = Array.isArray(res.data) ? res.data : [];
+      renderColaboradores();
+    }, function(err){ host.innerHTML='<div class="colab-count">Erro de conexão.</div>'; });
+  }
+  if (window.__lideresSupa) go(window.__lideresSupa);
+  else window.addEventListener('lideres:supa', function(){ go(window.__lideresSupa); }, { once:true });
+}
+function _hcColabFiltered(){
+  var f=_hcCF, q=norm(f.busca);
+  return (_hcColabs||[]).filter(function(c){
+    if (f.status!=='Todos' && (c.status||'')!==f.status) return false;
+    if (f.unidade!=='Todos' && (c.unidade||'')!==f.unidade) return false;
+    if (f.departamento!=='Todos' && (c.departamento||'')!==f.departamento) return false;
+    if (q && norm(c.nome||'').indexOf(q)<0) return false;
+    return true;
+  });
+}
+function _hcStPill(s){
+  var n=norm(s), cls='st-bot';
+  if(n==='ativo') cls='st-ativo'; else if(n==='inativo') cls='st-inativo';
+  return '<span class="status-badge '+cls+'">'+escH(s||'—')+'</span>';
+}
+function _hcOpts(arr, cur){
+  var seen={}, out=[];
+  arr.forEach(function(v){ v=(v==null?'':String(v)).trim(); if(v && !seen[v]){seen[v]=true; out.push(v);} });
+  out.sort(function(a,b){ return a.localeCompare(b,'pt'); });
+  out.unshift('Todos');
+  return out.map(function(o){ return '<option'+(o===cur?' selected':'')+'>'+escH(o)+'</option>'; }).join('');
+}
+function _hcColabRows(rows){
+  if(!rows.length) return '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Nenhum colaborador</td></tr>';
+  return rows.map(function(c){
+    return '<tr>'+
+      '<td class="nome">'+escH(c.nome||'—')+'</td>'+
+      '<td>'+escH(c.matricula||'—')+'</td>'+
+      '<td>'+escH(c.cargo||'—')+'</td>'+
+      '<td>'+escH(c.unidade||'—')+'</td>'+
+      '<td>'+escH(c.departamento||'—')+'</td>'+
+      '<td>'+_hcStPill(c.status)+'</td>'+
+    '</tr>';
+  }).join('');
+}
+function renderColaboradores(){
+  var host=document.getElementById('colaboradores-content'); if(!host) return;
+  var all=_hcColabs||[], rows=_hcColabFiltered();
+  host.innerHTML=''+
+    '<div class="colab-filtros">'+
+      '<div class="fg"><label>Status</label><select onchange="setColabFiltro(\'status\',this.value)">'+_hcOpts(all.map(function(c){return c.status;}),_hcCF.status)+'</select></div>'+
+      '<div class="fg"><label>Unidade</label><select onchange="setColabFiltro(\'unidade\',this.value)">'+_hcOpts(all.map(function(c){return c.unidade;}),_hcCF.unidade)+'</select></div>'+
+      '<div class="fg"><label>Departamento</label><select onchange="setColabFiltro(\'departamento\',this.value)">'+_hcOpts(all.map(function(c){return c.departamento;}),_hcCF.departamento)+'</select></div>'+
+    '</div>'+
+    '<input type="text" class="colab-busca" placeholder="Buscar por nome…" value="'+escH(_hcCF.busca)+'" oninput="setColabBusca(this.value)">'+
+    '<div class="colab-count" id="colab-count">'+rows.length+' colaborador(es)</div>'+
+    '<div class="colab-tbl-wrap"><table class="colab-tbl"><thead><tr>'+
+      '<th>Nome</th><th>Matrícula</th><th>Cargo</th><th>Unidade</th><th>Departamento</th><th>Status</th>'+
+    '</tr></thead><tbody id="colab-tbody">'+_hcColabRows(rows)+'</tbody></table></div>';
+}
+function setColabFiltro(k,v){ _hcCF[k]=v; renderColaboradores(); }
+function setColabBusca(v){
+  _hcCF.busca=v;
+  var rows=_hcColabFiltered();
+  var tb=document.getElementById('colab-tbody'); if(tb) tb.innerHTML=_hcColabRows(rows);
+  var ct=document.getElementById('colab-count'); if(ct) ct.textContent=rows.length+' colaborador(es)';
 }
 
 // ─── VAGAS ───────────────────────────────────────────────────────────────────
