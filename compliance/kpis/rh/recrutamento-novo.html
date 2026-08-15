@@ -3987,20 +3987,29 @@ function buildFunnelData() {
     if (_cfRecrutador && (r.responsavel||'').trim()!==_cfRecrutador) return false;
     return true;
   });
-  var comTeste    = _dedupeFunilNome(testeBase);
-  // O desfecho vem do STATUS DO DIA DE TESTE (rec_teste_dias.status) — o resultado
-  // real — e não do status_final da candidatura (que a migração preencheu como
-  // "Não contratado" até para quem não compareceu/cancelou). Usa o dia de teste de
-  // 2026 mais recente do candidato. "Contratado" no dia já cobre quem foi desligado
-  // depois (o dia continua "Contratado").
-  function _outcomeTeste(r){
-    var ds = (r.dias||[]).filter(_diaNoFunil);
-    if (!ds.length) return '';
-    return nrm(ds[ds.length-1].status);   // dias vêm ordenados por data_teste asc → último = mais recente
+  // Etapas de teste no nível do CANDIDATO (nome único), igual ao app: o desfecho
+  // vem do STATUS DO DIA DE TESTE (rec_teste_dias.status), não do status_final da
+  // candidatura (que a migração preencheu como "Não contratado" até para quem não
+  // compareceu). O app filtra os dias com o desfecho e SÓ DEPOIS deduplica por
+  // nome — então o candidato conta se QUALQUER dia de 2026 teve aquele desfecho
+  // (contratou num dia conta como contratação mesmo com re-teste agendado depois).
+  function _nomesTeste(alvos){   // alvos=null → qualquer dia de teste (agendados)
+    var set={};
+    testeBase.forEach(function(r){
+      var ds=(r.dias||[]).filter(_diaNoFunil);
+      var hit=!alvos;
+      if (alvos){ for (var i=0;i<ds.length;i++){ if (alvos.indexOf(nrm(ds[i].status))>=0){ hit=true; break; } } }
+      if (hit){ var k=norm((r.nome||'').toLowerCase().trim()); if(k) set[k]=true; }
+    });
+    return set;
   }
-  var testesReal  = comTeste.filter(function(r){ var s=_outcomeTeste(r); return s==='contratado'||s==='nao contratado'; });
-  var refs        = testesReal.filter(function(r){ return nrm(r.tipo_referencia)!=='ruim'; });
-  var contratados = comTeste.filter(function(r){ return _outcomeTeste(r)==='contratado'; });
+  // referência "Ruim" por nome (qualquer candidatura do nome marcada como Ruim)
+  var _refRuim={};
+  testeBase.forEach(function(r){ if(nrm(r.tipo_referencia)==='ruim'){ var k=norm((r.nome||'').toLowerCase().trim()); if(k) _refRuim[k]=true; } });
+  var comTeste    = Object.keys(_nomesTeste(null));
+  var testesReal  = Object.keys(_nomesTeste(['contratado','nao contratado']));
+  var refs        = testesReal.filter(function(k){ return !_refRuim[k]; });
+  var contratados = Object.keys(_nomesTeste(['contratado']));
 
   return [
     { label: 'Candidatos contatados',      count: base.length          },
