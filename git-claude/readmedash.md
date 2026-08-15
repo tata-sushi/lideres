@@ -22,7 +22,6 @@ Exemplos canônicos (estado atual):
 | `testes/abastecimento.html` | Abastecimento |
 | `testes/checklistcaixa.html` | Caixa |
 | `testes/extras.html` | Extras |
-| `escalas/src/App.jsx` (React/Vite) | Escalas |
 
 Páginas de **menu** e **institucionais** (`compliance/menucompliance.html`, `compliance/areas/institucional/*`, `compliance/kpis/index.html`, etc.) seguem outro padrão — cobertas em `readmemenu.md`.
 
@@ -115,23 +114,7 @@ Exemplos proibidos (já foram removidos):
 ❌ `Testes & Extras` → Extras
 ❌ `Controle de Escalas` → Escalas
 
-## 6. Páginas em React (escalas)
-
-`escalas/` é um app Vite/React separado, com header em `src/App.jsx`. Aplicam as mesmas regras via inline-style:
-
-```jsx
-<header style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 20px',display:'flex',alignItems:'center',gap:14,position:'sticky',top:0,zIndex:100}}>
-  <img src={LOGO_SRC} alt="TATÁ Sushi" style={{width:40,height:40,objectFit:'contain',flexShrink:0}}/>
-  <div style={{flex:1}}>
-    <div style={{fontSize:20,fontWeight:700,color:T.carbon,letterSpacing:'-0.3px'}}>Escalas</div>
-  </div>
-  {/* … status/buttons à direita … */}
-</header>
-```
-
-Sem subtítulo JSX (já removido o `TATÁ Sushi · Operação`).
-
-## 7. Checklist ao criar/editar uma dashboard
+## 6. Checklist ao criar/editar uma dashboard
 
 - [ ] Header usa o CSS da §2 (padding 14/20, gap 14, logo 40×40, título 20px).
 - [ ] Logo com base64 completo (tag `<img>` copiado de dashboard existente).
@@ -142,7 +125,7 @@ Sem subtítulo JSX (já removido o `TATÁ Sushi · Operação`).
 - [ ] Auth gate aplicado (ver `readmeauth.md`).
 - [ ] Se a página é navegada via menu/chip, há card/chip correspondente com `data-access-id`/`data-access-url` (ver `readmemenu.md`).
 
-## 8. Histórico das decisões
+## 7. Histórico das decisões
 
 | PR | Mudança |
 |----|---------|
