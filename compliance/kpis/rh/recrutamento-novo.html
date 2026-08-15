@@ -979,8 +979,8 @@ var _entrevistaCache = [];
 var state = {
   tab: 'entrevistas',
   dashSrc: 'entrevistas',
-  filters: { unidade: 'Todos', departamento: 'Todos', data: 'Todos', entrevistador: 'Todos', status: 'Todos', data_entrevista: 'Todos', data_teste: 'Todos', status_entrevista: 'Todos', status_teste: 'Todos', status_processo: 'Todos', busca: '' },
-  dashFilters: { unidade: 'Todos', departamento: 'Todos', periodo: 'Todos' },
+  filters: { unidade: 'Todos', departamento: 'Todos', data: 'Todos', entrevistador: 'Todos', status: 'Todos', data_entrevista: 'Todos', data_teste: 'Todos', status_entrevista: 'Todos', status_teste: 'Todos', status_processo: 'Todos', busca: '', dataIni: '', dataFim: '' },
+  dashFilters: { unidade: 'Todos', departamento: 'Todos', periodo: 'Todos', dataIni: '', dataFim: '' },
   loading: true,
   error: null
 };
@@ -1189,6 +1189,32 @@ function parseDateBR(s) {
   }
   return null;
 }
+// ─── Filtro de intervalo de datas (De/Até) ──────────────────────────────────
+// ini/fim vêm dos <input type="date"> em ISO (YYYY-MM-DD); parseDateBR aceita ISO.
+function _dateInRange(dataStr, ini, fim) {
+  if (!ini && !fim) return true;
+  var d = parseDateBR(dataStr);
+  if (!d || isNaN(d.getTime())) return false;
+  if (ini) { var di = parseDateBR(ini); if (di && d < di) return false; }
+  if (fim) { var df = parseDateBR(fim); if (df && d > df) return false; }
+  return true;
+}
+// candidatura (mãe): casa se a entrevista OU alguma entrevista-filha OU algum dia de teste cai no intervalo
+function _rowInRange(r, ini, fim) {
+  if (!ini && !fim) return true;
+  if (_dateInRange(r.data_entrevista, ini, fim)) return true;
+  var es = r.entrevistas || []; for (var i=0;i<es.length;i++){ if (_dateInRange(es[i].data, ini, fim)) return true; }
+  var ds = r.dias || [];        for (var j=0;j<ds.length;j++){ if (_dateInRange(ds[j].data_teste, ini, fim)) return true; }
+  return false;
+}
+// gera os dois inputs De/Até (handler = nome da função setDashFilter/setFilter)
+function dateRangeInputs(iniKey, fimKey, iniVal, fimVal, handler) {
+  var st='style="background-image:none;padding-right:12px"';
+  return '<div class="filter-group"><label class="filter-label">De</label>'+
+    '<input type="date" class="filter-select" '+st+' value="'+escH(iniVal||'')+'" onchange="'+handler+'(\''+iniKey+'\',this.value)"></div>'+
+    '<div class="filter-group"><label class="filter-label">Até</label>'+
+    '<input type="date" class="filter-select" '+st+' value="'+escH(fimVal||'')+'" onchange="'+handler+'(\''+fimKey+'\',this.value)"></div>';
+}
 function fmtDateBR(s) {
   var d = parseDateBR(s);
   if (!d || isNaN(d.getTime())) return s || '';
@@ -1324,6 +1350,7 @@ function getFiltered() {
       if (f.entrevistador!=='Todos' && (r.entrevistador||'')!==f.entrevistador) return false;
       if (f.data_entrevista!=='Todos' && (r.data_entrevista||'')!==f.data_entrevista) return false;
       if (f.data_teste!=='Todos' && !(r.dias||[]).some(function(d){ return (d.data_teste||'')===f.data_teste; })) return false;
+      if ((f.dataIni||f.dataFim) && !_rowInRange(r, f.dataIni, f.dataFim)) return false;
       if (f.status_entrevista!=='Todos' && (r.status_entrevista||'')!==f.status_entrevista) return false;
       if (f.status_teste!=='Todos' && !(r.dias||[]).some(function(d){ return (d.status||'')===f.status_teste; })) return false;
       if (f.status_processo!=='Todos' && (r.status_final||'')!==f.status_processo) return false;
@@ -1355,11 +1382,12 @@ function getStatusOpts() {
 function applyDashFilters(rows) {
   var f = state.dashFilters;
   if (!f) return rows;
-  if (f.unidade==='Todos' && f.departamento==='Todos' && f.periodo==='Todos') return rows;
+  if (f.unidade==='Todos' && f.departamento==='Todos' && f.periodo==='Todos' && !f.dataIni && !f.dataFim) return rows;
   return rows.filter(function(r) {
     if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
     if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
     if (f.periodo!=='Todos' && dataToMY(r.data)!==f.periodo) return false;
+    if ((f.dataIni||f.dataFim) && !_dateInRange(r.data, f.dataIni, f.dataFim)) return false;
     return true;
   });
 }
@@ -1445,6 +1473,7 @@ function renderAnaliticoFilters() {
   html+=sel('Entrevistador','entrevistador',uniqSort(src.map(function(r){return r.entrevistador;})),f.entrevistador);
   html+=sel('Data da entrevista','data_entrevista',uniqDatesDesc(src.map(function(r){return r.data_entrevista;})),f.data_entrevista,fmtDateBR);
   html+=sel('Data do teste','data_teste',uniqDatesDesc(diasAll.map(function(d){return d.data_teste;})),f.data_teste,fmtDateBR);
+  html+=dateRangeInputs('dataIni','dataFim',f.dataIni,f.dataFim,'setFilter');
   html+=sel('Status da entrevista','status_entrevista',uniqSort(src.map(function(r){return r.status_entrevista;})),f.status_entrevista);
   html+=sel('Status do teste','status_teste',uniqSort(diasAll.map(function(d){return d.status;})),f.status_teste);
   html+=sel('Status do processo','status_processo',uniqSort(src.map(function(r){return r.status_final;})),f.status_processo);
@@ -1499,6 +1528,7 @@ function renderDashFilters() {
   html+=sel('Unidade','unidade',unique(srcAll.map(function(r){return r.unidade;})),f.unidade);
   html+=sel('Departamento','departamento',unique(deptSrc.map(function(r){return r.departamento;})),f.departamento);
   html+=sel('Período','periodo',getDashPeriodos(),f.periodo);
+  html+=dateRangeInputs('dataIni','dataFim',f.dataIni,f.dataFim,'setDashFilter');
   var totalFiltered = applyDashFilters(srcAll).length;
   html+='</div><div class="filters-actions"><button class="btn-clear" onclick="clearDashFilters()">Limpar filtros</button>';
   html+='<span class="results-count"><span>'+totalFiltered+'</span> resultado(s)</span></div>';
@@ -1515,7 +1545,7 @@ function setDashFilter(key, val) {
 }
 
 function clearDashFilters() {
-  state.dashFilters = { unidade: 'Todos', departamento: 'Todos', periodo: 'Todos' };
+  state.dashFilters = { unidade: 'Todos', departamento: 'Todos', periodo: 'Todos', dataIni: '', dataFim: '' };
   _cfMes = null;
   _cfFunilIdx = null;
   _cfRecrutador = null;
@@ -3971,6 +4001,7 @@ function buildFunnelData() {
     if (f.unidade && f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
     if (f.departamento && f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
     if (f.periodo && f.periodo!=='Todos' && dataToMY(r.data_entrevista)!==f.periodo) return false;
+    if ((f.dataIni||f.dataFim) && !_rowInRange(r, f.dataIni, f.dataFim)) return false;
     if (_cfMes && dataToMY(r.data_entrevista)!==_cfMes) return false;
     if (_cfRecrutador && (r.responsavel||'').trim()!==_cfRecrutador) return false;
     return true;
@@ -4264,7 +4295,7 @@ function render() {
 function setTab(tab) {
   state.tab=tab;
   // Sem forçar status: cada aba abre mostrando tudo; a pessoa ajusta os filtros conforme precisar.
-  state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos',data_entrevista:'Todos',data_teste:'Todos',status_entrevista:'Todos',status_teste:'Todos',status_processo:'Todos',busca:''};
+  state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos',data_entrevista:'Todos',data_teste:'Todos',status_entrevista:'Todos',status_teste:'Todos',status_processo:'Todos',busca:'',dataIni:'',dataFim:''};
   _cardsShown=CARD_PAGE;
   _cfMes=null;
   _cfFunilIdx=null;
@@ -4289,7 +4320,7 @@ function setFilter(key,val) {
   render();
 }
 function clearFilters() {
-  state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos',data_entrevista:'Todos',data_teste:'Todos',status_entrevista:'Todos',status_teste:'Todos',status_processo:'Todos',busca:''};
+  state.filters={unidade:'Todos',departamento:'Todos',data:'Todos',entrevistador:'Todos',status:'Todos',data_entrevista:'Todos',data_teste:'Todos',status_entrevista:'Todos',status_teste:'Todos',status_processo:'Todos',busca:'',dataIni:'',dataFim:''};
   _cardsShown=CARD_PAGE;
   render();
 }
