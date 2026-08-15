@@ -314,6 +314,17 @@ body[data-view="colaboradores"] #kpi-section { display: none; }
 .hc-ed-tbl select { min-width:78px; }
 .hc-ed-tbl input:focus, .hc-ed-tbl select:focus { outline:none; border-color:var(--carbon); }
 .hc-ed-foot { display:flex; gap:10px; justify-content:flex-end; align-items:center; padding:12px 20px 16px; border-top:1px solid var(--border); flex-shrink:0; }
+.hc-ed-tools { display:flex; gap:8px; padding:0 20px 10px; flex-shrink:0; }
+.hc-ed-mini { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.04em; text-transform:uppercase; padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--mid); cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
+.hc-ed-mini svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2.2; }
+.hc-ed-mini:hover { border-color:var(--carbon); color:var(--carbon); }
+.hc-ed-mini.danger { margin-left:auto; }
+.hc-ed-mini.danger:hover { border-color:#c0392b; color:#c0392b; }
+.hc-ed-addform { display:flex; gap:8px; padding:0 20px 12px; flex-shrink:0; flex-wrap:wrap; align-items:center; }
+.hc-ed-addform input { flex:1; min-width:110px; border:1px solid var(--border); border-radius:6px; padding:7px 10px; font-size:13px; font-family:'DM Sans',sans-serif; color:var(--carbon); background:var(--surface); }
+.hc-ed-addform input:focus { outline:none; border-color:var(--carbon); }
+.hc-ed-addform button { font-family:'DM Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.04em; padding:7px 12px; border-radius:6px; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--mid); }
+.hc-ed-addform button.ok { background:var(--carbon); color:var(--citric); border:none; }
 </style>
 </head>
 <body>
@@ -492,6 +503,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="hc-ed-selrow">
       <div class="hc-ed-fg"><label>Unidade</label><select class="modal-select" id="hc-ed-unidade" onchange="_hcEdUnidadeChange(this.value)"></select></div>
       <div class="hc-ed-fg"><label>Departamento</label><select class="modal-select" id="hc-ed-depto" onchange="_hcEdRender()"></select></div>
+    </div>
+    <div class="hc-ed-tools">
+      <button class="hc-ed-mini" onclick="_hcEdAddStart()"><svg viewBox="0 0 24 24" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Adicionar</button>
+      <button class="hc-ed-mini danger" onclick="_hcEdRemover()"><svg viewBox="0 0 24 24" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>Remover</button>
+    </div>
+    <div class="hc-ed-addform" id="hc-ed-addform" style="display:none">
+      <input id="hc-ed-add-uni" placeholder="Unidade" autocomplete="off">
+      <input id="hc-ed-add-dep" placeholder="Departamento" autocomplete="off">
+      <button class="ok" onclick="_hcEdAddConfirm()">Adicionar</button>
+      <button onclick="_hcEdAddCancel()">Cancelar</button>
     </div>
     <div class="hc-ed-scroll">
       <table class="hc-ed-tbl">
@@ -1695,6 +1716,46 @@ function _hcEdUnidadeChange(u){
   var deps=[]; _hcEdState.forEach(function(r){ if(r.unidade===u && deps.indexOf(r.departamento)<0) deps.push(r.departamento); }); deps.sort();
   document.getElementById('hc-ed-depto').innerHTML=deps.map(function(d){ return '<option>'+escH(d)+'</option>'; }).join('');
   _hcEdRender();
+}
+function _hcEdRebuildUnidades(selUni){
+  var unis=[]; _hcEdState.forEach(function(r){ if(r.unidade && unis.indexOf(r.unidade)<0) unis.push(r.unidade); }); unis.sort();
+  document.getElementById('hc-ed-unidade').innerHTML=unis.map(function(u){ return '<option'+(u===selUni?' selected':'')+'>'+escH(u)+'</option>'; }).join('');
+}
+function _hcEdAddStart(){
+  var f=document.getElementById('hc-ed-addform'); f.style.display='flex';
+  document.getElementById('hc-ed-add-uni').value=document.getElementById('hc-ed-unidade').value||'';
+  document.getElementById('hc-ed-add-dep').value='';
+  document.getElementById('hc-ed-add-dep').focus();
+}
+function _hcEdAddCancel(){ document.getElementById('hc-ed-addform').style.display='none'; }
+function _hcEdAddConfirm(){
+  var u=(document.getElementById('hc-ed-add-uni').value||'').trim();
+  var d=(document.getElementById('hc-ed-add-dep').value||'').trim();
+  if(!u||!d){ alert('Preencha unidade e departamento.'); return; }
+  var dup=_hcEdState.some(function(r){ return r.unidade.toLowerCase()===u.toLowerCase() && r.departamento.toLowerCase()===d.toLowerCase(); });
+  if(dup){ alert('Esse departamento já existe nessa unidade.'); return; }
+  _hcEdState.push({ unidade:u, departamento:d, lider:0,especialista:0,auxiliares:0,aprendizes:0,estagiarios:0,
+    escLider:'',escEspecialista:'',escAuxiliares:'',escAprendizes:'',escEstagiarios:'' });
+  _hcEdAddCancel();
+  _hcEdRebuildUnidades(u);
+  _hcEdUnidadeChange(u);
+  document.getElementById('hc-ed-depto').value=d;
+  _hcEdRender();
+}
+function _hcEdRemover(){
+  var r=_hcEdCur(); if(!r) return;
+  if(!confirm('Remover "'+r.departamento+' · '+r.unidade+'" do quadro programado?')) return;
+  var u=r.unidade, d=r.departamento;
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('hc_programado_remover',{ p_unidade:u, p_departamento:d }).then(function(res){
+      if(res.error){ alert('Erro ao remover:\n'+(res.error.message||'erro')); return; }
+      _hcEdState=_hcEdState.filter(function(x){ return !(x.unidade===u && x.departamento===d); });
+      var unis=[]; _hcEdState.forEach(function(x){ if(x.unidade && unis.indexOf(x.unidade)<0) unis.push(x.unidade); });
+      _hcEdRebuildUnidades(unis.indexOf(u)>=0 ? u : (unis.sort()[0]||''));
+      _hcEdUnidadeChange(document.getElementById('hc-ed-unidade').value);
+      loadData();
+    }, function(e){ alert('Erro de conex\u00e3o:\n'+(e&&e.message||e)); });
+  });
 }
 function _hcEdCur(){
   var u=document.getElementById('hc-ed-unidade').value, d=document.getElementById('hc-ed-depto').value;
