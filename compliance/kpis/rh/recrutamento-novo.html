@@ -343,6 +343,7 @@ body.is-lider .tab-btn.admin-only { display: inline-flex; align-items: center; j
 .anl-table thead tr.anl-grp th.anl-ghead-col { min-width: 34px; width: 34px; padding: 8px 6px; }
 .anl-table thead tr.anl-grp th.anl-ghead-col .anl-gchev { margin: 0; font-size: 12px; }
 .anl-table th.anl-ccol, .anl-table td.anl-ccol { min-width: 34px; width: 34px; text-align: center; color: var(--muted); padding-left: 6px; padding-right: 6px; }
+.anl-table th.anl-cinicial { font-weight: 700; color: var(--carbon); font-size: 11px; }
 /* modal seccionado (edição a partir do Analítico) */
 .ae-modal { max-width: 655px; }   /* modais padrão 420px; este é bem mais largo p/ as seções */
 .ae-tabs { display: flex; justify-content: center; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); padding: 0 4px; -webkit-overflow-scrolling: touch; }
@@ -1946,6 +1947,7 @@ var _anlColsCache = null;
 var _anlGroupsCache = null;
 var _anlGroupsFull = null;      // grupos completos (label + cols) p/ recolher/expandir seções
 var _anlCollapsed = {};         // { índice do grupo: true } → grupo recolhido
+var _anlCollapsedInit = false;  // abre com todas as seções recolhidas (só na 1ª montagem)
 // resolve a vaga vinculada ao candidato (por vaga_id) a partir da lista global de vagas
 function _anlVagaLink(r){
   if(!r || !r.vaga_id) return null;
@@ -1977,7 +1979,7 @@ function _anlBuildCols() {
     })(_e);
   }
   var groups = [
-    { label:'Informações de candidatos', cols:[
+    { label:'Informações de candidatos', sigla:'I', cols:[
       ['Contato', function(r){ return _anlTxt(r.contato); }],
       ['CPF', function(r){ return _anlTxt(r.cpf); }],
       ['Unidade de interesse', function(r){ return _anlTxt(r.unidade); }],
@@ -1986,7 +1988,7 @@ function _anlBuildCols() {
       ['Pretensão', function(r){ return _anlPret(r.pretensao_salarial); }],
       ['Uniforme', function(r){ return _anlTxt(r.camiseta); }]
     ]},
-    { label:'Vaga vinculada', cols:[
+    { label:'Vaga vinculada', sigla:'V', cols:[
       ['Unidade', function(r){ var v=_anlVagaLink(r); return v?_anlTxt(v.unidade):'—'; }],
       ['Departamento', function(r){ var v=_anlVagaLink(r); return v?_anlTxt(v.departamento):'—'; }],
       ['Cargo', function(r){ var v=_anlVagaLink(r); return v?_anlTxt(v.cargo):'—'; }],
@@ -1994,8 +1996,8 @@ function _anlBuildCols() {
       ['Salário bruto', function(r){ var v=_anlVagaLink(r); return v?fmtValor(v.salario_bruto):'—'; }],
       ['Status', function(r){ var v=_anlVagaLink(r); return v?_anlBadge(v.status,'sf-'+slugVagaStatus(v.status)):'—'; }]
     ]},
-    { label:'Informações de entrevistas', cols: entrCols },
-    { label:'Informações de referências', cols:[
+    { label:'Informações de entrevistas', sigla:'E', cols: entrCols },
+    { label:'Informações de referências', sigla:'R', cols:[
       ['Check', function(r){ return _anlCheck(r.check_referencia); }],
       ['Contato', function(r){ return _anlRefNomes(r.contato_referencia); }],
       ['Telefone', function(r){ return _anlRefTels(r.contato_referencia); }],
@@ -2018,8 +2020,8 @@ function _anlBuildCols() {
       testeCols.push([p+'Recibo', function(r){ var d=(r.dias||[])[idx]; return d?_anlRecibo(d.recibo_status):'—'; }]);
     })(i);
   }
-  groups.push({ label:'Informações de testes', cols: testeCols });
-  groups.push({ label:'Informações do processo', cols:[
+  groups.push({ label:'Informações de testes', sigla:'T', cols: testeCols });
+  groups.push({ label:'Informações do processo', sigla:'F', cols:[
     ['Status final', function(r){ return _anlStatusFinal(r.status_final); }],
     ['Concluído em', function(r){ return _anlDataHora(r.status_final_em); }],
     ['Recrutador', function(r){ return _anlTxt(r.responsavel); }]
@@ -2029,6 +2031,8 @@ function _anlBuildCols() {
   _anlColsCache = flat;
   _anlGroupsCache = groups.map(function(g){ return { label:g.label, count:g.cols.length }; });
   _anlGroupsFull = groups;
+  // abre com todas as seções recolhidas (só na primeira montagem; toggles do usuário são preservados)
+  if (!_anlCollapsedInit) { groups.forEach(function(g, gi){ _anlCollapsed[gi] = true; }); _anlCollapsedInit = true; }
 }
 function _anlCols() { if (!_anlColsCache) _anlBuildCols(); return _anlColsCache; }
 function _anlGroups() { if (!_anlGroupsCache) _anlBuildCols(); return _anlGroupsCache; }
@@ -2088,7 +2092,7 @@ function _anlHeadHtml() {
   _anlGroupsF().forEach(function(g, gi){
     if (_anlCollapsed[gi]) {
       grp += '<th class="anl-gsep anl-ghead anl-ghead-col" colspan="1" onclick="toggleAnlGroup('+gi+')" title="Expandir: '+escH(g.label)+'"><span class="anl-gchev">＋</span></th>';
-      head += '<th class="anl-gsep anl-ccol"></th>';
+      head += '<th class="anl-gsep anl-ccol anl-cinicial" onclick="toggleAnlGroup('+gi+')" title="Expandir: '+escH(g.label)+'" style="cursor:pointer">'+escH(g.sigla||'')+'</th>';
     } else {
       grp += '<th class="anl-gsep anl-ghead" colspan="'+g.cols.length+'" onclick="toggleAnlGroup('+gi+')" title="Recolher seção"><span class="anl-glabel">'+escH(g.label)+'</span> <span class="anl-gchev">–</span></th>';
       g.cols.forEach(function(c, ci){ head += '<th'+(ci===0?' class="anl-gsep"':'')+'>'+escH(c[0])+'</th>'; });
