@@ -563,9 +563,13 @@ function sheetURL() {
 function showLoading() { document.getElementById('loading-overlay').classList.add('show'); }
 function hideLoading() { document.getElementById('loading-overlay').classList.remove('show'); }
 
+function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
 function loadData() {
   showLoading();
-  var pDados = fetch(sheetURL()).then(function(r){ return r.json(); });
+  // HC programado agora vem do Supabase (tata_plus.hc_programado_listar), não mais da planilha.
+  var pDados = new Promise(function(resolve,reject){
+    comSupa(function(supa){ supa.schema('tata_plus').rpc('hc_programado_listar').then(function(r){ r.error?reject(r.error):resolve(r.data||[]); }, reject); });
+  });
   var pColabs = _colabs !== null
     ? Promise.resolve(_colabs)
     : fetch(COLAB_URL2 + '?action=listColaboradores')
@@ -575,25 +579,15 @@ function loadData() {
   Promise.all([pDados, pColabs])
     .then(function(results){
       hideLoading();
-      var data = results[0];
-      if (data.error) { showError(data.error.message); return; }
-      var rows = data.values || [];
-      if (rows.length < 2) { dados=[]; render(); return; }
-      var headers = rows[0].map(norm);
-      dados = [];
-      for (var i = 1; i < rows.length; i++) {
-        var r = rows[i];
-        if (!r[0] && !r[1]) continue;
-        var obj = { row_index: i + 1 };
-        headers.forEach(function(h, j){ obj[h] = r[j] !== undefined ? String(r[j]) : ''; });
-        obj.lider        = parseInt(obj.lider)        || 0;
-        obj.especialista = parseInt(obj.especialista) || 0;
-        obj.auxiliares   = parseInt(obj.auxiliares)   || 0;
-        obj.aprendizes   = parseInt(obj.aprendizes)   || 0;
-        obj.estagiarios  = parseInt(obj.estagiarios)  || 0;
-        obj.total        = parseInt(obj.total)         || 0;
-        dados.push(obj);
-      }
+      var rpcRows = results[0] || [];
+      dados = rpcRows.map(function(r){
+        return {
+          id: r.id, unidade: r.unidade||'', departamento: r.departamento||'', escala: r.escala||'',
+          lider: parseInt(r.lider)||0, especialista: parseInt(r.especialista)||0,
+          auxiliares: parseInt(r.auxiliares)||0, aprendizes: parseInt(r.aprendizes)||0,
+          estagiarios: parseInt(r.estagiarios)||0, total: parseInt(r.total)||0
+        };
+      });
       render();
       renderKPIs();
       if (state.tab==='dashboard') renderDashboard();
@@ -1615,30 +1609,27 @@ function confirmarModalHC() {
   var auxiliares   = parseInt(document.getElementById('modal-hc-aux').value)||0;
   var aprendizes   = parseInt(document.getElementById('modal-hc-apr').value)||0;
   var estagiarios  = parseInt(document.getElementById('modal-hc-est').value)||0;
-  var payload = {
-    action:'updateHC', row_index:_modalData.row_index,
-    unidade:_modalData.unidade, departamento:_modalData.departamento,
-    escala: document.getElementById('modal-hc-escala').value,
-    lider:lider, especialista:especialista, auxiliares:auxiliares,
-    aprendizes:aprendizes, estagiarios:estagiarios,
-    responsavel:__nomeResponsavel
-  };
-  fetch(HC_SCRIPT_URL, { method:'POST', body: JSON.stringify(payload) })
-    .then(function(r){ return r.json(); })
-    .then(function(res){
-      if (res.ok) {
+  var escalaVal = document.getElementById('modal-hc-escala').value;
+  // Escrita no Supabase (upsert por unidade|departamento); carimba criado_por no servidor.
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('hc_programado_salvar', {
+      p_unidade:_modalData.unidade, p_departamento:_modalData.departamento,
+      p_escala:escalaVal, p_lider:lider, p_especialista:especialista,
+      p_auxiliares:auxiliares, p_aprendizes:aprendizes, p_estagiarios:estagiarios
+    }).then(function(res){
+      if (!res.error) {
         Object.assign(_modalData, {
-          escala:payload.escala, lider:lider, especialista:especialista,
+          escala:escalaVal, lider:lider, especialista:especialista,
           auxiliares:auxiliares, aprendizes:aprendizes, estagiarios:estagiarios,
           total:lider+especialista+auxiliares+aprendizes+estagiarios
         });
         fecharModalHC(); render(); renderKPIs();
       } else {
         btn.textContent='Confirmar'; btn.disabled=false;
-        alert('Erro ao salvar:\n'+(res.error||'resposta inválida'));
+        alert('Erro ao salvar:\n'+(res.error.message||'erro'));
       }
-    })
-    .catch(function(err){ btn.textContent='Confirmar'; btn.disabled=false; alert('Erro de conexão:\n'+err.message); });
+    }, function(err){ btn.textContent='Confirmar'; btn.disabled=false; alert('Erro de conexão:\n'+(err&&err.message||err)); });
+  });
 }
 
 // ─── DRAWER ───────────────────────────────────────────────────────────────────
