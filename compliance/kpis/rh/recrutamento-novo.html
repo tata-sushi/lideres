@@ -396,6 +396,10 @@ body[data-view="analitico"] .content { max-width: none; }
 .ag-btn-pri { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: #CFFF00; background: #35383F; border: none; border-radius: 6px; padding: 9px 18px; cursor: pointer; }
 .ag-btn-sec { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 9px 16px; cursor: pointer; }
 .ag-btn-del { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--red); background: none; border: 1px solid var(--red); border-radius: 6px; padding: 9px 16px; cursor: pointer; }
+.ag-dias-check { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.ag-dias-check label { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 6px; padding: 7px 12px; cursor: pointer; font-size: 13px; color: var(--carbon); user-select: none; }
+.ag-dias-check label:has(input:checked) { border-color: var(--carbon); background: #F4F5F2; font-weight: 600; }
+.ag-dias-check input { accent-color: #35383F; margin: 0; }
 .agenda-table td.ag-hora { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--carbon); white-space: nowrap; }
 .agenda-table td.ag-dur { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; text-align: right; }
 @media (max-width: 767px) {
@@ -741,7 +745,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div><div class="modal-section-title">Unidade</div><select class="modal-select" id="ag-f-unidade"></select></div>
       <div><div class="modal-section-title">Departamento</div><select class="modal-select" id="ag-f-departamento"></select></div>
       <div><div class="modal-section-title">Líder</div><select class="modal-select" id="ag-f-lider"></select></div>
-      <div><div class="modal-section-title">Dias disponíveis</div><input type="text" class="modal-input" id="ag-f-dias" placeholder="Ex.: Seg, Qua, Sex"></div>
+      <div><div class="modal-section-title">Dias disponíveis</div>
+        <div class="ag-dias-check" id="ag-f-dias">
+          <label><input type="checkbox" value="Seg"><span>Seg</span></label>
+          <label><input type="checkbox" value="Ter"><span>Ter</span></label>
+          <label><input type="checkbox" value="Qua"><span>Qua</span></label>
+          <label><input type="checkbox" value="Qui"><span>Qui</span></label>
+          <label><input type="checkbox" value="Sex"><span>Sex</span></label>
+          <label><input type="checkbox" value="Sáb"><span>Sáb</span></label>
+        </div>
+      </div>
       <div style="display:flex;gap:10px">
         <div style="flex:1"><div class="modal-section-title">Início</div><input type="time" class="modal-input" id="ag-f-inicio" step="60"></div>
         <div style="flex:1"><div class="modal-section-title">Término</div><input type="time" class="modal-input" id="ag-f-termino" step="60"></div>
@@ -3650,6 +3663,15 @@ function _agFillSelect(id, opts, val){
   s.value = cur;
 }
 function _agSplitHora(h){ var m=String(h||'').match(/\d{1,2}:\d{2}/g)||[]; return { ini:m[0]||'', fim:m[1]||'' }; }
+function _agGetDias(){
+  var box=document.getElementById('ag-f-dias'); if(!box) return '';
+  var out=[]; box.querySelectorAll('input:checked').forEach(function(c){ out.push(c.value); }); return out.join(', ');
+}
+function _agSetDias(str){
+  var box=document.getElementById('ag-f-dias'); if(!box) return;
+  var s=String(str||'');
+  box.querySelectorAll('input[type=checkbox]').forEach(function(c){ c.checked = s.indexOf(c.value)>=0; });
+}
 function _agRecarregar() {
   var SB = window.__lideresSupa; if (!SB) return;
   SB.rpc('rec_agenda_lideres_sandbox_listar').then(function(res){
@@ -3664,7 +3686,7 @@ function abrirAgendaModal(id) {
   _agFillSelect('ag-f-unidade', _agUnidades(), a?a.unidade:'');
   _agFillSelect('ag-f-departamento', _agDepartamentos(), a?a.departamento:'');
   _agFillSelect('ag-f-lider', _colabLideres(), a?a.lider:'');
-  document.getElementById('ag-f-dias').value = a ? (a.dias||'') : '';
+  _agSetDias(a ? (a.dias||'') : '');
   var hr = _agSplitHora(a?a.horario:'');
   document.getElementById('ag-f-inicio').value = hr.ini;
   document.getElementById('ag-f-termino').value = hr.fim;
@@ -3687,7 +3709,7 @@ function salvarAgenda() {
   var args = {
     p_id: idv || null,
     p_unidade: val('ag-f-unidade'), p_departamento: val('ag-f-departamento'),
-    p_lider: val('ag-f-lider'), p_dias: val('ag-f-dias'),
+    p_lider: val('ag-f-lider'), p_dias: _agGetDias(),
     p_horario: horario, p_duracao: val('ag-f-duracao')
   };
   if (!args.p_unidade || !args.p_departamento || !args.p_lider) {
