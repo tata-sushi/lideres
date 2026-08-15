@@ -969,6 +969,7 @@ function _liderMatchVaga(r) {
 }
 // (removido) lockVerMais — acesso deixa de ser hardcoded p/ admin; controle fica na config de acessos do app (data-aba-id)
 var entrevistas = [];
+var entrevistasAll = [];   // TODAS as entrevistas (inclusive de quem foi p/ teste) — fonte dos gráficos do dashboard
 var testes = [];
 var analitico = [];   // candidaturas cruas (mãe + dias) para a aba Analítico e edição
 var vagas = [];
@@ -1056,7 +1057,7 @@ function loadAllData() {
     // ── Candidaturas (entrevistas/testes) ──
     if (res.error) { entrevistas = []; testes = []; analitico = []; finishLoad(['Supabase: ' + res.error.message]); return; }
     var rows = Array.isArray(res.data) ? res.data : [];
-    entrevistas = []; testes = []; analitico = rows;   // Analítico usa a candidatura crua (mãe + dias)
+    entrevistas = []; entrevistasAll = []; testes = []; analitico = rows;   // Analítico usa a candidatura crua (mãe + dias)
     rows.forEach(function (r) {
       var dias = Array.isArray(r.dias) ? r.dias : []; // filha rec_teste_dias (aninhada pelo RPC)
       var temTeste = dias.length > 0;
@@ -1069,11 +1070,13 @@ function loadAllData() {
         pretensao: r.pretensao_salarial || '', selecionado: r.selecionado || '',
         entrevistador: r.entrevistador || '', status_final: r.status_final || ''
       };
-      // Aba Entrevistas: 1 LINHA POR ENTREVISTA (tabela-filha rec_entrevistas), p/ candidato SEM dia de teste
-      if (!temTeste) {
+      // Aba Entrevistas (LISTA): 1 LINHA POR ENTREVISTA (filha rec_entrevistas), p/ candidato SEM dia de teste.
+      // entrevistasAll recebe TODAS as entrevistas (inclusive de quem foi p/ teste) — usado nos gráficos do dashboard,
+      // pra "Entrevistas por mês"/"Status das entrevistas" contarem todas as entrevistas, igual à planilha.
+      {
         var ents = Array.isArray(r.entrevistas) ? r.entrevistas : [];
         ents.forEach(function (ent, ei) {
-          entrevistas.push(Object.assign({}, base, {
+          var _entObj = Object.assign({}, base, {
             _created: ent.created_at || r.created_at || '',
             _ent_id: ent.id, _ent_num: ei + 1, _ent_total: ents.length,
             data: ent.data || '', horario: ent.hora || '',
@@ -1082,7 +1085,9 @@ function loadAllData() {
             selecionado: ent.selecionado || r.selecionado || '',
             status_entrevista: ent.status || '', observacoes: ent.observacoes || '',
             referencia: r.tipo_referencia || ''
-          }));
+          });
+          entrevistasAll.push(_entObj);
+          if (!temTeste) entrevistas.push(_entObj);
         });
       }
       // Aba Testes: já tem dia de teste agendado (dados por dia vêm de r.dias)
@@ -3578,7 +3583,7 @@ function dataToMY(s) {
 // apenas a exclusão de registros sem horário/valor; ignora filtros da lista
 // (que pertencem à aba Entrevistas/Testes).
 function getFilteredForChart() {
-  var src = applyDashFilters(state.dashSrc==='entrevistas' ? entrevistas : testes);
+  var src = applyDashFilters(state.dashSrc==='entrevistas' ? entrevistasAll : testes);
   var rows;
   if (_cfFunilIdx !== null) {
     rows = _applyFunilFilter(src);
