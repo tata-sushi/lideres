@@ -430,6 +430,9 @@ body[data-view="analitico"] .content { max-width: none; }
 /* barra lateral nativa: visibilidade dos botões é controlada pelo painel (gate.js/denylist), não por perfil fixo */
 .header-plus{width:28px;height:28px;background:var(--carbon);border:none;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
 .header-plus svg{width:14px;height:14px;stroke:var(--citric);fill:none;stroke-width:2.5;stroke-linecap:round}
+@keyframes hr-spin { to { transform: rotate(360deg); } }
+#btn-hard-refresh.is-loading svg { animation: hr-spin .7s linear infinite; }
+#btn-hard-refresh.is-loading { pointer-events: none; opacity: .7; }
 
 /* ── NOVA SOLICITAÇÃO — overlay / modal ─────────────────────────────────────── */
 .ns-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;align-items:flex-end;justify-content:center;padding:0;}
@@ -625,6 +628,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </button>
   <button class="header-plus" onclick="history.back()" title="Voltar">
     <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+  </button>
+  <button class="header-plus" id="btn-hard-refresh" onclick="hardRefresh()" title="Atualizar (recarrega sem cache e mantém a aba)">
+    <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
   </button>
   <button class="header-plus" onclick="openDrawer()">
     <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -4266,6 +4272,7 @@ function setTab(tab) {
   document.getElementById('tab-vagas').classList.toggle('active',tab==='vagas');
   var _tabAg=document.getElementById('tab-agenda');
   if(_tabAg) _tabAg.classList.toggle('active',tab==='agenda');
+  _salvarAba(tab);
   render();
 }
 function setFilter(key,val) {
@@ -5111,7 +5118,84 @@ function gerarRecibosPDF() {
   setTimeout(function(){ window.print(); }, 150);
 }
 
+// ─── Aba atual na URL + botão Atualizar ──────────────────────────────────────
+// A aba aberta fica gravada na URL (#aba) e no sessionStorage. Assim qualquer
+// recarregamento — F5, puxar pra baixo no celular, botão Atualizar — volta na
+// mesma aba em vez de cair sempre em "Entrevistas".
+var ABAS_VALIDAS = ['agenda','vagas','entrevistas','testes','analitico','dashboard'];
+var ABA_CHAVE = 'rec_aba_atual';
+
+function _salvarAba(tab) {
+  if (ABAS_VALIDAS.indexOf(tab) < 0) return;
+  try { sessionStorage.setItem(ABA_CHAVE, tab); } catch (e) {}
+  try { history.replaceState(null, '', location.pathname + location.search + '#' + tab); } catch (e) {}
+}
+
+function _abaSalva() {
+  var h = (location.hash || '').replace('#','');
+  if (ABAS_VALIDAS.indexOf(h) >= 0) return h;
+  try {
+    var s = sessionStorage.getItem(ABA_CHAVE);
+    if (ABAS_VALIDAS.indexOf(s) >= 0) return s;
+  } catch (e) {}
+  return null;
+}
+
+// Aplica a aba salva antes do primeiro render (não chama render(), que ainda não
+// tem dados). Se a pessoa não puder ver essa aba, o gate.js troca sozinho pela
+// primeira aba liberada — ele olha justamente quem está com a classe 'active'.
+function _restaurarAba() {
+  var tab = _abaSalva();
+  if (!tab || !document.getElementById('tab-' + tab)) return;
+  state.tab = tab;
+  document.body.dataset.view = tab;
+  ABAS_VALIDAS.forEach(function (t) {
+    var b = document.getElementById('tab-' + t);
+    if (b) b.classList.toggle('active', t === tab);
+  });
+}
+
+// Recarrega do zero, sem cache, mantendo a aba atual.
+function hardRefresh() {
+  var btn = document.getElementById('btn-hard-refresh');
+  if (btn) btn.classList.add('is-loading');
+  var aba = state.tab || 'entrevistas';
+  _salvarAba(aba);
+
+  function recarregar() {
+    // O '?r=<timestamp>' obriga o navegador a buscar o HTML no servidor em vez
+    // de usar a cópia em cache; o '#aba' devolve a página onde ela estava.
+    location.replace(location.pathname + '?r=' + Date.now() + '#' + aba);
+  }
+
+  var tarefas = [];
+  if (window.caches && caches.keys) {
+    tarefas.push(caches.keys()
+      .then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); })
+      .catch(function () {}));
+  }
+  if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+    tarefas.push(navigator.serviceWorker.getRegistrations()
+      .then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })
+      .catch(function () {}));
+  }
+  if (!tarefas.length) return recarregar();
+  Promise.all(tarefas).then(recarregar, recarregar);
+}
+
+// Tira o '?r=' da barra de endereço — ele só serve pra furar o cache uma vez.
+(function () {
+  if (!/[?&]r=/.test(location.search)) return;
+  try {
+    var p = new URLSearchParams(location.search);
+    p.delete('r');
+    var q = p.toString();
+    history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash);
+  } catch (e) {}
+})();
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
+_restaurarAba();
 loadAllData();
 (function(){
   var s = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'))}catch(e){return null}})();
