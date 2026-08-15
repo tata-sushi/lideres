@@ -386,7 +386,10 @@ body[data-view="analitico"] .content { max-width: none; }
 /* ── AGENDA LÍDERES (KPI's) ── */
 .agenda-table-wrap { overflow-x: auto; }
 .agenda-table { width: 100%; border-collapse: collapse; }
-.agenda-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 6px; text-align: center; border-bottom: 2px solid var(--carbon); background: var(--surface); white-space: nowrap; }
+.agenda-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 6px; text-align: center; border-bottom: 2px solid var(--carbon); background: var(--surface); white-space: nowrap; cursor: pointer; user-select: none; }
+.agenda-table thead th:hover { color: var(--carbon); }
+.agenda-table thead th.ag-th-acoes { cursor: default; }
+.agenda-table thead th.ag-th-acoes:hover { color: var(--muted); }
 /* mesma fonte/padrão da tabela de Vagas (.vaga-table tbody td) */
 .agenda-table tbody td { padding: 8px 6px; font-size: 13px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--carbon); text-align: center; vertical-align: middle; }
 .agenda-table tbody tr:last-child td { border-bottom: none; }
@@ -713,13 +716,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <table class="agenda-table">
         <thead>
           <tr>
-            <th>Unidade</th>
-            <th>Departamento</th>
-            <th>Líder</th>
-            <th>Dias disponíveis</th>
-            <th>Horário</th>
-            <th>Duração</th>
-            <th>Ações</th>
+            <th onclick="toggleAgSort('unidade')">Unidade <span id="ag-vi-unidade">↕</span></th>
+            <th onclick="toggleAgSort('departamento')">Departamento <span id="ag-vi-departamento">↕</span></th>
+            <th onclick="toggleAgSort('lider')">Líder <span id="ag-vi-lider">↕</span></th>
+            <th onclick="toggleAgSort('dias')">Dias disponíveis <span id="ag-vi-dias">↕</span></th>
+            <th onclick="toggleAgSort('horario')">Horário <span id="ag-vi-horario">↕</span></th>
+            <th onclick="toggleAgSort('duracao')">Duração <span id="ag-vi-duracao">↕</span></th>
+            <th class="ag-th-acoes">Ações</th>
           </tr>
         </thead>
         <tbody id="agenda-lideres-tbody">
@@ -1599,11 +1602,11 @@ function renderDashFilters() {
     return h+'</select></div>';
   }
   var deptSrc = f.unidade==='Todos' ? srcAll : srcAll.filter(function(r){return r.unidade===f.unidade;});
-  var html='<div class="filters-row">';
+  var html='<div class="anl-filters-line">';
   html+=sel('Unidade','unidade',unique(srcAll.map(function(r){return r.unidade;})),f.unidade);
   html+=sel('Departamento','departamento',unique(deptSrc.map(function(r){return r.departamento;})),f.departamento);
   html+=sel('Competência','periodo',getDashPeriodos(),f.periodo);
-  html+=dateRangeInputs('dataIni','dataFim',f.dataIni,f.dataFim,'setDashFilter');
+  html+=dateRangeInputs('dataIni','dataFim',f.dataIni,f.dataFim,'setDashFilter',true);
   var totalFiltered = applyDashFilters(srcAll).length;
   html+='</div><div class="filters-actions"><button class="btn-clear" onclick="clearDashFilters()">Limpar filtros</button>';
   html+='<span class="results-count"><span>'+totalFiltered+'</span> resultado(s)</span></div>';
@@ -3637,10 +3640,31 @@ function contarSemana(rows, excluir) {
   return {semana:semana, hoje:hoje, mes:mes};
 }
 
+var _agSortCol = null;   // null = ordem padrão (por ordem/id)
+var _agSortDir = 1;
+function _agSortedRows(rows) {
+  if (!_agSortCol) return rows.slice();
+  return rows.slice().sort(function(a, b) {
+    var av = ((a[_agSortCol] || '') + '').toLowerCase();
+    var bv = ((b[_agSortCol] || '') + '').toLowerCase();
+    if (av < bv) return -_agSortDir;
+    if (av > bv) return _agSortDir;
+    return 0;
+  });
+}
+function toggleAgSort(col) {
+  if (_agSortCol === col) { _agSortDir = -_agSortDir; }
+  else { _agSortCol = col; _agSortDir = 1; }
+  var base = { unidade:'↕', departamento:'↕', lider:'↕', dias:'↕', horario:'↕', duracao:'↕' };
+  base[_agSortCol] = _agSortDir === 1 ? '↑' : '↓';
+  Object.keys(base).forEach(function(k){ var el = document.getElementById('ag-vi-'+k); if (el) el.textContent = base[k]; });
+  renderAgendaLideres();
+}
+
 function renderAgendaLideres() {
   var tb = document.getElementById('agenda-lideres-tbody');
   if (!tb) return;
-  var rows = agendaLideres || [];
+  var rows = _agSortedRows(agendaLideres || []);
   if (!rows.length) {
     tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:18px;">Sem registros de agenda.</td></tr>';
     return;
