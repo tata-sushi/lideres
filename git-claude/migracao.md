@@ -357,3 +357,8 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - Front `armarios.html`: busca o flag `armario_pode_gerir` no load; opções Incluir/Excluir e os guards do `doSubmit` usam o flag (sem `currentUser.type==='admin'`). Admin continua vendo por padrão.
 
 - 2026-08-16 — **Travas movidas pro painel admin** (Remuneração via `pode_ver_valores('cargos')`; Incluir/Excluir armário via botão liberável + `armario_pode_gerir`). Nada mais depende de perfil hardcoded nesses dois pontos.
+
+## Organograma 100% Supabase (16/08) ✅
+- Sub-lookups do modal da pessoa (**Armário** e **Próximo exame**) deixaram o Apps Script: `carregarArmarios`→`armarios_listar`, `carregarExames`→`exames_listar` (dados já migrados nas Partes 2a/2b). Removidos `ARMARIO_URL`, `MEDICINA_URL`, `COLAB_URL` (drawer já era Supabase) e o helper `_headerKey`. **organograma.html = 0 refs a script.google.com.**
+
+- 2026-08-16 — **Organograma FECHADO 100%** (árvore + CES + armário/exame do modal, tudo Supabase). Medicina e Armários (páginas próprias) também 100%. Módulo RH do portal segue com dashboards ainda em Sheets p/ migrar (semanal, banco de horas, férias, solicitações, reclamações, performance, hc2, benefícios, desligamentos2) + frente n8n (33 workflows, Sheets→Trello → Kanban/Supabase).
