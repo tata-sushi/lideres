@@ -576,7 +576,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </aside>
 
 <script>
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
@@ -628,16 +627,9 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closeDrawer(
 
 <script>
 
-// ─── CONFIGURAÇÃO GOOGLE SHEETS ───────────────────────────────────────────────
-var SHEETS_CONFIG = {
-  apiKey:        'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto',
-  spreadsheetId: '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw',
-  range:         'admissões!A2:G1000'  // Aba: admissões | linha 2 em diante
-  // Colunas: A=MT | B=UNIDADE | C=DEPARTAMENTO | D=NOME_COLABORADOR
-  //          E=DATA_ADMISSAO | F=DIAS_CONTRATO | G=STATUS_DEVOLUTIVA
-};
-// ─────────────────────────────────────────────────────────────────────────────
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyIfFRcDtGulyHT9hwyPEg6ySL1RcDraLQHJqxj9530vCmBSuneUroSmn8WHflrAh7V/exec';
+// ─── FONTE: Supabase (tata_plus.experiencia_listar / experiencia_avaliar) ─────
+// Lista = profiles ativos admitidos >= 2026-04-01; status derivado das avaliações.
+function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
 
 var hoje = new Date();
 var feedbacks = {};
@@ -666,75 +658,40 @@ function setError(msg) {
   }
 }
 
-// ── Parser de linhas da planilha ──
-// A=MT | B=UNIDADE | C=DEPARTAMENTO | D=NOME_COLABORADOR
-// E=DATA_ADMISSAO | F=DIAS_CONTRATO | G=STATUS_DEVOLUTIVA
-function parseLinha(row) {
-  if (!row || !row[3]) return null; // precisa ter NOME_COLABORADOR
-
-  var admissao = (row[4] || '').trim();
-  // Aceita DD/MM/YYYY ou YYYY-MM-DD
-  if (admissao.indexOf('/') !== -1) {
-    var p = admissao.split('/');
-    admissao = p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
-  }
-
-  var diasContrato = parseInt(row[5] || '14', 10);
-  var status = (row[6] || '').trim();
-
-  // Fase determinada pelo status:
-  // - Se já avaliado no 1º e aprovado → fase 46
-  // - Caso contrário → fase 14 (independente dos dias decorridos)
+// ── Mapeia uma linha do RPC (experiencia_listar) p/ o colaborador ──
+function mapColab(r) {
+  if (!r || !r.nome) return null;
+  var admissao = String(r.data_admissao || '').slice(0, 10); // ISO YYYY-MM-DD
+  var status = (r.status_devolutiva || '').trim();
+  // Fase: aprovado no 1º → 46 (2º período); caso contrário → 14
   var fase = (status === 'Av. 1º Período') ? 46 : 14;
-
   return {
-    mt:           (row[0] || '').trim(),
-    nome:         (row[3] || '').trim().toUpperCase(),
-    cargo:        (row[2] || '').trim(),        // usa DEPARTAMENTO como cargo
-    unidade:      (row[1] || '').trim(),
-    departamento: (row[2] || '').trim(),
-    lider:        '',                            // não existe na planilha
+    mt:           String(r.matricula || ''),
+    nome:         String(r.nome || '').trim().toUpperCase(),
+    cargo:        r.departamento || '',
+    unidade:      r.unidade || '',
+    departamento: r.departamento || '',
+    lider:        '',
     admissao:     admissao,
     fase:         fase,
-    diasContrato: diasContrato,
+    diasContrato: parseInt(r.dias_contrato, 10) || 0,
     statusDevolutiva: status
   };
 }
 
-// ── Carregamento via API ──
+// ── Carregamento via Supabase ──
 function carregarDados() {
   var errEl = document.getElementById('errorState');
   if (errEl) { errEl.style.display = 'none'; errEl.innerHTML = ''; }
   setLoading(true);
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' +
-    SHEETS_CONFIG.spreadsheetId + '/values/' +
-    encodeURIComponent(SHEETS_CONFIG.range) +
-    '?key=' + SHEETS_CONFIG.apiKey;
-
-  var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  var timer = setTimeout(function() { if (controller) controller.abort(); }, 15000);
-
-  fetch(url, controller ? { signal: controller.signal } : {})
-    .then(function(r) {
-      clearTimeout(timer);
-      if (!r.ok) return r.text().then(function(t) {
-        var msg;
-        try { var j = JSON.parse(t); msg = j.error && j.error.message; } catch(e) {}
-        throw new Error(msg || 'HTTP ' + r.status);
-      });
-      return r.json();
-    })
-    .then(function(data) {
-      var rows = data.values || [];
-      var rawList = rows.map(function(row, i) {
-        var c = parseLinha(row);
-        if (c) c.rowIndex = i + 2;
-        return c;
-      }).filter(Boolean);
+  comSupa(function(supa) {
+    supa.schema('tata_plus').rpc('experiencia_listar').then(function(res) {
+      if (res.error) { setError(res.error.message || 'Erro ao carregar avaliações'); return; }
+      var rawList = (res.data || []).map(mapColab).filter(Boolean);
       window._allColabs = rawList;
       colaboradores = rawList.slice();
       if (colaboradores.length === 0) {
-        setError('Nenhum colaborador encontrado na planilha. Verifique a aba "admissões".');
+        setError('Nenhum colaborador em período de experiência no momento.');
         return;
       }
       var statusOcultos = ['Não Efetivado 1º', 'Não Efetivado 2º', 'Av. 2º Período'];
@@ -742,23 +699,13 @@ function carregarDados() {
         return statusOcultos.indexOf(c.statusDevolutiva) === -1;
       });
       feedbacks = {};
-      colaboradores.forEach(function(c) {
-        var s = c.statusDevolutiva;
-        if ((s === 'Av. 1º Período' && c.fase === 14) || s === 'Av. 2º Período') {
-          feedbacks[c.nome] = { avaliador: '', respostas: {} };
-        }
-      });
       setLoading(false);
       document.getElementById('mainContent').style.display = 'block';
       renderCards();
-    })
-    .catch(function(e) {
-      clearTimeout(timer);
-      var msg = e.name === 'AbortError'
-        ? 'Tempo esgotado — verifique a conexão e tente novamente.'
-        : (e.message || 'Verifique a API Key e se a planilha está pública.');
-      setError(msg);
+    }, function(err) {
+      setError((err && err.message) || 'Erro de conexão com o Supabase.');
     });
+  });
 }
 
 function diffDias(str) {
@@ -1379,43 +1326,37 @@ function handleOverlayClick(e) {
 }
 
 function enviarFeedback() {
-  var avaliador = window.__lideresUser || '';
-  if (!avaliador) { showToast('Usuário não identificado'); return; }
-
   var btnSubmit = document.getElementById('btn-submit');
   btnSubmit.disabled = true;
   btnSubmit.textContent = 'Salvando...';
 
-  var payload = {
-    action:       'salvarAvaliacao',
-    periodo:      colabAtual.fase === 46 ? 2 : 1,
-    mt:           colabAtual.mt || '',
-    nome:         colabAtual.nome,
-    unidade:      colabAtual.unidade,
-    departamento: colabAtual.departamento || '',
-    avaliador:    avaliador,
-    obs:          document.getElementById('obs-geral').value,
-    respostas:    respostasModal
-  };
+  var periodo = colabAtual.fase === 46 ? 2 : 1;
+  // Pergunta-decisão: p13 (1º "continua no 2º período?") / q26 (2º "deverá ser efetivado")
+  var destaqueId = periodo === 2 ? 'q26' : 'p13';
+  var efetivar = respostasModal[destaqueId] === 'sim';
 
-  fetch(APPS_SCRIPT_URL, {
-    method:  'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body:    JSON.stringify(payload)
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (!data.ok) throw new Error(data.erro || 'Erro desconhecido');
-    var nomeColab = colabAtual.nome;
-    feedbacks[nomeColab] = { respostas: respostasModal, avaliador: avaliador };
-    fecharModal();
-    showToast('Avaliação salva: ' + nomeColab);
-    renderCards();
-  })
-  .catch(function(err) {
-    btnSubmit.disabled = false;
-    btnSubmit.textContent = 'Salvar Avaliação';
-    showToast('Erro ao salvar: ' + err.message);
+  comSupa(function(supa) {
+    supa.schema('tata_plus').rpc('experiencia_avaliar', {
+      p_matricula:    colabAtual.mt || '',
+      p_nome:         colabAtual.nome,
+      p_unidade:      colabAtual.unidade,
+      p_departamento: colabAtual.departamento || '',
+      p_periodo:      periodo,
+      p_efetivar:     efetivar,
+      p_obs:          document.getElementById('obs-geral').value,
+      p_respostas:    respostasModal
+    }).then(function(res) {
+      if (res.error) throw res.error;
+      var nomeColab = colabAtual.nome;
+      feedbacks[nomeColab] = { respostas: respostasModal, avaliador: window.__lideresUser || '' };
+      fecharModal();
+      showToast('Avaliação salva: ' + nomeColab);
+      renderCards();
+    }, function(err) {
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = 'Salvar Avaliação';
+      showToast('Erro ao salvar: ' + ((err && err.message) || err));
+    });
   });
 }
 
