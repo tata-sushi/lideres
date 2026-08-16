@@ -566,7 +566,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-var SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbw2d8S-nsu0cvs5oPyRZTsXtYvBC_9B85IBkE8t5IGoAsoq2nEumkNGllhSdIGUoXnTbg/exec';
 
 // ─── Estado ───────────────────────────────────────────────────────────────────
 var exames = [];
@@ -629,13 +628,39 @@ function parseRows(data) {
   hideLoading(); render();
 }
 
+function comSupa(cb){
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true });
+}
+
 function loadAllData() {
   state.loading = true; state.error = null;
   showLoading();
-  fetch(SCRIPT_URL + '?action=getData')
-    .then(function(r){ return r.json(); })
-    .then(parseRows)
-    .catch(function(err){ state.error = err.message||'Erro de rede'; hideLoading(); render(); });
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('exames_listar').then(function(res){
+      if (res.error) { state.error = res.error.message || 'Erro no servidor'; hideLoading(); render(); return; }
+      var rows = res.data || [];
+      exames = rows.map(function(r){
+        return {
+          matricula:          r.matricula || '',
+          nome:               r.nome || '',
+          cargo:              r.cargo || '',
+          departamento:       r.departamento || '',
+          unidade:            r.unidade || '',
+          admissao:           r.admissao || '',
+          statusColab:        r.status_colab || '',
+          tipoExame:          r.tipo_exame || '',
+          periodicidade:      parseInt(r.periodicidade) || 0,
+          ultimoExame:        r.ultimo_exame || '',
+          realizaExame:       r.realiza_exame || '',
+          proximaRealizacao:  r.proxima_realizacao || ''
+        };
+      });
+      hideLoading(); render();
+    }, function(err){
+      state.error = (err && err.message) || 'Erro de rede'; hideLoading(); render();
+    });
+  });
 }
 
 // ─── Utilitários ──────────────────────────────────────────────────────────────
@@ -1106,43 +1131,37 @@ function closeEditModal() {
 function saveExame() {
   if (!_editRecord) return;
   var errEl = document.getElementById('edit-modal-error');
-  if (!SCRIPT_URL) {
-    errEl.textContent = 'SCRIPT_URL não configurado.';
-    errEl.classList.add('show');
-    return;
-  }
   var btn   = document.getElementById('edit-btn-save');
   var spin  = document.getElementById('edit-btn-spin');
   var label = document.getElementById('edit-btn-label');
   btn.disabled = true; spin.style.display = 'block'; label.textContent = 'Salvando…';
   errEl.classList.remove('show');
-  var payload = {
-    matricula:         _editRecord.matricula,
-    tipoExame:         document.getElementById('edit-tipo').value,
-    periodicidade:     document.getElementById('edit-periodo').value,
-    ultimoExame:       document.getElementById('edit-ultimo').value,
-    realizaExame:      document.getElementById('edit-realiza').value,
-    proximaRealizacao: document.getElementById('edit-proxima').value
+  var args = {
+    p_matricula:     _editRecord.matricula,
+    p_tipo:          document.getElementById('edit-tipo').value,
+    p_periodicidade: document.getElementById('edit-periodo').value,
+    p_ultimo:        document.getElementById('edit-ultimo').value,
+    p_realiza:       document.getElementById('edit-realiza').value,
+    p_proxima:       document.getElementById('edit-proxima').value
   };
-  fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) })
-    .then(function(r){ return r.json(); })
-    .then(function(resp) {
-      if (resp.ok) { closeEditModal(); loadAllData(); }
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('exame_gravar', args).then(function(res){
+      var resp = res && res.data;
+      if (!res.error && resp && resp.ok) { closeEditModal(); loadAllData(); }
       else {
-        errEl.textContent = 'Erro: ' + (resp.error || 'Falha ao salvar');
+        errEl.textContent = 'Erro: ' + ((res.error && res.error.message) || (resp && resp.error) || 'Falha ao salvar');
         errEl.classList.add('show');
         btn.disabled = false; spin.style.display = 'none'; label.textContent = 'Salvar';
       }
-    })
-    .catch(function(err){
-      errEl.textContent = 'Erro de rede: ' + err.message;
+    }, function(err){
+      errEl.textContent = 'Erro de rede: ' + ((err && err.message) || err);
       errEl.classList.add('show');
       btn.disabled = false; spin.style.display = 'none'; label.textContent = 'Salvar';
     });
+  });
 }
 
 // ─── Drawer ───────────────────────────────────────────────────────────────────
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
@@ -1198,23 +1217,21 @@ function closeDrawer() {
   document.getElementById('drawer').classList.remove('open');
 }
 
-var _atualizarColabLoaded = false;
 function _loadAtualizarColabs() {
-  if (_atualizarColabLoaded) return;
-  fetch(COLAB_URL + '?action=listColaboradores')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data.ok || !data.colaboradores) return;
-      var sel = document.getElementById('atualizar-colab');
-      data.colaboradores.forEach(function(c) {
-        var opt = document.createElement('option');
-        opt.value = c.matricula || c.id || c.nome;
-        opt.textContent = c.nome;
-        sel.appendChild(opt);
-      });
-      _atualizarColabLoaded = true;
-    })
-    .catch(function() {});
+  // A lista de ativos já vem de exames_listar(); reaproveita para o dropdown.
+  var sel = document.getElementById('atualizar-colab');
+  if (!sel) return;
+  // Limpa opções antigas (mantém o placeholder "— Selecione —")
+  while (sel.options.length > 1) sel.remove(1);
+  exames.slice().sort(function(a, b){
+    return String(a.nome||'').localeCompare(String(b.nome||''), 'pt-BR');
+  }).forEach(function(c) {
+    if (!c.matricula) return;
+    var opt = document.createElement('option');
+    opt.value = c.matricula;
+    opt.textContent = c.nome + ' · #' + c.matricula;
+    sel.appendChild(opt);
+  });
 }
 
 var _ATU_PERIODO = { Normal: '360', Especial: '360', Complementar: '180', Administrativo: '720' };
@@ -1271,31 +1288,29 @@ function saveAtualizar() {
   var label = document.getElementById('atualizar-btn-label');
   btn.disabled = true; spin.style.display = 'block'; label.textContent = 'Salvando…';
   errEl.classList.remove('show');
-  var ultimoRaw = document.getElementById('atualizar-ultimo').value;
-  var ultimoFmt = ultimoRaw ? (function(s){ var p=s.split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : s; })(ultimoRaw) : '';
-  var payload = {
-    action:        'atualizarRelacao',
-    matricula:     matricula,
-    tipoExame:     document.getElementById('atualizar-tipo').value,
-    periodicidade: document.getElementById('atualizar-periodo').value,
-    ultimoExame:   ultimoFmt,
-    realizaExame:  document.getElementById('atualizar-realiza').value
+  var args = {
+    p_matricula:     matricula,
+    p_tipo:          document.getElementById('atualizar-tipo').value,
+    p_periodicidade: document.getElementById('atualizar-periodo').value,
+    p_ultimo:        document.getElementById('atualizar-ultimo').value,   // ISO YYYY-MM-DD (input date) — RPC aceita
+    p_realiza:       document.getElementById('atualizar-realiza').value
+    // sem p_proxima: a RPC recalcula = último + periodicidade
   };
-  fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) })
-    .then(function(r){ return r.json(); })
-    .then(function(resp) {
-      if (resp.ok) { closeAtualizarModal(); loadAllData(); }
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('exame_gravar', args).then(function(res){
+      var resp = res && res.data;
+      if (!res.error && resp && resp.ok) { closeAtualizarModal(); loadAllData(); }
       else {
-        errEl.textContent = 'Erro: ' + (resp.error || 'Falha ao salvar');
+        errEl.textContent = 'Erro: ' + ((res.error && res.error.message) || (resp && resp.error) || 'Falha ao salvar');
         errEl.classList.add('show');
         btn.disabled = false; spin.style.display = 'none'; label.textContent = 'Salvar';
       }
-    })
-    .catch(function(err){
-      errEl.textContent = 'Erro de rede: ' + err.message;
+    }, function(err){
+      errEl.textContent = 'Erro de rede: ' + ((err && err.message) || err);
       errEl.classList.add('show');
       btn.disabled = false; spin.style.display = 'none'; label.textContent = 'Salvar';
     });
+  });
 }
 
 document.addEventListener('keydown', function(e) {
