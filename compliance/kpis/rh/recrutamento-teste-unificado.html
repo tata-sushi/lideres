@@ -936,6 +936,7 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
 <body data-view="sobre">
 
 <!-- Auth gate removida nesta pagina de TESTE (sem login) -->
+<script>window.__TESTE_SEM_AUTH = true;</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 
@@ -968,6 +969,13 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
   <button class="tab-btn" id="tab-analitico" data-aba-id="governanca-kpis-rh-recrutamento::analitico" onclick="setTab('analitico')">Analítico</button>
   <button class="tab-btn" id="tab-dashboard" data-aba-id="governanca-kpis-rh-recrutamento::dashboard" onclick="setTab('dashboard')">KPI's</button>
   <button class="tab-btn active" id="tab-sobre" data-aba-id="governanca-kpis-rh-recrutamento::sobre" onclick="setTab('sobre')">Sobre</button>
+</div>
+<!-- Aviso das abas de dados nesta pagina de TESTE (sem login no Tata Plus) -->
+<div id="teste-login-aviso" style="display:none; padding:48px 24px 60px; text-align:center; background:var(--bg);">
+  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--carbon)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:14px"><rect x="4" y="11" width="16" height="10" rx="1.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+  <p style="font-size:16px; font-weight:700; color:var(--carbon); margin-bottom:8px">Esta aba precisa de login</p>
+  <p style="font-size:13px; color:var(--mid); line-height:1.6; max-width:340px; margin:0 auto 18px">Os dados ao vivo (Agenda, Vagas, Entrevistas, Testes, Analítico, KPI's) vêm do app Tatá Plus e exigem login. Nesta página de teste sem autenticação, apenas a aba <strong>Sobre</strong> funciona.</p>
+  <button onclick="setTab('sobre')" style="padding:10px 20px; background:var(--carbon); color:var(--citric); border:none; border-radius:6px; font-family:'DM Mono',monospace; font-size:11px; font-weight:500; letter-spacing:.08em; text-transform:uppercase; cursor:pointer">← Voltar para Sobre</button>
 </div>
 <div class="kpis-wrap" id="kpis-wrap">
   <div class="kpi-card kpi-card-entrev">
@@ -1949,9 +1957,17 @@ function fmtValor(v) {
 // ─── SANDBOX: dados vêm do Supabase (rec_candidaturas + vagas via RPCs públicos) ───
 function loadAllData() {
   state.loading = true; state.error = null;
-  showLoading();
   var SB = window.__lideresSupa;
-  if (!SB) { window.addEventListener('lideres:supa', loadAllData, { once: true }); return; }
+  if (!SB) {
+    // Pagina de TESTE sem login: sem gate.js o cliente Supabase autenticado nunca
+    // e criado e o evento 'lideres:supa' nunca dispara. Resolve para o estado de
+    // aviso (via render) em vez de deixar o spinner travado bloqueando a tela.
+    if (window.__TESTE_SEM_AUTH) { state.loading = false; hideLoading(); render(); return; }
+    showLoading();
+    window.addEventListener('lideres:supa', loadAllData, { once: true });
+    return;
+  }
+  showLoading();
   Promise.all([
     SB.rpc('rec_candidaturas_sandbox_listar', { p_matricula: _sandboxMatricula() }),  // máscara da pretensão/diária
     SB.rpc('vagas_sandbox_listar', { p_matricula: _sandboxMatricula() }),   // matrícula DEV p/ testar permissão de valores
@@ -5309,6 +5325,17 @@ function _verMaisCards() { _cardsShown += CARD_PAGE; render(); }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 function render() {
+  // Aba estatica "Sobre": conteudo institucional, nao depende de dados.
+  if (state.tab === 'sobre') { hideLoading(); document.getElementById('teste-login-aviso').style.display = 'none'; return; }
+  // Pagina de TESTE sem login: as abas de dados nao tem cliente Supabase
+  // autenticado (o gate.js foi removido). Mostra um aviso em vez de deixar o
+  // spinner travado, que bloqueava ate a troca de aba.
+  if (window.__TESTE_SEM_AUTH && !window.__lideresSupa) {
+    hideLoading();
+    document.getElementById('teste-login-aviso').style.display = '';
+    return;
+  }
+  document.getElementById('teste-login-aviso').style.display = 'none';
   if (state.loading) { showLoading(); return; }
   if (state.error)   { showError(state.error); return; }
   (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};document.getElementById('footer-date').textContent='Atualizado: '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());})();
@@ -6299,10 +6326,10 @@ function hardRefresh() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 _restaurarAba();
-// Nesta página de TESTE (sem gate.js, sem sessão) não há como autenticar no
-// Supabase — pular o carregamento quando a aba ativa é a estática "Sobre",
-// senão o overlay de carregamento fica preso pra sempre bloqueando a tela.
-if (state.tab !== 'sobre') { loadAllData(); }
+// Nesta pagina de TESTE (sem gate.js, sem sessao) o loadAllData resolve para o
+// estado de aviso quando a aba ativa depende de dados, e nao faz nada visivel
+// para a aba "Sobre" (estatica). Chamada unica que nunca trava a tela.
+loadAllData();
 (function(){
   var s = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'))}catch(e){return null}})();
   if (s && s.displayName) {
