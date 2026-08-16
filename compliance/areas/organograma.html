@@ -1103,6 +1103,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   // Aba "Salarios" → sub-modal REMUNERAÇÃO  |  Aba "Cargos" → sub-modal DESC. DO CARGO
   var _cesSalarios = {};
   var _cesCargos   = {};
+  // Permissão de ver valores financeiros (área 'cargos') — resolvida no servidor
+  // (painel admin → Valores financeiros). Sem trava de perfil no front.
+  var _podeVerValores = false;
 
   // Armários indexados por matrícula e por nome do colaborador
   var _armariosByMatricula = {};
@@ -1142,6 +1145,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       supa.schema('tata_plus').rpc('organograma_ces').then(function(res) {
         var data = res && res.data;
         if (!data || !data.ok) return;
+        _podeVerValores = !!data.pode_ver_valores;
         (data.salarios || []).forEach(function(s) {
           if (s.cargo_id) _cesSalarios[normCargoId(s.cargo_id)] = s;
         });
@@ -2318,10 +2322,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.getElementById('mAdmissao').textContent = formatarData(n.admissao);
     document.getElementById('mTempoCasa').textContent = tempoDeCasa(n.admissao);
     document.getElementById('mAniversario').textContent = formatarAniversario(n.dataNascimento);
-    var _perfil = ((window.__lideresSession && window.__lideresSession.perfil) || '').toLowerCase();
-    var _canRem = (_perfil === 'admin' || _perfil === 'analista-rh');
     var btnRem = document.getElementById('btnRemuneracao');
-    if (btnRem) btnRem.style.display = _canRem ? '' : 'none';
+    if (btnRem) btnRem.style.display = _podeVerValores ? '' : 'none';
     document.getElementById('modal').classList.add('show');
   }
 
@@ -2389,8 +2391,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   window.abrirRemuneracao = function() {
     if (!_modalNode) return;
-    var _p = ((window.__lideresSession && window.__lideresSession.perfil) || '').toLowerCase();
-    if (_p !== 'admin' && _p !== 'analista-rh') return;
+    if (!_podeVerValores) return;   // valores só p/ quem tem permissão (painel admin)
     var cargoId = _modalNode.cargoId;
     var sal = cargoId ? _cesSalarios[normCargoId(cargoId)] : null;
     document.getElementById('smRemTitle').textContent = _modalNode.cargo || '—';
