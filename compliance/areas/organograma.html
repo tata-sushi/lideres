@@ -1091,9 +1091,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   'use strict';
 
   // ============================================
-  // CONFIGURAÇÃO — cole aqui a URL do Web App
+  // CONFIGURAÇÃO
+  // Árvore + CES vêm do Supabase (schema tata_plus).
   // ============================================
-  var ENDPOINT = 'https://script.google.com/macros/s/AKfycbxUWUoOmv-Cn19-FjUJ18jYTu5G_embOGDaQDsgC4Jd8agVfgqs98Tbu3qlqa9e7tpu/exec';
   function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
   // Armários — mesma base usada em /compliance/kpis/rh/armarios.html
   var ARMARIO_URL = 'https://script.google.com/macros/s/AKfycbxD9BwHYMh44Zzob_94BKUgoetxhRxm7s7_cYncnQkCYpPrwhzpIO0t3ihSpY72Amxp-A/exec';
@@ -1255,31 +1255,160 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   }
 
   // ============================================
-  // CARREGAR DADOS DO APPS SCRIPT
+  // CONSTRUÇÃO DA HIERARQUIA (portado do Apps Script)
+  // Fonte: profiles (Supabase) via RPC organograma_colaboradores.
+  // ============================================
+  function _norm(s) {
+    return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  }
+
+  function detectarNivel(cargo) {
+    var c = _norm(cargo);
+    if (/^(diretor|ceo|socio|presidente|coo|cfo|chro|cco)/.test(c)) return 'diretoria';
+    if (/^(gerente|coord|chef executivo)/.test(c)) return 'gerencia';
+    if (/^(sup|lider|encarregado|chef|maitre)/.test(c)) return 'supervisor';
+    return 'operacional';
+  }
+
+  function classeUnidade(unidade) {
+    var u = _norm(unidade);
+    if (!u) return null;
+    if (u.indexOf('puc') >= 0 || u.indexOf('poke') >= 0) return 'puc';
+    if (u.indexOf('itaim') >= 0) return 'itaim';
+    if (u.indexOf('pinheiros') >= 0) return 'pinheiros';
+    if (u.indexOf('tata house') >= 0 || u.indexOf('house') >= 0) return 'tatahouse';
+    return null;
+  }
+
+  function gerarIniciais(nome) {
+    var partes = String(nome || '').trim().split(/\s+/).filter(Boolean);
+    if (partes.length === 0) return '?';
+    var a = partes[0].charAt(0);
+    var b = partes.length > 1 ? partes[partes.length - 1].charAt(0) : '';
+    return (a + b).toUpperCase();
+  }
+
+  var NIVEL_ORD = { diretoria: 0, gerencia: 1, supervisor: 2, operacional: 3 };
+
+  function ordenarNode(n) {
+    if (!n.children || n.children.length === 0) return;
+    n.children.sort(function(a, b) {
+      var na = NIVEL_ORD[a.nivel] !== undefined ? NIVEL_ORD[a.nivel] : 3;
+      var nb = NIVEL_ORD[b.nivel] !== undefined ? NIVEL_ORD[b.nivel] : 3;
+      if (na !== nb) return na - nb;
+      return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
+    });
+    n.children.forEach(ordenarNode);
+  }
+
+  // colaboradores: linhas cruas da RPC → { arvore, peers }
+  function construirHierarquia(colaboradores) {
+    var mapa = {};
+    var nodes = colaboradores.map(function(c) {
+      var idPessoa = c.id_pessoa || '';
+      var matricula = c.matricula || '';
+      var node = {
+        id: idPessoa || ('fixo_' + matricula),
+        idPessoa: idPessoa,
+        matricula: matricula,
+        nome: c.nome || '',
+        cargo: c.cargo || '',
+        cargoId: c.cargo_id || '',
+        supervisorId: c.id_superior || '',
+        unidade: c.unidade || '',
+        departamento: c.departamento || '',
+        admissao: c.data_admissao || '',
+        dataNascimento: c.data_nascimento || '',
+        foto: c.foto || '',
+        nivel: detectarNivel(c.cargo),
+        unitClass: classeUnidade(c.unidade),
+        iniciais: gerarIniciais(c.nome),
+        children: []
+      };
+      mapa[node.id] = node;
+      return node;
+    });
+
+    var orfaos = [];
+    var semSuperior = [];
+    nodes.forEach(function(n) {
+      var sup = n.supervisorId;
+      if (sup && sup === n.id) { orfaos.push(n); return; }         // auto-referência
+      if (sup && mapa[sup]) { mapa[sup].children.push(n); return; } // filho do líder
+      if (sup) { orfaos.push(n); return; }                          // líder ausente
+      semSuperior.push(n);                                          // sem superior → raiz/sócio
+    });
+
+    // Escolhe raiz entre os "sem superior": CEO primeiro, senão maior nível.
+    semSuperior.sort(function(a, b) {
+      var ca = /^ceo$/.test(_norm(a.cargo)) ? 0 : 1;
+      var cb = /^ceo$/.test(_norm(b.cargo)) ? 0 : 1;
+      if (ca !== cb) return ca - cb;
+      var na = NIVEL_ORD[a.nivel] !== undefined ? NIVEL_ORD[a.nivel] : 3;
+      var nb = NIVEL_ORD[b.nivel] !== undefined ? NIVEL_ORD[b.nivel] : 3;
+      if (na !== nb) return na - nb;
+      return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
+    });
+
+    var raiz = semSuperior[0] || null;
+    var peers = [];
+    for (var i = 1; i < semSuperior.length; i++) {
+      var s = semSuperior[i];
+      if (s.nivel === 'diretoria') peers.push(s); // sócios/diretores ao lado do CEO
+      else orfaos.push(s);
+    }
+
+    // Órfãos entram sob a raiz.
+    if (raiz) {
+      orfaos.forEach(function(o) { if (o !== raiz) raiz.children.push(o); });
+      ordenarNode(raiz);
+    }
+
+    return { arvore: raiz, peers: peers };
+  }
+
+  function calcularStats(nodes) {
+    var stats = { itaim: 0, pinheiros: 0, puc: 0, tatahouse: 0, backoffice: 0 };
+    nodes.forEach(function(n) {
+      var u = n.unitClass;
+      if (u === 'itaim') stats.itaim++;
+      else if (u === 'pinheiros') stats.pinheiros++;
+      else if (u === 'puc') stats.puc++;
+      else if (u === 'tatahouse') stats.tatahouse++;
+      else stats.backoffice++;
+    });
+    return stats;
+  }
+
+  // ============================================
+  // CARREGAR DADOS DO SUPABASE (profiles)
   // ============================================
   function carregarDados(opts) {
     opts = opts || {};
     showLoading(true);
     document.getElementById('errBox').classList.remove('show');
 
-    var url = ENDPOINT + (opts.refresh ? (ENDPOINT.indexOf('?') >= 0 ? '&' : '?') + 'refresh=1' : '');
-    fetch(url)
-      .then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(function(data) {
-        if (data.erro) throw new Error(data.erro);
-        if (!data.arvore) throw new Error('Resposta invalida (sem arvore)');
+    comSupa(function(supa) {
+      supa.schema('tata_plus').rpc('organograma_colaboradores').then(function(res) {
+        if (res.error) throw new Error(res.error.message || 'RPC organograma_colaboradores');
+        var linhas = res.data || [];
+        if (!linhas.length) throw new Error('Nenhum colaborador ativo encontrado');
 
-        arvore = inicializarNode(data.arvore);
+        var built = construirHierarquia(linhas);
+        if (!built.arvore) throw new Error('Não foi possível montar a árvore (sem raiz)');
+
+        // stats considera TODOS os nós da árvore + os peers (sócios)
+        var stats = calcularStats(coletarTodos(built.arvore).concat(built.peers));
+        var total = linhas.length;
+
+        arvore = inicializarNode(built.arvore);
         sortChildren(arvore);
         nodeMap = {};
         mapearNos(arvore, null);
-        peerNos = (data.peers || []).map(function(p) { return Object.assign({ children: [] }, p); });
+        peerNos = built.peers.map(function(p) { return Object.assign({ children: [] }, p); });
         peerNos.forEach(function(p) { nodeMap[p.id] = p; });
 
-        atualizarStats(data.stats || {}, data.total || 0);
+        atualizarStats(stats, total);
         showLoading(false);
         detectMode(true);
         var _cv = document.getElementById('canvas');
@@ -1290,11 +1419,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           if (window.scrollTo) window.scrollTo(0, 0);
         }, 200);
 
-        console.log('Carregado:', data.total, 'colaboradores');
-      })
-      .catch(function(err) {
-        showError(err.message + '. Verifique se o ENDPOINT esta correto e o Web App publicado como "Qualquer pessoa".');
+        console.log('Carregado:', total, 'colaboradores');
+      }).catch(function(err) {
+        showError((err && err.message ? err.message : err) + '. Verifique a conexão com o Supabase.');
       });
+    });
+  }
+
+  // Achata a árvore em uma lista de nós (para estatísticas).
+  function coletarTodos(n) {
+    if (!n) return [];
+    var out = [n];
+    (n.children || []).forEach(function(c) { out = out.concat(coletarTodos(c)); });
+    return out;
   }
 
   function inicializarNode(n) {
