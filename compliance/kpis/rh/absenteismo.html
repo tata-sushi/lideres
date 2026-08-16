@@ -457,19 +457,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <script>
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
-var SHEET_ID   = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
-var API_KEY    = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
-var SHEET_NAME = 'Ausências';  // nome da aba na planilha
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxSgSedQXD_iaOhBTY_JzMCw-5__EiLMXEB5veoEZHcUgGR0K1ChoL7PBibahUoSH2g/exec';
-
-// ─── USUÁRIO LOGADO ───────────────────────────────────────────────────────────
-var __nomeResponsavel = (function() {
-  try {
-    var s = JSON.parse(localStorage.getItem('lideres_session') || '{}');
-    return (s && s.displayName) || '';
-  } catch(e) { return ''; }
-})();
+// ─── FONTE: Supabase (tata_plus.ausencia_listar / ausencia_devolutiva_gravar) ─
+function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
 
 // ─── ESTADO ───────────────────────────────────────────────────────────────────
 var dados = [];
@@ -543,12 +532,6 @@ function isJustificado(d) {
   return d.devolutiva && d.devolutiva.trim() !== '';
 }
 
-// ─── FETCH SHEETS ─────────────────────────────────────────────────────────────
-function sheetURL() {
-  return 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID
-    + '/values/' + encodeURIComponent(SHEET_NAME + '!A:H')
-    + '?key=' + API_KEY;
-}
 function rowToObj(headers, row) {
   var obj = {};
   headers.forEach(function(h, i) {
@@ -578,26 +561,27 @@ function showLoading() { document.getElementById('loading-overlay').classList.ad
 function hideLoading() { document.getElementById('loading-overlay').classList.remove('show'); }
 function loadData() {
   showLoading();
-  fetch(sheetURL())
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
+  comSupa(function(supa) {
+    supa.schema('tata_plus').rpc('ausencia_listar').then(function(res) {
       hideLoading();
-      if (data.error) { showError(data.error.message); return; }
-      var rows = data.values || [];
-      if (rows.length < 2) { dados = []; render(); return; }
-      var headers = rows[0];
-      dados = [];
-      for (var i = 1; i < rows.length; i++) {
-        if (rows[i].some(function(c){ return c && c.trim(); })) {
-          var obj = normRow(rowToObj(headers, rows[i]));
-          obj._linha = i + 1;
-          dados.push(obj);
-        }
-      }
+      if (res.error) { showError(res.error.message); return; }
+      dados = (res.data || []).map(function(r) {
+        var iso = String(r.data_falta || '');
+        return {
+          mt:         String(r.matricula || ''),
+          nome:       r.colaborador || '',
+          unidade:    r.unidade || '',
+          depto:      r.departamento || '',
+          data:       iso ? iso.slice(0,10).split('-').reverse().join('/') : '',
+          tipo:       r.tipo || '',
+          status:     r.status || '',
+          devolutiva: r.devolutiva || ''
+        };
+      });
       render();
       if (state.tab === 'todos') renderDashboard();
-    })
-    .catch(function(err) { hideLoading(); showError(err.message || 'Erro de rede'); });
+    }, function(err) { hideLoading(); showError((err && err.message) || 'Erro de conexão'); });
+  });
 }
 function showError(msg) {
   document.getElementById('content').innerHTML =
@@ -764,42 +748,30 @@ function confirmarModalDev() {
   btn.textContent = 'Salvando...';
   btn.disabled = true;
 
-  var params = new URLSearchParams({
-    acao:        'devolutiva-ausencia',
-    linha:       d._linha || '',
-    nome:        d.nome,
-    mt:          d.mt,
-    data:        d.data,
-    devolutiva:  valor,
-    responsavel: __nomeResponsavel
-  });
-
-  fetch(APPS_SCRIPT_URL + '?' + params.toString())
-    .then(function(r){ return r.json(); })
-    .then(function(res){
-      if (res.success) {
-        d.devolutiva = valor;
-        d.tipo = valor;
-        var idx = _modalIdx;
-        fecharModalDev();
-        var cardEl = document.getElementById('card-' + idx);
-        if (cardEl) {
-          var newDiv = document.createElement('div');
-          newDiv.innerHTML = cardAbsencia(d, idx);
-          cardEl.replaceWith(newDiv.firstChild);
-        }
-        renderFilters();
-      } else {
-        btn.textContent = 'Confirmar';
-        btn.disabled = false;
-        alert('Erro ao salvar:\n' + (res.message || 'resposta inválida'));
+  comSupa(function(supa) {
+    supa.schema('tata_plus').rpc('ausencia_devolutiva_gravar', {
+      p_matricula:  d.mt,
+      p_data_falta: d.data,
+      p_devolutiva: valor
+    }).then(function(res) {
+      if (res.error) throw res.error;
+      d.devolutiva = valor;
+      d.tipo = valor;
+      var idx = _modalIdx;
+      fecharModalDev();
+      var cardEl = document.getElementById('card-' + idx);
+      if (cardEl) {
+        var newDiv = document.createElement('div');
+        newDiv.innerHTML = cardAbsencia(d, idx);
+        cardEl.replaceWith(newDiv.firstChild);
       }
-    })
-    .catch(function(err){
+      renderFilters();
+    }, function(err) {
       btn.textContent = 'Confirmar';
       btn.disabled = false;
-      alert('Erro de conexão:\n' + err.message);
+      alert('Erro ao salvar:\n' + ((err && err.message) || err));
     });
+  });
 }
 
 // ─── RENDER ───────────────────────────────────────────────────────────────────
@@ -1192,7 +1164,6 @@ function clearFilters() {
 }
 
 // ─── DRAWER ───────────────────────────────────────────────────────────────────
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
