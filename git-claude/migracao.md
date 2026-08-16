@@ -382,7 +382,7 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
   - Exclusões idênticas ao script (`MATRICULAS_EXCLUIR`, `NOMES_EXCLUIR`, `MATRICULAS_ZERO`→Negativas 0).
 - **`public.banco_horas_sync(jsonb)`** (service_role) **congela**: salário do cargo (`cargos_salarios` via `profiles.cargo_id`, **join case-insensitive** — profiles é Title Case, cargos_salarios não; cobertura 8→**119/139**) e `custo = saldo × salário/220 × 1,5` só quando saldo>0. `on conflict (data,matricula,tipo) do nothing` = **nunca recalcula**.
 - **Testado**: invocação real (semana 03→09/08, 124 ativos/2 deslig., 12s, idempotente) + validação do custo (Franciana saldo 10→R$233,07; Thamires saldo 50→R$1.434,27, batendo ao centavo).
-- **Agendado**: pg_cron `rhid-banco-horas-semanal` (jobid 16), `10 9 * * 1` (seg 06:10 SP), pega a semana anterior.
+- **Agendado**: pg_cron `rhid-banco-horas-semanal` (jobid 16), `0 23 * * 1` (**seg 20:00 SP**), pega a semana anterior (já fechada → dados RHID completos).
 - **Salário fonte**: usa `cargos_salarios` (por cargo), **não** o valor individual antigo da planilha — decisão do usuário (muda o salário do cargo → recalcula o custo das semanas **novas**; história fica congelada).
 - [ ] Os ~20 ativos com `cargo_id` fora do `cargos_salarios` (mesmo case-insensitive) → salário null / custo 0 até alinhar a tabela de cargos.
 - [ ] Migrar o "dashboard completo" (custo/passivo) com gate `pode_ver_valores` quando for a hora.
