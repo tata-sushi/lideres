@@ -629,7 +629,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="mf-toast" id="mf-toast"></div>
 
 <script>
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
@@ -677,19 +676,54 @@ function openDrawer(){
   loadDrawerMeta();document.getElementById('drawer-overlay').classList.add('open');document.getElementById('drawer').classList.add('open');document.body.style.overflow='hidden';loadDrawerKPIs();}
 function closeDrawer(){document.getElementById('drawer-overlay').classList.remove('open');document.getElementById('drawer').classList.remove('open');document.body.style.overflow='';}
 
-// ─── Modal Férias ─────────────────────────────────────────────────────────────
-var FERIAS_URL = 'https://script.google.com/macros/s/AKfycbxfdOSeQCVRQTYNGfuivGQZXYTmY9x2wfadr0vikOdCZo0Q5b0JXy3QzFuQJ4jh5GfIqQ/exec';
+// ─── Modal Férias (Supabase) ──────────────────────────────────────────────────
+function comSupa(cb) {
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true });
+}
 
-function _postFerias(payload) {
-  return fetch(FERIAS_URL, { method: 'POST', body: JSON.stringify(payload) })
-    .then(function(r) { return r.text(); })
-    .then(function(txt) {
-      if (!txt || txt.trimStart().charAt(0) === '<') {
-        return { ok: false, erro: 'Apps Script não implantado — copie git-claude/ferias.gs e implante nova versão' };
-      }
-      try { return JSON.parse(txt); }
-      catch(e) { return { ok: false, erro: 'Resposta inválida do servidor' }; }
+// Carrega todos os períodos de férias via RPC tata_plus.ferias_listar()
+function _feriasListar() {
+  return new Promise(function(resolve){
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('ferias_listar').then(function(r){
+        if (r.error) { console.error('ferias_listar', r.error); resolve({ ok:false, ferias:[] }); return; }
+        var ferias = (r.data || []).map(function(f){
+          return {
+            mt: String(f.mt), nome: f.nome,
+            unidade: f.unidade || '', departamento: f.departamento || '',
+            ini_aqui: f.ini_aqui, fim_aqui: f.fim_aqui,
+            ini_conc: f.ini_conc, fim_conc: f.fim_conc,
+            direito: f.direito, frac: f.frac,
+            ini1: f.ini1, ini2: f.ini2, ini3: f.ini3,
+            fim1: f.fim1, fim2: f.fim2, fim3: f.fim3,
+            abono: f.abono, aprovado: f.aprovado, obs: f.obs
+          };
+        });
+        resolve({ ok:true, ferias: ferias });
+      });
     });
+  });
+}
+
+// Deriva _colabsMap (unidade/departamento) a partir dos próprios registros de férias
+function _buildColabsMap() {
+  _colabsMap = {};
+  _feriasCache.forEach(function(p){
+    _colabsMap[String(p.mt)] = { unidade: p.unidade || '', departamento: p.departamento || '' };
+  });
+}
+
+// save | validar | aprovar — RPC tata_plus.ferias_gravar(jsonb)
+function _postFerias(payload) {
+  return new Promise(function(resolve){
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('ferias_gravar', { p_payload: payload }).then(function(r){
+        if (r.error) { resolve({ ok:false, erro: r.error.message || 'Erro ao gravar' }); return; }
+        resolve(r.data || { ok:false, erro:'Resposta inválida do servidor' });
+      });
+    });
+  });
 }
 var _feriasCache = [];
 var _colabsMap = {}; // mt → { unidade, departamento }
@@ -742,13 +776,13 @@ function openFeriasModal() {
   document.getElementById('spin-ferias').style.display = 'none';
   document.getElementById('mf-overlay').classList.add('open');
 
-  fetch(FERIAS_URL + '?action=list')
-    .then(function(r){ return r.json(); })
+  _feriasListar()
     .then(function(res) {
       if (!res.ok) { showFeriasToast('Erro ao carregar lista de férias', true); return; }
       _feriasCache = (res.ferias || []).filter(function(p) {
         return MT_EXCLUIDOS.indexOf(String(p.mt).trim()) === -1;
       });
+      _buildColabsMap();
       var seen = {}, colabs = [];
       _feriasCache.forEach(function(p) {
         if (!seen[p.mt]) { seen[p.mt] = true; colabs.push({mt: p.mt, nome: p.nome}); }
@@ -773,18 +807,6 @@ function openFeriasModal() {
           selPer.disabled = true;
         }
       }
-      // Fetch unidade/departamento from colabs
-      fetch(COLAB_URL + '?action=listColaboradores')
-        .then(function(r){ return r.json(); })
-        .then(function(d) {
-          if (!d.ok) return;
-          _colabsMap = {};
-          (d.colaboradores || []).forEach(function(c) {
-            var key = String(c.mt || c.matricula || '').trim();
-            if (key) _colabsMap[key] = { unidade: c.unidade || '', departamento: c.departamento || '' };
-          });
-        })
-        .catch(function(){});
     })
     .catch(function(){ showFeriasToast('Erro de rede ao carregar férias', true); });
 }
@@ -1005,121 +1027,9 @@ var weekEnd = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + (_d
   if (el) el.textContent = 'Atualizado: ' + d + ', ' + h;
 })();
 
-function makeDate(dia, mes) {
-  return new Date(hoje.getFullYear(), mes - 1, dia);
-}
-function proxAniversario(dia, mes) {
-  var thisYear = new Date(hoje.getFullYear(), mes - 1, dia);
-  if (thisYear >= hoje) return thisYear;
-  return new Date(hoje.getFullYear() + 1, mes - 1, dia);
-}
-function diasFaltando(dia, mes) {
-  var d = proxAniversario(dia, mes);
-  return Math.ceil((d - hoje) / 86400000);
-}
-function pctAniversario(dia, mes) {
-  var dias = diasFaltando(dia, mes);
-  var pct = Math.round((1 - dias / 365) * 100);
-  return Math.max(0, Math.min(100, pct));
-}
-function idadeCalc(ano) {
-  return hoje.getFullYear() - ano;
-}
-
-var COLABORADORES = [];
+// Dados de férias vêm de tata_plus.ferias_listar(); identidade/unidade derivam do profiles.
+// (Dashboard de aniversários era resquício do template de Benefícios — removido.)
 var DATA = [];
-
-// Google Sheets API config
-var SHEET_ID = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
-var SHEET_TAB = 'Colaboradores';
-var API_KEY = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
-
-function parseDateBR(str) {
-  if (!str || typeof str !== 'string') return null;
-  var parts = str.trim().split('/');
-  if (parts.length !== 3) return null;
-  var d = parseInt(parts[0],10), m = parseInt(parts[1],10), y = parseInt(parts[2],10);
-  if (isNaN(d)||isNaN(m)||isNaN(y)) return null;
-  return {dia: d, mes: m, ano: y};
-}
-
-function fetchColaboradores() {
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID +
-    '/values/' + encodeURIComponent(SHEET_TAB) + '?key=' + API_KEY;
-  return fetch(url).then(function(r){ return r.json(); }).then(function(json) {
-    if (!json.values || json.values.length < 2) { console.error('Sem dados na planilha'); return; }
-    var headers = json.values[0];
-    var iNome = 0;   // A - Nome
-    var iMt   = 1;   // B - Matrícula
-    var iStatus = 3;  // D - Status
-    var iUnidade = 4; // E - Unidade
-    var iDepto = 5;   // F - Departamento
-    var iNasc = 13;   // N - Data de Nascimento
-    var iAdmissao = 8; // I - Data de Admissão
-
-    COLABORADORES = [];
-    for (var r = 1; r < json.values.length; r++) {
-      var row = json.values[r];
-      var mt   = String(row[iMt]||'').trim();
-      if (MT_EXCLUIDOS.indexOf(mt) !== -1) continue;
-      var nome = (row[iNome]||'').trim();
-      var status = (row[iStatus]||'').trim();
-      var unidade = (row[iUnidade]||'').trim();
-      var depto = (row[iDepto]||'').trim();
-      var nascStr = (row[iNasc]||'').trim();
-      var admStr = (row[iAdmissao]||'').trim();
-
-      // Filtrar: apenas Ativo, com nome e data de nascimento válida
-      if (!nome) continue;
-      if (status.toLowerCase().indexOf('ativo') === -1) continue;
-      // Excluir "Inativo" que contém "ativo"
-      if (status.toLowerCase().indexOf('inativo') !== -1) continue;
-      var nasc = parseDateBR(nascStr);
-      if (!nasc) continue;
-
-      _colabsMap[mt] = { unidade: unidade || 'Sem unidade', departamento: depto || 'Sem depto' };
-      COLABORADORES.push({
-        nome: nome,
-        depto: depto || 'Sem depto',
-        dia: nasc.dia,
-        mes: nasc.mes,
-        anoNasc: nasc.ano,
-        unidade: unidade || 'Sem unidade',
-        admissao: parseDateBR(admStr)
-      });
-    }
-
-    DATA = COLABORADORES.map(function(c) {
-      var px = proxAniversario(c.dia, c.mes);
-      return Object.assign({}, c, {
-        proxAniv: px,
-        diasFaltando: diasFaltando(c.dia, c.mes),
-        pct: pctAniversario(c.dia, c.mes),
-        idade: idadeCalc(c.anoNasc),
-        nascFormatado: (String(c.dia).padStart(2,'0')+'/'+String(c.mes).padStart(2,'0')+'/'+c.anoNasc),
-        proxFormatado: px.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}),
-        mesAniv: px.getMonth(),
-        mesAnivMY: String(px.getMonth()+1).padStart(2,'0') + '/' + px.getFullYear(),
-        mesNome: px.toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase(),
-      });
-    }).sort(function(a,b){ return a.proxAniv - b.proxAniv; });
-
-    DATA_EMP = COLABORADORES.filter(function(c){ return c.admissao; }).map(function(c) {
-      var a = c.admissao;
-      var px = proxAniversario(a.dia, a.mes);
-      return Object.assign({}, c, {
-        proxAniv: px,
-        diasFaltando: diasFaltando(a.dia, a.mes),
-        pct: pctAniversario(a.dia, a.mes),
-        anosEmpresa: idadeCalc(a.ano),
-        proxFormatado: px.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}),
-        mesAniv: px.getMonth(),
-        mesAnivMY: String(px.getMonth()+1).padStart(2,'0') + '/' + px.getFullYear(),
-        mesNome: px.toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase(),
-      });
-    }).sort(function(a,b){ return a.proxAniv - b.proxAniv; });
-  });
-}
 
 var MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 var UNIDADES = ['Todos'];
@@ -1549,7 +1459,7 @@ function aprovarFerias(mt, iniAqui) {
   var aqui = (_isoToBR(p.ini_aqui) || '—') + ' → ' + (_isoToBR(p.fim_aqui) || '—');
   var conc  = (_isoToBR(p.ini_conc) || '—') + ' → ' + (_isoToBR(p.fim_conc) || '—');
   var obs = (p.obs || '').trim();
-  var abono = obs.match(/^(Sim|Não)/i) ? obs.match(/^(Sim|Não)/i)[1] : '—';
+  var abono = p.abono || (obs.match(/^(Sim|Não)/i) ? obs.match(/^(Sim|Não)/i)[1] : '—');
   document.getElementById('aprovar-aqui').textContent  = aqui;
   document.getElementById('aprovar-conc').textContent  = conc;
   document.getElementById('aprovar-frac').textContent  = p.frac || '—';
@@ -1728,13 +1638,27 @@ function confirmDevModal() {
 }
 
 function fetchFeriasOnStart() {
-  return fetch(FERIAS_URL + '?action=list')
-    .then(function(r){ return r.json(); })
+  return _feriasListar()
     .then(function(res){
       if (!res.ok) return;
       _feriasCache = (res.ferias || []).filter(function(p){
         return MT_EXCLUIDOS.indexOf(String(p.mt).trim()) === -1;
       });
+      _buildColabsMap();
+      // Unidades/departamentos derivados dos próprios registros de férias
+      UNIDADES = ['Todos'].concat(Array.from(new Set(_feriasCache.map(function(p){ return p.unidade; }).filter(Boolean))).sort());
+      DEPTOS   = ['Todos'].concat(Array.from(new Set(_feriasCache.map(function(p){ return p.departamento; }).filter(Boolean))).sort());
+      var fU = document.getElementById('fUnidade');
+      if (fU) {
+        fU.innerHTML = '';
+        UNIDADES.forEach(function(u) {
+          var opt = document.createElement('option');
+          opt.value = u;
+          opt.textContent = u === 'Todos' ? 'Todas as unidades' : u;
+          fU.appendChild(opt);
+        });
+      }
+      buildFilters();
     })
     .catch(function(){});
 }
@@ -1750,28 +1674,15 @@ function _tryRender() {
   }
 }
 
-fetchColaboradores().then(function() {
-  _colabsReady = true;
-  UNIDADES = ['Todos'].concat(Array.from(new Set(DATA.map(function(d){return d.unidade;}))).sort());
-  DEPTOS   = ['Todos'].concat(Array.from(new Set(DATA.map(function(d){return d.depto;}))).sort());
-  var fU = document.getElementById('fUnidade');
-  fU.innerHTML = '';
-  UNIDADES.forEach(function(u) {
-    var opt = document.createElement('option');
-    opt.value = u;
-    opt.textContent = u === 'Todos' ? 'Todas as unidades' : u;
-    fU.appendChild(opt);
-  });
-  buildFilters();
-  _tryRender();
-}).catch(function(err) {
-  console.error('Erro ao carregar colaboradores:', err);
-});
-
+// Fonte única: tata_plus.ferias_listar() alimenta férias + unidades/departamentos
 fetchFeriasOnStart().then(function() {
+  _colabsReady = true;
   _feriasReady = true;
   _tryRender();
-}).catch(function(){});
+}).catch(function(err) {
+  console.error('Erro ao carregar férias:', err);
+  _tryRender();
+});
 
 (function(){
   var s = window.__lideresSession ||
