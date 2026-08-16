@@ -449,8 +449,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-var SHEET_ID = '1oW3uXbig4B3gUQegxorxZghMnVrZcXk44AD08gx-cl0';
-var COL = { DATA:0, MT:1, COLABORADOR:2, SALDO:3, STATUS:4, DEPARTAMENTO:5, UNIDADE:6, TIPO:7, SALARIO:8, CUSTO:9 };
+// Banco de horas agora vem do Supabase (RPC banco_horas_listar).
 
 // Colaboradores ocultos do dashboard (gráficos, lista, KPIs)
 function normNome(s) {
@@ -482,66 +481,42 @@ function hideLoading() {
   if (el) el.classList.remove('show');
 }
 
-// ─── FETCH ───────────────────────────────────────────────────────────────────
-async function loadData() {
-  try {
-    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/export?format=csv&gid=0';
-    var resp = await fetch(url);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status + ' — verifique se a planilha está pública.');
-    var csv = await resp.text();
-    parseCSV(csv);
-    buildSemanas();
-    buildSnapshots();
-    buildFilterOptions();
-    hideLoading();
-    document.getElementById('data-container').classList.add('ready');
-    renderAll();
-  } catch(e) {
-    hideLoading();
-    showError(e);
-  }
+// ─── FETCH (Supabase) ────────────────────────────────────────────────────────
+function comSupa(cb){
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true });
 }
 
-// ─── PARSE CSV ───────────────────────────────────────────────────────────────
-function parseCSV(csv) {
-  var lines = csv.split('\n');
-  ALL_ROWS = [];
-  for (var i = 1; i < lines.length; i++) {
-    var line = lines[i].trim();
-    if (!line) continue;
-    var cols = parseCSVLine(line);
-    if (cols.length < 4) continue;
-    var nome = (cols[COL.COLABORADOR]||'').trim();
-    if (isHiddenColab(nome)) continue;
-    var saldo   = parseFloat((cols[COL.SALDO]||'0').replace(',','.')) || 0;
-    var custoRaw = (cols[COL.CUSTO]||'').replace(/\s+/g,'').replace('R$','').replace(/\./g,'').replace(',','.');
-    var custo   = parseFloat(custoRaw) || 0;
-    var dataStr = (cols[COL.DATA]||'').trim();
-    ALL_ROWS.push({
-      rowIndex: i,
-      dataStr:  dataStr,
-      semKey:   toSemKey(dataStr),
-      nome:     nome,
-      saldo:    saldo,
-      custo:    custo,
-      status:   (cols[COL.STATUS]||'').trim(),
-      depto:    (cols[COL.DEPARTAMENTO]||'').trim(),
-      unidade:  (cols[COL.UNIDADE]||'').trim(),
-      tipo:     (cols[COL.TIPO]||'').trim()
-    });
-  }
-}
-
-function parseCSVLine(line) {
-  var result = [], current = '', inQ = false;
-  for (var i = 0; i < line.length; i++) {
-    var ch = line[i];
-    if (ch === '"') { inQ = !inQ; }
-    else if (ch === ',' && !inQ) { result.push(current.trim()); current = ''; }
-    else { current += ch; }
-  }
-  result.push(current.trim());
-  return result;
+function loadData() {
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('banco_horas_listar', { p_semanas: 50 }).then(function(res){
+      if (res.error) { hideLoading(); showError(new Error(res.error.message || 'banco_horas_listar')); return; }
+      var lista = res.data || [];
+      ALL_ROWS = [];
+      lista.forEach(function(row, i){
+        var nome = (row.colaborador || '').trim();
+        if (isHiddenColab(nome)) return;
+        ALL_ROWS.push({
+          rowIndex: i,
+          dataStr:  row.data || '',
+          semKey:   toSemKey(row.data || ''),
+          nome:     nome,
+          saldo:    Number(row.saldo) || 0,
+          custo:    0,
+          status:   (row.status || '').trim(),
+          depto:    (row.departamento || '').trim(),
+          unidade:  (row.unidade || '').trim(),
+          tipo:     (row.tipo || '').trim()
+        });
+      });
+      buildSemanas();
+      buildSnapshots();
+      buildFilterOptions();
+      hideLoading();
+      document.getElementById('data-container').classList.add('ready');
+      renderAll();
+    }, function(e){ hideLoading(); showError(e); });
+  });
 }
 
 function toSemKey(dateStr) {
@@ -1023,7 +998,7 @@ function showError(e) {
       '<div class="error-title">Erro ao carregar dados</div>' +
     '</div>' +
     '<div class="error-msg">' + escH(e.message) + '</div>' +
-    '<div class="error-hint">Verifique se a planilha está compartilhada como "Qualquer pessoa com o link pode ver".<br>ID: ' + SHEET_ID + '</div>' +
+    '<div class="error-hint">Não foi possível carregar o banco de horas do Supabase. Tente recarregar.</div>' +
     '</div>';
   el.style.display = 'block';
 }
@@ -1069,7 +1044,6 @@ loadData();
   }
 })();
 
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
