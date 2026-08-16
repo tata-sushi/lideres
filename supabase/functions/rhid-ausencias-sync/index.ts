@@ -200,7 +200,7 @@ Deno.serve(async (req: Request) => {
         if (!tipo) continue;
         const dataISO = fmtISO(dia.date || dia.dateTimeInicio);
         if (!dataISO) continue;
-        const mt = String(p.registration).trim();
+        const mt = String(p.registration).trim().replace(/^0+/, ""); // igual à sync-rhid (profiles)
         const prof = pmap.get(mt) || {};
         rows.push({
           matricula: mt,
