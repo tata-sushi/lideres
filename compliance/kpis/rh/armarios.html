@@ -713,11 +713,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 // URL do Apps Script de Armários (deploy /exec)
 // Fonte: git-claude/armarios-apps-script.gs
 // Planilha: docs.google.com/spreadsheets/d/1mhlTE3Lhd8Sacnv3OMZRP-Yw9LMTc_d83ovBeOUTi5Y
-var GAS_URL_ARMARIO = localStorage.getItem('tata_armario_url') ||
-  'https://script.google.com/macros/s/AKfycbxD9BwHYMh44Zzob_94BKUgoetxhRxm7s7_cYncnQkCYpPrwhzpIO0t3ihSpY72Amxp-A/exec';
-
-// URL do Apps Script de colaboradores (reutiliza o mesmo da estoqueadm)
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
+// Dados dos armários agora vêm do Supabase (schema tata_plus, via RPC).
+function comSupa(cb){
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true });
+}
 
 /* ════════════════════════════════════════════════
    ESTADO
@@ -797,34 +797,31 @@ function fetchJSON(url, ms) {
     .finally(function(){ clearTimeout(timer); });
 }
 function loadData() {
-  if (!GAS_URL_ARMARIO) {
-    // Sem URL configurada: usar dados de demo
-    ARMARIOS  = gerarDemoArmarios();
-    HISTORICO = gerarDemoHistorico();
-    renderTudo();
-    (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};document.getElementById('footer-date').textContent='Demo local · '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());})();
-    hideLoading();
-    return;
-  }
-
-  Promise.all([
-    fetchJSON(GAS_URL_ARMARIO + '?action=armarios', 10000),
-    fetchJSON(GAS_URL_ARMARIO + '?action=historico&n=200', 10000)
-  ])
-  .then(function(res) {
-    ARMARIOS  = res[0] || [];
-    HISTORICO = res[1] || [];
-    renderTudo();
-    (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};document.getElementById('footer-date').textContent='Atualizado: '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());})();
-  })
-  .catch(function() {
-    ARMARIOS  = gerarDemoArmarios();
-    HISTORICO = gerarDemoHistorico();
-    renderTudo();
-    (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};document.getElementById('footer-date').textContent='Offline — dados de demo · '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());})();
-    showToast('Apps Script não configurado — exibindo demo.', false);
-  })
-  .finally(hideLoading);
+  comSupa(function(supa) {
+    Promise.all([
+      supa.schema('tata_plus').rpc('armarios_listar'),
+      supa.schema('tata_plus').rpc('armario_historico', { p_n: 200 })
+    ])
+    .then(function(res) {
+      var arm = res[0], hist = res[1];
+      if (arm.error) throw new Error(arm.error.message || 'armarios_listar');
+      ARMARIOS  = (arm.data || []).map(function(a){
+        return {
+          id: a.id, num: String(a.num), unidade: a.unidade, status: a.status,
+          colaborador: a.colaborador || '', matricula: a.matricula || '',
+          chave: '', obs: a.obs || '', termo: a.termo_assinado, updated: a.updated || ''
+        };
+      });
+      HISTORICO = (hist && hist.data) ? hist.data : [];
+      renderTudo();
+      (function(){var n=new Date(),p=function(x){return String(x).padStart(2,'0')};document.getElementById('footer-date').textContent='Atualizado: '+p(n.getDate())+'/'+p(n.getMonth()+1)+'/'+n.getFullYear()+', '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());})();
+    })
+    .catch(function(err) {
+      renderTudo();
+      showToast('Erro ao carregar armários: ' + ((err && err.message) || err), true);
+    })
+    .finally(hideLoading);
+  });
 }
 
 /* ════════════════════════════════════════════════
@@ -1241,17 +1238,18 @@ function bgCloseInfo(e) {
 /* ════════════════════════════════════════════════
    COLABORADORES
    ════════════════════════════════════════════════ */
-async function carregarColaboradores() {
-  if (__colabCache) return __colabCache;
-  try {
-    var isAdmin = currentUser && (currentUser.type === 'admin' || currentUser.type === 'analista-rh');
-    var unit = (!isAdmin && currentUser && currentUser.unit) ? currentUser.unit : '';
-    var url  = COLAB_URL + '?action=listColaboradores&unidade=' + encodeURIComponent(unit);
-    var res  = await fetch(url);
-    var data = await res.json();
-    __colabCache = (data && data.ok && Array.isArray(data.colaboradores)) ? data.colaboradores : [];
-  } catch(e) { __colabCache = []; }
-  return __colabCache;
+function carregarColaboradores() {
+  if (__colabCache) return Promise.resolve(__colabCache);
+  var isAdmin = currentUser && (currentUser.type === 'admin' || currentUser.type === 'analista-rh');
+  var unit = (!isAdmin && currentUser && currentUser.unit) ? currentUser.unit : '';
+  return new Promise(function(resolve){
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('armario_colaboradores', { p_unidade: unit || null }).then(function(res){
+        __colabCache = (!res.error && Array.isArray(res.data)) ? res.data : [];
+        resolve(__colabCache);
+      }, function(){ __colabCache = []; resolve(__colabCache); });
+    });
+  });
 }
 
 var __UNIT_NORM = {
@@ -1487,22 +1485,22 @@ function doSubmit() {
 }
 
 function _enviarPayload(payload, arm, armNovo) {
-  if (GAS_URL_ARMARIO) {
-    fetch(GAS_URL_ARMARIO, {
-      method:  'POST',
-      mode:    'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body:    JSON.stringify(payload)
-    })
-    .then(function() { onSubmitOk(arm, payload, armNovo); })
-    .catch(function() { showToast('Erro de conexão com o Apps Script.', true); })
-    .finally(function() { setLoad(false); });
-  } else {
-    setTimeout(function() {
-      onSubmitOk(arm, payload, armNovo);
-      setLoad(false);
-    }, 600);
-  }
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('armario_mov', { payload: payload }).then(function(res){
+      var r = res && res.data;
+      if (!res.error && r && r.ok) {
+        // se o banco atribuiu um id novo (incluir), reflete no objeto local
+        if (payload.tipo === 'incluir' && r.id) arm.id = r.id;
+        onSubmitOk(arm, payload, armNovo);
+      } else {
+        showToast('Erro: ' + ((res.error && res.error.message) || (r && r.error) || 'falha ao gravar'), true);
+        loadData();  // ressincroniza para desfazer o otimismo local
+      }
+    }, function(err){
+      showToast('Erro de conexão: ' + ((err && err.message) || err), true);
+      loadData();
+    }).finally(function(){ setLoad(false); });
+  });
 }
 
 function onSubmitOk(arm, payload, armNovo) {
@@ -1650,7 +1648,6 @@ initApp();
 // Rede de segurança: nenhum spinner de abertura fica preso pra sempre.
 setTimeout(function(){ var el=document.getElementById('loading-overlay'); if(el && el.classList.contains('show')){ el.classList.remove('show'); if(typeof showToast==='function') showToast('Não foi possível carregar os dados. Recarregue a página ou entre novamente.', false); } }, 15000);
 
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
