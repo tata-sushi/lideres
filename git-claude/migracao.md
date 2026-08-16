@@ -304,7 +304,7 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - 2026-08-16 — **Organograma Parte 1 EXECUTADA** (árvore via `organograma_colaboradores` + CES via `organograma_ces`; fotos do bucket de avatares; ENDPOINT/CES_URL removidos). Armário e Medicina seguem no Apps Script (Parte 2).
 
 ## Módulo MEDICINA OCUPACIONAL (`kpis/rh/medicina.html`) — ✅ FEITO 16/08 (Organograma Parte 2a)
-> Exames/ASO do Apps Script (planilha "Medicina Ocupacional") → Supabase. Mesmo molde de Experiências: a **lista deriva ao vivo de `profiles`** (ativos), então colaborador novo aparece sozinho e desligado some — **sem job de sync** ("inclusão pegando de profile + inativar desligados" resolvido pelo desenho derivado).
+> Exames/ASO do Apps Script (planilha "Medicina Ocupacional") → Supabase. A **lista deriva ao vivo de `profiles`** (ativos) — então na tela nunca fica desatualizada. Além disso, um **job agendado materializa o roster na base** (não depende de abrir a página).
 
 ### Dados
 - **Tabela** `dp_rh.exames` (privada, RLS, chave = `matricula`): guarda só a config de exame (app-owned) — `realiza_exame·tipo_exame·periodicidade·ultimo_exame·proxima_realizacao·atualizado_por`. Identidade (nome/cargo/depto/unidade/status/admissão) vem do `profiles` no read.
@@ -321,4 +321,8 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **Mecânica**: como não há evento de escrita (o exame vence com o tempo), é um **scan agendado** — `tata_plus.exame_kanban_scan()` cria o card (mesmo padrão à-prova-de-falha das Sanções/Experiências) com **dedup** em `dp_rh.exame_kanban` por `(matricula, proxima_realizacao)` → 1 card por ciclo de exame; quando o exame é refeito e a próxima muda, um novo card pode nascer no próximo ciclo.
 - **Agendado**: pg_cron `medicina-exames-kanban` (jobid 14), `0 9 * * *` (diário 06:00 SP). 1ª rodada criou **23 cards** (backlog vencido+30d); 2ª rodada = 0 (idempotente).
 
-- 2026-08-16 — **Medicina EXECUTADA** (tabela+RPCs+front+backfill 149+Kanban scan+cron). Falta da Parte 2: **Armário** (`ARMARIO_URL`) — mesma base de `armarios.html`.
+### Sync automático do roster (independe de abrir a página)
+- **`tata_plus.exames_sync_roster()`**: insere em `dp_rh.exames` uma linha p/ cada **ativo do profiles sem linha** (default `realiza=true`, sem config → "Pendente", `atualizado_por='sync'`). Idempotente. Desligados: a lista e o scan do Kanban já filtram `Ativo`, então somem sozinhos; a linha antiga fica (histórico p/ recontratação).
+- **Agendado**: pg_cron `medicina-exames-roster` (`50 8 * * *` = diário 05:50 SP, antes do scan do Kanban). 1ª rodada materializou os **25 ativos** que ainda não tinham linha → base com 139/139 ativos. (A *lista* já era ao vivo; isso mantém a *base* completa mesmo sem ninguém abrir a página.)
+
+- 2026-08-16 — **Medicina EXECUTADA** (tabela+RPCs+front+backfill 149+roster sync agendado+Kanban scan+cron). Falta da Parte 2: **Armário** (`ARMARIO_URL`) — mesma base de `armarios.html`.
