@@ -1095,10 +1095,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   // Árvore + CES vêm do Supabase (schema tata_plus).
   // ============================================
   function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
-  // Armários — mesma base usada em /compliance/kpis/rh/armarios.html
-  var ARMARIO_URL = 'https://script.google.com/macros/s/AKfycbxD9BwHYMh44Zzob_94BKUgoetxhRxm7s7_cYncnQkCYpPrwhzpIO0t3ihSpY72Amxp-A/exec';
-  // Medicina ocupacional — mesma base usada em /compliance/kpis/rh/medicina.html
-  var MEDICINA_URL = 'https://script.google.com/macros/s/AKfycbw2d8S-nsu0cvs5oPyRZTsXtYvBC_9B85IBkE8t5IGoAsoq2nEumkNGllhSdIGUoXnTbg/exec';
+  // Armário e Próximo exame do colaborador agora vêm do Supabase
+  // (RPCs armarios_listar / exames_listar — mesma base de armarios.html/medicina.html).
 
   // Aba "Salarios" → sub-modal REMUNERAÇÃO  |  Aba "Cargos" → sub-modal DESC. DO CARGO
   var _cesSalarios = {};
@@ -1169,16 +1167,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   }
 
   function carregarArmarios() {
-    fetch(ARMARIO_URL + '?action=armarios')
-      .then(function(r) { return r.json(); })
-      .then(function(lista) {
-        (lista || []).forEach(function(a) {
+    comSupa(function(supa) {
+      supa.schema('tata_plus').rpc('armarios_listar').then(function(res) {
+        if (res.error) return;
+        (res.data || []).forEach(function(a) {
           if (!a || !a.num) return;
-          if (a.matricula) _armariosByMatricula[normMat(a.matricula)] = a;
+          if (a.matricula)   _armariosByMatricula[normMat(a.matricula)] = a;
           if (a.colaborador) _armariosByNome[normNome(a.colaborador)] = a;
         });
-      })
-      .catch(function() {});
+      }, function() {});
+    });
   }
 
   // Retorna o armário do colaborador (por matrícula ou nome) ou null
@@ -1192,47 +1190,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   // ============================================
   // CARREGAR PRÓXIMO EXAME (mesma base de medicina.html)
   // ============================================
-  // normaliza cabeçalho da planilha → chave (igual a medicina.html)
-  function _headerKey(h) {
-    return String(h || '').toLowerCase().trim()
-      .replace(/[áàâã]/g, 'a').replace(/[éê]/g, 'e')
-      .replace(/[í]/g, 'i').replace(/[óôõ]/g, 'o')
-      .replace(/[ú]/g, 'u').replace(/[ç]/g, 'c')
-      .replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '_');
-  }
-
   function carregarExames() {
-    fetch(MEDICINA_URL + '?action=getData')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        var rows = (data && data.values) || [];
-        if (rows.length < 2) return;
-        var headers = rows[0].map(_headerKey);
-        function col() {  // retorna índice da 1ª chave existente
-          for (var i = 0; i < arguments.length; i++) {
-            var idx = headers.indexOf(arguments[i]);
-            if (idx !== -1) return idx;
-          }
-          return -1;
-        }
-        var iMat   = col('matricula');
-        var iNome  = col('nome');
-        var iProx  = col('proxima_realizacao', 'data_do_proximo_exame', 'data_proximo_exame', 'proximo_exame');
-        var iReal  = col('realiza_exame', 'realiza');
-        for (var r = 1; r < rows.length; r++) {
-          var row = rows[r];
-          if (!row || !row.some(function(c) { return c && String(c).trim(); })) continue;
+    comSupa(function(supa) {
+      supa.schema('tata_plus').rpc('exames_listar').then(function(res) {
+        if (res.error) return;
+        (res.data || []).forEach(function(row) {
           var rec = {
-            proxima: iProx !== -1 ? String(row[iProx] || '').trim() : '',
-            realiza: iReal !== -1 ? String(row[iReal] || '').trim() : ''
+            proxima: String(row.proxima_realizacao || '').trim(),
+            realiza: String(row.realiza_exame || '').trim()
           };
-          var mat = iMat !== -1 ? String(row[iMat] || '').trim() : '';
-          var nm  = iNome !== -1 ? String(row[iNome] || '').trim() : '';
+          var mat = String(row.matricula || '').trim();
+          var nm  = String(row.nome || '').trim();
           if (mat) _exameByMatricula[normMat(mat)] = rec;
           if (nm)  _exameByNome[normNome(nm)] = rec;
-        }
-      })
-      .catch(function() {});
+        });
+      }, function() {});
+    });
   }
 
   // Texto do próximo exame para o colaborador
@@ -2467,7 +2440,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   // ============================================
   // DRAWER
   // ============================================
-  var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
   var _drawerKpisLoaded = false;
   function loadDrawerKPIs() {
     if (_drawerKpisLoaded) return;
