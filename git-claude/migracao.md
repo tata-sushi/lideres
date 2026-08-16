@@ -374,10 +374,19 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 ### Front (`bancodehoras.html`)
 - `loadData` → `rpc('banco_horas_listar')` (mapeia p/ o shape antigo de linhas). Removidos `SHEET_ID` (CSV export), `COLAB_URL`, `parseCSV/parseCSVLine`. **0 refs a Sheets/Apps Script.** Commit `4fd0eabf`.
 
-### Pendências
-- [ ] **Cálculo semanal (Edge Function + cron)** — o “roda toda semana e congela”: saldo do RHID (`saldoBancoFinalDia`, sinal→Positivas/Negativas) × salário atual de `cargos_salarios` → custo → grava congelado. **Pagas/Perdidas** não saem do saldoBancoFinalDia (vêm de relatório de movimento) → dependem do **Apps Script bound** (não puxável do Drive; usuário vai colar).
+### Cálculo semanal (Edge Function + cron) — ✅ FEITO (usuário colou o Apps Script)
+- **`rhid-banco-horas-sync`** (Deno, deployed) — replica o Apps Script `importarSemanal`, mas só do que muda: **saldo do RHID** (identidade vem do profiles no read). Semana anterior seg→dom, `data`=domingo. Por pessoa:
+  - `saldoBancoFinalDia` (último dia, `paraMinutos`/60) → **Positivas** (≥0) / **Negativas** (<0);
+  - soma de `saldoBancoAjustado` na semana (≠0) → linha **Pagas** (valor absoluto);
+  - **desligado** (estava nos ativos da última semana, não é mais status 1 no RHID) → **Pagas** (saldo≥0) / **Perdidas** (<0). Detecta via `banco_horas_prev_ativos()` (matrículas das linhas de saldo da última data).
+  - Exclusões idênticas ao script (`MATRICULAS_EXCLUIR`, `NOMES_EXCLUIR`, `MATRICULAS_ZERO`→Negativas 0).
+- **`public.banco_horas_sync(jsonb)`** (service_role) **congela**: salário do cargo (`cargos_salarios` via `profiles.cargo_id`, **join case-insensitive** — profiles é Title Case, cargos_salarios não; cobertura 8→**119/139**) e `custo = saldo × salário/220 × 1,5` só quando saldo>0. `on conflict (data,matricula,tipo) do nothing` = **nunca recalcula**.
+- **Testado**: invocação real (semana 03→09/08, 124 ativos/2 deslig., 12s, idempotente) + validação do custo (Franciana saldo 10→R$233,07; Thamires saldo 50→R$1.434,27, batendo ao centavo).
+- **Agendado**: pg_cron `rhid-banco-horas-semanal` (jobid 16), `10 9 * * 1` (seg 06:10 SP), pega a semana anterior.
+- **Salário fonte**: usa `cargos_salarios` (por cargo), **não** o valor individual antigo da planilha — decisão do usuário (muda o salário do cargo → recalcula o custo das semanas **novas**; história fica congelada).
+- [ ] Os ~20 ativos com `cargo_id` fora do `cargos_salarios` (mesmo case-insensitive) → salário null / custo 0 até alinhar a tabela de cargos.
 - [ ] Migrar o "dashboard completo" (custo/passivo) com gate `pode_ver_valores` quando for a hora.
 
-- 2026-08-16 — **Banco de Horas: dashboard EXECUTADO** (tabela normalizada + RPC + backfill 15.464 + front). Falta o cálculo semanal (RHID) — precisa do Apps Script bound p/ Pagas/Perdidas.
+- 2026-08-16 — **Banco de Horas COMPLETO** (tabela+RPC+backfill 15.464+front+Edge Function `rhid-banco-horas-sync`+cron). Positivas/Negativas/Pagas/Perdidas cobertos (Apps Script colado pelo usuário). Salário por cargo (cargos_salarios), custo congelado.
 
 - 2026-08-16 — **Organograma FECHADO 100%** (árvore + CES + armário/exame do modal, tudo Supabase). Medicina e Armários (páginas próprias) também 100%. Módulo RH do portal segue com dashboards ainda em Sheets p/ migrar (semanal, banco de horas, férias, solicitações, reclamações, performance, hc2, benefícios, desligamentos2) + frente n8n (33 workflows, Sheets→Trello → Kanban/Supabase).
