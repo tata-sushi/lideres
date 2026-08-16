@@ -327,9 +327,10 @@ body[data-view="colaboradores"] #kpi-section { display: none; }
 .hc-ed-addform button.ok { background:var(--carbon); color:var(--citric); border:none; }
 .hc-row-del { display:inline-flex; align-items:center; justify-content:center; padding:4px; background:transparent; color:var(--muted); border:none; border-radius:5px; cursor:pointer; transition:color .15s, background .15s; }
 .hc-row-del:hover { color:#c0392b; background:#FDEAEA; }
-.hc-ed-addcargo { padding:8px 20px 4px; }
-.hc-ed-addcargo select { font-family:'DM Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.04em; padding:7px 10px; border:1px dashed var(--border); border-radius:6px; background:var(--surface); color:var(--mid); cursor:pointer; }
-.hc-ed-addcargo select:disabled { opacity:.5; cursor:default; }
+.hc-ed-addcargo { display:flex; gap:8px; padding:8px 20px 4px; }
+.hc-ed-addcargo input { flex:1; min-width:120px; border:1px solid var(--border); border-radius:6px; padding:7px 10px; font-size:13px; font-family:'DM Sans',sans-serif; color:var(--carbon); background:var(--surface); }
+.hc-ed-addcargo input:focus { outline:none; border-color:var(--carbon); }
+.hc-ed-addcargo button { font-family:'DM Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.04em; padding:7px 14px; border-radius:6px; cursor:pointer; border:none; background:var(--carbon); color:var(--citric); }
 </style>
 </head>
 <body>
@@ -487,7 +488,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <thead><tr><th>Cargo</th><th>Escala</th><th class="r">Quantidade</th><th></th></tr></thead>
         <tbody id="modal-hc-list"></tbody>
       </table>
-      <div class="hc-ed-addcargo"><select id="modal-hc-addcargo" onchange="_hcCargoAddSel(this)"></select></div>
+      <div class="hc-ed-addcargo">
+        <input type="text" id="modal-hc-addcargo-nome" placeholder="Novo cargo" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();_hcCargoAdd('modal-hc-addcargo-nome');}">
+        <button type="button" onclick="_hcCargoAdd('modal-hc-addcargo-nome')">Incluir</button>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn-modal-cancelar" onclick="fecharModalHC()">Cancelar</button>
@@ -526,7 +530,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <thead><tr><th>Cargo</th><th>Escala</th><th class="r">Quantidade</th><th></th></tr></thead>
         <tbody id="hc-ed-list"></tbody>
       </table>
-      <div class="hc-ed-addcargo"><select id="hc-ed-addcargo" onchange="_hcCargoAddSel(this)"></select></div>
+      <div class="hc-ed-addcargo">
+        <input type="text" id="hc-ed-addcargo-nome" placeholder="Novo cargo" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();_hcCargoAdd('hc-ed-addcargo-nome');}">
+        <button type="button" onclick="_hcCargoAdd('hc-ed-addcargo-nome')">Incluir</button>
+      </div>
     </div>
     <div class="hc-ed-foot">
       <button class="btn-modal-cancelar" onclick="fecharEditorHC()">Cancelar</button>
@@ -642,11 +649,10 @@ function loadData() {
       hideLoading();
       var rpcRows = results[0] || [];
       dados = rpcRows.map(function(r){
+        var cg = Array.isArray(r.cargos) ? r.cargos.map(function(c){ return { nome:String(c.nome||''), escala:String(c.escala||''), qtd:parseInt(c.qtd)||0 }; }) : [];
         return {
           id: r.id, unidade: r.unidade||'', departamento: r.departamento||'', escala: r.escala||'',
-          escLider: r.escala_lider||'', escEspecialista: r.escala_especialista||'',
-          escAuxiliares: r.escala_auxiliares||'', escAprendizes: r.escala_aprendizes||'',
-          escEstagiarios: r.escala_estagiarios||'',
+          cargos: cg,
           lider: parseInt(r.lider)||0, especialista: parseInt(r.especialista)||0,
           auxiliares: parseInt(r.auxiliares)||0, aprendizes: parseInt(r.aprendizes)||0,
           estagiarios: parseInt(r.estagiarios)||0, total: parseInt(r.total)||0
@@ -731,13 +737,9 @@ function setFiltroUnidade(val) { state.filtroUnidade=val; render(); }
 var _filteredCache = [];
 // Resume as escalas distintas dos cargos com quadro > 0 (ex.: "6x1" ou "5x2 / 6x1").
 function _hcEscResumo(d){
-  var seen={}, out=[];
-  [['lider','escLider'],['especialista','escEspecialista'],['auxiliares','escAuxiliares'],['aprendizes','escAprendizes'],['estagiarios','escEstagiarios']].forEach(function(p){
-    if((parseInt(d[p[0]])||0)>0){ var e=(d[p[1]]||'').trim(); if(e && !seen[e]){ seen[e]=1; out.push(e); } }
-  });
-  if(!out.length){
-    [d.escEspecialista,d.escLider,d.escAuxiliares,d.escAprendizes,d.escEstagiarios,d.escala].forEach(function(e){ e=(e||'').trim(); if(e && !seen[e]){ seen[e]=1; out.push(e); } });
-  }
+  var seen={}, out=[], list=(d&&d.cargos)||[];
+  list.forEach(function(c){ if((parseInt(c.qtd)||0)>0){ var e=(c.escala||'').trim(); if(e && !seen[e]){ seen[e]=1; out.push(e); } } });
+  if(!out.length){ list.forEach(function(c){ var e=(c.escala||'').trim(); if(e && !seen[e]){ seen[e]=1; out.push(e); } }); }
   return out.length ? out.join(' / ') : '—';
 }
 function cardHC(d, idx) {
@@ -1660,10 +1662,11 @@ function abrirModalHC(idx) {
   var d = _filteredCache[idx];
   if (!d) return;
   _modalOrig = d;
-  _modalData = Object.assign({ _added:{} }, d); // cópia de trabalho (Cancelar descarta)
+  _modalData = Object.assign({}, d); // cópia de trabalho (Cancelar descarta)
+  _modalData.cargos = (d.cargos||[]).map(function(c){ return { nome:c.nome||'', escala:c.escala||'', qtd:parseInt(c.qtd)||0 }; });
   document.getElementById('modal-hc-titulo').textContent = (d.departamento||'') + ' · ' + (d.unidade||'');
   _hcActive = _modalData;
-  _hcActiveRender = function(){ _hcRenderCargoTable('modal-hc-list','modal-hc-addcargo'); };
+  _hcActiveRender = function(){ _hcRenderCargoTable('modal-hc-list'); };
   _hcActiveRender();
   document.getElementById('modal-hc-overlay').classList.add('open');
   document.body.style.overflow='hidden';
@@ -1678,17 +1681,17 @@ function confirmarModalHC() {
   var btn = document.getElementById('btn-hc-confirmar');
   btn.textContent='Salvando...'; btn.disabled=true;
   var m=_modalData;
-  var row={ unidade:m.unidade, departamento:m.departamento,
-    lider:parseInt(m.lider)||0, especialista:parseInt(m.especialista)||0, auxiliares:parseInt(m.auxiliares)||0, aprendizes:parseInt(m.aprendizes)||0, estagiarios:parseInt(m.estagiarios)||0,
-    escala_lider:m.escLider||'', escala_especialista:m.escEspecialista||'', escala_auxiliares:m.escAuxiliares||'', escala_aprendizes:m.escAprendizes||'', escala_estagiarios:m.escEstagiarios||'' };
+  var cargos=_hcCleanCargos(m.cargos), b=_hcBucketsFromCargos(cargos);
+  var row={ unidade:m.unidade, departamento:m.departamento, cargos:cargos,
+    lider:b.lider, especialista:b.especialista, auxiliares:b.auxiliares, aprendizes:b.aprendizes, estagiarios:b.estagiarios };
   // Escrita no Supabase (upsert por unidade|departamento); carimba criado_por no servidor.
   comSupa(function(supa){
     supa.schema('tata_plus').rpc('hc_programado_salvar_lote', { p_rows:[row] }).then(function(res){
       if (!res.error) {
         if (_modalOrig) Object.assign(_modalOrig, {
-          lider:row.lider, especialista:row.especialista, auxiliares:row.auxiliares, aprendizes:row.aprendizes, estagiarios:row.estagiarios,
-          escLider:row.escala_lider, escEspecialista:row.escala_especialista, escAuxiliares:row.escala_auxiliares, escAprendizes:row.escala_aprendizes, escEstagiarios:row.escala_estagiarios,
-          total:row.lider+row.especialista+row.auxiliares+row.aprendizes+row.estagiarios
+          cargos:cargos,
+          lider:b.lider, especialista:b.especialista, auxiliares:b.auxiliares, aprendizes:b.aprendizes, estagiarios:b.estagiarios,
+          total:b.lider+b.especialista+b.auxiliares+b.aprendizes+b.estagiarios
         });
         fecharModalHC(); render(); renderKPIs();
       } else {
@@ -1700,13 +1703,10 @@ function confirmarModalHC() {
 }
 
 // ─── Editor do HC programado (modal: Unidade + Departamento → cargos) ────────
-// Cargos do editor: [r\u00f3tulo, campo quantidade, campo escala]
-var _HC_CARGOS = [['L\u00edder','lider','escLider'],['Especialista','especialista','escEspecialista'],['Auxiliares','auxiliares','escAuxiliares'],['Aprendizes','aprendizes','escAprendizes'],['Estagi\u00e1rios','estagiarios','escEstagiarios']];
 var _hcEdState = [];
 function abrirEditorHC(){
   _hcEdState = (dados||[]).map(function(d){ return { unidade:d.unidade||'', departamento:d.departamento||'',
-    lider:parseInt(d.lider)||0, especialista:parseInt(d.especialista)||0, auxiliares:parseInt(d.auxiliares)||0, aprendizes:parseInt(d.aprendizes)||0, estagiarios:parseInt(d.estagiarios)||0,
-    escLider:d.escLider||'', escEspecialista:d.escEspecialista||'', escAuxiliares:d.escAuxiliares||'', escAprendizes:d.escAprendizes||'', escEstagiarios:d.escEstagiarios||'' }; });
+    cargos:(d.cargos||[]).map(function(c){ return { nome:c.nome||'', escala:c.escala||'', qtd:parseInt(c.qtd)||0 }; }) }; });
   var unis=[]; _hcEdState.forEach(function(r){ if(r.unidade && unis.indexOf(r.unidade)<0) unis.push(r.unidade); }); unis.sort();
   document.getElementById('hc-ed-unidade').innerHTML=unis.map(function(u){ return '<option>'+escH(u)+'</option>'; }).join('');
   document.getElementById('hc-editor-overlay').classList.add('open');
@@ -1736,8 +1736,7 @@ function _hcEdAddConfirm(){
   if(!u||!d){ alert('Preencha unidade e departamento.'); return; }
   var dup=_hcEdState.some(function(r){ return r.unidade.toLowerCase()===u.toLowerCase() && r.departamento.toLowerCase()===d.toLowerCase(); });
   if(dup){ alert('Esse departamento já existe nessa unidade.'); return; }
-  _hcEdState.push({ unidade:u, departamento:d, lider:0,especialista:0,auxiliares:0,aprendizes:0,estagiarios:0,
-    escLider:'',escEspecialista:'',escAuxiliares:'',escAprendizes:'',escEstagiarios:'' });
+  _hcEdState.push({ unidade:u, departamento:d, cargos:[] });
   _hcEdAddCancel();
   _hcEdRebuildUnidades(u);
   _hcEdUnidadeChange(u);
@@ -1780,65 +1779,77 @@ function _hcEdCur(){
   return null;
 }
 // \u2500\u2500 Motor compartilhado da tabela de cargos (mold\u00e3o + modal por card) \u2500\u2500
+// Cada objeto em edi\u00e7\u00e3o tem .cargos = [{nome, escala, qtd}] (texto livre).
 // _hcActive: objeto em edi\u00e7\u00e3o; _hcActiveRender: redesenha a tabela do modal aberto.
 var _hcActive=null, _hcActiveRender=function(){};
 var _HC_TRASH='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
-function _hcEdEscSel(f,val){
-  return '<select onchange="_hcCargoSetEsc(\''+f+'\',this.value)"><option value=""'+(!val?' selected':'')+'>\u2014</option>'+
+// Classifica um nome de cargo em um dos 5 baldes (L\u00edder/Especialista/Aux/Apr/Est).
+function _hcBucketOf(nome){
+  var s=(nome||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  if(s==='lider'||s==='lideres'||s==='lideranca'||s==='liderancas') return 'lider';
+  if(s==='especialista'||s==='especialistas') return 'especialista';
+  if(s==='auxiliar'||s==='auxiliares') return 'auxiliares';
+  if(s==='aprendiz'||s==='aprendizes') return 'aprendizes';
+  if(s==='estagiario'||s==='estagiarios') return 'estagiarios';
+  return classifyCargoTipo(nome);
+}
+function _hcBucketsFromCargos(cargos){
+  var b={lider:0,especialista:0,auxiliares:0,aprendizes:0,estagiarios:0};
+  (cargos||[]).forEach(function(c){ b[_hcBucketOf(c.nome)] += (parseInt(c.qtd)||0); });
+  return b;
+}
+function _hcCleanCargos(cargos){
+  return (cargos||[]).filter(function(c){ return (c.nome||'').trim()!==''; })
+    .map(function(c){ return { nome:(c.nome||'').trim(), escala:(c.escala||'').trim(), qtd:parseInt(c.qtd)||0 }; });
+}
+function _hcEdEscSel(i,val){
+  return '<select onchange="_hcCargoSetEsc('+i+',this.value)"><option value=""'+(!val?' selected':'')+'>\u2014</option>'+
     '<option'+(val==='6x1'?' selected':'')+'>6x1</option><option'+(val==='5x2'?' selected':'')+'>5x2</option></select>';
 }
-// Cargos exibidos: os que t\u00eam quadro > 0, escala definida, ou foram adicionados na sess\u00e3o.
-function _hcCargoShown(o){
-  return _HC_CARGOS.filter(function(c){
-    return (parseInt(o[c[1]])||0)>0 || (o[c[2]]||'').trim()!=='' || (o._added && o._added[c[1]]);
-  });
-}
-function _hcRenderCargoTable(tbodyId, addSelId){
+function _hcRenderCargoTable(tbodyId){
   var o=_hcActive, tb=document.getElementById(tbodyId);
-  if(tb){
-    if(!o){ tb.innerHTML='<tr><td colspan="4" style="color:var(--muted)">\u2014</td></tr>'; }
-    else {
-      var shown=_hcCargoShown(o);
-      tb.innerHTML = shown.length ? shown.map(function(c){
-        return '<tr><td>'+c[0]+'</td>'+
-          '<td>'+_hcEdEscSel(c[2],o[c[2]]||'')+'</td>'+
-          '<td class="r"><input type="number" min="0" value="'+(parseInt(o[c[1]])||0)+'" oninput="_hcCargoSet(\''+c[1]+'\',this.value)"></td>'+
-          '<td class="r"><button type="button" class="hc-row-del" title="Excluir cargo" onclick="_hcCargoDel(\''+c[1]+'\')">'+_HC_TRASH+'</button></td></tr>';
-      }).join('') : '<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:12px">Nenhum cargo \u2014 adicione abaixo</td></tr>';
-    }
-  }
-  var sel=document.getElementById(addSelId);
-  if(sel){
-    var shownKeys = o ? _hcCargoShown(o).map(function(c){return c[1];}) : [];
-    var missing = o ? _HC_CARGOS.filter(function(c){ return shownKeys.indexOf(c[1])<0; }) : [];
-    sel.innerHTML='<option value="">+ Adicionar cargo</option>'+missing.map(function(c){ return '<option value="'+c[1]+'">'+c[0]+'</option>'; }).join('');
-    sel.disabled = !o || missing.length===0;
-  }
+  if(!tb) return;
+  var list=(o&&o.cargos)||[];
+  tb.innerHTML = list.length ? list.map(function(c,i){
+    return '<tr><td>'+escH(c.nome)+'</td>'+
+      '<td>'+_hcEdEscSel(i,c.escala||'')+'</td>'+
+      '<td class="r"><input type="number" min="0" value="'+(parseInt(c.qtd)||0)+'" oninput="_hcCargoSetQtd('+i+',this.value)"></td>'+
+      '<td class="r"><button type="button" class="hc-row-del" title="Excluir cargo" onclick="_hcCargoDel('+i+')">'+_HC_TRASH+'</button></td></tr>';
+  }).join('') : '<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:12px">Nenhum cargo \u2014 digite um cargo abaixo e clique em Incluir</td></tr>';
 }
-function _hcCargoSet(f,v){ if(_hcActive) _hcActive[f]=parseInt(v)||0; }
-function _hcCargoSetEsc(f,v){ if(_hcActive) _hcActive[f]=v; }
-function _hcCargoDel(qf){
-  var o=_hcActive; if(!o) return;
-  var c=_HC_CARGOS.filter(function(x){return x[1]===qf;})[0];
-  o[qf]=0; if(c) o[c[2]]=''; if(o._added) delete o._added[qf];
+function _hcCargoSetQtd(i,v){ if(_hcActive && _hcActive.cargos[i]) _hcActive.cargos[i].qtd=parseInt(v)||0; }
+function _hcCargoSetEsc(i,v){ if(_hcActive && _hcActive.cargos[i]) _hcActive.cargos[i].escala=v; }
+function _hcCargoDel(i){
+  var o=_hcActive; if(!o||!o.cargos[i]) return;
+  if(!confirm('Excluir o cargo "'+(o.cargos[i].nome||'')+'"?')) return;
+  o.cargos.splice(i,1);
   _hcActiveRender();
 }
-function _hcCargoAddSel(sel){
-  var qf=sel.value; if(!qf||!_hcActive) return;
-  _hcActive._added=_hcActive._added||{}; _hcActive._added[qf]=true;
+// Adiciona um cargo digitado (texto livre). inputId = campo de nome.
+function _hcCargoAdd(inputId){
+  var inp=document.getElementById(inputId); if(!inp) return;
+  var nome=(inp.value||'').trim();
+  if(!nome){ inp.focus(); return; }
+  if(!_hcActive){ return; }
+  _hcActive.cargos=_hcActive.cargos||[];
+  var dup=_hcActive.cargos.some(function(c){ return (c.nome||'').toLowerCase()===nome.toLowerCase(); });
+  if(dup){ alert('Esse cargo j\u00e1 est\u00e1 na lista.'); inp.select(); return; }
+  _hcActive.cargos.push({ nome:nome, escala:'', qtd:0 });
+  inp.value='';
   _hcActiveRender();
+  inp.focus();
 }
 function _hcEdRender(){
   _hcActive=_hcEdCur();
-  _hcActiveRender=function(){ _hcRenderCargoTable('hc-ed-list','hc-ed-addcargo'); };
+  _hcActiveRender=function(){ _hcRenderCargoTable('hc-ed-list'); };
   _hcActiveRender();
 }
 function salvarEditorHC(){
   var btn=document.getElementById('hc-ed-save'); btn.textContent='Salvando...'; btn.disabled=true;
   var rows=_hcEdState.map(function(r){
-    return { unidade:r.unidade, departamento:r.departamento,
-      lider:parseInt(r.lider)||0, especialista:parseInt(r.especialista)||0, auxiliares:parseInt(r.auxiliares)||0, aprendizes:parseInt(r.aprendizes)||0, estagiarios:parseInt(r.estagiarios)||0,
-      escala_lider:r.escLider||'', escala_especialista:r.escEspecialista||'', escala_auxiliares:r.escAuxiliares||'', escala_aprendizes:r.escAprendizes||'', escala_estagiarios:r.escEstagiarios||'' };
+    var cargos=_hcCleanCargos(r.cargos), b=_hcBucketsFromCargos(cargos);
+    return { unidade:r.unidade, departamento:r.departamento, cargos:cargos,
+      lider:b.lider, especialista:b.especialista, auxiliares:b.auxiliares, aprendizes:b.aprendizes, estagiarios:b.estagiarios };
   });
   comSupa(function(supa){
     supa.schema('tata_plus').rpc('hc_programado_salvar_lote', { p_rows: rows }).then(function(res){
