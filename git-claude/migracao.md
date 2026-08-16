@@ -302,3 +302,23 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - [ ] Tirar o gate de perfil da Remuneração e configurar permissão no **painel admin**.
 
 - 2026-08-16 — **Organograma Parte 1 EXECUTADA** (árvore via `organograma_colaboradores` + CES via `organograma_ces`; fotos do bucket de avatares; ENDPOINT/CES_URL removidos). Armário e Medicina seguem no Apps Script (Parte 2).
+
+## Módulo MEDICINA OCUPACIONAL (`kpis/rh/medicina.html`) — ✅ FEITO 16/08 (Organograma Parte 2a)
+> Exames/ASO do Apps Script (planilha "Medicina Ocupacional") → Supabase. Mesmo molde de Experiências: a **lista deriva ao vivo de `profiles`** (ativos), então colaborador novo aparece sozinho e desligado some — **sem job de sync** ("inclusão pegando de profile + inativar desligados" resolvido pelo desenho derivado).
+
+### Dados
+- **Tabela** `dp_rh.exames` (privada, RLS, chave = `matricula`): guarda só a config de exame (app-owned) — `realiza_exame·tipo_exame·periodicidade·ultimo_exame·proxima_realizacao·atualizado_por`. Identidade (nome/cargo/depto/unidade/status/admissão) vem do `profiles` no read.
+- **Backfill**: 149 configs de exame importadas da planilha (via MCP). `proxima = ultimo + periodicidade` (confirmado nos dados).
+- **RPCs** (`tata_plus`, authenticated): `exames_listar()` (profiles ativos LEFT JOIN exames; datas em DD/MM/YYYY p/ o front) e `exame_gravar(mat,tipo,periodicidade,ultimo,realiza,proxima)` (upsert; recalcula `proxima` quando não vem — caso do modal "Atualizar"; carimba `atualizado_por = minha_matricula()`). Helper `exame_parse_data` aceita BR ou ISO.
+- **Status do exame** (vencido/a-vencer/válido/pendente/dispensado) segue **derivado no front** (`calcStatusExame` por data), como antes — a coluna "Status Exame" da planilha era server-only e não é armazenada.
+
+### Front (`medicina.html`)
+- `loadAllData` → `rpc('exames_listar')` (mapeia p/ o shape `normExame`). `saveExame` e `saveAtualizar` → `rpc('exame_gravar')`. Dropdown do modal "Atualizar" reaproveita a lista já carregada (não busca colaboradores à parte). Removidos `SCRIPT_URL` e `COLAB_URL`. (Drawer KPIs já eram Supabase; `GITHUB_TREE_URL` do drawer é meta de páginas, não-Sheets, mantido.)
+
+### Kanban (card de exame — time-based, decidido com o usuário)
+- **Alvo**: quadro **RH** (08b636b2) / coluna **Outros** (9fcd0549) / etiqueta **Outros** (afcff19e) / responsável **Igor (24540)**.
+- **Regra**: exame **vencido + a vencer em 30 dias** (`proxima_realizacao <= current_date + 30`, ativo, `realiza`). Mesmo corte do status da página.
+- **Mecânica**: como não há evento de escrita (o exame vence com o tempo), é um **scan agendado** — `tata_plus.exame_kanban_scan()` cria o card (mesmo padrão à-prova-de-falha das Sanções/Experiências) com **dedup** em `dp_rh.exame_kanban` por `(matricula, proxima_realizacao)` → 1 card por ciclo de exame; quando o exame é refeito e a próxima muda, um novo card pode nascer no próximo ciclo.
+- **Agendado**: pg_cron `medicina-exames-kanban` (jobid 14), `0 9 * * *` (diário 06:00 SP). 1ª rodada criou **23 cards** (backlog vencido+30d); 2ª rodada = 0 (idempotente).
+
+- 2026-08-16 — **Medicina EXECUTADA** (tabela+RPCs+front+backfill 149+Kanban scan+cron). Falta da Parte 2: **Armário** (`ARMARIO_URL`) — mesma base de `armarios.html`.
