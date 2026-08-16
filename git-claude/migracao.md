@@ -361,4 +361,23 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 ## Organograma 100% Supabase (16/08) ✅
 - Sub-lookups do modal da pessoa (**Armário** e **Próximo exame**) deixaram o Apps Script: `carregarArmarios`→`armarios_listar`, `carregarExames`→`exames_listar` (dados já migrados nas Partes 2a/2b). Removidos `ARMARIO_URL`, `MEDICINA_URL`, `COLAB_URL` (drawer já era Supabase) e o helper `_headerKey`. **organograma.html = 0 refs a script.google.com.**
 
+## Módulo BANCO DE HORAS (`kpis/rh/bancodehoras.html`) — Dashboard ✅ 16/08 · Sync ⏳
+> Planilha "BANCO DE HORAS" (snapshot semanal do saldo do RHID) → Supabase, **normalizado**. História **congelada** (salário/custo da semana não recalculam); identidade derivada do `profiles` ao vivo.
+
+### Modelo (decisão do usuário: normalizar + congelar história)
+- **`dp_rh.banco_horas`** (privada, PK `(data, matricula, tipo)`): fato congelado = `data · matricula · tipo · saldo · salario · custo`. `tipo` ∈ Positivas/Negativas/Pagas/Perdidas (colaborador pode ter +1 linha por semana). **salário e custo são gravados** (valor da semana) e **nunca recalculam** — o valor-hora de uma semana passada ≠ o de hoje.
+- **Fórmula (confirmada)**: `custo = saldo × (salário/220) × 1,5` (valor-hora extra, acréscimo 50%). Nas semanas recentes a planilha zera o custo de Negativas — preservado como veio.
+- **NÃO se grava** nome/cargo/departamento/unidade/status → derivam do `profiles` no read (muda no profiles → muda aqui). Salário “vivo” (p/ o cálculo novo) vem de `cargos_salarios` via `profile.cargo_id`.
+- **RPC** `tata_plus.banco_horas_listar(p_semanas=50)` (authenticated): últimas N semanas, join `profiles` (coalesce nome → '(matrícula X)' p/ ~20 desligados antigos fora do profiles). Sem financeiro (a página não mostra custo; passivo fica pro "dashboard completo" depois, com gate `pode_ver_valores`).
+- **Backfill**: **15.464 linhas / 136 semanas / 502 pessoas** (07/01/2024→09/08/2026). Feito em blocos pequenos via MCP (blocos de 170KB travam o execute_sql; usar ~500 linhas/bloco). Semana atual resolve 100% dos nomes.
+
+### Front (`bancodehoras.html`)
+- `loadData` → `rpc('banco_horas_listar')` (mapeia p/ o shape antigo de linhas). Removidos `SHEET_ID` (CSV export), `COLAB_URL`, `parseCSV/parseCSVLine`. **0 refs a Sheets/Apps Script.** Commit `4fd0eabf`.
+
+### Pendências
+- [ ] **Cálculo semanal (Edge Function + cron)** — o “roda toda semana e congela”: saldo do RHID (`saldoBancoFinalDia`, sinal→Positivas/Negativas) × salário atual de `cargos_salarios` → custo → grava congelado. **Pagas/Perdidas** não saem do saldoBancoFinalDia (vêm de relatório de movimento) → dependem do **Apps Script bound** (não puxável do Drive; usuário vai colar).
+- [ ] Migrar o "dashboard completo" (custo/passivo) com gate `pode_ver_valores` quando for a hora.
+
+- 2026-08-16 — **Banco de Horas: dashboard EXECUTADO** (tabela normalizada + RPC + backfill 15.464 + front). Falta o cálculo semanal (RHID) — precisa do Apps Script bound p/ Pagas/Perdidas.
+
 - 2026-08-16 — **Organograma FECHADO 100%** (árvore + CES + armário/exame do modal, tudo Supabase). Medicina e Armários (páginas próprias) também 100%. Módulo RH do portal segue com dashboards ainda em Sheets p/ migrar (semanal, banco de horas, férias, solicitações, reclamações, performance, hc2, benefícios, desligamentos2) + frente n8n (33 workflows, Sheets→Trello → Kanban/Supabase).
