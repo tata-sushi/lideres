@@ -1442,7 +1442,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
   /* ── DRAWER ── */
-  var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
   var _drawerKpisLoaded = false;
   function loadDrawerKPIs() {
     if (_drawerKpisLoaded) return;
@@ -1548,20 +1547,32 @@ function openDrawer() {
   })();
 
   /* ── COLABORADORES (aba "Colaboradores" da planilha, via Apps Script separado) ── */
-  var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
-  var __colabCache = null; // [{ nome, matricula, unidade }]
+  var __colabCache = null; // [{ nome, matricula, cargo, unidade, departamento, ... }]
 
-  /* ── REGISTRO EM PLANILHA (audit trail de sanções) ── */
-  var SANCOES_REGISTRO_URL = 'https://script.google.com/macros/s/AKfycbxrjrbb8ZqJqihcznn-VIyGJySAq03f5Tx6QPlpnGG8itS8PpHrIvEUHz6sfwXxJbx4/exec';
-
+  /* ── REGISTRO DA SANÇÃO (Supabase: tata_plus.sancao_registrar -> dp_rh.sancoes + card no Kanban RH) ── */
   function registrarSancao(dados) {
-    fetch(SANCOES_REGISTRO_URL, {
-      method:  'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body:    JSON.stringify(Object.assign({ action: 'registrarSancao' }, dados))
-    })
-    .then(function(r) { return r.json(); })
-    .catch(function(err) { console.warn('[sancoes] falha ao registrar:', err); });
+    var depto = '';
+    try {
+      var m = (__colabCache || []).find(function(c){ return String(c.matricula) === String(dados.matricula) || c.nome === dados.nomeColaborador; });
+      if (m) depto = m.departamento || '';
+    } catch (e) {}
+    _supaReady().then(function(supa){
+      supa.schema('tata_plus').rpc('sancao_registrar', {
+        p_data_ocorrencia: dados.dataOcorrencia || null,
+        p_matricula:       dados.matricula || '',
+        p_nome:            dados.nomeColaborador || '',
+        p_cargo:           dados.cargoColaborador || '',
+        p_unidade:         dados.unidade || '',
+        p_departamento:    depto,
+        p_tipo:            dados.tipoSancao || '',
+        p_dias:            dados.diasSuspensao ? parseInt(dados.diasSuspensao, 10) : null,
+        p_descricao:       dados.descricao || '',
+        p_lider:           dados.lider || '',
+        p_cargo_lider:     dados.cargoLider || ''
+      }).then(function(res){
+        if (res && res.error) console.warn('[sancoes] falha ao registrar:', res.error);
+      }, function(err){ console.warn('[sancoes] falha ao registrar:', err); });
+    });
   }
 
   function _supaReady(){ return new Promise(function(res){ if(window.__lideresSupa){res(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){res(window.__lideresSupa);},{once:true}); }); }
