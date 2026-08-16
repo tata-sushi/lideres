@@ -16,12 +16,12 @@
 
 ## 🔖 PENDÊNCIAS (checklist vivo — atualizar conforme avançamos)
 
-### Sanções Disciplinares → Kanban (ADIADO — consulta feita 04/08)
-- [x] **Lookup de colaborador** migrado p/ Supabase (`colaboradores_listar()`), filtro por unidade preservado (#2544). Drawer/gravação/ficha técnica não tocados.
-- [ ] **Pré-requisito:** trazer a base de sanções do Sheets → `dp_rh.sancoes` (usuário vai trazer os pendentes). Hoje a sanção grava no Google Sheets.
-- [ ] **Aposentar o Trello:** fluxo n8n **`nova_sancao__card_trello`** (id `MsVFYQFSlhYItL0l`, ativo, "Available in MCP" **OFF** — ligar p/ inspecionar/inativar via MCP). Cria card no Trello quando cai nova sanção.
-- [ ] **Card no Kanban interno (sem n8n):** copiar o padrão da Ouvidoria — insert em `dp_rh.sancoes` → gatilho (tipo `tg_ouvidoria_para_kanban`) → `insert into tata_kanban.cards`. Card = `quadro_id, coluna_id, titulo, descricao, criado_por`.
-- [ ] **Definir destino do card:** quadro **RH** (`08b636b2-7daf-444b-950a-8255e3049e5f`) — não há coluna "Sanções" ainda (colunas: Admissão, Desligamentos, Outros, Solicitações Líderes, Em andamento, Concluído, Validadas). Criar coluna "Sanções" ou usar "Outros".
+### Sanções Disciplinares → Supabase + Kanban (Parte 1 FEITA 16/08)
+- [x] **Lookup de colaborador** migrado p/ Supabase (`colaboradores_listar()`), filtro por unidade preservado (#2544).
+- [x] **Gravação migrada:** `registrarSancao()` deixa o Apps Script e chama `tata_plus.sancao_registrar(...)` → grava em `dp_rh.sancoes` (privada, `id_externo` p/ import; `criado_por` carimbado no servidor). Front limpo (URLs mortas removidas).
+- [x] **Card no Kanban interno (SEM n8n):** gatilho `dp_rh.tg_sancao_para_kanban` (padrão Ouvidoria, à prova de falha, dedup em `dp_rh.sancao_kanban`) → card no quadro **RH** / coluna **Outros** / etiqueta **Sanções** (`5bee39f2-…`) / responsável **7 (Victor Augusto)**. Testado ponta a ponta. Import histórico NÃO gera card (guard `id_externo is not null`).
+- [ ] **Parte 2 — base histórica:** trazer sanções antigas do Sheets → `dp_rh.sancoes` (upsert por `id_externo`). Usuário traz a base; gero o `.sql`.
+- [ ] **Aposentar o Trello (opcional):** fluxo n8n **`nova_sancao__card_trello`** (id `MsVFYQFSlhYItL0l`) segue **ativo** mas inerte (planilha não recebe mais sanções). Usuário desliga quando quiser. **Não é necessário p/ o fluxo novo** — o card vem do gatilho do banco.
 
 ### Ouvidoria (piloto — no ar)
 - [ ] **PR #446** (`tata-sushi/plus`, página ouvidoria do app) — app-side revisar/mergear.
@@ -227,3 +227,4 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 
 - 2026-08-16 — **HC Etapa 1+2 EXECUTADAS** + editor de cargos por texto livre. Migrations: `hc_programado_*`, `hc_programado_cargos_jsonb`, `hc_programado_remover(_unidade)`, `hc_turnover_listar`. Front reconectado; validado roundtrip de gravação e contagens (140 ativos; 511 linhas de turnover 2016–2026).
 - 2026-08-16 — **Vagas Abertas migradas** (hc.html): coluna R&S do cruzamento deixa o Google Sheets e usa `tata_plus.hc_vagas_abertas()` (agrega abertas por unidade+departamento a partir de `dp_rh.vagas`, mesma base do recrutamento). Removidos `VAGAS_SHEET_*` e `API_KEY`. **hc.html agora é 100% Supabase** (sobra só a fonte do Google Fonts).
+- 2026-08-16 — **Sanções Parte 1 EXECUTADA** (só Supabase, sem n8n): `dp_rh.sancoes` + `dp_rh.sancao_kanban` + RPC `tata_plus.sancao_registrar` + gatilho `tg_sancao_para_kanban` (card → RH/Outros, etiqueta Sanções, responsável 7). Front `sancoes.html`: `registrarSancao` via RPC. Testado ponta a ponta. Parte 2 (import histórico) pendente do usuário trazer a base.
