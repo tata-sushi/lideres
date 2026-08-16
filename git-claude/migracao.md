@@ -259,3 +259,15 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
   - **Baixado via Google Drive MCP** (export CSV) — o leitor de sheets truncava. O Form **evoluiu**: linhas antigas (12 notas) e novas (9 notas + 3 sim/não + decisão + obs) convivem; mapeamento posicional cobre ambas. Bloco backfill 06/01/2026 (tudo 5, avaliador Victor) incluído a pedido.
 - **`experiencia_avaliar`** agora também grava evento no `_hist` (origem='app'); **`experiencia_historico(matrícula)`** pronta pro painel. Arquivo `IMPORTAR_experiencia_hist.sql` rodado pelo usuário no SQL Editor.
 - **Experiências 100% concluída**: leitura (profiles), gravação (RPC), status importado (143) e histórico de questionários (400). Ausências/Feriados seguem pendentes da fonte RHID.
+
+### Ausências (`absenteismo.html`) — ✅ FEITO 16/08 (RHID direto no Supabase)
+- **Tabela** `dp_rh.ausencias` — chave `(matricula, data_falta)`. Metade RHID (`colaborador·unidade·departamento·tipo·status`) + metade app (`devolutiva·devolutiva_por·devolutiva_em`).
+- **RPCs** (`tata_plus`, authenticated): `ausencia_listar()`, `ausencia_devolutiva_gravar(mat, data, devolutiva)` (carimba líder). **Sync**: `public.ausencia_sync(jsonb)` (service_role) — upsert só da metade RHID, **preserva a devolutiva**.
+- **Front** `absenteismo.html`: lê `ausencia_listar`, grava `ausencia_devolutiva_gravar`. Removidos Sheets/Apps Script/COLAB_URL/`__nomeResponsavel`.
+- **Backfill**: 4.461 linhas da aba `Ausências` (3.894 classificadas + 567 pendentes, 2025→2026).
+- **Sync RHID→Supabase = Edge Function `rhid-ausencias-sync`** (Deno). Substitui os Apps Scripts `importarAusenciasSemanal3` + `importarFaltasSemanal`. Numa passada: login RHID → `/person` → `/apuracao_ponto` por pessoa (concorrência 6) → extrai ausência justificada (tipo mapeado) + falta dia inteiro ("Falta") → `ausencia_sync`. Unidade/depto/status/nome do `profiles`. Matrícula normalizada (tira zero à esquerda, igual `sync-rhid`). Testada: 506 pessoas / 30s / preservou as 3.894 devolutivas.
+- **Agendada**: pg_cron `rhid-ausencias-semanal` (jobid 12), `0 9 * * 1` (seg 06:00 SP), pega a semana anterior.
+- **Credenciais**: reusa os secrets `RHID_EMAIL`/`RHID_PASSWORD` já existentes (mesmos da `sync-rhid`). **Padrão fixo**: 1 Edge Function por regra (profiles/ausências/feriados), todas com o mesmo login RHID.
+- **Aposentar Apps Scripts**: `importarAusenciasSemanal3`, `importarFaltasSemanal`, web app `devolutiva-ausencia` — planilha `Ausências` congelada.
+
+- 2026-08-16 — **Ausências EXECUTADA de ponta a ponta** (tabela+RPCs+front+backfill 4.461+Edge Function+cron). Feriados é o próximo, mesmo molde.
