@@ -226,3 +226,4 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - Ainda no Sheets nesta página (fora do escopo desta etapa): **Vagas abertas** (Google Sheets API, `VAGAS_SHEET_ID`).
 
 - 2026-08-16 — **HC Etapa 1+2 EXECUTADAS** + editor de cargos por texto livre. Migrations: `hc_programado_*`, `hc_programado_cargos_jsonb`, `hc_programado_remover(_unidade)`, `hc_turnover_listar`. Front reconectado; validado roundtrip de gravação e contagens (140 ativos; 511 linhas de turnover 2016–2026).
+- 2026-08-16 — **Vagas Abertas migradas** (hc.html): coluna R&S do cruzamento deixa o Google Sheets e usa `tata_plus.hc_vagas_abertas()` (agrega abertas por unidade+departamento a partir de `dp_rh.vagas`, mesma base do recrutamento). Removidos `VAGAS_SHEET_*` e `API_KEY`. **hc.html agora é 100% Supabase** (sobra só a fonte do Google Fonts).

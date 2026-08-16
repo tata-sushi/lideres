@@ -602,9 +602,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-// HC programado, colaboradores e turnover: 100% Supabase. API_KEY abaixo é só para a
-// planilha de VAGAS ABERTAS (única fonte Google Sheets que ainda resta nesta página).
-var API_KEY       = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
+// Página 100% Supabase: HC programado, colaboradores, turnover e vagas.
 
 // ─── USUÁRIO ──────────────────────────────────────────────────────────────────
 var __nomeResponsavel = (function() {
@@ -869,8 +867,7 @@ function setColabBusca(v){
 }
 
 // ─── VAGAS ───────────────────────────────────────────────────────────────────
-var VAGAS_SHEET_ID   = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
-var VAGAS_SHEET_NAME = 'CONTROLE DE VAGAS ABERTAS';
+// Vagas abertas via Supabase (tata_plus.hc_vagas_abertas -> dp_rh.vagas), agregado por unidade+departamento.
 var _vagasData   = null;
 // ─── CRUZAMENTO HC REAL × PROGRAMADO ─────────────────────────────────────────
 var _colabs = null;
@@ -898,22 +895,12 @@ function carregarCruzamento() {
   var pColabs = fetchColabs();
   var pVagas = _vagasData !== null
     ? Promise.resolve(_vagasData)
-    : fetch('https://sheets.googleapis.com/v4/spreadsheets/' + VAGAS_SHEET_ID
-        + '/values/' + encodeURIComponent(VAGAS_SHEET_NAME + '!A:O')
-        + '?key=' + API_KEY)
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        var rows = data.values || [];
-        if (rows.length < 2) return [];
-        var hdrs = rows[0];
-        var out = [];
-        for (var i = 1; i < rows.length; i++) {
-          if (!rows[i].some(function(c){ return c && c.trim(); })) continue;
-          var obj = {};
-          hdrs.forEach(function(h,j){ obj[norm(h).replace(/\s+/g,'_')] = (rows[i][j]||'').trim(); });
-          out.push({ unidade: obj.unidade||'', departamento: obj.departamento||'', status: obj.status_da_vaga||'' });
-        }
-        return out;
+    : new Promise(function(resolve){
+        comSupa(function(supa){
+          supa.schema('tata_plus').rpc('hc_vagas_abertas').then(function(r){
+            resolve((r && !r.error && Array.isArray(r.data)) ? r.data : []);
+          }, function(){ resolve([]); });
+        });
       });
   Promise.all([pColabs, pVagas])
     .then(function(res){
@@ -930,12 +917,10 @@ function carregarCruzamento() {
 
 function vagasEmAberto(unidade, departamento) {
   if (!_vagasData) return 0;
-  return _vagasData.filter(function(v) {
-    if (v.unidade !== unidade) return false;
-    if (v.departamento !== departamento) return false;
-    var s = norm(v.status);
-    return s === 'aberta' || s.indexOf('andamento') >= 0;
-  }).length;
+  for (var i=0;i<_vagasData.length;i++) {
+    if (_vagasData[i].unidade===unidade && _vagasData[i].departamento===departamento) return parseInt(_vagasData[i].qtd)||0;
+  }
+  return 0;
 }
 
 function renderCruzamento() {
