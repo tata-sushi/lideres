@@ -217,3 +217,12 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - 2026-08-02 — **Passo 4 EXECUTADO** (front dashboard): `kpis/rh/ouvidoria.html` agora lê via `comSupa` + `supa.schema('tata_plus').rpc('ouvidoria_listar')`, mapeando p/ {data,reclamante,identificado,ocorrencia,devolutiva}. Apps Script SCRIPT_URL desativado.
 - 2026-08-02 — **Passo 3 (dados)**: rede da sessão bloqueia Supabase (egress policy) e transcrição inline corrompe → gerado `IMPORTAR_ouvidoria.sql` (19 reg., upsert por id_externo) e **entregue ao usuário** p/ rodar no SQL Editor. NOTA: dados históricos são sensíveis; import é do próprio usuário.
 - NOTA CANAL: nesta sessão, escrita no banco só via MCP `execute_sql` (curl bloqueado). Import de dados em massa → entregar `.sql` p/ o SQL Editor do usuário ou para o agente app-side.
+
+## MÓDULO HC (headcount) — `kpis/rh/hc.html`
+- **Etapa 1 (HC programado)**: migrado do Sheets → Supabase. Tabela `dp_rh.hc_programado` + RPCs `tata_plus.hc_programado_listar/salvar/salvar_lote/remover/remover_unidade`. `total` = coluna gerada (soma dos baldes).
+- **Cargos por texto livre**: coluna `cargos jsonb` (`[{nome,escala,qtd}]`) é a fonte de verdade do editor. Os 5 baldes fixos (lider/especialista/auxiliares/aprendizes/estagiarios) são DERIVADOS no cliente classificando o nome do cargo (`classifyCargoTipo`) → mantêm KPIs/cruzamento sem mudança. Escala é por cargo.
+- **Editor (moldão + modal por card)**: motor de tabela de cargos compartilhado. Adicionar unidade/departamento; Remover depto / Remover unidade; por linha de cargo: editar escala/qtd + excluir (com confirmação); "Incluir" cargo por texto livre.
+- **Etapa 2 (HC real + turnover)**: `_colabs` (HC atual) deixa o Apps Script e usa `public.hc_colaboradores_listar()` (de `tata_plus.profiles`, filtrando `status='Ativo'` no cliente). Turnover deixa o CSV do Sheets e usa `tata_plus.hc_turnover_listar()` (admissão/demissão de `profiles`; sentinela `2999-01-01` → sem demissão). Helper `fetchColabs()` compartilhado.
+- Ainda no Sheets nesta página (fora do escopo desta etapa): **Vagas abertas** (Google Sheets API, `VAGAS_SHEET_ID`).
+
+- 2026-08-16 — **HC Etapa 1+2 EXECUTADAS** + editor de cargos por texto livre. Migrations: `hc_programado_*`, `hc_programado_cargos_jsonb`, `hc_programado_remover(_unidade)`, `hc_turnover_listar`. Front reconectado; validado roundtrip de gravação e contagens (140 ativos; 511 linhas de turnover 2016–2026).
