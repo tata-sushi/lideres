@@ -271,3 +271,13 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **Aposentar Apps Scripts**: `importarAusenciasSemanal3`, `importarFaltasSemanal`, web app `devolutiva-ausencia` — planilha `Ausências` congelada.
 
 - 2026-08-16 — **Ausências EXECUTADA de ponta a ponta** (tabela+RPCs+front+backfill 4.461+Edge Function+cron). Feriados é o próximo, mesmo molde.
+
+### Feriados (`feriados.html`) — ✅ FEITO 16/08 (RHID direto no Supabase)
+- **Tabela** `dp_rh.feriados_horas` — chave `(matricula, data_feriado)`. Metade RHID (`colaborador·unidade·departamento·feriado_nome·horas·saldo_anterior`) + metade app (`decisao·decisao_por·data_folga·decisao_em`).
+- **RPCs**: `feriado_listar()`, `feriado_decisao_gravar(mat, data, decisao, data_folga)` (carimba líder), `public.feriado_sync(jsonb)` (service_role; upsert RHID, **regra automática** saldo negativo→"Não tem direito" só em linha NOVA, preserva decisão do líder).
+- **Front** `feriados.html`: `feriado_listar` / `feriado_decisao_gravar`. Removidos Apps Script/COLAB_URL/`__nomeResponsavel`.
+- **Backfill**: 332 linhas da aba `Feriados` (213 Pagamento / 60 Folga / 59 Não tem direito; 4 feriados). Rodado via MCP em 4 blocos (usuário não podia rodar SQL).
+- **Sync = Edge Function `rhid-feriados-sync`** (substitui `relatórioFeriados`): detecta feriados da semana → quem trabalhou (horas) + saldo do dia anterior → `feriado_sync`. Unidade/depto/nome do `profiles`, matrícula normalizada. Testada: detectou Revolução Const. (09/07), 124 ativos, 73 linhas / 12,7s, preservou as 332 decisões.
+- **Agendada**: pg_cron `rhid-feriados-semanal` (jobid 13), `5 9 * * 1` (seg 06:05 SP).
+
+- 2026-08-16 — **Feriados EXECUTADA** (tabela+RPCs+front+backfill 332+Edge Function+cron). Módulo RHID (Experiências/Ausências/Feriados) COMPLETO. Apps Scripts podem ser desligados.

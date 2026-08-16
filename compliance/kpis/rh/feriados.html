@@ -498,18 +498,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <script>
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzgehdiUHa7w_Xd1stIf-s-Urq4CLYgN39zsFSI18QdxBXhkUErIQ4waHrDT-OwMNkg-g/exec';
+// ─── FONTE: Supabase (tata_plus.feriado_listar / feriado_decisao_gravar) ──────
+function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
 
-// ─── USUÁRIO LOGADO ───────────────────────────────────────────────────────────
-var __nomeResponsavel = (function() {
-  try {
-    var s = JSON.parse(localStorage.getItem('lideres_session') || '{}');
-    return (s && s.displayName) || '';
-  } catch(e) { return ''; }
-})();
-
-// ─── FERIADOS (populado dinamicamente pelo Apps Script) ───────────────────────
+// ─── FERIADOS (populado dinamicamente a partir dos dados) ─────────────────────
 var FERIADOS_CONFIG = [];
 
 // ─── ESTADO ───────────────────────────────────────────────────────────────────
@@ -584,25 +576,26 @@ function hideLoading() { document.getElementById('loading-overlay').classList.re
 function loadData() {
   showLoading();
 
-  fetch(APPS_SCRIPT_URL + '?acao=listar-feriados')
-    .then(function(r) { return r.json(); })
-    .then(function(res) {
-      if (!res.success) { showError(res.message || 'Resposta inválida'); return; }
+  comSupa(function(supa) {
+    supa.schema('tata_plus').rpc('feriado_listar').then(function(res) {
+      hideLoading();
+      if (res.error) { showError(res.error.message || 'Erro ao carregar'); return; }
 
-      dados = res.rows.map(function(r) {
+      dados = (res.data || []).map(function(r) {
+        var iso    = String(r.data_feriado || '').slice(0,10);
+        var dataBR = iso ? iso.split('-').reverse().join('/') : '';
         return {
-          _linha:       r._linha,
-          feriado:      r.feriado_id,
-          feriado_nome: r.feriado_nome,
-          data:         r.feriado_data,
-          nome:         r.nome,
-          mt:           r.mt,
-          horas:        r.horas,
-          unidade:      r.unidade,
-          depto:        r.depto,
-          saldo:        r.saldo,
-          decisao:      r.decisao,
-          responsavel:  r.lider
+          feriado:      iso,                         // id do feriado = data ISO
+          feriado_nome: r.feriado_nome || '',
+          data:         dataBR,
+          nome:         r.colaborador || '',
+          mt:           String(r.matricula || ''),
+          horas:        r.horas || '',
+          unidade:      r.unidade || '',
+          depto:        r.departamento || '',
+          saldo:        r.saldo_anterior || '',
+          decisao:      r.decisao || '',
+          responsavel:  r.decisao_por || ''
         };
       });
 
@@ -621,11 +614,9 @@ function loadData() {
         return da - db;
       });
 
-      // inicia em "Todos" (feriadoAtivo = null)
       render();
-    })
-    .catch(function(err) { showError('Erro de conexão: ' + err.message); })
-    .finally(hideLoading);
+    }, function(err) { hideLoading(); showError('Erro de conexão: ' + ((err && err.message) || err)); });
+  });
 }
 
 function showError(msg) {
@@ -912,39 +903,27 @@ function salvarDecisao(idx, decisao, dataCompensacao) {
   var d = _filteredCache[idx];
   if (!d || !decisao) return;
 
-  var params = new URLSearchParams({
-    acao:        'decisao-feriado',
-    linha:       d._linha || '',
-    nome:        d.nome,
-    mt:          d.mt,
-    feriado:     d.feriado,
-    data:        d.data,
-    decisao:     decisao,
-    responsavel: __nomeResponsavel
-  });
-  if (dataCompensacao) params.set('dataCompensacao', dataCompensacao);
-
-  fetch(APPS_SCRIPT_URL + '?' + params.toString())
-    .then(function(r){ return r.json(); })
-    .then(function(res){
-      if (res.success) {
-        d.decisao = decisao;
-        d.responsavel = __nomeResponsavel;
-        var cardEl = document.getElementById('card-' + idx);
-        if (cardEl) {
-          var newDiv = document.createElement('div');
-          newDiv.innerHTML = cardFeriado(d, idx);
-          cardEl.replaceWith(newDiv.firstChild);
-        }
-        renderKPIs();
-        renderFilters();
-      } else {
-        alert('Erro ao salvar:\n' + (res.message || 'resposta inválida'));
+  comSupa(function(supa) {
+    supa.schema('tata_plus').rpc('feriado_decisao_gravar', {
+      p_matricula:    d.mt,
+      p_data_feriado: d.feriado,
+      p_decisao:      decisao,
+      p_data_folga:   dataCompensacao || null
+    }).then(function(res){
+      if (res.error) throw res.error;
+      d.decisao = decisao;
+      var cardEl = document.getElementById('card-' + idx);
+      if (cardEl) {
+        var newDiv = document.createElement('div');
+        newDiv.innerHTML = cardFeriado(d, idx);
+        cardEl.replaceWith(newDiv.firstChild);
       }
-    })
-    .catch(function(err){
-      alert('Erro de conexão:\n' + err.message);
+      renderKPIs();
+      renderFilters();
+    }, function(err){
+      alert('Erro ao salvar:\n' + ((err && err.message) || err));
     });
+  });
 
   // ── MODO DEMO: simula sucesso sem fetch real ──────────────────────────────
   // Comente o bloco fetch() acima e descomente isso para demo local:
@@ -1311,7 +1290,6 @@ function clearFilters() {
 }
 
 // ─── DRAWER ───────────────────────────────────────────────────────────────────
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
