@@ -632,18 +632,27 @@ function showLoading() { document.getElementById('loading-overlay').classList.ad
 function hideLoading() { document.getElementById('loading-overlay').classList.remove('show'); }
 
 function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
+// Colaboradores reais (HC atual = ativos) via Supabase (hc_colaboradores_listar -> tata_plus.profiles)
+function fetchColabs(){
+  if(_colabs !== null) return Promise.resolve(_colabs);
+  return new Promise(function(resolve){
+    comSupa(function(supa){
+      supa.rpc('hc_colaboradores_listar').then(function(r){
+        var arr = (r && !r.error && Array.isArray(r.data)) ? r.data : [];
+        _colabs = arr.filter(function(c){ return (c.status||'')==='Ativo'; })
+          .map(function(c){ return { matricula:c.matricula, nome:c.nome||'', cargo:c.cargo||'', unidade:c.unidade||'', departamento:c.departamento||'' }; });
+        resolve(_colabs);
+      }, function(){ _colabs=[]; resolve(_colabs); });
+    });
+  });
+}
 function loadData() {
   showLoading();
   // HC programado agora vem do Supabase (tata_plus.hc_programado_listar), não mais da planilha.
   var pDados = new Promise(function(resolve,reject){
     comSupa(function(supa){ supa.schema('tata_plus').rpc('hc_programado_listar').then(function(r){ r.error?reject(r.error):resolve(r.data||[]); }, reject); });
   });
-  var pColabs = _colabs !== null
-    ? Promise.resolve(_colabs)
-    : fetch(COLAB_URL2 + '?action=listColaboradores')
-        .then(function(r){ return r.json(); })
-        .then(function(data){ _colabs = (data.ok && data.colaboradores) ? data.colaboradores : []; return _colabs; })
-        .catch(function(){ _colabs = []; return []; });
+  var pColabs = fetchColabs();
   Promise.all([pDados, pColabs])
     .then(function(results){
       hideLoading();
@@ -870,7 +879,6 @@ var VAGAS_SHEET_ID   = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
 var VAGAS_SHEET_NAME = 'CONTROLE DE VAGAS ABERTAS';
 var _vagasData   = null;
 // ─── CRUZAMENTO HC REAL × PROGRAMADO ─────────────────────────────────────────
-var COLAB_URL2 = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _colabs = null;
 // Matrículas excluídas de TODAS as análises (sócios)
 var EXCLUDED_MATS = [1, 9, 10];
@@ -893,12 +901,7 @@ function carregarCruzamento() {
   if (_colabs !== null && _vagasData !== null) { renderCruzamento(); return; }
   document.getElementById('cruzamento-content').innerHTML =
     '<div class="empty-state"><div style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--carbon);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px"></div><p>Carregando...</p></div>';
-  var pColabs = _colabs !== null
-    ? Promise.resolve(_colabs)
-    : fetch(COLAB_URL2 + '?action=listColaboradores').then(function(r){ return r.json(); }).then(function(data){
-        if (!data.ok) throw new Error(data.erro||'Erro ao carregar colaboradores');
-        return data.colaboradores || [];
-      });
+  var pColabs = fetchColabs();
   var pVagas = _vagasData !== null
     ? Promise.resolve(_vagasData)
     : fetch('https://sheets.googleapis.com/v4/spreadsheets/' + VAGAS_SHEET_ID
@@ -1191,16 +1194,6 @@ function getHcAtualFiltered() {
   var tot = src.reduce(function(a, d){ return a + d.total; }, 0);
   return tot || null;
 }
-function parseTvCSV(line) {
-  var res=[], cur='', inQ=false;
-  for (var i=0;i<line.length;i++) {
-    var ch=line[i];
-    if (ch==='"') { inQ=!inQ; }
-    else if (ch===','&&!inQ) { res.push(cur.trim()); cur=''; }
-    else { cur+=ch; }
-  }
-  res.push(cur.trim()); return res;
-}
 function parseTvDate(s) {
   if (!s) return null;
   var t=s.trim();
@@ -1220,41 +1213,24 @@ function parseTvDate(s) {
 }
 function loadTurnoverData() {
   if (_tvData) { renderTurnoverChart(); renderTurnoverMonthlyChart(); renderTurnoverAnalyticTable(); renderWeeklyEvolutionChart(); return; }
-  var url='https://docs.google.com/spreadsheets/d/1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw/export?format=csv&gid=175063295';
-  fetch(url).then(function(r){return r.text();}).then(function(csv){
-    var lines=csv.split('\n');
-    _tvData=[];
-    // Detect column indices from header row; fall back to known positions
-    var hdrs=parseTvCSV(lines[0]||'');
-    function colIdx(keywords, fallback) {
-      var kw=keywords.map(function(k){return k.toLowerCase();});
-      for (var h=0;h<hdrs.length;h++) {
-        var hh=hdrs[h].toLowerCase();
-        if (kw.every(function(k){return hh.indexOf(k)!==-1;})) return h;
-      }
-      return fallback;
-    }
-    var iMat=colIdx(['matr'],0);
-    var iAdm=colIdx(['admiss'],8);
-    var iDem=colIdx(['demiss'],14);
-    var iUni=colIdx(['unidade'],4);
-    var iDep=colIdx(['departamento'],5);
-    for (var i=1;i<lines.length;i++) {
-      var ln=lines[i].trim(); if (!ln) continue;
-      var cols=parseTvCSV(ln);
-      if (isExcluded(cols[iMat])) continue;
-      var adm=parseTvDate(cols[iAdm]);
-      var dem=parseTvDate(cols[iDem]||'');
-      if (!adm) continue;
-      var uni=(cols[iUni]||'').trim();
-      var dep=(cols[iDep]||'').trim();
-      _tvData.push({adm:adm, dem:dem, unidade:uni, departamento:dep});
-    }
-    renderTurnoverChart();
-    renderTurnoverMonthlyChart();
-    renderTurnoverAnalyticTable();
-    renderWeeklyEvolutionChart();
-  }).catch(function(){});
+  // Turnover agora vem do Supabase (tata_plus.hc_turnover_listar -> tata_plus.profiles).
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('hc_turnover_listar').then(function(r){
+      var rows = (r && !r.error && Array.isArray(r.data)) ? r.data : [];
+      _tvData=[];
+      rows.forEach(function(row){
+        if (isExcluded(row.matricula)) return;
+        var adm=parseTvDate(row.data_admissao);
+        if (!adm) return;
+        var dem=parseTvDate(row.data_demissao||'');
+        _tvData.push({ adm:adm, dem:dem, unidade:(row.unidade||'').trim(), departamento:(row.departamento||'').trim() });
+      });
+      renderTurnoverChart();
+      renderTurnoverMonthlyChart();
+      renderTurnoverAnalyticTable();
+      renderWeeklyEvolutionChart();
+    }, function(){});
+  });
 }
 function renderTurnoverChart() {
   if (!_tvData) return;
@@ -1861,7 +1837,6 @@ function salvarEditorHC(){
 }
 
 // ─── DRAWER ───────────────────────────────────────────────────────────────────
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
