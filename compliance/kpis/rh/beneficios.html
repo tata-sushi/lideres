@@ -347,7 +347,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </aside>
 
 <script>
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
@@ -436,9 +435,7 @@ var COLABORADORES = [];
 var DATA = [];
 
 // Google Sheets API config
-var SHEET_ID = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
-var SHEET_TAB = 'Colaboradores';
-var API_KEY = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
+// Colaboradores agora vêm do Supabase (RPC tata_plus.beneficios_colaboradores).
 
 function parseDateBR(str) {
   if (!str || typeof str !== 'string') return null;
@@ -449,47 +446,32 @@ function parseDateBR(str) {
   return {dia: d, mes: m, ano: y};
 }
 
+function comSupa(cb){
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true });
+}
+
 function fetchColaboradores() {
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID +
-    '/values/' + encodeURIComponent(SHEET_TAB) + '?key=' + API_KEY;
-  return fetch(url).then(function(r){ return r.json(); }).then(function(json) {
-    if (!json.values || json.values.length < 2) { console.error('Sem dados na planilha'); return; }
-    var headers = json.values[0];
-    var iNome = 0;   // A - Nome
-    var iStatus = 3;  // D - Status
-    var iUnidade = 4; // E - Unidade
-    var iDepto = 5;   // F - Departamento
-    var iNasc = 13;   // N - Data de Nascimento
-    var iAdmissao = 8; // I - Data de Admissão
-
-    COLABORADORES = [];
-    for (var r = 1; r < json.values.length; r++) {
-      var row = json.values[r];
-      var nome = (row[iNome]||'').trim();
-      var status = (row[iStatus]||'').trim();
-      var unidade = (row[iUnidade]||'').trim();
-      var depto = (row[iDepto]||'').trim();
-      var nascStr = (row[iNasc]||'').trim();
-      var admStr = (row[iAdmissao]||'').trim();
-
-      // Filtrar: apenas Ativo, com nome e data de nascimento válida
-      if (!nome) continue;
-      if (status.toLowerCase().indexOf('ativo') === -1) continue;
-      // Excluir "Inativo" que contém "ativo"
-      if (status.toLowerCase().indexOf('inativo') !== -1) continue;
-      var nasc = parseDateBR(nascStr);
-      if (!nasc) continue;
-
-      COLABORADORES.push({
-        nome: nome,
-        depto: depto || 'Sem depto',
-        dia: nasc.dia,
-        mes: nasc.mes,
-        anoNasc: nasc.ano,
-        unidade: unidade || 'Sem unidade',
-        admissao: parseDateBR(admStr)
-      });
-    }
+  // Aniversários / aniversário de empresa / plano médico: tudo deriva do profiles.
+  return new Promise(function(resolve) {
+    comSupa(function(supa) {
+      supa.schema('tata_plus').rpc('beneficios_colaboradores').then(function(res) {
+        var rows = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
+        COLABORADORES = [];
+        rows.forEach(function(row) {
+          var nome = (row.nome || '').trim();
+          var nasc = parseDateBR(row.nascimento);
+          if (!nome || !nasc) return;
+          COLABORADORES.push({
+            nome: nome,
+            depto: (row.departamento || '').trim() || 'Sem depto',
+            dia: nasc.dia,
+            mes: nasc.mes,
+            anoNasc: nasc.ano,
+            unidade: (row.unidade || '').trim() || 'Sem unidade',
+            admissao: parseDateBR(row.admissao)
+          });
+        });
 
     DATA = COLABORADORES.map(function(c) {
       var px = proxAniversario(c.dia, c.mes);
@@ -565,6 +547,9 @@ function fetchColaboradores() {
     })
     .filter(function(d){ return d.diasFaltando >= 0; })
     .sort(function(a,b){ return a.proxAniv - b.proxAniv; });
+        resolve();
+      }, function(){ resolve(); });
+    });
   });
 }
 

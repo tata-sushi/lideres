@@ -389,4 +389,8 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 
 - 2026-08-16 — **Banco de Horas COMPLETO** (tabela+RPC+backfill 15.464+front+Edge Function `rhid-banco-horas-sync`+cron). Positivas/Negativas/Pagas/Perdidas cobertos (Apps Script colado pelo usuário). Salário por cargo (cargos_salarios), custo congelado.
 
+## Benefícios (`kpis/rh/beneficios.html`) — ✅ FEITO 16/08
+- Dashboard (aniversários · aniversário de empresa · elegibilidade plano médico 6 meses) lia a planilha "Colaboradores" (Sheets API + API_KEY). Tudo **deriva do `profiles`** (nome, unidade, departamento, data_nascimento, data_admissao) — a matemática de datas é toda client-side.
+- **RPC** `tata_plus.beneficios_colaboradores()` (authenticated): ativos com data_nascimento, datas em DD/MM/YYYY. Front `fetchColaboradores` → `comSupa`+RPC (mantém DATA/DATA_EMP/DATA_MED intactos). Removidos `SHEET_ID`/`SHEET_TAB`/`API_KEY` (chave Google exposta saiu) e `COLAB_URL`. **0 refs a Sheets.** 139 colaboradores.
+
 - 2026-08-16 — **Organograma FECHADO 100%** (árvore + CES + armário/exame do modal, tudo Supabase). Medicina e Armários (páginas próprias) também 100%. Módulo RH do portal segue com dashboards ainda em Sheets p/ migrar (semanal, banco de horas, férias, solicitações, reclamações, performance, hc2, benefícios, desligamentos2) + frente n8n (33 workflows, Sheets→Trello → Kanban/Supabase).
