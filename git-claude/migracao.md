@@ -389,6 +389,12 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 
 - 2026-08-16 — **Banco de Horas COMPLETO** (tabela+RPC+backfill 15.464+front+Edge Function `rhid-banco-horas-sync`+cron). Positivas/Negativas/Pagas/Perdidas cobertos (Apps Script colado pelo usuário). Salário por cargo (cargos_salarios), custo congelado.
 
+## Report SEMANAL (`kpis/rh/semanal.html`) — ✅ FEITO 16/08
+> O agregador do RH: puxava de ~9 fontes Sheets/Apps Script. Como todas as bases já migraram, foi trocar fonte por fonte pelas RPCs.
+- HC programado → `hc_programado_listar`; Colaboradores (HC atual) → `hc_colaboradores_listar` (public, jsonb); Vagas em aberto → `hc_vagas_abertas`; Testes (gráfico) → **`report_testes_semanais`** (nova, de `rec_teste_dias`+`rec_candidaturas`, realizado=contratado); Banco de horas → `banco_horas_listar(p_semanas:=60)`; Ausências/atestados → `ausencia_listar`; Turnover → `hc_turnover_listar`; **Editar HC** (era POST Apps Script) → `hc_programado_salvar`.
+- **Datas**: banco de horas e testes saem DD/MM/YYYY; ausências e turnover saem ISO (YYYY-MM-DD) → parse adaptado nesses dois gráficos.
+- Helpers `comSupa`/`fetchRpc` içados pro escopo global. Alinhamentos (demandas+transcrição) e drawer KPIs já eram Supabase — mantidos. Removidas **2 API_KEY do Google expostas** + todas as URLs/SHEET_IDs mortas. **0 refs a Sheets.** (Rewire por subagente, revisado: chamadas RPC/schema/args conferidas, `demandas_lista` tem default, HC save com parseInt.)
+
 ## Benefícios (`kpis/rh/beneficios.html`) — ✅ FEITO 16/08
 - Dashboard (aniversários · aniversário de empresa · elegibilidade plano médico 6 meses) lia a planilha "Colaboradores" (Sheets API + API_KEY). Tudo **deriva do `profiles`** (nome, unidade, departamento, data_nascimento, data_admissao) — a matemática de datas é toda client-side.
 - **RPC** `tata_plus.beneficios_colaboradores()` (authenticated): ativos com data_nascimento, datas em DD/MM/YYYY. Front `fetchColaboradores` → `comSupa`+RPC (mantém DATA/DATA_EMP/DATA_MED intactos). Removidos `SHEET_ID`/`SHEET_TAB`/`API_KEY` (chave Google exposta saiu) e `COLAB_URL`. **0 refs a Sheets.** 139 colaboradores.

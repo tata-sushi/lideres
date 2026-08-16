@@ -518,10 +518,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-var SHEET_ID      = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
-var API_KEY       = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
-var SHEET_NAME    = 'hc_programado';
-var HC_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzCgCFTvna8yCQki9eG4hW-gq56Cp3Ew805hQawT-rYqq7qFJNvk5lxeDnM8tlr-Dc_/exec';
+// Fontes de dados agora vêm do Supabase (schema tata_plus) via RPCs.
 
 // ─── USUÁRIO ──────────────────────────────────────────────────────────────────
 var __nomeResponsavel = (function() {
@@ -539,45 +536,41 @@ function norm(s) { return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').
 function unique(arr) { var seen={},out=[]; arr.forEach(function(v){if(v&&!seen[v]){seen[v]=true;out.push(v);}}); return out.sort(); }
 
 // ─── FETCH ────────────────────────────────────────────────────────────────────
-function sheetURL() {
-  return 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID
-    + '/values/' + encodeURIComponent(SHEET_NAME + '!A:I')
-    + '?key=' + API_KEY;
-}
+function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
+function fetchRpc(fn){ return new Promise(function(resolve){ comSupa(function(supa){ supa.schema('tata_plus').rpc(fn).then(function(res){ resolve(res.error?[]:(res.data||[])); }).catch(function(){ resolve([]); }); }); }); }
 function showLoading() { document.getElementById('loading-overlay').classList.add('show'); }
 function hideLoading() { document.getElementById('loading-overlay').classList.remove('show'); }
 
 function loadData() {
   showLoading();
-  var pDados = fetch(sheetURL()).then(function(r){ return r.json(); });
+  var pDados = fetchRpc('hc_programado_listar');
   var pColabs = _colabs !== null
     ? Promise.resolve(_colabs)
-    : fetch(COLAB_URL2 + '?action=listColaboradores')
-        .then(function(r){ return r.json(); })
-        .then(function(data){ _colabs = (data.ok && data.colaboradores) ? data.colaboradores : []; return _colabs; })
-        .catch(function(){ _colabs = []; return []; });
+    : new Promise(function(resolve){ comSupa(function(supa){
+        supa.rpc('hc_colaboradores_listar')
+          .then(function(res){ _colabs = (res.error || !Array.isArray(res.data)) ? [] : res.data; resolve(_colabs); })
+          .catch(function(){ _colabs = []; resolve([]); });
+      }); });
   Promise.all([pDados, pColabs])
     .then(function(results){
       hideLoading();
-      var data = results[0];
-      if (data.error) { showError(data.error.message); return; }
-      var rows = data.values || [];
-      if (rows.length < 2) { dados=[]; render(); return; }
-      var headers = rows[0].map(norm);
+      var rows = results[0] || [];
       dados = [];
-      for (var i = 1; i < rows.length; i++) {
-        var r = rows[i];
-        if (!r[0] && !r[1]) continue;
-        var obj = { row_index: i + 1 };
-        headers.forEach(function(h, j){ obj[h] = r[j] !== undefined ? String(r[j]) : ''; });
-        obj.lider        = parseInt(obj.lider)        || 0;
-        obj.especialista = parseInt(obj.especialista) || 0;
-        obj.auxiliares   = parseInt(obj.auxiliares)   || 0;
-        obj.aprendizes   = parseInt(obj.aprendizes)   || 0;
-        obj.estagiarios  = parseInt(obj.estagiarios)  || 0;
-        obj.total        = parseInt(obj.total)         || 0;
-        dados.push(obj);
-      }
+      rows.forEach(function(r){
+        dados.push({
+          id:           r.id,
+          unidade:      r.unidade      != null ? String(r.unidade)      : '',
+          departamento: r.departamento != null ? String(r.departamento) : '',
+          escala:       r.escala       != null ? String(r.escala)       : '',
+          cargos:       r.cargos       != null ? String(r.cargos)       : '',
+          lider:        parseInt(r.lider)        || 0,
+          especialista: parseInt(r.especialista) || 0,
+          auxiliares:   parseInt(r.auxiliares)   || 0,
+          aprendizes:   parseInt(r.aprendizes)   || 0,
+          estagiarios:  parseInt(r.estagiarios)  || 0,
+          total:        parseInt(r.total)        || 0
+        });
+      });
       render();
       renderKPIs();
       if (state.tab==='dashboard') renderDashboard();
@@ -657,7 +650,7 @@ function setFiltroUnidade(val) { state.filtroUnidade=val; render(); }
 var _filteredCache = [];
 function cardHC(d, idx) {
   var escala = d.escala || '—';
-  var hasScript = HC_SCRIPT_URL !== '';
+  var hasScript = true;
   return '<div class="card" id="card-'+idx+'">' +
     '<div class="card-header"><div><div class="candidate-name">'+escH(d.departamento||'')+'</div>' +
     '<div class="candidate-mt">'+escH(d.unidade||'')+'</div></div>' +
@@ -697,11 +690,8 @@ function setTab(tab) {
 }
 
 // ─── VAGAS ───────────────────────────────────────────────────────────────────
-var VAGAS_SHEET_ID   = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
-var VAGAS_SHEET_NAME = 'CONTROLE DE VAGAS ABERTAS';
 var _vagasData   = null;
 // ─── CRUZAMENTO HC REAL × PROGRAMADO ─────────────────────────────────────────
-var COLAB_URL2 = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _colabs = null;
 // Matrículas excluídas de TODAS as análises (sócios)
 var EXCLUDED_MATS = [1, 9, 10];
@@ -726,28 +716,17 @@ function carregarCruzamento() {
     '<div class="empty-state"><div style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--carbon);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px"></div><p>Carregando...</p></div>';
   var pColabs = _colabs !== null
     ? Promise.resolve(_colabs)
-    : fetch(COLAB_URL2 + '?action=listColaboradores').then(function(r){ return r.json(); }).then(function(data){
-        if (!data.ok) throw new Error(data.erro||'Erro ao carregar colaboradores');
-        return data.colaboradores || [];
-      });
+    : new Promise(function(resolve){ comSupa(function(supa){
+        supa.rpc('hc_colaboradores_listar')
+          .then(function(res){ resolve((res.error || !Array.isArray(res.data)) ? [] : res.data); })
+          .catch(function(){ resolve([]); });
+      }); });
   var pVagas = _vagasData !== null
     ? Promise.resolve(_vagasData)
-    : fetch('https://sheets.googleapis.com/v4/spreadsheets/' + VAGAS_SHEET_ID
-        + '/values/' + encodeURIComponent(VAGAS_SHEET_NAME + '!A:O')
-        + '?key=' + API_KEY)
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        var rows = data.values || [];
-        if (rows.length < 2) return [];
-        var hdrs = rows[0];
-        var out = [];
-        for (var i = 1; i < rows.length; i++) {
-          if (!rows[i].some(function(c){ return c && c.trim(); })) continue;
-          var obj = {};
-          hdrs.forEach(function(h,j){ obj[norm(h).replace(/\s+/g,'_')] = (rows[i][j]||'').trim(); });
-          out.push({ unidade: obj.unidade||'', departamento: obj.departamento||'', status: obj.status_da_vaga||'' });
-        }
-        return out;
+    : fetchRpc('hc_vagas_abertas').then(function(rows){
+        return (rows || []).map(function(r){
+          return { unidade: r.unidade||'', departamento: r.departamento||'', qtd: parseInt(r.qtd)||0 };
+        });
       });
   Promise.all([pColabs, pVagas])
     .then(function(res){
@@ -764,12 +743,11 @@ function carregarCruzamento() {
 
 function vagasEmAberto(unidade, departamento) {
   if (!_vagasData) return 0;
-  return _vagasData.filter(function(v) {
-    if (v.unidade !== unidade) return false;
-    if (v.departamento !== departamento) return false;
-    var s = norm(v.status);
-    return s === 'aberta' || s.indexOf('andamento') >= 0;
-  }).length;
+  for (var i = 0; i < _vagasData.length; i++) {
+    var v = _vagasData[i];
+    if (v.unidade === unidade && v.departamento === departamento) return v.qtd || 0;
+  }
+  return 0;
 }
 
 function renderCruzamento() {
@@ -1011,16 +989,6 @@ function getHcAtualFiltered() {
   var tot = src.reduce(function(a, d){ return a + d.total; }, 0);
   return tot || null;
 }
-function parseTvCSV(line) {
-  var res=[], cur='', inQ=false;
-  for (var i=0;i<line.length;i++) {
-    var ch=line[i];
-    if (ch==='"') { inQ=!inQ; }
-    else if (ch===','&&!inQ) { res.push(cur.trim()); cur=''; }
-    else { cur+=ch; }
-  }
-  res.push(cur.trim()); return res;
-}
 function parseTvDate(s) {
   if (!s) return null;
   var t=s.trim();
@@ -1039,50 +1007,20 @@ function parseTvDate(s) {
   return null;
 }
 var _recrutData = null;
-var RECRUT_SHEET_ID = '1dgallG8luctOJC42Of2CKgOoRuspMmjxonPlCbD3hiE';
-var RECRUT_API_KEY  = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
-var ALIGN_SHEET_ID  = '1rdj8YM5fqpg3947gu1dHHv6OJt4pknLILpr2hPUfXJo';
-
-function normRec(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
 
 function loadRecrutamentoData() {
   if (_recrutData) { renderTestesChart(); return; }
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + RECRUT_SHEET_ID
-    + '/values/' + encodeURIComponent('CONTROLE DE TESTES!A:Z')
-    + '?key=' + RECRUT_API_KEY;
-  fetch(url).then(function(r){ return r.json(); }).then(function(data){
+  fetchRpc('report_testes_semanais').then(function(rows){
     _recrutData = [];
-    var rows = data.values || [];
-    if (rows.length < 2) { renderTestesChart(); return; }
-    var headers = rows[0].map(normRec);
-    // substring match: finds first header containing any of the keywords
-    function col(keywords) {
-      for (var k=0; k<keywords.length; k++) {
-        var kw = normRec(keywords[k]);
-        for (var h=0; h<headers.length; h++) {
-          if (headers[h].indexOf(kw) !== -1) return h;
-        }
-      }
-      return -1;
-    }
-    var iNome   = col(['nome','candidato']);
-    var iData   = col(['dias de teste','data teste','data']);
-    var iStatus = col(['status','resultado','situacao']);
-    for (var i=1; i<rows.length; i++) {
-      var r = rows[i];
-      var nome = (iNome>=0 ? r[iNome] : r[1] || '').trim();
-      if (!nome) continue;
-      var dataStr = (iData>=0 ? r[iData] : r[0] || '').trim();
+    (rows || []).forEach(function(r){
+      var dataStr = (r.data||'').trim();
       var p = dataStr.split('/');
-      if (p.length < 2) continue;
+      if (p.length < 2) return;
       var yr = p.length===3 ? parseInt(p[2]) : new Date().getFullYear();
       var dt = new Date(yr, parseInt(p[1])-1, parseInt(p[0]));
-      if (isNaN(dt.getTime())) continue;
-      var sf = normRec(iStatus>=0 ? r[iStatus] || '' : '');
-      // realizado = teste aconteceu (contratado OU não contratado), excluindo não compareceu/cancelado
-      var realizado = sf.indexOf('contrat') >= 0;
-      _recrutData.push({ dt: dt, realizado: realizado });
-    }
+      if (isNaN(dt.getTime())) return;
+      _recrutData.push({ dt: dt, realizado: !!r.realizado });
+    });
     renderTestesChart();
   }).catch(function(){ _recrutData = []; renderTestesChart(); });
 }
@@ -1132,43 +1070,28 @@ function renderTestesChart() {
 }
 
 var _bhData = null;
-var BH_SHEET_ID = '1oW3uXbig4B3gUQegxorxZghMnVrZcXk44AD08gx-cl0';
-
-function parseBhCSVLine(line) {
-  var result = [], cur = '', inQ = false;
-  for (var i = 0; i < line.length; i++) {
-    var ch = line[i];
-    if (ch === '"') { inQ = !inQ; continue; }
-    if (ch === ',' && !inQ) { result.push(cur.trim()); cur = ''; continue; }
-    cur += ch;
-  }
-  result.push(cur.trim());
-  return result;
-}
 
 function loadBancoHorasData() {
   if (_bhData) { renderBancoHorasChart(); return; }
-  var url = 'https://docs.google.com/spreadsheets/d/' + BH_SHEET_ID + '/export?format=csv&gid=0';
-  fetch(url).then(function(r){ return r.text(); }).then(function(csv){
-    _bhData = [];
-    var lines = csv.split('\n');
-    for (var i = 1; i < lines.length; i++) {
-      var ln = lines[i].trim(); if (!ln) continue;
-      var cols = parseBhCSVLine(ln);
-      if (cols.length < 4) continue;
-      var dataStr = (cols[0]||'').trim();
-      var nome = (cols[2]||'').trim();
-      var saldo = parseFloat((cols[3]||'0').replace(',','.')) || 0;
-      var semKey = '';
-      if (dataStr.indexOf('/') >= 0) {
-        var p = dataStr.split('/');
-        if (p.length === 3) semKey = p[2] + '-' + (p[1].length<2?'0':'')+p[1] + '-' + (p[0].length<2?'0':'')+p[0];
-      } else { semKey = dataStr; }
-      if (!semKey || !nome) continue;
-      _bhData.push({ semKey: semKey, nome: nome, saldo: saldo, rowIdx: i });
-    }
-    renderBancoHorasChart();
-  }).catch(function(){ _bhData = []; renderBancoHorasChart(); });
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('banco_horas_listar', { p_semanas: 60 }).then(function(res){
+      _bhData = [];
+      var rows = (res.error || !Array.isArray(res.data)) ? [] : res.data;
+      rows.forEach(function(r, i){
+        var dataStr = (r.data||'').trim();
+        var nome = (r.colaborador||'').trim();
+        var saldo = Number(r.saldo) || 0;
+        var semKey = '';
+        if (dataStr.indexOf('/') >= 0) {
+          var p = dataStr.split('/');
+          if (p.length === 3) semKey = p[2] + '-' + (p[1].length<2?'0':'')+p[1] + '-' + (p[0].length<2?'0':'')+p[0];
+        } else { semKey = dataStr; }
+        if (!semKey || !nome) return;
+        _bhData.push({ semKey: semKey, nome: nome, saldo: saldo, rowIdx: i });
+      });
+      renderBancoHorasChart();
+    }).catch(function(){ _bhData = []; renderBancoHorasChart(); });
+  });
 }
 
 function renderBancoHorasChart() {
@@ -1259,33 +1182,22 @@ function renderBancoHorasChart() {
 }
 
 var _absData = null;
-var ABSENTE_API_KEY = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
-var ABSENTE_SHEET_ID = '1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw';
 
 function loadAbsenteismoData() {
   if (_absData) { renderAtestadosChart(); return; }
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + ABSENTE_SHEET_ID
-    + '/values/' + encodeURIComponent('Ausências!A:H')
-    + '?key=' + ABSENTE_API_KEY;
-  fetch(url).then(function(r){ return r.json(); }).then(function(data){
-    var rows = data.values || [];
+  fetchRpc('ausencia_listar').then(function(rows){
     _absData = [];
-    if (rows.length < 2) { renderAtestadosChart(); return; }
-    var headers = rows[0];
     function norm(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
-    function v(obj){ for(var i=1;i<arguments.length;i++){ if(obj[arguments[i]]!==undefined&&obj[arguments[i]]!=='') return obj[arguments[i]]; } return ''; }
-    for (var i=1; i<rows.length; i++) {
-      if (!rows[i].some(function(c){ return c && c.trim(); })) continue;
-      var obj = {};
-      headers.forEach(function(h,j){ obj[norm(h)] = (rows[i][j]||'').trim(); });
-      var tipo = v(obj,'tipo de ausencia','tipo_de_ausencia','tipo','ausencia');
-      var dataStr = v(obj,'data_falta','data','data_ausencia');
-      var p = (dataStr||'').trim().split('/');
-      var dt = p.length===3 ? new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])) : null;
-      if (!dt || isNaN(dt.getTime())) continue;
+    (rows || []).forEach(function(r){
+      var tipo = r.tipo || '';
+      var dataStr = (r.data_falta||'').trim();
+      // data_falta vem como ISO "YYYY-MM-DD"
+      var p = dataStr.split('-');
+      var dt = p.length===3 ? new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])) : null;
+      if (!dt || isNaN(dt.getTime())) return;
       var slugTipo = norm(tipo).indexOf('atestado') >= 0 ? 'atestado' : 'outro';
       _absData.push({ dt: dt, tipo: slugTipo });
-    }
+    });
     renderAtestadosChart();
   }).catch(function(){ _absData = []; renderAtestadosChart(); });
 }
@@ -1340,36 +1252,16 @@ function renderAtestadosChart() {
 
 function loadTurnoverData() {
   if (_tvData) { renderWeeklyEvolutionChart(); return; }
-  var url='https://docs.google.com/spreadsheets/d/1WIzDAvqkvlQ8wFbfunMtAi8G0GeZmSAxlKLnqJZyfdw/export?format=csv&gid=175063295';
-  fetch(url).then(function(r){return r.text();}).then(function(csv){
-    var lines=csv.split('\n');
+  fetchRpc('hc_turnover_listar').then(function(rows){
     _tvData=[];
-    // Detect column indices from header row; fall back to known positions
-    var hdrs=parseTvCSV(lines[0]||'');
-    function colIdx(keywords, fallback) {
-      var kw=keywords.map(function(k){return k.toLowerCase();});
-      for (var h=0;h<hdrs.length;h++) {
-        var hh=hdrs[h].toLowerCase();
-        if (kw.every(function(k){return hh.indexOf(k)!==-1;})) return h;
-      }
-      return fallback;
-    }
-    var iMat=colIdx(['matr'],0);
-    var iAdm=colIdx(['admiss'],8);
-    var iDem=colIdx(['demiss'],14);
-    var iUni=colIdx(['unidade'],4);
-    var iDep=colIdx(['departamento'],5);
-    for (var i=1;i<lines.length;i++) {
-      var ln=lines[i].trim(); if (!ln) continue;
-      var cols=parseTvCSV(ln);
-      if (isExcluded(cols[iMat])) continue;
-      var adm=parseTvDate(cols[iAdm]);
-      var dem=parseTvDate(cols[iDem]||'');
-      if (!adm) continue;
-      var uni=(cols[iUni]||'').trim();
-      var dep=(cols[iDep]||'').trim();
-      _tvData.push({adm:adm, dem:dem, unidade:uni, departamento:dep});
-    }
+    (rows || []).forEach(function(r){
+      if (isExcluded(r.matricula)) return;
+      // data_admissao / data_demissao vêm como ISO "YYYY-MM-DD" (ou null)
+      var adm=parseTvDate(r.data_admissao||'');
+      if (!adm) return;
+      var dem=parseTvDate(r.data_demissao||'');
+      _tvData.push({adm:adm, dem:dem, unidade:(r.unidade||'').trim(), departamento:(r.departamento||'').trim()});
+    });
     renderWeeklyEvolutionChart();
   }).catch(function(){});
 }
@@ -1774,7 +1666,6 @@ function renderTabelaAnalitica(src) {
 // ─── MODAL EDITAR HC ─────────────────────────────────────────────────────────
 var _modalData = null;
 function abrirModalHC(idx) {
-  if (!HC_SCRIPT_URL) return;
   var d = _filteredCache[idx];
   if (!d) return;
   _modalData = d;
@@ -1794,42 +1685,38 @@ function fecharModalHC() {
   _modalData = null;
 }
 function confirmarModalHC() {
-  if (!_modalData||!HC_SCRIPT_URL) return;
+  if (!_modalData) return;
   var btn = document.getElementById('btn-hc-confirmar');
   btn.textContent='Salvando...'; btn.disabled=true;
+  var escala       = document.getElementById('modal-hc-escala').value;
   var lider        = parseInt(document.getElementById('modal-hc-lider').value)||0;
   var especialista = parseInt(document.getElementById('modal-hc-esp').value)||0;
   var auxiliares   = parseInt(document.getElementById('modal-hc-aux').value)||0;
   var aprendizes   = parseInt(document.getElementById('modal-hc-apr').value)||0;
   var estagiarios  = parseInt(document.getElementById('modal-hc-est').value)||0;
-  var payload = {
-    action:'updateHC', row_index:_modalData.row_index,
-    unidade:_modalData.unidade, departamento:_modalData.departamento,
-    escala: document.getElementById('modal-hc-escala').value,
-    lider:lider, especialista:especialista, auxiliares:auxiliares,
-    aprendizes:aprendizes, estagiarios:estagiarios,
-    responsavel:__nomeResponsavel
-  };
-  fetch(HC_SCRIPT_URL, { method:'POST', body: JSON.stringify(payload) })
-    .then(function(r){ return r.json(); })
-    .then(function(res){
-      if (res.ok) {
-        Object.assign(_modalData, {
-          escala:payload.escala, lider:lider, especialista:especialista,
-          auxiliares:auxiliares, aprendizes:aprendizes, estagiarios:estagiarios,
-          total:lider+especialista+auxiliares+aprendizes+estagiarios
-        });
-        fecharModalHC(); render(); renderKPIs();
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('hc_programado_salvar', {
+      p_unidade: _modalData.unidade,
+      p_departamento: _modalData.departamento,
+      p_escala: escala,
+      p_lider: lider,
+      p_especialista: especialista,
+      p_auxiliares: auxiliares,
+      p_aprendizes: aprendizes,
+      p_estagiarios: estagiarios
+    }).then(function(res){
+      if (!res.error) {
+        fecharModalHC();
+        loadData();
       } else {
         btn.textContent='Confirmar'; btn.disabled=false;
-        alert('Erro ao salvar:\n'+(res.error||'resposta inválida'));
+        alert('Erro ao salvar:\n'+((res.error&&res.error.message)||'resposta inválida'));
       }
-    })
-    .catch(function(err){ btn.textContent='Confirmar'; btn.disabled=false; alert('Erro de conexão:\n'+err.message); });
+    }).catch(function(err){ btn.textContent='Confirmar'; btn.disabled=false; alert('Erro de conexão:\n'+err.message); });
+  });
 }
 
 // ─── DRAWER ───────────────────────────────────────────────────────────────────
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
@@ -1961,8 +1848,6 @@ function sortAlignDates(dates){
 function loadAlinhamentosData() {
   if (_alignDemandas&&_alignDemandas.length&&_alignTransc){renderAlinhamentos();return;}
   // Alinhamentos: demandas + transcrição agora vêm do Supabase (Kanban tata_kanban / dp_rh).
-  function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
-  function fetchRpc(fn){ return new Promise(function(resolve){ comSupa(function(supa){ supa.schema('tata_plus').rpc(fn).then(function(res){ resolve(res.error?[]:(res.data||[])); }).catch(function(){ resolve([]); }); }); }); }
   Promise.all([fetchRpc('demandas_lista'),fetchRpc('alinhamento_transcricao_listar')])
   .then(function(results){
     _alignDemandas=(Array.isArray(results[0])?results[0]:[]).map(function(r){
