@@ -229,3 +229,20 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - 2026-08-16 — **Vagas Abertas migradas** (hc.html): coluna R&S do cruzamento deixa o Google Sheets e usa `tata_plus.hc_vagas_abertas()` (agrega abertas por unidade+departamento a partir de `dp_rh.vagas`, mesma base do recrutamento). Removidos `VAGAS_SHEET_*` e `API_KEY`. **hc.html agora é 100% Supabase** (sobra só a fonte do Google Fonts).
 - 2026-08-16 — **Sanções Parte 1 EXECUTADA** (só Supabase, sem n8n): `dp_rh.sancoes` + `dp_rh.sancao_kanban` + RPC `tata_plus.sancao_registrar` + gatilho `tg_sancao_para_kanban` (card → RH/Outros, etiqueta Sanções, responsável 7). Front `sancoes.html`: `registrarSancao` via RPC. Testado ponta a ponta. Parte 2 (import histórico) pendente do usuário trazer a base.
 - 2026-08-16 — **Sanções Parte 2 EXECUTADA**: import histórico de 347 sanções (dp_rh.sancoes) via IMPORTAR_sancoes.sql rodado pelo usuário. Confirmado: 347 total, 0 cards do histórico. Módulo Sanções 100% Supabase (front + gravação + Kanban + histórico).
+
+## Módulo RHID (Experiências / Ausências / Feriados) — RHID é só CONSULTA
+**Regra:** dados operacionais do RHID (admissões, ausências, feriados) são read-only; o app só GRAVA a avaliação de experiência. A lista de admissões sai do `profiles` (já sincronizado), não precisa de sync do RHID.
+
+### Experiências (`experiencias.html`) — ✅ FEITO 16/08
+- **Leitura:** deixa a planilha `admissões` → `tata_plus.experiencia_listar()` (profiles ativos admitidos >= 2026-04-01 — mesmo corte do Apps Script `sincronizarAdmissoes`; STATUS_DEVOLUTIVA DERIVADO das avaliações). Mantida a lógica 14/46 dias da página.
+- **Gravação:** deixa o POST Apps Script → `tata_plus.experiencia_avaliar(...)` → `dp_rh.experiencia_avaliacoes` (unique matricula+periodo; avaliador/criado_por no servidor; `efetivar` = decisão p13 no 1º / q26 no 2º; respostas jsonb). RPCs `authenticated`.
+- **Status importado** da planilha (143 avaliações; origem='import'): 53 Av.2º, 12 Não Efetivado 2º, 7 Não Efetivado 1º, 6 Av.1º. Front 100% Supabase (sem Sheets/Apps Script).
+- Apps Script da planilha (`atualizarDiasContrato`/`sincronizarAdmissoes`) fica **inerte** — a página não lê mais a planilha. Marcos reais do RHID: P1=admissão+13, P2=admissão+58 (a página não usa; calcula prazo por fase 14/46).
+
+### Ausências (`absenteismo.html`) — ⏳ pendente fonte RHID
+- Aba ausências: `MT | COLABORADOR | UNIDADE | DEPARTAMENTO | DATA_FALTA | TIPO DE AUSÊNCIA | STATUS | DEVOLUTIVA | LÍDER` (~275). Tipos: Falta/Atestado Médico/Licença Maternidade/Afastamento INSS. Read-only (RHID). **Definir com usuário como o RHID abastece o Supabase.**
+
+### Feriados (`feriados.html`) — ⏳ pendente fonte RHID
+- Aba feriados (banco de horas em feriado): `Data | Feriado | Colaborador | Matrícula | Horas | Unidade | Departamento | Saldo Dia Anterior | Devolutiva | Lider | DATA DA FOLGA | check trello` (~206). Devolutiva: Pagamento/Folga/Não tem direito. Página hoje tem cara de CRUD (grava/apaga) — confirmar se é app-owned ou só consulta do RHID.
+
+- 2026-08-16 — **Experiências EXECUTADA** (leitura+gravação → Supabase; 143 status importados). Ausências e Feriados aguardando o usuário definir como o RHID abastece o Supabase.
