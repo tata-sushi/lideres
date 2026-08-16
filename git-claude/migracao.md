@@ -326,3 +326,19 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **Agendado**: pg_cron `medicina-exames-roster` (`50 8 * * *` = diário 05:50 SP, antes do scan do Kanban). 1ª rodada materializou os **25 ativos** que ainda não tinham linha → base com 139/139 ativos. (A *lista* já era ao vivo; isso mantém a *base* completa mesmo sem ninguém abrir a página.)
 
 - 2026-08-16 — **Medicina EXECUTADA** (tabela+RPCs+front+backfill 149+roster sync agendado+Kanban scan+cron). Falta da Parte 2: **Armário** (`ARMARIO_URL`) — mesma base de `armarios.html`.
+
+## Módulo ARMÁRIOS (`kpis/rh/armarios.html`) — ✅ FEITO 16/08 (Organograma Parte 2b)
+> Controle de armários do Apps Script (planilha "Controle de Armários") → Supabase. Estado atual + log de movimentações; modal puxa colaboradores do `profiles` por unidade.
+
+### Dados
+- **`dp_rh.armarios`** (privada, RLS, unique `(unidade,num)`): estado atual de cada armário — `unidade·num·status(livre/ocupado/manut)·colaborador·matricula·obs·termo_assinado·atualizado_por`.
+- **`dp_rh.armarios_hist`** (privada): log de movimentações — `data_mov·unidade·num·tipo·colaborador·matricula·responsavel·obs·criado_por·created_at`. **Começa vazia** (o histórico da planilha não veio no export CSV; preenche daqui pra frente).
+- **Backfill**: 174 armários (Itaim Bibi 103 / Pinheiros 48 / Poke - Pinheiros 20 / TATÁ House 3 — 128 ocupados, 44 livres, 2 manut). Status derivado (colab real→ocupado; "Liberado"/vazio→livre; "Manutenção"→manut). **Unidade normalizada p/ casar com as abas do front** (`Itaim`→`Itaim Bibi`, `Poke`→`Poke - Pinheiros`, `Tatá House`→`TATÁ House`) — o filtro de aba é exato (`a.unidade === activeUnitFilter`).
+- **RPCs** (`tata_plus`, authenticated): `armarios_listar()`, `armario_historico(n)`, `armario_colaboradores(unidade)` (profiles ativos por unidade; `armario_unidade_key` torna o filtro tolerante a `Itaim`/`Itaim Bibi`), e **`armario_mov(payload jsonb)`** — aplica a movimentação (atribuir/recolher/trocar/manut/liberar_manut/incluir/excluir) atualizando `dp_rh.armarios` + gravando `dp_rh.armarios_hist`; carimba `criado_por = minha_matricula()` e resolve `responsavel` do profiles. Aceita o mesmo payload camelCase que o front já montava.
+
+### Front (`armarios.html`)
+- `loadData` → `armarios_listar` + `armario_historico`; `carregarColaboradores` → `armario_colaboradores`; `_enviarPayload` → `armario_mov` (em erro, `loadData()` ressincroniza pra desfazer o otimismo local). Removidos `GAS_URL_ARMARIO` e `COLAB_URL`. `fetchJSON`/`gerarDemo*` viraram código morto (inofensivo).
+- Testado por SQL ponta a ponta (incluir→atribuir→recolher→excluir + histórico), limpo depois (174 armários, hist zerada).
+- **Gate de escrita**: incluir/excluir seguem admin-only no front (como era). Move pro painel admin junto com as outras travas depois.
+
+- 2026-08-16 — **Armários EXECUTADA** (2 tabelas+4 RPCs+front+backfill 174). **Organograma Parte 2 COMPLETA** (Medicina + Armário). Sobra só tirar as travas de perfil (Remuneração do organograma, incluir/excluir de armário) p/ o painel admin.
