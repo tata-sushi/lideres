@@ -250,3 +250,12 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 ### Experiências — auto-update da lista + Kanban de não-efetivação (16/08)
 - **Lista auto-atualiza (sem sync):** `experiencia_listar()` lê `profiles` ao vivo (Ativo, admissão ≥ 01/04/2026). Colaborador novo no profiles → aparece sozinho como "1º pendente". A tabela `experiencia_avaliacoes` guarda só avaliações, não a lista. (Requisito "atualizar experiência com novos do profiles" já coberto pelo desenho derivado.)
 - **Card no Kanban quando "Não Efetivado 1º/2º":** gatilho `dp_rh.tg_experiencia_para_kanban` (AFTER INSERT/UPDATE em `experiencia_avaliacoes`, padrão à-prova-de-falha das Sanções). Dispara só quando `origem='app'` e `efetivar=false`. Cria card em quadro **RH** (08b636b2…) / coluna **Desligamentos** (db160d88…) / etiqueta **Desligamentos** (016c9de4…, criada nesta etapa) / responsáveis **24540 (Igor Victor Santos Pereira)** + **24332 (Thamires De Araujo Ouro)**. Dedup em `dp_rh.experiencia_kanban` (por avaliação). Import histórico e efetivações NÃO geram card. Testado ponta a ponta (card criado com coluna/etiqueta/responsáveis corretos) e limpo.
+
+### Experiências — Histórico de questionários IMPORTADO (16/08) ✅
+- **`dp_rh.experiencia_avaliacoes_hist`** (append-only, pro futuro painel) — populada com **400 eventos** dos 2 Google Forms de respostas:
+  - **1º período** (fileId `1uqEsLM1…`, 22 col): **213 eventos** / 205 colaboradores.
+  - **2º período** (fileId `1tjxL-dG…`, 35 col): **187 eventos** / 179 colaboradores.
+  - Cada linha: `respostas` jsonb (p01–p13 / q01–q26), `efetivar` (decisão p13/q26), `obs` (texto livre quando havia), `avaliador_nome` (líder), `form_ts` (carimbo original), `origem='form'`. Casado por **matrícula** (nomes inconsistentes). Idempotente por `(periodo, matricula, form_ts)`.
+  - **Baixado via Google Drive MCP** (export CSV) — o leitor de sheets truncava. O Form **evoluiu**: linhas antigas (12 notas) e novas (9 notas + 3 sim/não + decisão + obs) convivem; mapeamento posicional cobre ambas. Bloco backfill 06/01/2026 (tudo 5, avaliador Victor) incluído a pedido.
+- **`experiencia_avaliar`** agora também grava evento no `_hist` (origem='app'); **`experiencia_historico(matrícula)`** pronta pro painel. Arquivo `IMPORTAR_experiencia_hist.sql` rodado pelo usuário no SQL Editor.
+- **Experiências 100% concluída**: leitura (profiles), gravação (RPC), status importado (143) e histórico de questionários (400). Ausências/Feriados seguem pendentes da fonte RHID.
