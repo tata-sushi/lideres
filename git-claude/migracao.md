@@ -281,3 +281,24 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **Agendada**: pg_cron `rhid-feriados-semanal` (jobid 13), `5 9 * * 1` (seg 06:05 SP).
 
 - 2026-08-16 — **Feriados EXECUTADA** (tabela+RPCs+front+backfill 332+Edge Function+cron). Módulo RHID (Experiências/Ausências/Feriados) COMPLETO. Apps Scripts podem ser desligados.
+
+## Módulo ORGANOGRAMA (`compliance/areas/organograma.html`) — Parte 1 ✅ 16/08
+> Migração do Apps Script (ENDPOINT do Web App) → Supabase. Armário + Medicina ficam pra **Parte 2**.
+
+### Árvore (hierarquia) — do Apps Script para `profiles`
+- **RPC** `tata_plus.organograma_colaboradores()` (SECURITY DEFINER, authenticated): devolve os **ativos** do `profiles` (`status='Ativo'`) achatados — `id_pessoa, matricula, nome, cargo, cargo_id, id_superior, nome_superior, unidade, departamento, data_admissao, data_nascimento, foto`. **Foto** vem do `auth_users.avatar_url` (LEFT JOIN por matrícula) — substitui a pasta do Drive que o Apps Script usava.
+- **Front**: `carregarDados()` deixa o `fetch(ENDPOINT)` e chama a RPC via `comSupa`. A hierarquia é montada **no cliente**, portando a lógica do Web App: `detectarNivel` (diretoria/gerencia/supervisor/operacional por regex no cargo normalizado), `classeUnidade` (itaim/pinheiros/puc/tatahouse/backoffice), `gerarIniciais`, `construirHierarquia` (raiz = CEO entre os "sem superior"; demais diretores sem superior viram **peers/sócios** ao lado do CEO; órfãos — superior inativo/ausente — entram sob a raiz; `ordenarNode` recursivo por nível→nome pt-BR) e `calcularStats` (contagem por unitClass). `ENDPOINT` **removido**.
+- **Node contract preservado** p/ o render existente: `{id, idPessoa, matricula, nome, cargo, cargoId, supervisorId, unidade, departamento, admissao, dataNascimento, foto, nivel, unitClass, iniciais, children}` + `peers` + `stats` + `total`. `id = id_pessoa || 'fixo_'+matricula`.
+- **Validado** (simulação c/ dados reais, 139 ativos): 1 raiz (Tito/CEO), 2 peers (Diretor Mkt + Diretor Operações), **0 órfãos**, todos os 139 nós alcançáveis, profundidade 5. Stats: itaim 72 / pinheiros 38 / puc 12 / tatahouse 3 / backoffice 14 (o front ainda desconta `SOCIOS_FORA_DA_CONTA=3` no backoffice/total).
+
+### CES (Descrição do Cargo + Remuneração) — do Apps Script para Supabase
+- **RPC** `tata_plus.organograma_ces()` (authenticated): devolve `{ok, salarios[], cargos[]}` das tabelas de cargos/salários que já existiam no Supabase. Aliases p/ casar com o que o front espera: `bruto→bruto_aproximado`, `comp_tecnicas→comp_tec`, `comp_comportamentais→comp_comp`, `uniforme→uniformes`. Indexado por `cargo_id` normalizado.
+- **Front**: `carregarCES()` via RPC. Sub-modal **Descrição do Cargo** (`_cesCargos[cargoId]`) e **Remuneração** (`_cesSalarios[cargoId]`). `CES_URL` removido.
+- **Trava provisória**: o sub-modal de **Remuneração** segue restrito a perfil `admin`/`analista-rh` (hardcode). **A pedido do usuário, essa permissão vai migrar pro painel admin depois** — remover o gate quando isso existir.
+
+### Parte 2 (pendente — mais tarde hoje)
+- [ ] **Armário** (`ARMARIO_URL`) — mesma base de `armarios.html`, ainda no Apps Script.
+- [ ] **Medicina / próximo exame** (`MEDICINA_URL`) — mesma base de `medicina.html`, ainda no Apps Script.
+- [ ] Tirar o gate de perfil da Remuneração e configurar permissão no **painel admin**.
+
+- 2026-08-16 — **Organograma Parte 1 EXECUTADA** (árvore via `organograma_colaboradores` + CES via `organograma_ces`; fotos do bucket de avatares; ENDPOINT/CES_URL removidos). Armário e Medicina seguem no Apps Script (Parte 2).
