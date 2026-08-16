@@ -341,4 +341,19 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - Testado por SQL ponta a ponta (incluir→atribuir→recolher→excluir + histórico), limpo depois (174 armários, hist zerada).
 - **Gate de escrita**: incluir/excluir seguem admin-only no front (como era). Move pro painel admin junto com as outras travas depois.
 
-- 2026-08-16 — **Armários EXECUTADA** (2 tabelas+4 RPCs+front+backfill 174). **Organograma Parte 2 COMPLETA** (Medicina + Armário). Sobra só tirar as travas de perfil (Remuneração do organograma, incluir/excluir de armário) p/ o painel admin.
+- 2026-08-16 — **Armários EXECUTADA** (2 tabelas+4 RPCs+front+backfill 174). **Organograma Parte 2 COMPLETA** (Medicina + Armário).
+
+## Travas de perfil → painel admin (16/08) ✅
+> Tira os hardcodes de perfil e liga nas permissões que o **painel admin** já gerencia. Padrões reaproveitados (não inventei nada): `pode_ver_valores(area)` p/ valores financeiros e `governanca_abas`(tipo `botao`) + `governanca_abas_liberacoes` p/ botões liberáveis (mesmo esquema do `avatar_pode_gerir`).
+
+### Remuneração (Organograma) → permissão de **valores financeiros**, área `cargos`
+- `organograma_ces()` **não checa mais `perfil in (admin,analista-rh)`**; usa `tata_plus.pode_ver_valores('cargos')` (mesma área/regra da página CES). Mascara os salários **no servidor** (não vêm pro browser se não pode) e devolve `pode_ver_valores`.
+- Front `organograma.html`: `carregarCES` guarda `_podeVerValores`; botão REMUNERAÇÃO e `abrirRemuneracao` usam esse flag (sem `__lideresSession.perfil`).
+- **Quem libera:** painel admin → *Valores financeiros* → área **cargos** (ou **geral**). Hoje: 2 liberados em `cargos` + 1 em `geral`. ⚠️ Quem via por ser admin/analista-rh e **não** estiver liberado aí perde o acesso até ser incluído no painel.
+
+### Incluir/Excluir armário → **botão liberável** no painel
+- Registrado `governanca-kpis-rh-armarios::incluir-excluir` (`tipo=botao`) → **escondido por padrão, liberado por pessoa** no painel (via `gov_admin_botoes_set`).
+- Backend: `armario_pode_gerir()` (admin OU liberação) reforça dentro de `armario_mov` — incluir/excluir sem permissão retornam erro (trava real no servidor).
+- Front `armarios.html`: busca o flag `armario_pode_gerir` no load; opções Incluir/Excluir e os guards do `doSubmit` usam o flag (sem `currentUser.type==='admin'`). Admin continua vendo por padrão.
+
+- 2026-08-16 — **Travas movidas pro painel admin** (Remuneração via `pode_ver_valores('cargos')`; Incluir/Excluir armário via botão liberável + `armario_pode_gerir`). Nada mais depende de perfil hardcoded nesses dois pontos.
