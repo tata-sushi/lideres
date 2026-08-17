@@ -61,6 +61,10 @@
 - [x] nó "consulta demandas" → RPC `report_demandas_resumo` (feito na UI pelo usuário)
 - [ ] outros 8 nós de Google Sheets → Supabase (conforme cada fonte migrar)
 
+### n8n — workflows migrados (Sheets → Supabase)
+> Padrão desta instância (auto.tatasushi.tech): nó **HTTP Request** POST em `https://aoqsbusfrffapjglpqjk.supabase.co/rest/v1/rpc/<fn>` com headers `apikey`+`Authorization: Bearer <ANON>` (RPC precisa estar em `public` com grant a **anon**). Ref: `resumo_teste_e_entrevistas` (usa `rec_resumo_dia`). Editar via n8n MCP = SDK code → validate → update → **publish** (publish exige aprovação do usuário no harness).
+- [~] **`lembrete_e_resumo_aniversarios_da_semana_domingo_18h`** (id `JsaNTGHKGuWUClzx`): nó Google Sheets "Ler Planilha de colaboradores" (planilha Colaboradores) → **HTTP `public.aniversarios_colaboradores()`** (ativos com nascimento/admissão; nascimento só DD/MM p/ reduzir exposição via anon, admissão DD/MM/YYYY). Code adaptado (achata array do PostgREST, lê `nome/unidade/nascimento/admissao`, tirou o filtro de Status). Endpoint testado (200, 139 linhas). **Draft validado e salvo — falta PUBLICAR** (aprovação do usuário); até lá roda a versão antiga (Sheets), então nada quebra.
+
 ### Segurança / limpeza
 - [ ] **uazapi token hardcoded** nos fluxos → mover p/ credencial do n8n.
 - [ ] Remover hook `__test_number` do fluxo ouvidoria quando não precisar mais testar.
