@@ -73,6 +73,13 @@
 ### Assistência médica (6 meses) → card no Kanban (Trello → Supabase)
 - [x] **Migrado do n8n `cards_trello_inclusao_assistencia_medica` (id `ibrTtQ8MoYZ6VawN`)** — lia planilha Colaboradores e criava card no **Trello** para quem completa **6 meses de empresa** nos próximos 7 dias ("precisa ativar a assistência médica"). Refeito no Supabase: função `tata_plus.assistencia_medica_kanban_scan()` + **cron `assistencia-medica-6meses-kanban`** (jobid 19, `0 7 * * 0` = **domingo 04h BRT**), dedup `dp_rh.assistencia_medica_kanban(matricula,evento_em)` (evento único por pessoa), à prova de falha. Varre `profiles` ativos; `data_admissao + 6 meses` na janela [amanhã, +7d] → card no quadro **RH** / coluna **Outros** / etiqueta **Benefícios** (`e8f5c391-…`, criada agora) / responsável **24540 (Igor)**. Testado (4 cards da semana, 3ª rodada=0). **n8n antigo: usuário desativa.**
 
+### Manutenção (Chamados + Devolutivas) — Sheets/Apps Script → Supabase
+- [x] **Schema novo `manutencao`** (privado, não exposto ao PostgREST): tabelas `chamados` (id text `MNT-###`, título, unidade, departamento, categoria, prioridade, status, solicitante, executor, apoio, needs_help, data_abertura/prazo, custo[text], tipo, foto[url], obs) e `devolutivas` (uuid, id_chamado FK, ts, responsavel, status, obs, custo, tipo[update/help], foto). RLS on.
+- [x] **RPCs em `tata_plus`** (SECURITY DEFINER, `authenticated`): `manut_listar()` (jsonb: chamados + devolutivas aninhadas, datas DD/MM), `manut_criar_chamado(p jsonb)` (gera MNT-### por max+1 com lock), `manut_registrar_devolutiva(p jsonb)` (insere devolutiva + atualiza status/needs_help/custo/obs do chamado), `manut_toggle_help(p jsonb)`. Testados ponta a ponta.
+- [x] **Storage bucket `manutencao`** (público leitura, upload `authenticated`, 5MB, jpeg/png/webp). Front sobe a foto comprimida (base64→Blob) via `supa.storage.from('manutencao').upload()` e manda só a URL pública pro RPC. Fotos antigas seguem como URLs do Drive.
+- [x] **Front `kpis/manutencao/index.html`:** `apiGet`→`manut_listar` (via `comSupa`), `apiPost` roteia as 3 ações pros RPCs (`manut_criar_chamado`/`manut_registrar_devolutiva`/`manut_toggle_help`) com upload de foto no meio; call-sites (`toggleHelp`/`submitDevolutiva`/`submitNovoChamado`) intactos. `WEB_APP_URL` (Apps Script) removido.
+- [~] **Backfill** (via subagente): 78 chamados (MNT-001→078) + ~90 devolutivas, lidos da planilha (`read_file_content`, 2 abas). Datas DD/MM→date, ts em America/Sao_Paulo, custo/foto preservados. *(rodando)*
+
 ### Segurança / limpeza
 - [ ] **uazapi token hardcoded** nos fluxos → mover p/ credencial do n8n.
 - [ ] Remover hook `__test_number` do fluxo ouvidoria quando não precisar mais testar.

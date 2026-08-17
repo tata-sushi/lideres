@@ -573,7 +573,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 // executor: quem executa (avatar carbon)
 // apoio: pessoa de suporte (avatar laranja, aparece quando needs_help=true)
 // CONFIGURACAO
-var WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyC-Ro85YMUxK3VzbgHDIPD0lBbuvOwnoOf2-aZGmVJJKRDd04Q-TEcnJ3pgCEb5a_UqQ/exec';
+// Dados de manutenção migrados p/ Supabase (schema manutencao via RPCs em tata_plus).
+// Fotos vão para o Storage bucket "manutencao". Apps Script desativado.
 
 var manutencoes = [];
 var state = {
@@ -641,38 +642,65 @@ function hideLoading() {
   if (el) el.classList.remove('show');
 }
 
-// API
+// API (Supabase) — dados vêm do schema manutencao via RPCs em tata_plus
+function comSupa(cb) {
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true });
+}
+
+// Sobe foto (data URL base64) pro Storage e devolve a URL pública.
+// Se não for base64 (já é URL, ou vazio), devolve como está.
+function _manutUploadFoto(supa, foto, ctx) {
+  return new Promise(function(resolve, reject){
+    if (!foto || typeof foto !== 'string' || foto.indexOf('data:') !== 0) { resolve(foto || ''); return; }
+    try {
+      var parts = foto.split(',');
+      var mime  = (parts[0].match(/data:([^;]+);/) || [])[1] || 'image/jpeg';
+      var bin   = atob(parts[1]);
+      var arr   = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      var blob  = new Blob([arr], { type: mime });
+      var ext   = mime.indexOf('png') >= 0 ? 'png' : (mime.indexOf('webp') >= 0 ? 'webp' : 'jpg');
+      var base  = String((ctx && (ctx.id_chamado || ctx.titulo)) || 'foto').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40) || 'foto';
+      var path  = base + '_' + Date.now() + '.' + ext;
+      supa.storage.from('manutencao').upload(path, blob, { contentType: mime, upsert: false }).then(function(res){
+        if (res.error) { reject(res.error); return; }
+        var pub = supa.storage.from('manutencao').getPublicUrl(path);
+        resolve((pub && pub.data && pub.data.publicUrl) || '');
+      });
+    } catch (e) { reject(e); }
+  });
+}
+
 function apiGet(callback) {
   showLoading('Carregando dados...');
-  fetch(WEB_APP_URL)
-    .then(function(r){ return r.json(); })
-    .then(function(json) {
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('manut_listar').then(function(r){
       hideLoading();
-      if (json.ok) callback(null, json.data);
-      else callback(json.error||'Erro desconhecido');
-    })
-    .catch(function(e){ hideLoading(); callback(e.message); });
+      if (r.error) { console.error('manut_listar', r.error); callback(r.error.message || 'Erro ao carregar'); return; }
+      callback(null, Array.isArray(r.data) ? r.data : []);
+    });
+  });
 }
-function apiPost(data, callback) {
-  var body = JSON.stringify(data);
-  console.log('[apiPost] action:', data.action, '| body size (KB):', Math.round(body.length/1024));
-  fetch(WEB_APP_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: body
-  })
-  .then(function(r){
-    console.log('[apiPost] status:', r.status);
-    return r.json();
-  })
-  .then(function(json) {
-    console.log('[apiPost] response:', JSON.stringify(json).substring(0, 200));
-    if (json.ok) callback(null, json.data);
-    else callback(json.error||'Erro no servidor');
-  })
-  .catch(function(e){
-    console.error('[apiPost] catch:', e.message);
-    callback(e.message);
+
+function apiPost(payload, callback) {
+  var action = payload.action;
+  var d = payload.data || {};
+  var rpcName = action === 'criar_chamado'        ? 'manut_criar_chamado'
+              : action === 'registrar_devolutiva' ? 'manut_registrar_devolutiva'
+              : action === 'toggle_help'          ? 'manut_toggle_help'
+              : null;
+  if (!rpcName) { callback('Ação desconhecida: ' + action); return; }
+  comSupa(function(supa){
+    _manutUploadFoto(supa, d.foto, d).then(function(fotoUrl){
+      var body = {};
+      for (var k in d) { if (Object.prototype.hasOwnProperty.call(d, k)) body[k] = d[k]; }
+      body.foto = fotoUrl;
+      supa.schema('tata_plus').rpc(rpcName, { p: body }).then(function(r){
+        if (r.error) { console.error(rpcName, r.error); callback(r.error.message || 'Erro no servidor'); return; }
+        callback(null, r.data || {});
+      });
+    }).catch(function(e){ callback((e && e.message) || 'Erro ao enviar foto'); });
   });
 }
 
