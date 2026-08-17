@@ -53,7 +53,7 @@
 - [ ] Vagas / recrutamento
 - [ ] Banco de Horas
 - [ ] Absenteísmo (Ausências)
-  - [x] **Devolutiva de falta → card no Kanban RH (SEM n8n):** gatilho `dp_rh.tg_ausencia_devolutiva_para_kanban` (AFTER UPDATE em `dp_rh.ausencias`, só quando `tipo='Falta'` e a devolutiva passa de **vazia→preenchida**), dedup em `dp_rh.ausencia_kanban`, à prova de falha (exception handler nunca bloqueia a gravação). Card → quadro **RH** / coluna **Solicitações Líderes** (`652e8e47-…`) / etiqueta **Ponto** (`1ca9bb58-…`, criada agora) / responsável **24332 (Thamires)**. Testado ponta a ponta (linha sintética, card conferido e limpo). Histórico NÃO gera card (só dispara em UPDATE futuro de devolutiva).
+  - [x] **Devolutiva de falta → card no Kanban RH (SEM n8n):** gatilho `dp_rh.tg_ausencia_devolutiva_para_kanban` (AFTER UPDATE em `dp_rh.ausencias`, só quando `tipo='Falta'` e a devolutiva passa de **vazia→preenchida**), dedup em `dp_rh.ausencia_kanban`, à prova de falha (exception handler nunca bloqueia a gravação). Card → quadro **RH** / coluna **Solicitações Líderes** (`652e8e47-…`) / etiqueta **Ponto** (`1ca9bb58-…`, criada agora) / responsável **24332 (Thamires)**. Descrição inclui "**Enviado por: <nome>**" (resolve `devolutiva_por` matrícula→`profiles.nome`; fallback texto cru). Testado ponta a ponta. Histórico NÃO gera card (só dispara em UPDATE futuro de devolutiva).
 - [ ] Experiências / efetivações
 - [ ] Entrevistas / Testes
 - [ ] asos (Medicina Ocupacional)
