@@ -1637,17 +1637,32 @@ function rowsParaUI(idDisplay, rows) {
 // cruzando pelo nome (displayName). Sem dependência de Apps Script/Google Sheets.
 // Os valores são usados apenas para gravar no novo pedido (não filtram a listagem).
 var COLABS_PLUS = null;
+// Só o cliente AUTENTICADO do gate (window.__lideresSupa) lê tata_plus
+// (o anon não tem SELECT). Espera o cliente ficar pronto ('lideres:supa')
+// em vez de cair no anon e falhar silenciosamente.
+function _supaPlusReady() {
+  return new Promise(function(resolve) {
+    if (window.__lideresSupa && window.__lideresSupa.schema) return resolve(window.__lideresSupa);
+    var done = false;
+    function go() {
+      if (done) return; done = true;
+      resolve(window.__lideresSupa && window.__lideresSupa.schema ? window.__lideresSupa : null);
+    }
+    window.addEventListener('lideres:supa', go, { once: true });
+    setTimeout(go, 6000);
+  });
+}
 async function carregarColabsPlus() {
   if (COLABS_PLUS) return COLABS_PLUS;
-  var client = window.__lideresSupa || supa;
-  if (!client || !client.schema) return (COLABS_PLUS = []);
+  var client = await _supaPlusReady();
+  if (!client) return [];  // não cacheia vazio: tenta de novo numa próxima chamada
   try {
     var res = await client.schema('tata_plus').from('colaboradores_publicos')
       .select('nome, unidade, departamento');
     if (res.error) throw new Error(res.error.message);
     COLABS_PLUS = res.data || [];
     return COLABS_PLUS;
-  } catch(e) { console.warn('colaboradores_publicos:', e.message); return (COLABS_PLUS = []); }
+  } catch(e) { console.warn('colaboradores_publicos:', e.message); return []; }
 }
 
 async function carregarUsuario(session) {
@@ -2022,15 +2037,32 @@ function unlockBodyScroll() {
 }
 
 // ── MODAL NOVO PEDIDO ────────────────────────────────────────────────────────
+function popularSelDepto(sel) {
+  if (!sel) return;
+  var deptos = DEPTOS_DISPONIVEIS.length ? DEPTOS_DISPONIVEIS : (DEPARTAMENTO ? [DEPARTAMENTO] : []);
+  sel.innerHTML = deptos.map(function(d){
+    return '<option value="'+d+'"'+(d===DEPARTAMENTO?' selected':'')+'>'+d+'</option>';
+  }).join('') || '<option value="">—</option>';
+}
+
 function abrirModalPedido() {
   closeDrawer(true);
   setTimeout(function(){
     var sel = document.getElementById('pedido-depto');
     if (sel) {
-      var deptos = DEPTOS_DISPONIVEIS.length ? DEPTOS_DISPONIVEIS : (DEPARTAMENTO ? [DEPARTAMENTO] : []);
-      sel.innerHTML = deptos.map(function(d){
-        return '<option value="'+d+'"'+(d===DEPARTAMENTO?' selected':'')+'>'+d+'</option>';
-      }).join('') || '<option value="">—</option>';
+      popularSelDepto(sel);
+      // Se os departamentos ainda não vieram do Supabase (cliente do gate tardou),
+      // carrega e repopula o select já com o modal aberto.
+      if (!DEPTOS_DISPONIVEIS.length) {
+        carregarColabsPlus().then(function(colabs){
+          if (colabs && colabs.length) {
+            DEPTOS_DISPONIVEIS = Array.from(new Set(
+              colabs.map(function(c){ return String(c.departamento || '').trim(); }).filter(Boolean)
+            )).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
+            popularSelDepto(sel);
+          }
+        });
+      }
     }
     // Reset carrinho a cada abertura para não herdar estado anterior
     activeCats = [];
