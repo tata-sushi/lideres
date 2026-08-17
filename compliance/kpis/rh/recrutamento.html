@@ -5018,22 +5018,25 @@ function gerarRelatorioTestes() {
   var ini = r.ini, fim = r.fim;
   ini.setHours(0,0,0,0); fim.setHours(23,59,59,999);
 
-  // Só sobem para o relatório os testes com status relevante (o que realmente
-  // aconteceu / precisa de recibo). Fora: "Aguardando teste", "Não compareceu", "Cancelado".
-  var REL_TESTES_STATUS = ['contratado', 'nao contratado', 'agendar outro teste', 'aguardando aprovacao'];
-  var lista = (window.testes || []).filter(function(t) {
-    var st = norm((t.status_teste_dia || '').toLowerCase().trim());
-    if (REL_TESTES_STATUS.indexOf(st) === -1) return false;
-    var d = _relTestesParseData(t.data);
-    return d && d >= ini && d <= fim;
-  });
-  lista.sort(function(a,b){
+  function _relSortData(a,b){
     var da = _relTestesParseData(a.data), db = _relTestesParseData(b.data);
     if (da - db !== 0) return da - db;
     return (a.nome||'').localeCompare(b.nome||'');
+  }
+  // Semana toda (sem filtro de status) — base para a seção "Pagamentos RH" (recibo OK)
+  var listaSemana = (window.testes || []).filter(function(t) {
+    var d = _relTestesParseData(t.data);
+    return d && d >= ini && d <= fim;
+  }).sort(_relSortData);
+
+  // "Testes da Semana": só os status relevantes.
+  // Fora: "Aguardando teste", "Não compareceu", "Cancelado".
+  var REL_TESTES_STATUS = ['contratado', 'nao contratado', 'agendar outro teste', 'aguardando aprovacao'];
+  var lista = listaSemana.filter(function(t) {
+    return REL_TESTES_STATUS.indexOf(norm((t.status_teste_dia || '').toLowerCase().trim())) !== -1;
   });
 
-  if (!lista.length) { alert('Nenhum teste na semana ' + _relTestesFmtBR(ini) + ' – ' + _relTestesFmtBR(fim) + '.'); return; }
+  if (!listaSemana.length) { alert('Nenhum teste na semana ' + _relTestesFmtBR(ini) + ' – ' + _relTestesFmtBR(fim) + '.'); return; }
 
   var sess = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'));}catch(e){return null;}})();
   var solicitante = (sess && sess.displayName) ? sess.displayName : '—';
@@ -5058,16 +5061,21 @@ function gerarRelatorioTestes() {
       '</tr>';
   }
 
+  // Topo "Testes da Semana": só os status relevantes (lista)
   var rowsHtml = '';
   var totalValor = 0;
-  var listaOk = [];
-  var totalOk = 0;
   lista.forEach(function(t){
     var v = Number(t.valor_diaria || 0); totalValor += isFinite(v) ? v : 0;
     rowsHtml += _relTestesRowHtml(t);
+  });
+
+  // "Pagamentos RH": TODOS os recibos "OK" da semana, qualquer status
+  var listaOk = [];
+  var totalOk = 0;
+  listaSemana.forEach(function(t){
     if (_relTestesReciboStatus(t) === 'OK') {
       listaOk.push(t);
-      totalOk += isFinite(v) ? v : 0;
+      var v = Number(t.valor_diaria || 0); totalOk += isFinite(v) ? v : 0;
     }
   });
   var rowsOkHtml = listaOk.map(_relTestesRowHtml).join('');
