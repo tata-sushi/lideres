@@ -70,6 +70,9 @@
 ### Aniversários → card "lembrancinha" no Kanban (Trello → Supabase)
 - [x] **Migrado do n8n `lembrancas_aniversarios_criar_card` (id `2nPMjsHBjC1W90Kh`)** — que lia planilha Colaboradores e criava card no **Trello** (1 por aniversariante da próxima semana, "Entregar lembrancinha!!!"). Refeito 100% no Supabase (padrão exames): função `tata_plus.aniversario_kanban_scan()` + **cron `aniversario-lembranca-kanban`** (jobid 18, `0 9 * * 0` = **domingo 06h BRT**), dedup `dp_rh.aniversario_kanban(matricula,tipo,evento_em)`, à prova de falha. Varre `profiles` ativos, aniversários (🎂 idade / 🐢 empresa ≥1 ano) da **próxima semana** (seg→dom), 1 card cada → quadro **RH** / coluna **Outros** / etiqueta **Aniversário** (`49ade072-…`, criada agora) / responsável **24540 (Igor)**. Testado (4 cards da semana 17–23/08, 2ª rodada=0). **n8n antigo desativado** (evita card duplicado no Trello).
 
+### Assistência médica (6 meses) → card no Kanban (Trello → Supabase)
+- [x] **Migrado do n8n `cards_trello_inclusao_assistencia_medica` (id `ibrTtQ8MoYZ6VawN`)** — lia planilha Colaboradores e criava card no **Trello** para quem completa **6 meses de empresa** nos próximos 7 dias ("precisa ativar a assistência médica"). Refeito no Supabase: função `tata_plus.assistencia_medica_kanban_scan()` + **cron `assistencia-medica-6meses-kanban`** (jobid 19, `0 7 * * 0` = **domingo 04h BRT**), dedup `dp_rh.assistencia_medica_kanban(matricula,evento_em)` (evento único por pessoa), à prova de falha. Varre `profiles` ativos; `data_admissao + 6 meses` na janela [amanhã, +7d] → card no quadro **RH** / coluna **Outros** / etiqueta **Benefícios** (`e8f5c391-…`, criada agora) / responsável **24540 (Igor)**. Testado (4 cards da semana, 3ª rodada=0). **n8n antigo: usuário desativa.**
+
 ### Segurança / limpeza
 - [ ] **uazapi token hardcoded** nos fluxos → mover p/ credencial do n8n.
 - [ ] Remover hook `__test_number` do fluxo ouvidoria quando não precisar mais testar.
