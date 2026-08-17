@@ -2810,19 +2810,31 @@ function _evPopulateColaboradorSelect(current) {
   if (current) sel.value = current;
 }
 
-// Popula o dropdown de "Colaborador contratado" com os últimos 10 candidatos
-// da planilha CONTROLE DE TESTES cujo status é "Contratado" (mais recentes
-// primeiro, por ordem de linha na planilha).
+// Popula o dropdown de "Colaborador contratado" com os últimos 10 DIAS DE TESTE
+// (rec_teste_dias) cujo status do teste é "Contratado" — mais recentes primeiro,
+// pela data do teste (a candidatura pode ter status_final diferente).
 var EV_COLAB_CANCELADA = 'SUBSTITUIÇÃO CANCELADA';
+// DD/MM/YYYY ou YYYY-MM-DD → chave numérica AAAAMMDD p/ ordenar por recência
+function _evDataKey(s) {
+  var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s || '');
+  if (m) return (+m[3]) * 10000 + (+m[2]) * 100 + (+m[1]);
+  m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s || '');
+  if (m) return (+m[1]) * 10000 + (+m[2]) * 100 + (+m[3]);
+  return 0;
+}
 function _evPopulateColabContratadoSelect(current) {
   var sel = document.getElementById('ev-colab-contratado');
   if (!sel) return;
   var candidatos = (typeof testes !== 'undefined' && Array.isArray(testes)) ? testes : [];
   var contratados = candidatos.filter(function(t) {
     if (!t || !t.nome) return false;
-    return norm((t.status_final || '').toLowerCase().trim()) === 'contratado';
+    return norm((t.status_teste_dia || '').toLowerCase().trim()) === 'contratado';
   });
-  contratados.sort(function(a, b) { return (b._linha || 0) - (a._linha || 0); });
+  // mais recentes primeiro: data do teste, desempate por created_at
+  contratados.sort(function(a, b) {
+    var d = _evDataKey(b.data) - _evDataKey(a.data);
+    return d !== 0 ? d : String(b._created || '').localeCompare(String(a._created || ''));
+  });
   var seen = {}, ordered = [];
   for (var i = 0; i < contratados.length && ordered.length < 10; i++) {
     var nome = contratados[i].nome;
