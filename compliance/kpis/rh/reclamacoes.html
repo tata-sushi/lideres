@@ -478,8 +478,33 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 // ─── Backend ──────────────────────────────────────────────────────────────────
-var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxEs6_B76XgPgy3qHR164Q1zpmDVgM5QA3G1AT1fPd27S26q5ZtcBmissxRwWR8iwUw/exec';
 var processos = [];
+
+// ── Supabase (tata_plus.reclamacoes_listar / reclamacoes_gravar) ──────────────
+function comSupa(cb) {
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true });
+}
+function _recListar() {
+  return new Promise(function(resolve){
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('reclamacoes_listar').then(function(r){
+        if (r.error) { console.error('reclamacoes_listar', r.error); resolve({ ok:false, data:[] }); return; }
+        resolve({ ok:true, data: r.data || [] });
+      });
+    });
+  });
+}
+function _recGravar(payload) {
+  return new Promise(function(resolve){
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('reclamacoes_gravar', { p_payload: payload }).then(function(r){
+        if (r.error) { resolve({ ok:false, error: r.error.message || 'Erro ao gravar' }); return; }
+        resolve(r.data || { ok:false, error:'Resposta inválida' });
+      });
+    });
+  });
+}
 
 function pick(obj) {
   for (var i = 1; i < arguments.length; i++) {
@@ -497,7 +522,7 @@ function parseVal(s) {
 
 function mapRow(r) {
   return {
-    rowIndex:      pick(r, 'row_index', 'rowindex', 'row_idx'),
+    rowIndex:      pick(r, 'id', 'row_index', 'rowindex', 'row_idx'),
     notificacao:   pick(r, 'data_da_notificacao', 'data da notificacao', 'data_notificacao', 'notificacao', 'data_da_notificacao', 'data'),
     reclamante:    pick(r, 'reclamante'),
     solicitacao:   pick(r, 'solicitacoes', 'solicitacao', 'solicitacao_', 'solicitacoes_'),
@@ -539,8 +564,7 @@ function loadData() {
     if (empty) { empty.innerHTML = '<p style="color:var(--red)">' + msg + '</p>'; empty.style.display = 'block'; }
   }
   showLoading();
-  fetch(SCRIPT_URL)
-    .then(function(r) { return r.json(); })
+  _recListar()
     .then(function(json) {
       var rows;
       // Formato 1: {ok:true, data:[{...},...]}  (ouvidoria/recrutamento pattern)
@@ -1089,9 +1113,14 @@ function salvarNovoProcesso() {
     payload.reclamante_original = npVal('np-reclamante-original');
     payload.notificacao_original = document.getElementById('np-reclamante-original').dataset.notificacao || '';
   }
-  fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) })
-    .then(function(r) { return r.json(); })
-    .then(function() {
+  _recGravar(payload)
+    .then(function(res) {
+      if (!res || !res.ok) {
+        btn.disabled = false;
+        btn.textContent = 'Salvar';
+        alert('Erro ao salvar: ' + ((res && res.error) || 'tente novamente'));
+        return;
+      }
       closeNovoProcesso();
       loadData();
     })

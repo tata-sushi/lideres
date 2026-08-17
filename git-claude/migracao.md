@@ -26,9 +26,20 @@
 - [x] **Parte 2 — base histórica IMPORTADA:** 347 sanções (2021–2026; 317 advertências / 30 suspensões) via `IMPORTAR_sancoes.sql` (upsert por `id_externo`, `criado_por='import'`), rodado pelo usuário no SQL Editor. 8 duplicatas exatas coladas. Não gerou card (guard `id_externo`). Planilha só tinha DATA/MT/COLABORADOR/UNIDADE/DEPARTAMENTO/TIPO/MOTIVO → sem cargo/dias/líder.
 - [ ] **Aposentar o Trello (opcional):** fluxo n8n **`nova_sancao__card_trello`** (id `MsVFYQFSlhYItL0l`) segue **ativo** mas inerte (planilha não recebe mais sanções). Usuário desliga quando quiser. **Não é necessário p/ o fluxo novo** — o card vem do gatilho do banco.
 
-### Ouvidoria (piloto — no ar)
+### Ouvidoria (piloto — no ar) ✅ validada 17/08
+- [x] **Dashboard `kpis/rh/ouvidoria.html`** lê via `rpc('ouvidoria_listar')` (Apps Script desativado). Removido `COLAB_URL` morto → **0 refs a Sheets**.
+- [x] **Kanban interno** de pé: gatilho `dp_rh.ouvidoria_para_kanban` + dedup `dp_rh.ouvidoria_kanban` (19 registros na base).
 - [ ] **PR #446** (`tata-sushi/plus`, página ouvidoria do app) — app-side revisar/mergear.
-- [ ] **Kanban da Ouvidoria** (passo 7) — app-side liga `dp_rh.ouvidoria` a um quadro.
+
+### RH — dashboards ainda no Google (prioridade do usuário 17/08)
+- [x] **Reclamações** (`kpis/rh/reclamacoes.html`) — migrada (ver seção própria).
+- [ ] **Solicitações** (`kpis/rh/solicitacoes.html`) — Apps Script → Supabase.
+- [ ] **Desligamentos** (`kpis/rh/desligamentos.html`) — **não tem base; criar do zero.**
+- [ ] **Performance** (`kpis/rh/performance.html`) — **será o último.**
+- [ ] **Demandas / demandas2** — complexo: depende de Solicitações e migrar tudo pro Kanban.
+- [ ] **Fornecedores e Parceiros** — fácil, mas **muitas páginas**.
+- [ ] **Brainstorm** — **refazer o conceito** (não é migração 1:1).
+- Fora do escopo (Power BI): `hc2`, `desligamentos2`, `bancodehoras2`.
 
 ### Demandas
 - [ ] **`demandas.html`** (dashboard separado) — migrar p/ `rpc('demandas_lista')` quando o usuário liberar ("demandas não é agora"). RPC já corrigida (725 = 712+7+6).
@@ -411,5 +422,11 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **Sync = geração automática (`sincronizarFerias` → `dp_rh.ferias_sincronizar()`)**: como só lê `profiles` e escreve `dp_rh.ferias`, virou **função PL/pgSQL + `pg_cron`** (sem Edge Function/secrets). Gera cada ciclo aquisitivo **encerrado** a partir de `profiles.data_admissao` (ou override CLT→PJ `{'24174':2026-03-01,'3':2026-02-01}`), `on conflict do nothing`, `direito` NULL (validação manual); preenche concessivo faltante; trunca ciclo CLT que cruza o início PJ (idempotente). **NÃO apaga nada.** Cron **jobid 17 `ferias-gerar-periodos-semanal`** `10 9 * * 1` (segunda 6h10 SP). 1ª execução: +21 linhas (novos contratados + ciclos recém-encerrados) → 205 na tabela.
 - **Casar matrículas (Carlos Mateus)**: o sheet usava `24174`, mas o profiles/sistema usa `12`. Consolidei o histórico completo (direito/frac/períodos/abono/aprovado) das 4 linhas `24174` → `12` (mesmos `ini_aqui`) e apaguei as `24174` duplicadas — Carlos deixou de ter 4 pendências de validação. Override do sync ajustado p/ `12`. A migração "oficial" `12`→`24174` ficou no backlog (system-wide, ver acima).
 - **Aposentar Apps Script "Férias"** (`doGet`/`doPost`/`sincronizarFerias` + trigger diário) — planilha Férias vira só backup.
+
+## Módulo RECLAMAÇÕES (`kpis/rh/reclamacoes.html`) — ✅ FEITO 17/08
+> Processos trabalhistas (lista + dashboard + modal add/edit). Era Apps Script `doGet`/`doPost` (addReclamacao/updateReclamacao) sobre a planilha RT. **Sem matrícula** — reclamante é nome livre (ex-funcionário/externo), então a chave é um `id uuid` surrogate.
+- **`dp_rh.reclamacoes`** (RLS, sem PostgREST): `id uuid pk`, `data_notificacao/data_audiencia date`, `reclamante`, `solicitacoes`, `resultado`, `resolucao`, `valor_causa/valor_quitacao numeric`, `unidade`, `departamento`, `obs`, `criado_por/atualizado_por` (auditoria). Backfill **26 processos** (causa R$1.734.884,75 / quitação R$127.192,21). Datas DD/MM/YYYY e ISO normalizadas; valores BRL (`63450,62`, `R$ 9.000,00`) parseados.
+- **RPCs** (SECURITY DEFINER, `tata_plus`, authenticated): `reclamacoes_listar()` devolve as chaves que o front espera (`data_da_notificacao` DD/MM/YYYY, `valor_da_causa` numérico, etc.) + `id`. `reclamacoes_gravar(jsonb)` faz `addReclamacao`|`updateReclamacao`, carimba `criado_por`/`atualizado_por` via `minha_matricula()`; helper `dp_rh._num()` parseia BRL. Update casa por `id` (uuid).
+- **Front**: `comSupa`+RPC no `loadData` e no `salvarNovoProcesso`; `mapRow` pega `id` como `rowIndex` (mudança mínima — 1 linha). Removido `SCRIPT_URL`. **0 refs a Sheets.** Testes (listar/add/update + parse BRL `9.000,50`) validados via JWT simulado.
 
 - 2026-08-16 — **Organograma FECHADO 100%** (árvore + CES + armário/exame do modal, tudo Supabase). Medicina e Armários (páginas próprias) também 100%. Módulo RH do portal segue com dashboards ainda em Sheets p/ migrar (semanal, banco de horas, férias, solicitações, reclamações, performance, hc2, benefícios, desligamentos2) + frente n8n (33 workflows, Sheets→Trello → Kanban/Supabase).
