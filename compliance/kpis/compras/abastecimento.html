@@ -1239,7 +1239,7 @@ function fecharFotoModal() {
   if (overlay) overlay.classList.remove('active');
 }
 
-// Lista de recebedores — carregada de COLAB_URL em carregarRecebedores()
+// Lista de recebedores — carregada do Supabase (colaboradores_publicos) em carregarRecebedores()
 var RECEBEDORES = [];
 
 // Lista de fornecedores — alimentar via planilha futuramente
@@ -1633,29 +1633,40 @@ function rowsParaUI(idDisplay, rows) {
 }
 
 // ── IDENTIFICAÇÃO DO USUÁRIO ─────────────────────────────────────────────────
-// Lê unidade da sessão e busca departamento via COLAB_URL cruzando por displayName.
+// Unidade/departamento do usuário logado vêm do Supabase (tata_plus.colaboradores_publicos),
+// cruzando pelo nome (displayName). Sem dependência de Apps Script/Google Sheets.
 // Os valores são usados apenas para gravar no novo pedido (não filtram a listagem).
-async function carregarUsuario(session) {
-  UNIDADE      = String(session.unidade || '').trim();
-  DEPARTAMENTO = '';
-  if (!COLAB_URL || !session.displayName) return;
+var COLABS_PLUS = null;
+async function carregarColabsPlus() {
+  if (COLABS_PLUS) return COLABS_PLUS;
+  var client = window.__lideresSupa || supa;
+  if (!client || !client.schema) return (COLABS_PLUS = []);
   try {
-    var res  = await fetch(COLAB_URL + '?action=listColaboradores&t=' + Date.now());
-    var data = await res.json();
-    if (data && data.ok && Array.isArray(data.colaboradores)) {
-      var alvo = String(session.displayName).trim().toLowerCase();
-      var col = data.colaboradores.find(function(c) {
-        return String(c.nome || '').trim().toLowerCase() === alvo;
-      });
-      if (col) {
-        if (!UNIDADE)      UNIDADE      = String(col.unidade      || '').trim();
-        DEPARTAMENTO = String(col.departamento || '').trim();
-      }
-      DEPTOS_DISPONIVEIS = Array.from(new Set(
-        data.colaboradores.map(function(c){ return String(c.departamento || '').trim(); }).filter(Boolean)
-      )).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
-    }
-  } catch(e) { console.warn('Erro ao identificar usuário:', e.message); }
+    var res = await client.schema('tata_plus').from('colaboradores_publicos')
+      .select('nome, unidade, departamento');
+    if (res.error) throw new Error(res.error.message);
+    COLABS_PLUS = res.data || [];
+    return COLABS_PLUS;
+  } catch(e) { console.warn('colaboradores_publicos:', e.message); return (COLABS_PLUS = []); }
+}
+
+async function carregarUsuario(session) {
+  UNIDADE      = String((session && session.unidade) || '').trim();
+  DEPARTAMENTO = '';
+  if (!session || !session.displayName) return;
+  var colabs = await carregarColabsPlus();
+  if (!colabs.length) return;
+  var alvo = String(session.displayName).trim().toLowerCase();
+  var col = colabs.find(function(c) {
+    return String(c.nome || '').trim().toLowerCase() === alvo;
+  });
+  if (col) {
+    if (!UNIDADE) UNIDADE = String(col.unidade || '').trim();
+    DEPARTAMENTO = String(col.departamento || '').trim();
+  }
+  DEPTOS_DISPONIVEIS = Array.from(new Set(
+    colabs.map(function(c){ return String(c.departamento || '').trim(); }).filter(Boolean)
+  )).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
@@ -1695,17 +1706,15 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 window.addEventListener('lideres:sessao', function() { iniciarApp(obterSessao()); });
 
-// ── RECEBEDORES — carrega da base de colaboradores (ponto) ────────────────────
+// ── RECEBEDORES — nomes vindos da base de colaboradores (Supabase) ────────────
 async function carregarRecebedores() {
   try {
-    var res = await fetch(COLAB_URL + '?action=listColaboradores');
-    var data = await res.json();
-    if (data.ok && data.colaboradores && data.colaboradores.length) {
-      RECEBEDORES = data.colaboradores
-        .map(function(c) { return c.nome; })
-        .filter(function(n) { return !!n; })
-        .sort(function(a, b) { return a.localeCompare(b, 'pt-BR'); });
-    }
+    var colabs = await carregarColabsPlus();
+    var nomes = colabs
+      .map(function(c) { return c.nome; })
+      .filter(function(n) { return !!n; })
+      .sort(function(a, b) { return a.localeCompare(b, 'pt-BR'); });
+    if (nomes.length) RECEBEDORES = nomes;
   } catch(e) { /* mantém lista padrão */ }
 }
 
@@ -1954,7 +1963,6 @@ function _drawKpiEvolLine(svgId, data) {
 }
 
 // ── DRAWER ────────────────────────────────────────────────────────────────────
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 
 function loadDrawerKPIs() {
