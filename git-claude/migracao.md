@@ -33,7 +33,7 @@
 
 ### RH — dashboards ainda no Google (prioridade do usuário 17/08)
 - [x] **Reclamações** (`kpis/rh/reclamacoes.html`) — migrada (ver seção própria).
-- [ ] **Solicitações** (`kpis/rh/solicitacoes.html`) — Apps Script → Supabase.
+- [x] **Solicitações** (`kpis/rh/solicitacoes.html`) — migrada (ver seção própria).
 - [ ] **Desligamentos** (`kpis/rh/desligamentos.html`) — **não tem base; criar do zero.**
 - [ ] **Performance** (`kpis/rh/performance.html`) — **será o último.**
 - [ ] **Demandas / demandas2** — complexo: depende de Solicitações e migrar tudo pro Kanban.
@@ -428,5 +428,13 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **`dp_rh.reclamacoes`** (RLS, sem PostgREST): `id uuid pk`, `data_notificacao/data_audiencia date`, `reclamante`, `solicitacoes`, `resultado`, `resolucao`, `valor_causa/valor_quitacao numeric`, `unidade`, `departamento`, `obs`, `criado_por/atualizado_por` (auditoria). Backfill **26 processos** (causa R$1.734.884,75 / quitação R$127.192,21). Datas DD/MM/YYYY e ISO normalizadas; valores BRL (`63450,62`, `R$ 9.000,00`) parseados.
 - **RPCs** (SECURITY DEFINER, `tata_plus`, authenticated): `reclamacoes_listar()` devolve as chaves que o front espera (`data_da_notificacao` DD/MM/YYYY, `valor_da_causa` numérico, etc.) + `id`. `reclamacoes_gravar(jsonb)` faz `addReclamacao`|`updateReclamacao`, carimba `criado_por`/`atualizado_por` via `minha_matricula()`; helper `dp_rh._num()` parseia BRL. Update casa por `id` (uuid).
 - **Front**: `comSupa`+RPC no `loadData` e no `salvarNovoProcesso`; `mapRow` pega `id` como `rowIndex` (mudança mínima — 1 linha). Removido `SCRIPT_URL`. **0 refs a Sheets.** Testes (listar/add/update + parse BRL `9.000,50`) validados via JWT simulado.
+
+## Módulo SOLICITAÇÕES (`kpis/rh/solicitacoes.html`) — ✅ FEITO 17/08
+> Solicitações de RH (uniforme, EPI, alteração de cargo, férias, etc.). O dashboard **juntava 2 abas** via Sheets API + API_KEY: "SOLICITAÇÕES RH" (respostas do form) + "Demandas_trello" (mirror do card Trello, para status/datas). Escrita de nova solicitação era um Apps Script (`novaSolicitacao`).
+- **Aba Demandas_trello (gid 1160972519) é inalcançável** por aqui: proxy de egress bloqueia `docs.google.com` (curl e WebFetch) e o Drive MCP só exporta a 1ª aba (`download`/`read_file_content`). **Não é auth** — é limite técnico. Como a **col Q "Status" está 100% preenchida** na aba principal (Finalizado 489 / Pendente 57 / Em andamento 1) e col R (conclusão) em 488, migrei de **uma aba só**; o overlay do Trello era redundância de frescor. Cada linha guarda o **`id_card`** (col U) p/ religar ao Kanban interno depois.
+- **`dp_rh.solicitacoes`** (RLS, sem PostgREST): `id uuid`, `id_card`, `abertura timestamptz`, `email`, `unidade`, `solicitante`, `departamento`, `tipo`, `descricao`, `urgente`, `status` (col Q), `devolutiva` (col P), `data_conclusao` (col R), auditoria. Backfill **544 solicitações** (abr/2024→ago/2026), datas e status parseados.
+- **RPCs** (SECURITY DEFINER, `tata_plus`, authenticated): `solicitacoes_listar()` devolve o shape que o front consome (`titulo`, `abertura` DD/MM/YYYY, `status_q`=`status`, `atualizacao`=conclusão, +`id`). `solicitacao_nova(jsonb)` substitui o `novaSolicitacao`: grava `status='Pendente'`, carimba `criado_por` via `minha_matricula()` (retorna `{status:'ok',row:id}` pro front).
+- **Front**: `fetchAndRender` virou **1 chamada** (`solicitacoes_listar`) — acabou o join de 2 abas; `enviarSolicitacao` grava via RPC. Removidos `SHEET_ID`, **`API_KEY`** (chave Google exposta saiu), `GID`/`GID_DEMANDAS`, `GAS_URL`, `COLAB_URL` e o código morto (`COL`/`rowToObj`/`findCol`). **0 refs a Google.**
+- ⏳ **Vínculo status↔Kanban**: hoje o status é o snapshot da col Q. Quando migrarmos **demandas → Kanban interno**, o status da solicitação passa a vir do card (via `id_card`) — é a etapa complexa que o usuário já sinalizou.
 
 - 2026-08-16 — **Organograma FECHADO 100%** (árvore + CES + armário/exame do modal, tudo Supabase). Medicina e Armários (páginas próprias) também 100%. Módulo RH do portal segue com dashboards ainda em Sheets p/ migrar (semanal, banco de horas, férias, solicitações, reclamações, performance, hc2, benefícios, desligamentos2) + frente n8n (33 workflows, Sheets→Trello → Kanban/Supabase).

@@ -896,11 +896,31 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <script>
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
-var SHEET_ID  = '1PC5rZYA4zZGv0U0zkIJbpctA1MsGCG8kRawAOMiMznY';
-var GID          = '1411059243';   // aba SOLICITAÇÕES RH
-var GID_DEMANDAS = '1160972519';   // aba Demandas_trello
-var API_KEY   = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
+// ─── Supabase (tata_plus.solicitacoes_listar / solicitacao_nova) ─────────────
+function comSupa(cb) {
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true });
+}
+function _solListar() {
+  return new Promise(function(resolve){
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('solicitacoes_listar').then(function(r){
+        if (r.error) { console.error('solicitacoes_listar', r.error); resolve([]); return; }
+        resolve(r.data || []);
+      });
+    });
+  });
+}
+function _solNova(payload) {
+  return new Promise(function(resolve){
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('solicitacao_nova', { p_payload: payload }).then(function(r){
+        if (r.error) { resolve({ status:'erro', message: r.error.message || 'Erro ao enviar' }); return; }
+        resolve(r.data || { status:'erro', message:'Resposta inválida' });
+      });
+    });
+  });
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 var DATA = [];        // lista filtrada para últimos 10 dias (cards da aba Solicitações)
@@ -1031,9 +1051,7 @@ function enviarSolicitacao() {
   var data = document.getElementById('m-data').value;
   var solicitante = currentUser ? currentUser.name : '';
 
-  // Monta URL do Google Apps Script para envio
   var payload = {
-    action: 'novaSolicitacao',
     data: data,
     solicitante: solicitante,
     unidade: unidade,
@@ -1042,14 +1060,7 @@ function enviarSolicitacao() {
     titulo: titulo
   };
 
-  var params = Object.keys(payload).map(function(k) {
-    return encodeURIComponent(k) + '=' + encodeURIComponent(payload[k]);
-  }).join('&');
-
-  var GAS_URL = 'https://script.google.com/macros/s/AKfycbxYE3AIS5QisXhhG3fh3pqklXKAPbyppgJOO3kLyAa5roY94JKO7SHqg7iVfM8slx0/exec';
-
-  fetch(GAS_URL + '?' + params)
-    .then(function(r) { return r.json(); })
+  _solNova(payload)
     .then(function(res) {
       btn.disabled = false;
       document.getElementById('spin').style.display = 'none';
@@ -1058,13 +1069,13 @@ function enviarSolicitacao() {
         closeModal();
         fetchAndRender();
       } else {
-        showToast(res.message || 'Erro ao enviar', true);
+        showToast((res && res.message) || 'Erro ao enviar', true);
       }
     })
     .catch(function(err) {
       btn.disabled = false;
       document.getElementById('spin').style.display = 'none';
-      showToast('Erro de conexão: ' + (err.message || 'tente novamente'), true);
+      showToast('Erro de conexão: ' + ((err && err.message) || 'tente novamente'), true);
     });
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1430,23 +1441,6 @@ function renderChartCompetenciaSol() {
   });
 }
 
-// ─── MAPEAMENTO DAS COLUNAS DA PLANILHA ──────────────────────────────────────
-// Ajuste os índices (0-based) conforme os cabeçalhos reais da aba
-var COL = {
-  titulo:       7,   // Coluna H (descrição da solicitação)
-  unidade:      2,   // Coluna C
-  departamento: 4,   // Coluna E
-  solicitante:  3,   // Coluna D
-  tipo:         5,   // Coluna F (tipo de solicitação / badge)
-  abertura:     0,   // Coluna A (sobrescrito pelo Demandas_trello se houver match)
-  status:       5,   // Coluna F
-  status_q:     16,  // Coluna Q (sobrescrito pelo Demandas_trello se houver match)
-  devolutiva:   15,  // Coluna P
-  atualizacao:  17,  // Coluna R (Data de conclusão, sobrescrito pelo Demandas_trello)
-  id:           20   // Coluna U (ID card — chave de cruzamento com Demandas_trello)
-};
-// ─────────────────────────────────────────────────────────────────────────────
-
 function showLoading() {
   var el = document.getElementById('loading-overlay');
   if (el) el.classList.add('show');
@@ -1470,24 +1464,6 @@ function showError(msg) {
     '</div>';
 }
 
-function rowToObj(row) {
-  function cell(i) { return (i >= 0 && row[i] != null ? row[i] : '').toString().trim(); }
-  // Remove horário da data (ex: "04/04/2026 13:14:36" → "04/04/2026")
-  function dateOnly(str) { return str ? str.split(' ')[0] : ''; }
-  return {
-    id:           cell(COL.id),
-    titulo:       cell(COL.titulo),
-    tipo:         cell(COL.tipo),
-    unidade:      cell(COL.unidade),
-    departamento: cell(COL.departamento),
-    solicitante:  cell(COL.solicitante),
-    abertura:     dateOnly(cell(COL.abertura)),
-    status:       cell(COL.status),
-    status_q:     cell(COL.status_q),
-    devolutiva:   cell(COL.devolutiva),
-    atualizacao:  dateOnly(cell(COL.atualizacao))
-  };
-}
 
 function updateFooter() {
   var now = new Date();
@@ -1500,79 +1476,19 @@ function updateFooter() {
 function fetchAndRender() {
   showLoading();
 
-  var BASE = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID;
+  function parseDateBR(str) {
+    if (!str) return null;
+    str = str.toString().trim();
+    var m;
+    m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+    m = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+    return null;
+  }
 
-  // 1. Resolve nomes das duas abas pelo GID
-  fetch(BASE + '?key=' + API_KEY)
-    .then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status + ': Verifique se a planilha está pública e a API Key é válida.');
-      return r.json();
-    })
-    .then(function(meta) {
-      var sheets = meta.sheets || [];
-      function findName(gid) {
-        for (var i = 0; i < sheets.length; i++) {
-          var p = sheets[i].properties || {};
-          if (String(p.sheetId) === gid) return p.title;
-        }
-        return null;
-      }
-      var solName = findName(GID);
-      var demName = findName(GID_DEMANDAS);
-      if (!solName) throw new Error('Aba SOLICITAÇÕES RH não encontrada (gid=' + GID + ')');
-      if (!demName) throw new Error('Aba Demandas_trello não encontrada (gid=' + GID_DEMANDAS + ')');
-      return [solName, demName];
-    })
-    // 2. Busca as duas abas em paralelo
-    .then(function(names) {
-      var solUrl = BASE + '/values/' + encodeURIComponent(names[0] + '!A:U') +
-                   '?key=' + API_KEY + '&valueRenderOption=FORMATTED_VALUE';
-      var demUrl = BASE + '/values/' + encodeURIComponent(names[1] + '!A:H') +
-                   '?key=' + API_KEY + '&valueRenderOption=FORMATTED_VALUE';
-      return Promise.all([
-        fetch(solUrl).then(function(r) { if (!r.ok) throw new Error('Erro SOLICITAÇÕES: HTTP ' + r.status); return r.json(); }),
-        fetch(demUrl).then(function(r) { if (!r.ok) throw new Error('Erro Demandas: HTTP ' + r.status); return r.json(); })
-      ]);
-    })
-    .then(function(results) {
-      // 3. Monta lookup Demandas_trello: cardId → {status, abertura, conclusao}
-      // Colunas Demandas: A=Card ID, C=Data Criação, D=Status, H=Data de Conclusão
-      var demRows = (results[1].values) || [];
-      var demLookup = {};
-      for (var d = 1; d < demRows.length; d++) {
-        var dr = demRows[d];
-        if (!dr || !dr[0]) continue;
-        var cardId = dr[0].toString().trim();
-        if (!cardId) continue;
-        demLookup[cardId] = {
-          status:    (dr[3] || '').toString().trim(),
-          abertura:  (dr[2] || '').toString().trim(),
-          conclusao: (dr[7] || '').toString().trim()
-        };
-      }
-
-      // 4. Processa SOLICITAÇÕES RH e enriquece com dados do Demandas
-      var rows = (results[0].values) || [];
-      if (rows.length < 2) {
-        DATA.length = 0;
-        filtered = [];
-        renderCards();
-        updateKPIs();
-        updateFooter();
-        return;
-      }
-
-      function parseDateBR(str) {
-        if (!str) return null;
-        str = str.toString().trim();
-        var m;
-        m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-        if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
-        m = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-        if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
-        return null;
-      }
-
+  _solListar()
+    .then(function(list) {
       var hoje = new Date();
       hoje.setHours(0, 0, 0, 0);
       var limite = new Date(hoje);
@@ -1580,25 +1496,13 @@ function fetchAndRender() {
 
       DATA.length = 0;
       DATA_FULL.length = 0;
-      for (var i = 1; i < rows.length; i++) {
-        var row = rows[i];
-        if (!row || row.every(function(c){ return !c; })) continue;
-        var obj = rowToObj(row);
-        if (!obj.titulo) continue;
-
-        // Enriquece com dados do Demandas_trello via ID do card
-        var dem = obj.id ? demLookup[obj.id] : null;
-        if (dem) {
-          if (dem.status)    obj.status_q   = dem.status;
-          if (dem.abertura)  obj.abertura   = dem.abertura.split(' ')[0];
-          if (dem.conclusao) obj.atualizacao = dem.conclusao.split(' ')[0];
-        }
-
+      (list || []).forEach(function(obj) {
+        if (!obj || !obj.titulo) return;
         DATA_FULL.push(obj);
         var dtAbertura = parseDateBR(obj.abertura);
-        if (dtAbertura && dtAbertura < limite) continue;
+        if (dtAbertura && dtAbertura < limite) return;
         DATA.push(obj);
-      }
+      });
 
       filtered = DATA.slice();
 
@@ -1613,19 +1517,10 @@ function fetchAndRender() {
       updateFooter();
     })
     .catch(function(err) {
-      showError(err.message || 'Erro desconhecido');
+      showError((err && err.message) || 'Erro ao carregar solicitações');
       console.error(err);
     })
     .finally(hideLoading);
-}
-
-function findCol(header, candidates) {
-  for (var c = 0; c < candidates.length; c++) {
-    for (var i = 0; i < header.length; i++) {
-      if (header[i].indexOf(candidates[c]) !== -1) return i;
-    }
-  }
-  return -1;
 }
 
 function init() {
@@ -1639,7 +1534,6 @@ function init() {
 }
 
 // ─── DRAWER ──────────────────────────────────────────────────────────────────
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
