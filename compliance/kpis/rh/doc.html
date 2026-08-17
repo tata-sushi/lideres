@@ -137,6 +137,14 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 .sel-red                 { background: #FDEAEA; color: #7A1A1A; }
 .sel-blue                { background: #E8F0FA; color: #1A3A5C; }
 
+/* ── GESTÃO DE DOCUMENTOS (aba Analítico) ── */
+.doc-score-header { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 4px; }
+.doc-secao-title { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--carbon); margin: 16px 0 4px; }
+.doc-secao-title:first-of-type { margin-top: 14px; }
+.doc-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.doc-item:last-child { border-bottom: none; }
+.doc-item-label { flex: 1; font-size: 13px; color: var(--carbon); font-weight: 500; }
+
 .card-body { padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
 .card-field { display: flex; flex-direction: column; gap: 1px; }
 .field-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
@@ -672,6 +680,20 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="modal-body" id="info-body" style="padding-top:0"></div>
   </div>
 </div>
+<!-- Modal Gestão de Documentos — pasta do colaborador -->
+<div class="modal-overlay" id="doc-colab-overlay">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div>
+        <div class="candidate-name" id="doc-colab-nome">—</div>
+        <div class="field-value" style="font-weight:400;color:var(--mid)" id="doc-colab-sub">—</div>
+      </div>
+      <button class="modal-close" onclick="fecharDocColaborador()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="doc-colab-body"></div>
+  </div>
+</div>
+<input type="file" id="doc-file-input" style="display:none" onchange="_docFileSelecionado(event)" accept="image/*,application/pdf">
 <!-- Modal Agenda de Líderes (CRUD) -->
 <div class="modal-overlay" id="agenda-overlay">
   <div class="modal" style="max-width:440px">
@@ -960,6 +982,9 @@ var testes = [];
 var analitico = [];   // candidaturas cruas (mãe + dias) para a aba Analítico e edição
 var vagas = [];
 var agendaLideres = [];   // agenda fixa de entrevistas dos líderes (aba Agenda) — vem do Supabase
+var docTipos = [];              // catálogo dp_rh.doc_tipos (Gestão de Documentos)
+var colaboradorDocumentos = []; // dp_rh.colaborador_documentos — todos os documentos anexados
+var docColaboradores = [];      // roster (tata_plus.colaboradores_publicos) — quem aparece na aba Analítico
 var _testeCache = [];
 var _entrevistaCache = [];
 var state = {
@@ -1014,10 +1039,17 @@ function loadAllData() {
     SB.rpc('vagas_sandbox_listar', { p_matricula: _sandboxMatricula() }),   // matrícula DEV p/ testar permissão de valores
     SB.rpc('colaboradores_sandbox_listar'),   // raiz (profiles) → líder/colaborador do modal
     SB.rpc('cargos_salarios_sandbox_listar', { p_matricula: _sandboxMatricula() }),  // cargo + salário do modal
-    SB.rpc('rec_agenda_lideres_sandbox_listar')   // agenda fixa de entrevistas dos líderes (aba Agenda)
+    SB.rpc('rec_agenda_lideres_sandbox_listar'),   // agenda fixa de entrevistas dos líderes (aba Agenda)
+    SB.rpc('doc_tipos_sandbox_listar'),                    // catálogo de documentos (aba Analítico)
+    SB.rpc('colaborador_documentos_sandbox_listar_todos'), // documentos já anexados (aba Analítico)
+    SB.schema('tata_plus').from('colaboradores_publicos').select('matricula, nome, cargo, unidade, departamento').order('nome')
   ]).then(function (results) {
     var res = results[0], vres = results[1], cres = results[2], csres = results[3], ares = results[4];
+    var dtres = results[5], cdres = results[6], colres = results[7];
     agendaLideres = (ares && !ares.error && Array.isArray(ares.data)) ? ares.data : [];
+    docTipos = (dtres && !dtres.error && Array.isArray(dtres.data)) ? dtres.data : [];
+    colaboradorDocumentos = (cdres && !cdres.error && Array.isArray(cdres.data)) ? cdres.data : [];
+    docColaboradores = (colres && !colres.error && Array.isArray(colres.data)) ? colres.data : [];
     _colabs = (cres && !cres.error && Array.isArray(cres.data)) ? cres.data : [];
     _csCargos = (csres && !csres.error && csres.data && Array.isArray(csres.data.cargos)) ? csres.data.cargos : [];
     // ── Vagas ── (RPC devolve { pode_ver, vagas }; salários mascarados no servidor se não pode ver)
@@ -1102,7 +1134,6 @@ function loadAllData() {
     finishLoad([]);
   }, function () {
     entrevistas = []; testes = []; analitico = []; vagas = []; agendaLideres = [];
-    renderAgendaLideres();
     finishLoad(['Supabase indisponível']);
   });
 }
@@ -1112,6 +1143,183 @@ function finishLoad(errors) {
   state.error = errors.length ? errors.join(' | ') : null;
   hideLoading();
   render();
+}
+
+// ─── GESTÃO DE DOCUMENTOS (aba Analítico) ─────────────────────────────────────
+var _docUploadCtx = null;
+var MES_NOMES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function _slug(s) {
+  return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function _docTiposObrigatoriosUnicos() {
+  return (docTipos || []).filter(function (t) { return t.obrigatorio && t.periodicidade === 'unico'; });
+}
+
+function _docScore(matricula) {
+  var obrig = _docTiposObrigatoriosUnicos();
+  var meus = (colaboradorDocumentos || []).filter(function (d) { return d.matricula === matricula && d.status === 'entregue'; });
+  var entregues = obrig.filter(function (t) {
+    return meus.some(function (d) { return d.tipo_id === t.id; });
+  }).length;
+  return { entregues: entregues, total: obrig.length };
+}
+
+function _docScoreClasse(sc) {
+  if (!sc.total) return 'sel-blue';
+  if (sc.entregues >= sc.total) return 'sel-sim';
+  if (sc.entregues === 0) return 'sel-red';
+  return 'sel-amber';
+}
+
+function _docCategorias() {
+  var vistas = {}, ordem = [];
+  (docTipos || []).forEach(function (t) { if (!vistas[t.categoria]) { vistas[t.categoria] = true; ordem.push(t.categoria); } });
+  return ordem;
+}
+
+function _docMesesRecentes(n) {
+  var out = [], d = new Date();
+  d.setDate(1);
+  for (var i = 0; i < n; i++) {
+    out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+    d.setMonth(d.getMonth() - 1);
+  }
+  return out;
+}
+
+function _docFmtCompetencia(c) {
+  var p = (c || '').split('-');
+  if (p.length !== 2) return c || '';
+  var mi = parseInt(p[1], 10) - 1;
+  return (MES_NOMES[mi] || p[1]) + '/' + p[0];
+}
+
+function _docDoc(matricula, tipoId, competencia) {
+  return (colaboradorDocumentos || []).find(function (d) {
+    return d.matricula === matricula && d.tipo_id === tipoId && (d.competencia || null) === (competencia || null);
+  });
+}
+
+function _docItemHtml(matricula, tipo, competencia, label) {
+  var doc = _docDoc(matricula, tipo.id, competencia);
+  var entregue = doc && doc.status === 'entregue';
+  var badge = '<span class="status-badge ' + (entregue ? 'sel-sim' : 'sel-red') + '">' + (entregue ? 'Entregue' : 'Pendente') + '</span>';
+  var acao = entregue
+    ? '<button class="btn-avaliar" onclick="_docAbrirArquivo(\'' + escH(doc.link) + '\')">Ver</button>'
+    : '<button class="btn-avaliar" onclick="_docAbrirUpload(\'' + escH(matricula) + '\',\'' + tipo.id + '\',' + (competencia ? '\'' + competencia + '\'' : 'null') + ')">Anexar</button>';
+  return '<div class="doc-item"><div class="doc-item-label">' + escH(label) + '</div>' + badge + acao + '</div>';
+}
+
+function _docRenderSecoes(matricula) {
+  var sc = _docScore(matricula);
+  var html = '<div class="doc-score-header"><span class="field-label">Adequação documental</span>' +
+    '<span class="status-badge ' + _docScoreClasse(sc) + '" style="font-size:12px;padding:5px 12px">' + sc.entregues + '/' + sc.total + '</span></div>';
+
+  _docCategorias().forEach(function (categoria) {
+    var tipos = (docTipos || []).filter(function (t) { return t.categoria === categoria; });
+    html += '<div class="doc-secao-title">' + escH(categoria) + '</div>';
+    tipos.forEach(function (tipo) {
+      if (tipo.periodicidade === 'mensal') {
+        _docMesesRecentes(6).forEach(function (comp) {
+          html += _docItemHtml(matricula, tipo, comp, tipo.nome + ' — ' + _docFmtCompetencia(comp));
+        });
+      } else {
+        html += _docItemHtml(matricula, tipo, null, tipo.nome);
+      }
+    });
+  });
+  return html;
+}
+
+function abrirDocColaborador(matricula) {
+  var col = (docColaboradores || []).find(function (c) { return c.matricula === matricula; });
+  if (!col) return;
+  document.getElementById('doc-colab-nome').textContent = col.nome || '';
+  document.getElementById('doc-colab-sub').textContent = (col.cargo || '') + (col.unidade ? ' · ' + col.unidade : '');
+  document.getElementById('doc-colab-body').innerHTML = _docRenderSecoes(matricula);
+  document.getElementById('doc-colab-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function fecharDocColaborador() {
+  document.getElementById('doc-colab-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function _docAbrirUpload(matricula, tipoId, competencia) {
+  _docUploadCtx = { matricula: matricula, tipoId: tipoId, competencia: competencia || null };
+  var inp = document.getElementById('doc-file-input');
+  inp.value = '';
+  inp.click();
+}
+
+function _docFileSelecionado(ev) {
+  var file = ev.target.files && ev.target.files[0];
+  var ctx = _docUploadCtx;
+  if (!file || !ctx) return;
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
+  var tipo = (docTipos || []).find(function (t) { return t.id === ctx.tipoId; });
+  var ext = (file.name.split('.').pop() || 'bin');
+  var base = _slug(tipo ? tipo.nome : 'documento') + (ctx.competencia ? '-' + ctx.competencia : '');
+  var path = ctx.matricula + '/' + _slug(tipo ? tipo.categoria : 'geral') + '/' + base + '-' + Date.now() + '.' + ext;
+  SB.storage.from('dp-documentos').upload(path, file, { upsert: true }).then(function (r) {
+    if (r.error) { alert('Erro ao enviar arquivo:\n' + r.error.message); return; }
+    return SB.rpc('colaborador_documentos_sandbox_salvar', {
+      p_matricula: ctx.matricula, p_tipo_id: ctx.tipoId, p_competencia: ctx.competencia,
+      p_nome_arquivo: file.name, p_link: path, p_mime: file.type || null, p_tamanho: file.size || null,
+      p_enviado_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido'
+    });
+  }).then(function (r) {
+    if (!r) return;
+    if (r.error) { alert('Erro ao salvar registro:\n' + r.error.message); return; }
+    var row = r.data;
+    colaboradorDocumentos = (colaboradorDocumentos || []).filter(function (d) {
+      return !(d.matricula === row.matricula && d.tipo_id === row.tipo_id && (d.competencia || null) === (row.competencia || null));
+    });
+    colaboradorDocumentos.push(row);
+    document.getElementById('doc-colab-body').innerHTML = _docRenderSecoes(ctx.matricula);
+    renderDocGestao();
+  }, function (err) {
+    alert('Erro de conexão:\n' + (err && err.message || err));
+  });
+}
+
+function _docAbrirArquivo(path) {
+  var SB = window.__lideresSupa;
+  if (!SB || !path) return;
+  SB.storage.from('dp-documentos').createSignedUrl(path, 3600).then(function (r) {
+    if (r.data && r.data.signedUrl) window.open(r.data.signedUrl, '_blank');
+    else alert('Não foi possível abrir o arquivo.');
+  });
+}
+
+function setDocBusca(v) { state.docBusca = v; renderDocGestao(); }
+
+function renderDocGestao() {
+  document.getElementById('filters-wrap').innerHTML =
+    '<div class="anl-busca-bar"><input class="filter-select" style="width:100%" type="text" placeholder="Buscar colaborador, cargo ou unidade..." value="' + escH(state.docBusca || '') + '" oninput="setDocBusca(this.value)"></div>';
+  var busca = norm((state.docBusca || '').toLowerCase());
+  var lista = (docColaboradores || []).filter(function (c) {
+    if (!busca) return true;
+    return norm((c.nome || '').toLowerCase()).indexOf(busca) >= 0 ||
+      norm((c.cargo || '').toLowerCase()).indexOf(busca) >= 0 ||
+      norm((c.unidade || '').toLowerCase()).indexOf(busca) >= 0;
+  });
+  var c = document.getElementById('content');
+  if (!lista.length) { c.innerHTML = emptyState(); return; }
+  c.innerHTML = lista.map(function (col) {
+    var sc = _docScore(col.matricula);
+    return '<div class="card" style="cursor:pointer" onclick="abrirDocColaborador(\'' + escH(col.matricula) + '\')">' +
+      '<div class="card-header">' +
+      '<div><div class="candidate-name">' + escH(col.nome || '') + '</div>' +
+      '<div class="field-value" style="font-weight:400;color:var(--mid)">' + escH(col.cargo || '') + (col.unidade ? ' · ' + escH(col.unidade) : '') + '</div></div>' +
+      '<span class="status-badge ' + _docScoreClasse(sc) + '">' + sc.entregues + '/' + sc.total + '</span>' +
+      '</div></div>';
+  }).join('');
 }
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
@@ -4379,16 +4587,8 @@ function render() {
   if (state.tab === 'sobre' || state.tab === 'pendencias') {
     return;   // abas estáticas (em construção); nada a renderizar
   }
-  renderKPIs();
-  var filtered=getFiltered();
-  renderFilters();
-  var c=document.getElementById('content');
-  if (!filtered.length) { c.innerHTML=emptyState(); return; }
-  _testeCache=[];_entrevistaCache=[];
   if (state.tab === 'analitico') {
-    c.innerHTML = renderAnaliticoTableHtml(filtered);
-    _anlFitHeight();
-    requestAnimationFrame(_anlFitHeight);   // recalcula após o layout assentar
+    renderDocGestao();
   }
 }
 
