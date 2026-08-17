@@ -16,6 +16,9 @@
 
 ## 🔖 PENDÊNCIAS (checklist vivo — atualizar conforme avançamos)
 
+### Dados / matrículas
+- [ ] **Migrar matrícula do Carlos Mateus Silva De Oliveira `12` → `24174`** (nº oficial RHID). Hoje o portal INTEIRO usa `12` pra ele: `auth_users` (login mateusfrango11@gmail.com), `treinamento_progresso`=98 + `treinamento_respostas`=57, `governanca_*` (~48), `banco_horas`=8, `carteira_lancamentos`=12, `exames`, `resgates`, gamificação, etc. É um rename system-wide (mapear cada FK antes) — **fazer depois**. Ideal: corrigir na origem (RHID/Colaboradores) e deixar o sync do `profiles` propagar. Ao migrar, trocar o override de férias de `12`→`24174` em `dp_rh.ferias_sincronizar()`.
+
 ### Sanções Disciplinares → Supabase + Kanban (Parte 1 FEITA 16/08)
 - [x] **Lookup de colaborador** migrado p/ Supabase (`colaboradores_listar()`), filtro por unidade preservado (#2544).
 - [x] **Gravação migrada:** `registrarSancao()` deixa o Apps Script e chama `tata_plus.sancao_registrar(...)` → grava em `dp_rh.sancoes` (privada, `id_externo` p/ import; `criado_por` carimbado no servidor). Front limpo (URLs mortas removidas).
@@ -406,6 +409,7 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - Front: `_postFerias`/lista → `comSupa`+RPC; `_colabsMap` e filtros de unidade/departamento derivam do próprio `_feriasCache`. Removidos `FERIAS_URL`, `COLAB_URL`, `SHEET_ID`/`SHEET_TAB`/`API_KEY` (chave Google exposta saiu), `fetchColaboradores`/`parseDateBR` e helpers de aniversário mortos. **0 refs a Sheets.** Testes de escrita (save/validar/aprovar + negação de permissão) validados via JWT simulado.
 - **`ferias_listar()` só mostra `profiles.status='Ativo'` + `fim_aqui <= hoje`** (período aquisitivo encerrado). Mesmo efeito visual do Apps Script (que apagava inativos/prematuros), mas **preservando histórico** — ex-funcionários e a matrícula antiga do Carlos (sheet `24174` → profiles `12`) ficam na tabela, só escondidos. 183 linhas visíveis / 61 colaboradores.
 - **Sync = geração automática (`sincronizarFerias` → `dp_rh.ferias_sincronizar()`)**: como só lê `profiles` e escreve `dp_rh.ferias`, virou **função PL/pgSQL + `pg_cron`** (sem Edge Function/secrets). Gera cada ciclo aquisitivo **encerrado** a partir de `profiles.data_admissao` (ou override CLT→PJ `{'24174':2026-03-01,'3':2026-02-01}`), `on conflict do nothing`, `direito` NULL (validação manual); preenche concessivo faltante; trunca ciclo CLT que cruza o início PJ (idempotente). **NÃO apaga nada.** Cron **jobid 17 `ferias-gerar-periodos-semanal`** `10 9 * * 1` (segunda 6h10 SP). 1ª execução: +21 linhas (novos contratados + ciclos recém-encerrados) → 205 na tabela.
+- **Casar matrículas (Carlos Mateus)**: o sheet usava `24174`, mas o profiles/sistema usa `12`. Consolidei o histórico completo (direito/frac/períodos/abono/aprovado) das 4 linhas `24174` → `12` (mesmos `ini_aqui`) e apaguei as `24174` duplicadas — Carlos deixou de ter 4 pendências de validação. Override do sync ajustado p/ `12`. A migração "oficial" `12`→`24174` ficou no backlog (system-wide, ver acima).
 - **Aposentar Apps Script "Férias"** (`doGet`/`doPost`/`sincronizarFerias` + trigger diário) — planilha Férias vira só backup.
 
 - 2026-08-16 — **Organograma FECHADO 100%** (árvore + CES + armário/exame do modal, tudo Supabase). Medicina e Armários (páginas próprias) também 100%. Módulo RH do portal segue com dashboards ainda em Sheets p/ migrar (semanal, banco de horas, férias, solicitações, reclamações, performance, hc2, benefícios, desligamentos2) + frente n8n (33 workflows, Sheets→Trello → Kanban/Supabase).
