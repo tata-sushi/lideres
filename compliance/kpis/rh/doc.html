@@ -144,6 +144,10 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 .doc-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .doc-item:last-child { border-bottom: none; }
 .doc-item-label { flex: 1; font-size: 13px; color: var(--carbon); font-weight: 500; }
+.doc-dot { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 700; cursor: pointer; }
+.doc-dot-verde { background: var(--green-bg); color: var(--green); }
+.doc-dot-vermelho { background: var(--red-bg); color: var(--red); }
+.doc-dot-amarelo { background: var(--amber-bg); color: var(--amber); cursor: default; }
 
 .card-body { padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
 .card-field { display: flex; flex-direction: column; gap: 1px; }
@@ -1159,8 +1163,11 @@ function _docTiposObrigatoriosUnicos() {
 }
 
 function _docScore(matricula) {
+  // "Em ordem" = entregue OU dispensado (não precisa). Só falta quando não tem nenhum dos dois.
   var obrig = _docTiposObrigatoriosUnicos();
-  var meus = (colaboradorDocumentos || []).filter(function (d) { return d.matricula === matricula && d.status === 'entregue'; });
+  var meus = (colaboradorDocumentos || []).filter(function (d) {
+    return d.matricula === matricula && (d.status === 'entregue' || d.status === 'dispensado');
+  });
   var entregues = obrig.filter(function (t) {
     return meus.some(function (d) { return d.tipo_id === t.id; });
   }).length;
@@ -1205,11 +1212,18 @@ function _docDoc(matricula, tipoId, competencia) {
 
 function _docItemHtml(matricula, tipo, competencia, label) {
   var doc = _docDoc(matricula, tipo.id, competencia);
-  var entregue = doc && doc.status === 'entregue';
-  var badge = '<span class="status-badge ' + (entregue ? 'sel-sim' : 'sel-red') + '">' + (entregue ? 'Entregue' : 'Pendente') + '</span>';
-  var acao = entregue
-    ? '<button class="btn-avaliar" onclick="_docAbrirArquivo(\'' + escH(doc.link) + '\')">Ver</button>'
-    : '<button class="btn-avaliar" onclick="_docAbrirUpload(\'' + escH(matricula) + '\',\'' + tipo.id + '\',' + (competencia ? '\'' + competencia + '\'' : 'null') + ')">Anexar</button>';
+  var status = doc ? doc.status : null;
+  var badge, acao;
+  if (status === 'entregue') {
+    badge = '<span class="status-badge sel-sim">Entregue</span>';
+    acao = '<button class="btn-avaliar" onclick="_docAbrirArquivo(\'' + escH(doc.link) + '\')">Ver</button>';
+  } else if (status === 'dispensado') {
+    badge = '<span class="status-badge sel-amber">Não se aplica</span>';
+    acao = '';
+  } else {
+    badge = '<span class="status-badge sel-red">Pendente</span>';
+    acao = '<button class="btn-avaliar" onclick="_docAbrirUpload(\'' + escH(matricula) + '\',\'' + tipo.id + '\',' + (competencia ? '\'' + competencia + '\'' : 'null') + ')">Anexar</button>';
+  }
   return '<div class="doc-item"><div class="doc-item-label">' + escH(label) + '</div>' + badge + acao + '</div>';
 }
 
@@ -1299,27 +1313,104 @@ function _docAbrirArquivo(path) {
 
 function setDocBusca(v) { state.docBusca = v; renderDocGestao(); }
 
+// ─── Tabela da aba Analítico (mesmo padrão de cabeçalho em 2 níveis do Analítico de Recrutamento) ──
+var DOC_PAGE = 50;
+var _docRows = [];
+var _docShown = DOC_PAGE;
+
+function _docCellHtml(matricula, tipo, competencia) {
+  var doc = _docDoc(matricula, tipo.id, competencia);
+  if (doc && doc.status === 'dispensado') {
+    return '<span class="doc-dot doc-dot-amarelo" title="Não se aplica">●</span>';
+  }
+  if (doc && doc.status === 'entregue') {
+    return '<span class="doc-dot doc-dot-verde" title="Entregue — clique para ver" onclick="event.stopPropagation();_docAbrirArquivo(\'' + escH(doc.link) + '\')">✓</span>';
+  }
+  return '<span class="doc-dot doc-dot-vermelho" title="Pendente — clique para anexar" onclick="event.stopPropagation();_docAbrirUpload(\'' + escH(matricula) + '\',\'' + tipo.id + '\',' + (competencia ? '\'' + competencia + '\'' : 'null') + ')">✕</span>';
+}
+
+function _docGroupsF() {
+  return _docCategorias().map(function (categoria) {
+    var tipos = (docTipos || []).filter(function (t) { return t.categoria === categoria; });
+    var cols = [];
+    tipos.forEach(function (tipo) {
+      if (tipo.periodicidade === 'mensal') {
+        _docMesesRecentes(3).forEach(function (comp) {
+          cols.push([tipo.nome + ' ' + _docFmtCompetencia(comp), function (col) { return _docCellHtml(col.matricula, tipo, comp); }]);
+        });
+      } else {
+        cols.push([tipo.nome, function (col) { return _docCellHtml(col.matricula, tipo, null); }]);
+      }
+    });
+    return { label: categoria, sigla: categoria.charAt(0), cols: cols };
+  });
+}
+
+function _docHeadHtml(groups) {
+  var grp = '<th class="anl-sticky" rowspan="2">Colaborador</th>';
+  var head = '';
+  groups.forEach(function (g) {
+    grp += '<th class="anl-gsep anl-ghead" colspan="' + g.cols.length + '"><span class="anl-glabel">' + escH(g.label) + '</span></th>';
+    g.cols.forEach(function (c, ci) { head += '<th' + (ci === 0 ? ' class="anl-gsep"' : '') + '>' + escH(c[0]) + '</th>'; });
+  });
+  grp += '<th class="anl-acoes-h" rowspan="2">Adequação</th>';
+  return '<tr class="anl-grp">' + grp + '</tr><tr class="anl-crow">' + head + '</tr>';
+}
+
+function _docRowHtml(col, groups) {
+  var sc = _docScore(col.matricula);
+  var tds = '<td class="anl-sticky" style="cursor:pointer" onclick="abrirDocColaborador(\'' + escH(col.matricula) + '\')">' +
+    '<div class="candidate-name" style="text-transform:none;font-size:13px">' + escH(col.nome || '') + '</div>' +
+    '<div class="field-value" style="font-weight:400;color:var(--mid);font-size:11px">' + escH(col.cargo || '') + (col.unidade ? ' · ' + escH(col.unidade) : '') + '</div></td>';
+  groups.forEach(function (g) {
+    g.cols.forEach(function (c, ci) { tds += '<td' + (ci === 0 ? ' class="anl-gsep"' : '') + ' style="text-align:center">' + c[1](col) + '</td>'; });
+  });
+  tds += '<td class="anl-acoes"><span class="status-badge ' + _docScoreClasse(sc) + '">' + sc.entregues + '/' + sc.total + '</span></td>';
+  return '<tr>' + tds + '</tr>';
+}
+
+function _docRowsHtml(groups) {
+  return _docRows.slice(0, _docShown).map(function (col) { return _docRowHtml(col, groups); }).join('');
+}
+
+function _docMoreHtml() {
+  var resto = _docRows.length - _docShown;
+  if (resto <= 0) return '';
+  return '<button onclick="showMoreDoc()" style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--carbon);background:none;border:1px solid var(--border);border-radius:6px;padding:8px 18px;cursor:pointer">Ver mais (' + Math.min(DOC_PAGE, resto) + ')</button>';
+}
+
+function showMoreDoc() {
+  _docShown += DOC_PAGE;
+  var groups = _docGroupsF();
+  var tb = document.getElementById('doc-tbody'); if (tb) tb.innerHTML = _docRowsHtml(groups);
+  var mo = document.getElementById('doc-more'); if (mo) mo.innerHTML = _docMoreHtml();
+  _anlFitHeight();
+}
+
+function _docTableHtml() {
+  var groups = _docGroupsF();
+  return '<div class="anl-box"><div class="anl-wrap"><table class="ent-table anl-table">' +
+    '<thead>' + _docHeadHtml(groups) + '</thead>' +
+    '<tbody id="doc-tbody">' + _docRowsHtml(groups) + '</tbody></table></div>' +
+    '<div id="doc-more" class="anl-more">' + _docMoreHtml() + '</div></div>';
+}
+
 function renderDocGestao() {
   document.getElementById('filters-wrap').innerHTML =
     '<div class="anl-busca-bar"><input class="filter-select" style="width:100%" type="text" placeholder="Buscar colaborador, cargo ou unidade..." value="' + escH(state.docBusca || '') + '" oninput="setDocBusca(this.value)"></div>';
   var busca = norm((state.docBusca || '').toLowerCase());
-  var lista = (docColaboradores || []).filter(function (c) {
+  _docRows = (docColaboradores || []).filter(function (c) {
     if (!busca) return true;
     return norm((c.nome || '').toLowerCase()).indexOf(busca) >= 0 ||
       norm((c.cargo || '').toLowerCase()).indexOf(busca) >= 0 ||
       norm((c.unidade || '').toLowerCase()).indexOf(busca) >= 0;
   });
+  _docShown = DOC_PAGE;
   var c = document.getElementById('content');
-  if (!lista.length) { c.innerHTML = emptyState(); return; }
-  c.innerHTML = lista.map(function (col) {
-    var sc = _docScore(col.matricula);
-    return '<div class="card" style="cursor:pointer" onclick="abrirDocColaborador(\'' + escH(col.matricula) + '\')">' +
-      '<div class="card-header">' +
-      '<div><div class="candidate-name">' + escH(col.nome || '') + '</div>' +
-      '<div class="field-value" style="font-weight:400;color:var(--mid)">' + escH(col.cargo || '') + (col.unidade ? ' · ' + escH(col.unidade) : '') + '</div></div>' +
-      '<span class="status-badge ' + _docScoreClasse(sc) + '">' + sc.entregues + '/' + sc.total + '</span>' +
-      '</div></div>';
-  }).join('');
+  if (!_docRows.length) { c.innerHTML = emptyState(); return; }
+  c.innerHTML = _docTableHtml();
+  _anlFitHeight();
+  requestAnimationFrame(_anlFitHeight);
 }
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
