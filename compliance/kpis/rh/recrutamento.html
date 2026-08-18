@@ -884,10 +884,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="modal-section-title">Feedback <span style="color:#c0392b;">*</span></div>
         <textarea class="modal-textarea" id="modal-ent-feedback" required placeholder="Descreva o resultado da entrevista, pontos positivos, negativos ou observações relevantes..." style="min-height:100px;"></textarea>
       </div>
-      <hr class="modal-divider">
-      <div>
+      <hr class="modal-divider" id="modal-ent-ref-divider">
+      <div id="modal-ent-ref-wrap" style="display:none;">
         <div class="modal-section-title">Referência Profissional</div>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="modal-ent-sem-ref" onchange="onSemRefChange(this.checked)" style="width:16px;height:16px;">
+          Não consegui pegar a referência
+        </label>
+        <div id="modal-ent-ref-inputs" style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
           <div class="modal-ref-card">
             <div class="modal-ref-title">Contato 1 <span style="color:var(--red)">*</span></div>
             <div class="modal-ref-row">
@@ -914,6 +918,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
               </div>
             </div>
           </div>
+        </div>
+        <div id="modal-ent-sem-ref-obs-wrap" style="display:none;margin-top:8px;">
+          <span class="modal-ref-label">Motivo <span style="color:var(--red)">*</span></span>
+          <textarea class="modal-textarea" id="modal-ent-sem-ref-obs" placeholder="Ex.: candidato não informou referência, não retornou o contato..." style="min-height:70px;"></textarea>
         </div>
       </div>
     </div>
@@ -4723,6 +4731,11 @@ function abrirModalEntrevista(idx) {
   if (_evt) { _evt.textContent = 'Selecione a vaga'; _evt.classList.remove('selected'); }
   var _edd = document.getElementById('modal-ent-vaga-dropdown');
   if (_edd) _edd.classList.remove('open');
+  // reset referência: desmarca "não peguei", limpa motivo e esconde a seção (status começa vazio)
+  var _semRef = document.getElementById('modal-ent-sem-ref'); if (_semRef) _semRef.checked = false;
+  var _semRefObs = document.getElementById('modal-ent-sem-ref-obs'); if (_semRefObs) _semRefObs.value = '';
+  onSemRefChange(false);
+  onStatusEntrevistaChange('');
   document.getElementById('modal-entrevista').classList.add('active');
   document.body.style.overflow = 'hidden';
 }
@@ -4756,7 +4769,13 @@ document.addEventListener('click', function(e) {
 
 function onStatusEntrevistaChange(val) {
   var wrap = document.getElementById('modal-ent-vaga-wrap');
-  if (val === 'Aprovado para teste') {
+  var aprovado = (val === 'Aprovado para teste');
+  // Referência só é exigida quando aprovado para teste; nos demais status, passa direto.
+  var refWrap = document.getElementById('modal-ent-ref-wrap');
+  var refDiv  = document.getElementById('modal-ent-ref-divider');
+  if (refWrap) refWrap.style.display = aprovado ? '' : 'none';
+  if (refDiv)  refDiv.style.display  = aprovado ? '' : 'none';
+  if (aprovado) {
     popularVagasSelectEnt();
     wrap.style.display = '';
   } else {
@@ -4767,6 +4786,13 @@ function onStatusEntrevistaChange(val) {
     var dd = document.getElementById('modal-ent-vaga-dropdown');
     if (dd) dd.classList.remove('open');
   }
+}
+// Check "Não consegui pegar a referência": esconde os contatos e pede o motivo.
+function onSemRefChange(checked) {
+  var inputs = document.getElementById('modal-ent-ref-inputs');
+  var obs    = document.getElementById('modal-ent-sem-ref-obs-wrap');
+  if (inputs) inputs.style.display = checked ? 'none' : '';
+  if (obs)    obs.style.display    = checked ? '' : 'none';
 }
 
 function popularVagasSelectEnt() {
@@ -4816,7 +4842,16 @@ function salvarEntrevista() {
   var ref1tel   = document.getElementById('modal-ent-ref1-tel').value.trim();
   var ref2nome  = document.getElementById('modal-ent-ref2-nome').value.trim();
   var ref2tel   = document.getElementById('modal-ent-ref2-tel').value.trim();
-  if (!ref1nome || !ref1tel) { alert('Informe o Contato 1 de referência (nome e telefone).'); return; }
+  var aprovado  = (status === 'Aprovado para teste');
+  var semRef    = document.getElementById('modal-ent-sem-ref').checked;
+  var semRefObs = document.getElementById('modal-ent-sem-ref-obs').value.trim();
+  // Referência só é obrigatória quando "Aprovado para teste"; demais status passam direto.
+  if (aprovado && !semRef && (!ref1nome || !ref1tel)) {
+    alert('Informe o Contato 1 de referência (nome e telefone), ou marque "Não consegui pegar a referência".'); return;
+  }
+  if (aprovado && semRef && !semRefObs) {
+    alert('Descreva o motivo de não ter conseguido a referência.'); return;
+  }
 
   var d = _entrevistaCache[_modalEntrevistaIdx];
   if (!d || !d.id) { alert('Erro: dados do candidato não encontrados.'); return; }
@@ -4832,6 +4867,8 @@ function salvarEntrevista() {
     p_id: d.id, p_status: status, p_feedback: feedback,
     p_ref1_nome: ref1nome, p_ref1_tel: ref1tel,
     p_ref2_nome: ref2nome, p_ref2_tel: ref2tel,
+    p_sem_referencia: (aprovado && semRef),
+    p_ref_obs: (aprovado && semRef) ? semRefObs : null,
     p_por: _sandboxMatricula(),
     p_entrevista_id: d.ent_id || null
   }).then(function(res) {
