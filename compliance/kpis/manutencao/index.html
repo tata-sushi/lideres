@@ -1095,6 +1095,7 @@ function openFab() {
   document.getElementById('fab-box').scrollTop = 0;
   var el = document.getElementById('fab-solicitante');
   if (el && typeof LOGGED_USER !== 'undefined') el.value = LOGGED_USER;
+  _manutPopularFormColabs(); // unidade/departamento do Supabase (profiles) + pré-seleção do usuário
 }
 function closeFab() { document.getElementById('fab-overlay').classList.remove('open'); }
 function handleFabOverlayClick(e) { if (e.target===document.getElementById('fab-overlay')) closeFab(); }
@@ -1329,7 +1330,45 @@ openModal = function(id) {
   if (el) el.value = LOGGED_USER;
 };
 
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
+// Colaboradores (unidade/departamento) — vêm do Supabase (tata_plus.colaboradores_publicos), não mais do Apps Script.
+var _colabsCache = null;
+function _manutCarregarColabs(cb) {
+  if (_colabsCache) { if (cb) cb(_colabsCache); return; }
+  comSupa(function(supa){
+    supa.schema('tata_plus').from('colaboradores_publicos').select('nome, unidade, departamento').then(function(r){
+      if (r.error || !Array.isArray(r.data)) { if (cb) cb(null); return; }
+      _colabsCache = r.data;
+      if (cb) cb(_colabsCache);
+    });
+  });
+}
+function _preencherSelect(id, valores) {
+  var sel = document.getElementById(id);
+  if (!sel || !valores.length) return;
+  var atual = sel.value;
+  var first = sel.querySelector('option'); // preserva o "Selecione..."
+  sel.innerHTML = '';
+  if (first) sel.appendChild(first);
+  valores.forEach(function(v){ var o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
+  if (atual) sel.value = atual;
+}
+function _manutPopularFormColabs() {
+  _manutCarregarColabs(function(colabs){
+    if (!colabs || !colabs.length) return; // sem dados → mantém as opções padrão do HTML
+    var us = Array.from(new Set(colabs.map(function(c){ return (c.unidade||'').trim(); }).filter(Boolean))).sort();
+    var ds = Array.from(new Set(colabs.map(function(c){ return (c.departamento||'').trim(); }).filter(Boolean))).sort();
+    _preencherSelect('fab-unidade', us);
+    _preencherSelect('fab-departamento', ds);
+    // pré-seleciona unidade/departamento do usuário logado (match por nome no profile)
+    if (typeof LOGGED_USER === 'string' && LOGGED_USER) {
+      var me = colabs.find(function(c){ return (c.nome||'').trim().toLowerCase() === LOGGED_USER.trim().toLowerCase(); });
+      if (me) {
+        var su = document.getElementById('fab-unidade'); if (su && me.unidade) su.value = me.unidade;
+        var sd = document.getElementById('fab-departamento'); if (sd && me.departamento) sd.value = me.departamento;
+      }
+    }
+  });
+}
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
