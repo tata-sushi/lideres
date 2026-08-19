@@ -90,6 +90,7 @@
 - [x] **CONSOLIDADO em `compliance/ps.html`** (19/08): página única `Parceiros & Sistemas` (título header "P&S"), gate real `governanca-parceiros-sistemas`, tabelas formato recrutamento, drawer Cadastrar, RPCs via `public.catalogo_*` → `operacao.catalogo_itens`. No menu (`menucompliance.html`) como card único "Parceiros & Sistemas".
 - [x] **Páginas antigas APAGADAS** (superseded por ps.html): `fornecedores/index.html`, `ferramentas/index.html`, `catalogo/index.html`. `ferramentas/` nunca chegou a migrar do Apps Script — foi direto pro delete. Sem links de entrada.
 - [x] **Grants (pós gate real):** `catalogo_listar` anon+authenticated; `catalogo_gravar`/`catalogo_excluir` só `authenticated`.
+- [x] **Seção "Ferramentas & Parceiros" migrada em 15 páginas de área** (19/08): `compliance/areas/rh/*` (cei, ouvidoria, ponto, desligamentos, sst, beneficios, rt, folha, comunicacao, ted, admissao, ferias, sancoes, ces) + `areas/tatahouse/manual`. Trocado `fetch(Apps Script)` por RPC `catalogo_listar` (parceiro+ferramenta) via helper `ftFetch`, mantendo filtro por `FT_SUBSISTEMA` e render. Labels corrigidos p/ bater com a base: `Controle de Ponto`→`Ponto`, `desligamento`→`Desligamento`. Nenhuma outra página consome esses dados (endpoint antigo = 0 ocorrências no repo).
 - [ ] **Pendente do usuário:** liberar o id `governanca-parceiros-sistemas` no painel de acessos (senão card trava / página barra).
 
 ### Segurança / limpeza
