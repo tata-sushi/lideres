@@ -833,19 +833,23 @@
 </div>
 
 <!-- ══ SCRIPT ══════════════════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 (function() {
   'use strict';
+
+  // Cliente Supabase anon (página de acesso liberado). Armário/Medicina via RPCs públicos enxutos.
+  var _supa = (window.supabase && window.supabase.createClient)
+    ? window.supabase.createClient(
+        'https://aoqsbusfrffapjglpqjk.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvcXNidXNmcmZmYXBqZ2xwcWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MzcxMjQsImV4cCI6MjA5ODUxMzEyNH0.Dd9Z3SR3-18mQVX_yqUbIi0PG-eltLNjmOZB1Xu7W9o')
+    : null;
 
   // ============================================
   // CONFIGURAÇÃO — cole aqui a URL do Web App
   // ============================================
   var ENDPOINT = 'https://script.google.com/macros/s/AKfycbxUWUoOmv-Cn19-FjUJ18jYTu5G_embOGDaQDsgC4Jd8agVfgqs98Tbu3qlqa9e7tpu/exec';
   var CES_URL  = 'https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec';
-  // Armários — mesma base usada em /compliance/kpis/rh/armarios.html
-  var ARMARIO_URL = 'https://script.google.com/macros/s/AKfycbxD9BwHYMh44Zzob_94BKUgoetxhRxm7s7_cYncnQkCYpPrwhzpIO0t3ihSpY72Amxp-A/exec';
-  // Medicina ocupacional — mesma base usada em /compliance/kpis/rh/medicina.html
-  var MEDICINA_URL = 'https://script.google.com/macros/s/AKfycbw2d8S-nsu0cvs5oPyRZTsXtYvBC_9B85IBkE8t5IGoAsoq2nEumkNGllhSdIGUoXnTbg/exec';
 
   // Aba "Salarios" → sub-modal REMUNERAÇÃO  |  Aba "Cargos" → sub-modal DESC. DO CARGO
   var _cesSalarios = {};
@@ -902,10 +906,11 @@
   }
 
   function carregarArmarios() {
-    fetch(ARMARIO_URL + '?action=armarios')
-      .then(function(r) { return r.json(); })
-      .then(function(lista) {
-        (lista || []).forEach(function(a) {
+    if (!_supa) return;
+    _supa.rpc('org_armarios_publico')
+      .then(function(res) {
+        var lista = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
+        lista.forEach(function(a) {
           if (!a || !a.num) return;
           if (a.matricula) _armariosByMatricula[normMat(a.matricula)] = a;
           if (a.colaborador) _armariosByNome[normNome(a.colaborador)] = a;
@@ -935,35 +940,20 @@
   }
 
   function carregarExames() {
-    fetch(MEDICINA_URL + '?action=getData')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        var rows = (data && data.values) || [];
-        if (rows.length < 2) return;
-        var headers = rows[0].map(_headerKey);
-        function col() {  // retorna índice da 1ª chave existente
-          for (var i = 0; i < arguments.length; i++) {
-            var idx = headers.indexOf(arguments[i]);
-            if (idx !== -1) return idx;
-          }
-          return -1;
-        }
-        var iMat   = col('matricula');
-        var iNome  = col('nome');
-        var iProx  = col('proxima_realizacao', 'data_do_proximo_exame', 'data_proximo_exame', 'proximo_exame');
-        var iReal  = col('realiza_exame', 'realiza');
-        for (var r = 1; r < rows.length; r++) {
-          var row = rows[r];
-          if (!row || !row.some(function(c) { return c && String(c).trim(); })) continue;
+    if (!_supa) return;
+    _supa.rpc('org_exames_publico')
+      .then(function(res) {
+        var lista = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
+        lista.forEach(function(e) {
           var rec = {
-            proxima: iProx !== -1 ? String(row[iProx] || '').trim() : '',
-            realiza: iReal !== -1 ? String(row[iReal] || '').trim() : ''
+            proxima: String(e.proxima_realizacao || '').trim(),
+            realiza: String(e.realiza_exame || '').trim()
           };
-          var mat = iMat !== -1 ? String(row[iMat] || '').trim() : '';
-          var nm  = iNome !== -1 ? String(row[iNome] || '').trim() : '';
+          var mat = String(e.matricula || '').trim();
+          var nm  = String(e.nome || '').trim();
           if (mat) _exameByMatricula[normMat(mat)] = rec;
           if (nm)  _exameByNome[normNome(nm)] = rec;
-        }
+        });
       })
       .catch(function() {});
   }

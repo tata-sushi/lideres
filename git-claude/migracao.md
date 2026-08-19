@@ -351,7 +351,7 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 
 ### Parte 2 (pendente — mais tarde hoje)
 - [x] **Armário/Medicina na `organograma.html` canônica** — migrados (`armarios_listar`/`exames_listar`, ver linha 415).
-- [ ] **Armário (`ARMARIO_URL`) + Medicina (`MEDICINA_URL`) na `organograma2.html`** — página válida (NÃO é lixo, mantida). Ainda em Apps Script; migrar `carregarArmarios`→`armarios_listar` e `carregarExames`→`exames_listar`. Obs.: `organograma2.html` hoje não tem supabase-js/gate — precisa decidir a abordagem (gate real vs. wrappers públicos) com o usuário.
+- [x] **Armário + Medicina na `organograma2.html`** (página pública) — MIGRADOS 19/08: `carregarArmarios`->`org_armarios_publico`, `carregarExames`->`org_exames_publico` (wrappers public ENXUTOS em anon: só num/matricula/colaborador e matricula/nome/proxima/realiza). Cliente anon inline. Restam na org2 (fora de escopo): ENDPOINT (árvore) e CES_URL (cargo).
 - [x] Gate de perfil da Remuneração — **já feito**: `organograma.html` usa `pode_ver_valores` (painel admin), sem matrícula hardcoded.
 
 - 2026-08-16 — **Organograma Parte 1 EXECUTADA** (árvore via `organograma_colaboradores` + CES via `organograma_ces`; fotos do bucket de avatares; ENDPOINT/CES_URL removidos). Armário e Medicina seguem no Apps Script (Parte 2).
