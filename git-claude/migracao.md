@@ -17,7 +17,7 @@
 ## 🔖 PENDÊNCIAS (checklist vivo — atualizar conforme avançamos)
 
 ### Dados / matrículas
-- [ ] **Migrar matrícula do Carlos Mateus Silva De Oliveira `12` → `24174`** (nº oficial RHID). Hoje o portal INTEIRO usa `12` pra ele: `auth_users` (login mateusfrango11@gmail.com), `treinamento_progresso`=98 + `treinamento_respostas`=57, `governanca_*` (~48), `banco_horas`=8, `carteira_lancamentos`=12, `exames`, `resgates`, gamificação, etc. É um rename system-wide (mapear cada FK antes) — **fazer depois**. Ideal: corrigir na origem (RHID/Colaboradores) e deixar o sync do `profiles` propagar. Ao migrar, trocar o override de férias de `12`→`24174` em `dp_rh.ferias_sincronizar()`.
+- [x] **Migrar matrícula do Carlos Mateus Silva De Oliveira `12` → `24174`** ✅ (usuário confirmou concluído 19/08) (nº oficial RHID). Hoje o portal INTEIRO usa `12` pra ele: `auth_users` (login mateusfrango11@gmail.com), `treinamento_progresso`=98 + `treinamento_respostas`=57, `governanca_*` (~48), `banco_horas`=8, `carteira_lancamentos`=12, `exames`, `resgates`, gamificação, etc. É um rename system-wide (mapear cada FK antes) — **fazer depois**. Ideal: corrigir na origem (RHID/Colaboradores) e deixar o sync do `profiles` propagar. Ao migrar, trocar o override de férias de `12`→`24174` em `dp_rh.ferias_sincronizar()`.
 
 ### Sanções Disciplinares → Supabase + Kanban (Parte 1 FEITA 16/08)
 - [x] **Lookup de colaborador** migrado p/ Supabase (`colaboradores_listar()`), filtro por unidade preservado (#2544).
@@ -29,7 +29,7 @@
 ### Ouvidoria (piloto — no ar) ✅ validada 17/08
 - [x] **Dashboard `kpis/rh/ouvidoria.html`** lê via `rpc('ouvidoria_listar')` (Apps Script desativado). Removido `COLAB_URL` morto → **0 refs a Sheets**.
 - [x] **Kanban interno** de pé: gatilho `dp_rh.ouvidoria_para_kanban` + dedup `dp_rh.ouvidoria_kanban` (19 registros na base).
-- [ ] **PR #446** (`tata-sushi/plus`, página ouvidoria do app) — app-side revisar/mergear.
+- [x] **PR #446** (`tata-sushi/plus`, página ouvidoria do app) — ✅ mergeado (usuário confirmou 19/08).
 
 ### RH — dashboards ainda no Google (prioridade do usuário 17/08)
 - [x] **Reclamações** (`kpis/rh/reclamacoes.html`) — migrada (ver seção própria).
@@ -91,7 +91,7 @@
 - [x] **Páginas antigas APAGADAS** (superseded por ps.html): `fornecedores/index.html`, `ferramentas/index.html`, `catalogo/index.html`. `ferramentas/` nunca chegou a migrar do Apps Script — foi direto pro delete. Sem links de entrada.
 - [x] **Grants (pós gate real):** `catalogo_listar` anon+authenticated; `catalogo_gravar`/`catalogo_excluir` só `authenticated`.
 - [x] **Seção "Ferramentas & Parceiros" migrada em 15 páginas de área** (19/08): `compliance/areas/rh/*` (cei, ouvidoria, ponto, desligamentos, sst, beneficios, rt, folha, comunicacao, ted, admissao, ferias, sancoes, ces) + `areas/tatahouse/manual`. Trocado `fetch(Apps Script)` por RPC `catalogo_listar` (parceiro+ferramenta) via helper `ftFetch`, mantendo filtro por `FT_SUBSISTEMA` e render. Labels corrigidos p/ bater com a base: `Controle de Ponto`→`Ponto`, `desligamento`→`Desligamento`. Nenhuma outra página consome esses dados (endpoint antigo = 0 ocorrências no repo).
-- [ ] **Pendente do usuário:** liberar o id `governanca-parceiros-sistemas` no painel de acessos (senão card trava / página barra).
+- [x] **Liberado** o id `governanca-parceiros-sistemas` no painel de acessos ✅ (usuário confirmou 19/08).
 
 ### Segurança / limpeza
 - [ ] **uazapi token hardcoded** nos fluxos → mover p/ credencial do n8n.
