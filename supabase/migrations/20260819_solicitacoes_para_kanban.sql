@@ -34,10 +34,10 @@ create table if not exists dp_rh.solicitacoes_kanban (
 --     Férias ................. Benefícios            · Victor (7)
 --     Reembolso .............. Folha de Pagamento    · Victor (7)
 --     Solicitação de vaga .... Recrutamento & Seleção· Sabrina (24685)
+--     Contratação ............ Recrutamento & Seleção· Sabrina (24685)
 --     Uniforme ............... Uniforme/EPI          · Thamires (24332)
 --     EPI's .................. Uniforme/EPI          · Thamires (24332)
---     Contratação ............ Recrutamento & Seleção· Igor V. S. Pereira (24540)
---     Vale Transporte ........ Benefícios            · Igor (24540)
+--     Vale Transporte ........ Benefícios            · Igor V. S. Pereira (24540)
 --     Armário/Cadeado ........ Outros                · Igor (24540)
 --     Diversos ............... Outros                · Igor (24540)
 --   "criado_por" do card = matrícula do solicitante (NEW.criado_por), sem fallback.
@@ -83,7 +83,7 @@ begin
       when 'solicitação de vaga'   then '24685'  -- Sabrina
       when 'uniforme'              then '24332'  -- Thamires
       when 'epi''s'                then '24332'
-      when 'contratação'           then '24540'  -- Igor V. Santos Pereira
+      when 'contratação'           then '24685'  -- Sabrina  -- Igor V. Santos Pereira
       when 'vale transporte'       then '24540'
       when 'armário/cadeado'       then '24540'
       when 'diversos'              then '24540'
@@ -176,7 +176,7 @@ begin
       when 'solicitação de vaga'   then '24685'
       when 'uniforme'              then '24332'
       when 'epi''s'                then '24332'
-      when 'contratação'           then '24540'
+      when 'contratação'           then '24685'  -- Sabrina
       when 'vale transporte'       then '24540'
       when 'armário/cadeado'       then '24540'
       when 'diversos'              then '24540'
