@@ -350,7 +350,8 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **Trava provisória**: o sub-modal de **Remuneração** segue restrito a perfil `admin`/`analista-rh` (hardcode). **A pedido do usuário, essa permissão vai migrar pro painel admin depois** — remover o gate quando isso existir.
 
 ### Parte 2 (pendente — mais tarde hoje)
-- [x] **Armário** (`ARMARIO_URL`) e **Medicina / próximo exame** (`MEDICINA_URL`) — **já migrados** na `organograma.html` canônica (`armarios_listar`/`exames_listar`, ver linha 415). O Apps Script só restava na duplicata órfã `organograma2.html`, **apagada 19/08**.
+- [x] **Armário/Medicina na `organograma.html` canônica** — migrados (`armarios_listar`/`exames_listar`, ver linha 415).
+- [ ] **Armário (`ARMARIO_URL`) + Medicina (`MEDICINA_URL`) na `organograma2.html`** — página válida (NÃO é lixo, mantida). Ainda em Apps Script; migrar `carregarArmarios`→`armarios_listar` e `carregarExames`→`exames_listar`. Obs.: `organograma2.html` hoje não tem supabase-js/gate — precisa decidir a abordagem (gate real vs. wrappers públicos) com o usuário.
 - [x] Gate de perfil da Remuneração — **já feito**: `organograma.html` usa `pode_ver_valores` (painel admin), sem matrícula hardcoded.
 
 - 2026-08-16 — **Organograma Parte 1 EXECUTADA** (árvore via `organograma_colaboradores` + CES via `organograma_ces`; fotos do bucket de avatares; ENDPOINT/CES_URL removidos). Armário e Medicina seguem no Apps Script (Parte 2).
