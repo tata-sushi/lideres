@@ -229,6 +229,9 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 2. Quadro/colunas da Ouvidoria no `tata_kanban` (usuário configura com outro agente).
 3. "Ok" explícito para começar a executar (hoje = só planejar).
 
+### Backlog UI global
+- [ ] **Remover o breadcrumb (`.mod-breadcrumb` / "Governança de Processos › Índice › …") de TODAS as páginas** — decisão do usuário (19/08). Varredura em `compliance/**` para tirar o elemento em todas as páginas onde aparece.
+
 ## PILOTO OUVIDORIA — CONCLUÍDO ✅ (02/08)
 - Banco, dashboard, form público, fluxo n8n + trigger: tudo no ar.
 - Fluxo n8n em **PRODUÇÃO**: destino = grupo **TATÁ | Gerentes** `120363220385726427@g.us` (activeVersion c1515c08). O `__test_number` no payload segue disponível p/ testes futuros (roteia p/ número avulso sem tocar no grupo).
