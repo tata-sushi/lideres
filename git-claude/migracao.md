@@ -107,9 +107,9 @@
 - [x] **Auditoria server-side:** `estoque_admin_gravar` carimba `criado_por = minha_matricula()` (não falsificável).
 - [x] **Saldo errado (teto de 1000 linhas do PostgREST):** o front baixava `estoque_admin_historico` (1370 mov.) e o PostgREST cortava em 1000 → saldo errado no navegador (não reproduzia por SQL). Corrigido com `estoque_admin_posicao()` (agrega net por unidade+item+tamanho no servidor, 275 linhas) + teto do projeto elevado p/ 1.000.000. Ver Regra fixa #7.
 - [x] **Reconciliação do estoque físico** (RECONCILIAR_estoque_atual.sql): zerou o saldo acumulado do histórico + recontagem com a contagem física (94 itens / 742 un — EPI's 168, Uniformes 254, Calçados 33, Brindes 287). Saldo do banco = "Estoque atual".
-- [ ] **Gate de permissão de escrita** (quem pode gravar estoque): hoje qualquer `authenticated` que chegue na página grava (a página já é gated por `PAGE_ID` no front). Definir com o usuário quem pode e, se preciso, um check no `estoque_admin_gravar` (espelhar `escala_pode_gerir_*`).
+- [x] ~~Gate de permissão de escrita (estoque)~~ — **DISPENSADO pelo usuário** (19/08): a página já é gated por `PAGE_ID`; não precisa de check adicional.
 - [x] **`listColaboradores` (lookup de colaboradores) migrado** ✅ 19/08 — helper `colabListar()` → RPC `public.hc_colaboradores_listar` em 6 páginas ativas; constante morta `COLAB_URL` removida de 32 páginas. Endpoint Apps Script 100% retirado do repo.
-- [ ] `action=mapa` (mapa de liderança, script separado) segue no Sheets (lookup à parte).
+- [x] `action=mapa` (mapa de liderança) — **já migrado** (19/08): `estoqueadm.html` usa `profiles` do Supabase; sem fetch `action=mapa` em nenhuma página (só comentários descritivos). Sheet apagado pelo usuário.
 
 ### Processos contínuos (não é bug)
 - Transcrição: usuário insere novas atas manualmente (INSERT em `dp_rh.alinhamento_transcricao`).
@@ -350,9 +350,8 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **Trava provisória**: o sub-modal de **Remuneração** segue restrito a perfil `admin`/`analista-rh` (hardcode). **A pedido do usuário, essa permissão vai migrar pro painel admin depois** — remover o gate quando isso existir.
 
 ### Parte 2 (pendente — mais tarde hoje)
-- [ ] **Armário** (`ARMARIO_URL`) — mesma base de `armarios.html`, ainda no Apps Script.
-- [ ] **Medicina / próximo exame** (`MEDICINA_URL`) — mesma base de `medicina.html`, ainda no Apps Script.
-- [ ] Tirar o gate de perfil da Remuneração e configurar permissão no **painel admin**.
+- [x] **Armário** (`ARMARIO_URL`) e **Medicina / próximo exame** (`MEDICINA_URL`) — **já migrados** na `organograma.html` canônica (`armarios_listar`/`exames_listar`, ver linha 415). O Apps Script só restava na duplicata órfã `organograma2.html`, **apagada 19/08**.
+- [x] Gate de perfil da Remuneração — **já feito**: `organograma.html` usa `pode_ver_valores` (painel admin), sem matrícula hardcoded.
 
 - 2026-08-16 — **Organograma Parte 1 EXECUTADA** (árvore via `organograma_colaboradores` + CES via `organograma_ces`; fotos do bucket de avatares; ENDPOINT/CES_URL removidos). Armário e Medicina seguem no Apps Script (Parte 2).
 
