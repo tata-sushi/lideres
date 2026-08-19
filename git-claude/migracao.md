@@ -37,7 +37,7 @@
 - [ ] **Desligamentos** (`kpis/rh/desligamentos.html`) — **não tem base; criar do zero.**
 - [ ] **Performance** (`kpis/rh/performance.html`) — **será o último.**
 - [ ] **Demandas / demandas2** — complexo: depende de Solicitações e migrar tudo pro Kanban.
-- [ ] **Fornecedores e Parceiros** — fácil, mas **muitas páginas**.
+- [x] **Fornecedores e Parceiros** — ✅ FEITO 19/08 (consolidado em `ps.html` + 15 páginas de área migradas p/ `operacao.catalogo_itens`).
 - [ ] **Brainstorm** — **refazer o conceito** (não é migração 1:1).
 - Fora do escopo (Power BI): `hc2`, `desligamentos2`, `bancodehoras2`.
 
