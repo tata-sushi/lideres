@@ -824,7 +824,6 @@ window.perfSupa = window.perfSupa || function(cb) {
 
 // ─── Banco de Horas — Positivos vs Negativos (dados reais) ───────────────────
 (function() {
-  var BH_SHEET_ID = '1oW3uXbig4B3gUQegxorxZghMnVrZcXk44AD08gx-cl0';
   var BH_COL = { DATA:0, MT:1, COLABORADOR:2, SALDO:3, STATUS:4, DEPARTAMENTO:5, UNIDADE:6, TIPO:7 };
   var BH_ROWS = [], BH_SEMANAS = [], BH_SNAPSHOTS = {};
 
@@ -983,32 +982,24 @@ window.perfSupa = window.perfSupa || function(cb) {
   }
 
   function loadBHData() {
-    var url = 'https://docs.google.com/spreadsheets/d/' + BH_SHEET_ID + '/export?format=csv&gid=0';
-    fetch(url)
-      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then(function(csv) {
-        var lines = csv.split('\n');
-        BH_RAW = [];
-        for (var i = 1; i < lines.length; i++) {
-          var line = lines[i].trim();
-          if (!line) continue;
-          var cols = parseCSVLine(line);
-          if (cols.length < 4) continue;
-          var nome = (cols[BH_COL.COLABORADOR]||'').trim();
-          if (!nome) continue;
-          var saldo = parseFloat((cols[BH_COL.SALDO]||'0').replace(',','.')) || 0;
-          BH_RAW.push({
-            rowIndex: i, nome: nome, saldo: saldo,
-            semKey: toSemKey((cols[BH_COL.DATA]||'').trim()),
-            tipo:    (cols[BH_COL.TIPO]||'').trim(),
-            depto:   (cols[BH_COL.DEPARTAMENTO]||'').trim(),
-            unidade: (cols[BH_COL.UNIDADE]||'').trim()
-          });
-        }
+    window.perfSupa(function(supa) {
+      supa.schema('tata_plus').rpc('banco_horas_listar', { p_semanas: 60 }).then(function(res) {
+        var arr = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
+        BH_RAW = arr.map(function(r, i) {
+          return {
+            rowIndex: i,
+            nome:    r.colaborador || '',
+            saldo:   parseFloat(String(r.saldo).replace(',', '.')) || 0,
+            semKey:  toSemKey(String(r.data || '')),
+            tipo:    r.tipo || '',
+            depto:   r.departamento || '',
+            unidade: r.unidade || ''
+          };
+        }).filter(function(r) { return r.nome; });
         if (window.registerPerfRenderer) window.registerPerfRenderer(bhRender);
         else bhRender(window.perfState);
-      })
-      .catch(function() {});
+      }).catch(function() {});
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadBHData);
