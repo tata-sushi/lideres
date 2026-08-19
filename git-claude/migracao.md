@@ -48,15 +48,16 @@
 ### Report `semanal.html` — fontes ainda no Sheets (migrar uma a uma)
 - [x] Demandas (aba Alinhamentos) → Kanban ✅
 - [x] Transcrição (aba Alinhamentos) → Supabase ✅
-- [ ] HC / headcount (`HC_SCRIPT_URL`)
-- [ ] Colaboradores admissões/demissões → `tata_plus.profiles` (já tem `data_admissao`/`data_demissao`)
-- [ ] Vagas / recrutamento
-- [ ] Banco de Horas
-- [ ] Absenteísmo (Ausências)
+- [x] HC / headcount → RPCs `public.hc_colaboradores_listar` + `tata_plus.hc_programado_listar` ✅ (19/08: verificado — sem Apps Script)
+- [x] Colaboradores admissões/demissões → `tata_plus.hc_turnover_listar` (lê `data_admissao`/`data_demissao`) ✅
+- [x] Vagas / recrutamento → `tata_plus.hc_vagas_abertas` ✅
+- [x] Banco de Horas → `tata_plus.banco_horas_listar(p_semanas)` ✅
+- [x] Absenteísmo (Ausências) → `tata_plus.ausencia_listar` (lê `dp_rh.ausencias`) ✅
   - [x] **Devolutiva de falta → card no Kanban RH (SEM n8n):** gatilho `dp_rh.tg_ausencia_devolutiva_para_kanban` (AFTER UPDATE em `dp_rh.ausencias`, só quando `tipo='Falta'` e a devolutiva passa de **vazia→preenchida**), dedup em `dp_rh.ausencia_kanban`, à prova de falha (exception handler nunca bloqueia a gravação). Card → quadro **RH** / coluna **Solicitações Líderes** (`652e8e47-…`) / etiqueta **Ponto** (`1ca9bb58-…`, criada agora) / responsável **24332 (Thamires)**. Descrição inclui "**Enviado por: <nome>**" (resolve `devolutiva_por` matrícula→`profiles.nome`; fallback texto cru). Testado ponta a ponta. Histórico NÃO gera card (só dispara em UPDATE futuro de devolutiva).
-- [ ] Experiências / efetivações
-- [ ] Entrevistas / Testes
-- [ ] asos (Medicina Ocupacional)
+- [x] Experiências / efetivações → dashboard próprio `experiencias.html` (RHID→Supabase, já ✅). Não há seção na `semanal.html`.
+- [x] Entrevistas / Testes → `tata_plus.report_testes_semanais` (lê `dp_rh.rec_teste_dias` + candidaturas) ✅
+- [x] asos (Medicina Ocupacional) → dashboard próprio `medicina.html` (já ✅). Não há seção na `semanal.html`.
+- **19/08:** `semanal.html` auditada — **zero Apps Script**, todas as fontes via RPC lendo Supabase. Cluster do report semanal CONCLUÍDO.
 
 ### n8n `report_semanal`
 - [x] nó "consulta demandas" → RPC `report_demandas_resumo` (feito na UI pelo usuário)
