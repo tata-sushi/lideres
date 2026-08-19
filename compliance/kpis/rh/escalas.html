@@ -1209,14 +1209,17 @@ function carregarSemana(){
   ST.carregando = true;
   var ini = isoLocal(ST.inicio), fim = isoLocal(addDias(ST.inicio, 6));
   var pFer = TP().rpc('escala_feriados_periodo', { p_inicio: ini, p_fim: fim });
+  var pAus = TP().rpc('escala_ausencias_equipe_semana', { p_inicio: ini, p_unidade: ST.unidade });
   TP().rpc('escala_equipe_semana', { p_inicio: ini, p_unidade: ST.unidade }).then(function(r){
     hideLoading(); ST.carregando = false;
     if (r.error) { erroRPC(r.error); renderEmpty('Não foi possível carregar a escala.'); return; }
     ST.equipe = Array.isArray(r.data) ? r.data : [];
     popularDeptos();
-    // Feriados da semana (fato do dia) — pinta a grade depois que chegarem.
-    pFer.then(function(rf){ ST.feriados = (rf && rf.data && typeof rf.data === 'object') ? rf.data : {}; renderGrade(); },
-              function(){ ST.feriados = {}; renderGrade(); });
+    // Feriados (fato do dia) e ausências (por pessoa) — pinta a grade quando chegarem.
+    Promise.all([
+      pFer.then(function(rf){ ST.feriados = (rf && rf.data && typeof rf.data === 'object') ? rf.data : {}; }, function(){ ST.feriados = {}; }),
+      pAus.then(function(ra){ ST.ausencias = (ra && ra.data && typeof ra.data === 'object') ? ra.data : {}; }, function(){ ST.ausencias = {}; })
+    ]).then(function(){ renderGrade(); });
   }, function(e){ hideLoading(); ST.carregando = false; erroRPC(e); renderEmpty('Não foi possível carregar a escala.'); });
 }
 
@@ -1251,7 +1254,25 @@ function renderEmpty(msg){
     '<div class="esc-empty-state"><p>'+msg+'</p></div>';
 }
 
-function estadoHtml(dia){
+/* Ausências (dp_rh.ausencias via escala_ausencias_equipe_semana): vermelho =
+   falta/suspensão, âmbar = atestado/licença, cinza = folga/banco. */
+function ausDoDia(mat, iso){ var m = ST.ausencias && ST.ausencias[mat]; return (m && m[iso]) || null; }
+function ausCurto(t){
+  var m = { 'Suspensão de Contrato':'Suspensão', 'Atestado Médico':'Atestado', 'Afastamento INSS':'INSS',
+            'Licença Maternidade':'Lic. Mat.', 'Licença Paternidade':'Lic. Pat.', 'Banco de Horas':'Banco' };
+  return m[t] || t;
+}
+function ausCor(g){
+  if (g === 'vermelho') return { bg:'var(--red-bg)', fg:'var(--red)' };
+  if (g === 'ambar')    return { bg:'var(--amber-bg)', fg:'var(--amber)' };
+  return { bg:'', fg:'var(--mid)' };
+}
+function ausLabelHtml(aus){
+  var c = ausCor(aus.grupo);
+  return '<span title="'+esc(aus.tipo)+'" style="font-family:\'DM Mono\',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:'+c.fg+';white-space:nowrap;">'+esc(ausCurto(aus.tipo))+'</span>';
+}
+function estadoHtml(dia, aus){
+  if (aus) return ausLabelHtml(aus); // ausência sobrepõe o agendado no dia
   if (!dia || !dia.definido) return '<span class="ec-empty">+</span>';
   if (dia.folga) return '<span class="ec-folga">'+esc(dia.tipo_folga || 'Folga')+'</span>';
   var marc = (Array.isArray(dia.marcacoes) && dia.marcacoes.length)
@@ -1261,9 +1282,10 @@ function estadoHtml(dia){
   if (marc.length === 1) return '<span class="ec-hours"><b>'+marc[0][0]+'</b><span>'+marc[0][1]+'</span></span>';
   return '<span class="ec-hours-multi">'+marc.map(function(p){ return '<span class="ec-pair"><b>'+p[0]+'</b><i>'+p[1]+'</i></span>'; }).join('')+'</span>';
 }
-function celulaHtml(dia, pi, di, ehHoje){
+function celulaHtml(dia, pi, di, ehHoje, aus){
   var cls = 'esc-cell' + (ehHoje ? ' is-today' : '');
-  return '<td class="'+cls+'" onclick="abrirPontual('+pi+','+di+')">'+estadoHtml(dia)+'</td>';
+  var tint = (aus && ausCor(aus.grupo).bg) ? ' style="background:'+ausCor(aus.grupo).bg+';"' : '';
+  return '<td class="'+cls+'"'+tint+' onclick="abrirPontual('+pi+','+di+')">'+estadoHtml(dia, aus)+'</td>';
 }
 
 function renderGrade(){
@@ -1297,7 +1319,7 @@ function renderGrade(){
               '<span class="esc-name-cargo">'+esc(p.cargo||'')+'</span></span></div></td>';
     for (var di=0; di<7; di++){
       var d2 = addDias(ST.inicio, di);
-      body += celulaHtml((p.dias||[])[di], pi, di, isoLocal(d2) === hojeIso);
+      body += celulaHtml((p.dias||[])[di], pi, di, isoLocal(d2) === hojeIso, ausDoDia(p.matricula, isoLocal(d2)));
     }
     body += '</tr>';
   });
@@ -1311,11 +1333,12 @@ function renderGrade(){
     for (var di=0; di<7; di++){
       var dd = addDias(ST.inicio, di);
       var dia = (p.dias||[])[di];
+      var ausM = ausDoDia(p.matricula, isoLocal(dd));
       var hD = horasDia(dia); totalH += hD;
-      var hBadge = hD > 0 ? '<span class="epd-h">('+fmtH(hD)+')</span>' : '';
+      var hBadge = (!ausM && hD > 0) ? '<span class="epd-h">('+fmtH(hD)+')</span>' : '';
       dias += '<button class="esc-pcard-day" onclick="abrirPontual('+pi+','+di+')">'+
                 '<span class="epd-daycol"><span class="epd-dow">'+DIAS_CURTO[di]+'</span><span style="display:flex;flex-direction:column;"><span class="epd-date">('+ddmm(dd)+')</span>'+feriadoCaption(isoLocal(dd))+'</span></span>'+
-                '<span class="epd-state">'+estadoHtml(dia)+hBadge+'</span>'+
+                '<span class="epd-state">'+estadoHtml(dia, ausM)+hBadge+'</span>'+
               '</button>';
     }
     return '<div class="card">'+
