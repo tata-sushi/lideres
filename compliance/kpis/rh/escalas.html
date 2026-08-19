@@ -1363,10 +1363,7 @@ function renderGrade(){
   }).join('');
   var mobile = '<div class="esc-mobile">'+cards+'</div>';
 
-  // Botão "Confirmar semana" abaixo da grade (credita os pontos do líder).
-  var confirmar = '<div style="display:flex;justify-content:center;padding:20px 16px 8px;">'+
-    '<button class="esc-confirmar-btn" id="esc-confirmar" onclick="confirmarSemana()">Confirmar semana</button></div>';
-  document.getElementById('esc-content').innerHTML = mobile + desk + confirmar;
+  document.getElementById('esc-content').innerHTML = mobile + desk;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1496,6 +1493,13 @@ function pdQuickFill(c){
 }
 function pdLimpar(c){ if(!PD) return; PD.grid[c] = novaSemanaCiclo(); renderPdGrid(); }
 
+// Ao salvar a escala de um colaborador, confirma a semana dele (credita +10 ao
+// líder; dedup por membro/semana no backend). Best-effort, não bloqueia a UI.
+function confirmarMembroSemana(mat){
+  if(!mat) return;
+  TP().rpc('escala_membro_confirmar', { p_matricula: mat, p_inicio: isoLocal(ST.inicio) }).then(function(){}, function(){});
+}
+
 function salvarPadrao(){
   if(!PD) return;
   var efetivo = document.getElementById('pd-efetivo').value;
@@ -1527,6 +1531,7 @@ function salvarPadrao(){
     hideLoading(); btn.disabled = false;
     if (r.error) throw r.error;
     toast('Semana salva.');
+    confirmarMembroSemana(mat);
     fecharPadrao();
     carregarSemana();
   }).catch(function(e){ hideLoading(); btn.disabled = false; erroRPC(e); });
@@ -1669,7 +1674,7 @@ function salvarPontual(){
     TP().rpc('escala_dia_set', { p_matricula:PT.matricula, p_data:PT.data, p_entrada:null, p_saida:null, p_folga:true, p_folga_tipo:PT.folga }).then(function(r){
       hideLoading();
       if (r.error) { erroRPC(r.error); return; }
-      toast(PT.folga + ' marcada.'); fecharPontual(); carregarSemana();
+      toast(PT.folga + ' marcada.'); confirmarMembroSemana(PT.matricula); fecharPontual(); carregarSemana();
     }, function(e){ hideLoading(); erroRPC(e); });
     return;
   }
@@ -1680,7 +1685,7 @@ function salvarPontual(){
   TP().rpc('escala_dia_set', { p_matricula:PT.matricula, p_data:PT.data, p_entrada:m0.entrada, p_saida:m0.saida, p_folga:false, p_marcacoes:marc }).then(function(r){
     hideLoading();
     if (r.error) { erroRPC(r.error); return; }
-    toast('Ajuste salvo.'); fecharPontual(); carregarSemana();
+    toast('Ajuste salvo.'); confirmarMembroSemana(PT.matricula); fecharPontual(); carregarSemana();
   }, function(e){ hideLoading(); erroRPC(e); });
 }
 function marcarFolga(tipo){
@@ -1690,7 +1695,7 @@ function marcarFolga(tipo){
   TP().rpc('escala_dia_set', { p_matricula:PT.matricula, p_data:PT.data, p_entrada:null, p_saida:null, p_folga:true, p_folga_tipo:tipo }).then(function(r){
     hideLoading();
     if (r.error) { erroRPC(r.error); return; }
-    toast(tipo + ' marcada.'); fecharPontual(); carregarSemana();
+    toast(tipo + ' marcada.'); confirmarMembroSemana(PT.matricula); fecharPontual(); carregarSemana();
   }, function(e){ hideLoading(); erroRPC(e); });
 }
 function resetPontual(){
