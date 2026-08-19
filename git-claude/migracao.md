@@ -36,15 +36,14 @@
 - [x] **Solicitações** (`kpis/rh/solicitacoes.html`) — migrada (ver seção própria).
 - [ ] **Desligamentos** (`kpis/rh/desligamentos.html`) — **não tem base; criar do zero.**
 - [x] **Performance** (`kpis/rh/performance.html`) — MIGRADA 19/08, **100% Supabase (0 fontes Google)**. 7 fontes: CES→`organograma_ces`, Reclamações→`reclamacoes_listar`, Colaboradores→`organograma_colaboradores`(+fallback `hc_colaboradores_listar`), Exames→`exames_listar`, Absenteísmo→`ausencia_listar`, Turnover→`hc_turnover_listar`, Banco de Horas→`banco_horas_listar(60)`. Removidas chave Sheets API e todos os endpoints Apps Script. **Validar visualmente os gráficos** (esp. BH — a agregação usa a snapshot congelada por tipo).
-- [~] **Demandas / demandas2** — 19/08: front migrado, mas CORRIGIDO o alvo. `demandas.html`/`demandas2.html` apontam agora para `rpc('demandas_rh_lista')` = quadro **RH** (`08b636b2`), NÃO o 'Binho, Cinthia e Victor' (esse é alinhamento/report, fica na aba Alinhamentos do semanal). Mapa de colunas RH: Concluído+Validadas→Concluído, Em andamento→andamento, resto→Pendentes. `solicitacoes/solicitacoes2` já eram Supabase. Corrigido bug de sintaxe na demandas2.
-  - [ ] **BLOQUEIO:** quadro RH tem só **201** cards; faltam **~4000 demandas históricas** a importar pro Kanban (ou tabela). Fonte a definir com o usuário (Sheet/Trello export).
+- [x] **Demandas / demandas2** — ✅ FEITO 19/08. `demandas.html`/`demandas2.html` (ambas título "Demandas RH") leem `rpc('demandas_rh_lista')` = tabela **`tata_plus.demandas_rh`** (histórico do RH). NÃO é o 'Binho, Cinthia e Victor' (esse é alinhamento/report, aba Alinhamentos do semanal). `solicitacoes/solicitacoes2` já eram Supabase.
+  - [x] **BLOQUEIO RESOLVIDO:** importadas **2971** demandas históricas da aba **"Demandas_trello"** (gid 1160972519, sheet `1PC5rZYA…MiMznY`) → `tata_plus.demandas_rh` (col: card_id, short_link, data, status, titulo, etiqueta, atualizacao, conclusao, responsavel). Import via extensão `http` do Postgres (fetch+parse no banco). Datas 100% DD/MM/YYYY. Status: Finalizado 2927 / Em andamento 27 / Pendente 17 — todos casam com `statusKind` do front (finaliz→finalizado, andamento, pendente). `demandas_rh_lista()` reescrita p/ ler a tabela (era quadro Kanban `08b636b2`); grant `authenticated`.
 - [x] **Fornecedores e Parceiros** — ✅ FEITO 19/08 (consolidado em `ps.html` + 15 páginas de área migradas p/ `operacao.catalogo_itens`).
 - [ ] **Brainstorm** — **refazer o conceito** (não é migração 1:1).
 - Fora do escopo (Power BI): `hc2`, `desligamentos2`, `bancodehoras2`.
 
 ### Demandas
-- [x] **`demandas.html` + `demandas2.html`** — migradas p/ `rpc('demandas_lista')` ✅ 19/08.
-- [ ] Definir se a coluna **"Testes"** (2 cards) conta como demanda (hoje "Em andamento" = 6; seria 8 com Testes). *(regra de negócio na RPC — decidir com o usuário)*
+- [x] **`demandas.html` + `demandas2.html`** — leem `rpc('demandas_rh_lista')` (tabela `tata_plus.demandas_rh`, 2971 linhas históricas) ✅ 19/08.
 
 ### Report `semanal.html` — fontes ainda no Sheets (migrar uma a uma)
 - [x] Demandas (aba Alinhamentos) → Kanban ✅
