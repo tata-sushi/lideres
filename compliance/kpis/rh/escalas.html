@@ -662,6 +662,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <option value="Folga Feriado">Folga Feriado</option>
         </select>
       </div>
+      <div id="pt-folga-aniv"></div>
     </div>
     <div class="modal-footer" style="flex-wrap:wrap;gap:8px;">
       <button class="btn-modal-danger" id="pt-reset" onclick="resetPontual()" style="display:none;">Voltar ao padrão</button>
@@ -1512,8 +1513,61 @@ function abrirPontual(pi, di){
   var fs = document.getElementById('pt-folga-sel'); if (fs) fs.value = (dia.folga && dia.tipo_folga) ? dia.tipo_folga : '';
   document.getElementById('pt-reset').style.display = (PT.origem === 'manual') ? '' : 'none';
   document.getElementById('pt-overlay').classList.add('open');
+  carregarFolgaAniv();
 }
-function fecharPontual(){ document.getElementById('pt-overlay').classList.remove('open'); PT = null; }
+function fecharPontual(){ document.getElementById('pt-overlay').classList.remove('open'); PT = null; var fa=document.getElementById('pt-folga-aniv'); if(fa) fa.innerHTML=''; }
+
+/* Folga Aniversário — elegibilidade da pessoa no dia (só quando o dia é o
+   aniversário e quem abriu pode gerir a escala dela). RPC calcula tudo. */
+function fmtHorasAniv(v){
+  var n = Number(v)||0, abs = Math.abs(n), h = Math.floor(abs), m = Math.round((abs-h)*60);
+  if (m===60){ h+=1; m=0; }
+  return (n<0?'−':'') + h + 'h' + (m>0 ? (m<10?'0'+m:''+m) : '');
+}
+function critRowAniv(ok, label, det){
+  var cor = ok ? 'var(--green)' : 'var(--red)';
+  var ic = ok
+    ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+    : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  return '<div style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.35;">'+
+    '<span style="color:'+cor+';display:flex;flex-shrink:0;margin-top:1px;">'+ic+'</span>'+
+    '<span style="color:'+(ok?'var(--text)':'var(--muted)')+';">'+esc(label)+(det?' <span style="color:var(--muted);">· '+esc(det)+'</span>':'')+'</span>'+
+  '</div>';
+}
+function carregarFolgaAniv(){
+  var box = document.getElementById('pt-folga-aniv'); if(!box || !PT) return;
+  box.innerHTML = '';
+  var mat = PT.matricula, data = PT.data;
+  TP().rpc('escala_folga_aniversario_de', { p_matricula: mat, p_data: data }).then(function(r){
+    if(!PT || PT.matricula!==mat || PT.data!==data) return; // sheet mudou nesse meio-tempo
+    var d = r && r.data;
+    if(!d || d.autorizado===false || d.eh_meu!==true) return;
+    renderFolgaAniv(d);
+  }).catch(function(){});
+}
+function renderFolgaAniv(d){
+  var box = document.getElementById('pt-folga-aniv'); if(!box) return;
+  var verdictBg = d.elegivel ? 'var(--green-bg)' : 'var(--red-bg)';
+  var verdictFg = d.elegivel ? 'var(--green)' : 'var(--red)';
+  var verdict = (d.elegivel ? 'Elegível pela regra 🎉' : 'Ainda não elegível') + (d.previa ? ' · prévia' : '');
+  var rows =
+    critRowAniv(d.experiencia_ok, 'Passou da experiência (60 dias)', 'desde '+d.admissao)+
+    critRowAniv(d.banco_ok, 'Banco de horas não negativo', 'saldo '+fmtHorasAniv(d.banco_saldo))+
+    critRowAniv(d.faltas_ok, 'Sem faltas injustificadas (30 dias)', d.faltas_qtd>0 ? String(d.faltas_qtd) : '')+
+    critRowAniv(d.sancoes_ok, 'Sem advertências/suspensões (30 dias)', d.sancoes_qtd>0 ? String(d.sancoes_qtd) : '');
+  var domingo = d.domingo ? '<div style="margin-top:8px;font-size:11px;color:var(--muted);">Cai no domingo: a folga é compensada com o domingo do mês (a critério do líder).</div>' : '';
+  box.innerHTML =
+    '<div style="margin-top:12px;border:1px solid var(--border);border-radius:var(--radius);padding:12px;background:var(--surface);">'+
+      '<div style="display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;color:var(--text);">'+
+        '<span style="color:var(--amber);display:flex;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></span>'+
+        'Folga Aniversário'+
+      '</div>'+
+      '<div style="margin-top:2px;font-size:11.5px;color:var(--mid);">Caixa de bombons + cartão e um dia de folga.</div>'+
+      '<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">'+rows+'</div>'+
+      '<div style="margin-top:10px;border-radius:6px;padding:7px 10px;font-size:12.5px;font-weight:600;background:'+verdictBg+';color:'+verdictFg+';">'+verdict+'</div>'+
+      domingo+
+    '</div>';
+}
 
 function renderMarc(){
   if(!PT) return;
