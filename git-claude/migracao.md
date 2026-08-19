@@ -95,10 +95,10 @@
 - [x] **Liberado** o id `governanca-parceiros-sistemas` no painel de acessos ✅ (usuário confirmou 19/08).
 
 ### Segurança / limpeza
-- [ ] **uazapi token hardcoded** nos fluxos → mover p/ credencial do n8n.
-- [ ] Remover hook `__test_number` do fluxo ouvidoria quando não precisar mais testar.
-- [ ] 25/33 workflows n8n com **"Available in MCP" OFF** — ligar quando for editar.
-- [ ] Outros fluxos **Sheets→Trello** (sanção, asos, feriados, aniversários, etc.) → migrar Trello→Kanban + fonte Supabase.
+- [x] **uazapi token hardcoded** → movido p/ credencial do n8n. ✅ (usuário, 19/08)
+- [x] Remover hook `__test_number` do fluxo ouvidoria. ✅ (usuário, 19/08)
+- [x] 25/33 workflows n8n com **"Available in MCP" OFF** → resolvido. ✅ (usuário, 19/08)
+- [x] Outros fluxos **Sheets→Trello** (sanção, asos, feriados, aniversários, etc.) → migrados Trello→Kanban + fonte Supabase. ✅ (usuário, 19/08)
 
 ### Estoque Admin (Uniformes/EPI) — `estoqueadm.html`
 - [x] **Tabela `dp_rh.estoque_admin`** (privada) — livro de movimentos. *Correção: começou em `tata_plus`, movida p/ `dp_rh` conforme o padrão (fixo #5).*
