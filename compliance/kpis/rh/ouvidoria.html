@@ -1766,5 +1766,286 @@ function setTab(tab) {
   }
 }
 </script>
+
+<script>
+/* ===== Aba SOBRE — componentes portados de areas/rh/ouvidoria.html ===== */
+
+/* ── HFLOW · Fluxo Ouvidoria ── */
+(function() {
+  var LABELS = ['Relato', 'Tipo', 'Triagem', 'Apuração', 'Resposta'];
+  var NAMES  = ['Relato', 'Tipo de relato', 'Triagem', 'Apuração', 'Resposta'];
+  var ICONS = [
+    '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1"/><rect x="14" y="4" width="7" height="7" rx="1"/><rect x="3" y="13" width="7" height="7" rx="1"/><rect x="14" y="13" width="7" height="7" rx="1"/></svg>',
+    '<svg viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>',
+    '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    '<svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>'
+  ];
+  var LOCK_DOT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+
+  var HF_STEPS = 5;
+  var HF_TOTAL = 7;
+  var hfCur = 0;
+  var outer = document.getElementById('hf-outer');
+  var track = document.getElementById('hf-track');
+  var dotsEl = document.getElementById('hf-dots');
+  var stepName = document.getElementById('hf-step-name');
+  var pctEl = document.getElementById('hf-pct');
+  var fillEl = document.getElementById('hf-fill');
+  var coverList = document.getElementById('hf-cover-list');
+  if (!outer || !track) return;
+
+  /* Render capa */
+  (function(){
+    var html = '';
+    for (var i = 0; i < HF_STEPS; i++) {
+      var rowText = (i % 2 === 0) ? 1 : 3;
+      html += '<div class="flow-cover-tl-text" style="grid-column:' + (i+1) + ';grid-row:' + rowText + ';">' +
+        '<div class="flow-cover-tl-eb">' + (i+1) + 'º</div>' +
+        '<div class="flow-cover-tl-name">' + LABELS[i] + '</div>' +
+      '</div>';
+    }
+    for (var j = 0; j < HF_STEPS; j++) {
+      html += '<div class="flow-cover-tl-circle" style="grid-column:' + (j+1) + ';">' + ICONS[j] + '</div>';
+    }
+    if (coverList) coverList.innerHTML = html;
+  })();
+
+  /* Render dots: 4 etapas (01-04) + ✓ final */
+  for (var k = 0; k < HF_STEPS + 1; k++) {
+    (function(idx){
+      var isFinal = idx === HF_STEPS;
+      var item = document.createElement('div');
+      item.className = 'hflow-dot-item';
+      var dot = document.createElement('div');
+      dot.className = 'hflow-dot';
+      dot.textContent = isFinal ? '✓' : String(idx+1).padStart(2,'0');
+      dot.title = isFinal ? 'Processo Concluído' : NAMES[idx];
+      dot.addEventListener('click', function(){ hfGoTo(isFinal ? HF_TOTAL - 1 : idx + 1); });
+      item.appendChild(dot);
+      if (idx < HF_STEPS) {
+        var line = document.createElement('div');
+        line.className = 'hflow-dot-line';
+        item.appendChild(line);
+      }
+      dotsEl.appendChild(item);
+    })(k);
+  }
+
+  function isLocked(idx) {
+    var card = document.getElementById('hf-card-' + idx);
+    return card && card.dataset.locked === 'true';
+  }
+
+  function anyStepLocked() {
+    for (var i = 1; i <= HF_STEPS; i++) { if (isLocked(i)) return true; }
+    return false;
+  }
+
+  function hfRender() {
+    /* current class no card */
+    for (var i = 0; i < HF_TOTAL; i++) {
+      var c = document.getElementById('hf-card-' + i);
+      if (c) c.classList.toggle('is-current', i === hfCur);
+    }
+    /* dots */
+    var dots = dotsEl.querySelectorAll('.hflow-dot');
+    var lines = dotsEl.querySelectorAll('.hflow-dot-line');
+    var anyLocked = anyStepLocked();
+    dots.forEach(function(d, i) {
+      d.classList.remove('current', 'visited', 'locked');
+      var isFinalDot = i === HF_STEPS;
+      if (isFinalDot) {
+        if (anyLocked) {
+          d.classList.add('locked');
+          d.innerHTML = LOCK_DOT_SVG;
+        } else {
+          d.textContent = '✓';
+        }
+        if (hfCur === HF_TOTAL - 1) d.classList.add('current');
+        else if (hfCur > HF_TOTAL - 1) d.classList.add('visited');
+      } else {
+        var step = i + 1;
+        if (isLocked(step)) {
+          d.classList.add('locked');
+          d.innerHTML = LOCK_DOT_SVG;
+        } else {
+          d.textContent = String(step).padStart(2, '0');
+        }
+        if (hfCur === step) d.classList.add('current');
+        else if (hfCur > step) d.classList.add('visited');
+      }
+    });
+    lines.forEach(function(l, i) {
+      l.classList.toggle('passed', hfCur > i + 1);
+    });
+    /* lock do card final */
+    var finalLock = document.getElementById('hf-final-lock');
+    if (finalLock) finalLock.style.display = anyLocked ? '' : 'none';
+    /* barra de progresso */
+    var pct = hfCur === 0 ? 0 : Math.min(Math.round((hfCur / HF_STEPS) * 100), 100);
+    fillEl.style.width = pct + '%';
+    pctEl.textContent = pct + '%';
+    /* nome da etapa */
+    if (hfCur === 0) {
+      stepName.innerHTML = '<strong>Visão geral</strong> — Fluxo de ouvidoria';
+    } else if (hfCur === HF_TOTAL - 1) {
+      stepName.innerHTML = '<strong>Concluído!</strong> — Processo encerrado';
+    } else {
+      stepName.innerHTML = '<strong>Etapa ' + hfCur + ' de ' + HF_STEPS + '</strong> — ' + NAMES[hfCur - 1];
+    }
+    /* scroll para o card */
+    track.scrollTo({ left: hfCur * track.offsetWidth, behavior: 'smooth' });
+    /* botões */
+    track.querySelectorAll('.hflow-arrow-btn:not(.fwd)').forEach(function(b){
+      var inCard = b.closest('.hflow-card');
+      if (!inCard) return;
+      var cardIdx = parseInt(inCard.id.replace('hf-card-',''), 10);
+      if (cardIdx === 0) return;
+      if (cardIdx === 1) { b.style.visibility = 'hidden'; b.disabled = true; }
+      else { b.style.visibility = ''; b.disabled = false; }
+    });
+    track.querySelectorAll('.hflow-arrow-btn.fwd').forEach(function(b){
+      var inCard = b.closest('.hflow-card');
+      if (!inCard) return;
+      var cardIdx = parseInt(inCard.id.replace('hf-card-',''), 10);
+      b.disabled = cardIdx === HF_TOTAL - 1;
+    });
+  }
+
+  function hfGo(dir) { hfGoTo(hfCur + dir); }
+  function hfGoTo(i) {
+    if (i < 0 || i >= HF_TOTAL) return;
+    if (hfCur > 0 && i === 0) return; /* não volta pra capa */
+    hfCur = i;
+    hfRender();
+  }
+  window.hfGo = hfGo;
+  window.hfGoTo = hfGoTo;
+
+  /* Unlock */
+  window.hfUnlock = function(idx) {
+    var card = document.getElementById('hf-card-' + idx);
+    if (!card) return;
+    card.dataset.locked = 'false';
+    card.classList.remove('is-locked');
+    var lock = card.querySelector('.hflow-lock');
+    if (lock) lock.remove();
+    hfRender();
+  };
+
+  /* Checkbox interativo nos itens da lista */
+  track.addEventListener('click', function(e){
+    var li = e.target.closest && e.target.closest('.hflow-list li');
+    if (!li) return;
+    var on = li.dataset.checked !== 'true';
+    li.dataset.checked = on ? 'true' : 'false';
+    li.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  track.addEventListener('keydown', function(e){
+    if (e.key !== ' ' && e.key !== 'Enter') return;
+    var li = e.target.closest && e.target.closest('.hflow-list li');
+    if (li) { e.preventDefault();
+      var on = li.dataset.checked !== 'true';
+      li.dataset.checked = on ? 'true' : 'false';
+      li.setAttribute('aria-checked', on ? 'true' : 'false');
+    }
+  });
+
+  /* Scroll snap detection */
+  var hfTimer;
+  track.addEventListener('scroll', function(){
+    clearTimeout(hfTimer);
+    hfTimer = setTimeout(function(){
+      var idx = Math.round(track.scrollLeft / track.offsetWidth);
+      if (idx !== hfCur && idx >= 0 && idx < HF_TOTAL) {
+        if (hfCur > 0 && idx === 0) {
+          track.scrollTo({ left: hfCur * track.offsetWidth });
+          return;
+        }
+        hfCur = idx;
+        hfRender();
+      }
+    }, 80);
+  });
+
+  /* Fullscreen */
+  var expandBtn = document.getElementById('flow-expand');
+  var EXPAND_SVG = '<svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>';
+  var COMPRESS_SVG = '<svg viewBox="0 0 24 24"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>';
+  function setFullscreen(on) {
+    outer.classList.toggle('is-fullscreen', on);
+    document.body.classList.toggle('has-flow-fullscreen', on);
+    document.documentElement.classList.toggle('has-flow-fullscreen', on);
+    if (expandBtn) {
+      expandBtn.innerHTML = on ? COMPRESS_SVG : EXPAND_SVG;
+      expandBtn.setAttribute('aria-label', on ? 'Sair da tela cheia' : 'Expandir tela cheia');
+    }
+    setTimeout(function(){
+      track.scrollTo({ left: hfCur * track.offsetWidth });
+    }, 60);
+  }
+  if (expandBtn) {
+    expandBtn.addEventListener('click', function(e){
+      e.preventDefault();
+      setFullscreen(!outer.classList.contains('is-fullscreen'));
+    });
+  }
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && outer.classList.contains('is-fullscreen')) setFullscreen(false);
+  });
+
+  hfRender();
+})();
+
+/* ── FERRAMENTAS & PARCEIROS (aba Sobre) — via public.catalogo_listar ── */
+(function(){
+/* ── ACCORDION TOGGLE ── */
+function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
+
+/* ── FERRAMENTAS & PARCEIROS dinâmico ── */
+function ftFetch(tipo){ return new Promise(function(resolve){ function go(supa){ supa.rpc('catalogo_listar',{p_tipo:tipo}).then(function(r){ resolve((r&&!r.error&&Array.isArray(r.data))?r.data:[]); }).catch(function(){ resolve([]); }); } if (window.__lideresSupa) go(window.__lideresSupa); else window.addEventListener('lideres:supa', function(){ go(window.__lideresSupa); }, { once:true }); }); }
+var FT_SUBSISTEMA = 'Ouvidoria';
+var FT_CAT_SVG = {
+  'Automação & IA':               '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>',
+  'Comunicação':                  '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  'Dados & Gestão':               '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+  'Desenvolvimento & Implantação':'<svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+  'Documentação & Armazenamento': '<svg viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>',
+  'Financeiro':                   '<svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  'Marketing & Vendas':           '<svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>',
+  'Operação & PDV':               '<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+  'RH & Gestão de Pessoas':       '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  'default':                      '<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="6 9 9 12 6 15"/><line x1="12" y1="12" x2="16" y2="12"/></svg>'
+};
+function ftCatIcon(cat) { return FT_CAT_SVG[cat] || FT_CAT_SVG['default']; }
+function ftHasSubsistema(item) {
+  var val = item.subsistemas_rh || item.subsistemas || '';
+  return val.split(',').map(function(s){ return s.trim(); }).indexOf(FT_SUBSISTEMA) !== -1;
+}
+function renderFtOuvidoria(tools, parceiros) {
+  var acc = document.getElementById('ft-accordion-ouvidoria');
+  var all = tools.concat(parceiros).filter(ftHasSubsistema);
+  if (!all.length) { acc.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--t3);">Nenhum item vinculado a este subsistema.</div>'; return; }
+  var cats = {};
+  all.forEach(function(t){ var c=t.categoria||'Outros'; if(!cats[c])cats[c]=[]; cats[c].push(t); });
+  var html = '';
+  Object.keys(cats).forEach(function(cat,i){
+    var items=cats[cat]; var id='fta-ouv-'+i;
+    var rowsHtml=items.map(function(t){
+      var depts=(t.departamentos||'').split(',').map(function(d){return d.trim();}).filter(Boolean);
+      var pills=depts.map(function(d){return '<span class="ft-pill">'+d+'</span>';}).join('');
+      return '<div class="ft-tool-row"><p class="ft-tool-name">'+t.nome+'</p>'+(t.descricao?'<p class="ft-tool-desc">'+t.descricao+'</p>':'')+(pills?'<div class="ft-pills">'+pills+'</div>':'')+'</div>';
+    }).join('');
+    html+='<div class="ft-acc-item" id="'+id+'"><div class="ft-acc-header" onclick="toggleFta(\''+id+'\')"><div class="ft-acc-header-left"><div class="ft-acc-icon">'+ftCatIcon(cat)+'</div><div><p class="ft-acc-name">'+cat+'</p><p class="ft-acc-count">'+items.length+(items.length!==1?' itens':' item')+'</p></div></div><div class="ft-acc-chevron"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="ft-acc-body">'+rowsHtml+'</div></div>';
+  });
+  acc.innerHTML = html;
+}
+  window.toggleFta = toggleFta;
+  Promise.all([ ftFetch('ferramenta'), ftFetch('parceiro') ])
+    .then(function(res){ renderFtOuvidoria(res[0], res[1]); })
+    .catch(function(){ var a=document.getElementById('ft-accordion-ouvidoria'); if(a) a.innerHTML='<div style="padding:16px;font-size:12px;color:var(--t3);">Não foi possível carregar os dados.</div>'; });
+})();
+</script>
 </body>
 </html>
