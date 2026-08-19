@@ -108,7 +108,8 @@
 - [x] **Saldo errado (teto de 1000 linhas do PostgREST):** o front baixava `estoque_admin_historico` (1370 mov.) e o PostgREST cortava em 1000 → saldo errado no navegador (não reproduzia por SQL). Corrigido com `estoque_admin_posicao()` (agrega net por unidade+item+tamanho no servidor, 275 linhas) + teto do projeto elevado p/ 1.000.000. Ver Regra fixa #7.
 - [x] **Reconciliação do estoque físico** (RECONCILIAR_estoque_atual.sql): zerou o saldo acumulado do histórico + recontagem com a contagem física (94 itens / 742 un — EPI's 168, Uniformes 254, Calçados 33, Brindes 287). Saldo do banco = "Estoque atual".
 - [ ] **Gate de permissão de escrita** (quem pode gravar estoque): hoje qualquer `authenticated` que chegue na página grava (a página já é gated por `PAGE_ID` no front). Definir com o usuário quem pode e, se preciso, um check no `estoque_admin_gravar` (espelhar `escala_pode_gerir_*`).
-- [ ] `action=mapa` (mapa de liderança, script separado) e `listColaboradores` seguem no Sheets (lookups compartilhados, migração à parte).
+- [x] **`listColaboradores` (lookup de colaboradores) migrado** ✅ 19/08 — helper `colabListar()` → RPC `public.hc_colaboradores_listar` em 6 páginas ativas; constante morta `COLAB_URL` removida de 32 páginas. Endpoint Apps Script 100% retirado do repo.
+- [ ] `action=mapa` (mapa de liderança, script separado) segue no Sheets (lookup à parte).
 
 ### Processos contínuos (não é bug)
 - Transcrição: usuário insere novas atas manualmente (INSERT em `dp_rh.alinhamento_transcricao`).
