@@ -730,13 +730,18 @@ window.cesSalarios = {};
 window.cesReady    = false;
 window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); };
 
+// Helper Supabase compartilhado (dashboard logada). Substitui os fetches de Apps Script/Sheets.
+window.perfSupa = window.perfSupa || function(cb) {
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true });
+};
+
 (function() {
-  var CES_URL = 'https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec';
   function loadCES() {
-    fetch(CES_URL + '?action=getAll')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (!data.ok) return;
+    window.perfSupa(function(supa) {
+      supa.schema('tata_plus').rpc('organograma_ces').then(function(res) {
+        var data = res && res.data;
+        if (!data || !data.ok) return;
         (data.salarios || []).forEach(function(s) {
           if (s.cargo_id) window.cesSalarios[window.normCargoId(s.cargo_id)] = s;
         });
@@ -745,8 +750,8 @@ window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); 
         if (typeof window.colabsRender === 'function' && window.perfState) {
           window.colabsRender(window.perfState);
         }
-      })
-      .catch(function() {});
+      });
+    });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadCES);
   else loadCES();
@@ -754,7 +759,6 @@ window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); 
 
 // ─── Reclamações Trabalhistas — status (mesmo padrão de Exames Ocupacionais) ─
 (function() {
-  var RECL_URL = 'https://script.google.com/macros/s/AKfycbxEs6_B76XgPgy3qHR164Q1zpmDVgM5QA3G1AT1fPd27S26q5ZtcBmissxRwWR8iwUw/exec';
   var RECL_RAW = [];
 
   function isEncerrada(resultado) {
@@ -795,14 +799,9 @@ window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); 
   }
 
   function loadReclamacoes() {
-    fetch(RECL_URL)
-      .then(function(r) { return r.json(); })
-      .then(function(json) {
-        var rows = [];
-        if (json.ok && Array.isArray(json.data))     rows = json.data;
-        else if (Array.isArray(json.processos))      rows = json.processos;
-        else if (Array.isArray(json.data))           rows = json.data;
-        else if (Array.isArray(json))                rows = json;
+    window.perfSupa(function(supa) {
+      supa.schema('tata_plus').rpc('reclamacoes_listar').then(function(res) {
+        var rows = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
         RECL_RAW = rows.map(function(r) {
           return {
             resultado:    r.resultado    || r.RESULTADO    || '',
@@ -815,8 +814,8 @@ window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); 
         });
         if (window.registerPerfRenderer) window.registerPerfRenderer(reclRender);
         else reclRender(window.perfState);
-      })
-      .catch(function() {});
+      }).catch(function() {});
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadReclamacoes);
@@ -1150,7 +1149,6 @@ window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); 
 
 // ─── Exames Ocupacionais — status (mesma lógica de medicina.html) ────────────
 (function() {
-  var EXAMES_URL = 'https://script.google.com/macros/s/AKfycbw2d8S-nsu0cvs5oPyRZTsXtYvBC_9B85IBkE8t5IGoAsoq2nEumkNGllhSdIGUoXnTbg/exec';
 
   // Mesmo rowToObj de medicina.html (substituição explícita de acentos)
   function rowToObj(headers, row) {
@@ -1176,7 +1174,7 @@ window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); 
       return '';
     }
     return {
-      statusColab:       v('status'),
+      statusColab:       v('status','status_colab'),
       unidade:           v('unidade'),
       departamento:      v('departamento'),
       realizaExame:      v('realiza_exame','realiza_exame_','realiza'),
@@ -1251,35 +1249,21 @@ window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); 
   }
 
   function loadExamesData() {
-    fetch(EXAMES_URL + '?action=getData')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        // medicina.html usa data.values
-        if (data.ok === false || data.error) {
+    window.perfSupa(function(supa) {
+      supa.schema('tata_plus').rpc('exames_listar').then(function(res) {
+        if (res.error || !Array.isArray(res.data)) {
           var el = document.getElementById('exames-status-list');
           if (el) el.innerHTML = '<div class="exam-status-empty">Sem dados</div>';
           return;
         }
-        var rows = data.values || [];
-        if (rows.length < 2) {
-          var el2 = document.getElementById('exames-status-list');
-          if (el2) el2.innerHTML = '<div class="exam-status-empty">Sem dados</div>';
-          return;
-        }
-        var headers = rows[0];
-        EXAMES_RAW = [];
-        for (var i = 1; i < rows.length; i++) {
-          if (rows[i].some(function(c) { return c && String(c).trim(); })) {
-            EXAMES_RAW.push(normExame(rowToObj(headers, rows[i])));
-          }
-        }
+        EXAMES_RAW = res.data.map(normExame);
         if (window.registerPerfRenderer) window.registerPerfRenderer(examesRender);
         else examesRender(window.perfState);
-      })
-      .catch(function() {
+      }).catch(function() {
         var el = document.getElementById('exames-status-list');
         if (el) el.innerHTML = '<div class="exam-status-empty">Sem dados</div>';
       });
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadExamesData);
@@ -1474,7 +1458,6 @@ window.normCargoId = function(s) { return String(s || '').trim().toLowerCase(); 
 
 // ─── Colaboradores — tabela ───────────────────────────────────────────────────
 function colabListar(){ return new Promise(function(resolve){ function go(supa){ supa.rpc('hc_colaboradores_listar').then(function(r){ var arr=(r&&!r.error&&Array.isArray(r.data))?r.data:[]; resolve({ ok: !!(r&&!r.error), colaboradores: arr.map(function(c){ return {id:c.matricula,matricula:c.matricula,nome:c.nome,cargo:c.cargo,status:c.status,unidade:c.unidade,departamento:c.departamento}; }) }); }).catch(function(){ resolve({ok:false,colaboradores:[]}); }); } if(window.__lideresSupa) go(window.__lideresSupa); else window.addEventListener('lideres:supa',function(){ go(window.__lideresSupa); },{once:true}); }); }
-var ORGANO_URL   = 'https://script.google.com/macros/s/AKfycbxUWUoOmv-Cn19-FjUJ18jYTu5G_embOGDaQDsgC4Jd8agVfgqs98Tbu3qlqa9e7tpu/exec';
 var _rawColabs   = [];
 var _allColabs   = [];
 var _colabsShowing = 10;
@@ -1572,18 +1555,16 @@ function colabsRender(state) {
 window.colabsRender = colabsRender;
 
 function carregarColaboradores() {
-  // Busca a árvore do organograma (tem foto, iniciais, cargo, unidade)
-  fetch(ORGANO_URL)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data.arvore) throw new Error('sem arvore');
-      var colabs = _flattenArvore(data.arvore)
-        .concat(data.peers || [])
-        .filter(function(c) { return c.nome; })
+  // Colaboradores (com foto/cargo/unidade) via Supabase — organograma_colaboradores (lista plana).
+  window.perfSupa(function(supa) {
+    supa.schema('tata_plus').rpc('organograma_colaboradores').then(function(res) {
+      if (res.error) throw new Error(res.error.message || 'organograma_colaboradores');
+      var colabs = (Array.isArray(res.data) ? res.data : [])
+        .filter(function(c) { return c && c.nome; })
         .sort(function(a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+      if (!colabs.length) throw new Error('sem colaboradores');
       _applyColabs(colabs);
-    })
-    .catch(function() {
+    }).catch(function() {
       // fallback: listColaboradores sem foto
       colabListar()
         .then(function(data) {
@@ -1592,6 +1573,7 @@ function carregarColaboradores() {
         })
         .catch(function() {});
     });
+  });
 }
 
 if (document.readyState === 'loading') {
