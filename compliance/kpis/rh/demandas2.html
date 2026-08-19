@@ -337,8 +337,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 function showLoading() { var el = document.getElementById('loading-overlay'); if (el) el.classList.add('show'); }
 function hideLoading() { var el = document.getElementById('loading-overlay'); if (el) el.classList.remove('show'); }
 showLoading();
-var SHEET_ID = '1PC5rZYA4zZGv0U0zkIJbpctA1MsGCG8kRawAOMiMznY';
-var API_KEY  = 'AIzaSyCYDJdw0a5t_Ievs0Jh-msg4x4fpGbQDto';
+// [migrado p/ Supabase] dados via rpc('demandas_lista') (Kanban). Sheets API desativada.
+function comSupa(cb){
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true });
+}
 
 var demandas = [];
 var chartMeses = null;
@@ -405,31 +408,35 @@ function esc(s) {
 
 
 function loadData() {
-  fetch('https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + '/values/' + encodeURIComponent('demandas_trello!A:H') + '?key=' + API_KEY)
-    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function(d) {
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('demandas_lista').then(function(res){
       hideLoading();
-          var rows = d.values || [];
       var ph = document.getElementById('loading-placeholder');
       if (ph) ph.remove();
-      if (rows.length < 2) {
-        document.getElementById('content').innerHTML = '<div class="empty-state"><p>Nenhum dado encontrado na planilha.</p></div>';
+      if (res.error) {
+        console.error('Erro RPC demandas_lista:', res.error);
+        document.getElementById('content').innerHTML = '<div class="empty-state"><p>Erro ao carregar dados.</p></div>';
         return;
       }
-      var headers = rows[0];
-      demandas = rows.slice(1)
-        .map(function(row) { return rowToObj(headers, row); })
-        .filter(function(d) { return d.titulo && d.titulo.trim(); });
+      demandas = (res.data || []).map(function(r){
+        return {
+          titulo:   r.titulo   || '',
+          etiqueta: r.etiqueta || '',
+          status:   r.status   || '',
+          data:     r.data     || '',
+          obs:      ''
+        };
+      }).filter(function(d){ return d.titulo && d.titulo.trim(); });
       renderAll();
-    })
-    .catch(function(err) {
+    }).catch(function(err){
       hideLoading();
-          console.error('Erro ao carregar:', err);
+      console.error('Erro ao carregar:', err);
       var ph = document.getElementById('loading-placeholder');
       if (ph) ph.remove();
       document.getElementById('content').innerHTML =
-        '<div class="empty-state"><p>Erro ao carregar dados.<br>Verifique o acesso à planilha.</p></div>';
+        '<div class="empty-state"><p>Erro ao carregar dados.</p></div>';
     });
+  });
 }
 
 function renderAll() {
@@ -608,7 +615,7 @@ function renderChartMeses() {
   var keys = Object.keys(counts).sort();
   var meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var labels = keys.map(function(k) {
-    var p = k.split('-'); return meses[+p[1]-1] + ' '' + p[0].slice(2);
+    var p = k.split('-'); return meses[+p[1]-1] + ' ' + p[0].slice(2);
   });
   var data = keys.map(function(k) { return counts[k]; });
   var ctx = document.getElementById('cMeses').getContext('2d');
