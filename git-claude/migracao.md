@@ -36,7 +36,8 @@
 - [x] **Solicitações** (`kpis/rh/solicitacoes.html`) — migrada (ver seção própria).
 - [ ] **Desligamentos** (`kpis/rh/desligamentos.html`) — **não tem base; criar do zero.**
 - [x] **Performance** (`kpis/rh/performance.html`) — MIGRADA 19/08, **100% Supabase (0 fontes Google)**. 7 fontes: CES→`organograma_ces`, Reclamações→`reclamacoes_listar`, Colaboradores→`organograma_colaboradores`(+fallback `hc_colaboradores_listar`), Exames→`exames_listar`, Absenteísmo→`ausencia_listar`, Turnover→`hc_turnover_listar`, Banco de Horas→`banco_horas_listar(60)`. Removidas chave Sheets API e todos os endpoints Apps Script. **Validar visualmente os gráficos** (esp. BH — a agregação usa a snapshot congelada por tipo).
-- [x] **Demandas / demandas2** — ✅ FEITO 19/08: `demandas.html` (re-aplicada) e `demandas2.html` (migração fresca) → `rpc('demandas_lista')` (Kanban, 732). `solicitacoes/solicitacoes2` já eram Supabase. Corrigido bug de sintaxe pré-existente na demandas2.
+- [~] **Demandas / demandas2** — 19/08: front migrado, mas CORRIGIDO o alvo. `demandas.html`/`demandas2.html` apontam agora para `rpc('demandas_rh_lista')` = quadro **RH** (`08b636b2`), NÃO o 'Binho, Cinthia e Victor' (esse é alinhamento/report, fica na aba Alinhamentos do semanal). Mapa de colunas RH: Concluído+Validadas→Concluído, Em andamento→andamento, resto→Pendentes. `solicitacoes/solicitacoes2` já eram Supabase. Corrigido bug de sintaxe na demandas2.
+  - [ ] **BLOQUEIO:** quadro RH tem só **201** cards; faltam **~4000 demandas históricas** a importar pro Kanban (ou tabela). Fonte a definir com o usuário (Sheet/Trello export).
 - [x] **Fornecedores e Parceiros** — ✅ FEITO 19/08 (consolidado em `ps.html` + 15 páginas de área migradas p/ `operacao.catalogo_itens`).
 - [ ] **Brainstorm** — **refazer o conceito** (não é migração 1:1).
 - Fora do escopo (Power BI): `hc2`, `desligamentos2`, `bancodehoras2`.
