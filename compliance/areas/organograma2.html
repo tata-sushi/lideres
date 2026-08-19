@@ -848,11 +848,7 @@
   // ============================================
   // Árvore agora vem do Supabase (org_arvore_publico). CES (cargo/salário) segue no Apps Script.
   // ============================================
-  var CES_URL  = 'https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec';
 
-  // Aba "Salarios" → sub-modal REMUNERAÇÃO  |  Aba "Cargos" → sub-modal DESC. DO CARGO
-  var _cesSalarios = {};
-  var _cesCargos   = {};
 
   // Armários indexados por matrícula e por nome do colaborador
   var _armariosByMatricula = {};
@@ -865,32 +861,6 @@
   var arvore = null;
   var nodeMap = {};
   var peerNos = [];  // sócios vindos da planilha (sem supervisor, não-CEO)
-
-  function fmtMoney(val) {
-    if (val === null || val === undefined || val === '') return '—';
-    var n = parseFloat(String(val).replace(',', '.'));
-    if (isNaN(n) || n === 0) return '—';
-    return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-
-  function normCargoId(s) {
-    return String(s || '').trim().toLowerCase();
-  }
-
-  function carregarCES() {
-    fetch(CES_URL + '?action=getAll')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (!data.ok) return;
-        (data.salarios || []).forEach(function(s) {
-          if (s.cargo_id) _cesSalarios[normCargoId(s.cargo_id)] = s;
-        });
-        (data.cargos || []).forEach(function(c) {
-          if (c.cargo_id) _cesCargos[normCargoId(c.cargo_id)] = c;
-        });
-      })
-      .catch(function() {});
-  }
 
   // ============================================
   // CARREGAR ARMÁRIOS (mesma base de armarios.html)
@@ -2105,96 +2075,6 @@
     return str.split(/,|;/).map(function(s) { return s.trim(); }).filter(Boolean);
   }
 
-  window.abrirDescricaoCargo = function() {
-    if (!_modalNode) return;
-    var cargoId = _modalNode.cargoId;
-    var desc = cargoId ? _cesCargos[normCargoId(cargoId)] : null;
-    document.getElementById('smCargoTitle').textContent = _modalNode.cargo || '—';
-
-    var body = document.getElementById('smCargoBody');
-    if (!desc) {
-      body.innerHTML =
-        '<div style="padding:16px 0;text-align:center;font-family:\'DM Mono\',monospace;font-size:11px;color:var(--muted);">' +
-        (cargoId ? 'Descrição não cadastrada para este cargo.' : 'cargo_id não disponível para este colaborador.') +
-        '</div>';
-    } else {
-      var html = '';
-      if (desc.objetivos) {
-        html += '<div class="sub-modal-section"><div class="sub-modal-label">Objetivo</div>' +
-          '<p class="sub-modal-text">' + escapeHtml(desc.objetivos) + '</p></div>';
-      }
-      var resp = splitLines(desc.responsabilidades);
-      if (resp.length) {
-        html += '<div class="sub-modal-section"><div class="sub-modal-label">Responsabilidades</div><ul class="sub-modal-list">' +
-          resp.map(function(r) { return '<li>' + escapeHtml(r) + '</li>'; }).join('') +
-          '</ul></div>';
-      }
-      var qualItems = [];
-      if (desc.formacao)     qualItems.push({ key: 'Formação',      val: desc.formacao });
-      if (desc.experiencia)  qualItems.push({ key: 'Experiências',  val: desc.experiencia });
-      if (desc.competencias || desc.comp_tec) qualItems.push({ key: 'Competências Técnicas',        val: desc.comp_tec || desc.competencias });
-      if (desc.cnh          || desc.comp_comp) qualItems.push({ key: 'Competências Comportamentais', val: desc.comp_comp || desc.cnh });
-      if (qualItems.length) {
-        html += '<div class="sub-modal-section"><div class="sub-modal-label">Qualificações</div><ul class="qual-list">' +
-          qualItems.map(function(q) {
-            return '<li><strong>' + escapeHtml(q.key) + ':</strong> ' + escapeHtml(q.val) + '</li>';
-          }).join('') + '</ul></div>';
-      }
-      var epiItems = [];
-      if (desc.uniformes)  epiItems.push({ key: 'Uniformes', val: desc.uniformes });
-      if (desc.epis)       epiItems.push({ key: 'EPIs',       val: desc.epis });
-      if (epiItems.length) {
-        html += '<div class="sub-modal-section"><div class="sub-modal-label">Uniformes e Epi\'s</div><ul class="qual-list">' +
-          epiItems.map(function(q) {
-            return '<li><strong>' + escapeHtml(q.key) + ':</strong> ' + escapeHtml(q.val) + '</li>';
-          }).join('') + '</ul></div>';
-      }
-      if (!html) {
-        html = '<div style="padding:16px 0;text-align:center;font-family:\'DM Mono\',monospace;font-size:11px;color:var(--muted);">Descrição não cadastrada para este cargo.</div>';
-      }
-      body.innerHTML = html;
-    }
-    document.getElementById('modal').classList.add('modal-bg--hidden');
-    document.getElementById('subModalCargo').classList.add('show');
-  };
-
-  window.abrirRemuneracao = function() {
-    if (!_modalNode) return;
-    var _p = ((window.__lideresSession && window.__lideresSession.perfil) || '').toLowerCase();
-    if (_p !== 'admin' && _p !== 'analista-rh') return;
-    var cargoId = _modalNode.cargoId;
-    var sal = cargoId ? _cesSalarios[normCargoId(cargoId)] : null;
-    document.getElementById('smRemTitle').textContent = _modalNode.cargo || '—';
-
-    var body = document.getElementById('smRemBody');
-    if (!sal) {
-      body.innerHTML =
-        '<div style="padding:16px 0;text-align:center;font-family:\'DM Mono\',monospace;font-size:11px;color:var(--muted);">' +
-        (cargoId ? 'Remuneração não cadastrada para este cargo.' : 'cargo_id não disponível para este colaborador.') +
-        '</div>';
-    } else {
-      function remRow(label, val) {
-        return '<div class="modal-row"><span>' + label + '</span><span>' + val + '</span></div>';
-      }
-      var html = '';
-      html += remRow('Salário Fixo',  escapeHtml(fmtMoney(sal.salario_fixo)));
-      html += remRow('Bruto Aprox.',  escapeHtml(fmtMoney(sal.bruto_aproximado)));
-      if (sal.periculosidade && parseFloat(sal.periculosidade) > 0)
-        html += remRow('Periculosidade', escapeHtml(fmtMoney(sal.periculosidade)));
-      if (sal.insalubridade && parseFloat(sal.insalubridade) > 0)
-        html += remRow('Insalubridade', escapeHtml(fmtMoney(sal.insalubridade)));
-      if (sal.ponto_gorjeta && parseInt(sal.ponto_gorjeta, 10) > 0)
-        html += remRow('Pts Gorjeta', parseInt(sal.ponto_gorjeta, 10) + ' pt' + (parseInt(sal.ponto_gorjeta, 10) !== 1 ? 's' : ''));
-      if (sal.ponto_premio && parseInt(sal.ponto_premio, 10) > 0)
-        html += remRow('Pts Prêmio', parseInt(sal.ponto_premio, 10) + ' pt' + (parseInt(sal.ponto_premio, 10) !== 1 ? 's' : ''));
-      if (sal.obs)
-        html += remRow('Obs', escapeHtml(sal.obs));
-      body.innerHTML = html;
-    }
-    document.getElementById('modal').classList.add('modal-bg--hidden');
-    document.getElementById('subModalRem').classList.add('show');
-  };
-
   window.closeSubModal = function(id) {
     document.getElementById(id).classList.remove('show');
     document.getElementById('modal').classList.remove('modal-bg--hidden');
@@ -2306,7 +2186,6 @@
   }
 
   carregarDados();
-  carregarCES();
   carregarArmarios();
   carregarExames();
 
