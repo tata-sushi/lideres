@@ -87,8 +87,10 @@
 - [x] **Wrappers em `public`** (SECURITY DEFINER, `anon`+`authenticated`) delegando p/ `tata_plus.catalogo_*` — usados pela página sandbox `ferramentas-novo.html` (roda anon). **A promover:** ao ligar gate real, revogar `gravar/excluir` do `anon`.
 - [x] **Página unificada `compliance/ferramentas-novo.html`** (3 abas Sobre/Parceiros/Sistemas; tabela formato recrutamento; drawer com Acrescentar; base = duplicata de recrutamento-novo). Chama `public.catalogo_*` (schema default). Ainda não no menu.
 - [x] **Backfill** (subagente): planilha "Ferramentas e Parceiros" (`1LcMOMqvpHcKmhpXvzkWz8-bwDvPNUvJCYWeCndGENgQ`, 2 abas) → **20 parceiros + 25 ferramentas**. `\&`→`&` limpo; email/whatsapp só nos parceiros.
-- [x] **Front `fornecedores/index.html`** (tipo=`parceiro`): `loadItems`→`catalogo_listar`, `submitForm`→`catalogo_gravar`, `confirmDelete`→`catalogo_excluir` (via `comSupa`). `APPS_SCRIPT_URL`/`SHEET_NAME`/`COLAB_URL` removidos.
-- [ ] **Front `ferramentas/index.html`** (tipo=`ferramenta`) — mesma migração (RPCs já prontos, dados já no banco). *(próximo)*
+- [x] **CONSOLIDADO em `compliance/ps.html`** (19/08): página única `Parceiros & Sistemas` (título header "P&S"), gate real `governanca-parceiros-sistemas`, tabelas formato recrutamento, drawer Cadastrar, RPCs via `public.catalogo_*` → `operacao.catalogo_itens`. No menu (`menucompliance.html`) como card único "Parceiros & Sistemas".
+- [x] **Páginas antigas APAGADAS** (superseded por ps.html): `fornecedores/index.html`, `ferramentas/index.html`, `catalogo/index.html`. `ferramentas/` nunca chegou a migrar do Apps Script — foi direto pro delete. Sem links de entrada.
+- [x] **Grants (pós gate real):** `catalogo_listar` anon+authenticated; `catalogo_gravar`/`catalogo_excluir` só `authenticated`.
+- [ ] **Pendente do usuário:** liberar o id `governanca-parceiros-sistemas` no painel de acessos (senão card trava / página barra).
 
 ### Segurança / limpeza
 - [ ] **uazapi token hardcoded** nos fluxos → mover p/ credencial do n8n.
