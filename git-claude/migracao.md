@@ -351,7 +351,10 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 
 ### Parte 2 (pendente — mais tarde hoje)
 - [x] **Armário/Medicina na `organograma.html` canônica** — migrados (`armarios_listar`/`exames_listar`, ver linha 415).
-- [x] **Armário + Medicina na `organograma2.html`** (página pública) — MIGRADOS 19/08: `carregarArmarios`->`org_armarios_publico`, `carregarExames`->`org_exames_publico` (wrappers public ENXUTOS em anon: só num/matricula/colaborador e matricula/nome/proxima/realiza). Cliente anon inline. Restam na org2 (fora de escopo): ENDPOINT (árvore) e CES_URL (cargo).
+- [x] **`organograma2.html` (pública) 100% migrada** 19/08 — **0 refs a script.google.com**:
+  - Árvore: `org_arvore_publico` (wrapper anon de `organograma_colaboradores`) + `construirHierarquia` portado da `organograma.html` (`inicializarNode` idêntico → contrato de nó garantido).
+  - Armário: `org_armarios_publico`; Exame: `org_exames_publico` (wrappers anon ENXUTOS).
+  - Cargo/Salário (CES): **REMOVIDOS** por decisão do usuário (página pública não exibe isso) — código morto (nunca era chamado); `org_ces_publico` foi dropado p/ não vazar salário a anon.
 - [x] Gate de perfil da Remuneração — **já feito**: `organograma.html` usa `pode_ver_valores` (painel admin), sem matrícula hardcoded.
 
 - 2026-08-16 — **Organograma Parte 1 EXECUTADA** (árvore via `organograma_colaboradores` + CES via `organograma_ces`; fotos do bucket de avatares; ENDPOINT/CES_URL removidos). Armário e Medicina seguem no Apps Script (Parte 2).
