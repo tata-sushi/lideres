@@ -36,14 +36,14 @@
 - [x] **Solicitações** (`kpis/rh/solicitacoes.html`) — migrada (ver seção própria).
 - [ ] **Desligamentos** (`kpis/rh/desligamentos.html`) — **não tem base; criar do zero.**
 - [x] **Performance** (`kpis/rh/performance.html`) — MIGRADA 19/08, **100% Supabase (0 fontes Google)**. 7 fontes: CES→`organograma_ces`, Reclamações→`reclamacoes_listar`, Colaboradores→`organograma_colaboradores`(+fallback `hc_colaboradores_listar`), Exames→`exames_listar`, Absenteísmo→`ausencia_listar`, Turnover→`hc_turnover_listar`, Banco de Horas→`banco_horas_listar(60)`. Removidas chave Sheets API e todos os endpoints Apps Script. **Validar visualmente os gráficos** (esp. BH — a agregação usa a snapshot congelada por tipo).
-- [ ] **Demandas / demandas2** — complexo: depende de Solicitações e migrar tudo pro Kanban.
+- [x] **Demandas / demandas2** — ✅ FEITO 19/08: `demandas.html` (re-aplicada) e `demandas2.html` (migração fresca) → `rpc('demandas_lista')` (Kanban, 732). `solicitacoes/solicitacoes2` já eram Supabase. Corrigido bug de sintaxe pré-existente na demandas2.
 - [x] **Fornecedores e Parceiros** — ✅ FEITO 19/08 (consolidado em `ps.html` + 15 páginas de área migradas p/ `operacao.catalogo_itens`).
 - [ ] **Brainstorm** — **refazer o conceito** (não é migração 1:1).
 - Fora do escopo (Power BI): `hc2`, `desligamentos2`, `bancodehoras2`.
 
 ### Demandas
-- [ ] **`demandas.html`** (dashboard separado) — migrar p/ `rpc('demandas_lista')` quando o usuário liberar ("demandas não é agora"). RPC já corrigida (725 = 712+7+6).
-- [ ] Definir se a coluna **"Testes"** (2 cards) conta como demanda (hoje "Em andamento" = 6; seria 8 com Testes).
+- [x] **`demandas.html` + `demandas2.html`** — migradas p/ `rpc('demandas_lista')` ✅ 19/08.
+- [ ] Definir se a coluna **"Testes"** (2 cards) conta como demanda (hoje "Em andamento" = 6; seria 8 com Testes). *(regra de negócio na RPC — decidir com o usuário)*
 
 ### Report `semanal.html` — fontes ainda no Sheets (migrar uma a uma)
 - [x] Demandas (aba Alinhamentos) → Kanban ✅
@@ -440,8 +440,8 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **Testado**: invocação real (semana 03→09/08, 124 ativos/2 deslig., 12s, idempotente) + validação do custo (Franciana saldo 10→R$233,07; Thamires saldo 50→R$1.434,27, batendo ao centavo).
 - **Agendado**: pg_cron `rhid-banco-horas-semanal` (jobid 16), `0 23 * * 1` (**seg 20:00 SP**), pega a semana anterior (já fechada → dados RHID completos).
 - **Salário fonte**: usa `cargos_salarios` (por cargo), **não** o valor individual antigo da planilha — decisão do usuário (muda o salário do cargo → recalcula o custo das semanas **novas**; história fica congelada).
-- [ ] Os ~20 ativos com `cargo_id` fora do `cargos_salarios` (mesmo case-insensitive) → salário null / custo 0 até alinhar a tabela de cargos.
-- [ ] Migrar o "dashboard completo" (custo/passivo) com gate `pode_ver_valores` quando for a hora.
+- [x] ~~~20 cargos fora de `cargos_salarios`~~ — usuário resolve com outro agente (cadastro no RH). **Desconsiderado aqui.**
+- [x] ~~Dashboard custo/passivo com gate `pode_ver_valores`~~ — **desconsiderado** (decisão do usuário 19/08).
 
 - 2026-08-16 — **Banco de Horas COMPLETO** (tabela+RPC+backfill 15.464+front+Edge Function `rhid-banco-horas-sync`+cron). Positivas/Negativas/Pagas/Perdidas cobertos (Apps Script colado pelo usuário). Salário por cargo (cargos_salarios), custo congelado.
 
