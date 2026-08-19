@@ -35,7 +35,7 @@
 - [x] **Reclamações** (`kpis/rh/reclamacoes.html`) — migrada (ver seção própria).
 - [x] **Solicitações** (`kpis/rh/solicitacoes.html`) — migrada (ver seção própria).
 - [ ] **Desligamentos** (`kpis/rh/desligamentos.html`) — **não tem base; criar do zero.**
-- [ ] **Performance** (`kpis/rh/performance.html`) — **será o último.**
+- [x] **Performance** (`kpis/rh/performance.html`) — MIGRADA 19/08, **100% Supabase (0 fontes Google)**. 7 fontes: CES→`organograma_ces`, Reclamações→`reclamacoes_listar`, Colaboradores→`organograma_colaboradores`(+fallback `hc_colaboradores_listar`), Exames→`exames_listar`, Absenteísmo→`ausencia_listar`, Turnover→`hc_turnover_listar`, Banco de Horas→`banco_horas_listar(60)`. Removidas chave Sheets API e todos os endpoints Apps Script. **Validar visualmente os gráficos** (esp. BH — a agregação usa a snapshot congelada por tipo).
 - [ ] **Demandas / demandas2** — complexo: depende de Solicitações e migrar tudo pro Kanban.
 - [x] **Fornecedores e Parceiros** — ✅ FEITO 19/08 (consolidado em `ps.html` + 15 páginas de área migradas p/ `operacao.catalogo_itens`).
 - [ ] **Brainstorm** — **refazer o conceito** (não é migração 1:1).
