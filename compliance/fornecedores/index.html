@@ -563,10 +563,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 /* ══════════════════════════════════════
-   CONFIG — substitua pela URL do Apps Script
+   CONFIG — dados no Supabase (catalogo.itens via RPCs em tata_plus). Apps Script removido.
 ══════════════════════════════════════ */
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw_cY5gl-PfgniYQ9xhxb6RuNlq1rXCefvqqWXhpiLgRHteaVKbqmjFlZGPFSM_5et6yw/exec';
-var SHEET_NAME      = 'Parceiros';
 
 /* ══════════════════════════════════════
    ÍCONES por categoria
@@ -665,22 +663,25 @@ function hideLoading() {
   if (el) el.classList.remove('show');
 }
 
+// Dados de Parceiros/Fornecedores migrados p/ Supabase (catalogo.itens via RPCs em tata_plus).
+var CATALOGO_TIPO = 'parceiro';
+function comSupa(cb) {
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true });
+}
 function loadItems() {
-  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'DEPLOY_URL_AQUI') {
-    setTimeout(function(){ renderItems(MOCK_DATA); hideLoading(); }, 600);
-    return;
-  }
-  fetch(APPS_SCRIPT_URL + '?action=get&sheet=' + SHEET_NAME)
-    .then(function(r){ return r.json(); })
-    .then(function(d){ renderItems(d.data || []); })
-    .catch(function(){ renderItems(MOCK_DATA); })
-    .finally(hideLoading);
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('catalogo_listar', { p_tipo: CATALOGO_TIPO }).then(function(r){
+      hideLoading();
+      if (r.error) { console.error('catalogo_listar', r.error); renderItems([]); return; }
+      renderItems(Array.isArray(r.data) ? r.data : []);
+    });
+  });
 }
 
 /* ══════════════════════════════════════
    DRAWER
 ══════════════════════════════════════ */
-var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
@@ -781,23 +782,13 @@ function submitForm() {
   btn.textContent = 'Enviando...';
   btn.disabled = true;
 
-  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'DEPLOY_URL_AQUI') {
-    setTimeout(function(){
-      document.getElementById('form-body').style.display = 'none';
-      document.getElementById('form-footer').style.display = 'none';
-      document.getElementById('form-success').style.display = 'block';
-    }, 800);
-    return;
-  }
-
   var email    = document.getElementById('f-email').value.trim();
   var whatsapp = document.getElementById('f-whatsapp').value.trim();
 
-  var payload = {
-    action:         _editMode ? 'update' : 'add',
-    nome_original:  _editMode ? _editNomeOriginal : undefined,
-    sheet:          SHEET_NAME,
+  var args = { p: {
+    tipo:           CATALOGO_TIPO,
     nome:           nome,
+    nome_original:  _editMode ? _editNomeOriginal : null,
     categoria:      cat,
     descricao:      desc,
     departamentos:  depts.join(', '),
@@ -805,12 +796,12 @@ function submitForm() {
     email:          email,
     whatsapp:       whatsapp,
     enviado_por:    lider
-  };
+  } };
 
-  fetch(APPS_SCRIPT_URL, { method:'POST', body:JSON.stringify(payload) })
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if (d.ok) {
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('catalogo_gravar', args).then(function(r){
+      var d = r && r.data;
+      if (!r.error && d && d.ok) {
         if (_editMode) {
           document.querySelector('.form-success-title').textContent = 'Fornecedor atualizado!';
           document.querySelector('.form-success-desc').textContent = 'As alterações foram salvas com sucesso.';
@@ -819,17 +810,14 @@ function submitForm() {
         document.getElementById('form-footer').style.display = 'none';
         document.getElementById('form-success').style.display = 'block';
         if (_editMode) { setTimeout(function(){ closeFormModal(); loadItems(); }, 1400); }
+        else { loadItems(); }
       } else {
         btn.textContent = _editMode ? 'Salvar Alterações' : 'Acrescentar Fornecedor';
         btn.disabled = false;
-        alert('Erro: ' + (d.message || 'Tente novamente.'));
+        alert('Erro: ' + ((r.error && r.error.message) || (d && d.error) || 'Tente novamente.'));
       }
-    })
-    .catch(function(){
-      btn.textContent = _editMode ? 'Salvar Alterações' : 'Acrescentar Fornecedor';
-      btn.disabled = false;
-      alert('Erro ao enviar. Tente novamente.');
     });
+  });
 }
 
 /* ══════════════════════════════════════
@@ -901,23 +889,13 @@ function confirmDelete() {
   btn.textContent = 'Excluindo...';
   btn.disabled = true;
 
-  var session = window.__lideresSession;
-  if (!session) try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-  var lider = (session && session.displayName) ? session.displayName : '';
-
-  var payload = { action: 'delete', sheet: SHEET_NAME, nome: t.nome, enviado_por: lider };
-
-  fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('catalogo_excluir', { p_tipo: CATALOGO_TIPO, p_nome: t.nome }).then(function(r){
       closeDeleteConfirm();
-      if (d.ok) { loadItems(); }
-      else { alert('Erro ao excluir: ' + (d.message || 'Tente novamente.')); }
-    })
-    .catch(function() {
-      closeDeleteConfirm();
-      alert('Erro ao excluir. Tente novamente.');
+      if (!r.error && r.data && r.data.ok) { loadItems(); }
+      else { alert('Erro ao excluir: ' + ((r.error && r.error.message) || 'Tente novamente.')); }
     });
+  });
 }
 
 (function() {

@@ -81,6 +81,13 @@
 - [x] **Backfill** (via subagente): **78 chamados** (MNT-001→078) + **88 devolutivas**, lidos da planilha (`read_file_content`, 2 abas). Datas DD/MM→date, ts America/Sao_Paulo, custo/foto preservados, `\!`/`\_` limpos. ⚠️ Aba Devolutivas veio **truncada** na leitura (últimas devolutivas após 12/08 10:57 não entraram — cauda histórica; chamados completos).
 - [~] **Fotos antigas (74 do Drive):** usuário migra manualmente depois (links do Drive são públicos e funcionam; fotos novas já vão pro Storage). Edge Function `migrar-fotos-manutencao` escrita (baixa do Drive→sobe no bucket, server-side) + RPC `tata_plus.manut_fotos_drive_ids()` prontos, mas **deploy travado em aprovação** — retomar quando quiser automatizar.
 
+### Fornecedores & Ferramentas (catálogo) — Sheets/Apps Script → Supabase
+- [x] **Schema `catalogo`** + tabela `itens` (tipo `parceiro`|`ferramenta`, nome, categoria, descricao, departamentos[CSV], subsistemas_rh[CSV], email, whatsapp, enviado_por). Unique `(tipo, nome)` (case-sensitive — preserva "TATÁ Plus"/"Tatá Plus"). RLS on.
+- [x] **RPCs em `tata_plus`** (SECURITY DEFINER, `authenticated`): `catalogo_listar(p_tipo)` (jsonb), `catalogo_gravar(p jsonb)` (add/update por `nome_original`, upsert on conflict), `catalogo_excluir(p_tipo, p_nome)`. As DUAS páginas usam os mesmos RPCs (só muda `tipo`).
+- [x] **Backfill** (subagente): planilha "Ferramentas e Parceiros" (`1LcMOMqvpHcKmhpXvzkWz8-bwDvPNUvJCYWeCndGENgQ`, 2 abas) → **20 parceiros + 25 ferramentas**. `\&`→`&` limpo; email/whatsapp só nos parceiros.
+- [x] **Front `fornecedores/index.html`** (tipo=`parceiro`): `loadItems`→`catalogo_listar`, `submitForm`→`catalogo_gravar`, `confirmDelete`→`catalogo_excluir` (via `comSupa`). `APPS_SCRIPT_URL`/`SHEET_NAME`/`COLAB_URL` removidos.
+- [ ] **Front `ferramentas/index.html`** (tipo=`ferramenta`) — mesma migração (RPCs já prontos, dados já no banco). *(próximo)*
+
 ### Segurança / limpeza
 - [ ] **uazapi token hardcoded** nos fluxos → mover p/ credencial do n8n.
 - [ ] Remover hook `__test_number` do fluxo ouvidoria quando não precisar mais testar.
