@@ -1094,8 +1094,8 @@ function openFab() {
   document.getElementById('fab-overlay').classList.add('open');
   document.getElementById('fab-box').scrollTop = 0;
   var el = document.getElementById('fab-solicitante');
-  if (el && typeof LOGGED_USER !== 'undefined') el.value = LOGGED_USER;
-  _manutPopularFormColabs(); // unidade/departamento do Supabase (profiles) + pré-seleção do usuário
+  if (el && typeof LOGGED_USER === 'string' && LOGGED_USER) el.value = LOGGED_USER; // fallback imediato; o profile sobrescreve
+  _manutPopularFormColabs(); // solicitante + unidade + departamento vêm do profile do usuário logado
 }
 function closeFab() { document.getElementById('fab-overlay').classList.remove('open'); }
 function handleFabOverlayClick(e) { if (e.target===document.getElementById('fab-overlay')) closeFab(); }
@@ -1291,13 +1291,24 @@ carregarDados();
 <script>
 // ── SESSÃO ────────────────────────────────────────────────────────────────────
 // Herda login do index (localStorage lideres_session)
-var LOGGED_USER = (function() {
+// Nome do usuário logado. A sessão do modelo novo (gate.js) NÃO grava expiresAt —
+// ela publica window.__lideresUser e o displayName em localStorage. Lemos daí.
+function _lideresUserNome() {
+  if (window.__lideresUser) return window.__lideresUser;
   try {
     var s = JSON.parse(localStorage.getItem('lideres_session'));
-    if (s && s.displayName && s.expiresAt > Date.now()) return s.displayName;
+    if (s && s.displayName) return s.displayName;
   } catch(e) {}
   return '';
-})();
+}
+var LOGGED_USER = _lideresUserNome();
+// O gate resolve a sessão de forma assíncrona (postMessage do Plus). Quando o
+// perfil chega, re-sincroniza o nome e o chip do header.
+window.addEventListener('lideres:sessao', function(){
+  LOGGED_USER = _lideresUserNome();
+  var hu = document.getElementById('header-user');
+  if (hu && LOGGED_USER) hu.textContent = String(LOGGED_USER).trim().split(/\s+/)[0];
+});
 
 (function() {
   var session;
@@ -1322,12 +1333,17 @@ function doLogout() {
   window.location.replace('https://lideres.tatasushi.tech/');
 }
 
-// Preenche campo autor ao abrir modal
+// Preenche o "Autor da devolutiva" com o nome do PROFILE do usuário logado.
 var _origOpenModal = openModal;
 openModal = function(id) {
   _origOpenModal(id);
   var el = document.getElementById('dev-responsavel');
-  if (el) el.value = LOGGED_USER;
+  if (el && LOGGED_USER) el.value = LOGGED_USER; // fallback imediato
+  _manutMeuPerfil(function(p){
+    var nome = (p && p.nome) || LOGGED_USER || '';
+    var el2 = document.getElementById('dev-responsavel');
+    if (el2 && nome) el2.value = nome;
+  });
 };
 
 // Colaboradores (unidade/departamento) — vêm do Supabase (tata_plus.colaboradores_publicos), não mais do Apps Script.
@@ -1352,23 +1368,52 @@ function _preencherSelect(id, valores) {
   valores.forEach(function(v){ var o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
   if (atual) sel.value = atual;
 }
-function _manutPopularFormColabs() {
-  _manutCarregarColabs(function(colabs){
-    if (!colabs || !colabs.length) return; // sem dados → mantém as opções padrão do HTML
-    var us = Array.from(new Set(colabs.map(function(c){ return (c.unidade||'').trim(); }).filter(Boolean))).sort();
-    var ds = Array.from(new Set(colabs.map(function(c){ return (c.departamento||'').trim(); }).filter(Boolean))).sort();
-    _preencherSelect('fab-unidade', us);
-    _preencherSelect('fab-departamento', ds);
-    // pré-seleciona unidade/departamento do usuário logado (match por nome no profile)
-    if (typeof LOGGED_USER === 'string' && LOGGED_USER) {
-      var me = colabs.find(function(c){ return (c.nome||'').trim().toLowerCase() === LOGGED_USER.trim().toLowerCase(); });
-      if (me) {
-        var su = document.getElementById('fab-unidade'); if (su && me.unidade) su.value = me.unidade;
-        var sd = document.getElementById('fab-departamento'); if (sd && me.departamento) sd.value = me.departamento;
+// Perfil do usuário logado — vem de tata_plus.profiles via RPC colaborador_logado()
+// (resolve pelo e-mail do JWT da sessão do Plus). Traz nome/unidade/departamento/cargo.
+var _meuPerfilCache = null;
+function _manutMeuPerfil(cb) {
+  if (_meuPerfilCache) { if (cb) cb(_meuPerfilCache); return; }
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('colaborador_logado').then(function(r){
+      var row = (!r.error && Array.isArray(r.data) && r.data[0]) ? r.data[0] : null;
+      if (row) {
+        _meuPerfilCache = row;
+        if (row.nome) LOGGED_USER = row.nome; // sincroniza o nome autoritativo do profile
       }
-    }
+      if (cb) cb(_meuPerfilCache);
+    }, function(){ if (cb) cb(null); });
   });
 }
+// Garante que a opção exista no <select> e a seleciona.
+function _preSelectOption(id, val) {
+  if (!val) return;
+  var sel = document.getElementById(id);
+  if (!sel) return;
+  var has = Array.prototype.some.call(sel.options, function(o){ return o.value === val || o.textContent === val; });
+  if (!has) { var o = document.createElement('option'); o.value = val; o.textContent = val; sel.appendChild(o); }
+  sel.value = val;
+}
+function _manutPopularFormColabs() {
+  _manutCarregarColabs(function(colabs){
+    if (colabs && colabs.length) { // popula as opções dos selects a partir dos colaboradores
+      var us = Array.from(new Set(colabs.map(function(c){ return (c.unidade||'').trim(); }).filter(Boolean))).sort();
+      var ds = Array.from(new Set(colabs.map(function(c){ return (c.departamento||'').trim(); }).filter(Boolean))).sort();
+      _preencherSelect('fab-unidade', us);
+      _preencherSelect('fab-departamento', ds);
+    }
+    // Puxa TUDO do profile do usuário logado: solicitante + unidade + departamento.
+    _manutMeuPerfil(function(p){
+      if (!p) return;
+      var sol = document.getElementById('fab-solicitante');
+      if (sol && p.nome) sol.value = p.nome;
+      _preSelectOption('fab-unidade', p.unidade);
+      _preSelectOption('fab-departamento', p.departamento);
+    });
+  });
+}
+// Aquece o cache do profile assim que a sessão do Plus resolver, para que os
+// modais já abram preenchidos (sem esperar a rede no clique).
+comSupa(function(){ _manutMeuPerfil(); });
 var _drawerKpisLoaded = false;
 function loadDrawerKPIs() {
   if (_drawerKpisLoaded) return;
