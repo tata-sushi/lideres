@@ -26,7 +26,7 @@ Padrão (piloto Ouvidoria, fechado):
 ### 🟡 Grupo B — vinculações definidas pelo usuário
 - [x] `areas/rh/ponto` → `kpis/rh/escalas` ✅
 - [x] `areas/rh/sst` → `kpis/rh/medicina` ✅
-- [ ] `areas/rh/rt` → `kpis/rh/reclamacoes`
+- [x] `areas/rh/rt` → `kpis/rh/reclamacoes` ✅
 - [ ] `areas/rh/res` → `kpis/rh/recrutamento`  ⚠️ **CUIDADO EXTREMO — dashboard pesado.** Fazer por último, validação reforçada, apresentar antes do push.
 
 ### ⛔ Sem destino (não fazer agora)
