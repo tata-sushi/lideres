@@ -27,7 +27,7 @@ Padrão (piloto Ouvidoria, fechado):
 - [x] `areas/rh/ponto` → `kpis/rh/escalas` ✅
 - [x] `areas/rh/sst` → `kpis/rh/medicina` ✅
 - [x] `areas/rh/rt` → `kpis/rh/reclamacoes` ✅
-- [ ] `areas/rh/res` → `kpis/rh/recrutamento`  ⚠️ **CUIDADO EXTREMO — dashboard pesado.** Fazer por último, validação reforçada, apresentar antes do push.
+- [x] `areas/rh/res` → `kpis/rh/recrutamento` ✅ ⚠️ **CUIDADO EXTREMO — dashboard pesado.** Fazer por último, validação reforçada, apresentar antes do push.
 
 ### ⛔ Sem destino (não fazer agora)
 - `areas/rh/sancoes` — ainda não tem dashboard.
