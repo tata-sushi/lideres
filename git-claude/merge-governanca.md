@@ -21,7 +21,7 @@ Padrão (piloto Ouvidoria, fechado):
 - [x] `areas/rh/ferias` → `kpis/rh/ferias` ✅
 - [x] `areas/rh/beneficios` → `kpis/rh/beneficios` ✅
 - [x] `areas/rh/desligamentos` → `kpis/rh/desligamentos` ✅
-- [ ] `areas/rh/admissao` → `kpis/rh/admissao`  *(beast: 2744 linhas, 45 fns, gerador de documento — parar e avisar se o JS estiver arriscado)*
+- [x] `areas/rh/admissao` → `kpis/rh/admissao` ✅ *(beast: 2744 linhas, 45 fns, gerador de documento — parar e avisar se o JS estiver arriscado)*
 
 ### 🟡 Grupo B — vinculações definidas pelo usuário
 - [x] `areas/rh/ponto` → `kpis/rh/escalas` ✅
