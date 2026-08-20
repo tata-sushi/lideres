@@ -24,7 +24,7 @@ Padrão (piloto Ouvidoria, fechado):
 - [ ] `areas/rh/admissao` → `kpis/rh/admissao`  *(beast: 2744 linhas, 45 fns, gerador de documento — parar e avisar se o JS estiver arriscado)*
 
 ### 🟡 Grupo B — vinculações definidas pelo usuário
-- [ ] `areas/rh/ponto` → `kpis/rh/escalas`
+- [x] `areas/rh/ponto` → `kpis/rh/escalas` ✅
 - [ ] `areas/rh/sst` → `kpis/rh/medicina`
 - [ ] `areas/rh/rt` → `kpis/rh/reclamacoes`
 - [ ] `areas/rh/res` → `kpis/rh/recrutamento`  ⚠️ **CUIDADO EXTREMO — dashboard pesado.** Fazer por último, validação reforçada, apresentar antes do push.
