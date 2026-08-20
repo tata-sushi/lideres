@@ -20,7 +20,7 @@ Padrão (piloto Ouvidoria, fechado):
 ### 🟢 Grupo A — pares diretos (mesmo nome) — *aguardando "ok" do usuário*
 - [x] `areas/rh/ferias` → `kpis/rh/ferias` ✅
 - [x] `areas/rh/beneficios` → `kpis/rh/beneficios` ✅
-- [ ] `areas/rh/desligamentos` → `kpis/rh/desligamentos`
+- [x] `areas/rh/desligamentos` → `kpis/rh/desligamentos` ✅
 - [ ] `areas/rh/admissao` → `kpis/rh/admissao`  *(beast: 2744 linhas, 45 fns, gerador de documento — parar e avisar se o JS estiver arriscado)*
 
 ### 🟡 Grupo B — vinculações definidas pelo usuário
