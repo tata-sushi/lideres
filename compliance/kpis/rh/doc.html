@@ -1201,14 +1201,41 @@ function _docCategorias() {
   return ordem;
 }
 
-function _docMesesRecentes(n) {
-  var out = [], d = new Date();
-  d.setDate(1);
-  for (var i = 0; i < n; i++) {
-    out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
-    d.setMonth(d.getMonth() - 1);
-  }
-  return out;
+function _docMesStr(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+
+// Meses (mais recente primeiro) entre `desde` (Date, mês da admissão) e o mês atual.
+function _docMesesEntre(desde) {
+  var out = [], hoje = new Date();
+  var d = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  var limite = new Date(desde.getFullYear(), desde.getMonth(), 1);
+  while (d >= limite) { out.push(_docMesStr(d)); d.setMonth(d.getMonth() - 1); }
+  return out.length ? out : [_docMesStr(hoje)];
+}
+
+// Cartão de Ponto de UM colaborador: desde a admissão dele até hoje (usado no modal).
+function _docMesesDesdeAdmissao(matricula) {
+  var col = _docColaborador(matricula);
+  var d = (col && col.data_admissao) ? new Date(col.data_admissao + 'T00:00:00') : new Date();
+  return _docMesesEntre(d);
+}
+
+// Colunas de Cartão de Ponto da TABELA: desde a admissão mais antiga entre as linhas visíveis.
+function _docMesRangeTabela() {
+  var minAdm = null;
+  (_docRows || []).forEach(function (c) {
+    if (!c.data_admissao) return;
+    var d = new Date(c.data_admissao + 'T00:00:00');
+    if (!minAdm || d < minAdm) minAdm = d;
+  });
+  return _docMesesEntre(minAdm || new Date());
+}
+
+// true quando `competencia` (YYYY-MM) é anterior ao mês de admissão do colaborador.
+function _docAntesDaAdmissao(matricula, competencia) {
+  if (!competencia) return false;
+  var col = _docColaborador(matricula);
+  if (!col || !col.data_admissao) return false;
+  return competencia < col.data_admissao.slice(0, 7);
 }
 
 function _docFmtCompetencia(c) {
@@ -1254,7 +1281,7 @@ function _docRenderSecoes(matricula) {
     html += '<div class="doc-secao-title">' + escH(categoria) + '</div>';
     tipos.forEach(function (tipo) {
       if (tipo.periodicidade === 'mensal') {
-        _docMesesRecentes(6).forEach(function (comp) {
+        _docMesesDesdeAdmissao(matricula).forEach(function (comp) {
           html += _docItemHtml(matricula, tipo, comp, tipo.nome + ' — ' + _docFmtCompetencia(comp));
         });
       } else {
@@ -1294,14 +1321,18 @@ function _docFileSelecionado(ev) {
   var SB = window.__lideresSupa;
   if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
   var tipo = (docTipos || []).find(function (t) { return t.id === ctx.tipoId; });
+  var col = _docColaborador(ctx.matricula);
   var ext = (file.name.split('.').pop() || 'bin');
   var base = _slug(tipo ? tipo.nome : 'documento') + (ctx.competencia ? '-' + ctx.competencia : '');
   var path = ctx.matricula + '/' + _slug(tipo ? tipo.categoria : 'geral') + '/' + base + '-' + Date.now() + '.' + ext;
+  // Nome de exibição: "<Colaborador> - <Documento>[ <Competência>].ext" — não o nome original do arquivo enviado.
+  var nomeArquivo = (col ? col.nome : ctx.matricula) + ' - ' + (tipo ? tipo.nome : 'Documento') +
+    (ctx.competencia ? ' ' + _docFmtCompetencia(ctx.competencia) : '') + '.' + ext;
   SB.storage.from('dp-documentos').upload(path, file, { upsert: true }).then(function (r) {
     if (r.error) { alert('Erro ao enviar arquivo:\n' + r.error.message); return; }
     return SB.rpc('colaborador_documentos_sandbox_salvar', {
       p_matricula: ctx.matricula, p_tipo_id: ctx.tipoId, p_competencia: ctx.competencia,
-      p_nome_arquivo: file.name, p_link: path, p_mime: file.type || null, p_tamanho: file.size || null,
+      p_nome_arquivo: nomeArquivo, p_link: path, p_mime: file.type || null, p_tamanho: file.size || null,
       p_enviado_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido'
     });
   }).then(function (r) {
@@ -1339,6 +1370,9 @@ function _docCellHtml(matricula, tipo, competencia) {
   if (!_docAplica(tipo, matricula)) {
     return '<span class="doc-dot doc-dot-na" title="Não se aplica">—</span>';
   }
+  if (_docAntesDaAdmissao(matricula, competencia)) {
+    return '<span class="doc-dot doc-dot-na" title="Antes da admissão">—</span>';
+  }
   var doc = _docDoc(matricula, tipo.id, competencia);
   if (doc && doc.status === 'dispensado') {
     return '<span class="doc-dot doc-dot-amarelo" title="Não se aplica">●</span>';
@@ -1355,7 +1389,7 @@ function _docGroupsF() {
     var cols = [];
     tipos.forEach(function (tipo) {
       if (tipo.periodicidade === 'mensal') {
-        _docMesesRecentes(3).forEach(function (comp) {
+        _docMesRangeTabela().forEach(function (comp) {
           cols.push([tipo.nome + ' ' + _docFmtCompetencia(comp), function (col) { return _docCellHtml(col.matricula, tipo, comp); }]);
         });
       } else {
