@@ -148,6 +148,7 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 .doc-dot-verde { background: var(--green-bg); color: var(--green); }
 .doc-dot-vermelho { background: var(--red-bg); color: var(--red); }
 .doc-dot-amarelo { background: var(--amber-bg); color: var(--amber); cursor: default; }
+.doc-dot-na { background: var(--bg); color: var(--muted); cursor: default; }
 
 .card-body { padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
 .card-field { display: flex; flex-direction: column; gap: 1px; }
@@ -1158,13 +1159,26 @@ function _slug(s) {
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
 
-function _docTiposObrigatoriosUnicos() {
-  return (docTipos || []).filter(function (t) { return t.obrigatorio && t.periodicidade === 'unico'; });
+function _docColaborador(matricula) {
+  return (docColaboradores || []).find(function (c) { return c.matricula === matricula; });
+}
+
+// Tipos como ASO Demissional / Documentos de Desligamento só fazem sentido pra quem já saiu.
+function _docAplica(tipo, matricula) {
+  if (!tipo.aplica_somente_inativo) return true;
+  var col = _docColaborador(matricula);
+  return !!(col && col.status === 'Inativo');
+}
+
+function _docTiposObrigatoriosUnicos(matricula) {
+  return (docTipos || []).filter(function (t) {
+    return t.obrigatorio && t.periodicidade === 'unico' && _docAplica(t, matricula);
+  });
 }
 
 function _docScore(matricula) {
   // "Em ordem" = entregue OU dispensado (não precisa). Só falta quando não tem nenhum dos dois.
-  var obrig = _docTiposObrigatoriosUnicos();
+  var obrig = _docTiposObrigatoriosUnicos(matricula);
   var meus = (colaboradorDocumentos || []).filter(function (d) {
     return d.matricula === matricula && (d.status === 'entregue' || d.status === 'dispensado');
   });
@@ -1211,6 +1225,9 @@ function _docDoc(matricula, tipoId, competencia) {
 }
 
 function _docItemHtml(matricula, tipo, competencia, label) {
+  if (!_docAplica(tipo, matricula)) {
+    return '<div class="doc-item"><div class="doc-item-label">' + escH(label) + '</div><span class="status-badge">Não se aplica</span></div>';
+  }
   var doc = _docDoc(matricula, tipo.id, competencia);
   var status = doc ? doc.status : null;
   var badge, acao;
@@ -1319,6 +1336,9 @@ var _docRows = [];
 var _docShown = DOC_PAGE;
 
 function _docCellHtml(matricula, tipo, competencia) {
+  if (!_docAplica(tipo, matricula)) {
+    return '<span class="doc-dot doc-dot-na" title="Não se aplica">—</span>';
+  }
   var doc = _docDoc(matricula, tipo.id, competencia);
   if (doc && doc.status === 'dispensado') {
     return '<span class="doc-dot doc-dot-amarelo" title="Não se aplica">●</span>';
@@ -1395,11 +1415,21 @@ function _docTableHtml() {
     '<div id="doc-more" class="anl-more">' + _docMoreHtml() + '</div></div>';
 }
 
+function setDocStatusFiltro(v) { state.docStatusFiltro = v; renderDocGestao(); }
+
 function renderDocGestao() {
+  if (!state.docStatusFiltro) state.docStatusFiltro = 'Ativo';
   document.getElementById('filters-wrap').innerHTML =
-    '<div class="anl-busca-bar"><input class="filter-select" style="width:100%" type="text" placeholder="Buscar colaborador, cargo ou unidade..." value="' + escH(state.docBusca || '') + '" oninput="setDocBusca(this.value)"></div>';
+    '<div class="anl-busca-bar">' +
+    '<select class="filter-select" onchange="setDocStatusFiltro(this.value)">' +
+    ['Ativo', 'Inativo', 'Todos'].map(function (v) {
+      return '<option value="' + v + '"' + (state.docStatusFiltro === v ? ' selected' : '') + '>' + (v === 'Ativo' ? 'Ativos' : v === 'Inativo' ? 'Inativos' : 'Todos') + '</option>';
+    }).join('') +
+    '</select>' +
+    '<input class="filter-select" style="width:100%" type="text" placeholder="Buscar colaborador, cargo ou unidade..." value="' + escH(state.docBusca || '') + '" oninput="setDocBusca(this.value)"></div>';
   var busca = norm((state.docBusca || '').toLowerCase());
   _docRows = (docColaboradores || []).filter(function (c) {
+    if (state.docStatusFiltro !== 'Todos' && c.status !== state.docStatusFiltro) return false;
     if (!busca) return true;
     return norm((c.nome || '').toLowerCase()).indexOf(busca) >= 0 ||
       norm((c.cargo || '').toLowerCase()).indexOf(busca) >= 0 ||
