@@ -992,6 +992,7 @@ var docCargos = [];              // dp_rh.cargos (nomes) — pra tela de classif
 var docCargoExcecoes = [];       // dp_rh.doc_tipos_cargo_excecoes — regra "esse cargo (não) precisa desse tipo"
 var docColabExcecoes = [];       // dp_rh.colaborador_doc_excecoes — exceção pontual por pessoa, sobrepõe a regra de cargo
 var docEventos = [];             // eventos de ausência/sanção que exigem documento (dp_rh.doc_eventos_regras)
+var docEventosCortes = [];       // dp_rh.doc_eventos_cortes — quebras manuais de período dentro de um evento
 var _testeCache = [];
 var _entrevistaCache = [];
 var state = {
@@ -1053,11 +1054,12 @@ function loadAllData() {
     SB.rpc('doc_cargos_sandbox_listar'),                   // lista de cargos p/ tela de classificação
     SB.rpc('doc_tipos_cargo_excecoes_sandbox_listar'),     // regra "esse cargo (não) precisa desse tipo"
     SB.rpc('colaborador_doc_excecoes_sandbox_listar'),     // exceção por pessoa (sobrepõe a regra de cargo)
-    SB.rpc('doc_eventos_sandbox_listar')                   // ausência/sanção que exigem documento (últimos 60 dias — fase de teste)
+    SB.rpc('doc_eventos_sandbox_listar'),                  // ausência/sanção que exigem documento (últimos 60 dias — fase de teste)
+    SB.rpc('doc_eventos_cortes_sandbox_listar')             // quebras manuais de período dentro de um evento
   ]).then(function (results) {
     var res = results[0], vres = results[1], cres = results[2], csres = results[3], ares = results[4];
     var dtres = results[5], cdres = results[6], colres = results[7];
-    var cgres = results[8], dcres = results[9], ceres = results[10], evres = results[11];
+    var cgres = results[8], dcres = results[9], ceres = results[10], evres = results[11], ecres = results[12];
     agendaLideres = (ares && !ares.error && Array.isArray(ares.data)) ? ares.data : [];
     docTipos = (dtres && !dtres.error && Array.isArray(dtres.data)) ? dtres.data : [];
     colaboradorDocumentos = (cdres && !cdres.error && Array.isArray(cdres.data)) ? cdres.data : [];
@@ -1066,6 +1068,7 @@ function loadAllData() {
     docCargoExcecoes = (dcres && !dcres.error && Array.isArray(dcres.data)) ? dcres.data : [];
     docColabExcecoes = (ceres && !ceres.error && Array.isArray(ceres.data)) ? ceres.data : [];
     docEventos = (evres && !evres.error && Array.isArray(evres.data)) ? evres.data : [];
+    docEventosCortes = (ecres && !ecres.error && Array.isArray(ecres.data)) ? ecres.data : [];
     _colabs = (cres && !cres.error && Array.isArray(cres.data)) ? cres.data : [];
     _csCargos = (csres && !csres.error && csres.data && Array.isArray(csres.data.cargos)) ? csres.data.cargos : [];
     // ── Vagas ── (RPC devolve { pode_ver, vagas }; salários mascarados no servidor se não pode ver)
@@ -1395,7 +1398,87 @@ function _docItemEventoHtml(matricula, origem, evento) {
     badge = '<span class="status-badge sel-red">Pendente</span>';
     acao = '<button class="btn-avaliar" onclick="_docAbrirUploadEvento(\'' + escH(matricula) + '\',\'' + origem + '\',\'' + evento.evento_id + '\')">Anexar</button>';
   }
-  return '<div class="doc-item-wrap"><div class="doc-item"><div class="doc-item-label">' + escH(label) + '</div>' + badge + acao + '</div></div>';
+  return '<div class="doc-item-wrap"><div class="doc-item"><div class="doc-item-label">' + escH(label) + '</div>' + badge + acao + '</div>' + _docQuebraPeriodoHtml(matricula, origem, evento) + '</div>';
+}
+
+// ─── Quebrar período (ausência) — divide manualmente um período de vários dias em 2 documentos ──
+var _docQuebraAberta = null; // { origem, eventoId } do item com o formulário de quebra aberto
+
+function _docCorteDoEvento(matricula, origem, evento) {
+  return (docEventosCortes || []).find(function (c) {
+    return c.matricula === matricula && c.origem === origem && c.nome_documento === evento.nome_documento && c.data_corte === evento.data_inicio;
+  });
+}
+
+function _docQuebraPeriodoHtml(matricula, origem, evento) {
+  if (origem !== 'ausencia' || evento.data_inicio === evento.data_fim) return '';
+  var corteOrigem = _docCorteDoEvento(matricula, origem, evento);
+  var partes = [];
+  if (corteOrigem) {
+    partes.push('<a href="#" class="doc-exc-reset" onclick="event.preventDefault();_docDesfazerQuebraPeriodo(\'' + escH(matricula) + '\',\'' + corteOrigem.id + '\')">desfazer quebra</a>');
+  }
+  var aberta = _docQuebraAberta && _docQuebraAberta.origem === origem && _docQuebraAberta.eventoId === evento.evento_id;
+  if (aberta) {
+    var diaSeguinte = _dateAddDays(evento.data_inicio, 1);
+    partes.push(
+      '<div style="display:flex;align-items:center;gap:6px;margin-top:6px">' +
+        '<input type="date" id="doc-quebra-data-' + escH(evento.evento_id) + '" min="' + diaSeguinte + '" max="' + evento.data_fim + '" style="font-family:\'DM Mono\',monospace;font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:4px">' +
+        '<button class="btn-avaliar" onclick="_docConfirmarQuebraPeriodo(\'' + escH(matricula) + '\',\'' + origem + '\',\'' + escH(evento.evento_id) + '\')">Confirmar</button>' +
+        '<a href="#" class="doc-exc-reset" onclick="event.preventDefault();_docQuebraAberta=null;document.getElementById(\'doc-colab-body\').innerHTML=_docRenderSecoes(\'' + escH(matricula) + '\');">cancelar</a>' +
+      '</div>'
+    );
+  } else {
+    partes.push('<a href="#" class="doc-exc-reset" onclick="event.preventDefault();_docQuebraAberta={origem:\'' + origem + '\',eventoId:\'' + escH(evento.evento_id) + '\'};document.getElementById(\'doc-colab-body\').innerHTML=_docRenderSecoes(\'' + escH(matricula) + '\');">quebrar período</a>');
+  }
+  return partes.join('');
+}
+
+function _dateAddDays(dataISO, dias) {
+  var d = new Date(dataISO + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+
+function _docConfirmarQuebraPeriodo(matricula, origem, eventoId) {
+  var evento = (docEventos || []).find(function (e) { return e.origem === origem && e.evento_id === eventoId; });
+  if (!evento) return;
+  var inp = document.getElementById('doc-quebra-data-' + eventoId);
+  var dataCorte = inp ? inp.value : '';
+  if (!dataCorte || dataCorte <= evento.data_inicio || dataCorte > evento.data_fim) { alert('Escolha uma data dentro do período, depois do início.'); return; }
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
+  SB.rpc('doc_eventos_corte_sandbox_salvar', {
+    p_matricula: matricula, p_nome_documento: evento.nome_documento, p_data_corte: dataCorte,
+    p_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido'
+  }).then(function (r) {
+    if (r.error) { alert('Erro ao quebrar período:\n' + r.error.message); return; }
+    _docQuebraAberta = null;
+    return _docRecarregarEventos(matricula);
+  }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
+}
+
+function _docDesfazerQuebraPeriodo(matricula, corteId) {
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
+  SB.rpc('doc_eventos_corte_sandbox_excluir', { p_id: corteId }).then(function (r) {
+    if (r.error) { alert('Erro ao desfazer quebra:\n' + r.error.message); return; }
+    return _docRecarregarEventos(matricula);
+  }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
+}
+
+function _docRecarregarEventos(matricula) {
+  var SB = window.__lideresSupa;
+  if (!SB) return;
+  return Promise.all([
+    SB.rpc('doc_eventos_sandbox_listar'),
+    SB.rpc('doc_eventos_cortes_sandbox_listar')
+  ]).then(function (results) {
+    var evres = results[0], ecres = results[1];
+    docEventos = (evres && !evres.error && Array.isArray(evres.data)) ? evres.data : [];
+    docEventosCortes = (ecres && !ecres.error && Array.isArray(ecres.data)) ? ecres.data : [];
+    var body = document.getElementById('doc-colab-body');
+    if (body) body.innerHTML = _docRenderSecoes(matricula);
+  });
 }
 
 var _docUploadEventoCtx = null;
