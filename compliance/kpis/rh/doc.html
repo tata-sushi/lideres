@@ -139,6 +139,8 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 
 /* ── GESTÃO DE DOCUMENTOS (aba Analítico) ── */
 .doc-score-header { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 4px; }
+.doc-reset-all { text-align: center; padding: 8px 0 4px; }
+.doc-reset-all a { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--carbon); text-decoration: underline; cursor: pointer; }
 .doc-secao-title { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--carbon); margin: 16px 0 4px; }
 .doc-secao-title:first-of-type { margin-top: 14px; }
 .doc-item-wrap { padding: 9px 0; border-bottom: 1px solid var(--border); }
@@ -1307,6 +1309,12 @@ function _docRenderSecoes(matricula) {
   var html = '<div class="doc-score-header"><span class="field-label">Adequação documental</span>' +
     '<span class="status-badge ' + _docScoreClasse(sc) + '" style="font-size:12px;padding:5px 12px">' + sc.entregues + '/' + sc.total + '</span></div>';
 
+  var minhasExc = (docColabExcecoes || []).filter(function (e) { return e.matricula === matricula; });
+  if (minhasExc.length) {
+    var _docExcTxt = minhasExc.length > 1 ? (minhasExc.length + ' exceções individuais') : '1 exceção individual';
+    html += '<div class="doc-reset-all"><a href="#" onclick="event.preventDefault();_docLimparExcecoesPessoa(\'' + escH(matricula) + '\')">Usar padrão do cargo em tudo (remove ' + _docExcTxt + ')</a></div>';
+  }
+
   _docCategorias().forEach(function (categoria) {
     var tipos = (docTipos || []).filter(function (t) { return t.categoria === categoria; });
     html += '<div class="doc-secao-title">' + escH(categoria) + '</div>';
@@ -1411,6 +1419,23 @@ function _docRemoverExcecaoPessoa(matricula, tipoId) {
   SB.rpc('colaborador_doc_excecao_sandbox_excluir', { p_matricula: matricula, p_tipo_id: tipoId }).then(function (r) {
     if (r.error) { alert('Erro ao remover exceção:\n' + r.error.message); return; }
     docColabExcecoes = (docColabExcecoes || []).filter(function (e) { return !(e.matricula === matricula && e.tipo_id === tipoId); });
+    document.getElementById('doc-colab-body').innerHTML = _docRenderSecoes(matricula);
+    renderDocGestao();
+  }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
+}
+
+// Remove TODAS as exceções individuais dessa pessoa de uma vez — volta tudo pro padrão do cargo.
+function _docLimparExcecoesPessoa(matricula) {
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
+  var minhas = (docColabExcecoes || []).filter(function (e) { return e.matricula === matricula; });
+  if (!minhas.length) return;
+  Promise.all(minhas.map(function (e) {
+    return SB.rpc('colaborador_doc_excecao_sandbox_excluir', { p_matricula: matricula, p_tipo_id: e.tipo_id });
+  })).then(function (results) {
+    var erro = results.filter(Boolean).find(function (r) { return r.error; });
+    if (erro) { alert('Erro ao remover exceções:\n' + erro.error.message); return; }
+    docColabExcecoes = (docColabExcecoes || []).filter(function (e) { return e.matricula !== matricula; });
     document.getElementById('doc-colab-body').innerHTML = _docRenderSecoes(matricula);
     renderDocGestao();
   }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
