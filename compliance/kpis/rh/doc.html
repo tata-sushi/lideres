@@ -1467,12 +1467,28 @@ function _docCargoToggle(cargo, tipoId, aplica) {
   }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
 }
 
-function setDocBusca(v) { state.docBusca = v; renderDocGestao(); }
+// Busca por nome — re-renderiza só a tabela (mantém o foco do input), mesmo padrão do Analítico de Recrutamento.
+function setDocBusca(v) {
+  state.docBusca = v;
+  if (state.tab !== 'analitico') return;
+  _docFiltrarRows();
+  var c = document.getElementById('content');
+  if (c) { c.innerHTML = _docRows.length ? _docTableHtml() : emptyState(); _anlFitHeight(); requestAnimationFrame(_anlFitHeight); }
+  var cnt = document.querySelector('#filters-wrap .results-count span');
+  if (cnt) cnt.textContent = _docRows.length;
+}
 
 // ─── Tabela da aba Analítico (mesmo padrão de cabeçalho em 2 níveis do Analítico de Recrutamento) ──
 var DOC_PAGE = 50;
 var _docRows = [];
 var _docShown = DOC_PAGE;
+var _docCollapsed = {};   // { índice do grupo: true } → seção recolhida (mesmo padrão do Analítico de Recrutamento)
+
+function _docSigla(categoria) {
+  var partes = (categoria || '').split(/\s+/).filter(function (w) { return w && !/^(de|e|da|do)$/i.test(w); });
+  if (partes.length >= 2) return (partes[0].charAt(0) + partes[1].charAt(0)).toUpperCase();
+  return (categoria || '').replace(/\s+/g, '').slice(0, 2).toUpperCase();
+}
 
 function _docCellHtml(matricula, tipo, competencia) {
   if (!_docAplica(tipo, matricula)) {
@@ -1501,16 +1517,21 @@ function _docGroupsF() {
         cols.push([tipo.nome, function (col) { return _docCellHtml(col.matricula, tipo, null); }]);
       }
     });
-    return { label: categoria, sigla: categoria.charAt(0), cols: cols };
+    return { label: categoria, sigla: _docSigla(categoria), cols: cols };
   });
 }
 
 function _docHeadHtml(groups) {
   var grp = '<th class="anl-sticky" rowspan="2">Colaborador</th>';
   var head = '';
-  groups.forEach(function (g) {
-    grp += '<th class="anl-gsep anl-ghead" colspan="' + g.cols.length + '"><span class="anl-glabel">' + escH(g.label) + '</span></th>';
-    g.cols.forEach(function (c, ci) { head += '<th' + (ci === 0 ? ' class="anl-gsep"' : '') + '>' + escH(c[0]) + '</th>'; });
+  groups.forEach(function (g, gi) {
+    if (_docCollapsed[gi]) {
+      grp += '<th class="anl-gsep anl-ghead anl-ghead-col" colspan="1" onclick="toggleDocGroup(' + gi + ')" title="Expandir: ' + escH(g.label) + '"><span class="anl-gchev">＋</span></th>';
+      head += '<th class="anl-gsep anl-ccol anl-cinicial" onclick="toggleDocGroup(' + gi + ')" title="Expandir: ' + escH(g.label) + '" style="cursor:pointer">' + escH(g.sigla || '') + '</th>';
+    } else {
+      grp += '<th class="anl-gsep anl-ghead" colspan="' + g.cols.length + '" onclick="toggleDocGroup(' + gi + ')" title="Recolher seção"><span class="anl-glabel">' + escH(g.label) + '</span> <span class="anl-gchev">–</span></th>';
+      g.cols.forEach(function (c, ci) { head += '<th' + (ci === 0 ? ' class="anl-gsep"' : '') + '>' + escH(c[0]) + '</th>'; });
+    }
   });
   grp += '<th class="anl-acoes-h" rowspan="2">Adequação</th>';
   return '<tr class="anl-grp">' + grp + '</tr><tr class="anl-crow">' + head + '</tr>';
@@ -1521,11 +1542,18 @@ function _docRowHtml(col, groups) {
   var tds = '<td class="anl-sticky" style="cursor:pointer" onclick="abrirDocColaborador(\'' + escH(col.matricula) + '\')">' +
     '<div class="candidate-name" style="text-transform:none;font-size:13px">' + escH(col.nome || '') + '</div>' +
     '<div class="field-value" style="font-weight:400;color:var(--mid);font-size:11px">' + escH(col.cargo || '') + (col.unidade ? ' · ' + escH(col.unidade) : '') + '</div></td>';
-  groups.forEach(function (g) {
+  groups.forEach(function (g, gi) {
+    if (_docCollapsed[gi]) { tds += '<td class="anl-gsep anl-ccol">·</td>'; return; }
     g.cols.forEach(function (c, ci) { tds += '<td' + (ci === 0 ? ' class="anl-gsep"' : '') + ' style="text-align:center">' + c[1](col) + '</td>'; });
   });
   tds += '<td class="anl-acoes"><span class="status-badge ' + _docScoreClasse(sc) + '">' + sc.entregues + '/' + sc.total + '</span></td>';
   return '<tr>' + tds + '</tr>';
+}
+
+function toggleDocGroup(gi) {
+  _docCollapsed[gi] = !_docCollapsed[gi];
+  var box = document.querySelector('#content .anl-box');
+  if (box) { box.outerHTML = _docTableHtml(); _anlFitHeight(); requestAnimationFrame(_anlFitHeight); }
 }
 
 function _docRowsHtml(groups) {
@@ -1555,17 +1583,31 @@ function _docTableHtml() {
 }
 
 function setDocStatusFiltro(v) { state.docStatusFiltro = v; renderDocGestao(); }
+function clearDocFiltros() { state.docStatusFiltro = 'Ativo'; state.docBusca = ''; renderDocGestao(); }
 
 function renderDocGestao() {
   if (!state.docStatusFiltro) state.docStatusFiltro = 'Ativo';
-  document.getElementById('filters-wrap').innerHTML =
-    '<div class="anl-busca-bar">' +
-    '<select class="filter-select" onchange="setDocStatusFiltro(this.value)">' +
+  _docFiltrarRows();
+
+  var html = '<div class="anl-filters-line">';
+  html += '<div class="filter-group"><label class="filter-label">Status</label><select class="filter-select" onchange="setDocStatusFiltro(this.value)">' +
     ['Ativo', 'Inativo', 'Todos'].map(function (v) {
       return '<option value="' + v + '"' + (state.docStatusFiltro === v ? ' selected' : '') + '>' + (v === 'Ativo' ? 'Ativos' : v === 'Inativo' ? 'Inativos' : 'Todos') + '</option>';
-    }).join('') +
-    '</select>' +
-    '<input class="filter-select" style="width:100%" type="text" placeholder="Buscar colaborador, cargo ou unidade..." value="' + escH(state.docBusca || '') + '" oninput="setDocBusca(this.value)"></div>';
+    }).join('') + '</select></div>';
+  html += '</div>';
+  html += '<div class="filters-actions"><button class="btn-clear" onclick="clearDocFiltros()">Limpar filtros</button>' +
+    '<span class="results-count"><span>' + _docRows.length + '</span> resultado(s)</span></div>';
+  html += '<div class="anl-busca-bar"><input type="text" class="anl-busca" placeholder="Buscar colaborador, cargo ou unidade…" value="' + escH(state.docBusca || '') + '" oninput="setDocBusca(this.value)"></div>';
+  document.getElementById('filters-wrap').innerHTML = html;
+
+  var c = document.getElementById('content');
+  if (!_docRows.length) { c.innerHTML = emptyState(); return; }
+  c.innerHTML = _docTableHtml();
+  _anlFitHeight();
+  requestAnimationFrame(_anlFitHeight);
+}
+
+function _docFiltrarRows() {
   var busca = norm((state.docBusca || '').toLowerCase());
   _docRows = (docColaboradores || []).filter(function (c) {
     if (state.docStatusFiltro !== 'Todos' && c.status !== state.docStatusFiltro) return false;
@@ -1575,11 +1617,6 @@ function renderDocGestao() {
       norm((c.unidade || '').toLowerCase()).indexOf(busca) >= 0;
   });
   _docShown = DOC_PAGE;
-  var c = document.getElementById('content');
-  if (!_docRows.length) { c.innerHTML = emptyState(); return; }
-  c.innerHTML = _docTableHtml();
-  _anlFitHeight();
-  requestAnimationFrame(_anlFitHeight);
 }
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
