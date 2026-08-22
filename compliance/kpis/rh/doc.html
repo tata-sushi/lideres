@@ -1527,7 +1527,7 @@ function _docFileSelecionadoEvento(ev) {
   }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
 }
 
-function abrirDocColaborador(matricula) {
+function abrirDocColaborador(matricula, foco) {
   var col = (docColaboradores || []).find(function (c) { return c.matricula === matricula; });
   if (!col) return;
   document.getElementById('doc-colab-nome').textContent = col.nome || '';
@@ -1535,6 +1535,10 @@ function abrirDocColaborador(matricula) {
   document.getElementById('doc-colab-body').innerHTML = _docRenderSecoes(matricula);
   document.getElementById('doc-colab-overlay').classList.add('active');
   document.body.style.overflow = 'hidden';
+  if (foco) {
+    var titulo = Array.from(document.querySelectorAll('#doc-colab-body .doc-secao-title')).find(function (el) { return el.textContent === foco; });
+    if (titulo) titulo.scrollIntoView({ block: 'start' });
+  }
 }
 
 function fecharDocColaborador() {
@@ -1703,7 +1707,8 @@ function setDocBusca(v) {
 var DOC_PAGE = 50;
 var _docRows = [];
 var _docShown = DOC_PAGE;
-var _docCollapsed = {};   // { índice do grupo: true } → seção recolhida (mesmo padrão do Analítico de Recrutamento)
+var _docCollapsed = {};   // { índice do grupo: false } → seção expandida (por padrão tudo recolhido, ver _docIsCollapsed)
+function _docIsCollapsed(gi) { return _docCollapsed[gi] !== false; }
 
 function _docSigla(categoria) {
   var partes = (categoria || '').split(/\s+/).filter(function (w) { return w && !/^(de|e|da|do)$/i.test(w); });
@@ -1711,26 +1716,77 @@ function _docSigla(categoria) {
   return (categoria || '').replace(/\s+/g, '').slice(0, 2).toUpperCase();
 }
 
-function _docCellHtml(matricula, tipo, competencia) {
-  if (!_docAplica(tipo, matricula)) {
-    return '<span class="doc-dot doc-dot-na" title="Não se aplica">—</span>';
-  }
-  if (_docAntesDaAdmissao(matricula, competencia)) {
-    return '<span class="doc-dot doc-dot-na" title="Antes da admissão">—</span>';
-  }
-  if (!_docMesAlinhado(matricula, tipo, competencia)) {
-    return '<span class="doc-dot doc-dot-na" title="Fora do ciclo (a cada ' + tipo.intervalo_meses + ' meses)">—</span>';
-  }
+// Classifica um item de catálogo pra essa pessoa/competência: 'na' | 'entregue' | 'pendente'.
+function _docStatusItem(matricula, tipo, competencia) {
+  if (!_docAplica(tipo, matricula)) return 'na';
+  if (_docAntesDaAdmissao(matricula, competencia)) return 'na';
+  if (!_docMesAlinhado(matricula, tipo, competencia)) return 'na';
   var doc = _docDoc(matricula, tipo.id, competencia);
-  if (doc && doc.status === 'entregue') {
+  return (doc && doc.status === 'entregue') ? 'entregue' : 'pendente';
+}
+
+function _docCellHtml(matricula, tipo, competencia) {
+  var st = _docStatusItem(matricula, tipo, competencia);
+  if (st === 'na') {
+    var motivo = !_docAplica(tipo, matricula) ? 'Não se aplica'
+      : (_docAntesDaAdmissao(matricula, competencia) ? 'Antes da admissão' : 'Fora do ciclo (a cada ' + tipo.intervalo_meses + ' meses)');
+    return '<span class="doc-dot doc-dot-na" title="' + escH(motivo) + '">—</span>';
+  }
+  if (st === 'entregue') {
+    var doc = _docDoc(matricula, tipo.id, competencia);
     return '<span class="doc-dot doc-dot-verde" title="Entregue — clique para ver" onclick="event.stopPropagation();_docAbrirArquivo(\'' + escH(doc.link) + '\')">✓</span>';
   }
   return '<span class="doc-dot doc-dot-vermelho" title="Pendente — clique para anexar" onclick="event.stopPropagation();_docAbrirUpload(\'' + escH(matricula) + '\',\'' + tipo.id + '\',' + (competencia ? '\'' + competencia + '\'' : 'null') + ')">✕</span>';
 }
 
+// ─── Status agregado de uma seção inteira (Cartão de Ponto / ASOs / Afastamentos) ──
+// Regra combinada pela liderança: tudo em dia = verde; qualquer pendência = vermelho; nada aplicável = cinza (na).
+function _docAgregadoDe(statuses) {
+  if (statuses.indexOf('pendente') !== -1) return 'pendente';
+  if (statuses.indexOf('entregue') !== -1) return 'entregue';
+  return 'na';
+}
+
+function _docAgregadoCategoria(matricula, categoria) {
+  var tipos = (docTipos || []).filter(function (t) { return t.categoria === categoria; });
+  var statuses = [];
+  tipos.forEach(function (tipo) {
+    if (tipo.periodicidade === 'recorrente') {
+      _docMesRangeTabela().forEach(function (comp) { statuses.push(_docStatusItem(matricula, tipo, comp)); });
+    } else {
+      statuses.push(_docStatusItem(matricula, tipo, null));
+    }
+  });
+  return _docAgregadoDe(statuses);
+}
+
+function _docAgregadoAfastamentos(matricula) {
+  var eventos = _docEventosPessoa(matricula, 'ausencia');
+  var statuses = eventos.map(function (ev) {
+    var doc = _docDocEvento(matricula, 'ausencia', ev.evento_id);
+    return (doc && doc.status === 'entregue') ? 'entregue' : 'pendente';
+  });
+  return _docAgregadoDe(statuses);
+}
+
+function _docDotResumoHtml(status) {
+  if (status === 'entregue') return '<span class="doc-dot doc-dot-verde" title="Tudo em dia">✓</span>';
+  if (status === 'pendente') return '<span class="doc-dot doc-dot-vermelho" title="Tem pendência — clique para ver">✕</span>';
+  return '<span class="doc-dot doc-dot-na" title="Não se aplica">—</span>';
+}
+
+// Categoria "grande e recorrente" (Cartão de Ponto, ASOs) sempre aparece resumida numa única coluna
+// com o status agregado da seção — não faz sentido listar coluna por coluna de competência aqui.
+function _docCategoriaEhResumo(tipos) {
+  return tipos.length > 0 && tipos.every(function (t) { return t.periodicidade === 'recorrente'; });
+}
+
 function _docGroupsF() {
-  return _docCategorias().map(function (categoria) {
+  var groups = _docCategorias().map(function (categoria) {
     var tipos = (docTipos || []).filter(function (t) { return t.categoria === categoria; });
+    if (_docCategoriaEhResumo(tipos)) {
+      return { label: categoria, sigla: _docSigla(categoria), resumo: true, agregado: function (col) { return _docAgregadoCategoria(col.matricula, categoria); } };
+    }
     var cols = [];
     tipos.forEach(function (tipo) {
       if (tipo.periodicidade === 'recorrente') {
@@ -1743,13 +1799,20 @@ function _docGroupsF() {
     });
     return { label: categoria, sigla: _docSigla(categoria), cols: cols };
   });
+  // Afastamentos entra como resumo, na mesma posição do modal: antes da última categoria (Desligamento).
+  var afGroup = { label: 'Afastamentos', sigla: _docSigla('Afastamentos'), resumo: true, agregado: function (col) { return _docAgregadoAfastamentos(col.matricula); } };
+  if (groups.length) groups.splice(groups.length - 1, 0, afGroup); else groups.push(afGroup);
+  return groups;
 }
 
 function _docHeadHtml(groups) {
   var grp = '<th class="anl-sticky" rowspan="2">Colaborador</th>';
   var head = '';
   groups.forEach(function (g, gi) {
-    if (_docCollapsed[gi]) {
+    if (g.resumo) {
+      grp += '<th class="anl-gsep anl-ghead-col" colspan="1" title="' + escH(g.label) + '"><span class="anl-glabel" style="font-size:9px">' + escH(g.label) + '</span></th>';
+      head += '<th class="anl-gsep anl-ccol anl-cinicial" title="' + escH(g.label) + '">' + escH(g.sigla || '') + '</th>';
+    } else if (_docIsCollapsed(gi)) {
       grp += '<th class="anl-gsep anl-ghead anl-ghead-col" colspan="1" onclick="toggleDocGroup(' + gi + ')" title="Expandir: ' + escH(g.label) + '"><span class="anl-gchev">＋</span></th>';
       head += '<th class="anl-gsep anl-ccol anl-cinicial" onclick="toggleDocGroup(' + gi + ')" title="Expandir: ' + escH(g.label) + '" style="cursor:pointer">' + escH(g.sigla || '') + '</th>';
     } else {
@@ -1767,7 +1830,11 @@ function _docRowHtml(col, groups) {
     '<div class="candidate-name" style="text-transform:none;font-size:13px">' + escH(col.nome || '') + '</div>' +
     '<div class="field-value" style="font-weight:400;color:var(--mid);font-size:11px">' + escH(col.cargo || '') + (col.unidade ? ' · ' + escH(col.unidade) : '') + '</div></td>';
   groups.forEach(function (g, gi) {
-    if (_docCollapsed[gi]) { tds += '<td class="anl-gsep anl-ccol">·</td>'; return; }
+    if (g.resumo) {
+      tds += '<td class="anl-gsep anl-ccol" style="cursor:pointer" onclick="abrirDocColaborador(\'' + escH(col.matricula) + '\',\'' + escH(g.label) + '\')">' + _docDotResumoHtml(g.agregado(col)) + '</td>';
+      return;
+    }
+    if (_docIsCollapsed(gi)) { tds += '<td class="anl-gsep anl-ccol">·</td>'; return; }
     g.cols.forEach(function (c, ci) { tds += '<td' + (ci === 0 ? ' class="anl-gsep"' : '') + ' style="text-align:center">' + c[1](col) + '</td>'; });
   });
   tds += '<td class="anl-acoes"><span class="status-badge ' + _docScoreClasse(sc) + '">' + sc.entregues + '/' + sc.total + '</span></td>';
@@ -1775,7 +1842,7 @@ function _docRowHtml(col, groups) {
 }
 
 function toggleDocGroup(gi) {
-  _docCollapsed[gi] = !_docCollapsed[gi];
+  _docCollapsed[gi] = !_docIsCollapsed(gi);
   var box = document.querySelector('#content .anl-box');
   if (box) { box.outerHTML = _docTableHtml(); _anlFitHeight(); requestAnimationFrame(_anlFitHeight); }
 }
