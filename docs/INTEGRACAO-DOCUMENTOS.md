@@ -124,12 +124,22 @@ cria a linha `pendente_assinatura` já com `link_bucket='assinaturas'`, chama
 e grava o `atribuicao_id` de volta. `doc.html` já lê `link_bucket` ao montar o botão
 "Ver" (`_docAbrirArquivo(path, bucket)`) e já roda com sessão real (`gate.js`).
 
+Feito (2026-08-22): `armarios.html` também manda termo pro fluxo de assinatura
+digital agora (mesmo pipeline de `admissao.html` — mesma função `_armHtmlParaPdfBlob`
+copiada, mesmo catálogo). Novo `doc_tipos`: "Termo de Resp. Armário e Vestiário"
+(categoria "Contratos e Termos", `requer_assinatura=true`). O botão "Gerar Termo
+para Assinatura" (que só imprimia via `window.print()`) virou "Enviar para
+Assinatura Digital" — só aparece depois de uma atribuição de armário a um
+colaborador. O botão "Reimprimir Termo (2ª via)" continua imprimindo em papel
+(não mudou — é só cópia física de apoio, não faz parte do fluxo oficial mais).
+
 Em aberto:
 - Re-testar ponta a ponta o botão "Ver" do `doc.html` pra um documento
   `link_bucket='assinaturas'` depois da conversão pra `gate.js`.
 - Frente 4 (admissão — anexar pra validação): ainda não desenhada.
-- Cartão de Ponto/ASOs/Desligamento: hoje só a Admissão gera termos; as outras
-  categorias que também precisam assinar ainda não têm uma página que gere/envie
-  o PDF pra assinatura — fica pra quando essas páginas forem construídas.
+- Cartão de Ponto/ASOs/Desligamento: só Admissão e Armários geram termos hoje;
+  as outras categorias que também precisam assinar ainda não têm uma página
+  que gere/envie o PDF pra assinatura — fica pra quando essas páginas forem
+  construídas.
 
 _Última atualização: 2026-08-22._
