@@ -54,6 +54,7 @@ evento_origem              text (null | 'ausencia' | 'sancao')
 evento_id                 uuid
 link_bucket                text default 'dp-documentos'   -- NOVO (ver abaixo)
 assinatura_atribuicao_id  uuid                             -- NOVO (ver abaixo)
+versao                    integer default 1                -- NOVO (ver abaixo)
 ```
 
 Bucket próprio: `dp-documentos` (privado, mesmo padrão de RLS "acesso só por RPC
@@ -69,9 +70,23 @@ ligado sem policy, tudo passa por RPCs `*_sandbox_*`).
   `tata_plus.assinatura_atribuicoes.id`, só pra rastreio/depuração (não é a chave
   usada pelo trigger — essa é a `referencia_externa` de vocês, ver abaixo).
 
-O front (`doc.html`) ainda **não** lê `link_bucket` (todo o "Ver"/"Anexar" hoje
-assume `dp-documentos` fixo) — isso entra quando o restante da integração for
-implementado, pra não deixar código morto no meio do caminho.
+**Decisão (2026-08-22): gerar de novo não sobrescreve — vira versão nova.**
+`colaborador_documento_pendente_assinatura_sandbox_salvar` deixou de fazer
+upsert; agora sempre faz `insert`, calculando `versao = max(versao existente)+1`
+por `(matricula, tipo_id)`. Removi o índice único `colaborador_documentos_unico_uq`
+que impedia isso (o fluxo de upload simples — RG/CPF etc, via
+`colaborador_documentos_sandbox_salvar` — não dependia desse índice pra
+funcionar, já fazia find-then-update pela própria lógica, então continua sem
+duplicar). `doc.html` mostra só a versão mais recente como status principal,
+com um "Ver histórico (N versões)" que expande a lista completa.
+
+Do lado de vocês, `docs_enviar_para_assinatura` já cria uma pendência nova a
+cada chamada (nunca fez upsert) — isso já era compatível com "manter tudo".
+O único ajuste que fiz no `admissao.html` foi incluir a versão no `p_titulo`
+(ex: "Código de Ética (v2)") pra ficar identificável pro colaborador no app.
+Atenção: como vocês nunca invalidam a pendência anterior, gerar de novo cria
+uma nova cobrança de assinatura pro colaborador — a antiga fica pendente pra
+sempre se ele não assinar (isso é esperado agora, não é mais bug).
 
 ## Respostas às 6 decisões em aberto do doc de vocês
 

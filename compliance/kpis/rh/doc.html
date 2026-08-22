@@ -102,6 +102,12 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 .doc-toggle input:checked + .doc-toggle-track { background: var(--green); }
 .doc-toggle input:checked + .doc-toggle-track::before { transform: translateX(16px); }
 .doc-exc-reset { display: block; font-size: 10px; color: var(--muted); text-decoration: underline; margin-top: 4px; cursor: pointer; }
+.doc-versoes-list { flex-direction: column; gap: 4px; margin: 6px 0 2px; padding: 8px 10px; background: var(--bg); border-radius: 8px; }
+.doc-versao-item { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+.doc-versao-n { font-family: 'DM Mono', monospace; font-weight: 700; color: var(--carbon); min-width: 18px; }
+.doc-versao-data { flex: 1; }
+.doc-versao-badge { font-size: 9px; padding: 2px 7px; }
+.doc-versao-ver { color: var(--muted); text-decoration: underline; cursor: pointer; }
 .doc-dot { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 700; cursor: pointer; }
 .doc-dot-verde { background: var(--green-bg); color: var(--green); }
 .doc-dot-vermelho { background: var(--red-bg); color: var(--red); }
@@ -700,10 +706,17 @@ function _docFmtCompetencia(c) {
   return (MES_NOMES[mi] || p[1]) + '/' + p[0];
 }
 
-function _docDoc(matricula, tipoId, competencia) {
-  return (colaboradorDocumentos || []).find(function (d) {
+// Todas as versões de um termo (mais recente primeiro) — cada geração cria uma linha nova,
+// nunca sobrescreve (ver colaborador_documento_pendente_assinatura_sandbox_salvar).
+function _docVersoes(matricula, tipoId, competencia) {
+  return (colaboradorDocumentos || []).filter(function (d) {
     return d.matricula === matricula && d.tipo_id === tipoId && (d.competencia || null) === (competencia || null);
-  });
+  }).sort(function (a, b) { return (b.versao || 1) - (a.versao || 1); });
+}
+
+// A versão mais recente é a que conta pro status/badge do item.
+function _docDoc(matricula, tipoId, competencia) {
+  return _docVersoes(matricula, tipoId, competencia)[0] || null;
 }
 
 // Toggle "aplica / não aplica" — fica na frente da descrição do item.
@@ -725,13 +738,45 @@ function _docAssinaturaIconHtml(tipo) {
   return '<span class="doc-assinatura-ico" title="Requer assinatura"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>';
 }
 
+function _docFmtDataHora(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  var pad = function (n) { return String(n).padStart(2, '0'); };
+  return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+// ID determinístico (não depende de estado em JS) pra poder abrir/fechar o histórico
+// mesmo depois de um re-render completo de _docRenderSecoes.
+function _docVersoesId(matricula, tipoId, competencia) {
+  return 'docv_' + String(matricula).replace(/[^a-zA-Z0-9]/g, '') + '_' + String(tipoId).replace(/[^a-zA-Z0-9]/g, '') + '_' + (competencia || 'x');
+}
+
+function _docVersoesToggleHtml(matricula, tipo, competencia, versoes) {
+  if (versoes.length < 2) return '';
+  var id = _docVersoesId(matricula, tipo.id, competencia);
+  var linhas = versoes.map(function (v) {
+    var vBadge = v.status === 'entregue'
+      ? '<span class="status-badge sel-sim doc-versao-badge">Assinado</span>'
+      : '<span class="status-badge sel-red doc-versao-badge">Pendente</span>';
+    var link = v.status === 'entregue'
+      ? ' <a href="#" class="doc-versao-ver" onclick="event.preventDefault();_docAbrirArquivo(\'' + escH(v.link) + '\',\'' + escH(v.link_bucket || 'dp-documentos') + '\')">ver</a>'
+      : '';
+    return '<div class="doc-versao-item"><span class="doc-versao-n">v' + (v.versao || 1) + '</span>' +
+      '<span class="doc-versao-data">' + _docFmtDataHora(v.enviado_em) + '</span>' + vBadge + link + '</div>';
+  }).join('');
+  return '<a href="#" class="doc-exc-reset" onclick="event.preventDefault();var el=document.getElementById(\'' + id + '\');el.style.display=(el.style.display===\'none\'?\'flex\':\'none\');">Ver histórico (' + versoes.length + ' versões)</a>' +
+    '<div class="doc-versoes-list" id="' + id + '" style="display:none;">' + linhas + '</div>';
+}
+
 function _docItemHtml(matricula, tipo, competencia, label) {
   var toggle = _docExcecaoToggleHtml(matricula, tipo);
   var assinatura = _docAssinaturaIconHtml(tipo);
   if (!_docAplica(tipo, matricula)) {
     return '<div class="doc-item-wrap"><div class="doc-item">' + toggle + '<div class="doc-item-label">' + escH(label) + assinatura + '</div><span class="status-badge">Não se aplica</span></div>' + _docExcecaoResetHtml(matricula, tipo) + '</div>';
   }
-  var doc = _docDoc(matricula, tipo.id, competencia);
+  var versoes = _docVersoes(matricula, tipo.id, competencia);
+  var doc = versoes[0] || null;
   var status = doc ? doc.status : null;
   var badge, acao;
   if (status === 'entregue') {
@@ -741,7 +786,7 @@ function _docItemHtml(matricula, tipo, competencia, label) {
     badge = '<span class="status-badge sel-red">Pendente</span>';
     acao = '<button class="btn-avaliar" onclick="_docAbrirUpload(\'' + escH(matricula) + '\',\'' + tipo.id + '\',' + (competencia ? '\'' + competencia + '\'' : 'null') + ')">Anexar</button>';
   }
-  return '<div class="doc-item-wrap"><div class="doc-item">' + toggle + '<div class="doc-item-label">' + escH(label) + assinatura + '</div>' + badge + acao + '</div>' + _docExcecaoResetHtml(matricula, tipo) + '</div>';
+  return '<div class="doc-item-wrap"><div class="doc-item">' + toggle + '<div class="doc-item-label">' + escH(label) + assinatura + '</div>' + badge + acao + '</div>' + _docExcecaoResetHtml(matricula, tipo) + _docVersoesToggleHtml(matricula, tipo, competencia, versoes) + '</div>';
 }
 
 function _docRenderSecoes(matricula) {
