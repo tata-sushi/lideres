@@ -1369,7 +1369,7 @@ function _docRenderSecoes(matricula) {
 // ─── Documentos por evento (ausência/sanção) — exigência gerada automaticamente, não vem do catálogo ──
 function _docEventosPessoa(matricula, origem) {
   return (docEventos || []).filter(function (e) { return e.matricula === matricula && e.origem === origem; })
-    .sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); });
+    .sort(function (a, b) { return String(b.data_fim || '').localeCompare(String(a.data_fim || '')); });
 }
 
 function _docDocEvento(matricula, origem, eventoId) {
@@ -1378,9 +1378,15 @@ function _docDocEvento(matricula, origem, eventoId) {
   });
 }
 
+// "17/12/2025" (dia único) ou "17/12/2025 a 16/04/2026" (período, ex: uma licença de vários dias).
+function _docFmtPeriodo(evento) {
+  var ini = fmtDateBR(evento.data_inicio), fim = fmtDateBR(evento.data_fim);
+  return ini === fim ? ini : (ini + ' a ' + fim);
+}
+
 function _docItemEventoHtml(matricula, origem, evento) {
   var doc = _docDocEvento(matricula, origem, evento.evento_id);
-  var label = evento.nome_documento + ' — ' + fmtDateBR(evento.data);
+  var label = evento.nome_documento + ' — ' + _docFmtPeriodo(evento);
   var badge, acao;
   if (doc && doc.status === 'entregue') {
     badge = '<span class="status-badge sel-sim">Entregue</span>';
@@ -1412,7 +1418,7 @@ function _docFileSelecionadoEvento(ev) {
   var ext = (file.name.split('.').pop() || 'bin');
   var base = _slug(evento ? evento.nome_documento : ctx.origem) + '-' + ctx.eventoId;
   var path = ctx.matricula + '/' + _slug(ctx.origem === 'sancao' ? 'sancoes' : 'afastamentos') + '/' + base + '.' + ext;
-  var nomeArquivo = (col ? col.nome : ctx.matricula) + ' - ' + (evento ? evento.nome_documento : 'Documento') + (evento ? ' ' + fmtDateBR(evento.data) : '') + '.' + ext;
+  var nomeArquivo = (col ? col.nome : ctx.matricula) + ' - ' + (evento ? evento.nome_documento : 'Documento') + (evento ? ' ' + _docFmtPeriodo(evento) : '') + '.' + ext;
   SB.storage.from('dp-documentos').upload(path, file, { upsert: true }).then(function (r) {
     if (r.error) { alert('Erro ao enviar arquivo:\n' + r.error.message); return; }
     return SB.rpc('colaborador_documento_evento_sandbox_salvar', {
