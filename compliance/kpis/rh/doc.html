@@ -693,6 +693,40 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
   </div>
 </div>
+<!-- Modal Cadastrar Documento — cria um novo tipo (e, se preciso, uma seção nova) no catálogo -->
+<div class="modal-overlay" id="doc-tipo-overlay">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="candidate-name">Cadastrar Documento</div>
+      <button class="modal-close" onclick="fecharDocTipoNovo()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div><div class="modal-section-title">Seção</div>
+        <select class="modal-select" id="dtn-categoria" onchange="_docTipoNovoCategoriaChanged(this.value)"></select>
+        <input type="text" class="modal-input" id="dtn-categoria-nova" placeholder="Nome da nova seção" style="margin-top:6px;display:none">
+      </div>
+      <div><div class="modal-section-title">Nome do documento</div>
+        <input type="text" class="modal-input" id="dtn-nome" placeholder="Ex: Certidão de Nascimento">
+      </div>
+      <div><div class="modal-section-title">Periodicidade</div>
+        <select class="modal-select" id="dtn-periodicidade" onchange="_docTipoNovoPeriodicidadeChanged(this.value)">
+          <option value="unico">Único</option>
+          <option value="recorrente">Recorrente</option>
+        </select>
+      </div>
+      <div id="dtn-intervalo-wrap" style="display:none">
+        <div class="modal-section-title">Intervalo (meses)</div>
+        <input type="number" class="modal-input" id="dtn-intervalo" min="1" step="1" placeholder="Ex: 6">
+      </div>
+      <label class="ev-check"><input type="checkbox" id="dtn-obrigatorio" checked><span>Obrigatório (conta na adequação documental)</span></label>
+      <label class="ev-check"><input type="checkbox" id="dtn-somente-inativo"><span>Aplica só depois do desligamento</span></label>
+    </div>
+    <div class="modal-footer" style="gap:10px">
+      <button class="modal-btn modal-btn-cancel" onclick="fecharDocTipoNovo()" style="flex:1">Cancelar</button>
+      <button class="modal-btn modal-btn-save" onclick="_docTipoNovoSalvar()" style="flex:1">Salvar</button>
+    </div>
+  </div>
+</div>
 <!-- Modal Agenda de Líderes (CRUD) -->
 <div class="modal-overlay" id="agenda-overlay">
   <div class="modal" style="max-width:440px">
@@ -944,6 +978,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
       <button class="drawer-sam-btn" onclick="abrirDocCargos()">Documentos por Cargo</button>
+      <button class="drawer-sam-btn" style="margin-top:8px" onclick="abrirDocTipoNovo()">Cadastrar Documento</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -1654,6 +1689,71 @@ function abrirDocCargos() {
 function fecharDocCargos() {
   document.getElementById('doc-cargo-overlay').classList.remove('active');
   document.body.style.overflow = '';
+}
+
+// ─── Cadastrar Documento (novo tipo no catálogo, e opcionalmente uma seção nova) ──
+var DOC_TIPO_NOVA_SECAO = '__nova__';
+
+function abrirDocTipoNovo() {
+  closeDrawer();
+  var sel = document.getElementById('dtn-categoria');
+  sel.innerHTML = _docCategorias().map(function (c) { return '<option value="' + escH(c) + '">' + escH(c) + '</option>'; }).join('') +
+    '<option value="' + DOC_TIPO_NOVA_SECAO + '">+ Nova seção…</option>';
+  document.getElementById('dtn-categoria-nova').style.display = 'none';
+  document.getElementById('dtn-categoria-nova').value = '';
+  document.getElementById('dtn-nome').value = '';
+  document.getElementById('dtn-periodicidade').value = 'unico';
+  document.getElementById('dtn-intervalo-wrap').style.display = 'none';
+  document.getElementById('dtn-intervalo').value = '';
+  document.getElementById('dtn-obrigatorio').checked = true;
+  document.getElementById('dtn-somente-inativo').checked = false;
+  document.getElementById('doc-tipo-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function fecharDocTipoNovo() {
+  document.getElementById('doc-tipo-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function _docTipoNovoCategoriaChanged(v) {
+  document.getElementById('dtn-categoria-nova').style.display = (v === DOC_TIPO_NOVA_SECAO) ? '' : 'none';
+}
+
+function _docTipoNovoPeriodicidadeChanged(v) {
+  document.getElementById('dtn-intervalo-wrap').style.display = (v === 'recorrente') ? '' : 'none';
+}
+
+function _docTipoNovoSalvar() {
+  var selCategoria = document.getElementById('dtn-categoria').value;
+  var categoria = selCategoria === DOC_TIPO_NOVA_SECAO
+    ? document.getElementById('dtn-categoria-nova').value.trim()
+    : selCategoria;
+  var nome = document.getElementById('dtn-nome').value.trim();
+  var periodicidade = document.getElementById('dtn-periodicidade').value;
+  var intervalo = periodicidade === 'recorrente' ? parseInt(document.getElementById('dtn-intervalo').value, 10) : null;
+  var obrigatorio = document.getElementById('dtn-obrigatorio').checked;
+  var somenteInativo = document.getElementById('dtn-somente-inativo').checked;
+
+  if (!categoria) { alert('Informe a seção.'); return; }
+  if (!nome) { alert('Informe o nome do documento.'); return; }
+  if (periodicidade === 'recorrente' && (!intervalo || intervalo < 1)) { alert('Informe o intervalo em meses (número maior que zero).'); return; }
+
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
+  SB.rpc('doc_tipo_sandbox_criar', {
+    p_categoria: categoria, p_nome: nome, p_periodicidade: periodicidade, p_intervalo_meses: intervalo,
+    p_obrigatorio: obrigatorio, p_aplica_somente_inativo: somenteInativo,
+    p_criado_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido'
+  }).then(function (r) {
+    if (r.error) { alert('Erro ao cadastrar documento:\n' + r.error.message); return; }
+    return SB.rpc('doc_tipos_sandbox_listar');
+  }).then(function (r) {
+    if (!r) return;
+    if (!r.error && Array.isArray(r.data)) docTipos = r.data;
+    fecharDocTipoNovo();
+    if (state.tab === 'analitico') renderDocGestao();
+  }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
 }
 
 function _docCargoChanged(cargo) {
