@@ -2101,7 +2101,11 @@ function openDrawer() {
             window.html2pdf().set({
               margin: 0,
               html2canvas: { scale: 2, useCORS: true },
-              jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' }
+              jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
+              // Termos longos (ex: Meios Eletrônicos) passam de 1 página — sem isso o html2pdf
+              // corta a imagem só pela altura, cruzando o meio de parágrafos/seções e deixando
+              // uma emenda feia (chega a aparecer como uma barra preta na quebra).
+              pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
             }).from(el).outputPdf('blob').then(function(blob) {
               terminar(resolve, blob);
             }).catch(function(err) { terminar(reject, err); });
@@ -2111,8 +2115,13 @@ function openDrawer() {
         // Trava de segurança: onload de iframe raramente falha silenciosamente, mas se falhar
         // não pode travar o fluxo pra sempre.
         setTimeout(function() { terminar(reject, new Error('Tempo esgotado ao montar o documento.')); }, 15000);
+        // CSS "de tela" (ADM_CSS) tem sombra/cartão flutuante pensados pro preview no navegador —
+        // pro PDF isso só atrapalha (a sombra emenda feio numa quebra de página). Achata pro
+        // equivalente do @media print, e marca blocos de texto pra não quebrar no meio.
+        var pdfOverrides = '.page{box-shadow:none;max-width:100%;padding:24px 36px 36px;}' +
+          '.rp-p,.rp-section-heading,.rp-bullet,.rp-intro,.rp-section,.rp-assinaturas{break-inside:avoid;page-break-inside:avoid;}';
         var htmlDoc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
-          '<style>'+ADM_CSS+'body{padding:0;background:#fff;}</style></head><body>'+pageHtml+'</body></html>';
+          '<style>'+ADM_CSS+pdfOverrides+'body{padding:0;background:#fff;}</style></head><body>'+pageHtml+'</body></html>';
         iframe.srcdoc = htmlDoc;
       });
     });
