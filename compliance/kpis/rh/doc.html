@@ -141,9 +141,12 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 .doc-score-header { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 4px; }
 .doc-secao-title { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--carbon); margin: 16px 0 4px; }
 .doc-secao-title:first-of-type { margin-top: 14px; }
-.doc-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
-.doc-item:last-child { border-bottom: none; }
+.doc-item-wrap { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.doc-item-wrap:last-child { border-bottom: none; }
+.doc-item { display: flex; align-items: center; gap: 10px; }
 .doc-item-label { flex: 1; font-size: 13px; color: var(--carbon); font-weight: 500; }
+.doc-exc-link { font-size: 10px; color: var(--muted); margin-top: 4px; }
+.doc-exc-link a { color: var(--carbon); text-decoration: underline; cursor: pointer; }
 .doc-dot { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 700; cursor: pointer; }
 .doc-dot-verde { background: var(--green-bg); color: var(--green); }
 .doc-dot-vermelho { background: var(--red-bg); color: var(--red); }
@@ -699,6 +702,21 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 <input type="file" id="doc-file-input" style="display:none" onchange="_docFileSelecionado(event)" accept="image/*,application/pdf">
+<!-- Modal Documentos por Cargo — classificação de obrigatoriedade -->
+<div class="modal-overlay" id="doc-cargo-overlay">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="candidate-name">Documentos por Cargo</div>
+      <button class="modal-close" onclick="fecharDocCargos()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="ev-field"><span class="modal-section-title">Cargo</span>
+        <select class="modal-select" id="doc-cargo-select" onchange="_docCargoChanged(this.value)"></select>
+      </div>
+      <div id="doc-cargo-body"></div>
+    </div>
+  </div>
+</div>
 <!-- Modal Agenda de Líderes (CRUD) -->
 <div class="modal-overlay" id="agenda-overlay">
   <div class="modal" style="max-width:440px">
@@ -947,6 +965,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         </div>
       </div>
     </div>
+    <div class="drawer-section">
+      <div class="drawer-section-label">Ações</div>
+      <button class="drawer-sam-btn" onclick="abrirDocCargos()">Documentos por Cargo</button>
+    </div>
   </div>
   <div class="drawer-footer">
     <div class="drawer-footer-label">Responsável</div>
@@ -990,6 +1012,9 @@ var agendaLideres = [];   // agenda fixa de entrevistas dos líderes (aba Agenda
 var docTipos = [];              // catálogo dp_rh.doc_tipos (Gestão de Documentos)
 var colaboradorDocumentos = []; // dp_rh.colaborador_documentos — todos os documentos anexados
 var docColaboradores = [];      // roster (tata_plus.profiles, só status=Ativo) — quem aparece na aba Analítico
+var docCargos = [];              // dp_rh.cargos (nomes) — pra tela de classificação por cargo
+var docCargoExcecoes = [];       // dp_rh.doc_tipos_cargo_excecoes — regra "esse cargo (não) precisa desse tipo"
+var docColabExcecoes = [];       // dp_rh.colaborador_doc_excecoes — exceção pontual por pessoa, sobrepõe a regra de cargo
 var _testeCache = [];
 var _entrevistaCache = [];
 var state = {
@@ -1047,14 +1072,21 @@ function loadAllData() {
     SB.rpc('rec_agenda_lideres_sandbox_listar'),   // agenda fixa de entrevistas dos líderes (aba Agenda)
     SB.rpc('doc_tipos_sandbox_listar'),                    // catálogo de documentos (aba Analítico)
     SB.rpc('colaborador_documentos_sandbox_listar_todos'), // documentos já anexados (aba Analítico)
-    SB.rpc('doc_colaboradores_sandbox_listar')             // roster (tata_plus.profiles, status=Ativo)
+    SB.rpc('doc_colaboradores_sandbox_listar'),            // roster (tata_plus.profiles, status=Ativo)
+    SB.rpc('doc_cargos_sandbox_listar'),                   // lista de cargos p/ tela de classificação
+    SB.rpc('doc_tipos_cargo_excecoes_sandbox_listar'),     // regra "esse cargo (não) precisa desse tipo"
+    SB.rpc('colaborador_doc_excecoes_sandbox_listar')      // exceção por pessoa (sobrepõe a regra de cargo)
   ]).then(function (results) {
     var res = results[0], vres = results[1], cres = results[2], csres = results[3], ares = results[4];
     var dtres = results[5], cdres = results[6], colres = results[7];
+    var cgres = results[8], dcres = results[9], ceres = results[10];
     agendaLideres = (ares && !ares.error && Array.isArray(ares.data)) ? ares.data : [];
     docTipos = (dtres && !dtres.error && Array.isArray(dtres.data)) ? dtres.data : [];
     colaboradorDocumentos = (cdres && !cdres.error && Array.isArray(cdres.data)) ? cdres.data : [];
     docColaboradores = (colres && !colres.error && Array.isArray(colres.data)) ? colres.data : [];
+    docCargos = (cgres && !cgres.error && Array.isArray(cgres.data)) ? cgres.data.map(function (r) { return r.cargo; }) : [];
+    docCargoExcecoes = (dcres && !dcres.error && Array.isArray(dcres.data)) ? dcres.data : [];
+    docColabExcecoes = (ceres && !ceres.error && Array.isArray(ceres.data)) ? ceres.data : [];
     _colabs = (cres && !cres.error && Array.isArray(cres.data)) ? cres.data : [];
     _csCargos = (csres && !csres.error && csres.data && Array.isArray(csres.data.cargos)) ? csres.data.cargos : [];
     // ── Vagas ── (RPC devolve { pode_ver, vagas }; salários mascarados no servidor se não pode ver)
@@ -1164,10 +1196,24 @@ function _docColaborador(matricula) {
 }
 
 // Tipos como ASO Demissional / Documentos de Desligamento só fazem sentido pra quem já saiu.
-function _docAplica(tipo, matricula) {
+function _docAplicaPorStatus(tipo, matricula) {
   if (!tipo.aplica_somente_inativo) return true;
   var col = _docColaborador(matricula);
   return !!(col && col.status === 'Inativo');
+}
+
+// Resolve se um tipo de documento se aplica a um colaborador — exceção da pessoa
+// (colaborador_doc_excecoes) sobrepõe a regra do cargo (doc_tipos_cargo_excecoes),
+// que por sua vez sobrepõe o padrão (aplica a todo mundo). Regra de status (ASO
+// Demissional/Desligamento) é aplicada por cima disso — sempre precisa valer também.
+function _docAplica(tipo, matricula) {
+  if (!_docAplicaPorStatus(tipo, matricula)) return false;
+  var excPessoa = (docColabExcecoes || []).find(function (e) { return e.matricula === matricula && e.tipo_id === tipo.id; });
+  if (excPessoa) return excPessoa.aplica;
+  var col = _docColaborador(matricula);
+  var excCargo = col && (docCargoExcecoes || []).find(function (e) { return e.cargo === col.cargo && e.tipo_id === tipo.id; });
+  if (excCargo) return excCargo.aplica;
+  return true;
 }
 
 function _docTiposObrigatoriosUnicos(matricula) {
@@ -1251,9 +1297,22 @@ function _docDoc(matricula, tipoId, competencia) {
   });
 }
 
+// Link de exceção individual — só faz sentido pra tipos "único" (não mensal, ex: Cartão de Ponto).
+function _docExcecaoLinkHtml(matricula, tipo) {
+  if (tipo.periodicidade !== 'unico') return '';
+  var exc = (docColabExcecoes || []).find(function (e) { return e.matricula === matricula && e.tipo_id === tipo.id; });
+  if (exc) {
+    return '<div class="doc-exc-link">Exceção: ' + (exc.aplica ? 'obrigatório' : 'não se aplica') + ' pra esta pessoa · ' +
+      '<a href="#" onclick="event.preventDefault();_docRemoverExcecaoPessoa(\'' + escH(matricula) + '\',\'' + tipo.id + '\')">remover</a></div>';
+  }
+  var aplicaHoje = _docAplica(tipo, matricula);
+  return '<div class="doc-exc-link"><a href="#" onclick="event.preventDefault();_docToggleExcecaoPessoa(\'' + escH(matricula) + '\',\'' + tipo.id + '\',' + (!aplicaHoje) + ')">' +
+    (aplicaHoje ? 'Marcar como não aplicável pra esta pessoa' : 'Forçar como obrigatório pra esta pessoa') + '</a></div>';
+}
+
 function _docItemHtml(matricula, tipo, competencia, label) {
   if (!_docAplica(tipo, matricula)) {
-    return '<div class="doc-item"><div class="doc-item-label">' + escH(label) + '</div><span class="status-badge">Não se aplica</span></div>';
+    return '<div class="doc-item-wrap"><div class="doc-item"><div class="doc-item-label">' + escH(label) + '</div><span class="status-badge">Não se aplica</span></div>' + _docExcecaoLinkHtml(matricula, tipo) + '</div>';
   }
   var doc = _docDoc(matricula, tipo.id, competencia);
   var status = doc ? doc.status : null;
@@ -1261,14 +1320,11 @@ function _docItemHtml(matricula, tipo, competencia, label) {
   if (status === 'entregue') {
     badge = '<span class="status-badge sel-sim">Entregue</span>';
     acao = '<button class="btn-avaliar" onclick="_docAbrirArquivo(\'' + escH(doc.link) + '\')">Ver</button>';
-  } else if (status === 'dispensado') {
-    badge = '<span class="status-badge sel-amber">Não se aplica</span>';
-    acao = '';
   } else {
     badge = '<span class="status-badge sel-red">Pendente</span>';
     acao = '<button class="btn-avaliar" onclick="_docAbrirUpload(\'' + escH(matricula) + '\',\'' + tipo.id + '\',' + (competencia ? '\'' + competencia + '\'' : 'null') + ')">Anexar</button>';
   }
-  return '<div class="doc-item"><div class="doc-item-label">' + escH(label) + '</div>' + badge + acao + '</div>';
+  return '<div class="doc-item-wrap"><div class="doc-item"><div class="doc-item-label">' + escH(label) + '</div>' + badge + acao + '</div>' + _docExcecaoLinkHtml(matricula, tipo) + '</div>';
 }
 
 function _docRenderSecoes(matricula) {
@@ -1359,6 +1415,82 @@ function _docAbrirArquivo(path) {
   });
 }
 
+function _docToggleExcecaoPessoa(matricula, tipoId, novoAplica) {
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
+  SB.rpc('colaborador_doc_excecao_sandbox_salvar', {
+    p_matricula: matricula, p_tipo_id: tipoId, p_aplica: novoAplica,
+    p_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido'
+  }).then(function (r) {
+    if (r.error) { alert('Erro ao salvar exceção:\n' + r.error.message); return; }
+    docColabExcecoes = (docColabExcecoes || []).filter(function (e) { return !(e.matricula === matricula && e.tipo_id === tipoId); });
+    docColabExcecoes.push(r.data);
+    document.getElementById('doc-colab-body').innerHTML = _docRenderSecoes(matricula);
+    renderDocGestao();
+  }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
+}
+
+function _docRemoverExcecaoPessoa(matricula, tipoId) {
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
+  SB.rpc('colaborador_doc_excecao_sandbox_excluir', { p_matricula: matricula, p_tipo_id: tipoId }).then(function (r) {
+    if (r.error) { alert('Erro ao remover exceção:\n' + r.error.message); return; }
+    docColabExcecoes = (docColabExcecoes || []).filter(function (e) { return !(e.matricula === matricula && e.tipo_id === tipoId); });
+    document.getElementById('doc-colab-body').innerHTML = _docRenderSecoes(matricula);
+    renderDocGestao();
+  }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
+}
+
+// ─── Documentos por Cargo (classificação de obrigatoriedade) ─────────────────
+function abrirDocCargos() {
+  closeDrawer();
+  document.getElementById('doc-cargo-select').innerHTML = '<option value="">Selecione um cargo</option>' +
+    (docCargos || []).map(function (c) { return '<option value="' + escH(c) + '">' + escH(c) + '</option>'; }).join('');
+  document.getElementById('doc-cargo-body').innerHTML = '';
+  document.getElementById('doc-cargo-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function fecharDocCargos() {
+  document.getElementById('doc-cargo-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function _docCargoChanged(cargo) {
+  var body = document.getElementById('doc-cargo-body');
+  if (!cargo) { body.innerHTML = ''; return; }
+  var html = '';
+  _docCategorias().forEach(function (categoria) {
+    var tipos = (docTipos || []).filter(function (t) { return t.categoria === categoria && t.periodicidade === 'unico'; });
+    if (!tipos.length) return;
+    html += '<div class="doc-secao-title">' + escH(categoria) + '</div>';
+    tipos.forEach(function (tipo) {
+      var exc = (docCargoExcecoes || []).find(function (e) { return e.cargo === cargo && e.tipo_id === tipo.id; });
+      var aplica = exc ? exc.aplica : true;
+      html += '<div class="doc-item-wrap"><label class="doc-item" style="cursor:pointer">' +
+        '<input type="checkbox" ' + (aplica ? 'checked' : '') + ' onchange="_docCargoToggle(\'' + escH(cargo) + '\',\'' + tipo.id + '\',this.checked)">' +
+        '<span class="doc-item-label">' + escH(tipo.nome) + '</span></label></div>';
+    });
+  });
+  body.innerHTML = html || '<div class="doc-item-label" style="color:var(--muted)">Nenhum documento único no catálogo.</div>';
+}
+
+function _docCargoToggle(cargo, tipoId, aplica) {
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
+  var por = _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido';
+  // aplica=true (voltou a marcar) = volta ao padrão, então só precisa remover a exceção salva antes.
+  var call = aplica
+    ? SB.rpc('doc_tipos_cargo_excecao_sandbox_excluir', { p_tipo_id: tipoId, p_cargo: cargo })
+    : SB.rpc('doc_tipos_cargo_excecao_sandbox_salvar', { p_tipo_id: tipoId, p_cargo: cargo, p_aplica: false, p_por: por });
+  call.then(function (r) {
+    if (r.error) { alert('Erro ao salvar:\n' + r.error.message); return; }
+    docCargoExcecoes = (docCargoExcecoes || []).filter(function (e) { return !(e.cargo === cargo && e.tipo_id === tipoId); });
+    if (!aplica) docCargoExcecoes.push(r.data);
+    renderDocGestao();
+  }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
+}
+
 function setDocBusca(v) { state.docBusca = v; renderDocGestao(); }
 
 // ─── Tabela da aba Analítico (mesmo padrão de cabeçalho em 2 níveis do Analítico de Recrutamento) ──
@@ -1374,9 +1506,6 @@ function _docCellHtml(matricula, tipo, competencia) {
     return '<span class="doc-dot doc-dot-na" title="Antes da admissão">—</span>';
   }
   var doc = _docDoc(matricula, tipo.id, competencia);
-  if (doc && doc.status === 'dispensado') {
-    return '<span class="doc-dot doc-dot-amarelo" title="Não se aplica">●</span>';
-  }
   if (doc && doc.status === 'entregue') {
     return '<span class="doc-dot doc-dot-verde" title="Entregue — clique para ver" onclick="event.stopPropagation();_docAbrirArquivo(\'' + escH(doc.link) + '\')">✓</span>';
   }
