@@ -5,20 +5,24 @@ no repo `tata-sushi/plus`. Os dois lados compartilham o **mesmo projeto Supabase
 (`aoqsbusfrffapjglpqjk`) — a integração acontece **na base** (colunas de ligação +
 trigger/RPC), não por webhook.
 
-**Status: integração PORTAL-SIDE implementada e testada ponta a ponta (2026-08-22).**
-`admissao-novo.html` já chama `docs_enviar_para_assinatura` de verdade (não mais o
-placeholder). Testei manualmente contra o Supabase real: criei a linha
-`pendente_assinatura`, chamei `docs_enviar_para_assinatura`, disparei o trigger deles
-inserindo em `assinatura_registros` — a linha do portal virou `entregue` com
-`link`/`link_bucket` corretos, sozinha. Dados de teste removidos depois.
+**Status: integração PORTAL-SIDE implementada, testada ponta a ponta e em produção
+(2026-08-22).** `admissao.html` (produção — a versão de teste `admissao-novo.html`
+foi promovida e removida) chama `docs_enviar_para_assinatura` de verdade. Testei
+manualmente contra o Supabase real: criei a linha `pendente_assinatura`, chamei
+`docs_enviar_para_assinatura`, disparei o trigger deles inserindo em
+`assinatura_registros` — a linha do portal virou `entregue` com `link`/`link_bucket`
+corretos, sozinha. Dados de teste removidos depois.
 
-**Pendência conhecida (não implementada ainda):** `doc.html` roda em modo sandbox
-(chave anon, sem sessão real — `minha_matricula()`/`docs_pode_gerir()` sempre
-resolvem vazio/false pra ele). Isso significa que o botão "Ver" de um documento com
-`link_bucket='assinaturas'` vai falhar (RLS nega) quando aberto a partir do
-`doc.html` — só funciona hoje a partir de uma página com sessão real (como a
-`admissao-novo.html`). Resolver isso exige um proxy com `service_role` (Edge
-Function) ou mover o `doc.html` pra autenticação real — ainda não decidido.
+O PDF do termo enviado pra assinatura não carrega mais linha de assinatura física
+(a assinatura do colaborador é só a digital, capturada no app via rubrica+selfie).
+Exceção: o "Checklist de Admissão" (documento interno de RH, não passa pelo fluxo
+de assinatura do colaborador) manteve suas próprias assinaturas de Responsável
+pela admissão / Gerente de RH.
+
+**Pendência resolvida:** `doc.html` também foi convertido de sandbox pra
+autenticação real (`gate.js` + sessão real), então o botão "Ver" de um documento
+com `link_bucket='assinaturas'` já deve funcionar a partir dele — ainda não
+re-testado ponta a ponta depois da conversão.
 
 - **Portal de Governança** (este repo, schema `dp_rh`) — gestão de documentos:
   catálogo (`doc_tipos`), instância por colaborador (`colaborador_documentos`),
@@ -99,16 +103,15 @@ Categorias do catálogo (`dp_rh.doc_tipos.categoria`) hoje: **Documentos Pessoai
 
 ## Próximo passo
 
-Feito (2026-08-22): `admissao-novo.html` sobe o PDF pra `assinaturas/docs/`, cria a
-linha `pendente_assinatura` já com `link_bucket='assinaturas'`, chama
+Feito (2026-08-22): `admissao.html` (produção) sobe o PDF pra `assinaturas/docs/`,
+cria a linha `pendente_assinatura` já com `link_bucket='assinaturas'`, chama
 `docs_enviar_para_assinatura` com `p_referencia_externa = colaborador_documentos.id`
 e grava o `atribuicao_id` de volta. `doc.html` já lê `link_bucket` ao montar o botão
-"Ver" (`_docAbrirArquivo(path, bucket)`), mas — ver "pendência conhecida" acima —
-ainda não consegue de fato abrir um arquivo `assinaturas` por rodar sem sessão real.
+"Ver" (`_docAbrirArquivo(path, bucket)`) e já roda com sessão real (`gate.js`).
 
 Em aberto:
-- Resolver a leitura do `doc.html` pro bucket `assinaturas` (Edge Function com
-  `service_role`, ou autenticação real na página).
+- Re-testar ponta a ponta o botão "Ver" do `doc.html` pra um documento
+  `link_bucket='assinaturas'` depois da conversão pra `gate.js`.
 - Frente 4 (admissão — anexar pra validação): ainda não desenhada.
 - Cartão de Ponto/ASOs/Desligamento: hoje só a Admissão gera termos; as outras
   categorias que também precisam assinar ainda não têm uma página que gere/envie
