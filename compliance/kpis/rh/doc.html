@@ -1224,23 +1224,29 @@ function _docCategorias() {
 
 function _docMesStr(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 
-// Meses (mais recente primeiro) entre `desde` (Date, mês da admissão) e o mês atual.
-function _docMesesEntre(desde) {
+// Meses (mais recente primeiro) a partir de `desde` (Date), andando de `passo` em `passo` meses,
+// até o mês atual. passo=1 (padrão) dá todo mês; passo=6 dá um a cada semestre, e por aí vai.
+function _docMesesEntre(desde, passo) {
+  passo = passo || 1;
   var out = [], hoje = new Date();
-  var d = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  var limite = new Date(desde.getFullYear(), desde.getMonth(), 1);
-  while (d >= limite) { out.push(_docMesStr(d)); d.setMonth(d.getMonth() - 1); }
+  var alvo = new Date(desde.getFullYear(), desde.getMonth(), 1);
+  var limite = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  while (alvo <= limite) { out.push(_docMesStr(alvo)); alvo.setMonth(alvo.getMonth() + passo); }
+  out.reverse();
   return out.length ? out : [_docMesStr(hoje)];
 }
 
-// Cartão de Ponto de UM colaborador: desde a admissão dele até hoje (usado no modal).
-function _docMesesDesdeAdmissao(matricula) {
+// Ciclo de UM colaborador (ex: Cartão de Ponto, ASO Periódico): desde a admissão dele até hoje,
+// no intervalo (em meses) daquele tipo de documento. Usado no modal.
+function _docMesesDesdeAdmissao(matricula, passo) {
   var col = _docColaborador(matricula);
   var d = (col && col.data_admissao) ? new Date(col.data_admissao + 'T00:00:00') : new Date();
-  return _docMesesEntre(d);
+  return _docMesesEntre(d, passo);
 }
 
-// Colunas de Cartão de Ponto da TABELA: desde a admissão mais antiga entre as linhas visíveis.
+// Colunas recorrentes da TABELA: sempre mês a mês (a granularidade mais fina), desde a admissão
+// mais antiga entre as linhas visíveis — o alinhamento por pessoa é feito célula a célula
+// (_docMesAlinhado), já que cada colaborador pode ter um ciclo próprio a partir da sua admissão.
 function _docMesRangeTabela() {
   var minAdm = null;
   (_docRows || []).forEach(function (c) {
@@ -1257,6 +1263,20 @@ function _docAntesDaAdmissao(matricula, competencia) {
   var col = _docColaborador(matricula);
   if (!col || !col.data_admissao) return false;
   return competencia < col.data_admissao.slice(0, 7);
+}
+
+// true quando `competencia` cai exatamente num múltiplo do intervalo do tipo, a partir da
+// admissão do colaborador (ex: admitido em jan/2026 + intervalo 6 → alinhado em jan, jul, jan...).
+function _docMesAlinhado(matricula, tipo, competencia) {
+  if (!competencia || !tipo.intervalo_meses || tipo.intervalo_meses <= 1) return true;
+  var col = _docColaborador(matricula);
+  if (!col || !col.data_admissao) return true;
+  var adm = new Date(col.data_admissao + 'T00:00:00');
+  var p = competencia.split('-');
+  var compMes = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, 1);
+  var admMes = new Date(adm.getFullYear(), adm.getMonth(), 1);
+  var diff = (compMes.getFullYear() - admMes.getFullYear()) * 12 + (compMes.getMonth() - admMes.getMonth());
+  return diff >= 0 && diff % tipo.intervalo_meses === 0;
 }
 
 function _docFmtCompetencia(c) {
@@ -1318,8 +1338,8 @@ function _docRenderSecoes(matricula) {
     var tipos = (docTipos || []).filter(function (t) { return t.categoria === categoria; });
     html += '<div class="doc-secao-title">' + escH(categoria) + '</div>';
     tipos.forEach(function (tipo) {
-      if (tipo.periodicidade === 'mensal') {
-        _docMesesDesdeAdmissao(matricula).forEach(function (comp) {
+      if (tipo.periodicidade === 'recorrente') {
+        _docMesesDesdeAdmissao(matricula, tipo.intervalo_meses).forEach(function (comp) {
           html += _docItemHtml(matricula, tipo, comp, tipo.nome + ' — ' + _docFmtCompetencia(comp));
         });
       } else {
@@ -1521,6 +1541,9 @@ function _docCellHtml(matricula, tipo, competencia) {
   if (_docAntesDaAdmissao(matricula, competencia)) {
     return '<span class="doc-dot doc-dot-na" title="Antes da admissão">—</span>';
   }
+  if (!_docMesAlinhado(matricula, tipo, competencia)) {
+    return '<span class="doc-dot doc-dot-na" title="Fora do ciclo (a cada ' + tipo.intervalo_meses + ' meses)">—</span>';
+  }
   var doc = _docDoc(matricula, tipo.id, competencia);
   if (doc && doc.status === 'entregue') {
     return '<span class="doc-dot doc-dot-verde" title="Entregue — clique para ver" onclick="event.stopPropagation();_docAbrirArquivo(\'' + escH(doc.link) + '\')">✓</span>';
@@ -1533,7 +1556,7 @@ function _docGroupsF() {
     var tipos = (docTipos || []).filter(function (t) { return t.categoria === categoria; });
     var cols = [];
     tipos.forEach(function (tipo) {
-      if (tipo.periodicidade === 'mensal') {
+      if (tipo.periodicidade === 'recorrente') {
         _docMesRangeTabela().forEach(function (comp) {
           cols.push([tipo.nome + ' ' + _docFmtCompetencia(comp), function (col) { return _docCellHtml(col.matricula, tipo, comp); }]);
         });
