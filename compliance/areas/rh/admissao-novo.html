@@ -762,6 +762,9 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
 .adm-btn { width:100%; height:40px; background:var(--carbon); color:var(--citric); border:none; border-radius:var(--r); font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.6px; text-transform:uppercase; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; transition:opacity 0.15s; }
 .adm-btn:hover { opacity:0.85; }
 .adm-btn:disabled { opacity:0.4; cursor:not-allowed; }
+.adm-btn-outline { width:100%; height:40px; background:transparent; color:var(--carbon); border:1.5px solid var(--carbon); border-radius:var(--r); font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.6px; text-transform:uppercase; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; transition:opacity 0.15s; margin-top:8px; }
+.adm-btn-outline:hover { opacity:0.7; }
+.adm-btn-outline:disabled { opacity:0.4; cursor:not-allowed; }
 .adm-spin { width:11px; height:11px; border:2px solid rgba(207,255,0,0.25); border-top-color:var(--citric); border-radius:50%; animation:admBtnRot 0.6s linear infinite; display:none; flex-shrink:0; }
 @keyframes admBtnRot { to { transform:rotate(360deg); } }
 .adm-doc-list { display:flex; flex-direction:column; gap:8px; margin-top:4px; }
@@ -1376,6 +1379,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="adm-spin" id="adm-spin"></div>
         <span id="adm-btn-label">Gerar PDF</span>
       </button>
+      <button class="adm-btn-outline" id="adm-btn-salvar" onclick="salvarTermosParaAssinatura()">
+        <div class="adm-spin" id="adm-spin-salvar" style="border-color:rgba(52,55,63,0.25);border-top-color:var(--carbon)"></div>
+        <span id="adm-btn-salvar-label">Salvar p/ Assinatura Digital</span>
+      </button>
     </div>
   </div>
 </div>
@@ -1899,6 +1906,299 @@ function openDrawer() {
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
+  // CSS compartilhado pelas páginas de termo (impressão em lote e salvamento individual).
+  var ADM_CSS = [
+    '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}',
+    'body{background:#CBD5E1;font-family:"DM Sans","Helvetica Neue",Arial,sans-serif;padding:32px 16px 64px;display:flex;flex-direction:column;align-items:center;gap:32px;color:#111;}',
+    '.page{width:100%;max-width:760px;background:#fff;padding:34px 46px 44px;box-shadow:0 4px 32px rgba(0,0,0,.18);font-size:10px;line-height:1.55;color:#222;page-break-after:always;}',
+    '.page:last-child{page-break-after:auto;}',
+    /* header */
+    '.rp-header{display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:1.5px solid #111;margin-bottom:18px;}',
+    '.rp-logo{width:42px;height:42px;flex-shrink:0;object-fit:contain;}',
+    '.rp-header-title{flex:1;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#111;line-height:1.25;}',
+    '.rp-header-sub{font-size:9px;font-weight:400;color:#666;text-transform:none;letter-spacing:0;margin-top:2px;}',
+    '.rp-header-right{flex-shrink:0;text-align:right;font-size:9px;color:#555;line-height:1.65;}',
+    '.rp-header-right strong{color:#111;font-weight:700;}',
+    /* intro */
+    '.rp-intro{display:flex;align-items:stretch;gap:10px;margin-bottom:18px;flex-wrap:wrap;}',
+    '.rp-intro-field{display:flex;flex-direction:column;gap:4px;min-width:0;}',
+    '.rp-intro-field.grow{flex:1;min-width:0;}',
+    '.rp-intro-label{font-family:"DM Mono",monospace;font-size:8px;text-transform:uppercase;letter-spacing:.6px;color:#888;white-space:nowrap;}',
+    '.rp-intro-value{background:#F4F4F4;padding:7px 12px;font-size:10.5px;font-weight:700;color:#111;border-radius:3px;}',
+    /* section */
+    '.rp-section{margin-bottom:16px;}',
+    '.rp-section-label{font-family:"DM Mono",monospace;font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#34373F;padding-bottom:5px;margin-bottom:8px;border-bottom:1px solid #ddd;}',
+    '.rp-p{font-size:10px;color:#222;line-height:1.6;text-align:justify;margin-bottom:6px;}',
+    '.rp-p:last-child{margin-bottom:0;}',
+    '.rp-section-heading{font-size:10.5px;font-weight:700;color:#111;margin:8px 0 3px;text-transform:none;letter-spacing:0;}',
+    '.rp-bullets{margin:3px 0 6px 14px;padding:0;list-style:disc;}',
+    '.rp-bullet{font-size:10px;color:#222;line-height:1.55;margin-bottom:2px;}',
+    /* city/date */
+    '.rp-cidade-data{font-size:11px;text-align:right;margin:20px 0 24px;color:#222;}',
+    /* signatures */
+    '.rp-assinaturas{display:flex;gap:48px;margin-top:8px;}',
+    '.rp-assinatura{flex:1;text-align:center;}',
+    '.rp-ass-line{border-top:1.5px solid #000;margin-bottom:6px;}',
+    '.rp-ass-lbl{font-size:10px;color:#555;}',
+    '.rp-ass-declaro{font-size:11px;font-weight:700;color:#111;margin:12px 0 4px;}',
+    '.rp-ass-name{font-size:11px;font-weight:600;margin-top:2px;color:#111;}',
+    '.rp-ass-sub{font-size:9px;color:#777;}',
+    /* footer */
+    '.rp-footer-meta{margin-top:20px;padding-top:10px;border-top:1px solid #ededed;display:flex;align-items:center;justify-content:space-between;font-family:"DM Mono",monospace;font-size:8px;color:#aaa;text-transform:uppercase;letter-spacing:.6px;}',
+    /* print overrides */
+    '@media print{',
+    'body{background:#fff;padding:0;}',
+    '.page{box-shadow:none;width:100%;max-width:100%;padding:24px 36px 36px;',
+    '-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
+    '.rp-intro-value,.rp-section-label{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
+    '}'
+  ].join('');
+
+  function _admFmtAdmissao(s) {
+    if (!s) return '';
+    s = String(s).trim();
+    if (s.indexOf('-') !== -1) {
+      var p = s.split('-');
+      if (p.length === 3) return p[2].padStart(2,'0') + '/' + p[1].padStart(2,'0') + '/' + p[0];
+    }
+    return s;
+  }
+
+  function _admSlug(s) {
+    return String(s || '').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+
+  // Monta a página HTML (mesmo layout usado na impressão em lote) de UM termo só.
+  function _admBuildDocPageHtml(doc, ctx) {
+    var rawContent = ADM_DOCS_CONTENT[doc.id];
+    if (typeof rawContent === 'function') {
+      rawContent = doc.id === 'japona_termica'
+        ? rawContent(ctx.colabNomeLimpo, ctx.caNumero)
+        : doc.id === 'luva_termica'
+          ? rawContent(ctx.colabNomeLimpo, ctx.caLuva)
+          : rawContent(ctx.colabNomeLimpo);
+    }
+    var paragraphs = typeof rawContent === 'string'
+      ? rawContent
+      : (rawContent || [doc.desc + '.']).map(function(p){ return '<p class="rp-p">'+_escHtml(p)+'</p>'; }).join('');
+    return (
+      '<div class="page">' +
+        '<div class="rp-header">' +
+          '<img class="rp-logo" src="'+ADM_LOGO_B64+'" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' +
+          '<div class="rp-header-title">' +
+            _escHtml(doc.nome) +
+          '</div>' +
+          '<div class="rp-header-right">Emitido em <strong>'+_escHtml(ctx.dateStr)+'</strong></div>' +
+        '</div>' +
+
+        '<div class="rp-intro">' +
+          '<div class="rp-intro-field grow">' +
+            '<span class="rp-intro-label">Colaborador</span>' +
+            '<span class="rp-intro-value">'+_escHtml(ctx.colabNomeLimpo)+'</span>' +
+          '</div>' +
+          (ctx.colabMatricula ? (
+            '<div class="rp-intro-field">' +
+              '<span class="rp-intro-label">Matrícula</span>' +
+              '<span class="rp-intro-value">'+_escHtml(ctx.colabMatricula)+'</span>' +
+            '</div>'
+          ) : '') +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Cargo</span>' +
+            '<span class="rp-intro-value">'+_escHtml(ctx.colabCargo || '—')+'</span>' +
+          '</div>' +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Unidade</span>' +
+            '<span class="rp-intro-value">'+_escHtml(ctx.colabUnidade || '—')+'</span>' +
+          '</div>' +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Admissão</span>' +
+            '<span class="rp-intro-value">'+_escHtml(ctx.dataAdmissao || ctx.dataFmt)+'</span>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="rp-section">' +
+          '<div class="rp-section-label">'+(doc.sectionLabel || 'Declaração')+'</div>' +
+          '<div class="rp-section-body">'+paragraphs+'</div>' +
+        '</div>' +
+
+        '<p class="rp-ass-declaro">Declaro que li, compreendi e estou de acordo com os termos deste documento, tendo recebido uma cópia.</p>' +
+
+        '<div class="rp-cidade-data">São Paulo, '+_escHtml(ctx.docDateFmt)+'</div>' +
+
+        (doc.singleSig
+          ? ('<div class="rp-assinaturas" style="justify-content:center;">' +
+              '<div class="rp-assinatura" style="max-width:300px;">' +
+                '<div class="rp-ass-line"></div>' +
+                '<div class="rp-ass-name">'+_escHtml(ctx.colabNomeLimpo)+'</div>' +
+              '</div>' +
+            '</div>')
+          : ('<div class="rp-assinaturas">' +
+              '<div class="rp-assinatura">' +
+                '<div class="rp-ass-line"></div>' +
+                '<div class="rp-ass-name">'+_escHtml(ctx.colabNomeLimpo)+'</div>' +
+              '</div>' +
+              '<div class="rp-assinatura">' +
+                '<div class="rp-ass-line"></div>' +
+                '<div class="rp-ass-lbl">Gestor Responsável</div>' +
+                '<div class="rp-ass-name">TATÁ Sushi &amp; Poke</div>' +
+              '</div>' +
+            '</div>')) +
+
+      '</div>'
+    );
+  }
+
+  // ─── Salvar termo individualmente (gera PDF + upload + pendência de assinatura) ──
+  function comSupaPromise() { return new Promise(function(resolve) { comSupa(resolve); }); }
+
+  var _admDocTipoIdCache = null;
+  function _admCarregarDocTipos() {
+    if (_admDocTipoIdCache) return Promise.resolve(_admDocTipoIdCache);
+    return comSupaPromise().then(function(supa) {
+      return supa.rpc('doc_tipos_sandbox_listar').then(function(r) {
+        if (r.error) throw r.error;
+        var porNome = {};
+        (r.data || []).forEach(function(t) { porNome[t.nome] = t.id; });
+        var mapa = {};
+        ADM_DOCS.forEach(function(doc) {
+          if (doc.sectionLabel && porNome[doc.sectionLabel]) mapa[doc.id] = porNome[doc.sectionLabel];
+        });
+        _admDocTipoIdCache = mapa;
+        return mapa;
+      });
+    });
+  }
+
+  function _admCarregarHtml2Pdf() {
+    if (window.html2pdf) return Promise.resolve();
+    return new Promise(function(resolve, reject) {
+      var sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      sc.onload = function() { resolve(); };
+      sc.onerror = function() { reject(new Error('Falha ao carregar biblioteca de geração de PDF.')); };
+      document.head.appendChild(sc);
+    });
+  }
+
+  // Renderiza a página de UM termo num iframe isolado (não herda/vaza estilo da página) e converte pra Blob PDF.
+  function _admHtmlParaPdfBlob(pageHtml) {
+    return _admCarregarHtml2Pdf().then(function() {
+      return new Promise(function(resolve, reject) {
+        var iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:1131px;border:0;';
+        document.body.appendChild(iframe);
+        var terminado = false;
+        function cleanup() { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }
+        function terminar(fn, arg) { if (terminado) return; terminado = true; cleanup(); fn(arg); }
+        // Sem dependência de Google Fonts aqui — CSS já cai pro fallback (Helvetica/Arial) e evita
+        // que uma falha/lentidão de rede na fonte trave a geração do PDF.
+        function rasterizar() {
+          try {
+            var el = iframe.contentDocument.querySelector('.page');
+            if (!el) { terminar(reject, new Error('Falha ao montar o documento.')); return; }
+            window.html2pdf().set({
+              margin: 0,
+              html2canvas: { scale: 2, useCORS: true },
+              jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' }
+            }).from(el).outputPdf('blob').then(function(blob) {
+              terminar(resolve, blob);
+            }).catch(function(err) { terminar(reject, err); });
+          } catch (err) { terminar(reject, err); }
+        }
+        iframe.onload = function() { setTimeout(rasterizar, 150); };
+        // Trava de segurança: onload de iframe raramente falha silenciosamente, mas se falhar
+        // não pode travar o fluxo pra sempre.
+        setTimeout(function() { terminar(reject, new Error('Tempo esgotado ao montar o documento.')); }, 15000);
+        var htmlDoc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
+          '<style>'+ADM_CSS+'body{padding:0;background:#fff;}</style></head><body>'+pageHtml+'</body></html>';
+        iframe.srcdoc = htmlDoc;
+      });
+    });
+  }
+
+  function _admSalvarUmTermo(doc, ctx, mapaTipoId) {
+    var tipoId = mapaTipoId[doc.id];
+    if (!tipoId) return Promise.reject(new Error('Tipo de documento "'+doc.nome+'" não encontrado no catálogo (dp_rh.doc_tipos).'));
+    var pageHtml = _admBuildDocPageHtml(doc, ctx);
+    return _admHtmlParaPdfBlob(pageHtml).then(function(blob) {
+      var path = ctx.colabMatricula + '/contratos-e-termos/' + _admSlug(doc.sectionLabel || doc.nome) + '.pdf';
+      var nomeArquivo = (ctx.colabNomeLimpo || ctx.colabMatricula) + ' - ' + (doc.sectionLabel || doc.nome) + '.pdf';
+      return comSupaPromise().then(function(supa) {
+        return supa.storage.from('dp-documentos').upload(path, blob, { upsert: true, contentType: 'application/pdf' }).then(function(r) {
+          if (r.error) throw r.error;
+          return supa.rpc('colaborador_documento_pendente_assinatura_sandbox_salvar', {
+            p_matricula: ctx.colabMatricula, p_tipo_id: tipoId, p_nome_arquivo: nomeArquivo, p_link: path,
+            p_mime: 'application/pdf', p_tamanho: blob.size, p_enviado_por: ctx.usuarioLogado || ctx.colabMatricula
+          }).then(function(r2) {
+            if (r2.error) throw r2.error;
+            return r2.data;
+          });
+        });
+      });
+    });
+  }
+
+  function _admSetLoadingSalvar(loading, label) {
+    var btn = document.getElementById('adm-btn-salvar');
+    btn.disabled = loading;
+    document.getElementById('adm-spin-salvar').style.display = loading ? 'block' : 'none';
+    if (label) document.getElementById('adm-btn-salvar-label').textContent = label;
+  }
+
+  function salvarTermosParaAssinatura() {
+    var sel      = document.getElementById('adm-colab');
+    var colabVal = sel.value;
+    var checked  = Array.from(document.querySelectorAll('#adm-doc-list input[type=checkbox]:checked'));
+    var caNumero = (document.getElementById('adm-ca') || {}).value || '';
+    var caLuva   = (document.getElementById('adm-ca-luva') || {}).value || '';
+    _admShowError('');
+    if (!colabVal) { _admShowError('Selecione um colaborador.'); return; }
+
+    var termos = checked.map(function(cb) { return ADM_DOCS.find(function(d) { return d.id === cb.value; }); })
+      .filter(function(d) { return d && d.sectionLabel; }); // checklist e lista_epis não entram nesse fluxo
+    if (!termos.length) { _admShowError('Selecione ao menos um termo (checklist e lista de EPIs não entram nesse fluxo — só impressão em lote).'); return; }
+    if (termos.some(function(d){ return d.id === 'japona_termica'; }) && !caNumero.trim()) { _admShowError('Informe o número do CA da Japona Térmica.'); return; }
+    if (termos.some(function(d){ return d.id === 'luva_termica'; }) && !caLuva.trim()) { _admShowError('Informe o número do CA da Luva Térmica.'); return; }
+
+    var colabNome = sel.options[sel.selectedIndex].text;
+    var colabData = _admColabMap[colabVal] || {};
+    if (!colabData.matricula) { _admShowError('Colaborador sem matrícula cadastrada — não é possível salvar.'); return; }
+    var colabNomeLimpo = colabData.nome || colabNome.split(' — ')[0];
+    var colabUnidade   = colabData.unidade || '';
+    var colabCargo     = colabData.cargo || colabData.departamento || '';
+    var dataAdmissao   = _admFmtAdmissao(colabData.admissao);
+    var _sess = window.__lideresSession || (function(){ try { return JSON.parse(localStorage.getItem('lideres_session')); } catch(e){ return null; } })();
+    var usuarioLogado = (_sess && _sess.displayName) ? _sess.displayName : '';
+    var now = new Date();
+    var pad = function(n){ return String(n).padStart(2,'0'); };
+    var dataFmt = pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear();
+    var dateStr = dataFmt + ', ' + pad(now.getHours())+':'+pad(now.getMinutes());
+    var _docDateRaw = (document.getElementById('adm-data-doc') || {}).value || '';
+    var docDateFmt = _docDateRaw ? _admFmtAdmissao(_docDateRaw) : dataFmt;
+
+    var ctx = {
+      colabMatricula: colabData.matricula, colabNomeLimpo: colabNomeLimpo, colabUnidade: colabUnidade,
+      colabCargo: colabCargo, dataAdmissao: dataAdmissao, dataFmt: dataFmt, dateStr: dateStr,
+      docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva, usuarioLogado: usuarioLogado
+    };
+
+    _admSetLoadingSalvar(true, 'Salvando…');
+    _admCarregarDocTipos().then(function(mapaTipoId) {
+      return termos.reduce(function(promise, doc) {
+        return promise.then(function() { return _admSalvarUmTermo(doc, ctx, mapaTipoId); });
+      }, Promise.resolve());
+    }).then(function() {
+      _admSetLoadingSalvar(false, 'Salvar p/ Assinatura Digital');
+      closeModalAdmissao();
+      alert(termos.length + ' termo(s) salvo(s) — pendente(s) de assinatura.');
+    }, function(err) {
+      _admSetLoadingSalvar(false, 'Salvar p/ Assinatura Digital');
+      _admShowError('Erro ao salvar: ' + (err && err.message || err));
+    });
+  }
+
   function gerarAdmissaoPDF() {
     var sel       = document.getElementById('adm-colab');
     var colabVal  = sel.value;
@@ -1955,52 +2255,7 @@ function openDrawer() {
     var _docDateRaw = (document.getElementById('adm-data-doc') || {}).value || '';
     var docDateFmt = _docDateRaw ? _admFmtAdmissao(_docDateRaw) : dataFmt;
 
-    var css = [
-      '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}',
-      'body{background:#CBD5E1;font-family:"DM Sans","Helvetica Neue",Arial,sans-serif;padding:32px 16px 64px;display:flex;flex-direction:column;align-items:center;gap:32px;color:#111;}',
-      '.page{width:100%;max-width:760px;background:#fff;padding:34px 46px 44px;box-shadow:0 4px 32px rgba(0,0,0,.18);font-size:10px;line-height:1.55;color:#222;page-break-after:always;}',
-      '.page:last-child{page-break-after:auto;}',
-      /* header */
-      '.rp-header{display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:1.5px solid #111;margin-bottom:18px;}',
-      '.rp-logo{width:42px;height:42px;flex-shrink:0;object-fit:contain;}',
-      '.rp-header-title{flex:1;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#111;line-height:1.25;}',
-      '.rp-header-sub{font-size:9px;font-weight:400;color:#666;text-transform:none;letter-spacing:0;margin-top:2px;}',
-      '.rp-header-right{flex-shrink:0;text-align:right;font-size:9px;color:#555;line-height:1.65;}',
-      '.rp-header-right strong{color:#111;font-weight:700;}',
-      /* intro */
-      '.rp-intro{display:flex;align-items:stretch;gap:10px;margin-bottom:18px;flex-wrap:wrap;}',
-      '.rp-intro-field{display:flex;flex-direction:column;gap:4px;min-width:0;}',
-      '.rp-intro-field.grow{flex:1;min-width:0;}',
-      '.rp-intro-label{font-family:"DM Mono",monospace;font-size:8px;text-transform:uppercase;letter-spacing:.6px;color:#888;white-space:nowrap;}',
-      '.rp-intro-value{background:#F4F4F4;padding:7px 12px;font-size:10.5px;font-weight:700;color:#111;border-radius:3px;}',
-      /* section */
-      '.rp-section{margin-bottom:16px;}',
-      '.rp-section-label{font-family:"DM Mono",monospace;font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#34373F;padding-bottom:5px;margin-bottom:8px;border-bottom:1px solid #ddd;}',
-      '.rp-p{font-size:10px;color:#222;line-height:1.6;text-align:justify;margin-bottom:6px;}',
-      '.rp-p:last-child{margin-bottom:0;}',
-      '.rp-section-heading{font-size:10.5px;font-weight:700;color:#111;margin:8px 0 3px;text-transform:none;letter-spacing:0;}',
-      '.rp-bullets{margin:3px 0 6px 14px;padding:0;list-style:disc;}',
-      '.rp-bullet{font-size:10px;color:#222;line-height:1.55;margin-bottom:2px;}',
-      /* city/date */
-      '.rp-cidade-data{font-size:11px;text-align:right;margin:20px 0 24px;color:#222;}',
-      /* signatures */
-      '.rp-assinaturas{display:flex;gap:48px;margin-top:8px;}',
-      '.rp-assinatura{flex:1;text-align:center;}',
-      '.rp-ass-line{border-top:1.5px solid #000;margin-bottom:6px;}',
-      '.rp-ass-lbl{font-size:10px;color:#555;}',
-      '.rp-ass-declaro{font-size:11px;font-weight:700;color:#111;margin:12px 0 4px;}',
-      '.rp-ass-name{font-size:11px;font-weight:600;margin-top:2px;color:#111;}',
-      '.rp-ass-sub{font-size:9px;color:#777;}',
-      /* footer */
-      '.rp-footer-meta{margin-top:20px;padding-top:10px;border-top:1px solid #ededed;display:flex;align-items:center;justify-content:space-between;font-family:"DM Mono",monospace;font-size:8px;color:#aaa;text-transform:uppercase;letter-spacing:.6px;}',
-      /* print overrides */
-      '@media print{',
-      'body{background:#fff;padding:0;}',
-      '.page{box-shadow:none;width:100%;max-width:100%;padding:24px 36px 36px;',
-      '-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
-      '.rp-intro-value,.rp-section-label{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
-      '}'
-    ].join('');
+    var css = ADM_CSS;
 
     var cssCl = [
       '.cl-list{list-style:none;padding:0;margin:0;}',
@@ -2117,82 +2372,11 @@ function openDrawer() {
       if (doc.id === 'checklist') {
         return _buildChecklistPage(colabNomeLimpo, colabData.matricula || '', colabUnidade, colabCargo, dataAdmissao || dataFmt, usuarioLogado);
       }
-      var rawContent = ADM_DOCS_CONTENT[doc.id];
-      if (typeof rawContent === 'function') {
-        rawContent = doc.id === 'japona_termica'
-          ? rawContent(colabNomeLimpo, caNumero)
-          : doc.id === 'luva_termica'
-            ? rawContent(colabNomeLimpo, caLuva)
-            : rawContent(colabNomeLimpo);
-      }
-      var paragraphs = typeof rawContent === 'string'
-        ? rawContent
-        : (rawContent || [doc.desc + '.']).map(function(p){ return '<p class="rp-p">'+_escHtml(p)+'</p>'; }).join('');
-      var pageHtml = (
-        '<div class="page">' +
-          '<div class="rp-header">' +
-            '<img class="rp-logo" src="'+ADM_LOGO_B64+'" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' +
-            '<div class="rp-header-title">' +
-              _escHtml(doc.nome) +
-            '</div>' +
-            '<div class="rp-header-right">Emitido em <strong>'+_escHtml(dateStr)+'</strong></div>' +
-          '</div>' +
-
-          '<div class="rp-intro">' +
-            '<div class="rp-intro-field grow">' +
-              '<span class="rp-intro-label">Colaborador</span>' +
-              '<span class="rp-intro-value">'+_escHtml(colabNomeLimpo)+'</span>' +
-            '</div>' +
-            (colabData.matricula ? (
-              '<div class="rp-intro-field">' +
-                '<span class="rp-intro-label">Matrícula</span>' +
-                '<span class="rp-intro-value">'+_escHtml(colabData.matricula)+'</span>' +
-              '</div>'
-            ) : '') +
-            '<div class="rp-intro-field">' +
-              '<span class="rp-intro-label">Cargo</span>' +
-              '<span class="rp-intro-value">'+_escHtml(colabCargo || '—')+'</span>' +
-            '</div>' +
-            '<div class="rp-intro-field">' +
-              '<span class="rp-intro-label">Unidade</span>' +
-              '<span class="rp-intro-value">'+_escHtml(colabUnidade || '—')+'</span>' +
-            '</div>' +
-            '<div class="rp-intro-field">' +
-              '<span class="rp-intro-label">Admissão</span>' +
-              '<span class="rp-intro-value">'+_escHtml(dataAdmissao || dataFmt)+'</span>' +
-            '</div>' +
-          '</div>' +
-
-          '<div class="rp-section">' +
-            '<div class="rp-section-label">'+(doc.sectionLabel || 'Declaração')+'</div>' +
-            '<div class="rp-section-body">'+paragraphs+'</div>' +
-          '</div>' +
-
-          '<p class="rp-ass-declaro">Declaro que li, compreendi e estou de acordo com os termos deste documento, tendo recebido uma cópia.</p>' +
-
-          '<div class="rp-cidade-data">São Paulo, '+_escHtml(docDateFmt)+'</div>' +
-
-          (doc.singleSig
-            ? ('<div class="rp-assinaturas" style="justify-content:center;">' +
-                '<div class="rp-assinatura" style="max-width:300px;">' +
-                  '<div class="rp-ass-line"></div>' +
-                  '<div class="rp-ass-name">'+_escHtml(colabNomeLimpo)+'</div>' +
-                '</div>' +
-              '</div>')
-            : ('<div class="rp-assinaturas">' +
-                '<div class="rp-assinatura">' +
-                  '<div class="rp-ass-line"></div>' +
-                  '<div class="rp-ass-name">'+_escHtml(colabNomeLimpo)+'</div>' +
-                '</div>' +
-                '<div class="rp-assinatura">' +
-                  '<div class="rp-ass-line"></div>' +
-                  '<div class="rp-ass-lbl">Gestor Responsável</div>' +
-                  '<div class="rp-ass-name">TATÁ Sushi &amp; Poke</div>' +
-                '</div>' +
-              '</div>')) +
-
-        '</div>'
-      );
+      var pageHtml = _admBuildDocPageHtml(doc, {
+        colabNomeLimpo: colabNomeLimpo, colabMatricula: colabData.matricula, colabCargo: colabCargo,
+        colabUnidade: colabUnidade, dataAdmissao: dataAdmissao, dataFmt: dataFmt, dateStr: dateStr,
+        docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva
+      });
       return doc.vias === 2 ? pageHtml + pageHtml : pageHtml;
     }).join('');
 
