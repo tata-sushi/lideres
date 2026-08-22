@@ -2071,59 +2071,62 @@ function openDrawer() {
     });
   }
 
-  function _admCarregarHtml2Pdf() {
-    if (window.html2pdf) return Promise.resolve();
-    return new Promise(function(resolve, reject) {
-      var sc = document.createElement('script');
-      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-      sc.onload = function() { resolve(); };
-      sc.onerror = function() { reject(new Error('Falha ao carregar biblioteca de geração de PDF.')); };
-      document.head.appendChild(sc);
-    });
-  }
-
   // Renderiza a página de UM termo num iframe isolado (não herda/vaza estilo da página) e converte pra Blob PDF.
+  // IMPORTANTE: html2canvas precisa rodar a partir da MESMA janela/documento do elemento que está
+  // rasterizando — chamado do documento pai sobre um elemento de um iframe filho, ele clona o
+  // elemento errado e perde TODO o CSS (fica sem caixas, sem logo no tamanho certo, sem nada).
+  // Por isso o script do html2pdf é carregado dentro do próprio iframe, não na página principal.
   function _admHtmlParaPdfBlob(pageHtml) {
-    return _admCarregarHtml2Pdf().then(function() {
-      return new Promise(function(resolve, reject) {
-        var iframe = document.createElement('iframe');
-        iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:1131px;border:0;';
-        document.body.appendChild(iframe);
-        var terminado = false;
-        function cleanup() { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }
-        function terminar(fn, arg) { if (terminado) return; terminado = true; cleanup(); fn(arg); }
-        // Sem dependência de Google Fonts aqui — CSS já cai pro fallback (Helvetica/Arial) e evita
-        // que uma falha/lentidão de rede na fonte trave a geração do PDF.
-        function rasterizar() {
-          try {
-            var el = iframe.contentDocument.querySelector('.page');
-            if (!el) { terminar(reject, new Error('Falha ao montar o documento.')); return; }
-            window.html2pdf().set({
-              margin: 0,
-              html2canvas: { scale: 2, useCORS: true },
-              jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
-              // Termos longos (ex: Meios Eletrônicos) passam de 1 página — sem isso o html2pdf
-              // corta a imagem só pela altura, cruzando o meio de parágrafos/seções e deixando
-              // uma emenda feia (chega a aparecer como uma barra preta na quebra).
-              pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-            }).from(el).outputPdf('blob').then(function(blob) {
-              terminar(resolve, blob);
-            }).catch(function(err) { terminar(reject, err); });
-          } catch (err) { terminar(reject, err); }
-        }
-        iframe.onload = function() { setTimeout(rasterizar, 150); };
-        // Trava de segurança: onload de iframe raramente falha silenciosamente, mas se falhar
-        // não pode travar o fluxo pra sempre.
-        setTimeout(function() { terminar(reject, new Error('Tempo esgotado ao montar o documento.')); }, 15000);
-        // CSS "de tela" (ADM_CSS) tem sombra/cartão flutuante pensados pro preview no navegador —
-        // pro PDF isso só atrapalha (a sombra emenda feio numa quebra de página). Achata pro
-        // equivalente do @media print, e marca blocos de texto pra não quebrar no meio.
-        var pdfOverrides = '.page{box-shadow:none;max-width:100%;padding:24px 36px 36px;}' +
-          '.rp-p,.rp-section-heading,.rp-bullet,.rp-intro,.rp-section,.rp-assinaturas{break-inside:avoid;page-break-inside:avoid;}';
-        var htmlDoc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
-          '<style>'+ADM_CSS+pdfOverrides+'body{padding:0;background:#fff;}</style></head><body>'+pageHtml+'</body></html>';
-        iframe.srcdoc = htmlDoc;
-      });
+    return new Promise(function(resolve, reject) {
+      var iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:1131px;border:0;';
+      document.body.appendChild(iframe);
+      var terminado = false;
+      function cleanup() { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }
+      // O Blob resolvido pertence à REALM do iframe (html2pdf roda lá dentro, de propósito, pra
+      // preservar o CSS — ver comentário abaixo). Se o iframe for desmontado cedo demais, chamadas
+      // como blob.arrayBuffer() no chamador ficam penduradas pra sempre (a realm que as processaria
+      // já não existe mais). Por isso o cleanup espera um bom tempo — dá folga de sobra pra quem
+      // recebeu o blob terminar de ler/fazer upload antes do iframe sumir.
+      function terminar(fn, arg) { if (terminado) return; terminado = true; fn(arg); setTimeout(cleanup, 30000); }
+      // Sem dependência de Google Fonts aqui — CSS já cai pro fallback (Helvetica/Arial) e evita
+      // que uma falha/lentidão de rede na fonte trave a geração do PDF.
+      function rasterizar(tentativas) {
+        try {
+          var win = iframe.contentWindow;
+          if (!win || !win.html2pdf) {
+            if (tentativas > 0) { setTimeout(function() { rasterizar(tentativas - 1); }, 150); return; }
+            terminar(reject, new Error('Falha ao carregar biblioteca de geração de PDF.')); return;
+          }
+          var el = iframe.contentDocument.querySelector('.page');
+          if (!el) { terminar(reject, new Error('Falha ao montar o documento.')); return; }
+          win.html2pdf().set({
+            margin: 0,
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
+            // Termos longos (ex: Meios Eletrônicos) passam de 1 página — sem isso o html2pdf
+            // corta a imagem só pela altura, cruzando o meio de parágrafos/seções e deixando
+            // uma emenda feia (chega a aparecer como uma barra preta na quebra).
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+          }).from(el).outputPdf('blob').then(function(blob) {
+            terminar(resolve, blob);
+          }).catch(function(err) { terminar(reject, err); });
+        } catch (err) { terminar(reject, err); }
+      }
+      iframe.onload = function() { setTimeout(function() { rasterizar(20); }, 150); };
+      // Trava de segurança: onload de iframe raramente falha silenciosamente, mas se falhar
+      // não pode travar o fluxo pra sempre.
+      setTimeout(function() { terminar(reject, new Error('Tempo esgotado ao montar o documento.')); }, 15000);
+      // CSS "de tela" (ADM_CSS) tem sombra/cartão flutuante pensados pro preview no navegador —
+      // pro PDF isso só atrapalha (a sombra emenda feio numa quebra de página). Achata pro
+      // equivalente do @media print, e marca blocos de texto pra não quebrar no meio.
+      var pdfOverrides = '.page{box-shadow:none;max-width:100%;padding:24px 36px 36px;}' +
+        '.rp-p,.rp-section-heading,.rp-bullet,.rp-intro,.rp-section,.rp-assinaturas{break-inside:avoid;page-break-inside:avoid;}';
+      var htmlDoc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
+        '<style>'+ADM_CSS+pdfOverrides+'body{padding:0;background:#fff;}</style></head><body>'+pageHtml+
+        '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>' +
+        '</body></html>';
+      iframe.srcdoc = htmlDoc;
     });
   }
 
