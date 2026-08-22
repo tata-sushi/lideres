@@ -677,6 +677,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 <input type="file" id="doc-file-input" style="display:none" onchange="_docFileSelecionado(event)" accept="image/*,application/pdf">
+<input type="file" id="doc-file-input-evento" style="display:none" onchange="_docFileSelecionadoEvento(event)" accept="image/*,application/pdf">
 <!-- Modal Documentos por Cargo — classificação de obrigatoriedade -->
 <div class="modal-overlay" id="doc-cargo-overlay">
   <div class="modal" style="max-width:480px">
@@ -990,6 +991,7 @@ var docColaboradores = [];      // roster (tata_plus.profiles, só status=Ativo)
 var docCargos = [];              // dp_rh.cargos (nomes) — pra tela de classificação por cargo
 var docCargoExcecoes = [];       // dp_rh.doc_tipos_cargo_excecoes — regra "esse cargo (não) precisa desse tipo"
 var docColabExcecoes = [];       // dp_rh.colaborador_doc_excecoes — exceção pontual por pessoa, sobrepõe a regra de cargo
+var docEventos = [];             // eventos de ausência/sanção que exigem documento (dp_rh.doc_eventos_regras)
 var _testeCache = [];
 var _entrevistaCache = [];
 var state = {
@@ -1050,11 +1052,12 @@ function loadAllData() {
     SB.rpc('doc_colaboradores_sandbox_listar'),            // roster (tata_plus.profiles, status=Ativo)
     SB.rpc('doc_cargos_sandbox_listar'),                   // lista de cargos p/ tela de classificação
     SB.rpc('doc_tipos_cargo_excecoes_sandbox_listar'),     // regra "esse cargo (não) precisa desse tipo"
-    SB.rpc('colaborador_doc_excecoes_sandbox_listar')      // exceção por pessoa (sobrepõe a regra de cargo)
+    SB.rpc('colaborador_doc_excecoes_sandbox_listar'),     // exceção por pessoa (sobrepõe a regra de cargo)
+    SB.rpc('doc_eventos_sandbox_listar')                   // ausência/sanção que exigem documento (últimos 60 dias — fase de teste)
   ]).then(function (results) {
     var res = results[0], vres = results[1], cres = results[2], csres = results[3], ares = results[4];
     var dtres = results[5], cdres = results[6], colres = results[7];
-    var cgres = results[8], dcres = results[9], ceres = results[10];
+    var cgres = results[8], dcres = results[9], ceres = results[10], evres = results[11];
     agendaLideres = (ares && !ares.error && Array.isArray(ares.data)) ? ares.data : [];
     docTipos = (dtres && !dtres.error && Array.isArray(dtres.data)) ? dtres.data : [];
     colaboradorDocumentos = (cdres && !cdres.error && Array.isArray(cdres.data)) ? cdres.data : [];
@@ -1062,6 +1065,7 @@ function loadAllData() {
     docCargos = (cgres && !cgres.error && Array.isArray(cgres.data)) ? cgres.data.map(function (r) { return r.cargo; }) : [];
     docCargoExcecoes = (dcres && !dcres.error && Array.isArray(dcres.data)) ? dcres.data : [];
     docColabExcecoes = (ceres && !ceres.error && Array.isArray(ceres.data)) ? ceres.data : [];
+    docEventos = (evres && !evres.error && Array.isArray(evres.data)) ? evres.data : [];
     _colabs = (cres && !cres.error && Array.isArray(cres.data)) ? cres.data : [];
     _csCargos = (csres && !csres.error && csres.data && Array.isArray(csres.data.cargos)) ? csres.data.cargos : [];
     // ── Vagas ── (RPC devolve { pode_ver, vagas }; salários mascarados no servidor se não pode ver)
@@ -1347,7 +1351,85 @@ function _docRenderSecoes(matricula) {
       }
     });
   });
+
+  var afastamentos = _docEventosPessoa(matricula, 'ausencia');
+  if (afastamentos.length) {
+    html += '<div class="doc-secao-title">Afastamentos</div>';
+    afastamentos.forEach(function (ev) { html += _docItemEventoHtml(matricula, 'ausencia', ev); });
+  }
+  var sancoesEv = _docEventosPessoa(matricula, 'sancao');
+  if (sancoesEv.length) {
+    html += '<div class="doc-secao-title">Sanções</div>';
+    sancoesEv.forEach(function (ev) { html += _docItemEventoHtml(matricula, 'sancao', ev); });
+  }
+
   return html;
+}
+
+// ─── Documentos por evento (ausência/sanção) — exigência gerada automaticamente, não vem do catálogo ──
+function _docEventosPessoa(matricula, origem) {
+  return (docEventos || []).filter(function (e) { return e.matricula === matricula && e.origem === origem; })
+    .sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); });
+}
+
+function _docDocEvento(matricula, origem, eventoId) {
+  return (colaboradorDocumentos || []).find(function (d) {
+    return d.matricula === matricula && d.evento_origem === origem && d.evento_id === eventoId;
+  });
+}
+
+function _docItemEventoHtml(matricula, origem, evento) {
+  var doc = _docDocEvento(matricula, origem, evento.evento_id);
+  var label = evento.nome_documento + ' — ' + fmtDateBR(evento.data);
+  var badge, acao;
+  if (doc && doc.status === 'entregue') {
+    badge = '<span class="status-badge sel-sim">Entregue</span>';
+    acao = '<button class="btn-avaliar" onclick="_docAbrirArquivo(\'' + escH(doc.link) + '\')">Ver</button>';
+  } else {
+    badge = '<span class="status-badge sel-red">Pendente</span>';
+    acao = '<button class="btn-avaliar" onclick="_docAbrirUploadEvento(\'' + escH(matricula) + '\',\'' + origem + '\',\'' + evento.evento_id + '\')">Anexar</button>';
+  }
+  return '<div class="doc-item-wrap"><div class="doc-item"><div class="doc-item-label">' + escH(label) + '</div>' + badge + acao + '</div></div>';
+}
+
+var _docUploadEventoCtx = null;
+
+function _docAbrirUploadEvento(matricula, origem, eventoId) {
+  _docUploadEventoCtx = { matricula: matricula, origem: origem, eventoId: eventoId };
+  var inp = document.getElementById('doc-file-input-evento');
+  inp.value = '';
+  inp.click();
+}
+
+function _docFileSelecionadoEvento(ev) {
+  var file = ev.target.files && ev.target.files[0];
+  var ctx = _docUploadEventoCtx;
+  if (!file || !ctx) return;
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
+  var col = _docColaborador(ctx.matricula);
+  var evento = (docEventos || []).find(function (e) { return e.origem === ctx.origem && e.evento_id === ctx.eventoId; });
+  var ext = (file.name.split('.').pop() || 'bin');
+  var base = _slug(evento ? evento.nome_documento : ctx.origem) + '-' + ctx.eventoId;
+  var path = ctx.matricula + '/' + _slug(ctx.origem === 'sancao' ? 'sancoes' : 'afastamentos') + '/' + base + '.' + ext;
+  var nomeArquivo = (col ? col.nome : ctx.matricula) + ' - ' + (evento ? evento.nome_documento : 'Documento') + (evento ? ' ' + fmtDateBR(evento.data) : '') + '.' + ext;
+  SB.storage.from('dp-documentos').upload(path, file, { upsert: true }).then(function (r) {
+    if (r.error) { alert('Erro ao enviar arquivo:\n' + r.error.message); return; }
+    return SB.rpc('colaborador_documento_evento_sandbox_salvar', {
+      p_matricula: ctx.matricula, p_evento_origem: ctx.origem, p_evento_id: ctx.eventoId,
+      p_nome_arquivo: nomeArquivo, p_link: path, p_mime: file.type || null, p_tamanho: file.size || null,
+      p_enviado_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido'
+    });
+  }).then(function (r) {
+    if (!r) return;
+    if (r.error) { alert('Erro ao salvar registro:\n' + r.error.message); return; }
+    var row = r.data;
+    colaboradorDocumentos = (colaboradorDocumentos || []).filter(function (d) {
+      return !(d.matricula === row.matricula && d.evento_origem === row.evento_origem && d.evento_id === row.evento_id);
+    });
+    colaboradorDocumentos.push(row);
+    document.getElementById('doc-colab-body').innerHTML = _docRenderSecoes(ctx.matricula);
+  }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
 }
 
 function abrirDocColaborador(matricula) {
