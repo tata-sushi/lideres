@@ -476,5 +476,76 @@ function clearFilters(){ /* stub */ }
 })();
 </script>
 
+<!-- Auditoria de assinaturas: documentos assinados + carimbo de tempo (RFC 3161) -->
+<script>
+(function(){
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function fmtDT(iso){
+    if(!iso) return '—';
+    var d=new Date(iso), p=function(n){return String(n).padStart(2,'0');};
+    return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes());
+  }
+  function start(supa){
+    var head=document.getElementById('tbl-head'), body=document.getElementById('tbl-body');
+    var tblCount=document.getElementById('tbl-count-label'), countShown=document.getElementById('count-shown');
+    var empty=document.getElementById('empty-state');
+    if(!body) return;
+
+    async function ver(path){
+      if(!path){ alert('Documento sem arquivo para abrir.'); return; }
+      try{
+        var r=await supa.storage.from('assinaturas').createSignedUrl(path,3600);
+        if(r.data&&r.data.signedUrl) window.open(r.data.signedUrl,'_blank');
+        else alert('Não foi possível abrir o documento.');
+      }catch(e){ alert('Não foi possível abrir o documento.'); }
+    }
+    async function baixarTsr(atribId,rot){
+      try{
+        var r=await supa.schema('tata_plus').rpc('docs_carimbo_token',{p_atribuicao_id:atribId});
+        var d=r.data;
+        if(!d||!d.ok||!d.token_base64){ alert('Carimbo indisponível para este documento.'); return; }
+        var bin=atob(d.token_base64), bytes=new Uint8Array(bin.length);
+        for(var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+        var blob=new Blob([bytes],{type:'application/timestamp-reply'});
+        var url=URL.createObjectURL(blob), a=document.createElement('a');
+        a.href=url; a.download='carimbo-'+String(rot||'documento').replace(/[^a-z0-9]+/gi,'-').toLowerCase().replace(/^-+|-+$/g,'')+'.tsr';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); },1500);
+      }catch(e){ alert('Não foi possível baixar o carimbo.'); }
+    }
+    body.addEventListener('click',function(e){
+      var v=e.target.closest('[data-ver]'); if(v){ ver(v.getAttribute('data-ver')); return; }
+      var t=e.target.closest('[data-tsr]'); if(t){ baixarTsr(t.getAttribute('data-tsr'),t.getAttribute('data-rot')); }
+    });
+
+    if(head) head.innerHTML='<th>Colaborador</th><th>Documento</th><th>Assinado em</th><th>Carimbo de tempo</th><th style="text-align:right">Ações</th>';
+
+    supa.schema('tata_plus').rpc('docs_auditoria').then(function(res){
+      var d=res.data, itens=(d&&d.ok&&Array.isArray(d.itens))?d.itens:[];
+      if(tblCount) tblCount.textContent=itens.length+' documento(s)';
+      if(countShown) countShown.textContent=itens.length;
+      if(!itens.length){ if(empty) empty.style.display='block'; return; }
+      if(empty) empty.style.display='none';
+      body.innerHTML=itens.map(function(it){
+        var carimbo=it.tem_carimbo
+          ? '<span style="color:var(--green);font-weight:600">'+fmtDT(it.carimbo_tempo)+'</span><br><span style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--muted)">'+esc(it.carimbo_tsa||'')+' · RFC 3161</span>'
+          : '<span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted)">sem carimbo</span>';
+        var acoes=(it.assinado_path?'<button class="btn-ver" data-ver="'+esc(it.assinado_path)+'">Ver</button> ':'')
+          +(it.tem_carimbo?'<button class="btn-ver" data-tsr="'+esc(it.atribuicao_id)+'" data-rot="'+esc(it.titulo)+'" style="background:var(--green)">.tsr</button>':'');
+        return '<tr>'
+          +'<td class="cell-reclamante">'+esc(it.colaborador||('mat '+it.matricula))+'<br><span style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--muted)">mat '+esc(it.matricula)+'</span></td>'
+          +'<td>'+esc(it.titulo)+'</td>'
+          +'<td>'+fmtDT(it.assinado_em)+'</td>'
+          +'<td>'+carimbo+'</td>'
+          +'<td class="cell-ver">'+(acoes||'—')+'</td>'
+          +'</tr>';
+      }).join('');
+    }).catch(function(){ if(empty) empty.style.display='block'; });
+  }
+  if(window.__lideresSupa) start(window.__lideresSupa);
+  else window.addEventListener('lideres:supa',function(){ start(window.__lideresSupa); },{once:true});
+})();
+</script>
+
 </body>
 </html>
