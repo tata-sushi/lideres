@@ -127,20 +127,22 @@ e grava o `atribuicao_id` de volta. `doc.html` já lê `link_bucket` ao montar o
 Feito (2026-08-22): `armarios.html` também manda termo pro fluxo de assinatura
 digital agora (mesmo pipeline de `admissao.html`). Novo `doc_tipos`: "Termo de
 Resp. Armário e Vestiário" (categoria "Contratos e Termos", `requer_assinatura=
-true`). Os dois botões que geravam o termo em papel — "Gerar Termo para
-Assinatura" (banner de sucesso) e "Reimprimir Termo (2ª via)" (modal de
-consulta) — foram convertidos pro fluxo digital; o antigo `window.print()`/
-`#recibo`/`@media print` foram removidos (sem call site nenhum depois da
-conversão).
+true`).
 
 Feito (2026-08-22): `estoqueadm.html` também — novo `doc_tipos`: "Termo de
 Recebimento de Uniformes e EPI's" (mesma categoria, `requer_assinatura=true`).
-O botão "Gerar Recibo para Assinatura" virou "Enviar para Assinatura Digital"
-— só aparece quando o lançamento tem uma matrícula específica (reabastecimento/
-transferência de estoque, sem colaborador, não geram recibo). O "Termo EPI
-Coletivo" dessa mesma página (manutenção/higienização de EPI compartilhado por
-unidade, sem colaborador individual pra assinar) ficou de fora — não é um
-documento que alguém assina pessoalmente, não faz sentido no modelo atual.
+O "Termo EPI Coletivo" dessa mesma página (manutenção/higienização de EPI
+compartilhado por unidade, sem colaborador individual pra assinar) ficou de
+fora — não é um documento que alguém assina pessoalmente, não faz sentido no
+modelo atual.
+
+**Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
+é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões
+lado a lado (mesmo padrão de `admissao.html` com "Gerar PDF" +
+"Enviar para Assinatura Digital"): imprimir continua chamando `window.print()`
+normalmente, e assinatura digital continua o pipeline completo (upload +
+pendência + `docs_enviar_para_assinatura`). O botão de assinatura digital só
+aparece quando há colaborador/matrícula; o de impressão aparece sempre.
 
 Em aberto:
 - Re-testar ponta a ponta o botão "Ver" do `doc.html` pra um documento
