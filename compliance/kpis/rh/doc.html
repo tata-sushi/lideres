@@ -145,8 +145,8 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 .doc-item-wrap:last-child { border-bottom: none; }
 .doc-item { display: flex; align-items: center; gap: 10px; }
 .doc-item-label { flex: 1; font-size: 13px; color: var(--carbon); font-weight: 500; }
-.doc-eye-toggle { display: inline-flex; align-items: center; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 100px; padding: 3px; margin-top: 6px; }
-.doc-eye-btn { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; border: none; background: transparent; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
+.doc-eye-toggle { display: inline-flex; align-items: center; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 100px; padding: 2px; flex-shrink: 0; }
+.doc-eye-btn { display: flex; align-items: center; justify-content: center; width: 21px; height: 21px; border-radius: 50%; border: none; background: transparent; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
 .doc-eye-btn.active { background: var(--green); color: #fff; }
 .doc-eye-btn.active.off { background: var(--carbon); color: var(--citric); }
 .doc-exc-reset { display: block; font-size: 10px; color: var(--muted); text-decoration: underline; margin-top: 4px; cursor: pointer; }
@@ -1275,26 +1275,29 @@ function _docDoc(matricula, tipoId, competencia) {
 }
 
 // Link de exceção individual — só faz sentido pra tipos "único" (não mensal, ex: Cartão de Ponto).
-var _docEyeSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-var _docEyeOffSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.66 18.66 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+var _docCheckSvg = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+var _docBanSvg = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>';
 
-function _docExcecaoLinkHtml(matricula, tipo) {
-  if (tipo.periodicidade !== 'unico') return '';
-  var exc = (docColabExcecoes || []).find(function (e) { return e.matricula === matricula && e.tipo_id === tipo.id; });
+// Toggle "aplica / não aplica" — fica na frente da descrição do item.
+function _docExcecaoToggleHtml(matricula, tipo) {
   var aplicaHoje = _docAplica(tipo, matricula);
-  var html = '<div class="doc-eye-toggle">' +
-    '<button type="button" class="doc-eye-btn' + (!aplicaHoje ? ' active off' : '') + '" title="Não se aplica a esta pessoa" onclick="_docToggleExcecaoPessoa(\'' + escH(matricula) + '\',\'' + tipo.id + '\',false)">' + _docEyeOffSvg + '</button>' +
-    '<button type="button" class="doc-eye-btn' + (aplicaHoje ? ' active' : '') + '" title="Se aplica a esta pessoa" onclick="_docToggleExcecaoPessoa(\'' + escH(matricula) + '\',\'' + tipo.id + '\',true)">' + _docEyeSvg + '</button>' +
+  return '<div class="doc-eye-toggle">' +
+    '<button type="button" class="doc-eye-btn' + (!aplicaHoje ? ' active off' : '') + '" title="Não se aplica a esta pessoa" onclick="_docToggleExcecaoPessoa(\'' + escH(matricula) + '\',\'' + tipo.id + '\',false)">' + _docBanSvg + '</button>' +
+    '<button type="button" class="doc-eye-btn' + (aplicaHoje ? ' active' : '') + '" title="Se aplica a esta pessoa" onclick="_docToggleExcecaoPessoa(\'' + escH(matricula) + '\',\'' + tipo.id + '\',true)">' + _docCheckSvg + '</button>' +
     '</div>';
-  if (exc) {
-    html += '<a href="#" class="doc-exc-reset" onclick="event.preventDefault();_docRemoverExcecaoPessoa(\'' + escH(matricula) + '\',\'' + tipo.id + '\')">usar padrão do cargo</a>';
-  }
-  return html;
+}
+
+// Link "usar padrão do cargo" — só aparece quando existe exceção salva.
+function _docExcecaoResetHtml(matricula, tipo) {
+  var exc = (docColabExcecoes || []).find(function (e) { return e.matricula === matricula && e.tipo_id === tipo.id; });
+  if (!exc) return '';
+  return '<a href="#" class="doc-exc-reset" onclick="event.preventDefault();_docRemoverExcecaoPessoa(\'' + escH(matricula) + '\',\'' + tipo.id + '\')">usar padrão do cargo</a>';
 }
 
 function _docItemHtml(matricula, tipo, competencia, label) {
+  var toggle = _docExcecaoToggleHtml(matricula, tipo);
   if (!_docAplica(tipo, matricula)) {
-    return '<div class="doc-item-wrap"><div class="doc-item"><div class="doc-item-label">' + escH(label) + '</div><span class="status-badge">Não se aplica</span></div>' + _docExcecaoLinkHtml(matricula, tipo) + '</div>';
+    return '<div class="doc-item-wrap"><div class="doc-item">' + toggle + '<div class="doc-item-label">' + escH(label) + '</div><span class="status-badge">Não se aplica</span></div>' + _docExcecaoResetHtml(matricula, tipo) + '</div>';
   }
   var doc = _docDoc(matricula, tipo.id, competencia);
   var status = doc ? doc.status : null;
@@ -1306,7 +1309,7 @@ function _docItemHtml(matricula, tipo, competencia, label) {
     badge = '<span class="status-badge sel-red">Pendente</span>';
     acao = '<button class="btn-avaliar" onclick="_docAbrirUpload(\'' + escH(matricula) + '\',\'' + tipo.id + '\',' + (competencia ? '\'' + competencia + '\'' : 'null') + ')">Anexar</button>';
   }
-  return '<div class="doc-item-wrap"><div class="doc-item"><div class="doc-item-label">' + escH(label) + '</div>' + badge + acao + '</div>' + _docExcecaoLinkHtml(matricula, tipo) + '</div>';
+  return '<div class="doc-item-wrap"><div class="doc-item">' + toggle + '<div class="doc-item-label">' + escH(label) + '</div>' + badge + acao + '</div>' + _docExcecaoResetHtml(matricula, tipo) + '</div>';
 }
 
 function _docRenderSecoes(matricula) {
