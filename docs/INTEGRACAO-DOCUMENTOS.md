@@ -67,17 +67,20 @@ implementado, pra não deixar código morto no meio do caminho.
 4. **Estrutura de `colaborador_documentos`:** tabela acima. Pro trigger de vocês:
    `update dp_rh.colaborador_documentos set status='entregue', link=<assinado_path>,
    link_bucket='assinaturas', updated_at=now() where id = <referencia_externa>::uuid`.
-5. **Cartão de Ponto (frente 3):** minha recomendação é que **não** passe pelo
-   fluxo de assinatura do app — é um registro que a empresa já gera/possui (não
-   uma declaração de responsabilidade que precise de rubrica+selfie mensal). Deve
-   continuar entrando pelo "Anexar" que já existe no `doc.html` (upload direto pro
-   `dp-documentos`, sem passar pelo app). Mas é decisão de processo, não técnica —
-   preciso confirmar com quem pediu a integração antes de fechar isso.
+5. **Cartão de Ponto (frente 3) — DECIDIDO:** passa pelo fluxo de assinatura do
+   app, igual aos termos. Regra confirmada: **todo documento do catálogo exige
+   assinatura, exceto a categoria "Documentos Pessoais"** (RG, CPF, Comprovante
+   de Endereço — só anexo/conferência, sem passar pela app). Isso vale pra toda
+   competência do Cartão de Ponto (um envio por mês) e pros ASOs também.
 6. **Frente 4 (admissão):** ainda em aberto do meu lado — não defini ainda quais
    documentos do fluxo de admissão são gerados (viram assinatura) vs. só
    anexados pelo colaborador pra validação, nem em qual página a validação
    acontece. Não bloqueia o resto da integração (frentes 1 e 2), fica pra uma
    rodada de design separada.
+
+Categorias do catálogo (`dp_rh.doc_tipos.categoria`) hoje: **Documentos Pessoais**
+(fora da assinatura — item 5), **Contratos e Termos**, **Cartão de Ponto**, **ASOs**,
+**Documentos de Desligamento** (essas 4 entram no fluxo de assinatura do app).
 
 ## Próximo passo
 
