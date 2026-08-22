@@ -159,6 +159,7 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 .doc-dot-vermelho { background: var(--red-bg); color: var(--red); }
 .doc-dot-amarelo { background: var(--amber-bg); color: var(--amber); cursor: default; }
 .doc-dot-na { background: var(--bg); color: var(--muted); cursor: default; }
+.doc-assinatura-ico { display: inline-flex; vertical-align: middle; margin-left: 6px; color: var(--mid); }
 
 .card-body { padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
 .card-field { display: flex; flex-direction: column; gap: 1px; }
@@ -720,6 +721,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </div>
       <label class="ev-check"><input type="checkbox" id="dtn-obrigatorio" checked><span>Obrigatório (conta na adequação documental)</span></label>
       <label class="ev-check"><input type="checkbox" id="dtn-somente-inativo"><span>Aplica só depois do desligamento</span></label>
+      <label class="ev-check"><input type="checkbox" id="dtn-requer-assinatura"><span>Requer assinatura (termo de responsabilidade)</span></label>
     </div>
     <div class="modal-footer" style="gap:10px">
       <button class="modal-btn modal-btn-cancel" onclick="fecharDocTipoNovo()" style="flex:1">Cancelar</button>
@@ -1348,10 +1350,16 @@ function _docExcecaoResetHtml(matricula, tipo) {
   return '<a href="#" class="doc-exc-reset" onclick="event.preventDefault();_docRemoverExcecaoPessoa(\'' + escH(matricula) + '\',\'' + tipo.id + '\')">usar padrão do cargo</a>';
 }
 
+function _docAssinaturaIconHtml(tipo) {
+  if (!tipo.requer_assinatura) return '';
+  return '<span class="doc-assinatura-ico" title="Requer assinatura"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>';
+}
+
 function _docItemHtml(matricula, tipo, competencia, label) {
   var toggle = _docExcecaoToggleHtml(matricula, tipo);
+  var assinatura = _docAssinaturaIconHtml(tipo);
   if (!_docAplica(tipo, matricula)) {
-    return '<div class="doc-item-wrap"><div class="doc-item">' + toggle + '<div class="doc-item-label">' + escH(label) + '</div><span class="status-badge">Não se aplica</span></div>' + _docExcecaoResetHtml(matricula, tipo) + '</div>';
+    return '<div class="doc-item-wrap"><div class="doc-item">' + toggle + '<div class="doc-item-label">' + escH(label) + assinatura + '</div><span class="status-badge">Não se aplica</span></div>' + _docExcecaoResetHtml(matricula, tipo) + '</div>';
   }
   var doc = _docDoc(matricula, tipo.id, competencia);
   var status = doc ? doc.status : null;
@@ -1363,7 +1371,7 @@ function _docItemHtml(matricula, tipo, competencia, label) {
     badge = '<span class="status-badge sel-red">Pendente</span>';
     acao = '<button class="btn-avaliar" onclick="_docAbrirUpload(\'' + escH(matricula) + '\',\'' + tipo.id + '\',' + (competencia ? '\'' + competencia + '\'' : 'null') + ')">Anexar</button>';
   }
-  return '<div class="doc-item-wrap"><div class="doc-item">' + toggle + '<div class="doc-item-label">' + escH(label) + '</div>' + badge + acao + '</div>' + _docExcecaoResetHtml(matricula, tipo) + '</div>';
+  return '<div class="doc-item-wrap"><div class="doc-item">' + toggle + '<div class="doc-item-label">' + escH(label) + assinatura + '</div>' + badge + acao + '</div>' + _docExcecaoResetHtml(matricula, tipo) + '</div>';
 }
 
 function _docRenderSecoes(matricula) {
@@ -1707,6 +1715,7 @@ function abrirDocTipoNovo() {
   document.getElementById('dtn-intervalo').value = '';
   document.getElementById('dtn-obrigatorio').checked = true;
   document.getElementById('dtn-somente-inativo').checked = false;
+  document.getElementById('dtn-requer-assinatura').checked = false;
   document.getElementById('doc-tipo-overlay').classList.add('active');
   document.body.style.overflow = 'hidden';
 }
@@ -1734,6 +1743,7 @@ function _docTipoNovoSalvar() {
   var intervalo = periodicidade === 'recorrente' ? parseInt(document.getElementById('dtn-intervalo').value, 10) : null;
   var obrigatorio = document.getElementById('dtn-obrigatorio').checked;
   var somenteInativo = document.getElementById('dtn-somente-inativo').checked;
+  var requerAssinatura = document.getElementById('dtn-requer-assinatura').checked;
 
   if (!categoria) { alert('Informe a seção.'); return; }
   if (!nome) { alert('Informe o nome do documento.'); return; }
@@ -1744,7 +1754,8 @@ function _docTipoNovoSalvar() {
   SB.rpc('doc_tipo_sandbox_criar', {
     p_categoria: categoria, p_nome: nome, p_periodicidade: periodicidade, p_intervalo_meses: intervalo,
     p_obrigatorio: obrigatorio, p_aplica_somente_inativo: somenteInativo,
-    p_criado_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido'
+    p_criado_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido',
+    p_requer_assinatura: requerAssinatura
   }).then(function (r) {
     if (r.error) { alert('Erro ao cadastrar documento:\n' + r.error.message); return; }
     return SB.rpc('doc_tipos_sandbox_listar');
