@@ -1874,17 +1874,31 @@ function _docTableHtml() {
 }
 
 function setDocStatusFiltro(v) { state.docStatusFiltro = v; renderDocGestao(); }
-function clearDocFiltros() { state.docStatusFiltro = 'Ativo'; state.docBusca = ''; renderDocGestao(); }
+function setDocUnidadeFiltro(v) { state.docUnidadeFiltro = v; state.docDepartamentoFiltro = 'Todos'; renderDocGestao(); }
+function setDocDepartamentoFiltro(v) { state.docDepartamentoFiltro = v; renderDocGestao(); }
+function clearDocFiltros() { state.docStatusFiltro = 'Ativo'; state.docUnidadeFiltro = 'Todos'; state.docDepartamentoFiltro = 'Todos'; state.docBusca = ''; renderDocGestao(); }
 
 function renderDocGestao() {
   if (!state.docStatusFiltro) state.docStatusFiltro = 'Ativo';
+  if (!state.docUnidadeFiltro) state.docUnidadeFiltro = 'Todos';
+  if (!state.docDepartamentoFiltro) state.docDepartamentoFiltro = 'Todos';
   _docFiltrarRows();
+
+  function sel(label, key, opts, curVal, onchange) {
+    var h = '<div class="filter-group"><label class="filter-label">' + label + '</label><select class="filter-select" onchange="' + onchange + '(this.value)">';
+    h += '<option value="Todos"' + (curVal === 'Todos' ? ' selected' : '') + '>Todos</option>';
+    opts.forEach(function (o) { h += '<option value="' + escH(o) + '"' + (curVal === o ? ' selected' : '') + '>' + escH(o) + '</option>'; });
+    return h + '</select></div>';
+  }
+  var deptSrc = state.docUnidadeFiltro === 'Todos' ? (docColaboradores || []) : (docColaboradores || []).filter(function (c) { return c.unidade === state.docUnidadeFiltro; });
 
   var html = '<div class="anl-filters-line">';
   html += '<div class="filter-group"><label class="filter-label">Status</label><select class="filter-select" onchange="setDocStatusFiltro(this.value)">' +
     ['Ativo', 'Inativo', 'Todos'].map(function (v) {
       return '<option value="' + v + '"' + (state.docStatusFiltro === v ? ' selected' : '') + '>' + (v === 'Ativo' ? 'Ativos' : v === 'Inativo' ? 'Inativos' : 'Todos') + '</option>';
     }).join('') + '</select></div>';
+  html += sel('Unidade', 'unidade', unique((docColaboradores || []).map(function (c) { return c.unidade; })), state.docUnidadeFiltro, 'setDocUnidadeFiltro');
+  html += sel('Departamento', 'departamento', unique(deptSrc.map(function (c) { return c.departamento; })), state.docDepartamentoFiltro, 'setDocDepartamentoFiltro');
   html += '</div>';
   html += '<div class="filters-actions"><button class="btn-clear" onclick="clearDocFiltros()">Limpar filtros</button>' +
     '<span class="results-count"><span>' + _docRows.length + '</span> resultado(s)</span></div>';
@@ -1902,6 +1916,8 @@ function _docFiltrarRows() {
   var busca = norm((state.docBusca || '').toLowerCase());
   _docRows = (docColaboradores || []).filter(function (c) {
     if (state.docStatusFiltro !== 'Todos' && c.status !== state.docStatusFiltro) return false;
+    if (state.docUnidadeFiltro && state.docUnidadeFiltro !== 'Todos' && c.unidade !== state.docUnidadeFiltro) return false;
+    if (state.docDepartamentoFiltro && state.docDepartamentoFiltro !== 'Todos' && c.departamento !== state.docDepartamentoFiltro) return false;
     if (!busca) return true;
     return norm((c.nome || '').toLowerCase()).indexOf(busca) >= 0 ||
       norm((c.cargo || '').toLowerCase()).indexOf(busca) >= 0 ||
