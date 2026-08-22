@@ -5,6 +5,21 @@ no repo `tata-sushi/plus`. Os dois lados compartilham o **mesmo projeto Supabase
 (`aoqsbusfrffapjglpqjk`) — a integração acontece **na base** (colunas de ligação +
 trigger/RPC), não por webhook.
 
+**Status: integração PORTAL-SIDE implementada e testada ponta a ponta (2026-08-22).**
+`admissao-novo.html` já chama `docs_enviar_para_assinatura` de verdade (não mais o
+placeholder). Testei manualmente contra o Supabase real: criei a linha
+`pendente_assinatura`, chamei `docs_enviar_para_assinatura`, disparei o trigger deles
+inserindo em `assinatura_registros` — a linha do portal virou `entregue` com
+`link`/`link_bucket` corretos, sozinha. Dados de teste removidos depois.
+
+**Pendência conhecida (não implementada ainda):** `doc.html` roda em modo sandbox
+(chave anon, sem sessão real — `minha_matricula()`/`docs_pode_gerir()` sempre
+resolvem vazio/false pra ele). Isso significa que o botão "Ver" de um documento com
+`link_bucket='assinaturas'` vai falhar (RLS nega) quando aberto a partir do
+`doc.html` — só funciona hoje a partir de uma página com sessão real (como a
+`admissao-novo.html`). Resolver isso exige um proxy com `service_role` (Edge
+Function) ou mover o `doc.html` pra autenticação real — ainda não decidido.
+
 - **Portal de Governança** (este repo, schema `dp_rh`) — gestão de documentos:
   catálogo (`doc_tipos`), instância por colaborador (`colaborador_documentos`),
   geração via páginas de admissão/outras, upload direto, exceções por cargo/pessoa,
@@ -84,13 +99,19 @@ Categorias do catálogo (`dp_rh.doc_tipos.categoria`) hoje: **Documentos Pessoai
 
 ## Próximo passo
 
-Do lado de vocês: `docs_enviar_para_assinatura(...)` + trigger/RPC de retorno,
-como já desenhado no `INTEGRACAO-DOCUMENTOS.md` de lá.
+Feito (2026-08-22): `admissao-novo.html` sobe o PDF pra `assinaturas/docs/`, cria a
+linha `pendente_assinatura` já com `link_bucket='assinaturas'`, chama
+`docs_enviar_para_assinatura` com `p_referencia_externa = colaborador_documentos.id`
+e grava o `atribuicao_id` de volta. `doc.html` já lê `link_bucket` ao montar o botão
+"Ver" (`_docAbrirArquivo(path, bucket)`), mas — ver "pendência conhecida" acima —
+ainda não consegue de fato abrir um arquivo `assinaturas` por rodar sem sessão real.
 
-Do lado daqui, quando isso estiver pronto: trocar o botão "Salvar p/ Assinatura
-Digital" da `admissao-novo.html` (hoje faz upload direto pro `dp-documentos` com
-status `pendente_assinatura`, provisório) pra chamar `docs_enviar_para_assinatura`
-passando `p_referencia_externa = colaborador_documentos.id`, e ensinar o `doc.html`
-a ler `link_bucket` ao abrir/exibir um documento.
+Em aberto:
+- Resolver a leitura do `doc.html` pro bucket `assinaturas` (Edge Function com
+  `service_role`, ou autenticação real na página).
+- Frente 4 (admissão — anexar pra validação): ainda não desenhada.
+- Cartão de Ponto/ASOs/Desligamento: hoje só a Admissão gera termos; as outras
+  categorias que também precisam assinar ainda não têm uma página que gere/envie
+  o PDF pra assinatura — fica pra quando essas páginas forem construídas.
 
 _Última atualização: 2026-08-22._

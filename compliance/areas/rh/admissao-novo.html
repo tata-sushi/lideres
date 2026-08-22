@@ -2118,25 +2118,55 @@ function openDrawer() {
     });
   }
 
+  // Integração com o sistema de assinatura do app (tata_plus.docs_*) — ver docs/INTEGRACAO-DOCUMENTOS.md.
   function _admSalvarUmTermo(doc, ctx, mapaTipoId) {
     var tipoId = mapaTipoId[doc.id];
     if (!tipoId) return Promise.reject(new Error('Tipo de documento "'+doc.nome+'" não encontrado no catálogo (dp_rh.doc_tipos).'));
     var pageHtml = _admBuildDocPageHtml(doc, ctx);
     return _admHtmlParaPdfBlob(pageHtml).then(function(blob) {
-      var path = ctx.colabMatricula + '/contratos-e-termos/' + _admSlug(doc.sectionLabel || doc.nome) + '.pdf';
+      var arquivoPath = 'docs/' + _admUuid() + '.pdf';
       var nomeArquivo = (ctx.colabNomeLimpo || ctx.colabMatricula) + ' - ' + (doc.sectionLabel || doc.nome) + '.pdf';
       return comSupaPromise().then(function(supa) {
-        return supa.storage.from('dp-documentos').upload(path, blob, { upsert: true, contentType: 'application/pdf' }).then(function(r) {
-          if (r.error) throw r.error;
+        // 1) sobe o PDF pro bucket do app (assinaturas/docs/) — INSERT liberado pra qualquer sessão autenticada.
+        return supa.storage.from('assinaturas').upload(arquivoPath, blob, { upsert: true, contentType: 'application/pdf' }).then(function(rUp) {
+          if (rUp.error) throw rUp.error;
+          // 2) cria/atualiza a linha do portal como pendente_assinatura, já apontando pro bucket certo.
           return supa.rpc('colaborador_documento_pendente_assinatura_sandbox_salvar', {
-            p_matricula: ctx.colabMatricula, p_tipo_id: tipoId, p_nome_arquivo: nomeArquivo, p_link: path,
-            p_mime: 'application/pdf', p_tamanho: blob.size, p_enviado_por: ctx.usuarioLogado || ctx.colabMatricula
-          }).then(function(r2) {
-            if (r2.error) throw r2.error;
-            return r2.data;
+            p_matricula: ctx.colabMatricula, p_tipo_id: tipoId, p_nome_arquivo: nomeArquivo, p_link: arquivoPath,
+            p_mime: 'application/pdf', p_tamanho: blob.size, p_enviado_por: ctx.usuarioLogado || ctx.colabMatricula,
+            p_link_bucket: 'assinaturas'
+          });
+        }).then(function(rRow) {
+          if (rRow.error) throw rRow.error;
+          var linha = rRow.data;
+          // 3) manda pra assinatura de verdade no app (referencia_externa = id dessa linha).
+          return supa.schema('tata_plus').rpc('docs_enviar_para_assinatura', {
+            p_matricula: ctx.colabMatricula, p_tipo: 'pdf', p_titulo: doc.sectionLabel || doc.nome,
+            p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
+            p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true,
+            p_atribuido_por: ctx.usuarioLogado || ctx.colabMatricula
+          }).then(function(rEnvio) {
+            if (rEnvio.error) throw rEnvio.error;
+            var envio = rEnvio.data;
+            if (!envio || !envio.ok) throw new Error((envio && envio.erro) || 'Falha ao enviar pra assinatura.');
+            // 4) grava o vínculo de volta na linha do portal (só rastreio — o trigger do app já cuida do status).
+            return supa.rpc('colaborador_documento_definir_atribuicao_sandbox', {
+              p_id: linha.id, p_assinatura_atribuicao_id: envio.atribuicao_id
+            }).then(function(rLink) {
+              if (rLink.error) throw rLink.error;
+              return rLink.data;
+            });
           });
         });
       });
+    });
+  }
+
+  function _admUuid() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
     });
   }
 
