@@ -7,8 +7,9 @@
 --
 -- 1) Semeia os modelos exp14_lider e exp60_lider no catálogo (com o form).
 -- 2) tata_plus.av_experiencia_salvar()  → grava o caso + resposta do líder.
--- 3) tata_plus.av_experiencia_listar()  → roster + status, UNINDO a tabela
---    nova e a antiga (transição sem janela vazia até a migração dos 156).
+-- 3) tata_plus.av_experiencia_listar()  → roster + status, lendo SÓ a tabela
+--    nova. A antiga (experiencia_avaliacoes) deixa de ser lida/gravada; os
+--    156 registros ficam nela para migração posterior (por você).
 --
 -- Escala: Desempenho (1 muito abaixo → 5 destaque; 3 = dentro do esperado).
 -- NÃO migra dados. Idempotente (on conflict / create or replace).
@@ -142,7 +143,7 @@ begin
   return v_av;
 end $$;
 
--- ── 3) RPC de leitura · roster + status (UNE nova + antiga na transição) ───
+-- ── 3) RPC de leitura · roster + status (lê SÓ a tabela nova) ──────────────
 create or replace function tata_plus.av_experiencia_listar()
 returns table(matricula text, unidade text, departamento text, nome text,
               data_admissao date, dias_contrato int, status_devolutiva text)
@@ -154,7 +155,7 @@ language sql stable security definer set search_path to 'tata_plus','dp_rh','pub
     where coalesce(p.status,'') = 'Ativo' and p.data_admissao is not null
       and p.data_admissao >= date '2026-04-01'
   ),
-  ev_novo as (
+  ev as (
     select a.alvo_matricula as matricula,
            bool_or(a.periodo=1) as t1,
            bool_or((a.decisao->>'continua_2p')::boolean) filter (where a.periodo=1) as e1,
@@ -164,17 +165,6 @@ language sql stable security definer set search_path to 'tata_plus','dp_rh','pub
     join dp_rh.avaliacao_modelos m on m.id = a.modelo_id
     where m.slug in ('exp14_lider','exp60_lider')
     group by a.alvo_matricula
-  ),
-  ev_legado as (
-    select matricula,
-           bool_or(periodo=1) as t1, bool_or(efetivar) filter (where periodo=1) as e1,
-           bool_or(periodo=2) as t2, bool_or(efetivar) filter (where periodo=2) as e2
-    from dp_rh.experiencia_avaliacoes group by matricula
-  ),
-  ev as (
-    select matricula, bool_or(t1) as t1, bool_or(e1) as e1, bool_or(t2) as t2, bool_or(e2) as e2
-    from (select * from ev_novo union all select * from ev_legado) u
-    group by matricula
   )
   select b.matricula, b.unidade, b.departamento, b.nome, b.data_admissao, b.dias,
     case
