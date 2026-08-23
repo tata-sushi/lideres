@@ -2,10 +2,11 @@
 -- Sistema de Avaliações & Feedback — ESTRUTURA BASE (núcleo genérico)
 -- ---------------------------------------------------------------------------
 -- Fundação do sistema descrito no Documento Canônico v2.0 (3 frentes,
--- 9 instrumentos, escala Likert 1–5). Este passo cria SÓ a estrutura:
--- tabelas, régua de status, gatilho de updated_at, RLS travado e o catálogo
--- de instrumentos (metadados). Os FORMULÁRIOS e as RPCs de acesso entram
--- em cada fase seguinte (experiência primeiro).
+-- 9 instrumentos, escala Likert 1–5). Este passo cria SÓ AS TABELAS (mais
+-- régua de status, gatilho de updated_at e RLS travado). SEM catálogo semeado,
+-- SEM formulários e SEM migração de dados. O catálogo de instrumentos, os
+-- FORMULÁRIOS e as RPCs de acesso entram em cada fase seguinte (experiência
+-- primeiro).
 --
 -- Escopo desta migration (núcleo case-based — serve Frente 1 e Frente 2):
 --   experiência 14d/60d (líder + colaborador), Desempenho, Liderança,
@@ -34,6 +35,7 @@ create table if not exists dp_rh.avaliacao_modelos (
   gatilho       jsonb   not null default '{}'::jsonb, -- {"dias":14} · {"meses":[1,7]}
   papeis        text[]  not null default '{}',        -- quem responde: {lider} {colaborador} {liderado} ...
   gera_media    boolean not null default true,        -- entra na régua de 5 faixas
+  gera_card     boolean not null default false,       -- cria card no kanban? (ver OBS na tabela avaliacao_kanban)
   form          jsonb   not null default '{}'::jsonb, -- questionário (preenchido na fase do instrumento)
   form_versao   smallint not null default 1,
   ativo         boolean not null default false,       -- vira true quando a fase do instrumento sobe
@@ -123,6 +125,14 @@ create table if not exists dp_rh.avaliacao_eventos (
 create index if not exists avaliacao_eventos_av_idx on dp_rh.avaliacao_eventos(avaliacao_id, created_at);
 
 -- ── 6) Kanban · mapa avaliação → card (padrão *_para_kanban) ───────────────
+-- ┌ OBSERVAÇÃO (a DEFINIR no futuro) ─ criação de card é SELETIVA ───────────┐
+-- │ • Nem todo instrumento vira card: a flag avaliacao_modelos.gera_card     │
+-- │   (default FALSE) decide quais. Ligamos caso a caso, quando definirmos.  │
+-- │ • Nem toda pendência de avaliação precisa gerar card — a criação será    │
+-- │   deliberada, não automática para toda avaliação/pendência.             │
+-- │ • O trigger avaliação→card NÃO é criado aqui; entra quando desenharmos   │
+-- │   o fluxo do kanban (qual quadro, coluna, quando abre/fecha o card).     │
+-- └──────────────────────────────────────────────────────────────────────────┘
 create table if not exists dp_rh.avaliacao_kanban (
   avaliacao_id uuid primary key references dp_rh.avaliacoes(id) on delete cascade,
   card_id      uuid,
@@ -166,24 +176,8 @@ alter table dp_rh.avaliacao_respostas enable row level security;
 alter table dp_rh.avaliacao_eventos   enable row level security;
 alter table dp_rh.avaliacao_kanban    enable row level security;
 
--- ── 10) Catálogo · os 8 instrumentos case-based (metadados) ────────────────
--- Forms vazios de propósito: cada questionário é preenchido na fase do
--- instrumento. ativo=false até a fase subir. Reconhecimento (Frente 3) fica
--- fora do catálogo — é módulo próprio numa fase futura.
-insert into dp_rh.avaliacao_modelos
-  (slug, nome, frente, fluxo, escala, onde, periodicidade, gatilho, papeis, gera_media, ordem, ativo)
-values
-  ('exp14_lider', 'Experiência 14d — Líder',        1, 'lider_para_colab',        'desempenho', 'portal_lideres', 'admissao_14', '{"dias":14}',  '{lider}',        true, 1, false),
-  ('exp14_colab', 'Experiência 14d — Colaborador',  1, 'colab_para_experiencia',  'percepcao',  'tata_plus',      'admissao_14', '{"dias":14}',  '{colaborador}',  true, 2, false),
-  ('exp60_lider', 'Experiência 60d — Líder',        1, 'lider_para_colab',        'desempenho', 'portal_lideres', 'admissao_60', '{"dias":60}',  '{lider}',        true, 3, false),
-  ('exp60_colab', 'Experiência 60d — Colaborador',  1, 'colab_para_experiencia',  'percepcao',  'tata_plus',      'admissao_60', '{"dias":60}',  '{colaborador}',  true, 4, false),
-  ('desempenho',  'Avaliação de Desempenho',        1, 'lider_para_colab',        'desempenho', 'portal_lideres', 'sob_demanda', '{}',           '{lider}',        true, 5, false),
-  ('lideranca',   'Avaliação de Liderança',         1, 'colab_para_lider',        'percepcao',  'tata_plus',      'sob_demanda', '{}',           '{liderado}',     true, 6, false),
-  ('pulso',       'Pulso de Clima',                 1, 'colab_para_org',          'percepcao',  'tata_plus',      'continuo',    '{}',           '{colaborador}',  true, 7, false),
-  ('desligamento','Entrevista de Desligamento',     2, 'colab_para_jornada',      'percepcao',  'ambos',          'offboarding', '{}',           '{colaborador}',  false, 8, false)
-on conflict (slug) do nothing;
-
 -- ═══════════════════════════════════════════════════════════════════════════
--- FIM · estrutura base. Próximo passo: preencher os formulários de
--- Experiência 14d/60d (líder) e ligar o portal Líderes + RPCs de escrita.
+-- FIM · estrutura base (só tabelas). Próximo passo (fase Experiência):
+-- semear no catálogo os modelos exp14_lider/exp60_lider (+ colaborador),
+-- preencher seus formulários, ligar o portal Líderes e as RPCs de escrita.
 -- ═══════════════════════════════════════════════════════════════════════════
