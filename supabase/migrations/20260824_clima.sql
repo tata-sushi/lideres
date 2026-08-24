@@ -257,16 +257,27 @@ language sql stable security definer set search_path to 'tata_plus','dp_rh','pub
 $fn$;
 
 -- ── 7) Grants ──────────────────────────────────────────────────────────────
--- emitir: só autenticado (automação/RH). Página pública NÃO emite.
-grant execute on function tata_plus.av_clima_emitir(text,int)              to authenticated;
+-- IMPORTANTE: CREATE FUNCTION concede EXECUTE ao PUBLIC por padrão — isso
+-- exporia emitir e as RPCs de RH ao anon. Revogamos o PUBLIC e damos só o
+-- papel certo a cada função.
+revoke execute on function tata_plus.av_clima_emitir(text,int)            from public;
+revoke execute on function tata_plus.av_clima_abrir(uuid)                 from public;
+revoke execute on function tata_plus.av_clima_responder(uuid,jsonb,text)  from public;
+revoke execute on function tata_plus.av_clima_resumo(date,int)            from public;
+revoke execute on function tata_plus.av_clima_por_unidade(text,date,int)  from public;
+revoke execute on function tata_plus.av_clima_comentarios(date,int)       from public;
+revoke execute on function tata_plus.av_clima_participacao(text)          from public;
+
+-- emitir: só automação (service_role) e RH logado. NUNCA anon.
+grant execute on function tata_plus.av_clima_emitir(text,int)            to service_role, authenticated;
 -- página externa (anon): abrir + responder.
-grant execute on function tata_plus.av_clima_abrir(uuid)                   to anon, authenticated;
-grant execute on function tata_plus.av_clima_responder(uuid,jsonb,text)    to anon, authenticated;
+grant execute on function tata_plus.av_clima_abrir(uuid)                 to anon, authenticated;
+grant execute on function tata_plus.av_clima_responder(uuid,jsonb,text)  to anon, authenticated;
 -- leitura RH: só autenticado.
-grant execute on function tata_plus.av_clima_resumo(date,int)              to authenticated;
-grant execute on function tata_plus.av_clima_por_unidade(text,date,int)    to authenticated;
-grant execute on function tata_plus.av_clima_comentarios(date,int)         to authenticated;
-grant execute on function tata_plus.av_clima_participacao(text)            to authenticated;
+grant execute on function tata_plus.av_clima_resumo(date,int)            to authenticated;
+grant execute on function tata_plus.av_clima_por_unidade(text,date,int)  to authenticated;
+grant execute on function tata_plus.av_clima_comentarios(date,int)       to authenticated;
+grant execute on function tata_plus.av_clima_participacao(text)          to authenticated;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- FIM. Amostragem (quem é pingado por semana) fica com a automação (escolhe as
