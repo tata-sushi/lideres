@@ -47,7 +47,7 @@ $fn$;
 -- ── pendente: o colaborador logado ainda deve avaliar o líder neste semestre?
 create or replace function tata_plus.av_lideranca_pendente()
 returns jsonb language plpgsql stable security definer set search_path to 'tata_plus','dp_rh','public' as $fn$
-declare v_mat text := tata_plus.minha_matricula(); v_idsup text; v_lider text; v_lidernome text; v_modelo uuid; v_periodo int; v_ja boolean;
+declare v_mat text := tata_plus.minha_matricula(); v_idsup text; v_lider text; v_lidernome text; v_modelo uuid; v_periodo int; v_resp_em timestamptz;
 begin
   if v_mat is null then return jsonb_build_object('pendente',false,'motivo','sem_sessao'); end if;
   -- id_superior é o id_pessoa do líder (não a matrícula) → resolve a matrícula real
@@ -57,13 +57,13 @@ begin
   if v_lider is null then return jsonb_build_object('pendente',false,'motivo','lider_sem_matricula','lider_nome',v_lidernome); end if;
   select id into v_modelo from dp_rh.avaliacao_modelos where slug='lideranca';
   v_periodo := (extract(year from now())::int - 2026)*2 + case when extract(month from now())::int <= 6 then 1 else 2 end;
-  select exists(
-    select 1 from dp_rh.avaliacoes a join dp_rh.avaliacao_respostas r on r.avaliacao_id=a.id
+  -- respondido_em = timestamp do envio deste liderado (null se ainda não respondeu)
+  select max(r.enviada_em) into v_resp_em
+    from dp_rh.avaliacoes a join dp_rh.avaliacao_respostas r on r.avaliacao_id=a.id
     where a.modelo_id=v_modelo and a.alvo_matricula=v_lider and a.periodo=v_periodo and a.ciclo_id is null
-      and r.papel='liderado' and r.avaliador_matricula=v_mat
-  ) into v_ja;
-  return jsonb_build_object('pendente', not v_ja, 'ja_respondeu', v_ja,
-    'lider_matricula', v_lider, 'lider_nome', v_lidernome, 'periodo', v_periodo);
+      and r.papel='liderado' and r.avaliador_matricula=v_mat;
+  return jsonb_build_object('pendente', v_resp_em is null, 'ja_respondeu', v_resp_em is not null,
+    'respondido_em', v_resp_em, 'lider_matricula', v_lider, 'lider_nome', v_lidernome, 'periodo', v_periodo);
 end $fn$;
 
 -- ── salvar: o liderado avalia o próprio líder (anônimo, 1 por semestre) ─────
