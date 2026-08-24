@@ -47,11 +47,14 @@ $fn$;
 -- ── pendente: o colaborador logado ainda deve avaliar o líder neste semestre?
 create or replace function tata_plus.av_lideranca_pendente()
 returns jsonb language plpgsql stable security definer set search_path to 'tata_plus','dp_rh','public' as $fn$
-declare v_mat text := tata_plus.minha_matricula(); v_lider text; v_lidernome text; v_modelo uuid; v_periodo int; v_ja boolean;
+declare v_mat text := tata_plus.minha_matricula(); v_idsup text; v_lider text; v_lidernome text; v_modelo uuid; v_periodo int; v_ja boolean;
 begin
   if v_mat is null then return jsonb_build_object('pendente',false,'motivo','sem_sessao'); end if;
-  select id_superior, nome_superior into v_lider, v_lidernome from tata_plus.profiles where matricula=v_mat;
-  if coalesce(trim(v_lider),'')='' then return jsonb_build_object('pendente',false,'motivo','sem_lider'); end if;
+  -- id_superior é o id_pessoa do líder (não a matrícula) → resolve a matrícula real
+  select id_superior, nome_superior into v_idsup, v_lidernome from tata_plus.profiles where matricula=v_mat;
+  if coalesce(trim(v_idsup),'')='' then return jsonb_build_object('pendente',false,'motivo','sem_lider'); end if;
+  select matricula into v_lider from tata_plus.profiles where id_pessoa=v_idsup limit 1;
+  if v_lider is null then return jsonb_build_object('pendente',false,'motivo','lider_sem_matricula','lider_nome',v_lidernome); end if;
   select id into v_modelo from dp_rh.avaliacao_modelos where slug='lideranca';
   v_periodo := (extract(year from now())::int - 2026)*2 + case when extract(month from now())::int <= 6 then 1 else 2 end;
   select exists(
@@ -68,12 +71,15 @@ create or replace function tata_plus.av_lideranca_salvar(p_respostas jsonb, p_ma
 returns jsonb language plpgsql security definer set search_path to 'dp_rh','tata_plus','public' as $fn$
 declare
   v_mat text := tata_plus.minha_matricula();
-  v_lider text; v_modelo uuid; v_periodo int; v_av uuid;
+  v_idsup text; v_lider text; v_modelo uuid; v_periodo int; v_av uuid;
   v_resp jsonb; v_media numeric(4,2); v_soma numeric; v_caso numeric(4,2); v_snap jsonb;
 begin
   if v_mat is null then raise exception 'sem matrícula ativa'; end if;
-  select id_superior into v_lider from tata_plus.profiles where matricula=v_mat;
-  if coalesce(trim(v_lider),'')='' then raise exception 'sem liderança cadastrada'; end if;
+  -- id_superior é o id_pessoa do líder → resolve a matrícula real
+  select id_superior into v_idsup from tata_plus.profiles where matricula=v_mat;
+  if coalesce(trim(v_idsup),'')='' then raise exception 'sem liderança cadastrada'; end if;
+  select matricula into v_lider from tata_plus.profiles where id_pessoa=v_idsup limit 1;
+  if v_lider is null then raise exception 'liderança sem matrícula (id_pessoa %)', v_idsup; end if;
   select id into v_modelo from dp_rh.avaliacao_modelos where slug='lideranca';
   v_periodo := (extract(year from now())::int - 2026)*2 + case when extract(month from now())::int <= 6 then 1 else 2 end;
 
@@ -108,7 +114,7 @@ begin
   insert into dp_rh.avaliacao_eventos (avaliacao_id, tipo, ator_matricula, dados)
   values (v_av, 'liderado_respondeu', v_mat, jsonb_build_object('periodo',v_periodo));
 
-  return jsonb_build_object('ok',true,'periodo',v_periodo);
+  return jsonb_build_object('ok',true,'periodo',v_periodo,'lider_matricula',v_lider);
 end $fn$;
 
 -- ── resultado consolidado (o próprio líder vê o seu; RH virá com o dashboard)
