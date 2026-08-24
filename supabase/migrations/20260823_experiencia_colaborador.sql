@@ -27,7 +27,7 @@ values
      {"id":"c10","tipo":"escala","dimensao":"Canais e Processos","texto":"O quanto ficou claro como funciona o Canal de Ouvidoria?"},
      {"id":"c11","tipo":"escala","dimensao":"Canais e Processos","texto":"O quanto sua documentação foi solicitada e regularizada de forma clara?"},
      {"id":"c12","tipo":"escala","dimensao":"Canais e Processos","texto":"O quanto ficou claro que você pode participar de avaliações de refeição e melhorias?"},
-     {"id":"c13","tipo":"escala","dimensao":"Recursos e Orientações","texto":"O quanto você recebeu todos os uniformes, EPIs e materiais necessários?"},
+     {"id":"c13","tipo":"escala","dimensao":"Recursos e Orientações","texto":"O quanto você se sente bem equipado(a) com uniformes, EPIs e materiais necessários?"},
      {"id":"c14","tipo":"escala","dimensao":"Recursos e Orientações","texto":"O quanto ficou claro como higienizar, conservar e utilizar uniforme e EPIs?"},
      {"id":"c15","tipo":"escala","dimensao":"Liderança","texto":"O quanto você tem recebido suporte da liderança para aprender suas atividades?"},
      {"id":"c16","tipo":"escala","dimensao":"Clima","texto":"O quanto você se sente confortável para pedir ajuda quando necessário?"},
