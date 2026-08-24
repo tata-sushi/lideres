@@ -22,7 +22,7 @@ values
      {"id":"c05","tipo":"escala","dimensao":"Equipe","texto":"O quanto você se sente acolhido(a) pela equipe?"},
      {"id":"c06","tipo":"escala","dimensao":"Informações do Trabalho","texto":"O quanto ficou claro como funcionam jornada, escalas, folgas, ponto, atrasos e ausências?"},
      {"id":"c07","tipo":"escala","dimensao":"Informações do Trabalho","texto":"O quanto ficou claro como funcionam salário, fechamento e datas de pagamento?"},
-     {"id":"c08","tipo":"escala","dimensao":"Informações do Trabalho","texto":"O quanto ficou claro como funciona a gorjeta?"},
+     {"id":"c08","tipo":"escala","dimensao":"Informações do Trabalho","texto":"O quanto ficou claro como funciona a gorjeta, critérios e elegibilidade?"},
      {"id":"c09","tipo":"escala","dimensao":"Informações do Trabalho","texto":"O quanto ficou claro como funcionam premiações, critérios e elegibilidade?"},
      {"id":"c10","tipo":"escala","dimensao":"Canais e Processos","texto":"O quanto ficou claro como funciona o Canal de Ouvidoria?"},
      {"id":"c11","tipo":"escala","dimensao":"Canais e Processos","texto":"O quanto sua documentação foi solicitada e regularizada de forma clara?"},
