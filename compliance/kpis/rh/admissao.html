@@ -3272,9 +3272,21 @@ window.toggleFta = toggleFta;
   }
 
   var _admEpiPdfDoc = null;
-  function _admRenderEpiPages(pageNums, cb) {
+  function _admRenderEpiPages(pageNums, cb, onError) {
+    var done = false;
+    var watchdog = setTimeout(function() {
+      if (done) return;
+      done = true;
+      onError(new Error('Tempo esgotado ao carregar a lista de uniformes/EPIs.'));
+    }, 15000);
+    function finish(fn, arg) {
+      if (done) return;
+      done = true;
+      clearTimeout(watchdog);
+      fn(arg);
+    }
     function renderOne(pdf, nums, results) {
-      if (!nums.length) { cb(results); return; }
+      if (!nums.length) { finish(cb, results); return; }
       pdf.getPage(nums[0]).then(function(page) {
         var vp = page.getViewport({scale: 2});
         var cv = document.createElement('canvas');
@@ -3282,15 +3294,15 @@ window.toggleFta = toggleFta;
         page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise.then(function() {
           results.push(cv.toDataURL('image/jpeg', 0.92));
           renderOne(pdf, nums.slice(1), results);
-        });
-      });
+        }).catch(function(err) { finish(onError, err); });
+      }).catch(function(err) { finish(onError, err); });
     }
     function doRender(pdf) { renderOne(pdf, pageNums, []); }
     if (_admEpiPdfDoc) { doRender(_admEpiPdfDoc); return; }
     function load() {
       pdfjsLib.getDocument('uniformes-epis.pdf').promise.then(function(pdf) {
         _admEpiPdfDoc = pdf; doRender(pdf);
-      });
+      }).catch(function(err) { finish(onError, err); });
     }
     if (!window.pdfjsLib) {
       var sc = document.createElement('script');
@@ -3299,6 +3311,7 @@ window.toggleFta = toggleFta;
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         load();
       };
+      sc.onerror = function() { finish(onError, new Error('Falha ao carregar biblioteca de PDF (pdf.js).')); };
       document.head.appendChild(sc);
     } else { load(); }
   }
@@ -4007,7 +4020,10 @@ window.toggleFta = toggleFta;
     } // end _buildPages
 
     if (_epiDocSel) {
-      _admRenderEpiPages([1, 2, _epiPageNum], function(imgs) { _buildPages(imgs); });
+      _admRenderEpiPages([1, 2, _epiPageNum], function(imgs) { _buildPages(imgs); }, function(err) {
+        _admSetLoading(false, 'Gerar PDF');
+        _admShowError('Não foi possível carregar a lista de uniformes/EPIs. Desmarque essa opção ou tente novamente. (' + (err && err.message || 'erro desconhecido') + ')');
+      });
     } else {
       _buildPages(null);
     }
