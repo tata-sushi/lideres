@@ -18,7 +18,7 @@ insert into dp_rh.avaliacao_modelos
   (slug, nome, frente, fluxo, escala, onde, periodicidade, gatilho, papeis, gera_media, gera_card, form, form_versao, ativo, ordem)
 values
 ('desempenho', 'Avaliação de Desempenho', 1, 'lider_para_colab', 'desempenho', 'portal_lideres', 'semestral',
- '{"meses":6,"ancora":"efetivacao_mais_6m","efetivacao_dias":60}', '{lider}', true, false,
+ '{"meses":6,"ancora":"efetivacao_mais_6m","efetivacao_dias":60,"data_inicio":"2026-09-01"}', '{lider}', true, false,
  $json${
    "escala": "desempenho",
    "itens": [
@@ -49,18 +49,25 @@ returns jsonb language sql stable security definer set search_path to 'dp_rh','t
 $$;
 
 -- ── 3) Roster de efetivos + status (quem está devendo desempenho) ──────────
+-- `data_inicio` (no gatilho do modelo) = largada do programa: antes dela a fila
+-- fica vazia (nada pendente); a partir dela vale a régua rolling de 6m por pessoa.
 create or replace function tata_plus.av_desempenho_listar()
 returns table(matricula text, nome text, unidade text, departamento text, cargo text,
               dias_casa int, ultima_data date, ultima_media numeric, ultima_rodada int,
               proxima_rodada int, elegivel_desde date, proxima_prevista date, due boolean)
 language sql stable security definer set search_path to 'tata_plus','dp_rh','public' as $$
-  with efet as (
+  with cfg as (
+    select coalesce((gatilho->>'data_inicio')::date, current_date) as inicio,
+           coalesce((gatilho->>'efetivacao_dias')::int, 60)         as efdias
+    from dp_rh.avaliacao_modelos where slug='desempenho'
+  ),
+  efet as (
     select p.matricula, p.nome, p.unidade, p.departamento, p.cargo, p.data_admissao,
            (current_date - p.data_admissao)::int as dias,
-           (p.data_admissao + interval '60 days' + interval '6 mons')::date as elegivel_desde
-    from tata_plus.profiles p
+           (p.data_admissao + (c.efdias||' days')::interval + interval '6 mons')::date as elegivel_desde
+    from tata_plus.profiles p cross join cfg c
     where coalesce(p.status,'')='Ativo' and p.data_admissao is not null
-      and current_date >= (p.data_admissao + interval '60 days')::date   -- efetivo (passou experiência)
+      and current_date >= (p.data_admissao + (c.efdias||' days')::interval)::date   -- efetivo (passou experiência)
   ),
   ult as (
     select a.alvo_matricula,
@@ -75,11 +82,12 @@ language sql stable security definer set search_path to 'tata_plus','dp_rh','pub
          u.ultima_data, u.ultima_media, u.ultima_rodada,
          coalesce(u.ultima_rodada,0)+1 as proxima_rodada,
          e.elegivel_desde,
-         case when u.ultima_data is null then e.elegivel_desde
+         case when u.ultima_data is null then greatest(e.elegivel_desde, c.inicio)
               else (u.ultima_data + interval '6 mons')::date end as proxima_prevista,
-         case when u.ultima_data is null then current_date >= e.elegivel_desde
+         case when current_date < c.inicio then false                    -- antes da largada: nada pendente
+              when u.ultima_data is null then current_date >= e.elegivel_desde
               else current_date >= (u.ultima_data + interval '6 mons')::date end as due
-  from efet e
+  from efet e cross join cfg c
   left join ult u on u.alvo_matricula = e.matricula
   order by due desc, proxima_prevista;
 $$;
