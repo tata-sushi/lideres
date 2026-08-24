@@ -353,6 +353,7 @@
 .anl-note { display:inline-flex; align-items:center; gap:8px; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:#9a6b00; background:#FFF7E6; border:1px solid #F0D9A0; border-radius:100px; padding:6px 12px; margin:12px 0 0; }
 .anl-box { background:var(--white); border:1px solid var(--border); border-radius:var(--r); box-shadow:0 1px 3px rgba(0,0,0,.06); overflow:hidden; }
 .anl-table-pad { padding:16px 20px; }
+#view-analitico .filters-wrap { border-bottom:none; }
 #view-analitico .filters-actions { justify-content:space-between; align-items:center; }
 .btn-clear { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.5px; color:var(--t3); background:none; border:none; cursor:pointer; padding:4px 0; text-transform:uppercase; text-decoration:underline; text-underline-offset:2px; }
 .btn-clear:hover { color:var(--carbon); }
@@ -362,12 +363,12 @@
 .anl-wrap { overflow:auto; max-height:64vh; -webkit-overflow-scrolling:touch; }
 .anl-table { border-collapse:separate; border-spacing:0; white-space:nowrap; font-size:12.5px; }
 .anl-table th, .anl-table td { padding:8px 12px; border-bottom:1px solid var(--border); border-right:1px solid var(--border); text-align:center; vertical-align:middle; color:var(--carbon); }
-.anl-table thead th { position:sticky; z-index:2; background:var(--white); font-family:'DM Mono',monospace; font-size:9px; letter-spacing:.05em; text-transform:uppercase; color:var(--t3); }
+.anl-table thead th { position:sticky; top:0; z-index:2; background:var(--white); font-family:'DM Mono',monospace; font-size:9px; letter-spacing:.05em; text-transform:uppercase; color:var(--t3); border-bottom:2px solid var(--carbon); }
 .anl-table thead tr.anl-grp th { top:0; height:32px; box-sizing:border-box; }
-.anl-table thead tr.anl-crow th { top:32px; border-bottom:2px solid var(--carbon); }
+.anl-table thead tr.anl-crow th { top:32px; }
 .anl-sticky { position:sticky; left:0; z-index:3; background:var(--white); box-shadow:1px 0 0 var(--carbon); text-align:left; font-weight:600; }
 .anl-table thead th.anl-sticky { z-index:6; }
-.anl-table thead th.anl-sticky[rowspan] { top:0; vertical-align:middle; z-index:7; font-size:11px; }
+.anl-table thead th.anl-sticky[rowspan] { top:0; vertical-align:middle; z-index:7; font-size:12.6px; }
 .anl-nome-cell { display:flex; flex-direction:column; gap:2px; min-width:230px; text-align:left; }
 .anl-nome-txt { font-weight:600; color:var(--t1); }
 .anl-msub { font-family:'DM Mono',monospace; font-size:9.5px; color:var(--t3); font-weight:400; }
@@ -1750,7 +1751,7 @@ function setTab(t){
 <script>
 /* ── ANALÍTICO · Performance 360 (profiles + ausencias) ── */
 (function(){
-  var LOADED=false, COLABS=[], AUS={}, PAGE=50, shown=PAGE, rows=[];
+  var LOADED=false, COLABS=[], AUS={}, SANC={}, PAGE=50, shown=PAGE, rows=[];
   var collapsed={}, collapsedInit=false;
   function esc(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function pad(n){ return String(n).padStart(2,'0'); }
@@ -1764,17 +1765,20 @@ function setTab(t){
       ['Tempo de empresa',function(c){ return c.data_admissao?tempoCasa(c.data_admissao,c.data_demissao):'—'; }]
     ]},
     { label:'Absenteísmo', sigla:'A', cols:[
-      ['Faltas',      function(c){ var a=AUS[c.matricula]; var n=a?a.faltas:0; return n?'<span class="anl-pill '+(n>=3?'bad':'warn')+'">'+n+'</span>':'<span class="anl-ph">0</span>'; }],
-      ['Justificadas',function(c){ var a=AUS[c.matricula]; var n=a?a.just:0; return n?'<span class="anl-pill ok">'+n+'</span>':'<span class="anl-ph">0</span>'; }]
+      ['Faltas',      function(c){ var a=AUS[c.matricula]; var n=a?a.faltas:0; return n?String(n):'<span class="anl-ph">0</span>'; }],
+      ['Justificadas',function(c){ var a=AUS[c.matricula]; var n=a?a.just:0; return n?String(n):'<span class="anl-ph">0</span>'; }]
     ]},
-    { label:'Sanções', sigla:'S', cols:[ ['Advertências', ph],['Suspensões', ph] ]},
+    { label:'Sanções', sigla:'S', cols:[
+      ['Advertências',function(c){ var s=SANC[c.matricula]; var n=s?s.adv:0; return n?String(n):'<span class="anl-ph">0</span>'; }],
+      ['Suspensões',  function(c){ var s=SANC[c.matricula]; var n=s?s.susp:0; return n?String(n):'<span class="anl-ph">0</span>'; }]
+    ]},
     { label:'Avaliações', sigla:'V', cols:[ ['Média', ph],['Faixa', ph] ]},
     { label:'Feedback', sigla:'F', cols:[ ['Qtd', ph],['Último', ph] ]}
   ]; }
   function headHtml(){
     var G=GROUPS();
     if(!collapsedInit){ G.forEach(function(g,gi){ collapsed[gi]=true; }); collapsedInit=true; }
-    var grp='<th class="anl-sticky" rowspan="2">Colaborador</th>', sub='';
+    var grp='<th class="anl-sticky" rowspan="2">Nome</th>', sub='';
     G.forEach(function(g,gi){
       if(collapsed[gi]){
         grp+='<th class="anl-gsep anl-ghead anl-ghead-col" onclick="toggleAnlGroup('+gi+')" title="Expandir: '+esc(g.label)+'"><span class="anl-gchev">＋</span></th>';
@@ -1789,7 +1793,7 @@ function setTab(t){
   function rowHtml(c){
     var G=GROUPS();
     var tds='<td class="anl-sticky"><div class="anl-nome-cell"><span class="anl-nome-txt">'+esc(c.nome||'—')+'</span>'+
-      '<span class="anl-msub">mat. '+esc(c.matricula||'—')+(c.unidade?' · '+esc(c.unidade):'')+(c.departamento?' · '+esc(c.departamento):'')+(c.cargo?' · '+esc(c.cargo):'')+'</span></div></td>';
+      (c.cargo?'<span class="anl-msub">'+esc(c.cargo)+'</span>':'')+'</div></td>';
     G.forEach(function(g,gi){
       if(collapsed[gi]){ tds+='<td class="anl-gsep anl-ccol">·</td>'; return; }
       g.cols.forEach(function(col,ci){ tds+='<td'+(ci===0?' class="anl-gsep"':'')+'>'+col[1](c)+'</td>'; });
@@ -1825,18 +1829,21 @@ function setTab(t){
   };
   function isJust(tipo){ return /atestado|licen|afastamento/i.test(tipo||''); }
   function isFalta(tipo){ return /^falta$/i.test((tipo||'').trim()); }
+  function isSusp(tipo){ return /suspens/i.test(tipo||''); }
   window.loadAnalitico=function(){
     if(LOADED) return; LOADED=true;
     var m=document.getElementById('anl-mount'); if(m) m.innerHTML='<div class="anl-box" style="padding:40px;text-align:center;color:var(--t3);font-family:\'DM Mono\',monospace;font-size:11px">Carregando…</div>';
     window.perfSupa(function(supa){
       var pC=supa.schema('tata_plus').rpc('colaboradores_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
       var pA=supa.schema('tata_plus').rpc('ausencia_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
-      Promise.all([pC,pA]).then(function(res){
-        var colabs=res[0], aus=res[1];
+      var pS=supa.schema('tata_plus').rpc('sancoes_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
+      Promise.all([pC,pA,pS]).then(function(res){
+        var colabs=res[0], aus=res[1], sanc=res[2];
         AUS={};
         aus.forEach(function(a){ var mt=a.matricula; if(!mt) return; if(!AUS[mt]) AUS[mt]={faltas:0,just:0}; if(isFalta(a.tipo)) AUS[mt].faltas++; else if(isJust(a.tipo)) AUS[mt].just++; });
-        COLABS=colabs.filter(function(c){ var st=(c.status||'').toString().toLowerCase(); return st.indexOf('ativ')===0 || st===''; })
-                     .sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
+        SANC={};
+        sanc.forEach(function(s){ var mt=s.matricula; if(!mt) return; if(!SANC[mt]) SANC[mt]={adv:0,susp:0}; if(isSusp(s.tipo_sancao)) SANC[mt].susp++; else SANC[mt].adv++; });
+        COLABS=colabs.slice().sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
         function fill(id,key){ var sel=document.getElementById(id); if(!sel) return; var cur=sel.value; var vals=Array.from(new Set(COLABS.map(function(c){return c[key];}).filter(Boolean))).sort(function(a,b){return String(a).localeCompare(String(b),'pt-BR');}); sel.innerHTML='<option value="">'+esc(sel.dataset.all||'Todos')+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'">'+esc(v)+'</option>';}).join(''); sel.value=cur; }
         fill('anl-f-unidade','unidade'); fill('anl-f-depto','departamento');
         anlRender();
