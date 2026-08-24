@@ -55,6 +55,9 @@ end $$;
 
 -- ── RPC · feed (comunidade e/ou perfil) ────────────────────────────────────
 -- Sem filtro = feed geral. p_para = recebidos por alguém. p_de = dados por alguém.
+-- Avatar: fonte real é tata_plus.auth_users.avatar_url (foto do login, ~228/294),
+-- a mesma que o feed de posts usa. profiles.avatar_url está quase vazio (2/515),
+-- então fica só como fallback. Nome continua vindo de profiles.
 create or replace function tata_plus.reconhecimento_feed(
   p_limite int default 30, p_antes timestamptz default null,
   p_para text default null, p_de text default null
@@ -62,12 +65,14 @@ create or replace function tata_plus.reconhecimento_feed(
                 para_matricula text, para_nome text, para_avatar text,
                 motivo text, mensagem text, created_at timestamptz)
 language sql stable security definer set search_path to 'tata_plus','dp_rh','public' as $$
-  select r.id, r.de_matricula, pd.nome, pd.avatar_url,
-         r.para_matricula, pp.nome, pp.avatar_url,
+  select r.id, r.de_matricula, pd.nome, coalesce(ad.avatar_url, pd.avatar_url),
+         r.para_matricula, pp.nome, coalesce(ap.avatar_url, pp.avatar_url),
          r.motivo, r.mensagem, r.created_at
   from dp_rh.reconhecimentos r
-  left join tata_plus.profiles pd on pd.matricula = r.de_matricula
-  left join tata_plus.profiles pp on pp.matricula = r.para_matricula
+  left join tata_plus.profiles   pd on pd.matricula = r.de_matricula
+  left join tata_plus.auth_users ad on ad.matricula = r.de_matricula
+  left join tata_plus.profiles   pp on pp.matricula = r.para_matricula
+  left join tata_plus.auth_users ap on ap.matricula = r.para_matricula
   where tata_plus.minha_matricula() is not null           -- só ativos leem
     and (p_antes is null or r.created_at < p_antes)
     and (p_para  is null or r.para_matricula = p_para)
