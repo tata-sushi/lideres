@@ -80,13 +80,13 @@ begin
   if v_dias >= 14 and not exists (
        select 1 from dp_rh.avaliacoes a join dp_rh.avaliacao_modelos m on m.id=a.modelo_id
        where a.alvo_matricula = v_mat and m.slug='exp14_colab') then
-    return query select 1::int, v_dias, (select form from dp_rh.avaliacao_modelos where slug='exp14_colab');
+    return query select 1::int, v_dias, (select am.form from dp_rh.avaliacao_modelos am where am.slug='exp14_colab');
   end if;
 
   if v_dias >= 60 and not exists (
        select 1 from dp_rh.avaliacoes a join dp_rh.avaliacao_modelos m on m.id=a.modelo_id
        where a.alvo_matricula = v_mat and m.slug='exp60_colab') then
-    return query select 2::int, v_dias, (select form from dp_rh.avaliacao_modelos where slug='exp60_colab');
+    return query select 2::int, v_dias, (select am.form from dp_rh.avaliacao_modelos am where am.slug='exp60_colab');
   end if;
 end $$;
 
