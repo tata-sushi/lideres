@@ -65,7 +65,7 @@ $$;
 
 -- ── 3) Pendências do colaborador logado (o que ele precisa responder) ───────
 -- Regra: P1 a partir de 14 dias, P2 a partir de 60 dias; pendente até responder.
--- Só ativos admitidos a partir de 2026-04-01. (limites ajustáveis)
+-- Só ativos admitidos a partir de 2026-09-01. (limites ajustáveis)
 create or replace function tata_plus.av_experiencia_colab_pendentes()
 returns table(periodo int, dias int, form jsonb)
 language plpgsql stable security definer set search_path to 'tata_plus','dp_rh','public' as $$
@@ -74,7 +74,7 @@ begin
   if v_mat is null then return; end if;
   select data_admissao into v_adm from tata_plus.profiles
     where matricula = v_mat and coalesce(status,'')='Ativo';
-  if v_adm is null or v_adm < date '2026-04-01' then return; end if;
+  if v_adm is null or v_adm < date '2026-09-01' then return; end if;
   v_dias := (current_date - v_adm)::int;
 
   if v_dias >= 14 and not exists (
