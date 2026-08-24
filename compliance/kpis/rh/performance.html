@@ -1751,13 +1751,15 @@ function setTab(t){
 <script>
 /* ── ANALÍTICO · Performance 360 (profiles + ausencias) ── */
 (function(){
-  var LOADED=false, COLABS=[], AUS={}, SANC={}, PAGE=50, shown=PAGE, rows=[];
+  var LOADED=false, COLABS=[], AUS={}, SANC={}, AVAL={}, PAGE=50, shown=PAGE, rows=[];
   var collapsed={}, collapsedInit=false;
   function esc(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function pad(n){ return String(n).padStart(2,'0'); }
   function fmtDate(d){ if(!d) return '—'; var p=String(d).slice(0,10).split('-'); if(p.length!==3) return '—'; return p[2]+'/'+p[1]+'/'+p[0]; }
   function tempoCasa(adm, dem){ if(!adm) return '—'; var a=new Date(String(adm).slice(0,10)+'T12:00:00'); var b=dem?new Date(String(dem).slice(0,10)+'T12:00:00'):new Date(); if(isNaN(a)) return '—'; var meses=(b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth()); if(b.getDate()<a.getDate()) meses--; if(meses<0) meses=0; var y=Math.floor(meses/12), m=meses%12; var out=[]; if(y) out.push(y+(y===1?' ano':' anos')); if(m) out.push(m+(m===1?' mês':' meses')); return out.length?out.join(' '):'< 1 mês'; }
   function tempoDesde(dem){ return dem?tempoCasa(dem, null):'—'; }
+  function fmtNota(v){ if(v==null||v==='') return '<span class="anl-ph">—</span>'; var n=parseFloat(v); if(isNaN(n)) return '<span class="anl-ph">—</span>'; return n.toFixed(1).replace('.',','); }
+  function notaCol(key){ return function(c){ var a=AVAL[c.matricula]; return a?fmtNota(a[key]):'<span class="anl-ph">—</span>'; }; }
   function ph(){ return '<span class="anl-ph">—</span>'; }
   function GROUPS(){ return [
     { label:'Contrato', sigla:'C', cols:[
@@ -1773,7 +1775,12 @@ function setTab(t){
       ['Advertências',function(c){ var s=SANC[c.matricula]; var n=s?s.adv:0; return n?String(n):'<span class="anl-ph">0</span>'; }],
       ['Suspensões',  function(c){ var s=SANC[c.matricula]; var n=s?s.susp:0; return n?String(n):'<span class="anl-ph">0</span>'; }]
     ]},
-    { label:'Avaliações', sigla:'V', cols:[ ['Média', ph],['Faixa', ph] ]},
+    { label:'Avaliações · Experiência', sigla:'V', cols:[
+      ['Líder 1º',  notaCol('lider_p1')],
+      ['Líder 2º',  notaCol('lider_p2')],
+      ['Colab. 1º', notaCol('colab_p1')],
+      ['Colab. 2º', notaCol('colab_p2')]
+    ]},
     { label:'Desligamento', sigla:'D', cols:[ ['Tipo de dispensa', ph],['Fez Homologação', ph],['Tem processo', ph] ]},
     { label:'Tempo desde o desligamento', sigla:'T', cols:[ ['Tempo', function(c){ return c.data_demissao?tempoDesde(c.data_demissao):'—'; }] ]},
     { label:'Feedback', sigla:'F', cols:[ ['Qtd', ph],['Último', ph] ]}
@@ -1840,12 +1847,15 @@ function setTab(t){
       var pC=supa.schema('tata_plus').rpc('colaboradores_analitico_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return supa.schema('tata_plus').rpc('colaboradores_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; }); });
       var pA=supa.schema('tata_plus').rpc('ausencia_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
       var pS=supa.schema('tata_plus').rpc('sancoes_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
-      Promise.all([pC,pA,pS]).then(function(res){
-        var colabs=res[0], aus=res[1], sanc=res[2];
+      var pV=supa.schema('tata_plus').rpc('avaliacoes_experiencia_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
+      Promise.all([pC,pA,pS,pV]).then(function(res){
+        var colabs=res[0], aus=res[1], sanc=res[2], avals=res[3];
         AUS={};
         aus.forEach(function(a){ var mt=a.matricula; if(!mt) return; if(!AUS[mt]) AUS[mt]={faltas:0,just:0}; if(isFalta(a.tipo)) AUS[mt].faltas++; else if(isJust(a.tipo)) AUS[mt].just++; });
         SANC={};
         sanc.forEach(function(s){ var mt=s.matricula; if(!mt) return; if(!SANC[mt]) SANC[mt]={adv:0,susp:0}; if(isSusp(s.tipo_sancao)) SANC[mt].susp++; else SANC[mt].adv++; });
+        AVAL={};
+        avals.forEach(function(v){ var mt=v.matricula; if(!mt) return; AVAL[mt]={lider_p1:v.lider_p1,lider_p2:v.lider_p2,colab_p1:v.colab_p1,colab_p2:v.colab_p2}; });
         COLABS=colabs.slice().sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
         function fill(id,key){ var sel=document.getElementById(id); if(!sel) return; var cur=sel.value; var vals=Array.from(new Set(COLABS.map(function(c){return c[key];}).filter(Boolean))).sort(function(a,b){return String(a).localeCompare(String(b),'pt-BR');}); sel.innerHTML='<option value="">'+esc(sel.dataset.all||'Todos')+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'">'+esc(v)+'</option>';}).join(''); sel.value=cur; }
         fill('anl-f-unidade','unidade'); fill('anl-f-depto','departamento');
