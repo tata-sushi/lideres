@@ -20,18 +20,18 @@ values
  $json${
    "escala": "percepcao",
    "itens": [
-     {"id":"comunicacao","tipo":"escala","dimensao":"Comunicação","texto":"O quanto sua liderança comunica orientações de forma clara?"},
-     {"id":"apoio","tipo":"escala","dimensao":"Apoio","texto":"O quanto sua liderança oferece apoio quando você enfrenta dificuldades?"},
-     {"id":"feedback","tipo":"escala","dimensao":"Feedback","texto":"O quanto você recebe feedbacks úteis para melhorar seu trabalho?"},
-     {"id":"respeito","tipo":"escala","dimensao":"Respeito","texto":"O quanto sua liderança trata as pessoas com respeito?"},
-     {"id":"justica","tipo":"escala","dimensao":"Justiça","texto":"O quanto sua liderança distribui demandas e cobranças de forma justa?"},
-     {"id":"seguranca_psi","tipo":"escala","dimensao":"Segurança Psicológica","texto":"O quanto você se sente à vontade para conversar com sua liderança sobre dúvidas, erros ou dificuldades?"},
-     {"id":"reconhecimento","tipo":"escala","dimensao":"Reconhecimento","texto":"O quanto sua liderança reconhece boas entregas e esforços da equipe?"},
-     {"id":"desenvolvimento","tipo":"escala","dimensao":"Desenvolvimento","texto":"O quanto sua liderança contribui para seu aprendizado e crescimento?"},
+     {"id":"comunicacao","tipo":"escala","dimensao":"Comunicação","texto":"Com que frequência sua liderança comunica orientações de forma clara?"},
+     {"id":"apoio","tipo":"escala","dimensao":"Apoio","texto":"Com que frequência sua liderança oferece apoio quando você enfrenta dificuldades?"},
+     {"id":"feedback","tipo":"escala","dimensao":"Feedback","texto":"Com que frequência você recebe feedbacks úteis para melhorar seu trabalho?"},
+     {"id":"respeito","tipo":"escala","dimensao":"Respeito","texto":"Com que frequência sua liderança trata as pessoas com respeito?"},
+     {"id":"justica","tipo":"escala","dimensao":"Justiça","texto":"Com que frequência sua liderança distribui demandas e cobranças de forma justa?"},
+     {"id":"seguranca_psi","tipo":"escala","dimensao":"Segurança Psicológica","texto":"Com que frequência você se sente à vontade para conversar com sua liderança sobre dúvidas, erros ou dificuldades?"},
+     {"id":"reconhecimento","tipo":"escala","dimensao":"Reconhecimento","texto":"Com que frequência sua liderança reconhece boas entregas e esforços da equipe?"},
+     {"id":"desenvolvimento","tipo":"escala","dimensao":"Desenvolvimento","texto":"Com que frequência sua liderança contribui para seu aprendizado e crescimento?"},
      {"id":"mantem","tipo":"aberta","texto":"O que sua liderança faz bem e deveria manter?"},
      {"id":"melhorar","tipo":"aberta","texto":"O que sua liderança poderia melhorar?"}
    ]
- }$json$::jsonb, 1, true, 6)
+ }$json$::jsonb, 2, true, 6)
 on conflict (slug) do update set
   nome=excluded.nome, frente=excluded.frente, fluxo=excluded.fluxo, escala=excluded.escala,
   onde=excluded.onde, periodicidade=excluded.periodicidade, gatilho=excluded.gatilho,
