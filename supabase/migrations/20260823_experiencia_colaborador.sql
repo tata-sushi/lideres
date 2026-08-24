@@ -25,7 +25,7 @@ values
      {"id":"c08","tipo":"escala","dimensao":"Informações do Trabalho","texto":"O quanto ficou claro como funciona a gorjeta, critérios e elegibilidade?"},
      {"id":"c09","tipo":"escala","dimensao":"Informações do Trabalho","texto":"O quanto ficou claro como funcionam premiações, critérios e elegibilidade?"},
      {"id":"c10","tipo":"escala","dimensao":"Canais e Processos","texto":"O quanto ficou claro como funciona o Canal de Ouvidoria?"},
-     {"id":"c11","tipo":"escala","dimensao":"Canais e Processos","texto":"O quanto sua documentação foi solicitada e regularizada de forma clara?"},
+     {"id":"c11","tipo":"escala","dimensao":"Canais e Processos","texto":"O quanto ficou claro o processo de documentação (o que entregar e como regularizar)?"},
      {"id":"c12","tipo":"escala","dimensao":"Canais e Processos","texto":"O quanto ficou claro que você pode participar de avaliações de refeição e melhorias?"},
      {"id":"c13","tipo":"escala","dimensao":"Recursos e Orientações","texto":"O quanto você se sente bem equipado(a) com uniformes, EPIs e materiais necessários?"},
      {"id":"c14","tipo":"escala","dimensao":"Recursos e Orientações","texto":"O quanto ficou claro como higienizar, conservar e utilizar uniforme e EPIs?"},
@@ -41,11 +41,11 @@ values
    "itens": [
      {"id":"c01","tipo":"escala","dimensao":"Trabalho","texto":"O quanto está claro o que é esperado no seu trabalho?"},
      {"id":"c02","tipo":"escala","dimensao":"Trabalho","texto":"O quanto você teve facilidade para acessar e realizar os treinamentos?"},
-     {"id":"c03","tipo":"escala","dimensao":"Trabalho","texto":"O quanto você recebeu treinamento suficiente para desempenhar suas atividades?"},
+     {"id":"c03","tipo":"escala","dimensao":"Trabalho","texto":"O quanto o treinamento que você recebeu te preparou para desempenhar suas atividades?"},
      {"id":"c04","tipo":"escala","dimensao":"Equipe","texto":"O quanto você se sente integrado(a) à equipe?"},
      {"id":"c05","tipo":"escala","dimensao":"Comunicação","texto":"O quanto você se sente à vontade para expressar dúvidas, opiniões ou sugestões?"},
-     {"id":"c06","tipo":"escala","dimensao":"Liderança","texto":"O quanto você recebe apoio adequado da sua liderança quando tem dificuldades?"},
-     {"id":"c07","tipo":"escala","dimensao":"Clima","texto":"O quanto sua carga de trabalho tem sido adequada para realizar as atividades com qualidade?"},
+     {"id":"c06","tipo":"escala","dimensao":"Liderança","texto":"O quanto você recebe apoio da sua liderança quando tem dificuldades?"},
+     {"id":"c07","tipo":"escala","dimensao":"Clima","texto":"O quanto sua carga de trabalho tem permitido realizar suas atividades com qualidade?"},
      {"id":"c08","tipo":"escala","dimensao":"Clima","texto":"O quanto você se sente tratado(a) com respeito no ambiente de trabalho?"},
      {"id":"aberta","tipo":"aberta","texto":"Como sua liderança contribuiu para sua adaptação e o que poderia ter ajudado mais nesse período?"}
    ]
