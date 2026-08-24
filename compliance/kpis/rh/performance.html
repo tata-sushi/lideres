@@ -659,13 +659,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <div id="view-analitico" class="dash-view">
   <div class="anl-wrap-view">
-    <div class="anl-note">⚠ Prévia — grid de esqueleto; os dados (absenteísmo · sanções · avaliações · feedback) serão ligados em breve</div>
+    <div class="anl-note">⚠ Colaboradores de profiles · absenteísmo · sanções · avaliações · feedback serão ligados em breve</div>
     <div class="anl-toolbar">
-      <select class="anl-sel"><option>Todas as unidades</option></select>
-      <select class="anl-sel"><option>Todos os departamentos</option></select>
-      <input class="anl-busca" type="text" placeholder="Buscar colaborador…">
+      <select class="anl-sel" id="anl-f-unidade" data-all="Todas as unidades" onchange="anlRender()"><option value="">Todas as unidades</option></select>
+      <select class="anl-sel" id="anl-f-depto" data-all="Todos os departamentos" onchange="anlRender()"><option value="">Todos os departamentos</option></select>
+      <input class="anl-busca" id="anl-f-busca" type="text" placeholder="Buscar colaborador…" oninput="anlRender()">
     </div>
-    <p class="anl-count">6 colaboradores (amostra)</p>
+    <p class="anl-count" id="anl-count">—</p>
     <div class="anl-box"><div class="anl-scroll"><table class="anl-table">
       <thead>
         <tr class="anl-grp">
@@ -682,9 +682,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <th class="anl-gsep">Qtd</th><th>Último</th>
         </tr>
       </thead>
-      <tbody>
-        <tr><td class="anl-sticky"><div class="anl-nome">Colaborador 1</div><div class="anl-msub">mat. 0010 · Matriz · Sushiman</div></td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td></tr><tr><td class="anl-sticky"><div class="anl-nome">Colaborador 2</div><div class="anl-msub">mat. 0011 · Filial Centro · Garçom</div></td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td></tr><tr><td class="anl-sticky"><div class="anl-nome">Colaborador 3</div><div class="anl-msub">mat. 0012 · Filial Sul · Cozinheiro</div></td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td></tr><tr><td class="anl-sticky"><div class="anl-nome">Colaborador 4</div><div class="anl-msub">mat. 0013 · Filial Norte · Caixa</div></td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td></tr><tr><td class="anl-sticky"><div class="anl-nome">Colaborador 5</div><div class="anl-msub">mat. 0014 · Matriz · Atendente</div></td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td></tr><tr><td class="anl-sticky"><div class="anl-nome">Colaborador 6</div><div class="anl-msub">mat. 0015 · Filial Centro · Aux. Cozinha</div></td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph">—</td></tr>
-      </tbody>
+      <tbody id="anl-tbody"></tbody>
     </table></div></div>
   </div>
 </div><!-- /view-analitico -->
@@ -1745,8 +1743,53 @@ function setTab(t){
   var btn=document.getElementById('tab-'+t); if(btn) btn.classList.add('active');
   document.querySelectorAll('.dash-view').forEach(function(v){v.classList.remove('active');});
   var v=document.getElementById('view-'+t); if(v) v.classList.add('active');
+  if(t==='analitico' && window.loadAnalitico) window.loadAnalitico();
   window.scrollTo(0,0);
 }
+</script>
+<script>
+/* ── ANALÍTICO · lista de colaboradores (profiles via colabListar) ── */
+(function(){
+  var anlLoaded=false, anlAll=[];
+  function esc(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function phG(){ return '<td class="anl-gsep anl-ph">—</td>'; }
+  function ph(){ return '<td class="anl-ph">—</td>'; }
+  window.anlRender=function(){
+    var uni=(document.getElementById('anl-f-unidade')||{}).value||'';
+    var dep=(document.getElementById('anl-f-depto')||{}).value||'';
+    var q=((document.getElementById('anl-f-busca')||{}).value||'').trim().toLowerCase();
+    var rows=anlAll.filter(function(c){
+      if(uni && c.unidade!==uni) return false;
+      if(dep && c.departamento!==dep) return false;
+      if(q && (c.nome||'').toLowerCase().indexOf(q)<0 && String(c.matricula||'').toLowerCase().indexOf(q)<0) return false;
+      return true;
+    });
+    var tb=document.getElementById('anl-tbody'); if(!tb) return;
+    tb.innerHTML = rows.length ? rows.map(function(c){
+      return '<tr>'+
+        '<td class="anl-sticky"><div class="anl-nome">'+esc(c.nome||'—')+'</div>'+
+          '<div class="anl-msub">mat. '+esc(c.matricula||'—')+(c.unidade?' · '+esc(c.unidade):'')+(c.cargo?' · '+esc(c.cargo):'')+'</div></td>'+
+        phG()+ph()+ph()+   /* absenteismo */
+        phG()+ph()+        /* sancoes */
+        phG()+ph()+        /* avaliacoes */
+        phG()+ph()+        /* feedback */
+        '</tr>';
+    }).join('') : '<tr><td class="anl-sticky">Nenhum colaborador</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph" colspan="8">—</td></tr>';
+    var cnt=document.getElementById('anl-count'); if(cnt) cnt.textContent = rows.length+' colaborador'+(rows.length===1?'':'es');
+  };
+  window.loadAnalitico=function(){
+    if(anlLoaded) return; anlLoaded=true;
+    var tb=document.getElementById('anl-tbody'); if(tb) tb.innerHTML='<tr><td class="anl-sticky">Carregando…</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph" colspan="8">—</td></tr>';
+    (typeof colabListar==='function' ? colabListar() : Promise.resolve({colaboradores:[]})).then(function(r){
+      var arr=(r&&r.colaboradores)||[];
+      anlAll=arr.filter(function(c){ var st=(c.status||'').toString().toLowerCase(); return !st || st.indexOf('ativ')===0; });
+      anlAll.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
+      function fill(id,key){ var sel=document.getElementById(id); if(!sel) return; var cur=sel.value; var vals=Array.from(new Set(anlAll.map(function(c){return c[key];}).filter(Boolean))).sort(function(a,b){return String(a).localeCompare(String(b),'pt-BR');}); sel.innerHTML='<option value="">'+esc(sel.dataset.all||'Todos')+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'">'+esc(v)+'</option>';}).join(''); sel.value=cur; }
+      fill('anl-f-unidade','unidade'); fill('anl-f-depto','departamento');
+      anlRender();
+    }, function(){ if(tb) tb.innerHTML='<tr><td class="anl-sticky">Erro ao carregar</td><td class="anl-gsep anl-ph">—</td><td class="anl-ph" colspan="8">—</td></tr>'; });
+  };
+})();
 </script>
 </body>
 </html>
