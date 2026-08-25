@@ -1428,8 +1428,7 @@ function parseTimestamp(ts){
 }
 
 function getAno(row){
-  var d = parseTimestamp(row.timestamp);
-  return d ? String(d.getFullYear()) : '';
+  return row.ano != null ? String(row.ano) : '';
 }
 
 var _pageTab = 'sobre';
@@ -1444,30 +1443,16 @@ function setTab(tab){
 function hideLoading(){ var el = document.getElementById('loading-overlay'); if (el) el.classList.remove('show'); }
 
 function loadData(){
-  if (!SCRIPT_URL){
-    console.warn('SCRIPT_URL não configurado — exibindo painel vazio. Configure o endpoint Apps Script.');
-    DATA = [];
-    onDataReady();
-    return;
-  }
-  fetch(SCRIPT_URL)
-    .then(function(r){ return r.json(); })
-    .then(function(json){
-      var rows;
-      if (json && json.ok && Array.isArray(json.data))     rows = json.data;
-      else if (Array.isArray(json))                         rows = json;
-      else if (json && Array.isArray(json.data))            rows = json.data;
-      else if (json && Array.isArray(json.values)){
-        var headers = json.values[0] || [];
-        rows = json.values.slice(1).map(function(row){
-          var o = {}; headers.forEach(function(h,i){ o[h] = row[i]; }); return o;
-        });
-      } else { rows = []; }
-      DATA = rows.map(mapRow).filter(function(r){ return r.tipo || r.timestamp; });
+  // Dados reais via RPC (schema tata_plus) usando o client autenticado do portal.
+  function go(supa){
+    supa.schema('tata_plus').rpc('av_desligamento_rows').then(function(res){
+      if (res && res.error) console.error('Erro RPC av_desligamento_rows:', res.error);
+      DATA = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
       onDataReady();
-    })
-    .catch(function(e){ console.error('Erro fetch:', e); DATA = []; onDataReady(); })
-    .finally(hideLoading);
+    }).catch(function(e){ console.error('Erro RPC av_desligamento_rows:', e); DATA = []; onDataReady(); });
+  }
+  if (window.__lideresSupa) go(window.__lideresSupa);
+  else window.addEventListener('lideres:supa', function(){ go(window.__lideresSupa); }, { once:true });
 }
 
 function onDataReady(){
@@ -1592,7 +1577,7 @@ var barValueLabelsPlugin = {
   }
 };
 
-function renderBarVertical(canvasId, entries){
+function renderBarVertical(canvasId, entries, colors){
   destroyChart(canvasId);
   var canvas = document.getElementById(canvasId);
   if (!canvas) return;
@@ -1600,7 +1585,7 @@ function renderBarVertical(canvasId, entries){
   var data   = entries.map(function(e){ return e[1]; });
   _charts[canvasId] = new Chart(canvas, {
     type: 'bar',
-    data: { labels: labels, datasets: [{ data: data, backgroundColor: '#35383F', borderRadius: 3, barPercentage: 0.7, categoryPercentage: 0.85 }] },
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: colors || '#35383F', borderRadius: 3, barPercentage: 0.7, categoryPercentage: 0.85 }] },
     plugins: [barValueLabelsPlugin],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
@@ -1687,6 +1672,15 @@ function renderPie(canvasId, entries){
 var ORDER_NIVEL = ['Bom','Excelente','Regular','Ruim'];
 var ORDER_SIMNAO = ['Sim','Não'];
 
+// Dados unificados em escala 1–5: cada avaliação vira distribuição de notas
+// 1..5, com cores por faixa (1 crítico → 5 destaque).
+var NOTA_COLORS = ['#C0392B','#E08A3C','#C9A227','#5AA469','#1A5C2A']; // 1..5
+function countNota(rows, field){
+  var c = {1:0,2:0,3:0,4:0,5:0};
+  rows.forEach(function(r){ var v = r[field]; if (v>=1 && v<=5) c[v]++; });
+  return [['1',c[1]],['2',c[2]],['3',c[3]],['4',c[4]],['5',c[5]]];
+}
+
 function renderAll(rows){
   document.getElementById('kpi-realizadas').textContent = rows.length;
 
@@ -1697,15 +1691,8 @@ function renderAll(rows){
   var motivosTop = entriesSortedDesc(motivos).slice(0, 9);
   renderBarHorizontal('chart-saidas', motivosTop);
 
-  renderBarVertical('c-lideranca',      entriesOrdered(countByField(rows, 'lideranca'),      ORDER_NIVEL));
-  renderBarVertical('c-condicoes',      entriesOrdered(countByField(rows, 'condicoes'),      ORDER_NIVEL));
-  renderBarVertical('c-reconhecimento', entriesOrdered(countByField(rows, 'reconhecimento'), ORDER_SIMNAO));
-  renderBarVertical('c-treinamento',    entriesOrdered(countByField(rows, 'treinamento'),    ORDER_SIMNAO));
-  renderBarVertical('c-colegas',        entriesOrdered(countByField(rows, 'colegas'),        ORDER_NIVEL));
-  renderBarVertical('c-carreira',       entriesOrdered(countByField(rows, 'carreira'),       ORDER_SIMNAO));
-  renderBarVertical('c-carga',          entriesOrdered(countByField(rows, 'carga'),          ORDER_SIMNAO));
-  renderBarVertical('c-ambiente',       entriesOrdered(countByField(rows, 'ambiente'),       ORDER_NIVEL));
-  renderBarVertical('c-recomendaria',   entriesOrdered(countByField(rows, 'recomendaria'),   ORDER_SIMNAO));
+  ['lideranca','condicoes','reconhecimento','treinamento','colegas','carreira','carga','ambiente','recomendaria']
+    .forEach(function(f){ renderBarVertical('c-'+f, countNota(rows, f), NOTA_COLORS); });
 }
 
 // === Init ===================================================================
