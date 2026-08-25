@@ -152,5 +152,15 @@ Em aberto:
   as outras categorias que também precisam assinar ainda não têm uma página
   que gere/envie o PDF pra assinatura — fica pra quando essas páginas forem
   construídas.
+- **(2026-08-24) RLS bloqueando envio pra assinatura pra quem não é líder/admin.**
+  Reproduzido em admissão: `storage.objects` policy `assinaturas_insert` só libera
+  upload em `assinaturas/docs/*` se `tata_plus.docs_pode_gerir()` for `true` —
+  hoje essa função é `perfil='admin' OU lider=true` em `tata_plus.profiles`. RH
+  que gera/envia termos de admissão, armários e uniformes não é necessariamente
+  "líder" nesse sentido (gestão de escala) nem "admin" — fica bloqueado com
+  "new row violates row-level security policy" ao clicar "Enviar para Assinatura
+  Digital". Decisão de quem deveria poder mandar termo pra assinatura (só
+  líder/admin, ou também RH em geral) e o ajuste em si ficam pra depois — é
+  função do lado `tata_plus`, então também precisa alinhar com o outro time.
 
-_Última atualização: 2026-08-22._
+_Última atualização: 2026-08-24._
