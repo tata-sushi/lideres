@@ -53,7 +53,7 @@
   .main { padding: 24px 28px; display: grid; grid-template-columns: 1fr; gap: 16px; }
 
   /* KPI */
-  .kpi-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; }
+  .kpi-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
   .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
   .kpi-value { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
@@ -1681,11 +1681,11 @@ function fetchColaboradores() {
       var a = c.admissao;
       var admDate = new Date(a.ano, a.mes - 1, a.dia);
       var hojeMid = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-      var px, origin, label;
+      var px, origin, label, marcoMeses;
       // 6 meses (uma única vez, antes de completar 1 ano)
       var seis = new Date(admDate); seis.setMonth(seis.getMonth() + 6);
       if (seis >= hojeMid) {
-        px = seis; origin = admDate; label = '6 meses';
+        px = seis; origin = admDate; label = '6 meses'; marcoMeses = 6;
       } else {
         // Próximo aniversário anual (>= 1 ano de empresa)
         var thisYearAniv = new Date(hoje.getFullYear(), a.mes - 1, a.dia);
@@ -1695,6 +1695,7 @@ function fetchColaboradores() {
         px = thisYearAniv;
         origin = new Date(a.ano + nYears - 1, a.mes - 1, a.dia);
         label = nYears + (nYears === 1 ? ' ano' : ' anos');
+        marcoMeses = nYears * 12;
       }
       var total = px - origin;
       var passed = hoje - origin;
@@ -1706,6 +1707,7 @@ function fetchColaboradores() {
         pct: pct,
         anosEmpresa: idadeCalc(a.ano),
         proxMarco: label,
+        marcoMeses: marcoMeses,
         proxFormatado: px.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}),
         mesAniv: px.getMonth(),
         mesAnivMY: String(px.getMonth()+1).padStart(2,'0') + '/' + px.getFullYear(),
@@ -1745,6 +1747,23 @@ var MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov
 var UNIDADES = ['Todos'];
 var DEPTOS   = ['Todos'];
 var DATA_EMP = [];
+
+// Premiações por faixa (custo unitário) — Aniversário de Empresa
+var PREM_FAIXAS = {}; // marco_meses -> custo_unitario (number)
+function custoFaixa(marcoMeses){ var v = PREM_FAIXAS[marcoMeses]; return (typeof v === 'number' && !isNaN(v)) ? v : 0; }
+function fmtBRL(v){ return (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+function fetchPremiacoes(){
+  return new Promise(function(resolve){
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('premiacoes_faixas_listar').then(function(res){
+        var rows = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
+        PREM_FAIXAS = {};
+        rows.forEach(function(r){ PREM_FAIXAS[r.marco_meses] = parseFloat(r.custo_unitario) || 0; });
+        resolve();
+      }, function(){ resolve(); });
+    });
+  });
+}
 
 var TT = {
   backgroundColor: '#fff',
@@ -1893,6 +1912,7 @@ function _buildEmpresaCfList() {
       pct: pct,
       anosEmpresa: currentYear - a.ano,
       proxMarco: cfEmpFaixa,
+      marcoMeses: (cfEmpFaixa === '6 meses' ? 6 : (parseInt(cfEmpFaixa,10) || 0) * 12),
       proxFormatado: evt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}),
       mesAniv: evt.getMonth(),
       mesAnivMY: String(evt.getMonth()+1).padStart(2,'0') + '/' + evt.getFullYear(),
@@ -1928,12 +1948,25 @@ function updateKPIs(filt) {
             : activeTab === 'empresa' ? 'Aniversários de empresa'
             : 'Completando 6 meses';
 
-  document.getElementById('kpiRow').innerHTML =
+  var html =
     '<div class="kpi-card">' +
       '<div class="kpi-label">' + label + '</div>' +
       '<div class="kpi-value">' + total + '</div>' +
       '<div class="kpi-sub"><strong>' + hoje_aniv + '</strong> hoje / <strong>' + semana + '</strong> na semana</div>' +
     '</div>';
+
+  if (activeTab === 'empresa') {
+    var custoMes = cfFilt.reduce(function(s,d){ return s + custoFaixa(d.marcoMeses); }, 0);
+    var mesLabel = (MESES_PT[parseInt(mesRef.slice(0,2),10)-1] || '') + '/' + mesRef.slice(3);
+    html +=
+      '<div class="kpi-card">' +
+        '<div class="kpi-label">Custo total do mês</div>' +
+        '<div class="kpi-value">' + fmtBRL(custoMes) + '</div>' +
+        '<div class="kpi-sub"><strong>' + total + '</strong> premiação(ões) · ' + mesLabel + '</div>' +
+      '</div>';
+  }
+
+  document.getElementById('kpiRow').innerHTML = html;
 }
 
 function doSort(key) {
@@ -2227,7 +2260,7 @@ function updateAll() {
   }
 }
 
-fetchColaboradores().then(function() {
+Promise.all([fetchColaboradores(), fetchPremiacoes()]).then(function() {
   UNIDADES = ['Todos'].concat(Array.from(new Set(DATA.map(function(d){return d.unidade;}))).sort());
   DEPTOS = ['Todos'].concat(Array.from(new Set(DATA.map(function(d){return d.depto;}))).sort());
 
