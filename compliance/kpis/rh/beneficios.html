@@ -53,7 +53,7 @@
   .main { padding: 24px 28px; display: grid; grid-template-columns: 1fr; gap: 16px; }
 
   /* KPI */
-  .kpi-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .kpi-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; }
   .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
   .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
   .kpi-value { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
@@ -187,7 +187,9 @@ body.tab-empresa #tableCard tbody td:nth-child(3) {
 .emp-resumo-table thead th:first-child { text-align:left; }
 .emp-resumo-table tbody td { padding:9px 8px; font-size:13px; color:var(--carbon); border-bottom:1px solid var(--border); text-align:center; vertical-align:middle; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .emp-resumo-table tbody td:first-child { text-align:left; font-family:'DM Mono',monospace; font-size:12px; letter-spacing:.4px; text-transform:uppercase; color:var(--carbon); font-weight:500; }
-.emp-resumo-table tbody tr:last-child td { border-bottom:none; background:#FAFAFA; font-weight:700; }
+.emp-resumo-table tbody tr.emp-total-row td { background:#FAFAFA; font-weight:700; border-top:2px solid var(--carbon); }
+.emp-resumo-table tbody tr.emp-custo-row td { border-bottom:none; background:#F2F4EC; font-weight:700; color:var(--carbon); }
+.emp-resumo-table tbody tr.emp-custo-row td.zero { color:var(--muted); font-weight:500; }
 .emp-resumo-table tbody td:last-child { font-weight:700; }
 .emp-resumo-table tbody td.zero { color:var(--muted); }
 .emp-resumo-table tbody td.clickable { cursor: pointer; transition: background .12s; }
@@ -1948,25 +1950,12 @@ function updateKPIs(filt) {
             : activeTab === 'empresa' ? 'Aniversários de empresa'
             : 'Completando 6 meses';
 
-  var html =
+  document.getElementById('kpiRow').innerHTML =
     '<div class="kpi-card">' +
       '<div class="kpi-label">' + label + '</div>' +
       '<div class="kpi-value">' + total + '</div>' +
       '<div class="kpi-sub"><strong>' + hoje_aniv + '</strong> hoje / <strong>' + semana + '</strong> na semana</div>' +
     '</div>';
-
-  if (activeTab === 'empresa') {
-    var custoMes = cfFilt.reduce(function(s,d){ return s + custoFaixa(d.marcoMeses); }, 0);
-    var mesLabel = (MESES_PT[parseInt(mesRef.slice(0,2),10)-1] || '') + '/' + mesRef.slice(3);
-    html +=
-      '<div class="kpi-card">' +
-        '<div class="kpi-label">Custo total do mês</div>' +
-        '<div class="kpi-value">' + fmtBRL(custoMes) + '</div>' +
-        '<div class="kpi-sub"><strong>' + total + '</strong> premiação(ões) · ' + mesLabel + '</div>' +
-      '</div>';
-  }
-
-  document.getElementById('kpiRow').innerHTML = html;
 }
 
 function doSort(key) {
@@ -2208,13 +2197,17 @@ function renderResumoEmpresa(filt) {
 
   // Corpo — matriz faixa × mês (0..11)
   var colTotals = [0,0,0,0,0,0,0,0,0,0,0,0];
-  var grandTotal = 0;
+  var colCusto  = [0,0,0,0,0,0,0,0,0,0,0,0];
+  var grandTotal = 0, grandCusto = 0;
   var rows = EMP_FAIXAS.map(function(fx){
+    var mMeses = faixaKeyMeses(fx.key);
+    var custoU = custoFaixa(mMeses);
     var line = '<tr><td>'+fx.label+'</td>';
     var lineTot = 0;
     for (var m = 0; m < 12; m++) {
       var n = buckets[fx.key + '|' + m] || 0;
       lineTot += n; colTotals[m] += n; grandTotal += n;
+      colCusto[m] += n * custoU; grandCusto += n * custoU;
       var isSel = (cfEmpFaixa === fx.key && cfEmpMes === m);
       var cls = [];
       if (n === 0) cls.push('zero');
@@ -2229,12 +2222,21 @@ function renderResumoEmpresa(filt) {
   }).join('');
 
   // Linha Total
-  var totalRow = '<tr><td>Total</td>';
+  var totalRow = '<tr class="emp-total-row"><td>Total</td>';
   colTotals.forEach(function(n){ totalRow += '<td>'+n+'</td>'; });
   totalRow += '<td>'+grandTotal+'</td></tr>';
 
-  body.innerHTML = rows + totalRow;
+  // Linha Custo (estimativa de premiações por mês)
+  var custoRow = '<tr class="emp-custo-row"><td>Custo (R$)</td>';
+  colCusto.forEach(function(v){ custoRow += '<td'+(v?'':' class="zero"')+'>'+fmtCusto(v)+'</td>'; });
+  custoRow += '<td>'+fmtCusto(grandCusto)+'</td></tr>';
+
+  body.innerHTML = rows + totalRow + custoRow;
 }
+// Faixa (label) -> marco em meses (6, 12, 24...)
+function faixaKeyMeses(key){ if (key === '6 meses') return 6; var n = parseInt(key,10); return n ? n*12 : 0; }
+// Custo compacto para a tabela (sem símbolo; label da linha já indica R$)
+function fmtCusto(v){ return v ? Math.round(v).toLocaleString('pt-BR') : '0'; }
 
 function updateAll() {
   if (activeTab === 'sobre') return;
