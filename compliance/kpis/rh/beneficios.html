@@ -190,6 +190,9 @@ body.tab-empresa #tableCard tbody td:nth-child(3) {
 .emp-resumo-table tbody tr:last-child td { border-bottom:none; background:#FAFAFA; font-weight:700; }
 .emp-resumo-table tbody td:last-child { font-weight:700; }
 .emp-resumo-table tbody td.zero { color:var(--muted); }
+.emp-resumo-table tbody td.clickable { cursor: pointer; transition: background .12s; }
+.emp-resumo-table tbody td.clickable:hover { background: #F1F1F1; }
+.emp-resumo-table tbody td.cf-cell { background: var(--carbon) !important; color: var(--citric); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -1755,6 +1758,9 @@ var TT = {
 };
 
 var selUni = 'Todos', selDepto = 'Todos', cfMes = null, cfMesEmp = null, cfMesMed = null;
+// Cross-filter célula do Resumo por Mês (aba empresa): faixa + mês do ano corrente
+var cfEmpFaixa = null; // ex: '1 ano'
+var cfEmpMes = null;   // 0..11
 var activeTab = 'sobre';
 var DATA_MED = [];
 var sKey = 'diasFaltando', sDir = 'asc';
@@ -1792,7 +1798,8 @@ function setTab(tab) {
   document.body.classList.toggle('tab-empresa', tab === 'empresa');
   if (isSobre) return;
   var acm = getActiveCfMes();
-  document.body.classList.toggle('cf-active', acm !== null);
+  var hasEmpCF = (tab === 'empresa' && cfEmpFaixa !== null);
+  document.body.classList.toggle('cf-active', acm !== null || hasEmpCF);
   updateAll();
 }
 
@@ -1807,6 +1814,10 @@ function buildFilters() {
 }
 
 function getFilt() {
+  // CF de célula do Resumo (aba empresa): substitui a lista por uma feita on-the-fly
+  if (activeTab === 'empresa' && cfEmpFaixa !== null) {
+    return _buildEmpresaCfList();
+  }
   return getActiveData().filter(function(d) {
     if (selUni!=='Todos' && d.unidade!==selUni) return false;
     if (selDepto!=='Todos' && d.depto!==selDepto) return false;
@@ -1816,6 +1827,8 @@ function getFilt() {
 
 function setCF(my) {
   if (getActiveCfMes()===my) { clearCF(); return; }
+  // Limpa CF de célula do Resumo (mutuamente exclusivo com CF de mês)
+  cfEmpFaixa = null; cfEmpMes = null;
   setActiveCfMes(my);
   document.body.classList.add('cf-active');
   updateAll();
@@ -1824,6 +1837,68 @@ function clearCF() {
   setActiveCfMes(null);
   document.body.classList.remove('cf-active');
   updateAll();
+}
+// Cross-filter da célula do Resumo por Mês → filtra o Analítico
+window.setCfEmpresa = function(faixa, mesIdx) {
+  if (cfEmpFaixa === faixa && cfEmpMes === mesIdx) {
+    cfEmpFaixa = null; cfEmpMes = null;
+    document.body.classList.remove('cf-active');
+  } else {
+    cfEmpFaixa = faixa; cfEmpMes = mesIdx;
+    // Limpa CF de mês do gráfico (mutuamente exclusivo)
+    cfMesEmp = null;
+    document.body.classList.add('cf-active');
+  }
+  updateAll();
+};
+
+// Constrói lista de aniversariantes de empresa (calendar year) para o CF do Resumo,
+// no mesmo formato dos itens de DATA_EMP (para o rowHtml reaproveitar).
+function _buildEmpresaCfList() {
+  var currentYear = hoje.getFullYear();
+  var pool = COLABORADORES.filter(function(c){
+    if (!c.admissao) return false;
+    if (selUni!=='Todos' && c.unidade!==selUni) return false;
+    if (selDepto!=='Todos' && c.depto!==selDepto) return false;
+    return true;
+  });
+  return pool.filter(function(c){
+    var a = c.admissao;
+    if (cfEmpFaixa === '6 meses') {
+      var seis = new Date(a.ano, a.mes - 1, a.dia);
+      seis.setMonth(seis.getMonth() + 6);
+      return seis.getFullYear() === currentYear && seis.getMonth() === cfEmpMes;
+    }
+    var n = parseInt(cfEmpFaixa, 10);
+    if (!n) return false;
+    return (currentYear - a.ano) === n && (a.mes - 1) === cfEmpMes;
+  }).map(function(c){
+    var a = c.admissao;
+    var evt, origin;
+    if (cfEmpFaixa === '6 meses') {
+      evt = new Date(a.ano, a.mes - 1, a.dia); evt.setMonth(evt.getMonth() + 6);
+      origin = new Date(a.ano, a.mes - 1, a.dia);
+    } else {
+      var n = parseInt(cfEmpFaixa, 10);
+      evt = new Date(a.ano + n, a.mes - 1, a.dia);
+      origin = new Date(a.ano + n - 1, a.mes - 1, a.dia);
+    }
+    var total = evt - origin;
+    var passed = hoje - origin;
+    var pct = total > 0 ? Math.max(0, Math.min(100, Math.round(passed / total * 100))) : 100;
+    var diasFalt = Math.ceil((evt - hoje) / 86400000);
+    return Object.assign({}, c, {
+      proxAniv: evt,
+      diasFaltando: diasFalt,
+      pct: pct,
+      anosEmpresa: currentYear - a.ano,
+      proxMarco: cfEmpFaixa,
+      proxFormatado: evt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}),
+      mesAniv: evt.getMonth(),
+      mesAnivMY: String(evt.getMonth()+1).padStart(2,'0') + '/' + evt.getFullYear(),
+      mesNome: evt.toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase(),
+    });
+  });
 }
 
 function getMonthData(filt) {
@@ -2107,7 +2182,14 @@ function renderResumoEmpresa(filt) {
     for (var m = 0; m < 12; m++) {
       var n = buckets[fx.key + '|' + m] || 0;
       lineTot += n; colTotals[m] += n; grandTotal += n;
-      line += '<td'+(n===0?' class="zero"':'')+'>'+n+'</td>';
+      var isSel = (cfEmpFaixa === fx.key && cfEmpMes === m);
+      var cls = [];
+      if (n === 0) cls.push('zero');
+      else cls.push('clickable');
+      if (isSel) cls.push('cf-cell');
+      var clsAttr = cls.length ? ' class="'+cls.join(' ')+'"' : '';
+      var onclickAttr = (n > 0) ? ' onclick="setCfEmpresa(\''+fx.key+'\','+m+')"' : '';
+      line += '<td'+clsAttr+onclickAttr+'>'+n+'</td>';
     }
     line += '<td>'+lineTot+'</td></tr>';
     return line;
