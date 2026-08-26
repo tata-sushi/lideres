@@ -167,6 +167,18 @@
   .drawer-footer-avatar{width:32px;height:32px;border-radius:50%;background:var(--carbon);display:flex;align-items:center;justify-content:center;font-family:"DM Mono",monospace;font-size:10px;font-weight:500;color:var(--citric);flex-shrink:0}
   .drawer-footer-name{font-size:13px;font-weight:600;color:var(--carbon)}
   .drawer-footer-role{font-family:"DM Mono",monospace;font-size:9px;color:var(--muted);letter-spacing:.04em;margin-top:1px}
+
+/* ── ANIVERSÁRIO DE EMPRESA: Resumo por Mês + colunas extras no Analítico ── */
+body:not(.tab-empresa) #empresaResumoCard { display: none; }
+body:not(.tab-empresa) .col-empresa { display: none; }
+.emp-resumo-table { width: 100%; border-collapse: collapse; }
+.emp-resumo-table thead th { font-family:'DM Mono',monospace; font-size:9px; font-weight:500; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); padding:9px 8px; text-align:center; border-bottom:2px solid var(--carbon); background:var(--surface); white-space:nowrap; }
+.emp-resumo-table thead th:first-child { text-align:left; }
+.emp-resumo-table tbody td { padding:9px 8px; font-size:13px; color:var(--carbon); border-bottom:1px solid var(--border); text-align:center; vertical-align:middle; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.emp-resumo-table tbody td:first-child { text-align:left; font-family:'DM Mono',monospace; font-size:12px; letter-spacing:.4px; text-transform:uppercase; color:var(--carbon); font-weight:500; }
+.emp-resumo-table tbody tr:last-child td { border-bottom:none; background:#FAFAFA; font-weight:700; }
+.emp-resumo-table tbody td:last-child { font-weight:700; }
+.emp-resumo-table tbody td.zero { color:var(--muted); }
 </style>
 </head>
 <body>
@@ -280,6 +292,17 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-wrap"><canvas id="cAniv"></canvas></div>
   </div>
 
+  <!-- RESUMO POR MÊS · Aniversário de Empresa (só aparece na aba empresa) -->
+  <div class="table-card" id="empresaResumoCard">
+    <div class="chart-title">Resumo por Mês</div>
+    <div class="table-wrap">
+      <table class="emp-resumo-table">
+        <thead id="empResumoHead"></thead>
+        <tbody id="empResumoBody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="table-card" id="tableCard">
     <div class="chart-title">Analítico <span class="table-count" id="tCount"></span></div>
     <div class="table-wrap">
@@ -289,6 +312,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
             <th onclick="doSort('nome')">Colaborador</th>
             <th onclick="doSort('proxAniv')">Próx. Aniversário</th>
             <th id="thTerceiro" onclick="doSort('idade')">Idade</th>
+            <th class="col-empresa" onclick="doSort('unidade')">Unidade</th>
+            <th class="col-empresa" onclick="doSort('depto')">Departamento</th>
             <th onclick="doSort('pct')">Progresso</th>
           </tr>
         </thead>
@@ -1753,6 +1778,7 @@ function setTab(tab) {
   var isSobre = tab === 'sobre';
   var vd = document.getElementById('view-dashboard'); if (vd) vd.style.display = isSobre ? 'none' : '';
   var vs = document.getElementById('view-sobre'); if (vs) vs.style.display = isSobre ? '' : 'none';
+  document.body.classList.toggle('tab-empresa', tab === 'empresa');
   if (isSobre) return;
   var acm = getActiveCfMes();
   document.body.classList.toggle('cf-active', acm !== null);
@@ -1857,6 +1883,8 @@ function rowHtml(d) {
     '<td>' + d.nome + ' ' + statusBadge(d) + '</td>' +
     '<td>' + d.proxFormatado + '</td>' +
     '<td>' + terceiro + '</td>' +
+    '<td class="col-empresa">' + (d.unidade || '—') + '</td>' +
+    '<td class="col-empresa">' + (d.depto || '—') + '</td>' +
     '<td>' + progBar(d.pct) + '</td>' +
     '</tr>';
 }
@@ -1893,7 +1921,8 @@ function renderTable(filt) {
   document.getElementById('tBody').innerHTML = '';
   document.getElementById('btnMore').hidden = true;
   if (!filt.length) {
-    document.getElementById('tBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Nenhum colaborador encontrado</td></tr>';
+    var cs = activeTab === 'empresa' ? 6 : 4;
+    document.getElementById('tBody').innerHTML = '<tr><td colspan="'+cs+'" style="text-align:center;padding:32px;color:var(--muted)">Nenhum colaborador encontrado</td></tr>';
     return;
   }
   tRows = sorted;
@@ -1997,12 +2026,72 @@ function renderChart(filt) {
   });
 }
 
+// ── Resumo por Mês (aba Aniversário de Empresa) ──
+// Linhas = faixas fixas (6 meses / 1 ano / 2 / 3 / 4 / 5 / 10 anos) + Total
+// Colunas = 12 meses a partir do mês atual (janela igual à do gráfico) + Total
+var EMP_FAIXAS = [
+  { key:'6 meses', label:'6 meses' },
+  { key:'1 ano',   label:'1 ano'   },
+  { key:'2 anos',  label:'2 anos'  },
+  { key:'3 anos',  label:'3 anos'  },
+  { key:'4 anos',  label:'4 anos'  },
+  { key:'5 anos',  label:'5 anos'  },
+  { key:'10 anos', label:'10 anos' }
+];
+var MESES_NOME = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function renderResumoEmpresa(filt) {
+  if (activeTab !== 'empresa') return;
+  var head = document.getElementById('empResumoHead');
+  var body = document.getElementById('empResumoBody');
+  if (!head || !body) return;
+
+  // Janela de 12 meses igual ao gráfico
+  var monthKeys = [];
+  var monthLabels = [];
+  for (var i = 0; i < 12; i++) {
+    var m = (hoje.getMonth() + i) % 12;
+    var y = hoje.getFullYear() + (hoje.getMonth() + i >= 12 ? 1 : 0);
+    monthKeys.push(String(m + 1).padStart(2, '0') + '/' + y);
+    monthLabels.push(MESES_NOME[m]);
+  }
+
+  // Header
+  var th = '<tr><th>Faixa</th>';
+  monthLabels.forEach(function(l){ th += '<th>'+l+'</th>'; });
+  th += '<th>Total</th></tr>';
+  head.innerHTML = th;
+
+  // Body — matriz faixa × mês
+  var colTotals = monthKeys.map(function(){ return 0; });
+  var grandTotal = 0;
+  var rows = EMP_FAIXAS.map(function(fx){
+    var line = '<tr><td>'+fx.label+'</td>';
+    var lineTot = 0;
+    monthKeys.forEach(function(mk, ci){
+      var n = filt.filter(function(d){ return d.proxMarco === fx.key && d.mesAnivMY === mk; }).length;
+      lineTot += n; colTotals[ci] += n; grandTotal += n;
+      line += '<td'+(n===0?' class="zero"':'')+'>'+n+'</td>';
+    });
+    line += '<td>'+lineTot+'</td></tr>';
+    return line;
+  }).join('');
+
+  // Linha Total
+  var totalRow = '<tr><td>Total</td>';
+  colTotals.forEach(function(n){ totalRow += '<td>'+n+'</td>'; });
+  totalRow += '<td>'+grandTotal+'</td></tr>';
+
+  body.innerHTML = rows + totalRow;
+}
+
 function updateAll() {
   if (activeTab === 'sobre') return;
   var activeCfMes = getActiveCfMes();
   var filt = getFilt();
   updateKPIs(filt);
   renderChart(filt);
+  renderResumoEmpresa(filt);
   renderTable(filt);
   document.getElementById('chartTitle').textContent =
     activeTab === 'aniv' ? 'Aniversariantes por Mês'
