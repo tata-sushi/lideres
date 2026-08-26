@@ -2046,33 +2046,58 @@ function renderResumoEmpresa(filt) {
   var body = document.getElementById('empResumoBody');
   if (!head || !body) return;
 
-  // Janela de 12 meses igual ao gráfico
-  var monthKeys = [];
-  var monthLabels = [];
-  for (var i = 0; i < 12; i++) {
-    var m = (hoje.getMonth() + i) % 12;
-    var y = hoje.getFullYear() + (hoje.getMonth() + i >= 12 ? 1 : 0);
-    monthKeys.push(String(m + 1).padStart(2, '0') + '/' + y);
-    monthLabels.push(MESES_NOME[m]);
-  }
+  // Ano calendário fixo (Jan → Dez do ano atual).
+  // Valores dos meses que já passaram continuam refletindo os aniversários que aconteceram.
+  var currentYear = hoje.getFullYear();
 
-  // Header
+  // Header (Jan..Dez + Total)
   var th = '<tr><th>Faixa</th>';
-  monthLabels.forEach(function(l){ th += '<th>'+l+'</th>'; });
+  MESES_NOME.forEach(function(l){ th += '<th>'+l+'</th>'; });
   th += '<th>Total</th></tr>';
   head.innerHTML = th;
 
-  // Body — matriz faixa × mês
-  var colTotals = monthKeys.map(function(){ return 0; });
+  // Pool: colaboradores com admissão, respeitando filtros de unidade/departamento
+  var pool = COLABORADORES.filter(function(c){
+    if (!c.admissao) return false;
+    if (selUni!=='Todos' && c.unidade!==selUni) return false;
+    if (selDepto!=='Todos' && c.depto!==selDepto) return false;
+    return true;
+  });
+
+  // Buckets por (faixa, mês do ano corrente)
+  var buckets = {};
+  var validYears = [1, 2, 3, 4, 5, 10];
+  pool.forEach(function(c){
+    var a = c.admissao;
+
+    // Evento de 6 meses: ocorre exatamente 6 meses após a admissão
+    var seis = new Date(a.ano, a.mes - 1, a.dia);
+    seis.setMonth(seis.getMonth() + 6);
+    if (seis.getFullYear() === currentYear) {
+      var k6 = '6 meses|' + seis.getMonth();
+      buckets[k6] = (buckets[k6] || 0) + 1;
+    }
+
+    // Aniversário anual: N = years-in-current-year, apenas se N ∈ {1,2,3,4,5,10}
+    var years = currentYear - a.ano;
+    if (validYears.indexOf(years) >= 0) {
+      var faixaKey = years === 1 ? '1 ano' : years + ' anos';
+      var kY = faixaKey + '|' + (a.mes - 1);
+      buckets[kY] = (buckets[kY] || 0) + 1;
+    }
+  });
+
+  // Corpo — matriz faixa × mês (0..11)
+  var colTotals = [0,0,0,0,0,0,0,0,0,0,0,0];
   var grandTotal = 0;
   var rows = EMP_FAIXAS.map(function(fx){
     var line = '<tr><td>'+fx.label+'</td>';
     var lineTot = 0;
-    monthKeys.forEach(function(mk, ci){
-      var n = filt.filter(function(d){ return d.proxMarco === fx.key && d.mesAnivMY === mk; }).length;
-      lineTot += n; colTotals[ci] += n; grandTotal += n;
+    for (var m = 0; m < 12; m++) {
+      var n = buckets[fx.key + '|' + m] || 0;
+      lineTot += n; colTotals[m] += n; grandTotal += n;
       line += '<td'+(n===0?' class="zero"':'')+'>'+n+'</td>';
-    });
+    }
     line += '<td>'+lineTot+'</td></tr>';
     return line;
   }).join('');
