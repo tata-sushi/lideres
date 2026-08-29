@@ -106,6 +106,15 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .modal-field-label { font-family:'DM Mono',monospace; font-size:9px; font-weight:500; letter-spacing:0.8px; text-transform:uppercase; color:var(--muted); }
 .modal-field-value { font-size:13px; color:var(--text); line-height:1.5; }
 .modal-fields-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.app-toggle-row { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-top:6px; padding-top:14px; border-top:1px solid var(--border); cursor:pointer; }
+.app-toggle-sub { display:block; font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); margin-top:3px; letter-spacing:.02em; }
+.app-toggle { position:relative; display:inline-block; width:42px; height:24px; flex-shrink:0; }
+.app-toggle input { opacity:0; width:0; height:0; }
+.app-toggle-slider { position:absolute; inset:0; background:var(--border); border-radius:24px; transition:.2s; }
+.app-toggle-slider::before { content:''; position:absolute; height:18px; width:18px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 2px rgba(0,0,0,.25); }
+.app-toggle input:checked + .app-toggle-slider { background:var(--carbon); }
+.app-toggle input:checked + .app-toggle-slider::before { transform:translateX(18px); }
+.app-toggle input:disabled + .app-toggle-slider { opacity:.5; }
 @media (min-width:600px) { .modal-overlay { align-items:center; } .modal-box { border-radius:16px; } .modal-handle { display:none; } }
 
 /* FOOTER */
@@ -534,13 +543,33 @@ function openEvtModal(id) {
     '</div>' +
     (e.local        ? '<div class="modal-field"><div class="modal-field-label">Local</div><div class="modal-field-value">' + escapeHtml(e.local) + '</div></div>' : '') +
     (e.responsavel  ? '<div class="modal-field"><div class="modal-field-label">Responsável</div><div class="modal-field-value">' + escapeHtml(e.responsavel) + '</div></div>' : '') +
-    (e.descricao    ? '<div class="modal-field"><div class="modal-field-label">Descrição</div><div class="modal-field-value">' + escapeHtml(e.descricao) + '</div></div>' : '');
+    (e.descricao    ? '<div class="modal-field"><div class="modal-field-label">Descrição</div><div class="modal-field-value">' + escapeHtml(e.descricao) + '</div></div>' : '') +
+    (e.categoria === 'evento'
+      ? '<label class="app-toggle-row">' +
+          '<span><span class="modal-field-label">Mostrar na agenda do app</span>' +
+          '<span class="app-toggle-sub">Aparece para os colaboradores no app</span></span>' +
+          '<span class="app-toggle"><input type="checkbox" ' + (e.mostrarNoApp ? 'checked' : '') + ' onchange="toggleEventoApp(\'' + e.id + '\', this)"><span class="app-toggle-slider"></span></span>' +
+        '</label>'
+      : '');
   document.getElementById('evt-modal').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
 function closeEvtModal() {
   document.getElementById('evt-modal').classList.remove('open');
   document.body.style.overflow = '';
+}
+// Marca/desmarca um evento para aparecer na Agenda do app (categoria 'evento').
+function toggleEventoApp(id, input) {
+  var checked = input.checked;
+  var supa = window.__lideresSupa;
+  if (!supa) { input.checked = !checked; return; }
+  input.disabled = true;
+  supa.schema('tata_plus').rpc('agenda_evento_app_set', { p_id: id, p_mostrar: checked }).then(function(r) {
+    input.disabled = false;
+    if (r.error) { input.checked = !checked; alert('Erro ao salvar: ' + r.error.message); return; }
+    var e = STATE.eventos.find(function(x) { return String(x.id) === String(id); });
+    if (e) e.mostrarNoApp = checked;
+  }, function() { input.disabled = false; input.checked = !checked; alert('Falha ao salvar.'); });
 }
 function handleModalClick(e) {
   if (e.target.id === 'evt-modal') closeEvtModal();
@@ -622,7 +651,8 @@ function loadEventos() {
           local:      e.local || '',
           categoria:  e.categoria || 'outro',
           responsavel:e.responsavel || '',
-          descricao:  e.descricao || ''
+          descricao:  e.descricao || '',
+          mostrarNoApp: !!e.mostrar_no_app
         };
       });
       renderAll();
