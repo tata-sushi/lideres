@@ -1806,7 +1806,31 @@ function _diaHoras(dia){ // {a,b} em horas (b pode passar de 24) ou null
   var a=_mins(dia.entrada), b=_mins(dia.saida); if(a==null||b==null) return null;
   a/=60; b/=60; if(b<=a) b+=24; return { a:a, b:b };
 }
-function horasDia(dia){ var h=_diaHoras(dia); return h ? (h.b-h.a) : 0; }
+function horasDia(dia){
+  if(!dia || !dia.definido || dia.folga) return 0;
+  // Coleta os pares (entrada,saida) das marcações; fallback: entrada/saida do dia.
+  var pares = [];
+  if(Array.isArray(dia.marcacoes) && dia.marcacoes.length){
+    dia.marcacoes.forEach(function(m){ var e=_mins(m.entrada), s=_mins(m.saida); if(e!=null && s!=null) pares.push([e,s]); });
+  } else if(dia.entrada!=null){
+    var e0=_mins(dia.entrada), s0=_mins(dia.saida); if(e0!=null && s0!=null) pares.push([e0,s0]);
+  }
+  if(!pares.length) return 0;
+  pares.sort(function(a,b){ return a[0]-b[0]; });
+  // Detecta marcações gravadas com entradas/saídas transpostas (pares se sobrepõem).
+  var transposto=false;
+  for(var i=0;i+1<pares.length;i++){ if(pares[i][1] > pares[i+1][0]){ transposto=true; break; } }
+  var min=0;
+  if(transposto){
+    // Reconstrói os turnos a partir dos horários ordenados (entra,sai,entra,sai…).
+    var t=[]; pares.forEach(function(p){ t.push(p[0],p[1]); }); t.sort(function(a,b){ return a-b; });
+    for(var j=0;j+1<t.length;j+=2){ min += (t[j+1]-t[j]); }
+  } else {
+    // Caso normal: soma cada turno, tratando virada de meia-noite.
+    pares.forEach(function(p){ var a=p[0], b=p[1]; if(b<=a) b+=1440; min += (b-a); });
+  }
+  return min/60;
+}
 function horasPessoa(p){ var s=0; (p.dias||[]).forEach(function(d){ s+=horasDia(d); }); return s; }
 function fmtH(h){ if(!h) return '0h'; var H=Math.floor(h+1e-6), M=Math.round((h-H)*60); return M ? (H+'h'+(M<10?'0':'')+M) : (H+'h'); }
 function _ov(a,b,s,e){ return Math.max(a,s) < Math.min(b,e); }
