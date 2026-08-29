@@ -4484,6 +4484,7 @@ function openNovoCandidato() {
   ['nc-nome','nc-contato','nc-cpf','nc-pretensao','nc-horario'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
   var d=document.getElementById('nc-data'); if(d) d.value='';
   var sc=document.getElementById('nc-selecionado'); if(sc) sc.value='';
+  ncSelecionadoChanged();
   // cascata unidade→depto→cargo (mesma fonte Cargos&Salários do modal de vaga)
   _evPopulateSelect('nc-unidade', _csUnidades(), '');
   document.getElementById('nc-unidade').value = '';
@@ -4521,6 +4522,7 @@ function abrirEditarCandidato(id) {
   document.getElementById('nc-data').value      = _toDateInput(r.data_entrevista);
   document.getElementById('nc-horario').value   = _toTimeInput(r.horarios);
   _aeSetSelect('nc-selecionado', r.selecionado || '');
+  ncSelecionadoChanged();
   var u=r.unidade||'', dp=r.departamento||'', cargoFull=r.cargo||'';
   _evPopulateSelect('nc-unidade', _csUnidades(), u);
   document.getElementById('nc-unidade').value = u;
@@ -4583,6 +4585,23 @@ function ncCargoChanged() {
   if (niveis.length) _evPopulateSelect('nc-nivel', niveis, niveis.length === 1 ? niveis[0] : '');
   else _ncResetNivel();
   _ncFillHorarioVaga();   // atualiza opções de horário conforme a vaga selecionada
+}
+
+// Selecionado negativo = candidato que não seguiu no processo:
+// esconde o agendamento (não cria entrevista/teste) e mostra a nota.
+function ncSelecionadoChanged() {
+  var v = (document.getElementById('nc-selecionado') || {}).value || '';
+  var neg = (v === 'Não' || v === 'Não respondeu' || v === 'Não aceitou a proposta');
+  var hr = document.getElementById('nc-agendamento-hr');
+  var grid = document.getElementById('nc-agendamento-grid');
+  var nota = document.getElementById('nc-nao-contratado-nota');
+  if (hr) hr.style.display = neg ? 'none' : '';
+  if (grid) grid.style.display = neg ? 'none' : '';
+  if (nota) nota.style.display = neg ? 'block' : 'none';
+  if (neg) {
+    ['nc-data', 'nc-horario'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
+    var ent = document.getElementById('nc-entrevistador'); if (ent) ent.value = '';
+  }
 }
 
 function salvarNovoCandidato() {
@@ -7071,7 +7090,7 @@ function enviarSolicitacao() {
         </div>
         <div class="ev-field">
           <span class="modal-section-title">Selecionado</span>
-          <select class="modal-select" id="nc-selecionado">
+          <select class="modal-select" id="nc-selecionado" onchange="ncSelecionadoChanged()">
             <option value="">—</option>
             <option>Sim</option>
             <option>Não</option>
@@ -7114,9 +7133,9 @@ function enviarSolicitacao() {
           </select>
         </div>
       </div>
-      <hr class="modal-divider">
+      <hr class="modal-divider" id="nc-agendamento-hr">
       <!-- Grupo 3: agendamento (opcional) -->
-      <div class="modal-info-grid">
+      <div class="modal-info-grid" id="nc-agendamento-grid">
         <div class="ev-field" style="grid-column:1/-1">
           <span class="modal-section-title" style="color:var(--muted)">Agendar 1ª entrevista <span style="text-transform:none;letter-spacing:0">(opcional — pode agendar depois no Fluxo de Etapas)</span></span>
         </div>
@@ -7135,6 +7154,7 @@ function enviarSolicitacao() {
           </select>
         </div>
       </div>
+      <div id="nc-nao-contratado-nota" style="display:none;background:#FDEAEA;color:#7A1A1A;border-radius:6px;padding:11px 13px;font-size:12px;margin-top:6px">Candidato marcado como <strong>não selecionado</strong> — será registrado como <strong>Não contratado</strong>, sem entrevista ou teste.</div>
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-btn-cancel" onclick="closeNovoCandidato()">Cancelar</button>
