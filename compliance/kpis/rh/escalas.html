@@ -1333,6 +1333,36 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<!-- ═══ MODAL: IMPRIMIR ESCALA (escolhe unidade/departamento) ═══ -->
+<div class="modal-overlay" id="imp-overlay" onclick="if(event.target===this)fecharModalImprimir()">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-header esc-sheet-hd">
+      <div class="esc-sheet-name">Imprimir escala</div>
+      <button onclick="fecharModalImprimir()" style="width:26px;height:26px;background:var(--bg);border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="esc-field" id="imp-uni-field">
+        <span class="esc-field-label">Unidade</span>
+        <select class="esc-select" id="imp-unidade" onchange="onImpUnidadeChange()"></select>
+      </div>
+      <div class="esc-field">
+        <span class="esc-field-label">Departamento</span>
+        <select class="esc-select" id="imp-depto" onchange="onImpDeptoChange()"><option value="Todos">Todos</option></select>
+      </div>
+      <div class="esc-field">
+        <span class="esc-field-label">Semana</span>
+        <div class="esc-weeklabel"><b id="imp-week-range">—</b></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-confirmar" id="imp-btn" onclick="confirmarImprimir()" style="flex:1;">Imprimir</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ BOTTOM-SHEET: AJUSTE PONTUAL ═══ -->
 <div class="modal-overlay" id="pt-overlay" onclick="if(event.target===this)fecharPontual()">
   <div class="modal-box">
@@ -1449,7 +1479,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
       <button class="drawer-sam-btn" data-botao-id="governanca-app-escala::cadastrar-horario" style="margin-bottom:8px;" onclick="closeDrawer(); abrirCadastroHorario();">Cadastrar horário</button>
-      <button class="drawer-sam-btn" data-botao-id="governanca-app-escala::imprimir-escala" onclick="closeDrawer(); imprimirEscala();">Imprimir escala</button>
+      <button class="drawer-sam-btn" data-botao-id="governanca-app-escala::imprimir-escala" onclick="closeDrawer(); abrirModalImprimir();">Imprimir escala</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -1930,9 +1960,57 @@ function renderGradeVisual(){
 function gvSelDia(i){ ST.gvDia=i; renderGradeVisual(); }
 
 /* ── Impressão (aberta pelo drawer) — esquema do app de escalas ──────────── */
+/* ── Modal de impressão: escolhe unidade (admin) + departamento e imprime ── */
+function abrirModalImprimir(){
+  var uField = document.getElementById('imp-uni-field');
+  var uSel = document.getElementById('imp-unidade');
+  if (ST.admin){
+    if (uField) uField.style.display = '';
+    var top = document.getElementById('esc-unidade');
+    if (uSel && top) { uSel.innerHTML = top.innerHTML; uSel.value = ST.unidade || ''; }
+  } else {
+    if (uField) uField.style.display = 'none'; // líder: sem seleção de unidade (vê a própria equipe)
+  }
+  _impPopularDepto();
+  var fim = addDias(ST.inicio, 6);
+  var wr = document.getElementById('imp-week-range'); if (wr) wr.textContent = ddmm(ST.inicio)+' – '+ddmm(fim);
+  document.getElementById('imp-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function fecharModalImprimir(){
+  document.getElementById('imp-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function _impPopularDepto(){
+  var sel = document.getElementById('imp-depto'); if(!sel) return;
+  var vistos={}, lista=[];
+  ST.equipe.forEach(function(p){ var d=String(p.departamento||'').trim(); if(d && !vistos[d]){ vistos[d]=1; lista.push(d); } });
+  lista.sort();
+  var cur = (ST.depto && lista.indexOf(ST.depto)>=0) ? ST.depto : 'Todos';
+  sel.innerHTML = '<option value="Todos">Todos</option>' + lista.map(function(d){ return '<option value="'+esc(d)+'"'+(d===cur?' selected':'')+'>'+esc(d)+'</option>'; }).join('');
+  sel.value = cur;
+}
+function onImpUnidadeChange(){
+  var u = document.getElementById('imp-unidade').value;
+  ST.unidade = u; ST.depto = 'Todos';
+  var top = document.getElementById('esc-unidade'); if(top) top.value = u; // mantém topo em sincronia
+  carregarSemana(); // recarrega a unidade; ao terminar, _impPopularDepto roda pelo hook em carregarSemana
+}
+function onImpDeptoChange(){
+  ST.depto = document.getElementById('imp-depto').value || 'Todos';
+  var top = document.getElementById('esc-depto'); if(top) top.value = ST.depto;
+  renderGrade();
+}
+function confirmarImprimir(){
+  if (ST.carregando){ toast('Carregando escala…'); return; }
+  ST.depto = (document.getElementById('imp-depto')||{}).value || 'Todos';
+  fecharModalImprimir();
+  imprimirEscala();
+}
+
 function imprimirEscala(){
   var vis=_kpiVis();
-  if(!ST.unidade || !vis.length){ toast('Nada para imprimir.'); return; }
+  if(!vis.length){ toast('Nada para imprimir.'); return; }
   var fim=addDias(ST.inicio,6);
   var thDias=DIAS_FULL.map(function(x,i){ var d=addDias(ST.inicio,i); return '<th>'+x+'<br><span class="epdf-th-data">'+ddmm(d)+'</span></th>'; }).join('');
   var totais=[]; for(var i=0;i<7;i++){ var tr=0,fo=0; vis.forEach(function(p){ var d=(p.dias||[])[i]; if(!d||!d.definido) return; if(d.folga) fo++; else tr++; }); totais.push({tr:tr,fo:fo}); }
@@ -1954,7 +2032,7 @@ function imprimirEscala(){
   div.innerHTML=
     '<div class="epdf-header"><div class="epdf-header-center"><div class="epdf-title">Escala Semanal</div></div>'+
     '<div class="epdf-header-right">'+
-      '<div class="epdf-meta-line">Unidade: <strong>'+esc(ST.unidade)+'</strong></div>'+
+      '<div class="epdf-meta-line">Unidade: <strong>'+esc(ST.unidade||'—')+'</strong></div>'+
       '<div class="epdf-meta-line">Departamento: <strong>'+esc(ST.depto||'Todos')+'</strong></div>'+
       '<div class="epdf-meta-line">Semana: <strong>'+ddmm(ST.inicio)+' – '+ddmm(fim)+'</strong></div>'+
       '<div class="epdf-meta-line">Emitido em: '+new Date().toLocaleString('pt-BR')+'</div>'+
@@ -1982,6 +2060,8 @@ function carregarSemana(){
     if (r.error) { erroRPC(r.error); renderEmpty('Não foi possível carregar a escala.'); return; }
     ST.equipe = Array.isArray(r.data) ? r.data : [];
     popularDeptos();
+    var impOv = document.getElementById('imp-overlay');
+    if (impOv && impOv.classList.contains('open')) _impPopularDepto(); // sincroniza depto do modal de impressão
     // Feriados (fato do dia) e ausências (por pessoa) — pinta a grade quando chegarem.
     Promise.all([
       pFer.then(function(rf){ ST.feriados = (rf && rf.data && typeof rf.data === 'object') ? rf.data : {}; }, function(){ ST.feriados = {}; }),
