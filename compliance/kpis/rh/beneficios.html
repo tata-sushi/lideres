@@ -594,6 +594,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 #view-sobre .benef-doc-item input[type=checkbox] { width:15px;height:15px;flex-shrink:0;margin-top:3px;cursor:pointer;accent-color:var(--carbon); }
 #view-sobre .benef-doc-name { font-size:13px;font-weight:500;color:var(--t1);line-height:1.4; }
 #view-sobre .benef-mt-fg { display:grid;grid-template-columns:1fr 1fr;gap:0 10px; }
+@keyframes benefModalIn { from { opacity:0; transform:translateY(8px) scale(.98); } to { opacity:1; transform:none; } }
+@keyframes benefBtnRot { to { transform:rotate(360deg); } }
 #view-sobre html[data-auth="pending"] body > *:not(#auth-gate) { visibility: hidden; }
 #view-sobre html[data-auth="denied"]  body > *:not(#auth-gate) { display: none !important; }
 #view-sobre html[data-auth="ok"]      #auth-gate { display: none !important; }
@@ -1536,6 +1538,77 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <!-- ── DRAWER ── -->
+<!-- ── MODAL Gerar Termos ── -->
+<div class="benef-overlay" id="benef-overlay">
+  <div class="benef-modal">
+    <div class="benef-modal-header">
+      <div>
+        <div class="benef-eyebrow">RH &amp; Benefícios</div>
+        <div class="benef-modal-title">Gerar Termos</div>
+      </div>
+      <button class="benef-close-btn" onclick="closeModalBenef()">✕</button>
+    </div>
+    <div class="benef-modal-body">
+      <div class="form-row">
+        <label class="form-label" for="benef-colab">Colaborador</label>
+        <select class="form-select" id="benef-colab">
+          <option value="">— Selecione —</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="benef-data">Data do documento</label>
+        <input class="form-input" type="date" id="benef-data">
+      </div>
+      <div class="form-divider">Documentos</div>
+      <div class="benef-doc-list">
+        <label class="benef-doc-item">
+          <input type="checkbox" id="benef-doc-vt" value="vt">
+          <span class="benef-doc-name">Termo de Opção de Vale Transporte</span>
+        </label>
+        <label class="benef-doc-item">
+          <input type="checkbox" id="benef-doc-am" value="am">
+          <span class="benef-doc-name">Termo de ciência e autorização de desconto em folha — Assistência Médica</span>
+        </label>
+        <div class="benef-doc-item" style="flex-direction:column;align-items:stretch;cursor:default;">
+          <div style="display:flex;align-items:flex-start;gap:10px;">
+            <input type="checkbox" id="benef-doc-mt" value="mt" style="cursor:pointer;" onclick="event.stopPropagation()" onchange="_benefToggleMtFields(this.checked)">
+            <label for="benef-doc-mt" style="cursor:pointer;flex:1;">
+              <span class="benef-doc-name">Contrato de Mútuo Financeiro com autorização de desconto em folha</span>
+            </label>
+          </div>
+          <div id="benef-mt-fields" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+            <div class="benef-mt-fg">
+              <div class="form-row">
+                <label class="form-label" for="benef-mt-valor">Valor concedido (R$)</label>
+                <input class="form-input" type="text" id="benef-mt-valor" placeholder="0,00" onclick="event.stopPropagation()">
+              </div>
+              <div class="form-row">
+                <label class="form-label" for="benef-mt-parcelas">Número de parcelas</label>
+                <input class="form-input" type="number" id="benef-mt-parcelas" min="1" placeholder="12" onclick="event.stopPropagation()">
+              </div>
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="benef-mt-extenso">Valor por extenso</label>
+              <input class="form-input" type="text" id="benef-mt-extenso" placeholder="ex: dois mil reais" onclick="event.stopPropagation()">
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="benef-mt-parcela">Valor da parcela (R$)</label>
+              <input class="form-input" type="text" id="benef-mt-parcela" placeholder="0,00" onclick="event.stopPropagation()">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="benef-modal-footer">
+      <div class="benef-error" id="benef-error"></div>
+      <button class="benef-btn" id="benef-btn" onclick="gerarTermosBenef()">
+        <div class="benef-spin" id="benef-spin"></div>
+        <span id="benef-btn-label">Gerar PDF</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
 <aside class="drawer" id="drawer">
   <div class="drawer-header">
@@ -1574,7 +1647,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
-      <button class="drawer-sam-btn" onclick="closeDrawer();openPremModal()">Editar premiações</button>
+      <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-beneficios::gerar-termos" onclick="closeDrawer();openModalBenef()">Gerar Termos</button>
+      <button class="drawer-sam-btn" onclick="closeDrawer();openPremModal()" style="margin-top:8px;">Editar premiações</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -1653,7 +1727,114 @@ function loadDrawerMeta() {
 function openDrawer(){
   loadDrawerMeta();document.getElementById('drawer-overlay').classList.add('open');document.getElementById('drawer').classList.add('open');document.body.style.overflow='hidden';loadDrawerKPIs();}
 function closeDrawer(){document.getElementById('drawer-overlay').classList.remove('open');document.getElementById('drawer').classList.remove('open');document.body.style.overflow='';}
-document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer();closePremModal();}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer();closePremModal();closeModalBenef();}});
+
+/* ── MODAL Gerar Termos ──────────────────────────────────────────
+   Botão + modal de emissão de documentos (Termo VT, Termo Assistência
+   Médica e Contrato de Mútuo Financeiro / empréstimo).
+   A geração do PDF em si (gerarTermosBenef) é um stub — será
+   conectada por outro agente. Tudo o mais (UI + carga de colaborador)
+   já funciona. window.__benefColabMap fica exposto para o gerador. */
+var _benefColabLoaded = false;
+window.__benefColabMap = {};
+
+function openModalBenef() {
+  if (typeof closeDrawer === 'function') closeDrawer();
+  _benefLoadColaboradores();
+  var sel = document.getElementById('benef-colab'); if (sel) sel.value = '';
+  var _t = new Date(), _p = function(n){ return String(n).padStart(2,'0'); };
+  var d = document.getElementById('benef-data');
+  if (d) d.value = _t.getFullYear()+'-'+_p(_t.getMonth()+1)+'-'+_p(_t.getDate());
+  ['benef-doc-vt','benef-doc-am','benef-doc-mt'].forEach(function(id){ var el=document.getElementById(id); if(el) el.checked=false; });
+  _benefToggleMtFields(false);
+  _benefSetLoading(false, 'Gerar PDF');
+  _benefShowError('');
+  document.getElementById('benef-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModalBenef() {
+  var ov = document.getElementById('benef-overlay');
+  if (ov) ov.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function _benefToggleMtFields(on) {
+  var f = document.getElementById('benef-mt-fields');
+  if (f) f.style.display = on ? 'block' : 'none';
+  if (!on) ['benef-mt-valor','benef-mt-extenso','benef-mt-parcelas','benef-mt-parcela'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+}
+
+function _benefLoadColaboradores() {
+  if (_benefColabLoaded) return;
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('beneficios_colaboradores').then(function(res){
+      var rows = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
+      var sel = document.getElementById('benef-colab');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— Selecione —</option>';
+      rows.map(function(r){
+        return {
+          nome: (r.nome || '').trim(),
+          cargo: (r.cargo || '').trim(),
+          unidade: (r.unidade || '').trim(),
+          departamento: (r.departamento || '').trim(),
+          matricula: (r.matricula != null ? String(r.matricula) : '').trim()
+        };
+      }).filter(function(c){ return c.nome; })
+        .sort(function(a,b){ return a.nome.localeCompare(b.nome,'pt-BR'); })
+        .forEach(function(c){
+          var key = c.matricula || c.nome;
+          window.__benefColabMap[key] = c;
+          var opt = document.createElement('option');
+          opt.value = key; opt.textContent = c.nome;
+          sel.appendChild(opt);
+        });
+      _benefColabLoaded = true;
+    }).catch(function(){});
+  });
+}
+
+function _benefSetLoading(loading, label) {
+  var btn = document.getElementById('benef-btn');
+  if (btn) btn.disabled = loading;
+  var sp = document.getElementById('benef-spin');
+  if (sp) sp.style.display = loading ? 'block' : 'none';
+  if (label) { var l = document.getElementById('benef-btn-label'); if (l) l.textContent = label; }
+}
+
+function _benefShowError(msg) {
+  var el = document.getElementById('benef-error');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.toggle('show', !!msg);
+}
+
+/* STUB — a geração do PDF será implementada por outro agente.
+   Valida a seleção e expõe os dados em window.__benefTermosPayload. */
+function gerarTermosBenef() {
+  var colabKey = (document.getElementById('benef-colab')||{}).value || '';
+  if (!colabKey) { _benefShowError('Selecione o colaborador.'); return; }
+  var vt = (document.getElementById('benef-doc-vt')||{}).checked;
+  var am = (document.getElementById('benef-doc-am')||{}).checked;
+  var mt = (document.getElementById('benef-doc-mt')||{}).checked;
+  if (!vt && !am && !mt) { _benefShowError('Selecione ao menos um documento.'); return; }
+  _benefShowError('');
+  window.__benefTermosPayload = {
+    colaborador: window.__benefColabMap[colabKey] || { nome: colabKey },
+    data: (document.getElementById('benef-data')||{}).value || '',
+    docs: { vt: vt, am: am, mt: mt },
+    mutuo: {
+      valor:    (document.getElementById('benef-mt-valor')   ||{}).value || '',
+      parcelas: (document.getElementById('benef-mt-parcelas')||{}).value || '',
+      extenso:  (document.getElementById('benef-mt-extenso') ||{}).value || '',
+      parcela:  (document.getElementById('benef-mt-parcela') ||{}).value || ''
+    }
+  };
+  _benefShowError('Gerador de PDF ainda não conectado — em breve.');
+}
 
 /* ── MODAL Premiações ── */
 function _premEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
