@@ -575,13 +575,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <script>
 // ──────────────────────────────────────────────
-// CONFIG — edite aqui quando tiver o Apps Script publicado
+// CONFIG — backend migrado do Apps Script para o Supabase (tata_plus.brainstorm_*)
 // ──────────────────────────────────────────────
 const config = {
   session:  'Brainstorm Geral',
-  url:      'https://script.google.com/macros/s/AKfycbzhIeR5I7dhZ4J1jVEHPdj_jBcDBhbbyrkAhyJVwTd3FwxtCV3ZTByiRx9d6oA8VhVh/exec',
   interval: 8
 };
+
+// Resolve o cliente Supabase publicado pelo gate (síncrono se já pronto, senão
+// aguarda o evento 'lideres:supa').
+function withSupa(cb) {
+  if (window.__lideresSupa) { cb(window.__lideresSupa); return; }
+  window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once: true });
+}
 
 
 let renderedWords = {};
@@ -599,27 +605,30 @@ function getAuthor() {
 // INIT
 // ──────────────────────────────────────────────
 (function init() {
-  // Header user + footer date
+  // Header user + footer date (elementos podem não existir — guarda contra null)
   var fullName = getAuthor();
   var parts = fullName.trim().split(/\s+/);
   var short = parts.length > 1 ? parts[0] : parts[0];
-  document.getElementById('header-user').textContent = short;
+  var hu = document.getElementById('header-user');
+  if (hu) hu.textContent = short;
   var now = new Date();
   var dd = String(now.getDate()).padStart(2,'0');
   var mm = String(now.getMonth()+1).padStart(2,'0');
   var yyyy = now.getFullYear();
   var hh = String(now.getHours()).padStart(2,'0');
   var mn = String(now.getMinutes()).padStart(2,'0');
-  document.getElementById('footerDate').textContent = 'Atualizado: ' + dd + '/' + mm + '/' + yyyy + ', ' + hh + ':' + mn;
+  var fd = document.getElementById('footerDate');
+  if (fd) fd.textContent = 'Atualizado: ' + dd + '/' + mm + '/' + yyyy + ', ' + hh + ':' + mn;
 
-  document.getElementById('wordInput').addEventListener('keydown', e => {
+  var wi = document.getElementById('wordInput');
+  if (wi) wi.addEventListener('keydown', e => {
     if (e.key === 'Enter') sendWord();
   });
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeWordModal();
   });
 
-  if (config.url) startPolling();
+  startPolling();
 })();
 
 // ──────────────────────────────────────────────
@@ -670,10 +679,6 @@ async function sendWord() {
     errEl.textContent = 'Selecione uma categoria.';
     errEl.classList.add('show'); return;
   }
-  if (!config.url) {
-    errEl.textContent = 'Endpoint não configurado.';
-    errEl.classList.add('show'); return;
-  }
 
   const btn   = document.getElementById('sendBtn');
   const spin  = document.getElementById('send-spin');
@@ -682,26 +687,29 @@ async function sendWord() {
   spin.style.display = 'block';
   label.textContent = 'Enviando…';
 
-  try {
-    const params = new URLSearchParams({
-      action:    'addWord',
-      word:      word,
-      author:    getAuthor(),
-      session:   config.session,
-      descricao: desc,
-      categoria: selectedCat
-    });
-    await fetch(`${config.url}?${params}`, { method: 'GET', mode: 'no-cors' });
-    addWordToCanvas(word, 1, getAuthor(), 1, desc, selectedCat);
-    closeWordModal();
-    showToast(`"${word}" enviado ✓`, 'success');
-  } catch(e) {
-    errEl.textContent = 'Erro ao enviar. Verifique a URL.';
+  const fail = function(msg){
+    errEl.textContent = msg || 'Erro ao enviar. Tente novamente.';
     errEl.classList.add('show');
     btn.disabled = false;
     spin.style.display = 'none';
     label.textContent = 'Enviar';
-  }
+  };
+
+  withSupa(function(supa){
+    supa.schema('tata_plus').rpc('brainstorm_add', {
+      p_sessao:    config.session,
+      p_palavra:   word,
+      p_autor:     getAuthor(),
+      p_descricao: desc,
+      p_categoria: selectedCat
+    }).then(function(res){
+      if (res && res.error) { fail('Erro ao enviar. Tente novamente.'); return; }
+      addWordToCanvas(word, 1, getAuthor(), 1, desc, selectedCat);
+      closeWordModal();
+      showToast(`"${word}" enviado ✓`, 'success');
+      fetchWords();
+    }).catch(function(){ fail('Erro ao enviar. Tente novamente.'); });
+  });
 }
 
 // ──────────────────────────────────────────────
@@ -713,21 +721,14 @@ function startPolling() {
   pollTimer = setInterval(fetchWords, config.interval * 1000);
 }
 
-async function fetchWords() {
-  if (!config.url) return;
-  try {
-    const params = new URLSearchParams({
-      action: 'getWords',
-      session: config.session
-    });
-    const res = await fetch(`${config.url}?${params}`);
-    const data = await res.json();
-    if (Array.isArray(data)) {
-      syncCanvas(data);
-    }
-  } catch(e) {
-    // silencioso, tenta no próximo ciclo
-  }
+function fetchWords() {
+  withSupa(function(supa){
+    supa.schema('tata_plus').rpc('brainstorm_palavras', { p_sessao: config.session })
+      .then(function(res){
+        if (res && !res.error && Array.isArray(res.data)) syncCanvas(res.data);
+      })
+      .catch(function(){ /* silencioso, tenta no próximo ciclo */ });
+  });
 }
 
 // ──────────────────────────────────────────────
@@ -758,8 +759,10 @@ function syncCanvas(words) {
   });
 
   const total = words.reduce((s, w) => s + (w.count || 1), 0);
-  document.getElementById('drawer-kpi-words').textContent = words.length;
-  document.getElementById('drawer-kpi-sends').textContent = total;
+  const elW = document.getElementById('drawer-kpi-words');
+  const elS = document.getElementById('drawer-kpi-sends');
+  if (elW) elW.textContent = words.length;
+  if (elS) elS.textContent = total;
 }
 
 function addWordToCanvas(word, count, author, maxCount, descricao, categoria) {
@@ -852,23 +855,23 @@ function calcFontSize(count, maxCount, canvasW) {
 // LIMPAR CANVAS
 // ──────────────────────────────────────────────
 function confirmClear() {
-  if (!config.url) { showToast('Configure o Apps Script primeiro.', 'error'); return; }
   if (confirm(`Limpar TODAS as palavras da sessão "${config.session}"?`)) {
     clearSession();
   }
 }
-async function clearSession() {
-  try {
-    const params = new URLSearchParams({ action: 'clearSession', session: config.session });
-    await fetch(`${config.url}?${params}`, { method: 'GET', mode: 'no-cors' });
-    Object.values(renderedWords).forEach(({ el }) => el?.remove());
-    renderedWords = {};
-    document.getElementById('drawer-kpi-words').textContent = '0';
-    document.getElementById('drawer-kpi-sends').textContent = '0';
-    showToast('Canvas limpo ✓', 'success');
-  } catch(e) {
-    showToast('Erro ao limpar.', 'error');
-  }
+function clearSession() {
+  withSupa(function(supa){
+    supa.schema('tata_plus').rpc('brainstorm_limpar', { p_sessao: config.session })
+      .then(function(res){
+        if (res && res.error) { showToast('Erro ao limpar.', 'error'); return; }
+        Object.values(renderedWords).forEach(({ el }) => el?.remove());
+        renderedWords = {};
+        var _w = document.getElementById('drawer-kpi-words'); if (_w) _w.textContent = '0';
+        var _s = document.getElementById('drawer-kpi-sends'); if (_s) _s.textContent = '0';
+        showToast('Canvas limpo ✓', 'success');
+      })
+      .catch(function(){ showToast('Erro ao limpar.', 'error'); });
+  });
 }
 
 // ──────────────────────────────────────────────
