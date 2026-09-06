@@ -422,6 +422,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .esc-addmarc { margin-top: 2px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--mid); background: var(--bg); border: 1px dashed var(--border); border-radius: var(--radius); padding: 8px 12px; cursor: pointer; width: 100%; transition: all .15s; }
 .esc-addmarc:hover { border-color: var(--carbon); color: var(--carbon); }
 .esc-addmarc:disabled { opacity: .4; cursor: not-allowed; }
+.cp-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px 12px; border: 1.5px dashed var(--border); border-radius: var(--radius); background: var(--bg); cursor: pointer; text-align: center; transition: all .15s; }
+.cp-drop.dragover { border-color: var(--carbon); background: var(--surface); }
+.cp-drop-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--mid); }
+.cp-drop-sub { font-size: 11px; color: var(--muted); }
+.cp-file-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.cp-file-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; }
+.cp-file-row.cp-ok { background: var(--bg); }
+.cp-file-row.cp-bad { background: #FDEAEA; border-color: #FECACA; }
+.cp-file-icon { width: 16px; height: 16px; flex-shrink: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; }
+.cp-ok .cp-file-icon { background: #2E7D32; }
+.cp-bad .cp-file-icon { background: #B93232; }
+.cp-file-info { flex: 1; min-width: 0; }
+.cp-file-nome { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-file-meta { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.cp-summary { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.4px; color: var(--muted); text-transform: uppercase; }
+.cp-progress { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-align: center; }
 .esc-field { display: flex; flex-direction: column; gap: 5px; }
 .esc-field-label { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
 .esc-seg { display: flex; gap: 6px; }
@@ -1441,6 +1457,44 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<!-- ═══ MODAL: ENVIAR CARTÃO DE PONTO EM LOTE ═══
+     Documento externo (já pronto, vindo da folha) — não gera PDF aqui, só sobe
+     o arquivo tal como está e manda pra assinatura digital. Casa cada arquivo
+     com um colaborador pela matrícula no começo do nome (padrão fixo da folha:
+     "MATRICULA_NOME_id.pdf" — tudo antes do primeiro "_"). ── -->
+<div class="modal-overlay" id="cp-overlay" onclick="if(event.target===this)fecharModalCartaoPonto()">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-header esc-sheet-hd">
+      <div class="esc-sheet-name">Enviar Cartão de Ponto</div>
+      <button onclick="fecharModalCartaoPonto()" style="width:26px;height:26px;background:var(--bg);border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="esc-field">
+        <span class="esc-field-label">Competência</span>
+        <input class="esc-select" type="month" id="cp-competencia">
+      </div>
+      <div class="esc-field">
+        <span class="esc-field-label">Arquivos (PDF, um por colaborador)</span>
+        <div class="cp-drop" id="cp-drop" onclick="document.getElementById('cp-files').click()">
+          <div class="cp-drop-label" id="cp-drop-label">Clique ou arraste os PDFs aqui</div>
+          <div class="cp-drop-sub">Nome do arquivo precisa começar com a matrícula (ex.: 7_NOME_id.pdf)</div>
+        </div>
+        <input type="file" id="cp-files" accept="application/pdf" multiple style="display:none;" onchange="_cpOnFilesSelected(this.files)">
+      </div>
+      <div class="cp-summary" id="cp-summary" style="display:none;"></div>
+      <div class="cp-file-list" id="cp-file-list"></div>
+      <div class="cp-progress" id="cp-progress" style="display:none;"></div>
+      <div class="esc-field" id="cp-error" style="display:none;color:#B93232;font-size:11px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-confirmar" id="cp-btn" onclick="enviarCartaoPontoLote()" style="flex:1;">Enviar para Assinatura Digital</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ DRAWER "Sobre" ═══ -->
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
@@ -1484,6 +1538,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="drawer-section-label">Ações</div>
       <button class="drawer-sam-btn" data-botao-id="governanca-app-escala::cadastrar-horario" style="margin-bottom:8px;" onclick="closeDrawer(); abrirCadastroHorario();">Cadastrar horário</button>
       <button class="drawer-sam-btn" data-botao-id="governanca-app-escala::imprimir-escala" onclick="closeDrawer(); abrirModalImprimir();">Imprimir escala</button>
+      <button class="drawer-sam-btn" data-botao-id="governanca-app-escala::cartao-ponto" style="margin-top:8px;" onclick="closeDrawer(); abrirModalCartaoPonto();">Enviar Cartão de Ponto</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -1642,6 +1697,234 @@ function erroRPC(err){
   var m = (err && err.message) ? err.message : String(err||'Erro');
   if (/sem permiss/i.test(m)) toast('Sem permissão para montar a escala.');
   else toast('Erro: '+m);
+}
+
+/* ── Cartão de Ponto (upload em lote) ────────────────────────────────────────
+   Documento externo, já pronto (vem da folha) — não gera PDF aqui, só sobe o
+   arquivo tal como está e manda pra assinatura digital, um por colaborador.
+   Casa cada arquivo com a matrícula pelo padrão fixo da folha:
+   "MATRICULA_NOME_id.pdf" (tudo antes do primeiro "_"). ────────────────────── */
+var CP_TIPO_NOME = 'Cartão de Ponto';
+var _cpTipoId = null;
+var _cpColabPorMatricula = null; // matricula -> {nome, status}
+var _cpArquivos = []; // [{file, matricula, nome, status: 'ok'|'bad', motivo}]
+var _cpEnviando = false;
+
+function _cpUuid(){
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){
+    var r = Math.random()*16|0, v = c==='x' ? r : (r&0x3|0x8);
+    return v.toString(16);
+  });
+}
+
+function _cpFmtBytes(n){
+  if (!n && n !== 0) return '';
+  if (n < 1024) return n+' B';
+  if (n < 1024*1024) return (n/1024).toFixed(0)+' KB';
+  return (n/(1024*1024)).toFixed(1)+' MB';
+}
+
+/* Carrega o quadro de colaboradores (matrícula → nome/status) uma vez só,
+   pra casar com o prefixo do nome do arquivo. hc_colaboradores_listar cobre
+   a empresa inteira (ao contrário de ST.equipe, que é só a semana/unidade
+   em tela), que é o que precisamos pra um lote com gente de todo canto. */
+function _cpCarregarColaboradores(){
+  if (_cpColabPorMatricula) return Promise.resolve(_cpColabPorMatricula);
+  return new Promise(function(resolve){
+    comSupa(function(supa){
+      supa.rpc('hc_colaboradores_listar').then(function(r){
+        var mapa = {};
+        (!r.error && Array.isArray(r.data) ? r.data : []).forEach(function(c){
+          if (c.matricula != null) mapa[String(c.matricula)] = { nome: c.nome||'', status: c.status||'' };
+        });
+        _cpColabPorMatricula = mapa;
+        resolve(mapa);
+      }, function(){ _cpColabPorMatricula = {}; resolve({}); });
+    });
+  });
+}
+
+function _cpCarregarTipoId(){
+  if (_cpTipoId) return Promise.resolve(_cpTipoId);
+  return new Promise(function(resolve, reject){
+    comSupa(function(supa){
+      supa.rpc('doc_tipos_sandbox_listar').then(function(r){
+        if (r.error) { reject(r.error); return; }
+        var t = (r.data||[]).find(function(x){ return x.nome === CP_TIPO_NOME && x.categoria === CP_TIPO_NOME; });
+        if (!t) { reject(new Error('Tipo de documento "'+CP_TIPO_NOME+'" não encontrado no catálogo (dp_rh.doc_tipos).')); return; }
+        _cpTipoId = t.id;
+        resolve(t.id);
+      }).catch(reject);
+    });
+  });
+}
+
+function abrirModalCartaoPonto(){
+  _cpArquivos = [];
+  _cpEnviando = false;
+  document.getElementById('cp-files').value = '';
+  document.getElementById('cp-file-list').innerHTML = '';
+  document.getElementById('cp-summary').style.display = 'none';
+  document.getElementById('cp-progress').style.display = 'none';
+  document.getElementById('cp-error').style.display = 'none';
+  var btn = document.getElementById('cp-btn');
+  btn.disabled = false; btn.textContent = 'Enviar para Assinatura Digital';
+  var comp = document.getElementById('cp-competencia');
+  if (!comp.value) {
+    var h = new Date();
+    var m = new Date(h.getFullYear(), h.getMonth()-1, 1); // mês anterior (folha fechada) como sugestão
+    comp.value = m.getFullYear()+'-'+pad(m.getMonth()+1);
+  }
+  document.getElementById('cp-overlay').classList.add('open');
+  _cpCarregarColaboradores();
+}
+function fecharModalCartaoPonto(){
+  if (_cpEnviando) return; // não deixa fechar no meio do envio em lote
+  document.getElementById('cp-overlay').classList.remove('open');
+}
+
+function _cpOnFilesSelected(fileList){
+  var files = Array.prototype.slice.call(fileList||[]);
+  if (!files.length) return;
+  _cpCarregarColaboradores().then(function(mapaColab){
+    files.forEach(function(file){
+      var matricula = String(file.name.split('_')[0]||'').trim();
+      var colab = mapaColab[matricula];
+      _cpArquivos.push({
+        file: file, matricula: matricula,
+        nome: colab ? colab.nome : '',
+        status: colab ? 'ok' : 'bad',
+        motivo: colab ? '' : 'Matrícula "'+esc(matricula)+'" não encontrada'
+      });
+    });
+    _cpRenderFileList();
+  });
+}
+
+function _cpRenderFileList(){
+  var box = document.getElementById('cp-file-list');
+  box.innerHTML = _cpArquivos.map(function(item, i){
+    var cls = item.status === 'ok' ? 'cp-ok' : 'cp-bad';
+    var meta = item.status === 'ok'
+      ? ('Matrícula '+esc(item.matricula)+' · '+esc(item.nome))
+      : esc(item.motivo);
+    var icone = item.status === 'ok'
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    return '<div class="cp-file-row '+cls+'">'+
+      '<span class="cp-file-icon">'+icone+'</span>'+
+      '<span class="cp-file-info">'+
+        '<span class="cp-file-nome">'+esc(item.file.name)+'</span>'+
+        '<span class="cp-file-meta">'+meta+' · '+_cpFmtBytes(item.file.size)+'</span>'+
+      '</span>'+
+      '<button onclick="_cpRemoverArquivo('+i+')" title="Remover" style="width:22px;height:22px;background:transparent;border:0;cursor:pointer;color:var(--muted);flex-shrink:0;display:flex;align-items:center;justify-content:center;">'+
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'+
+      '</button>'+
+    '</div>';
+  }).join('');
+  var ok = _cpArquivos.filter(function(i){ return i.status === 'ok'; }).length;
+  var bad = _cpArquivos.length - ok;
+  var summary = document.getElementById('cp-summary');
+  if (_cpArquivos.length) {
+    summary.style.display = 'block';
+    summary.textContent = ok+' arquivo(s) reconhecido(s)'+(bad ? ' · '+bad+' não reconhecido(s)' : '');
+  } else {
+    summary.style.display = 'none';
+  }
+}
+function _cpRemoverArquivo(i){ _cpArquivos.splice(i,1); _cpRenderFileList(); }
+
+/* Núcleo compartilhado por arquivo: sobe o PDF já pronto (sem gerar nada aqui,
+   ao contrário dos termos de beneficios.html/admissao.html) e roda o mesmo
+   pipeline de pendência + envio pra assinatura real (ver docs/INTEGRACAO-DOCUMENTOS.md). */
+function _cpEnviarUmArquivo(item, tipoId, competencia, emitidoPor){
+  return new Promise(function(resolve, reject){
+    comSupa(function(supa){
+      var arquivoPath = 'docs/'+_cpUuid()+'.pdf';
+      supa.storage.from('assinaturas').upload(arquivoPath, item.file, { upsert:true, contentType:'application/pdf' }).then(function(rUp){
+        if (rUp.error) throw rUp.error;
+        return supa.rpc('colaborador_documento_pendente_assinatura_sandbox_salvar', {
+          p_matricula: item.matricula, p_tipo_id: tipoId, p_nome_arquivo: item.file.name, p_link: arquivoPath,
+          p_mime: 'application/pdf', p_tamanho: item.file.size, p_enviado_por: emitidoPor,
+          p_link_bucket: 'assinaturas', p_competencia: competencia
+        });
+      }).then(function(rRow){
+        if (rRow.error) throw rRow.error;
+        var linha = rRow.data;
+        var tituloVersionado = CP_TIPO_NOME+' — '+competencia+(linha.versao > 1 ? ' (v'+linha.versao+')' : '');
+        return TP().rpc('docs_enviar_para_assinatura', {
+          p_matricula: item.matricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
+          p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
+          p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true,
+          p_atribuido_por: emitidoPor
+        }).then(function(rEnvio){
+          if (rEnvio.error) throw rEnvio.error;
+          var envio = rEnvio.data;
+          if (!envio || !envio.ok) throw new Error((envio && envio.erro) || 'Falha ao enviar pra assinatura.');
+          return supa.rpc('colaborador_documento_definir_atribuicao_sandbox', {
+            p_id: linha.id, p_assinatura_atribuicao_id: envio.atribuicao_id
+          });
+        });
+      }).then(function(rLink){
+        if (rLink && rLink.error) throw rLink.error;
+        resolve();
+      }).catch(reject);
+    });
+  });
+}
+
+function enviarCartaoPontoLote(){
+  if (_cpEnviando) return;
+  var errBox = document.getElementById('cp-error');
+  errBox.style.display = 'none';
+  var competencia = (document.getElementById('cp-competencia')||{}).value||'';
+  if (!competencia) { errBox.style.display='block'; errBox.textContent='Selecione a competência.'; return; }
+  var validos = _cpArquivos.filter(function(i){ return i.status === 'ok'; });
+  if (!validos.length) { errBox.style.display='block'; errBox.textContent='Anexe ao menos um arquivo reconhecido.'; return; }
+
+  var _sess = window.__lideresSession || (function(){ try { return JSON.parse(localStorage.getItem('lideres_session')); } catch(e){ return null; } })();
+  var emitidoPor = (_sess && _sess.displayName) ? _sess.displayName : '—';
+
+  _cpEnviando = true;
+  var btn = document.getElementById('cp-btn');
+  btn.disabled = true;
+  var progresso = document.getElementById('cp-progress');
+  progresso.style.display = 'block';
+
+  var falhas = [];
+  var total = validos.length;
+  _cpCarregarTipoId().then(function(tipoId){
+    return validos.reduce(function(promise, item, idx){
+      return promise.then(function(){
+        progresso.textContent = 'Enviando '+(idx+1)+'/'+total+'… ('+item.matricula+' — '+item.nome+')';
+        return _cpEnviarUmArquivo(item, tipoId, competencia, emitidoPor).catch(function(err){
+          falhas.push({ item: item, erro: (err && err.message) || String(err) });
+        });
+      });
+    }, Promise.resolve());
+  }).then(function(){
+    _cpEnviando = false;
+    btn.disabled = false;
+    btn.textContent = 'Enviar para Assinatura Digital';
+    progresso.style.display = 'none';
+    var okCount = total - falhas.length;
+    if (!falhas.length) {
+      toast(okCount+' cartão(ões) de ponto enviado(s) para assinatura digital!');
+      fecharModalCartaoPonto();
+    } else {
+      errBox.style.display = 'block';
+      errBox.innerHTML = okCount+' de '+total+' enviado(s). Falharam: '+
+        falhas.map(function(f){ return esc(f.item.matricula)+' ('+esc(f.erro)+')'; }).join(', ');
+    }
+  }, function(err){
+    _cpEnviando = false;
+    btn.disabled = false;
+    btn.textContent = 'Enviar para Assinatura Digital';
+    progresso.style.display = 'none';
+    errBox.style.display = 'block';
+    errBox.textContent = 'Erro: '+((err && err.message) || String(err));
+  });
 }
 
 /* ── Drawer ──────────────────────────────────────────────────────────────── */
