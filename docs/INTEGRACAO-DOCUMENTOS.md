@@ -136,6 +136,19 @@ compartilhado por unidade, sem colaborador individual pra assinar) ficou de
 fora — não é um documento que alguém assina pessoalmente, não faz sentido no
 modelo atual.
 
+Feito (2026-09-06): `beneficios.html` também — o Contrato de Mútuo Financeiro
+com Autorização de Desconto em Folha (o único termo com checkbox reativo no
+modal hoje; Vale-Transporte e Assistência Médica seguem só impressão, sem
+doc_tipos cadastrado). Novo `doc_tipos`: "Contrato de Mútuo Financeiro com
+Autorização de Desconto em Folha" (mesma categoria, `requer_assinatura=true`).
+Esse contrato não tinha bloco de assinatura nenhum antes (nem físico) — foi
+adicionado junto, agrupado com o último parágrafo + data num bloco só
+(`.rp-fechamento`, `page-break-inside:avoid`) pra reduzir o risco de a
+assinatura isolar sozinha numa página quase em branco quando o contrato não
+cabe inteiro numa página (mesmo problema já visto em termos longos como
+Código de Ética — aqui mitigado agrupando o fechamento, não com o cálculo de
+altura restante que ainda fica pra fazer se o caso persistir).
+
 **Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
 é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões
 lado a lado (mesmo padrão de `admissao.html` com "Gerar PDF" +
