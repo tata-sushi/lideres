@@ -1,0 +1,119 @@
+name: TATA House source-unit feedback E2E v3 temporary
+
+on:
+  push:
+    branches:
+      - feat/tatahouse-governanca-phase1
+
+permissions:
+  contents: write
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tatahouse-governanca-phase1
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: cesarspichencoff-cmyk/tata-house.github.io
+          ref: feat/house-governanca-phase1
+          path: house
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build House feature without integration backend
+        working-directory: house
+        run: |
+          npm ci
+          npm run build
+      - name: Install Chromium
+        run: |
+          mkdir -p /tmp/source-unit-e2e
+          cd /tmp/source-unit-e2e
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Prepare exact-origin proof
+        run: |
+          cat > /tmp/source-unit-cert.cnf <<'EOF'
+          [req]
+          distinguished_name=req_dn
+          x509_extensions=v3_req
+          prompt=no
+          [req_dn]
+          CN=tata-house-source-unit-e2e
+          [v3_req]
+          subjectAltName=@alt_names
+          [alt_names]
+          DNS.1=tata-house.github.io
+          DNS.2=lideres.tatasushi.tech
+          EOF
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 -keyout /tmp/source-unit-key.pem -out /tmp/source-unit-cert.pem -config /tmp/source-unit-cert.cnf >/dev/null 2>&1
+          cat > /tmp/source-unit-e2e.cjs <<'NODE'
+          const https=require('https'),fs=require('fs'),path=require('path');
+          const mode=process.argv[2],root=process.env.GITHUB_WORKSPACE,houseRoot=path.join(root,'house','out');
+          const gateStub=`(function(){document.documentElement.dataset.auth='ok';window.GOV_PAGE_ID='governanca-kpis-tatahouse-cardapio';window.__lideresSession={displayName:'E2E',perfil:'gestao'};window.__E2E_DIA={dia_id:'source-unit-dia-1',data:'2026-09-06',unidade:'Itaim',status:'aguardando_preparo',resumo:'Frango Fonte E2E',aprovado_em:'2026-09-05T18:00:00Z',comprado_em:null,recebido_em:null,n_restricoes:0,almoco:60,jantar:0,marmitas:10,obs:'',itens:[{tipo:'principal',item:'Frango Fonte E2E',qtd:null,un:'',custo:null,insumos:[]},{tipo:'guarnicao',item:'Arroz E2E',qtd:null,un:'',custo:null,insumos:[]},{tipo:'salada',item:'Folhas E2E',qtd:null,un:'',custo:null,insumos:[]}]};function result(data){return Promise.resolve({data,error:null})}window.__lideresSupa={schema:function(){return{rpc:function(name,args){if(name==='cozinhas_lista')return result([{chave:'Itaim',nome:'TATÁ House - Itaim'},{chave:'Pinheiros',nome:'TATÁ House - Pinheiros'}]);if(name==='refeicoes_elab_primeira_data')return result('2026-09-06');if(name==='refeicoes_processamento')return result([JSON.parse(JSON.stringify(window.__E2E_DIA))]);return result([])},from:function(){return{select:function(){return result([])}}}}}}})();`;
+          function mime(f){if(f.endsWith('.html'))return'text/html; charset=utf-8';if(f.endsWith('.js')||f.endsWith('.mjs'))return'application/javascript; charset=utf-8';if(f.endsWith('.css'))return'text/css; charset=utf-8';if(f.endsWith('.json'))return'application/json; charset=utf-8';if(f.endsWith('.png'))return'image/png';return'application/octet-stream'}
+          function send(res,c,b,t='text/plain; charset=utf-8'){res.writeHead(c,{'content-type':t,'cache-control':'no-store'});res.end(b)}
+          function serve(res,base,p){let rel=decodeURIComponent(p);while(rel.startsWith('/'))rel=rel.slice(1);if(!rel)rel='index.html';if(rel.endsWith('/'))rel+='index.html';const br=path.resolve(base),f=path.resolve(base,rel);if(!f.startsWith(br+path.sep)&&f!==br)return send(res,403,'forbidden');try{if(!fs.statSync(f).isFile())return send(res,404,'not found');res.writeHead(200,{'content-type':mime(f),'cache-control':'no-store'});fs.createReadStream(f).pipe(res)}catch{return send(res,404,'not found')}}
+          function server(){https.createServer({key:fs.readFileSync('/tmp/source-unit-key.pem'),cert:fs.readFileSync('/tmp/source-unit-cert.pem')},(req,res)=>{const host=(req.headers.host||'').split(':')[0],p=new URL(req.url,'https://'+host).pathname;if(host==='lideres.tatasushi.tech'){if(p==='/compliance/gate.js')return send(res,200,gateStub,'application/javascript; charset=utf-8');return serve(res,root,p)}if(host==='tata-house.github.io')return serve(res,houseRoot,p);return send(res,421,'unknown host')}).listen(443,'0.0.0.0',()=>console.log('SOURCE_UNIT_SERVER=READY'))}
+          async function test(){
+            const {chromium}=require('/tmp/source-unit-e2e/node_modules/playwright');
+            const browser=await chromium.launch({headless:true,args:['--host-resolver-rules=MAP tata-house.github.io 127.0.0.1, MAP lideres.tatasushi.tech 127.0.0.1','--no-proxy-server']});
+            const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:390,height:844},timezoneId:'America/Sao_Paulo'});
+            const writes=[]; context.on('request',r=>{if(!['GET','HEAD','OPTIONS'].includes(r.method()))writes.push({method:r.method(),url:r.url()})});
+            const leaders=await context.newPage(); leaders.on('dialog',d=>d.dismiss());
+            await leaders.goto('https://lideres.tatasushi.tech/compliance/kpis/tatahouse/cardapio.html',{waitUntil:'domcontentloaded'});
+            await leaders.locator('.tab-btn[data-tab="processamento"]').click();
+            await leaders.waitForFunction(()=>document.querySelectorAll('.btn-proc-dia').length>0);
+            await leaders.locator('#pf-unidade').selectOption('Itaim');
+            await leaders.waitForFunction(()=>document.querySelectorAll('.btn-proc-dia').length>0);
+            await leaders.locator('.btn-proc-dia').first().click();
+            const popupPromise=context.waitForEvent('page'); await leaders.locator('#md-publicar-house').click();
+            const house=await popupPromise; house.on('dialog',d=>d.dismiss()); await house.waitForLoadState('domcontentloaded');
+            await leaders.waitForFunction(()=>{const t=document.getElementById('md-house-publish-status')?.textContent||'';return t.startsWith('Publicado:')&&t.includes('ACK ')},null,{timeout:15000});
+            console.log('SOURCE_UNIT_PUBLISH_ACK=PASS');
+            await house.waitForFunction(()=>document.body.innerText.includes('Frango Fonte E2E'),null,{timeout:15000});
+            const source=await house.evaluate(()=>JSON.parse(localStorage.getItem('tata.governanca.unidade-fonte.v1')||'null'));
+            if(!source||source.data!=='2026-09-06'||source.unidadeFonte!=='Itaim')throw new Error('source-unit context mismatch: '+JSON.stringify(source));
+            console.log('SOURCE_UNIT_CONTEXT=PASS',JSON.stringify(source));
+            await house.getByRole('button',{name:/Ótimo/i}).click(); await house.getByRole('button',{name:/Enviar avaliação/i}).click();
+            await house.waitForFunction(()=>{try{return JSON.parse(localStorage.getItem('tata.governanca.outbox.v1')||'[]').length===1}catch{return false}},null,{timeout:5000});
+            const first=await house.evaluate(()=>JSON.parse(localStorage.getItem('tata.governanca.outbox.v1'))[0]);
+            if(!first||first.tipo!=='avaliacao.prato'||first.origem!=='tata-house'||first.data!=='2026-09-06'||first.unidade!=='Itaim'||first.prato!=='Frango Fonte E2E'||first.voto!=='bom')throw new Error('Itaim outbox mismatch: '+JSON.stringify(first));
+            console.log('SOURCE_UNIT_VOTE_OUTBOX=PASS',JSON.stringify(first));
+            await house.evaluate(()=>{localStorage.removeItem('tata.governanca.unidade-fonte.v1');localStorage.removeItem('tata.governanca.outbox.v1')}); await house.reload({waitUntil:'domcontentloaded'});
+            await house.waitForFunction(()=>document.body.innerText.includes('Frango Fonte E2E'),null,{timeout:10000});
+            await house.getByRole('button',{name:/Regular/i}).click(); await house.getByRole('button',{name:/Enviar avaliação/i}).click();
+            await house.waitForFunction(()=>{try{return JSON.parse(localStorage.getItem('tata.governanca.outbox.v1')||'[]').length===1}catch{return false}},null,{timeout:5000});
+            const fallback=await house.evaluate(()=>JSON.parse(localStorage.getItem('tata.governanca.outbox.v1'))[0]);
+            if(!fallback||fallback.unidade!=='tata-house'||fallback.voto!=='ok'||fallback.prato!=='Frango Fonte E2E')throw new Error('legacy fallback mismatch: '+JSON.stringify(fallback));
+            console.log('SOURCE_UNIT_FALLBACK=PASS',JSON.stringify(fallback));
+            if(await house.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth))throw new Error('mobile overflow detected');
+            const externalWrites=writes.filter(x=>!x.url.startsWith('https://lideres.tatasushi.tech/')&&!x.url.startsWith('https://tata-house.github.io/'));
+            if(externalWrites.length)throw new Error('unexpected external write: '+JSON.stringify(externalWrites));
+            console.log('SOURCE_UNIT_NO_EXTERNAL_WRITE=PASS'); console.log('SOURCE_UNIT_MOBILE=PASS'); await browser.close();
+          }
+          if(mode==='server')server();else if(mode==='test')test().catch(e=>{console.error(e);process.exit(1)});else process.exit(2);
+          NODE
+      - name: Start exact-origin HTTPS harness
+        run: |
+          sudo -E node /tmp/source-unit-e2e.cjs server >/tmp/source-unit-server.log 2>&1 &
+          for i in $(seq 1 20); do if curl --noproxy '*' --resolve lideres.tatasushi.tech:443:127.0.0.1 -ksSf https://lideres.tatasushi.tech/compliance/kpis/tatahouse/cardapio.html >/dev/null; then exit 0; fi; sleep 1; done
+          cat /tmp/source-unit-server.log; exit 1
+      - name: Prove full source-unit roundtrip
+        run: node /tmp/source-unit-e2e.cjs test
+      - name: Remove temporary E2E workflow
+        if: always()
+        run: |
+          git config user.name "cesarspichencoff-cmyk"
+          git config user.email "cesar.spichencoff@gmail.com"
+          rm -f .github/workflows/tatahouse-source-unit-vote-e2e-v3-temp.yml
+          git add -A .github/workflows/tatahouse-source-unit-vote-e2e-v3-temp.yml
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "test(tatahouse): remove temporary source-unit E2E v3"
+          git push origin HEAD:feat/tatahouse-governanca-phase1
