@@ -9,6 +9,7 @@
   var HOUSE_ORIGIN = 'https://tata-house.github.io';
   var HOUSE_AVALIAR_URL = HOUSE_ORIGIN + '/avaliar.html';
   var PLANEJADOR_GOVERNANCA_URL = '/compliance/kpis/tatahouse/planejador-v2.html';
+  var CENTRAL_GOVERNANCA_URL = '/compliance/kpis/tatahouse/central.html';
 
   var MSG_READY = 'tata-house:governanca:ready:v1';
   var MSG_CARDAPIO = 'tata-house:governanca:cardapio:v1';
@@ -96,8 +97,9 @@
   }
 
   /**
-   * Torna o Planejador VÉRTICE 2.0 descobrível dentro da página oficial
-   * sem tocar no menu global nem alterar o fluxo de aprovação existente.
+   * Torna o Planejador VÉRTICE 2.0 e a Central TATÁ House descobríveis dentro
+   * da página oficial sem tocar no menu global nem criar uma segunda cópia do
+   * produto House.
    */
   function instalarAtalhoPlanejador(doc) {
     doc = doc || (global && global.document);
@@ -107,7 +109,7 @@
 
     var faixa = doc.createElement('section');
     faixa.id = 'tatahouse-planejador-v2-entry';
-    faixa.setAttribute('aria-label', 'Planejador inteligente do TATÁ House');
+    faixa.setAttribute('aria-label', 'TATÁ House conectado à Governança');
     faixa.style.cssText = [
       'max-width:1100px',
       'margin:10px auto 4px',
@@ -125,23 +127,46 @@
       'border:1px solid rgba(124,150,0,.25)',
       'border-radius:14px',
       'background:linear-gradient(135deg,#f7fbe9 0%,#ffffff 72%)',
-      'box-shadow:0 1px 4px rgba(0,0,0,.04)'
+      'box-shadow:0 1px 4px rgba(0,0,0,.04)',
+      'flex-wrap:wrap'
     ].join(';');
 
     var copy = doc.createElement('div');
-    copy.style.cssText = 'min-width:0;flex:1';
+    copy.style.cssText = 'min-width:220px;flex:1';
     var rotulo = doc.createElement('div');
-    rotulo.textContent = 'NOVO · PLANEJADOR VÉRTICE 2.0';
+    rotulo.textContent = 'TATÁ HOUSE × GOVERNANÇA';
     rotulo.style.cssText = 'font:600 9px DM Mono,monospace;letter-spacing:1.1px;color:#617900;margin-bottom:4px';
     var titulo = doc.createElement('div');
-    titulo.textContent = 'Planeje com inteligência antes de aprovar';
+    titulo.textContent = 'Um produto, mais inteligência, uma governança';
     titulo.style.cssText = 'font-size:14px;font-weight:700;color:#25282d;line-height:1.25';
     var desc = doc.createElement('div');
-    desc.textContent = 'Histórico, aceitação, custo, rotação e alertas do motor do House — com decisão humana no final.';
+    desc.textContent = 'Abra o House oficial sem duplicar estado ou use o planejador inteligente antes da decisão humana.';
     desc.style.cssText = 'font-size:11px;color:#6f7278;line-height:1.45;margin-top:3px';
     copy.appendChild(rotulo);
     copy.appendChild(titulo);
     copy.appendChild(desc);
+
+    var acoes = doc.createElement('div');
+    acoes.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+
+    var central = doc.createElement('a');
+    central.href = CENTRAL_GOVERNANCA_URL;
+    central.textContent = 'Abrir Central House';
+    central.style.cssText = [
+      'display:inline-flex',
+      'align-items:center',
+      'justify-content:center',
+      'min-height:38px',
+      'padding:0 14px',
+      'border-radius:10px',
+      'border:1px solid #d6d9cc',
+      'background:#ffffff',
+      'color:#35383f',
+      'font:700 10px DM Mono,monospace',
+      'letter-spacing:.25px',
+      'text-decoration:none',
+      'white-space:nowrap'
+    ].join(';');
 
     var link = doc.createElement('a');
     link.href = PLANEJADOR_GOVERNANCA_URL;
@@ -161,8 +186,10 @@
       'white-space:nowrap'
     ].join(';');
 
+    acoes.appendChild(central);
+    acoes.appendChild(link);
     caixa.appendChild(copy);
-    caixa.appendChild(link);
+    caixa.appendChild(acoes);
     faixa.appendChild(caixa);
 
     var header = doc.querySelector('.header');
@@ -268,6 +295,7 @@
     houseOrigin: HOUSE_ORIGIN,
     houseUrl: HOUSE_AVALIAR_URL,
     planejadorUrl: PLANEJADOR_GOVERNANCA_URL,
+    centralUrl: CENTRAL_GOVERNANCA_URL,
     criarSnapshot: criarSnapshot,
     criarSnapshotDoCardapioDia: criarSnapshotDoCardapioDia,
     instalarAtalhoPlanejador: instalarAtalhoPlanejador,
