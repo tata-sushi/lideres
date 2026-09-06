@@ -203,6 +203,7 @@
     var janela = null;
     var corr = correlationId();
     var timeoutMs = Number(opcoes.timeoutMs) > 0 ? Number(opcoes.timeoutMs) : 12000;
+    var unidadeFonte = texto(opcoes.unidadeFonte);
     var aoStatus = typeof opcoes.aoStatus === 'function' ? opcoes.aoStatus : function () {};
 
     return new Promise(function (resolve, reject) {
@@ -236,6 +237,7 @@
           janela.postMessage({
             type: MSG_CARDAPIO,
             correlationId: corr,
+            ...(unidadeFonte ? { sourceUnit: unidadeFonte } : {}),
             payload: snapshot
           }, HOUSE_ORIGIN);
           aoStatus('enviado');
