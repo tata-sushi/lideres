@@ -8,6 +8,7 @@ const evidence = JSON.parse(fs.readFileSync(path.join(__dirname, 'house_governan
 
 assert.equal(evidence.contrato, 'tata-house-governanca-live-access-evidence');
 assert.equal(evidence.versao, 1);
+assert.ok(evidence.fechamentoObservadoEm, 'evidencia live precisa registrar instante de fechamento observado');
 assert.equal(evidence.classificacaoGlobal, 'LIVE_UNAUTHENTICATED_DENIAL_PROVEN__AUTHENTICATED_SESSION_UNKNOWN');
 assert.equal(evidence.supabase.projectRef, 'aoqsbusfrffapjglpqjk');
 assert.equal(evidence.supabase.schemaOperacional, 'tata_plus');
@@ -17,9 +18,14 @@ assert.match(evidence.supabase.regraArquitetural, /window\.__lideresSupa/);
 assert.equal(evidence.fonteCanonica.vertice.branch, 'vertice-active');
 assert.equal(evidence.fonteCanonica.vertice.sha, 'efc574cb4f90ab513e210dc524517af10ac162bd');
 assert.equal(evidence.fonteCanonica.houseProducao.sha, '6dc04827b195aaca9d4653618e5a40ca64a1a6f4');
-assert.equal(evidence.fonteCanonica.lideresProducao.sha, '4d6b0a853cba32c2e5fb1626dc3b2b7b7e429813');
-assert.match(evidence.fonteCanonica.lideresProducao.notaConcorrencia, /beneficios\.html/);
-assert.equal(evidence.fonteCanonica.houseFeature.sha, 'b19144a59150784ba2e716800bda2ac01676b701');
+const lideresProd = evidence.fonteCanonica.lideresProducaoObservadaNoFechamento;
+assert.equal(lideresProd.sha, '43c929374db324bf71bce770c1188b729d9be620');
+assert.match(lideresProd.semanticaTemporal, /observado no fechamento/i);
+assert.match(lideresProd.semanticaTemporal, /nao e uma afirmacao de imutabilidade futura/i);
+assert.match(lideresProd.notaConcorrencia, /8 commits/);
+assert.match(lideresProd.notaConcorrencia, /beneficios\.html/);
+assert.equal(evidence.fonteCanonica.houseFeatureObservada.sha, 'b19144a59150784ba2e716800bda2ac01676b701');
+assert.match(evidence.fonteCanonica.houseFeatureObservada.semanticaTemporal, /trabalho concorrente posterior/i);
 assert.equal(evidence.fonteCanonica.lideresFeatureAntesDesteRegistro.sha, 'd17a5d178956ccf152d579d11ed5bd15c2280111');
 
 const openApi = evidence.provasLive.find((p) => p.run === 34049919850);
