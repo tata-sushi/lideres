@@ -9,6 +9,8 @@ const evaluator = require(path.join(base, 'house_governanca_readiness_v1.js'));
 const manifesto = JSON.parse(fs.readFileSync(path.join(base, 'house_governanca_readiness_v1.json'), 'utf8'));
 const central = fs.readFileSync(path.join(base, 'central.html'), 'utf8');
 const painel = fs.readFileSync(path.join(base, 'prontidao.html'), 'utf8');
+const preflightExpectations = JSON.parse(fs.readFileSync(path.join(base, 'house_governanca_live_readonly_expectations_v1.json'), 'utf8'));
+const promotionMap = JSON.parse(fs.readFileSync(path.join(base, 'house_governanca_promotion_map_v1.json'), 'utf8'));
 
 function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
@@ -48,10 +50,25 @@ assert.match(gateRpc.resumo || '', /SECURITY DEFINER/, 'semântica histórica de
 assert.match(gateRpc.resumo || '', /upsert do dia \+ substituição dos itens/, 'semântica histórica deve registrar upsert + substituição dos itens');
 assert.match(gateRpc.resumo || '', /insumos por prato/, 'semântica histórica deve registrar persistência de insumos');
 assert.match(gateRpc.resumo || '', /transição aguardando_aprovacao→aguardando_compra/, 'semântica histórica deve registrar a transição documentada');
-assert.match(gateRpc.resumo || '', /corpo SQL atual/, 'limite de prova live precisa permanecer explícito');
-for (const evidence of ['#2293', '#2324', '#2304', '#2327', '88d20d1f']) {
-  assert.match(gateRpc.evidencia || '', new RegExp(evidence.replace('#', '\\#')), `evidência histórica ausente: ${evidence}`);
+assert.match(gateRpc.resumo || '', /probe catalog-only/i, 'RPC live deve registrar que o probe catalog-only está preparado');
+assert.match(gateRpc.resumo || '', /aoqsbusfrffapjglpqjk/, 'RPC live deve manter o project ref alvo explícito');
+for (const evidence of ['#2293', '#2324', '#2304', '#2327', '88d20d1f', '34030492627', '34030605413']) {
+  assert.match(gateRpc.evidencia || '', new RegExp(evidence.replace('#', '\\#')), `evidência ausente: ${evidence}`);
 }
+
+const liveTransport = manifesto.gates.find((g) => g.id === 'integration_live_transport');
+assert.equal(liveTransport.status, 'DEFERRED');
+assert.match(liveTransport.resumo || '', /34020542078/, 'feed read-only controlado deve permanecer registrado');
+assert.match(liveTransport.resumo || '', /aoqsbusfrffapjglpqjk/, 'bloqueio de acesso ao projeto correto deve permanecer explícito');
+
+const livePermissions = manifesto.gates.find((g) => g.id === 'live_permission_data_verification');
+assert.equal(livePermissions.status, 'SIMULATION');
+assert.match(livePermissions.resumo || '', /falta de permissão/i, 'falta de permissão live deve permanecer explícita');
+
+const liveSchema = manifesto.gates.find((g) => g.id === 'legacy_evaluation_schema_live');
+assert.equal(liveSchema.status, 'UNKNOWN');
+assert.match(liveSchema.resumo || '', /catalog-only/i, 'schema live deve registrar preflight preparado');
+assert.match(liveSchema.resumo || '', /sem ler linhas de negócio/i, 'preflight deve permanecer metadata-only');
 
 const prodBlockers = new Set(todos.resultados.production_promotion.blockers.map((g) => g.id));
 assert.equal(prodBlockers.has('pdfjs_runtime_security'), false, 'PDF.js corrigido não pode continuar como bloqueador de produção');
@@ -96,12 +113,21 @@ assert.match(painel, /overflow-wrap:anywhere/, 'evidências longas precisam queb
 assert.equal(manifesto.fontes.houseProducao.sha, '6dc04827b195aaca9d4653618e5a40ca64a1a6f4');
 assert.equal(manifesto.fontes.lideresProducao.sha, '88d20d1fa24591234d3276ffac380dd63eefa8f5');
 assert.equal(manifesto.fontes.vertice.branch, 'vertice-active');
-assert.equal(manifesto.fontes.houseFeature.sha, '5779b4a501953d719f14029cf9be9fac39e98c93');
-assert.match(manifesto.fontes.houseFeature.nota || '', /PDF\.js 6\.2\.108/, 'fonte House precisa registrar a remediação PDF.js');
+assert.equal(manifesto.fontes.houseFeature.sha, 'e7b3b791750ba85b1da2f6f229a3168e69c0a217');
+assert.match(manifesto.fontes.houseFeature.nota || '', /não é unidade promovível inteira/i, 'fonte House deve registrar que a branch inteira não é promovível');
+assert.equal(manifesto.fontes.lideresFeature.sha, 'c97cc4399ed15d628e1caaacab24fef55f1eb51f');
 assert.equal(manifesto.evidenceHead, 'd74a477af160a1abd44d37f5dd6c3eecd0a83f9b');
 assert.match(manifesto.evidenceHeadNota || '', /fronteira backend-ready/i, 'semântica do evidenceHead backend-ready precisa permanecer explícita');
 assert.match(manifesto.evidenceHeadNota || '', /34017747800/, 'nota de evidência deve registrar a prova PDF.js separadamente');
-assert.match(manifesto.evidenceHeadNota || '', /SQL live atual permanece não carregado/i, 'nota de evidência deve preservar limite de prova do RPC live');
+assert.match(manifesto.evidenceHeadNota || '', /34020542078/, 'nota de evidência deve registrar o feed read-only controlado');
+assert.match(manifesto.evidenceHeadNota || '', /34030492627/, 'nota de evidência deve registrar o preflight catalog-only');
+assert.match(manifesto.evidenceHeadNota || '', /aoqsbusfrffapjglpqjk/, 'nota de evidência deve registrar o projeto live alvo');
+
+assert.equal(preflightExpectations.projectRefEsperado, 'aoqsbusfrffapjglpqjk');
+assert.ok(preflightExpectations.funcoes.every((f) => f.podeInvocarNestePreflight === false), 'readiness não pode incorporar preflight que invoque RPC');
+assert.ok(preflightExpectations.tabelas.every((t) => t.lerLinhas === false), 'readiness não pode incorporar preflight que leia dados de negócio');
+assert.equal(promotionMap.autorizacaoProducao, false, 'mapa de promoção nunca concede autorização');
+assert.match(promotionMap.regraPrincipal, /NUNCA promover a branch House inteira/i);
 
 console.log('READINESS_MANIFEST=PASS');
 console.log('READINESS_PRE_SUPABASE=PASS');
@@ -109,6 +135,8 @@ console.log('READINESS_BACKEND_LIVE_BLOCKED=PASS');
 console.log('READINESS_PDFJS_SECURITY=PASS');
 console.log('READINESS_LEGACY_RPC_HISTORICAL=KNOWN');
 console.log('READINESS_LEGACY_RPC_LIVE=UNKNOWN');
+console.log('READINESS_LIVE_ACCESS_BLOCKED=PASS');
+console.log('READINESS_LIVE_PREFLIGHT_PREPARED=PASS');
 console.log('READINESS_LEGACY_RPC_FAIL_CLOSED=PASS');
 console.log('READINESS_PRODUCTION_BLOCKED=PASS');
 console.log('READINESS_PLANNER_WRITE_BLOCKED=PASS');
@@ -116,3 +144,4 @@ console.log('READINESS_FAIL_CLOSED=PASS');
 console.log('READINESS_CENTRAL_LINK=PASS');
 console.log('READINESS_BROWSER_EVIDENCE=PASS');
 console.log('READINESS_EVIDENCE_HEAD_SEMANTICS=PASS');
+console.log('READINESS_PROMOTION_MAP=PASS');
