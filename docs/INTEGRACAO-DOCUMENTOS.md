@@ -315,6 +315,19 @@ deliberadamente diferente do `_docFmtPeriodo(evento)` já existente (usado
 pros eventos de ausência/sanção, assinatura de função diferente), que
 tinha o mesmo nome e foi pego de sobreposição na primeira tentativa.
 
+**Refinamento (2026-09-06):** a mesma nomenclatura foi estendida pra **toda**
+linha de Cartão de Ponto no checklist, não só a que já tem documento
+enviado — inclusive as ainda "Pendente" mostram o período assumido pela
+folha (dia 21 do mês anterior a dia 20 do mês de competência, novo helper
+`_docPeriodoPadraoCartaoPonto(comp)`) em vez de "Mês/Ano" genérico. Assim
+que um documento real bate, `_docItemHtml` troca esse período assumido
+pelo período de verdade gravado na linha (podem não coincidir se RH
+enviar um período fora do padrão). Escopo: só a categoria "Cartão de
+Ponto" — o resto do catálogo recorrente continua com "Mês/Ano" normal.
+De passagem, o modal "pasta do colaborador" (`doc-colab-overlay`) ganhou
++20% de largura (480px → 576px) pra caber os rótulos mais longos sem
+quebrar linha.
+
 **Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
 é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões
 lado a lado (mesmo padrão de `admissao.html` com "Gerar PDF" +

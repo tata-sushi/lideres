@@ -388,7 +388,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <main class="content" id="content"></main>
 <!-- Modal Gestão de Documentos — pasta do colaborador -->
 <div class="modal-overlay" id="doc-colab-overlay">
-  <div class="modal" style="max-width:480px">
+  <div class="modal" style="max-width:576px">
     <div class="modal-header">
       <div>
         <div class="candidate-name" id="doc-colab-nome">—</div>
@@ -742,6 +742,20 @@ function _docFmtCompetenciaPeriodo(c) {
   return fmt(partes[0]) + ' a ' + fmt(partes[1]);
 }
 
+// Período padrão da folha (dia 21 do mês anterior a dia 20 do mês de competência —
+// "referente" a esse mês), usado como rótulo de toda linha de Cartão de Ponto no
+// checklist, mesmo antes de existir um documento enviado. Se um documento real já
+// bateu, _docItemHtml troca isso pelo período de verdade (pode não ser exatamente
+// dia 21 a 20 — ver _docFmtCompetenciaPeriodo).
+function _docPeriodoPadraoCartaoPonto(comp) {
+  var p = (comp || '').split('-');
+  if (p.length !== 2) return comp || '';
+  var y = parseInt(p[0], 10), m = parseInt(p[1], 10) - 1; // mês da competência, 0-indexado
+  var pad = function (n) { return String(n).padStart(2, '0'); };
+  var fmt = function (d) { return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear(); };
+  return fmt(new Date(y, m - 1, 21)) + ' a ' + fmt(new Date(y, m, 20));
+}
+
 // competencia de uma linha pode ser "YYYY-MM" (mês calendário, a maioria dos
 // recorrentes) OU um período customizado "YYYY-MM-DD_YYYY-MM-DD" (Cartão de
 // Ponto — a folha raramente fecha alinhada ao mês, ver escalas.html). Nesse
@@ -870,7 +884,8 @@ function _docRenderSecoes(matricula) {
     tipos.forEach(function (tipo) {
       if (tipo.periodicidade === 'recorrente') {
         _docMesesDesdeAdmissao(matricula, tipo.intervalo_meses).forEach(function (comp) {
-          html += _docItemHtml(matricula, tipo, comp, tipo.nome + ' — ' + _docFmtCompetencia(comp));
+          var rotuloMes = (categoria === 'Cartão de Ponto') ? _docPeriodoPadraoCartaoPonto(comp) : _docFmtCompetencia(comp);
+          html += _docItemHtml(matricula, tipo, comp, tipo.nome + ' — ' + rotuloMes);
         });
       } else {
         html += _docItemHtml(matricula, tipo, null, tipo.nome);
