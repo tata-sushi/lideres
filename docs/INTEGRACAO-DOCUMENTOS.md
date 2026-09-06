@@ -232,8 +232,9 @@ Feito (2026-09-06): **Cartão de Ponto — upload em lote de documento externo,
 dentro de `escalas.html`.** Fluxo diferente dos anteriores: o PDF já vem
 pronto da folha (não é gerado a partir de HTML aqui), então não passa por
 `html2pdf`/iframe — o `File` sobe pro bucket `assinaturas` como está. Botão
-"Enviar Cartão de Ponto" no drawer abre um modal com seletor de competência
-(mês/ano) e uma área de anexar múltiplos PDFs de uma vez. Cada arquivo casa
+"Enviar Cartão de Ponto" no drawer abre um modal com período apurado
+(data inicial + final, não um seletor de mês/ano — a folha raramente bate
+com o mês calendário) e uma área de anexar múltiplos PDFs de uma vez. Cada arquivo casa
 com um colaborador pela matrícula, sempre a substring antes do primeiro `_`
 no nome do arquivo (padrão fixo da folha: `MATRICULA_NOME_id.pdf`) — casado
 contra `hc_colaboradores_listar` (cobre a empresa inteira, ao contrário de
@@ -246,7 +247,11 @@ is null` fixo), o que quebraria o versionamento de um documento mensal
 recorrente. Adicionado parâmetro opcional `p_competencia text default null`
 e o escopo de versionamento passou a ser `(matricula, tipo_id, competencia)`
 — compatível com todo mundo que já chama essa RPC (supabase-js sempre manda
-named params, então um parâmetro novo com default não quebra ninguém).
+named params, então um parâmetro novo com default não quebra ninguém). O
+valor gravado em `competencia` pro Cartão de Ponto é o período exato
+(`YYYY-MM-DD_YYYY-MM-DD`, início e fim escolhidos no modal), não um
+"YYYY-MM" — o título mostrado no app usa o período por extenso
+("Cartão de Ponto — 21/07/2026 a 20/08/2026").
 
 `doc_tipos` "Cartão de Ponto" já existia no catálogo (categoria "Cartão de
 Ponto", `periodicidade='recorrente'`) mas com `requer_assinatura=false` —
