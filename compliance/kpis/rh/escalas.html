@@ -1473,8 +1473,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="modal-body">
       <div class="esc-field">
-        <span class="esc-field-label">Competência</span>
-        <input class="esc-select" type="month" id="cp-competencia">
+        <span class="esc-field-label">Período apurado</span>
+        <div class="esc-marc-row">
+          <input type="date" class="esc-time" id="cp-periodo-ini">
+          <span class="esc-marc-arrow">&rarr;</span>
+          <input type="date" class="esc-time" id="cp-periodo-fim">
+        </div>
       </div>
       <div class="esc-field">
         <span class="esc-field-label">Arquivos (PDF, um por colaborador)</span>
@@ -1724,6 +1728,10 @@ function _cpFmtBytes(n){
   if (n < 1024*1024) return (n/1024).toFixed(0)+' KB';
   return (n/(1024*1024)).toFixed(1)+' MB';
 }
+function _cpFmtDataBR(iso){
+  var p = String(iso||'').split('-');
+  return p.length === 3 ? p[2]+'/'+p[1]+'/'+p[0] : '';
+}
 
 /* Carrega o quadro de colaboradores (matrícula → nome/status) uma vez só,
    pra casar com o prefixo do nome do arquivo. hc_colaboradores_listar cobre
@@ -1770,11 +1778,16 @@ function abrirModalCartaoPonto(){
   document.getElementById('cp-error').style.display = 'none';
   var btn = document.getElementById('cp-btn');
   btn.disabled = false; btn.textContent = 'Enviar para Assinatura Digital';
-  var comp = document.getElementById('cp-competencia');
-  if (!comp.value) {
+  var ini = document.getElementById('cp-periodo-ini');
+  var fim = document.getElementById('cp-periodo-fim');
+  if (!ini.value && !fim.value) {
+    // Sugestão: mês fechado anterior (a folha raramente bate com o mês calendário
+    // — por isso os dois campos ficam abertos pra edição, isso é só ponto de partida).
     var h = new Date();
-    var m = new Date(h.getFullYear(), h.getMonth()-1, 1); // mês anterior (folha fechada) como sugestão
-    comp.value = m.getFullYear()+'-'+pad(m.getMonth()+1);
+    var iniSug = new Date(h.getFullYear(), h.getMonth()-1, 1);
+    var fimSug = new Date(h.getFullYear(), h.getMonth(), 0);
+    ini.value = isoLocal(iniSug);
+    fim.value = isoLocal(fimSug);
   }
   document.getElementById('cp-overlay').classList.add('open');
   _cpCarregarColaboradores();
@@ -1838,7 +1851,7 @@ function _cpRemoverArquivo(i){ _cpArquivos.splice(i,1); _cpRenderFileList(); }
 /* Núcleo compartilhado por arquivo: sobe o PDF já pronto (sem gerar nada aqui,
    ao contrário dos termos de beneficios.html/admissao.html) e roda o mesmo
    pipeline de pendência + envio pra assinatura real (ver docs/INTEGRACAO-DOCUMENTOS.md). */
-function _cpEnviarUmArquivo(item, tipoId, competencia, emitidoPor){
+function _cpEnviarUmArquivo(item, tipoId, competencia, periodoLabel, emitidoPor){
   return new Promise(function(resolve, reject){
     comSupa(function(supa){
       var arquivoPath = 'docs/'+_cpUuid()+'.pdf';
@@ -1852,7 +1865,7 @@ function _cpEnviarUmArquivo(item, tipoId, competencia, emitidoPor){
       }).then(function(rRow){
         if (rRow.error) throw rRow.error;
         var linha = rRow.data;
-        var tituloVersionado = CP_TIPO_NOME+' — '+competencia+(linha.versao > 1 ? ' (v'+linha.versao+')' : '');
+        var tituloVersionado = CP_TIPO_NOME+' — '+periodoLabel+(linha.versao > 1 ? ' (v'+linha.versao+')' : '');
         return TP().rpc('docs_enviar_para_assinatura', {
           p_matricula: item.matricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
           p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
@@ -1878,8 +1891,12 @@ function enviarCartaoPontoLote(){
   if (_cpEnviando) return;
   var errBox = document.getElementById('cp-error');
   errBox.style.display = 'none';
-  var competencia = (document.getElementById('cp-competencia')||{}).value||'';
-  if (!competencia) { errBox.style.display='block'; errBox.textContent='Selecione a competência.'; return; }
+  var periodoIni = (document.getElementById('cp-periodo-ini')||{}).value||'';
+  var periodoFim = (document.getElementById('cp-periodo-fim')||{}).value||'';
+  if (!periodoIni || !periodoFim) { errBox.style.display='block'; errBox.textContent='Informe o período inicial e final apurado.'; return; }
+  if (periodoFim < periodoIni) { errBox.style.display='block'; errBox.textContent='O período final não pode ser antes do inicial.'; return; }
+  var competencia = periodoIni+'_'+periodoFim; // chave de versionamento — período exato, não "mês calendário" (a folha raramente bate com ele)
+  var periodoLabel = _cpFmtDataBR(periodoIni)+' a '+_cpFmtDataBR(periodoFim);
   var validos = _cpArquivos.filter(function(i){ return i.status === 'ok'; });
   if (!validos.length) { errBox.style.display='block'; errBox.textContent='Anexe ao menos um arquivo reconhecido.'; return; }
 
@@ -1898,7 +1915,7 @@ function enviarCartaoPontoLote(){
     return validos.reduce(function(promise, item, idx){
       return promise.then(function(){
         progresso.textContent = 'Enviando '+(idx+1)+'/'+total+'… ('+item.matricula+' — '+item.nome+')';
-        return _cpEnviarUmArquivo(item, tipoId, competencia, emitidoPor).catch(function(err){
+        return _cpEnviarUmArquivo(item, tipoId, competencia, periodoLabel, emitidoPor).catch(function(err){
           falhas.push({ item: item, erro: (err && err.message) || String(err) });
         });
       });
