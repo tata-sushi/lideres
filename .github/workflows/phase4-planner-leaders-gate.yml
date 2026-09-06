@@ -1,0 +1,53 @@
+name: Phase 4 Planner Leaders Gate
+
+on:
+  push:
+    branches: [feat/tatahouse-governanca-phase1]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax + contract
+        run: |
+          node --check compliance/kpis/tatahouse/house_governanca_planejador_v1.js
+          node -e "JSON.parse(require('fs').readFileSync('compliance/kpis/tatahouse/house_governanca_planejador_contract_v1.json','utf8'))"
+          grep -q "governanca-kpis-tatahouse-cardapio" compliance/kpis/tatahouse/planejador-v2.html
+          grep -q "Ainda não aprovado" compliance/kpis/tatahouse/planejador-v2.html
+          grep -q "não altera o cardápio oficial nem o Supabase" compliance/kpis/tatahouse/planejador-v2.html
+      - name: Deterministic planner bridge
+        run: |
+          node <<'NODE'
+          const api = require('./compliance/kpis/tatahouse/house_governanca_planejador_v1.js');
+          const assert = require('assert');
+          assert.equal(api.houseOrigin, 'https://tata-house.github.io');
+          assert.equal(api.houseUrl, 'https://tata-house.github.io/planejar.html');
+          assert.equal(api.semanaIsoValida('2026-S37'), true);
+          assert.equal(api.semanaIsoValida('2026-S54'), false);
+          assert.deepEqual(api.datasDaSemana('2026-S37'), ['2026-09-07','2026-09-08','2026-09-09','2026-09-10','2026-09-11','2026-09-12','2026-09-13']);
+          const ctx = api.criarContexto({ semanaId: '2026-S37', unidadeFonte: 'Itaim', correlationId: 'corr-1' });
+          assert.equal(api.validarContexto(ctx).correlationId, 'corr-1');
+          const dias = api.datasDaSemana('2026-S37').map((data, indice) => ({
+            indice, data, pessoas: 70, principal: 'Prato ' + indice,
+            guarnicaoFixa: 'Arroz e Feijão', guarnicao: 'Legumes', salada: 'Folhas', sobremesa: 'Fruta'
+          }));
+          const draft = {
+            contrato: 'tata-house-governanca', versao: 1, tipo: 'planejamento.semana.rascunho', origem: 'tata-house',
+            proposalId: 'prop-1', correlationId: 'corr-1', criadoEm: '2026-09-06T15:00:00-03:00',
+            semanaId: '2026-S37', unidadeFonte: 'Itaim', unidadeAlvo: 'tata-house', dias,
+            diagnostico: { podeEnviar: true, bloqueios: [], alertas: ['revisar custo'] }
+          };
+          assert.equal(api.validarDraft(draft).proposalId, 'prop-1');
+          assert.equal(api.validarDraft({ ...draft, dias: dias.map((d,i) => i === 0 ? {...d, data:'2026-09-08'} : d) }), null);
+          const mem = new Map();
+          const storage = { getItem:k => mem.has(k) ? mem.get(k) : null, setItem:(k,v) => mem.set(k,v) };
+          const saved = api.salvarRegistro(draft, storage);
+          assert.equal(saved.proposalId, 'prop-1');
+          assert.equal(api.lerRegistros(storage).length, 1);
+          console.log('PHASE4_LEADERS_PLANNER=PASS');
+          NODE
+      - run: git diff --check HEAD~3..HEAD
