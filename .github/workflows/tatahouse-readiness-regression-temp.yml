@@ -1,0 +1,42 @@
+name: TATA House readiness final regression temporary
+
+on:
+  push:
+    branches: [feat/tatahouse-governanca-phase1]
+    paths:
+      - '.github/workflows/tatahouse-readiness-regression-temp.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tatahouse-governanca-phase1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run permanent readiness regression
+        run: node compliance/kpis/tatahouse/house_governanca_readiness_v1.test.cjs
+      - name: Diff hygiene
+        run: git diff --check
+      - name: Remove temporary workflow only
+        if: always()
+        run: |
+          git config user.name "cesarspichencoff-cmyk"
+          git config user.email "cesar.spichencoff@gmail.com"
+          for attempt in 1 2 3; do
+            git fetch origin feat/tatahouse-governanca-phase1
+            git reset --hard origin/feat/tatahouse-governanca-phase1
+            if [ ! -f .github/workflows/tatahouse-readiness-regression-temp.yml ]; then exit 0; fi
+            git rm -f -- .github/workflows/tatahouse-readiness-regression-temp.yml
+            git commit -m "test(tatahouse): remove temporary readiness final regression"
+            if git push origin HEAD:feat/tatahouse-governanca-phase1; then exit 0; fi
+            sleep 1
+          done
+          exit 1
