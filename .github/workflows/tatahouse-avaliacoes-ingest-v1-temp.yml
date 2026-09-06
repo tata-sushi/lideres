@@ -9,6 +9,8 @@ on:
       - 'compliance/kpis/tatahouse/house_governanca_avaliacoes_ingest_v1.test.cjs'
       - 'compliance/kpis/tatahouse/house_governanca_avaliacoes_local_v1.js'
       - 'compliance/kpis/tatahouse/house_governanca_avaliacoes_receiver_v1.test.cjs'
+      - 'compliance/kpis/tatahouse/house_governanca_avaliacoes_backend_contract_v1.json'
+      - 'compliance/kpis/tatahouse/central.html'
       - '.github/workflows/tatahouse-avaliacoes-ingest-v1-temp.yml'
 
 permissions:
@@ -29,3 +31,26 @@ jobs:
         run: node compliance/kpis/tatahouse/house_governanca_avaliacoes_ingest_v1.test.cjs
       - name: Prove optional durable receiver seam
         run: node compliance/kpis/tatahouse/house_governanca_avaliacoes_receiver_v1.test.cjs
+      - name: Validate frozen backend boundary
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const p='compliance/kpis/tatahouse/house_governanca_avaliacoes_backend_contract_v1.json';
+          const c=JSON.parse(fs.readFileSync(p,'utf8'));
+          if(c.estado!=='BACKEND_READY_NOT_APPLIED') throw new Error('backend contract activation drift');
+          if(c.destinoPretendido.projectRef!=='aoqsbusfrffapjglpqjk') throw new Error('wrong legacy backend ref');
+          if(c.classificacao.backendMutation!=='NOT_AUTHORIZED') throw new Error('backend authorization drift');
+          if(c.projecaoCompatibilidade.bom!==5||c.projecaoCompatibilidade.ok!==3||c.projecaoCompatibilidade.ruim!==1) throw new Error('vote mapping drift');
+          console.log('BACKEND_CONTRACT_FAIL_CLOSED=PASS');
+          NODE
+      - name: Validate Central wiring without activation
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('compliance/kpis/tatahouse/central.html','utf8');
+          const core='house_governanca_avaliacoes_ingest_v1.js';
+          const receiver='house_governanca_avaliacoes_local_v1.js';
+          if(!s.includes(core)||!s.includes(receiver)||s.indexOf(core)>s.indexOf(receiver)) throw new Error('Central script order invalid');
+          if(/definirPersistidorDuravel\s*\(/.test(s)) throw new Error('Central must not activate durable persistence yet');
+          console.log('CENTRAL_DURABLE_CORE_DORMANT=PASS');
+          NODE
