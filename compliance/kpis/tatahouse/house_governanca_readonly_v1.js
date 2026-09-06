@@ -7,6 +7,7 @@
   var ORIGEM = 'lideres';
   var HOUSE_ORIGIN = 'https://tata-house.github.io';
   var MSG_EVIDENCIA = 'tata-house:governanca:planejador:evidencia:v1';
+  var MSG_EVIDENCIA_READY = 'tata-house:governanca:planejador:evidencia:ready:v1';
   var RPC_HISTORICO = 'refeicoes_relatorio_detalhado';
   var JANELA_DIAS = 56;
   var MAX_DIAS = 56;
@@ -252,6 +253,7 @@
     modo: MODO,
     houseOrigin: HOUSE_ORIGIN,
     messageType: MSG_EVIDENCIA,
+    readyType: MSG_EVIDENCIA_READY,
     rpcAllowlist: Object.freeze(['tata_plus.' + RPC_HISTORICO]),
     janelaDias: JANELA_DIAS,
     periodoHistorico: periodoHistorico,
