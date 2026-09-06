@@ -817,6 +817,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 #view-sobre .adm-doc-item { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); cursor:pointer; transition:border-color .15s; }
 #view-sobre .adm-doc-item:hover { border-color:var(--carbon); }
 #view-sobre .adm-doc-item input[type="checkbox"] { width:15px; height:15px; margin-top:3px; cursor:pointer; accent-color:var(--carbon); flex-shrink:0; }
+#view-sobre .vt-addrow { margin-top:2px; padding:6px 12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.04em; text-transform:uppercase; color:var(--t1); cursor:pointer; }
+#view-sobre .vt-addrow:hover { border-color:var(--carbon); }
+#view-sobre .vt-row-edit .form-select, #view-sobre .vt-row-edit .form-input { padding:7px 9px; font-size:12px; }
 #view-sobre .adm-doc-name { font-size:13px; font-weight:600; color:var(--t1); }
 #view-sobre .adm-doc-desc { font-family:'DM Mono',monospace; font-size:10px; color:var(--t3); margin-top:2px; }
 @media (min-width:768px) {
@@ -3197,6 +3200,24 @@ window.toggleFta = toggleFta;
   function _admBuildDocList() {
     var list = document.getElementById('adm-doc-list');
     list.innerHTML = '';
+
+    // Termo de Vale Transporte — item especial (PDF, preenchido pela RH), não vem do catálogo
+    var vtItem = document.createElement('div');
+    vtItem.className = 'adm-doc-item';
+    vtItem.style.cssText = 'flex-direction:column;align-items:stretch;';
+    vtItem.innerHTML =
+      '<div style="display:flex;align-items:flex-start;gap:10px;">' +
+        '<input type="checkbox" id="admdoc_vale_transporte" value="vale_transporte" onchange="_admToggleVtFields(this.checked)">' +
+        '<label for="admdoc_vale_transporte" style="cursor:pointer;flex:1;"><div class="adm-doc-name">Termo de Vale Transporte</div></label>' +
+      '</div>' +
+      '<div id="admvt-fields" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">' +
+        '<div class="form-row"><label class="form-label" for="admvt-endereco">Endereço residencial</label><input class="form-input" type="text" id="admvt-endereco" placeholder="rua, nº, bairro, cidade/UF, CEP" onclick="event.stopPropagation()"></div>' +
+        '<div class="form-row"><label class="form-label" for="admvt-opcao">Opção do colaborador</label><select class="form-select" id="admvt-opcao" onclick="event.stopPropagation()"><option value="sim">SIM — opto pela utilização do Vale Transporte</option><option value="nao">NÃO — opto pela utilização do Vale Transporte</option></select></div>' +
+        '<div class="form-divider">Casa → Trabalho</div><div id="admvt-ct-rows"></div><button type="button" class="vt-addrow" onclick="event.stopPropagation();_admVtAddRow(\'ct\')">+ linha</button>' +
+        '<div class="form-divider">Trabalho → Casa</div><div id="admvt-tc-rows"></div><button type="button" class="vt-addrow" onclick="event.stopPropagation();_admVtAddRow(\'tc\')">+ linha</button>' +
+      '</div>';
+    list.appendChild(vtItem);
+
     ADM_DOCS.forEach(function(doc) {
       var hasCa  = doc.id === 'japona_termica' || doc.id === 'luva_termica';
       var hasEpi = doc.id === 'lista_epis';
@@ -3241,6 +3262,102 @@ window.toggleFta = toggleFta;
 
       list.appendChild(item);
     });
+  }
+
+  // ── Termo de Vale Transporte (PDF, preenchido pela RH) ──
+  var VT_BILHETES = ['BENFÁCIL BARUERI','BENFICA (BBTT) ITAPEVI','BRASIL ITAQUAQUECETUBA','ETCD DIADEMA','RADIAL SUZANO','RADIAL FERRAZ DE VASCONCELOS','SOU DIADEMA','SPTRANS UNITÁRIO','SPTRANS INTEGRAÇÃO','TOP UNITÁRIO','OUTROS'];
+  function _admVtRowHtml(){
+    var opts = VT_BILHETES.map(function(x){ return '<option value="'+_escHtml(x)+'">'+_escHtml(x)+'</option>'; }).join('');
+    return '<div class="vt-row-edit" style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">'+
+      '<select class="form-select vt-bilhete" style="flex:1.4;" onclick="event.stopPropagation()">'+opts+'</select>'+
+      '<input class="form-input vt-linha" type="text" placeholder="linha (nome/nº)" style="flex:1;" onclick="event.stopPropagation()">'+
+      '<input class="form-input vt-valor" type="text" placeholder="R$" style="width:74px;flex:none;" onclick="event.stopPropagation()">'+
+      '<button type="button" title="Remover" onclick="event.stopPropagation();this.closest(\'.vt-row-edit\').remove()" style="border:none;background:none;cursor:pointer;font-size:18px;line-height:1;color:var(--muted);flex-shrink:0;">×</button>'+
+    '</div>';
+  }
+  function _admVtAddRow(dir){
+    var c = document.getElementById(dir==='ct'?'admvt-ct-rows':'admvt-tc-rows');
+    if (c) c.insertAdjacentHTML('beforeend', _admVtRowHtml());
+  }
+  function _admVtReadRows(dir){
+    var c = document.getElementById(dir==='ct'?'admvt-ct-rows':'admvt-tc-rows');
+    if (!c) return [];
+    return Array.prototype.map.call(c.querySelectorAll('.vt-row-edit'), function(r){
+      return {
+        bilhete: ((r.querySelector('.vt-bilhete')||{}).value||'').trim(),
+        linha:   ((r.querySelector('.vt-linha')  ||{}).value||'').trim(),
+        valor:   ((r.querySelector('.vt-valor')  ||{}).value||'').trim()
+      };
+    }).filter(function(e){ return e.bilhete || e.linha || e.valor; });
+  }
+  function _admToggleVtFields(on){
+    var f = document.getElementById('admvt-fields');
+    if (f) f.style.display = on ? 'block' : 'none';
+    if (on){
+      ['ct','tc'].forEach(function(dir){
+        var c = document.getElementById(dir==='ct'?'admvt-ct-rows':'admvt-tc-rows');
+        if (c && !c.children.length) _admVtAddRow(dir);
+      });
+    } else {
+      var e=document.getElementById('admvt-endereco'); if(e) e.value='';
+      var o=document.getElementById('admvt-opcao'); if(o) o.value='sim';
+      ['admvt-ct-rows','admvt-tc-rows'].forEach(function(id){ var c=document.getElementById(id); if(c) c.innerHTML=''; });
+    }
+  }
+  // Monta a página (HTML) do Termo de Vale Transporte, no mesmo padrão do benefícios.
+  function _admVtBuildPage(ctx){
+    var esc = _escHtml;
+    function b(w){ return '<span style="border-bottom:1px solid #333;display:inline-block;width:'+w+';height:1em;vertical-align:bottom;">&nbsp;</span>'; }
+    var vtEndereco = (document.getElementById('admvt-endereco')||{}).value||'';
+    var vtOpcao = (document.getElementById('admvt-opcao')||{}).value||'sim';
+    var vtCT = _admVtReadRows('ct');
+    var vtTC = _admVtReadRows('tc');
+    var boxOn  = '<span style="display:inline-block;width:11px;height:11px;border:1.2px solid #333;text-align:center;line-height:10px;font-size:9px;vertical-align:middle;margin-right:5px;">✓</span>';
+    var boxOff = '<span style="display:inline-block;width:11px;height:11px;border:1.2px solid #333;vertical-align:middle;margin-right:5px;"></span>';
+    function vtGrid(rows){
+      if (!rows.length) return '<div style="font-size:10.5px;color:#777;padding:2px 0;">— nenhuma linha informada —</div>';
+      return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">'+ rows.map(function(e){
+        var txt = '<strong>'+esc(e.bilhete||'—')+'</strong>' + (e.linha?' — '+esc(e.linha):'') + (e.valor?': R$ '+esc(e.valor):'');
+        return '<div class="vt-row">'+boxOn+'<span>'+txt+'</span></div>';
+      }).join('') +'</div>';
+    }
+    var introHtml =
+      '<div class="rp-intro">'+
+        '<div class="rp-intro-field grow"><span class="rp-intro-label">Colaborador</span><span class="rp-intro-value">'+esc(ctx.colabNomeLimpo)+'</span></div>'+
+        (ctx.colabMatricula ? '<div class="rp-intro-field"><span class="rp-intro-label">Matrícula</span><span class="rp-intro-value">'+esc(ctx.colabMatricula)+'</span></div>' : '')+
+        '<div class="rp-intro-field"><span class="rp-intro-label">Cargo</span><span class="rp-intro-value">'+esc(ctx.colabCargo||'—')+'</span></div>'+
+        '<div class="rp-intro-field"><span class="rp-intro-label">Unidade</span><span class="rp-intro-value">'+esc(ctx.colabUnidade||'—')+'</span></div>'+
+      '</div>';
+    return '<div class="page">'+
+        '<div class="rp-header">'+
+          '<img class="rp-logo" src="'+ADM_LOGO_B64+'" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">'+
+          '<div class="rp-header-title">Termo de Compromisso e Autorização de Desconto</div>'+
+          '<div class="rp-header-right">Emitido em <strong>'+esc(ctx.dateStr)+'</strong></div>'+
+        '</div>'+
+        introHtml+
+        '<p style="font-size:10.5px;color:#222;line-height:1.7;text-align:justify;margin-bottom:10px;">Nos termos do artigo 7° do Decreto nº 95.247 de 17 de novembro de 1987, solicito receber o Vale Transporte e comprometo-me:</p>'+
+        '<div style="font-size:10.5px;color:#222;line-height:1.7;margin-bottom:14px;padding-left:8px;">'+
+          '<p style="margin-bottom:6px;"><strong>a)</strong> A utilizá-lo exclusivamente para meu efetivo deslocamento casa-trabalho e trabalho-casa;</p>'+
+          '<p style="margin-bottom:6px;"><strong>b)</strong> A atualizar anualmente ou sempre que ocorrer alteração do meu endereço residencial ou dos serviços e meios de transporte mais adequados ao meu deslocamento casa-trabalho e trabalho-casa;</p>'+
+          '<p style="margin-bottom:6px;"><strong>c)</strong> Autorizo a empresa a descontar mensalmente de meus vencimentos, a parcela equivalente até 6% (seis por cento) do meu salário básico ou vencimento, a título de participações nos custos de Vale Transporte, conforme determina o artigo 9° do Decreto nº 95.247/87;</p>'+
+          '<p><strong>d)</strong> Declaro estar ciente de que a declaração falsa ou o uso indevido do Vale Transporte constituem falta grave, conforme parágrafo 3° do artigo 7° do Decreto nº 95.247/87.</p>'+
+        '</div>'+
+        '<p style="text-align:center;font-size:11px;margin-bottom:12px;">'+
+          '<span style="margin-right:32px;">'+(vtOpcao==='sim'?boxOn:boxOff)+' SIM opto pela utilização do Vale Transporte</span>'+
+          '<span>'+(vtOpcao==='nao'?boxOn:boxOff)+' NÃO opto pela utilização do Vale Transporte</span>'+
+        '</p>'+
+        '<p style="font-size:10.5px;color:#222;margin-bottom:12px;"><strong>Endereço residencial:</strong> '+(vtEndereco.trim()?esc(vtEndereco.trim()):b('420px'))+'</p>'+
+        '<div style="margin-bottom:14px;">'+
+          '<div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:#f4f4f4;padding:6px 10px;margin-bottom:8px;border-left:3px solid #35383f;">Opção Casa → Trabalho:</div>'+ vtGrid(vtCT)+
+        '</div>'+
+        '<div style="margin-bottom:18px;">'+
+          '<div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:#f4f4f4;padding:6px 10px;margin-bottom:8px;border-left:3px solid #35383f;">Opção Trabalho → Casa:</div>'+ vtGrid(vtTC)+
+        '</div>'+
+        '<div class="rp-cidade-data">São Paulo, '+esc(ctx.docDateFmt)+'.</div>'+
+        '<div class="rp-assinaturas">'+
+          '<div class="rp-assinatura"><div class="rp-ass-line"></div><div class="rp-ass-lbl">Assinatura do Colaborador</div><div class="rp-ass-name">'+esc(ctx.colabNomeLimpo)+'</div></div>'+
+        '</div>'+
+      '</div>';
   }
 
   function _admToggleCaInItem(rowId, inputId, checked) {
@@ -3841,6 +3958,7 @@ window.toggleFta = toggleFta;
     }
 
     var selectedDocs = checked.map(function(cb) {
+      if (cb.value === 'vale_transporte') return { id:'vale_transporte', nome:'Termo de Vale Transporte' };
       return ADM_DOCS.find(function(d) { return d.id === cb.value; });
     });
 
@@ -3987,6 +4105,12 @@ window.toggleFta = toggleFta;
       }
       if (doc.id === 'checklist') {
         return _buildChecklistPage(colabNomeLimpo, colabData.matricula || '', colabUnidade, colabCargo, dataAdmissao || dataFmt, usuarioLogado);
+      }
+      if (doc.id === 'vale_transporte') {
+        return _admVtBuildPage({
+          colabNomeLimpo: colabNomeLimpo, colabMatricula: colabData.matricula, colabCargo: colabCargo,
+          colabUnidade: colabUnidade, dateStr: dateStr, docDateFmt: docDateFmt
+        });
       }
       var pageHtml = _admBuildDocPageHtml(doc, {
         colabNomeLimpo: colabNomeLimpo, colabMatricula: colabData.matricula, colabCargo: colabCargo,
