@@ -27,6 +27,11 @@ const gateHumano = manifesto.gates.find((g) => g.id === 'human_production_author
 assert.ok(gateHumano, 'gate humano de produção ausente');
 assert.equal(gateHumano.status, 'NOT_AUTHORIZED', 'branch feature não pode declarar autorização humana de produção');
 
+const gateReadiness = manifesto.gates.find((g) => g.id === 'readiness_fail_closed_dashboard');
+assert.ok(gateReadiness, 'gate de prontidão browser ausente');
+assert.equal(gateReadiness.status, 'PASS', 'painel readiness precisa permanecer registrado como PASS após prova browser');
+assert.match(gateReadiness.evidencia || '', /34016194494/, 'gate readiness precisa apontar para a prova browser atual');
+
 const prodBlockers = new Set(todos.resultados.production_promotion.blockers.map((g) => g.id));
 for (const id of [
   'pdfjs_runtime_security',
@@ -76,6 +81,7 @@ assert.match(painel, /house_governanca_readiness_v1\.js/, 'painel precisa carreg
 assert.match(painel, /house_governanca_readiness_v1\.json/, 'painel precisa carregar o manifesto versionado');
 assert.match(painel, /NÃO PROMOVER/, 'painel deve manter linguagem explícita de bloqueio');
 assert.match(painel, /Somente <strong>PASS<\/strong> satisfaz um requisito\./, 'painel deve declarar a semântica fail-closed');
+assert.match(painel, /overflow-wrap:anywhere/, 'evidências longas precisam quebrar linha no mobile');
 
 assert.equal(manifesto.fontes.houseProducao.sha, '6dc04827b195aaca9d4653618e5a40ca64a1a6f4');
 assert.equal(manifesto.fontes.lideresProducao.sha, '88d20d1fa24591234d3276ffac380dd63eefa8f5');
@@ -87,3 +93,4 @@ console.log('READINESS_PRODUCTION_BLOCKED=PASS');
 console.log('READINESS_PLANNER_WRITE_BLOCKED=PASS');
 console.log('READINESS_FAIL_CLOSED=PASS');
 console.log('READINESS_CENTRAL_LINK=PASS');
+console.log('READINESS_BROWSER_EVIDENCE=PASS');
