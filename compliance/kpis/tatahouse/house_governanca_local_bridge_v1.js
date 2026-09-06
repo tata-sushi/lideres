@@ -69,6 +69,31 @@
     };
   }
 
+  function itensDoTipo(dia, tipo) {
+    var itens = dia && Array.isArray(dia.itens) ? dia.itens : [];
+    return itens.filter(function (it) {
+      return it && it.tipo === tipo && texto(it.item);
+    }).map(function (it) {
+      return texto(it.item);
+    });
+  }
+
+  /**
+   * Adapta o objeto de cardápio já carregado pela Governança para o contrato
+   * v1 do House. Não consulta rede e não altera o objeto fonte.
+   */
+  function criarSnapshotDoCardapioDia(dia) {
+    dia = dia || {};
+    var principal = texto(dia.resumo) || itensDoTipo(dia, 'principal').join(' · ');
+    return criarSnapshot({
+      data: texto(dia.data),
+      unidade: 'tata-house',
+      principal: principal,
+      guarnicao: itensDoTipo(dia, 'guarnicao').join(' · '),
+      salada: itensDoTipo(dia, 'salada').join(' · ')
+    });
+  }
+
   function abrirEEnviar(snapshot, opcoes) {
     opcoes = opcoes || {};
     var janela = null;
@@ -166,6 +191,7 @@
     houseOrigin: HOUSE_ORIGIN,
     houseUrl: HOUSE_AVALIAR_URL,
     criarSnapshot: criarSnapshot,
+    criarSnapshotDoCardapioDia: criarSnapshotDoCardapioDia,
     abrirEEnviar: abrirEEnviar
   });
 })(window);
