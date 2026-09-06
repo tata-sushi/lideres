@@ -228,6 +228,42 @@ confirmando que os termos marcados são todos enfileirados e enviados.
 
 Assistência Médica segue de fora (sem checkbox reativado, sem `doc_tipos`).
 
+Feito (2026-09-06): **Cartão de Ponto — upload em lote de documento externo,
+dentro de `escalas.html`.** Fluxo diferente dos anteriores: o PDF já vem
+pronto da folha (não é gerado a partir de HTML aqui), então não passa por
+`html2pdf`/iframe — o `File` sobe pro bucket `assinaturas` como está. Botão
+"Enviar Cartão de Ponto" no drawer abre um modal com seletor de competência
+(mês/ano) e uma área de anexar múltiplos PDFs de uma vez. Cada arquivo casa
+com um colaborador pela matrícula, sempre a substring antes do primeiro `_`
+no nome do arquivo (padrão fixo da folha: `MATRICULA_NOME_id.pdf`) — casado
+contra `hc_colaboradores_listar` (cobre a empresa inteira, ao contrário de
+`ST.equipe`, que é só a equipe/semana em tela). Arquivo com matrícula não
+encontrada fica marcado e fora do envio, sem travar os demais.
+
+Isso expôs uma lacuna na RPC: `colaborador_documento_pendente_assinatura_
+sandbox_salvar` não aceitava nem gravava competência nenhuma (`competencia
+is null` fixo), o que quebraria o versionamento de um documento mensal
+recorrente. Adicionado parâmetro opcional `p_competencia text default null`
+e o escopo de versionamento passou a ser `(matricula, tipo_id, competencia)`
+— compatível com todo mundo que já chama essa RPC (supabase-js sempre manda
+named params, então um parâmetro novo com default não quebra ninguém).
+
+`doc_tipos` "Cartão de Ponto" já existia no catálogo (categoria "Cartão de
+Ponto", `periodicidade='recorrente'`) mas com `requer_assinatura=false` —
+ajustado pra `true` pra refletir a decisão já registrada acima (item 5:
+"todo documento do catálogo exige assinatura, exceto Documentos Pessoais").
+
+O envio processa os arquivos casados em sequência (não em paralelo, pra não
+saturar o Storage/RPCs de uma vez), mostrando progresso ("Enviando 3/40…") e
+tratando falha por arquivo de forma independente — um erro num colaborador
+não aborta o lote inteiro, e o resumo final mostra quantos foram e quantos
+falharam (com o motivo por matrícula). Testado com Playwright mockando
+`window.__lideresSupa` (sem depender do Supabase real): casamento de
+matrícula certo/errado, envio completo com sucesso (upload + pendência +
+`docs_enviar_para_assinatura` + atribuição, um por arquivo casado) e o caso
+de falha parcial (1 de 2 falha, o outro é enviado normalmente, modal continua
+aberto com o erro em vez de fechar como se tudo tivesse dado certo).
+
 **Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
 é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões
 lado a lado (mesmo padrão de `admissao.html` com "Gerar PDF" +
@@ -240,10 +276,9 @@ Em aberto:
 - Re-testar ponta a ponta o botão "Ver" do `doc.html` pra um documento
   `link_bucket='assinaturas'` depois da conversão pra `gate.js`.
 - Frente 4 (admissão — anexar pra validação): ainda não desenhada.
-- Cartão de Ponto/ASOs/Desligamento: só Admissão e Armários geram termos hoje;
-  as outras categorias que também precisam assinar ainda não têm uma página
-  que gere/envie o PDF pra assinatura — fica pra quando essas páginas forem
-  construídas.
+- ASOs/Desligamento: ainda não têm uma página que gere/envie o PDF pra
+  assinatura — fica pra quando essas páginas forem construídas. Cartão de
+  Ponto já resolvido (2026-09-06, `escalas.html`, ver acima).
 - **(2026-08-24) RLS bloqueando envio pra assinatura pra quem não é líder/admin.**
   Reproduzido em admissão: `storage.objects` policy `assinaturas_insert` só libera
   upload em `assinaturas/docs/*` se `tata_plus.docs_pode_gerir()` for `true` —
@@ -255,4 +290,4 @@ Em aberto:
   líder/admin, ou também RH em geral) e o ajuste em si ficam pra depois — é
   função do lado `tata_plus`, então também precisa alinhar com o outro time.
 
-_Última atualização: 2026-08-24._
+_Última atualização: 2026-09-06._
