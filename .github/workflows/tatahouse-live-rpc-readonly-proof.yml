@@ -26,12 +26,13 @@ jobs:
 
           const gate = fs.readFileSync('compliance/gate.js', 'utf8');
           const url = gate.match(/var SUPA_URL = '([^']+)'/)?.[1];
-          const anon = gate.match(/var SUPA_ANON\s*=\s*\n?\s*'([^']+)'/)?.[1];
-          if (!url || !anon) throw new Error('Supabase public runtime config not found in gate.js');
+          // Current public Supabase publishable key already shipped by Lideres pages.
+          // It identifies the project/client only; no logged-in user bearer token is used.
+          const publishable = 'sb_publishable_X3pKD_F1QLAyxbxFU32HqQ_pRp9p6JQ';
+          if (!url) throw new Error('Supabase URL not found in gate.js');
 
           const baseHeaders = {
-            apikey: anon,
-            Authorization: `Bearer ${anon}`,
+            apikey: publishable,
             'Accept-Profile': 'tata_plus',
           };
 
@@ -41,7 +42,11 @@ jobs:
               headers: { ...baseHeaders, Accept: 'application/openapi+json' },
             });
             console.log(`LIVE_SCHEMA_HTTP=${schemaRes.status}`);
-            if (!schemaRes.ok) throw new Error(`OpenAPI request failed: ${schemaRes.status}`);
+            if (!schemaRes.ok) {
+              const err = await schemaRes.text();
+              console.log(`LIVE_SCHEMA_ERROR_PREFIX=${err.slice(0, 180).replace(/\s+/g, ' ')}`);
+              throw new Error(`OpenAPI request failed: ${schemaRes.status}`);
+            }
             const spec = await schemaRes.json();
             const rpcNames = Object.keys(spec.paths || {})
               .filter((p) => p.startsWith('/rpc/'))
@@ -86,6 +91,7 @@ jobs:
               console.log(`LIVE_READ_RPC_FIRST_ROW_KEYS=${keys.join(',')}`);
             }
             console.log('LIVE_READ_RPC=PASS');
+            console.log('LIVE_USER_BEARER_TOKEN_USED=NO');
             console.log('LIVE_MUTATION_CALLS=0');
           }
 
