@@ -20,11 +20,12 @@ html[data-auth="pending"] body>*:not(#auth-gate){visibility:hidden}html[data-aut
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>window.GOV_PAGE_ID='governanca-kpis-tatahouse';</script>
 <script src="/compliance/gate.js"></script>
+<script src="/compliance/kpis/tatahouse/house_governanca_avaliacoes_local_v1.js"></script>
 
 <div class="shell">
   <header class="topbar">
     <div class="brand"><div class="mark">TH</div><div class="brand-copy"><div class="brand-title">Central TATÁ House</div><div class="brand-sub">Governança × produto oficial</div></div></div>
-    <div class="status"><span class="status-dot"></span><span>House único · memória preservada</span></div>
+    <div class="status"><span class="status-dot"></span><span id="central-status">House único · memória preservada</span></div>
   </header>
   <nav class="nav" aria-label="Navegação TATÁ House">
     <button class="active" type="button" id="btn-house">Operação House</button>
@@ -42,15 +43,60 @@ html[data-auth="pending"] body>*:not(#auth-gate){visibility:hidden}html[data-aut
 <script>
 (function(){
   'use strict';
+  var HOUSE_ORIGIN='https://tata-house.github.io';
+  var CONTEXTO_MSG='tata-house:governanca:contexto:v1';
   var frame=document.getElementById('house-frame');
   var loading=document.getElementById('loading');
   var btn=document.getElementById('btn-house');
+  var status=document.getElementById('central-status');
+
   function esconder(){loading.classList.add('hide');}
-  frame.addEventListener('load',esconder);
+
+  function enviarContexto(){
+    if(document.documentElement.dataset.auth!=='ok'||!frame.contentWindow)return false;
+    var sessao=window.__lideresSession||{};
+    var displayName=typeof sessao.displayName==='string'?sessao.displayName.trim().slice(0,120):'';
+    var perfil=typeof sessao.perfil==='string'?sessao.perfil.trim().slice(0,80):'';
+    if(!displayName&&!perfil)return false;
+    try{
+      frame.contentWindow.postMessage({
+        type:CONTEXTO_MSG,
+        payload:{displayName:displayName,perfil:perfil}
+      },HOUSE_ORIGIN);
+      status.textContent=displayName?('Conectado · '+displayName):'Conectado ao TATÁ Plus';
+      return true;
+    }catch(e){return false;}
+  }
+
+  function tentarContexto(){
+    if(enviarContexto())return;
+    var tentativas=0;
+    var timer=window.setInterval(function(){
+      tentativas+=1;
+      if(enviarContexto()||tentativas>=30)window.clearInterval(timer);
+    },150);
+  }
+
+  frame.addEventListener('load',function(){
+    esconder();
+    tentarContexto();
+  });
+
+  var obs=new MutationObserver(function(){
+    if(document.documentElement.dataset.auth==='ok')tentarContexto();
+  });
+  obs.observe(document.documentElement,{attributes:true,attributeFilter:['data-auth']});
+
   btn.addEventListener('click',function(){
     loading.classList.remove('hide');
-    try{frame.contentWindow.location.replace('https://tata-house.github.io/');}catch(e){frame.src='https://tata-house.github.io/';}
+    try{frame.contentWindow.location.replace(HOUSE_ORIGIN+'/');}catch(e){frame.src=HOUSE_ORIGIN+'/';}
   });
+
+  window.addEventListener('tatahouse:governanca:avaliacoes-recebidas',function(evento){
+    var r=evento.detail||{};
+    if(r.novos>0)status.textContent='Avaliação House recebida · '+r.novos+' nova'+(r.novos===1?'':'s');
+  });
+
   window.setTimeout(esconder,8000);
 })();
 </script>
