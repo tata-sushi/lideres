@@ -142,12 +142,24 @@ modal hoje; Vale-Transporte e Assistência Médica seguem só impressão, sem
 doc_tipos cadastrado). Novo `doc_tipos`: "Contrato de Mútuo Financeiro com
 Autorização de Desconto em Folha" (mesma categoria, `requer_assinatura=true`).
 Esse contrato não tinha bloco de assinatura nenhum antes (nem físico) — foi
-adicionado junto, agrupado com o último parágrafo + data num bloco só
-(`.rp-fechamento`, `page-break-inside:avoid`) pra reduzir o risco de a
-assinatura isolar sozinha numa página quase em branco quando o contrato não
-cabe inteiro numa página (mesmo problema já visto em termos longos como
-Código de Ética — aqui mitigado agrupando o fechamento, não com o cálculo de
-altura restante que ainda fica pra fazer se o caso persistir).
+adicionado junto, agrupado com a seção "Disposições Gerais" inteira + data
+num bloco só (`.rp-fechamento`, `page-break-inside:avoid`) pra reduzir o
+risco de a assinatura isolar sozinha numa página quase em branco quando o
+contrato não cabe inteiro numa página (mesmo problema já visto em termos
+longos como Código de Ética). **Testado gerando o PDF de verdade
+(`page.pdf()`, não só a tela)**: o contrato realmente estoura pra 2 páginas;
+agrupar só o último parágrafo não bastava (a página 2 ficava só com a
+assinatura); agrupando a seção inteira, a página 2 fica com conteúdo de
+verdade antes da assinatura — ainda sobra espaço em branco depois dela, mas
+deixou de ser "quase vazia". O cálculo de altura restante pra decidir a
+quebra de página (a solução mais robusta, discutida mas não implementada)
+ainda fica pra depois, se o problema persistir em outros termos.
+
+De passagem, também fica registrado: medi a margem lateral do PDF impresso
+pixel a pixel (36px, igual em todas as páginas de termo do sistema — não é
+um bug, é só uma margem fina/0.375in por design). Se algum dia quiserem
+margem maior, é mudança deliberada no `BENEF_TERMO_CSS`/`ADM_CSS`/etc, não
+um bug a corrigir.
 
 **Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
 é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões
