@@ -3353,10 +3353,11 @@ window.toggleFta = toggleFta;
         '<div style="margin-bottom:18px;">'+
           '<div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:#f4f4f4;padding:6px 10px;margin-bottom:8px;border-left:3px solid #35383f;">Opção Trabalho → Casa:</div>'+ vtGrid(vtTC)+
         '</div>'+
+        // Sem linha de assinatura física aqui — mesmo padrão do resto de admissao.html
+        // (Código de Ética etc.): a assinatura do colaborador é só a digital, capturada
+        // no app via rubrica+selfie, não tem contrapartida em papel.
+        '<p class="rp-ass-declaro">Declaro que li, compreendi e estou de acordo com os termos deste documento, tendo recebido uma cópia.</p>'+
         '<div class="rp-cidade-data">São Paulo, '+esc(ctx.docDateFmt)+'.</div>'+
-        '<div class="rp-assinaturas">'+
-          '<div class="rp-assinatura"><div class="rp-ass-line"></div><div class="rp-ass-lbl">Assinatura do Colaborador</div><div class="rp-ass-name">'+esc(ctx.colabNomeLimpo)+'</div></div>'+
-        '</div>'+
       '</div>';
   }
 
@@ -3753,6 +3754,10 @@ window.toggleFta = toggleFta;
         ADM_DOCS.forEach(function(doc) {
           if (doc.sectionLabel && porNome[doc.sectionLabel]) mapa[doc.id] = porNome[doc.sectionLabel];
         });
+        // Termo de Vale Transporte é item especial (não vem do ADM_DOCS) — mapeado à parte.
+        if (porNome['Termo de Compromisso e Autorização de Desconto']) {
+          mapa['vale_transporte'] = porNome['Termo de Compromisso e Autorização de Desconto'];
+        }
         _admDocTipoIdCache = mapa;
         return mapa;
       });
@@ -3822,7 +3827,9 @@ window.toggleFta = toggleFta;
   function _admSalvarUmTermo(doc, ctx, mapaTipoId) {
     var tipoId = mapaTipoId[doc.id];
     if (!tipoId) return Promise.reject(new Error('Tipo de documento "'+doc.nome+'" não encontrado no catálogo (dp_rh.doc_tipos).'));
-    var pageHtml = _admBuildDocPageHtml(doc, ctx);
+    // Termo de Vale Transporte usa seu próprio builder (campos específicos: endereço,
+    // opção sim/não, linhas casa↔trabalho) — não vem do ADM_DOCS_CONTENT genérico.
+    var pageHtml = doc.id === 'vale_transporte' ? _admVtBuildPage(ctx) : _admBuildDocPageHtml(doc, ctx);
     return _admHtmlParaPdfBlob(pageHtml).then(function(blob) {
       var arquivoPath = 'docs/' + _admUuid() + '.pdf';
       var nomeArquivo = (ctx.colabNomeLimpo || ctx.colabMatricula) + ' - ' + (doc.sectionLabel || doc.nome) + '.pdf';
@@ -3889,8 +3896,10 @@ window.toggleFta = toggleFta;
     _admShowError('');
     if (!colabVal) { _admShowError('Selecione um colaborador.'); return; }
 
-    var termos = checked.map(function(cb) { return ADM_DOCS.find(function(d) { return d.id === cb.value; }); })
-      .filter(function(d) { return d && d.sectionLabel; }); // checklist e lista_epis não entram nesse fluxo
+    var termos = checked.map(function(cb) {
+      if (cb.value === 'vale_transporte') return { id:'vale_transporte', nome:'Termo de Vale Transporte', sectionLabel:'Termo de Compromisso e Autorização de Desconto' };
+      return ADM_DOCS.find(function(d) { return d.id === cb.value; });
+    }).filter(function(d) { return d && d.sectionLabel; }); // checklist e lista_epis não entram nesse fluxo
     if (!termos.length) { _admShowError('Selecione ao menos um termo (checklist e lista de EPIs não entram nesse fluxo — só impressão em lote).'); return; }
     if (termos.some(function(d){ return d.id === 'japona_termica'; }) && !caNumero.trim()) { _admShowError('Informe o número do CA da Japona Térmica.'); return; }
     if (termos.some(function(d){ return d.id === 'luva_termica'; }) && !caLuva.trim()) { _admShowError('Informe o número do CA da Luva Térmica.'); return; }
