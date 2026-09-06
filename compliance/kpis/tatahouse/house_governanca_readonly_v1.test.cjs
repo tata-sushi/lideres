@@ -6,6 +6,7 @@ const api = require('./house_governanca_readonly_v1.js');
 (async () => {
   assert.deepEqual(api.rpcAllowlist, ['tata_plus.refeicoes_relatorio_detalhado']);
   assert.equal(api.modo, 'read-only');
+  assert.equal(api.readyType, 'tata-house:governanca:planejador:evidencia:ready:v1');
   assert.equal(api.janelaDias, 56);
   assert.deepEqual(api.periodoHistorico('2026-S37'), {
     de: '2026-07-13',
@@ -126,6 +127,7 @@ const api = require('./house_governanca_readonly_v1.js');
   console.log('READONLY_NO_MUTATION_PATH=PASS');
   console.log('READONLY_DATA_MINIMIZATION=PASS');
   console.log('READONLY_FAIL_CLOSED=PASS');
+  console.log('READONLY_EVIDENCE_READY_TYPE=PASS');
   console.log('READONLY_EXACT_ORIGIN_HANDOFF=PASS');
 })().catch((err) => {
   console.error(err);
