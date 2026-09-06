@@ -1899,7 +1899,7 @@ function setTab(t){
 <script>
 /* ── ANALÍTICO · Performance 360 (profiles + ausencias) ── */
 (function(){
-  var LOADED=false, COLABS=[], AUS={}, SANC={}, AVAL={}, FBK={}, REC={}, PAGE=50, shown=PAGE, rows=[];
+  var LOADED=false, COLABS=[], AUS={}, SANC={}, AVAL={}, FBK={}, REC={}, DESL={}, PAGE=50, shown=PAGE, rows=[];
   // Avaliações por ciclo (periodo): listas de ciclos + mapas matricula->{ciclo:nota}
   var DES_CICLOS=[], DES_MAP={}, LID_CICLOS=[], LID_MAP={};
   // Monta as colunas de um grupo por ciclo (uma sub-coluna por ciclo; placeholder se vazio)
@@ -1942,6 +1942,10 @@ function setTab(t){
     { label:'Avaliação de Liderança',  sigla:'L', cols: cicloCols(LID_CICLOS, LID_MAP) },
     { label:'Desligamento', sigla:'D', cols:[ ['Tipo de dispensa', ph],['Fez Homologação', ph],['Tem processo', ph] ]},
     { label:'Tempo desde o desligamento', sigla:'T', cols:[ ['Tempo', function(c){ return c.data_demissao?tempoDesde(c.data_demissao):'—'; }] ]},
+    { label:'Entrevista de Desligamento', sigla:'E', cols:[
+      ['Respondida', function(c){ var d=DESL[c.matricula]; return (d&&d.respondida)?d.respondida:'<span class="anl-ph">—</span>'; }],
+      ['Nota',       function(c){ var d=DESL[c.matricula]; return d?fmtNota(d.nota):'<span class="anl-ph">—</span>'; }]
+    ]},
     { label:'Feedback', sigla:'F', cols:[
       ['Qtd',    function(c){ var f=FBK[c.matricula]; var n=f?f.qtd:0; return n?String(n):'<span class="anl-ph">0</span>'; }],
       ['Último', function(c){ var f=FBK[c.matricula]; return (f&&f.ultimo)?f.ultimo:'<span class="anl-ph">—</span>'; }]
@@ -2018,8 +2022,9 @@ function setTab(t){
       var pDes=supa.schema('tata_plus').rpc('avaliacao_ciclo_notas',{p_slug:'desempenho'}).then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
       var pLid=supa.schema('tata_plus').rpc('avaliacao_ciclo_notas',{p_slug:'lideranca'}).then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
       var pR=supa.schema('tata_plus').rpc('reconhecimentos_analitico_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
-      Promise.all([pC,pA,pS,pV,pF,pDes,pLid,pR]).then(function(res){
-        var colabs=res[0], aus=res[1], sanc=res[2], avals=res[3], fbks=res[4], desC=res[5], lidC=res[6], recs=res[7];
+      var pDE=supa.schema('tata_plus').rpc('desligamento_entrevista_analitico_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
+      Promise.all([pC,pA,pS,pV,pF,pDes,pLid,pR,pDE]).then(function(res){
+        var colabs=res[0], aus=res[1], sanc=res[2], avals=res[3], fbks=res[4], desC=res[5], lidC=res[6], recs=res[7], desls=res[8];
         AUS={};
         aus.forEach(function(a){ var mt=a.matricula; if(!mt) return; if(!AUS[mt]) AUS[mt]={faltas:0,just:0}; if(isFalta(a.tipo)) AUS[mt].faltas++; else if(isJust(a.tipo)) AUS[mt].just++; });
         SANC={};
@@ -2038,6 +2043,8 @@ function setTab(t){
         LID_CICLOS=_buildCiclos(lidC, LID_MAP);
         REC={};
         recs.forEach(function(r){ var mt=r.matricula; if(!mt) return; REC[mt]={qtd:r.qtd,ultimo:r.ultimo}; });
+        DESL={};
+        desls.forEach(function(d){ var mt=d.matricula; if(!mt) return; DESL[mt]={respondida:d.respondida,nota:d.nota}; });
         COLABS=colabs.slice().sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
         function fill(id,key){ var sel=document.getElementById(id); if(!sel) return; var cur=sel.value; var vals=Array.from(new Set(COLABS.map(function(c){return c[key];}).filter(Boolean))).sort(function(a,b){return String(a).localeCompare(String(b),'pt-BR');}); sel.innerHTML='<option value="">'+esc(sel.dataset.all||'Todos')+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'">'+esc(v)+'</option>';}).join(''); sel.value=cur; }
         fill('anl-f-unidade','unidade'); fill('anl-f-depto','departamento');
