@@ -66,10 +66,14 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script>window.GOV_PAGE_ID='governanca-kpis-tatahouse-cardapio';</script>
   <script src="/compliance/gate.js"></script>
+  <script src="/compliance/kpis/tatahouse/house_governanca_readonly_v1.js"></script>
   <script src="/compliance/kpis/tatahouse/house_governanca_planejador_v1.js"></script>
   <script>
     (function(){
       var api=window.TataHouseGovernancaPlanejadorV1;
+      var ro=window.TataHouseGovernancaReadonlyV1;
+      var evidenciaAtual=null;
+      var housePronto=false;
       var iframe=document.getElementById('house-frame');
       var workspace=document.getElementById('workspace');
       var receipt=document.getElementById('receipt');
@@ -94,7 +98,13 @@
         return api.criarContexto({semanaId:semanaId,unidadeFonte:unidade.value});
       }
 
+      function enviarEvidenciaSePronto(){
+        if(!housePronto||!evidenciaAtual||!ro)return false;
+        return ro.enviarParaHouse(iframe,evidenciaAtual);
+      }
+
       function statusTexto(etapa){
+        if(etapa==='house-pronto'){housePronto=true;enviarEvidenciaSePronto();}
         var mapa={
           'house-pronto':'House conectado. Enviando contexto da semana…',
           'contexto-enviado':'Contexto enviado ao motor do House…',
@@ -128,11 +138,20 @@
         try{
           if(limparConexao){limparConexao();limparConexao=null;}
           var ctx=contextoAtual();
+          evidenciaAtual=null;
+          housePronto=false;
           receipt.classList.remove('show');
           workspace.classList.add('show');
           status.textContent='Abrindo motor inteligente do TATÁ House…';
           iframe.src=api.houseUrl+'?contexto='+encodeURIComponent(ctx.correlationId);
           limparConexao=api.conectarIframe(iframe,ctx,{aoStatus:statusTexto,aoDraft:mostrarDraft});
+          if(ro&&window.__lideresSupa){
+            ro.carregar({supa:window.__lideresSupa,unidade:ctx.unidadeFonte,semanaId:ctx.semanaId}).then(function(resultado){
+              if(!resultado||resultado.ok!==true||!resultado.evidencia)return;
+              evidenciaAtual=resultado.evidencia;
+              enviarEvidenciaSePronto();
+            }).catch(function(){});
+          }
         }catch(e){status.textContent=e&&e.message?e.message:'Não foi possível abrir o planejador.';}
       });
 
