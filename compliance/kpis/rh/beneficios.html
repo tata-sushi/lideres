@@ -1580,8 +1580,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
               <input class="form-input" type="text" id="benef-mt-parcela" placeholder="0,00" readonly style="background:var(--bg);cursor:not-allowed;" onclick="event.stopPropagation()">
             </div>
             <div class="form-row">
-              <label class="form-label" for="benef-mt-extenso">Valor por extenso</label>
-              <input class="form-input" type="text" id="benef-mt-extenso" placeholder="ex: dois mil reais" onclick="event.stopPropagation()">
+              <label class="form-label" for="benef-mt-extenso">Valor por extenso — calculado</label>
+              <input class="form-input" type="text" id="benef-mt-extenso" placeholder="preenchido automaticamente" readonly style="background:var(--bg);cursor:not-allowed;" onclick="event.stopPropagation()">
             </div>
             <div class="benef-mt-fg">
               <div class="form-row">
@@ -1784,13 +1784,62 @@ function _benefParseBRL(s){
 function _benefFmtBRL(n){
   return (Number(n)||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
 }
+// Número inteiro (>=0) por extenso em pt-BR
+function _extensoInt(num){
+  num = Math.floor(Number(num)||0);
+  if (num === 0) return 'zero';
+  var U=['','um','dois','três','quatro','cinco','seis','sete','oito','nove','dez','onze','doze','treze','catorze','quinze','dezesseis','dezessete','dezoito','dezenove'];
+  var D=['','','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+  var C=['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
+  function c3(x){
+    if (x===0) return '';
+    if (x===100) return 'cem';
+    var out=[], c=Math.floor(x/100), r=x%100;
+    if (c) out.push(C[c]);
+    if (r){ if (r<20) out.push(U[r]); else { var d=Math.floor(r/10), u=r%10; out.push(u?D[d]+' e '+U[u]:D[d]); } }
+    return out.join(' e ');
+  }
+  var chunks=[], t=num;
+  while (t>0){ chunks.push(t%1000); t=Math.floor(t/1000); }
+  var eS=['','mil','milhão','bilhão','trilhão'], eP=['','mil','milhões','bilhões','trilhões'];
+  var parts=[];
+  for (var i=chunks.length-1;i>=0;i--){
+    var v=chunks[i]; if (v===0) continue;
+    var txt=c3(v);
+    if (i===1) txt=(v===1)?'mil':txt+' mil';
+    else if (i>=2) txt=txt+' '+(v===1?eS[i]:eP[i]);
+    parts.push({v:v, txt:txt});
+  }
+  var res='';
+  for (var k=0;k<parts.length;k++){
+    if (k===0){ res=parts[k].txt; continue; }
+    var cur=parts[k];
+    var sep = (k===parts.length-1 && (cur.v<100 || cur.v%100===0)) ? ' e ' : ', ';
+    res += sep + cur.txt;
+  }
+  return res;
+}
+// Valor em reais por extenso: 1500.5 -> "mil e quinhentos reais e cinquenta centavos"
+function _extensoReais(valor){
+  var n = Math.round((Number(valor)||0)*100);
+  var reais = Math.floor(n/100), cent = n%100, out='';
+  if (reais>0){
+    var extR = _extensoInt(reais);
+    var moeda = reais===1 ? 'real' : 'reais';
+    if (/(milh(ão|ões)|bilh(ão|ões)|trilh(ão|ões))$/.test(extR)) moeda = 'de '+moeda;
+    out += extR+' '+moeda;
+  }
+  if (cent>0){ if (out) out+=' e '; out += _extensoInt(cent)+' '+(cent===1?'centavo':'centavos'); }
+  return out || 'zero real';
+}
 // Preenche o campo (readonly) "Valor da parcela" = total / nº parcelas.
 function _benefParcelaAuto(){
   var total = _benefParseBRL((document.getElementById('benef-mt-valor')||{}).value);
   var n = parseInt((document.getElementById('benef-mt-parcelas')||{}).value, 10) || 0;
   var out = document.getElementById('benef-mt-parcela');
-  if (!out) return;
-  out.value = (total > 0 && n > 0) ? _benefFmtBRL(total / n) : '';
+  if (out) out.value = (total > 0 && n > 0) ? _benefFmtBRL(total / n) : '';
+  var ext = document.getElementById('benef-mt-extenso');
+  if (ext) ext.value = (total > 0) ? _extensoReais(total) : '';
 }
 
 function _benefLoadColaboradores() {
@@ -1867,6 +1916,7 @@ function _benefShowError(msg) {
     // Valor da parcela = total / nº parcelas (sem juros). Calcula aqui como fonte da verdade.
     var _totalNum = _benefParseBRL(mtValor);
     if (_totalNum > 0 && mtNParc > 0) mtParc = _benefFmtBRL(_totalNum / mtNParc);
+    if (_totalNum > 0) mtExtenso = _extensoReais(_totalNum);   // valor por extenso automático
 
     var colab    = window.__benefColabMap[colabKey] || {};
     var nome     = colab.nome     || colabKey;
@@ -2076,7 +2126,7 @@ function _benefShowError(msg) {
       '<!DOCTYPE html><html lang="pt-BR"><head>'+
       '<meta charset="UTF-8">'+
       '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">'+
-      '<title>Termos — Benefícios</title>'+
+      '<title>Termos TATÁ Sushi - Benefícios</title>'+
       '<style>'+css+'</style>'+
       '</head><body>'+pages+'</body></html>';
 
