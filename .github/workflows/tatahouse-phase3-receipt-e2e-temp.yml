@@ -1,0 +1,79 @@
+name: TATA House Governance Phase 3 receipt E2E temporary
+
+on:
+  push:
+    branches:
+      - feat/tatahouse-governanca-phase1
+
+permissions:
+  contents: write
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tatahouse-governanca-phase1
+      - uses: actions/checkout@v4
+        with:
+          repository: cesarspichencoff-cmyk/tata-house.github.io
+          ref: feat/house-governanca-phase1
+          path: house
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build House feature
+        working-directory: house
+        run: |
+          npm ci
+          npm run build
+        env:
+          NEXT_PUBLIC_EMAILJS_SERVICE_ID: phase3-e2e
+          NEXT_PUBLIC_EMAILJS_TEMPLATE_ID: phase3-e2e
+          NEXT_PUBLIC_EMAILJS_PUBLIC_KEY: phase3-e2e
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: phase3-e2e
+          NEXT_PUBLIC_GEMINI_API_KEY: phase3-e2e
+          NEXT_PUBLIC_GROQ_KEY: phase3-e2e
+      - name: Install Chromium
+        run: |
+          mkdir -p /tmp/phase3-e2e
+          cd /tmp/phase3-e2e
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium
+      - name: Start exact-origin HTTPS harness
+        run: |
+          cat > /tmp/phase3-cert.cnf <<'EOF'
+          [req]
+          distinguished_name=req_dn
+          x509_extensions=v3_req
+          prompt=no
+          [req_dn]
+          CN=tata-house-governanca-phase3
+          [v3_req]
+          subjectAltName=@alt_names
+          [alt_names]
+          DNS.1=tata-house.github.io
+          DNS.2=lideres.tatasushi.tech
+          EOF
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 -keyout /tmp/phase3-key.pem -out /tmp/phase3-cert.pem -config /tmp/phase3-cert.cnf >/dev/null 2>&1
+          sudo -E node .github/scripts/tatahouse_phase3_receipt_e2e.cjs server >/tmp/phase3-server.log 2>&1 &
+          for i in $(seq 1 20); do
+            if curl --noproxy '*' --resolve lideres.tatasushi.tech:443:127.0.0.1 -ksSf https://lideres.tatasushi.tech/compliance/kpis/tatahouse/cardapio.html >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/phase3-server.log
+          exit 1
+      - name: Prove receipt and changed-menu warning
+        run: node .github/scripts/tatahouse_phase3_receipt_e2e.cjs test
+      - name: Remove temporary receipt E2E harness
+        run: |
+          rm .github/workflows/tatahouse-phase3-receipt-e2e-temp.yml .github/scripts/tatahouse_phase3_receipt_e2e.cjs
+          git config user.name "cesarspichencoff-cmyk"
+          git config user.email "cesar.spichencoff@gmail.com"
+          git add .github/workflows/tatahouse-phase3-receipt-e2e-temp.yml .github/scripts/tatahouse_phase3_receipt_e2e.cjs
+          git commit -m "test(tatahouse): remove temporary Phase 3 receipt E2E harness"
+          git push origin HEAD:feat/tatahouse-governanca-phase1
