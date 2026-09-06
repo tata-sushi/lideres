@@ -57,6 +57,15 @@ assert.equal(parity.componentes.readonlyOverlay.aplicarSomentePatchDoArquivo, tr
 assert.equal(parity.componentes.scenarioComponent.sourceCommit, '36bbd9346bea7ac3a29a09329b5907213684b5ac');
 assert.equal(parity.componentes.pdfjsSecurity.sourceCommit, 'a1302762b9c8ac82e77556f05020b044605ce843');
 
+const ux = parity.componentes.uxDecisionSurfaceOverlay;
+assert.equal(ux.sourceCommit, '23a31f7217ac1e150a9c9cc194acaa907141f72f');
+assert.equal(ux.aplicarSomentePatchDosArquivos, true);
+assert.deepEqual(ux.arquivos, [
+  'src/components/cardapio/PlanejadorGovernanca.tsx',
+  'src/components/cardapio/CenariosGovernanca.tsx'
+]);
+assert.match(ux.escopo || '', /Nao altera motor, estado, contratos ou persistencia/i);
+
 const shared = parity.componentes.scenarioSharedSubstrate;
 assert.match(shared.descricao || '', /cenarios/i);
 const sharedByPath = Object.fromEntries(shared.arquivos.map((x) => [x.path, x]));
@@ -90,6 +99,7 @@ console.log('CLEAN_CANDIDATE_PROOF_LIMIT=PASS');
 console.log('CLEAN_CANDIDATE_TRANSPORT_NOT_INTELLIGENCE=PASS');
 console.log('CLEAN_CANDIDATE_READONLY_PARITY_PROFILE=PASS');
 console.log('CLEAN_CANDIDATE_SCENARIO_SUBSTRATE=PASS');
+console.log('CLEAN_CANDIDATE_UX_OVERLAY=PASS');
 console.log('CLEAN_CANDIDATE_TROCAS_EXCLUDED=PASS');
 console.log('CLEAN_CANDIDATE_GLOBAL_UX_EXCLUDED=PASS');
 console.log('CLEAN_CANDIDATE_EFFECT_BOUNDARY_LOCKED=PASS');
