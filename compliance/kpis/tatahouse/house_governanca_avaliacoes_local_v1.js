@@ -11,6 +11,7 @@
   var LIMITE_LOCAL = 2000;
   var DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
   var DATA_HORA_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+  var persistidorDuravel = null;
 
   function texto(v) {
     return typeof v === 'string' ? v.trim() : '';
@@ -109,7 +110,8 @@
         confirmados: [],
         rejeitados: [{ id: 'pacote', motivo: 'Contrato de avaliações inválido.' }],
         novos: 0,
-        total: lerRecebidas().length
+        total: lerRecebidas().length,
+        modo: 'local'
       };
     }
 
@@ -145,7 +147,8 @@
           return { id: id || ('indice-' + indice), motivo: 'Falha ao persistir recibo local.' };
         }),
         novos: 0,
-        total: lerRecebidas().length
+        total: lerRecebidas().length,
+        modo: 'local'
       };
     }
 
@@ -154,7 +157,50 @@
       confirmados: confirmados,
       rejeitados: rejeitados,
       novos: novos,
-      total: lerRecebidas().length
+      total: lerRecebidas().length,
+      modo: 'local'
+    };
+  }
+
+  /**
+   * Ativa a fronteira durável somente quando o núcleo de ingestão v1 já está
+   * carregado. Sem ambos, falha fechado e mantém o modo local atual.
+   * A ativação real de Supabase/HTTP permanece uma decisão separada.
+   */
+  function definirPersistidorDuravel(fn) {
+    var ingest = global.TataHouseGovernancaAvaliacoesIngestV1;
+    if (typeof fn !== 'function' || !ingest || typeof ingest.ingerirPacote !== 'function') return false;
+    persistidorDuravel = fn;
+    return true;
+  }
+
+  function removerPersistidorDuravel() {
+    persistidorDuravel = null;
+    return true;
+  }
+
+  async function processarPacote(entrada) {
+    if (!persistidorDuravel) return importarPacote(entrada);
+    var ingest = global.TataHouseGovernancaAvaliacoesIngestV1;
+    if (!ingest || typeof ingest.ingerirPacote !== 'function') {
+      return {
+        ok: false,
+        confirmados: [],
+        rejeitados: [{ id: 'persistidor', motivo: 'Núcleo durável v1 indisponível.' }],
+        novos: 0,
+        total: lerRecebidas().length,
+        modo: 'duravel'
+      };
+    }
+    var r = await ingest.ingerirPacote(entrada, persistidorDuravel);
+    return {
+      ok: !!r.ok,
+      confirmados: Array.isArray(r.confirmados) ? r.confirmados : [],
+      rejeitados: Array.isArray(r.rejeitados) ? r.rejeitados : [],
+      novos: 0,
+      total: lerRecebidas().length,
+      modo: 'duravel',
+      processados: Number.isFinite(r.processados) ? r.processados : 0
     };
   }
 
@@ -179,22 +225,32 @@
 
       var corr = texto(dados.correlationId);
       if (!corr) return;
-      var resultado = importarPacote(dados.payload);
 
-      try {
-        evento.source.postMessage({
-          type: MSG_ACK,
-          correlationId: corr,
-          confirmados: resultado.confirmados,
-          rejeitados: resultado.rejeitados
-        }, HOUSE_ORIGIN);
-      } catch (e) {
-        // Sem ACK o House mantém a outbox; não há perda de estado.
-      }
+      Promise.resolve(processarPacote(dados.payload)).then(function (resultado) {
+        try {
+          evento.source.postMessage({
+            type: MSG_ACK,
+            correlationId: corr,
+            confirmados: resultado.confirmados,
+            rejeitados: resultado.rejeitados
+          }, HOUSE_ORIGIN);
+        } catch (e) {
+          // Sem ACK o House mantém a outbox; não há perda de estado.
+        }
 
-      try {
-        global.dispatchEvent(new CustomEvent(EVENTO_RECEBIDAS, { detail: resultado }));
-      } catch (e) {}
+        try {
+          global.dispatchEvent(new CustomEvent(EVENTO_RECEBIDAS, { detail: resultado }));
+        } catch (e) {}
+      }).catch(function () {
+        try {
+          evento.source.postMessage({
+            type: MSG_ACK,
+            correlationId: corr,
+            confirmados: [],
+            rejeitados: [{ id: 'persistidor', motivo: 'Falha inesperada de persistência.' }]
+          }, HOUSE_ORIGIN);
+        } catch (e) {}
+      });
     }
 
     global.addEventListener('message', aoReceber);
@@ -213,8 +269,12 @@
     normalizarEvento: normalizarEvento,
     normalizarPacote: normalizarPacote,
     importarPacote: importarPacote,
+    processarPacote: processarPacote,
     listarRecebidas: function () { return lerRecebidas().map(function (e) { return Object.assign({}, e); }); },
     limparRecebidas: limparRecebidas,
+    definirPersistidorDuravel: definirPersistidorDuravel,
+    removerPersistidorDuravel: removerPersistidorDuravel,
+    modoPersistencia: function () { return persistidorDuravel ? 'duravel' : 'local'; },
     instalarReceptor: instalarReceptor
   });
 
