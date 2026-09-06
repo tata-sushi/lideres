@@ -1587,6 +1587,27 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
               <label class="form-label" for="benef-mt-parcela">Valor da parcela (R$)</label>
               <input class="form-input" type="text" id="benef-mt-parcela" placeholder="0,00" onclick="event.stopPropagation()">
             </div>
+            <div class="form-row">
+              <label class="form-label" for="benef-mt-cpf">CPF do colaborador</label>
+              <input class="form-input" type="text" id="benef-mt-cpf" placeholder="000.000.000-00" onclick="event.stopPropagation()">
+            </div>
+            <div class="benef-mt-fg">
+              <div class="form-row">
+                <label class="form-label" for="benef-mt-meio">Disponibilização via</label>
+                <select class="form-select" id="benef-mt-meio" onclick="event.stopPropagation()">
+                  <option value="PIX">PIX</option>
+                  <option value="transferência bancária">Transferência bancária</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label class="form-label" for="benef-mt-datadisp">Data de disponibilização</label>
+                <input class="form-input" type="date" id="benef-mt-datadisp" onclick="event.stopPropagation()">
+              </div>
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="benef-mt-mes1">Mês do 1º desconto</label>
+              <input class="form-input" type="month" id="benef-mt-mes1" onclick="event.stopPropagation()">
+            </div>
           </div>
         </div>
       </div>
@@ -1754,7 +1775,7 @@ function closeModalBenef() {
 function _benefToggleMtFields(on) {
   var f = document.getElementById('benef-mt-fields');
   if (f) f.style.display = on ? 'block' : 'none';
-  if (!on) ['benef-mt-valor','benef-mt-extenso','benef-mt-parcelas','benef-mt-parcela'].forEach(function(id){
+  if (!on) ['benef-mt-valor','benef-mt-extenso','benef-mt-parcelas','benef-mt-parcela','benef-mt-cpf','benef-mt-datadisp','benef-mt-mes1'].forEach(function(id){
     var el = document.getElementById(id); if (el) el.value = '';
   });
 }
@@ -1817,7 +1838,17 @@ function _benefShowError(msg) {
     var mtExtenso = (document.getElementById('benef-mt-extenso') ||{}).value||'';
     var mtParcs   = (document.getElementById('benef-mt-parcelas')||{}).value||'';
     var mtParc    = (document.getElementById('benef-mt-parcela') ||{}).value||'';
+    var mtCpf      = (document.getElementById('benef-mt-cpf')     ||{}).value||'';
+    var mtMeio     = (document.getElementById('benef-mt-meio')    ||{}).value||'';
+    var mtDataDisp = (document.getElementById('benef-mt-datadisp')||{}).value||'';
+    var mtMes1     = (document.getElementById('benef-mt-mes1')    ||{}).value||'';
     if (!vtChecked && !amChecked && !mtChecked) { _benefShowError('Selecione ao menos um documento.'); return; }
+
+    // Formatações dos campos do mútuo
+    var _MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    var mtDataDispFmt = mtDataDisp ? (function(){ var p=mtDataDisp.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; })() : '';
+    var mtMes1Fmt = mtMes1 ? (function(){ var p=mtMes1.split('-'); return (_MESES[parseInt(p[1],10)-1]||'')+' de '+p[0]; })() : '';
+    var mtNParc = parseInt(mtParcs, 10) || 0;
 
     var colab    = window.__benefColabMap[colabKey] || {};
     var nome     = colab.nome     || colabKey;
@@ -1968,34 +1999,57 @@ function _benefShowError(msg) {
     }
 
     if (mtChecked) {
+      var _parcLinha = (mtNParc === 1)
+        ? 'O desconto ocorrerá na folha referente ao mês de <strong>'+(mtMes1Fmt?esc(mtMes1Fmt):b('160px'))+'</strong>.'
+        : 'O primeiro desconto ocorrerá na folha referente ao mês de <strong>'+(mtMes1Fmt?esc(mtMes1Fmt):b('160px'))+'</strong>, e os seguintes nas folhas subsequentes.';
       pages +=
         '<div class="page">'+
           '<div class="rp-header">'+
             '<img class="rp-logo" src="'+_BENEF_LOGO+'" alt="TATÁ">'+
-            '<div class="rp-header-title">Contrato de Acordo Financeiro</div>'+
+            '<div class="rp-header-title">Contrato de Mútuo Financeiro com Autorização de Desconto em Folha</div>'+
             '<div class="rp-header-right">Emitido em <strong>'+nowFmt+'</strong></div>'+
           '</div>'+
-          introHtml+
           '<div class="rp-section">'+
-            '<div class="rp-section-label">Contrato de Mútuo Financeiro com Autorização de Desconto em Folha</div>'+
-            '<p class="rp-p">Pelo presente instrumento particular, de um lado <strong>EMPRESA TATA SUSHI COMERCIO DE ALIMENTOS LTDA</strong>, inscrita no <strong>CNPJ nº 23.894.533/0001-60</strong>, e de outro lado o(a) colaborador(a) <strong>'+esc(nome)+'</strong>, celebram o presente Contrato de Mútuo Financeiro.</p>'+
-            '<p class="rp-p" style="margin-top:10px;"><strong>Do Objeto</strong></p>'+
-            '<p class="rp-p">A EMPRESA concede ao COLABORADOR, nesta data, a quantia de <strong>R$ '+(mtValor.trim()?esc(mtValor.trim()):b('90px'))+' ('+(mtExtenso.trim()?esc(mtExtenso.trim()):b('200px'))+')</strong>, a título de mútuo financeiro.</p>'+
-            '<p class="rp-p" style="margin-top:10px;"><strong>Da Forma de Pagamento</strong></p>'+
-            '<p class="rp-p">O valor concedido será restituído em <strong>'+(mtParcs.trim()?esc(mtParcs.trim()):b('40px'))+' parcelas</strong> mensais e sucessivas de <strong>R$ '+(mtParc.trim()?esc(mtParc.trim()):b('80px'))+'</strong>, mediante desconto em folha de pagamento.</p>'+
-            '<p class="rp-p" style="margin-top:10px;"><strong>Da Autorização de Desconto</strong></p>'+
-            '<p class="rp-p">Nos termos do artigo 462 da CLT, o COLABORADOR autoriza expressamente a EMPRESA a efetuar os descontos das parcelas descritas neste instrumento em sua folha de pagamento mensal.</p>'+
-            '<p class="rp-p" style="margin-top:10px;"><strong>Da Ausência de Juros</strong></p>'+
-            '<p class="rp-p">O presente mútuo é concedido sem incidência de juros, multa ou correção monetária, salvo descumprimento das obrigações previstas neste contrato.</p>'+
-            '<p class="rp-p" style="margin-top:10px;"><strong>Do Desligamento</strong></p>'+
-            '<p class="rp-p">Em caso de rescisão do contrato de trabalho antes da quitação integral do saldo devedor, o COLABORADOR autoriza os descontos legalmente permitidos nas verbas rescisórias.</p>'+
-            '<p class="rp-p">Caso permaneça saldo remanescente após os descontos legalmente admitidos, o COLABORADOR compromete-se a quitá-lo mediante pagamento direto à EMPRESA, conforme instrumento complementar de confissão de dívida.</p>'+
-            '<p class="rp-p" style="margin-top:10px;"><strong>Disposições Gerais</strong></p>'+
-            '<p class="rp-p">As partes declaram ter lido, compreendido e aceitado todas as condições previstas neste instrumento, firmando-o de forma livre e espontânea.</p>'+
+            '<p class="rp-p">Pelo presente instrumento particular, de um lado, <strong>EMPRESA TATA SUSHI COMERCIO DE ALIMENTOS LTDA</strong>, inscrita no CNPJ nº <strong>23.894.533/0001-60</strong>, doravante denominada <strong>EMPREGADOR</strong>, e, de outro lado, <strong>'+esc(nome)+'</strong>, inscrito(a) no CPF nº <strong>'+(mtCpf.trim()?esc(mtCpf.trim()):b('140px'))+'</strong>, matrícula nº <strong>'+(matricula?esc(matricula):b('80px'))+'</strong>, doravante denominado(a) <strong>EMPREGADO</strong>, celebram o presente Contrato de Mútuo Financeiro, mediante as condições abaixo.</p>'+
+
+            '<p class="rp-p" style="margin-top:12px;"><strong>Do Objeto</strong></p>'+
+            '<p class="rp-p">O EMPREGADOR concede ao EMPREGADO a quantia de <strong>R$ '+(mtValor.trim()?esc(mtValor.trim()):b('90px'))+' ('+(mtExtenso.trim()?esc(mtExtenso.trim()):b('200px'))+')</strong>, a título de mútuo financeiro, a ser disponibilizada por <strong>'+(mtMeio.trim()?esc(mtMeio.trim()):b('120px'))+'</strong>, em <strong>'+(mtDataDispFmt?esc(mtDataDispFmt):b('90px'))+'</strong>.</p>'+
+            '<p class="rp-p">O EMPREGADO reconhece que o valor recebido constitui empréstimo e deverá ser integralmente restituído nas condições previstas neste contrato.</p>'+
+            '<p class="rp-p">O enquadramento como mútuo é compatível com o art. 586 do Código Civil, que prevê a restituição de coisa fungível recebida em empréstimo.</p>'+
+
+            '<p class="rp-p" style="margin-top:12px;"><strong>Da Forma de Pagamento</strong></p>'+
+            '<p class="rp-p">O valor concedido será restituído em <strong>'+(mtParcs.trim()?esc(mtParcs.trim()):b('40px'))+' parcela(s)</strong> mensal(is) e sucessiva(s) de <strong>R$ '+(mtParc.trim()?esc(mtParc.trim()):b('80px'))+'</strong>, mediante desconto em folha de pagamento.</p>'+
+            '<p class="rp-p">'+_parcLinha+'</p>'+
+
+            '<p class="rp-p" style="margin-top:12px;"><strong>Da Autorização de Desconto</strong></p>'+
+            '<p class="rp-p">O EMPREGADO, de forma livre, expressa e específica, autoriza o EMPREGADOR a efetuar em sua folha de pagamento os descontos correspondentes às parcelas previstas neste contrato.</p>'+
+            '<p class="rp-p">A presente autorização refere-se exclusivamente ao empréstimo aqui formalizado.</p>'+
+            '<p class="rp-p">Os descontos serão realizados observando-se a legislação trabalhista, as normas coletivas aplicáveis e os limites legalmente incidentes sobre a remuneração do EMPREGADO.</p>'+
+            '<p class="rp-p">Caso determinada parcela não possa ser descontada, total ou parcialmente, o valor correspondente permanecerá devido e poderá ser descontado posteriormente, quando legalmente possível, ou pago por outro meio acordado entre as partes.</p>'+
+
+            '<p class="rp-p" style="margin-top:12px;"><strong>Da Ausência de Juros</strong></p>'+
+            '<p class="rp-p">O presente mútuo é concedido sem incidência de juros remuneratórios, multa ou correção monetária, devendo o EMPREGADO restituir exclusivamente o valor objeto deste empréstimo.</p>'+
+            '<p class="rp-p">O valor concedido possui natureza de empréstimo e não constitui salário, gratificação, prêmio ou qualquer outra parcela de natureza remuneratória.</p>'+
+
+            '<p class="rp-p" style="margin-top:12px;"><strong>Da Quitação Antecipada</strong></p>'+
+            '<p class="rp-p">O EMPREGADO poderá antecipar, total ou parcialmente, a quitação do saldo devedor a qualquer momento, sem multa ou qualquer penalidade.</p>'+
+
+            '<p class="rp-p" style="margin-top:12px;"><strong>Do Desligamento</strong></p>'+
+            '<p class="rp-p">Em caso de término do contrato de trabalho antes da quitação integral do empréstimo, o EMPREGADO autoriza a compensação do saldo devedor com as verbas rescisórias, observados os limites legalmente permitidos.</p>'+
+            '<p class="rp-p">A compensação realizada nas verbas rescisórias não poderá exceder o equivalente a um mês de remuneração do EMPREGADO, conforme previsto no art. 477, §5º, da CLT.</p>'+
+            '<p class="rp-p">Caso permaneça saldo devedor após a compensação legalmente permitida, a dívida continuará existente, devendo o saldo remanescente ser pago diretamente ao EMPREGADOR por meio de PIX, transferência bancária, boleto ou outro meio disponibilizado.</p>'+
+            '<p class="rp-p">As partes poderão, de comum acordo e por escrito, ajustar a forma e o prazo para pagamento do saldo remanescente.</p>'+
+
+            '<p class="rp-p" style="margin-top:12px;"><strong>Disposições Gerais</strong></p>'+
+            '<p class="rp-p">A concessão deste empréstimo possui caráter individual e específico, não gerando direito adquirido ou obrigação de futuras concessões pelo EMPREGADOR.</p>'+
+            '<p class="rp-p">A ausência de determinado desconto em folha não será considerada perdão, renúncia ou quitação do valor devido.</p>'+
+            '<p class="rp-p">Qualquer alteração relevante nas condições de pagamento deverá ser formalizada entre as partes.</p>'+
+            '<p class="rp-p">As partes declaram ter lido, compreendido e aceitado as condições deste instrumento, firmando-o de forma livre e consciente.</p>'+
           '</div>'+
           '<div class="rp-cidade-data">São Paulo, '+dataFmt+'.</div>'+
-          '<div class="rp-assinaturas" style="justify-content:center;">'+
-            '<div class="rp-assinatura" style="max-width:280px;"><div class="rp-ass-line"></div><div class="rp-ass-lbl">Assinatura do Colaborador</div><div class="rp-ass-name">'+esc(nome)+'</div></div>'+
+          '<div class="rp-assinaturas" style="flex-direction:column;gap:30px;margin-top:14px;">'+
+            '<div class="rp-assinatura" style="max-width:360px;margin:0 auto;"><div class="rp-ass-line"></div><div class="rp-ass-lbl">EMPREGADOR</div><div class="rp-ass-name">EMPRESA TATA SUSHI COMERCIO DE ALIMENTOS LTDA</div><div class="rp-ass-lbl">CNPJ nº 23.894.533/0001-60</div></div>'+
+            '<div class="rp-assinatura" style="max-width:360px;margin:0 auto;"><div class="rp-ass-line"></div><div class="rp-ass-lbl">EMPREGADO</div><div class="rp-ass-name">'+esc(nome)+'</div><div class="rp-ass-lbl">CPF nº '+(mtCpf.trim()?esc(mtCpf.trim()):b('140px'))+'</div></div>'+
           '</div>'+
         '</div>';
     }
