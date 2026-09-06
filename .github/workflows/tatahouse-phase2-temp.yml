@@ -1,0 +1,235 @@
+name: TATA House Governance Phase 2 (temporary)
+
+on:
+  push:
+    branches:
+      - feat/tatahouse-governanca-phase1
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tatahouse-governanca-phase1
+      - name: Apply fail-closed Phase 2 patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          bridge_path = Path('compliance/kpis/tatahouse/house_governanca_local_bridge_v1.js')
+          html_path = Path('compliance/kpis/tatahouse/cardapio.html')
+          bridge = bridge_path.read_text()
+          html = html_path.read_text()
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 anchor, found {count}')
+              return text.replace(old, new, 1)
+
+          adapter = r'''  function itensDoTipo(dia, tipo) {
+            var itens = dia && Array.isArray(dia.itens) ? dia.itens : [];
+            return itens.filter(function (it) {
+              return it && it.tipo === tipo && texto(it.item);
+            }).map(function (it) {
+              return texto(it.item);
+            });
+          }
+
+          /**
+           * Adapta o objeto de cardápio já carregado pela Governança para o
+           * contrato v1 do House. Não consulta rede e não altera o objeto fonte.
+           * `resumo` é a fonte primária do prato principal porque a própria UI
+           * oficial da Governança o apresenta como “Prato principal”.
+           */
+          function criarSnapshotDoCardapioDia(dia) {
+            dia = dia || {};
+            var principal = texto(dia.resumo) || itensDoTipo(dia, 'principal').join(' · ');
+            return criarSnapshot({
+              data: texto(dia.data),
+              unidade: 'tata-house',
+              principal: principal,
+              guarnicao: itensDoTipo(dia, 'guarnicao').join(' · '),
+              salada: itensDoTipo(dia, 'salada').join(' · ')
+            });
+          }
+
+'''
+          bridge = replace_once(
+              bridge,
+              '  function abrirEEnviar(snapshot, opcoes) {',
+              adapter + '  function abrirEEnviar(snapshot, opcoes) {',
+              'bridge adapter insertion',
+          )
+          bridge = replace_once(
+              bridge,
+              '    criarSnapshot: criarSnapshot,\n    abrirEEnviar: abrirEEnviar',
+              '    criarSnapshot: criarSnapshot,\n    criarSnapshotDoCardapioDia: criarSnapshotDoCardapioDia,\n    abrirEEnviar: abrirEEnviar',
+              'bridge export',
+          )
+
+          publish_ui = '''    <div id="md-house-publish-wrap" style="display:none;padding:0 20px 14px;">\n      <button type="button" class="modal-btn modal-btn-save" id="md-publicar-house" style="width:100%;">Publicar no TATÁ House</button>\n      <div id="md-house-publish-status" style="margin-top:8px;font-family:'DM Mono',monospace;font-size:10px;line-height:1.4;color:var(--muted);"></div>\n    </div>\n'''
+          html = replace_once(
+              html,
+              '    <div class="md-status-banner" id="md-status-banner"></div>',
+              publish_ui + '    <div class="md-status-banner" id="md-status-banner"></div>',
+              'publish UI insertion',
+          )
+
+          script_anchor = '</div>\n\n<script>\n(function() {\n  var DIAS_ABREV'
+          script_repl = '</div>\n\n<script src="/compliance/kpis/tatahouse/house_governanca_local_bridge_v1.js"></script>\n<script>\n(function() {\n  var DIAS_ABREV'
+          html = replace_once(html, script_anchor, script_repl, 'bridge script load')
+
+          publish_logic = r'''  function configurarPublicacaoHouseModal(dia) {
+            var wrap=document.getElementById('md-house-publish-wrap');
+            var btn=document.getElementById('md-publicar-house');
+            var status=document.getElementById('md-house-publish-status');
+            if(!wrap || !btn || !status) return;
+            if(!dia){ wrap.style.display='none'; status.textContent=''; return; }
+            wrap.style.display='';
+            var origem=cozNome(dia.unidade||_uniProc);
+            var unidadeExplicita=_uniProc!=='__todas__';
+            btn.disabled=!unidadeExplicita;
+            btn.title=unidadeExplicita?'Publicar este cardápio aprovado no TATÁ House':'Selecione uma unidade no filtro de Processamento antes de publicar';
+            status.textContent=unidadeExplicita
+              ? ('Origem: '+origem+' → TATÁ House · envio manual, sem backend novo.')
+              : 'Selecione uma unidade no filtro de Processamento antes de publicar no House.';
+            if(!btn.dataset.houseBound){
+              btn.dataset.houseBound='1';
+              btn.addEventListener('click', publicarHouseModal);
+            }
+          }
+
+          function publicarHouseModal(){
+            if(!_procData) return;
+            if(_uniProc==='__todas__'){
+              showToast('Selecione uma unidade no Processamento antes de publicar.');
+              return;
+            }
+            var bridge=window.TataHouseGovernancaLocalBridgeV1;
+            if(!bridge || typeof bridge.criarSnapshotDoCardapioDia!=='function'){
+              showToast('Bridge do TATÁ House indisponível.');
+              return;
+            }
+            var btn=document.getElementById('md-publicar-house');
+            var status=document.getElementById('md-house-publish-status');
+            var origem=cozNome(_procData.unidade||_uniProc);
+            var snapshot;
+            try{
+              snapshot=bridge.criarSnapshotDoCardapioDia(_procData);
+            }catch(e){
+              var msg=e&&e.message?e.message:String(e);
+              if(status) status.textContent='Não publicado: '+msg;
+              showToast('Não publicado: '+msg);
+              return;
+            }
+            _btnCarregando(btn,'Publicando…');
+            if(status) status.textContent='Abrindo o House para '+snapshot.data+' · '+origem+'…';
+            bridge.abrirEEnviar(snapshot,{aoStatus:function(etapa){
+              var mapa={
+                'abrindo-house':'Abrindo o TATÁ House…',
+                'house-pronto':'House pronto. Enviando cardápio aprovado…',
+                'enviado':'Cardápio enviado. Aguardando confirmação…',
+                'confirmado':'House confirmou a persistência local.'
+              };
+              if(status && mapa[etapa]) status.textContent=mapa[etapa];
+            }}).then(function(r){
+              if(status) status.textContent='Publicado: '+origem+' → TATÁ House · '+r.data+' · ACK '+r.correlationId;
+              showToast('Cardápio publicado no TATÁ House ✓');
+            }).catch(function(e){
+              var msg=e&&e.message?e.message:String(e);
+              if(status) status.textContent='Falha ao publicar: '+msg;
+              showToast('Falha ao publicar no House');
+            }).finally(function(){
+              _btnPronto(btn,'Publicar no TATÁ House');
+            });
+          }
+
+'''
+          html = replace_once(
+              html,
+              '  function onModalPrimary(){',
+              publish_logic + '  function onModalPrimary(){',
+              'publish logic insertion',
+          )
+          html = replace_once(
+              html,
+              "    setModalReadonly(true, isAval);\n    document.getElementById('modal-dia').classList.add('active');",
+              "    setModalReadonly(true, isAval);\n    configurarPublicacaoHouseModal(dia);\n    document.getElementById('modal-dia').classList.add('active');",
+              'process modal activation',
+          )
+          html = replace_once(
+              html,
+              "    setModalReadonly(false, true);\n    document.getElementById('modal-dia').classList.add('active');",
+              "    setModalReadonly(false, true);\n    configurarPublicacaoHouseModal(null);\n    document.getElementById('modal-dia').classList.add('active');",
+              'draft modal isolation',
+          )
+          html = replace_once(
+              html,
+              "  function fecharModal(){ document.getElementById('modal-dia').classList.remove('active'); document.body.style.overflow=''; _editIdx=-1; _modalMode='elab'; _procData=null; var _b=document.getElementById('md-status-banner'); if(_b) _b.innerHTML=''; }",
+              "  function fecharModal(){ document.getElementById('modal-dia').classList.remove('active'); document.body.style.overflow=''; _editIdx=-1; _modalMode='elab'; _procData=null; configurarPublicacaoHouseModal(null); var _b=document.getElementById('md-status-banner'); if(_b) _b.innerHTML=''; }",
+              'modal cleanup',
+          )
+
+          bridge_path.write_text(bridge)
+          html_path.write_text(html)
+          PY
+      - name: Prove adapter and structural boundary
+        run: |
+          node --check compliance/kpis/tatahouse/house_governanca_local_bridge_v1.js
+          cat > /tmp/phase2-adapter-test.cjs <<'NODE'
+          const fs=require('fs'); const vm=require('vm');
+          const code=fs.readFileSync('compliance/kpis/tatahouse/house_governanca_local_bridge_v1.js','utf8');
+          const fakeWindow={crypto:{randomUUID:()=> 'corr-test'},addEventListener(){},removeEventListener(){},setTimeout,clearTimeout,open(){return null;}};
+          vm.runInNewContext(code,{window:fakeWindow,Date,Math,Promise,Error,Number,Array,Object,String});
+          const b=fakeWindow.TataHouseGovernancaLocalBridgeV1;
+          if(!b || typeof b.criarSnapshotDoCardapioDia!=='function') throw new Error('adapter not exported');
+          const s=b.criarSnapshotDoCardapioDia({
+            data:'2026-09-06', unidade:'Itaim', resumo:' Frango acebolado ',
+            itens:[
+              {tipo:'principal',item:'Principal alternativo'},
+              {tipo:'guarnicao',item:' Arroz e Feijão '},
+              {tipo:'guarnicao',item:' Legumes '},
+              {tipo:'salada',item:' Folhas '}
+            ]
+          });
+          if(s.unidade!=='tata-house') throw new Error('target unit drift');
+          if(s.principal!=='Frango acebolado') throw new Error('resumo must be primary principal source');
+          if(s.guarnicao!=='Arroz e Feijão · Legumes') throw new Error('guarnicao mapping mismatch');
+          if(s.salada!=='Folhas') throw new Error('salada mapping mismatch');
+          const f=b.criarSnapshotDoCardapioDia({data:'2026-09-06',resumo:'',itens:[{tipo:'principal',item:'Peixe'},{tipo:'principal',item:'Omelete'}]});
+          if(f.principal!=='Peixe · Omelete') throw new Error('typed principal fallback mismatch');
+          let rejected=false; try{b.criarSnapshotDoCardapioDia({data:'2026-02-31',resumo:'Frango',itens:[]});}catch{rejected=true;}
+          if(!rejected) throw new Error('impossible date accepted');
+          console.log('PHASE2_ADAPTER=PASS',JSON.stringify(s));
+          NODE
+          node /tmp/phase2-adapter-test.cjs
+          python3 - <<'PY'
+          from pathlib import Path
+          h=Path('compliance/kpis/tatahouse/cardapio.html').read_text()
+          checks={
+            'bridge script': h.count('src="/compliance/kpis/tatahouse/house_governanca_local_bridge_v1.js"')==1,
+            'publish button': h.count('id="md-publicar-house"')==1,
+            'publish logic': h.count('function publicarHouseModal()')==1,
+            'explicit unit gate': h.count("_uniProc==='__todas__'")>=1,
+            'adapter use': h.count('bridge.criarSnapshotDoCardapioDia(_procData)')==1,
+          }
+          bad=[k for k,v in checks.items() if not v]
+          if bad: raise SystemExit('structural checks failed: '+', '.join(bad))
+          print('PHASE2_HTML_STRUCTURE=PASS', checks)
+          PY
+          git diff --check
+          git diff -- compliance/kpis/tatahouse/house_governanca_local_bridge_v1.js compliance/kpis/tatahouse/cardapio.html
+      - name: Commit proven Phase 2 and remove temporary workflow
+        run: |
+          rm .github/workflows/tatahouse-phase2-temp.yml
+          git config user.name "cesarspichencoff-cmyk"
+          git config user.email "cesar.spichencoff@gmail.com"
+          git add compliance/kpis/tatahouse/house_governanca_local_bridge_v1.js compliance/kpis/tatahouse/cardapio.html .github/workflows/tatahouse-phase2-temp.yml
+          git commit -m "feat(tatahouse): publish approved governance menu to House"
+          git push origin HEAD:feat/tatahouse-governanca-phase1
