@@ -10,6 +10,9 @@ on:
       - 'compliance/kpis/tatahouse/house_governanca_avaliacoes_local_v1.js'
       - 'compliance/kpis/tatahouse/house_governanca_avaliacoes_receiver_v1.test.cjs'
       - 'compliance/kpis/tatahouse/house_governanca_avaliacoes_backend_contract_v1.json'
+      - 'compliance/kpis/tatahouse/house_governanca_readiness_v1.json'
+      - 'compliance/kpis/tatahouse/house_governanca_readiness_v1.js'
+      - 'compliance/kpis/tatahouse/prontidao.html'
       - 'compliance/kpis/tatahouse/central.html'
       - '.github/workflows/tatahouse-avaliacoes-ingest-v1-temp.yml'
 
@@ -27,6 +30,7 @@ jobs:
           node --check compliance/kpis/tatahouse/house_governanca_avaliacoes_ingest_v1.test.cjs
           node --check compliance/kpis/tatahouse/house_governanca_avaliacoes_local_v1.js
           node --check compliance/kpis/tatahouse/house_governanca_avaliacoes_receiver_v1.test.cjs
+          node --check compliance/kpis/tatahouse/house_governanca_readiness_v1.js
       - name: Prove ingest semantics
         run: node compliance/kpis/tatahouse/house_governanca_avaliacoes_ingest_v1.test.cjs
       - name: Prove optional durable receiver seam
@@ -53,4 +57,24 @@ jobs:
           if(!s.includes(core)||!s.includes(receiver)||s.indexOf(core)>s.indexOf(receiver)) throw new Error('Central script order invalid');
           if(/definirPersistidorDuravel\s*\(/.test(s)) throw new Error('Central must not activate durable persistence yet');
           console.log('CENTRAL_DURABLE_CORE_DORMANT=PASS');
+          NODE
+      - name: Validate backend readiness separation
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),vm=require('vm');
+          const manifest=JSON.parse(fs.readFileSync('compliance/kpis/tatahouse/house_governanca_readiness_v1.json','utf8'));
+          const ctx={};ctx.globalThis=ctx;vm.createContext(ctx);
+          vm.runInContext(fs.readFileSync('compliance/kpis/tatahouse/house_governanca_readiness_v1.js','utf8'),ctx);
+          const api=ctx.TataHouseGovernancaReadinessV1;
+          const all=api.avaliarTodos(manifest);
+          if(!all.valido) throw new Error('readiness invalid: '+all.erros.join(','));
+          if(!all.resultados.pre_supabase_functional.ready) throw new Error('pre-supabase regressed');
+          const back=all.resultados.backend_activation;
+          if(!back||back.ready) throw new Error('backend activation must remain blocked');
+          const ids=new Set(back.blockers.map(x=>x.id));
+          for(const id of ['integration_live_transport','live_permission_data_verification','legacy_evaluation_schema_live','human_backend_mutation_authorization']) if(!ids.has(id)) throw new Error('missing backend blocker '+id);
+          if(manifest.fase!=='BACKEND_READY_NOT_APPLIED') throw new Error('phase drift');
+          const html=fs.readFileSync('compliance/kpis/tatahouse/prontidao.html','utf8');
+          if(!html.includes("'backend_activation'")) throw new Error('backend target absent from dashboard');
+          console.log('READINESS_BACKEND_TARGET_FAIL_CLOSED=PASS');
           NODE
