@@ -1,55 +1,33 @@
-name: TATA House central index patch temporary
+name: TATA House Central Index Patch
 
 on:
   push:
-    branches:
-      - feat/tatahouse-governanca-phase1
+    branches: [feat/tatahouse-governanca-phase1]
 
 permissions:
   contents: write
 
 jobs:
-  patch-and-verify:
+  patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feat/tatahouse-governanca-phase1
-          fetch-depth: 0
-      - name: Insert Central House as primary category entry
+      - name: Patch index
+        run: python .github/scripts/tatahouse_patch_central_index.py
+      - name: Verify index
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('compliance/kpis/tatahouse/index.html')
-          s = p.read_text(encoding='utf-8')
-          marker = '      <!-- Nosso Propósito -->'
-          if 'data-tatahouse-central="v1"' in s:
-              raise SystemExit('Central entry already present; refusing duplicate patch')
-          if s.count(marker) != 1:
-              raise SystemExit(f'Expected exactly one insertion marker, found {s.count(marker)}')
-          bloco = '''      <!-- Central TATÁ House — shell governado do produto oficial -->
-          <div class="ac-dept-chip active-chip" data-tatahouse-central="v1" onclick="location.href='central.html'" style="cursor:pointer">
-            <div class="ac-chip-icon">
-              <svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-7h6v7"/></svg>
-            </div>
-            <span class="ac-chip-label">Central TATÁ House</span>
-          </div>
-
-'''
-          p.write_text(s.replace(marker, bloco + marker), encoding='utf-8')
-          PY
-      - name: Verify bounded navigation change
-        run: |
-          test "$(grep -c 'data-tatahouse-central="v1"' compliance/kpis/tatahouse/index.html)" -eq 1
+          grep -q 'data-tatahouse-central="v1"' compliance/kpis/tatahouse/index.html
           grep -q "location.href='central.html'" compliance/kpis/tatahouse/index.html
-          grep -q "Central TATÁ House" compliance/kpis/tatahouse/index.html
-          git diff --check -- compliance/kpis/tatahouse/index.html
           test -f compliance/kpis/tatahouse/central.html
-      - name: Commit product patch and remove temporary workflow
+          git diff --check -- compliance/kpis/tatahouse/index.html
+      - name: Commit bounded product change
         run: |
           rm .github/workflows/tatahouse-central-index-temp.yml
+          rm .github/scripts/tatahouse_patch_central_index.py
           git config user.name "cesarspichencoff-cmyk"
           git config user.email "cesar.spichencoff@gmail.com"
-          git add compliance/kpis/tatahouse/index.html .github/workflows/tatahouse-central-index-temp.yml
+          git add compliance/kpis/tatahouse/index.html .github/workflows/tatahouse-central-index-temp.yml .github/scripts/tatahouse_patch_central_index.py
           git commit -m "feat(tatahouse): make Central House primary governance entry"
           git push origin HEAD:feat/tatahouse-governanca-phase1
