@@ -12,6 +12,37 @@ assert.equal(recipe.status, 'PREPARED_NOT_AUTHORIZED');
 assert.equal(recipe.baseProducao.sha, '6dc04827b195aaca9d4653618e5a40ca64a1a6f4');
 assert.equal(recipe.featureFonte.sha, 'e7b3b791750ba85b1da2f6f229a3168e69c0a217');
 
+const dry = recipe.evidencias.dryRunReconstrucao;
+assert.equal(dry.runId, '34037071715');
+assert.equal(dry.classificacao, 'PROVEN_CONTROLLED_RUNNER');
+assert.equal(dry.candidateFiles, 31);
+assert.equal(dry.testsPassed, 190);
+assert.equal(dry.typecheck, 'PASS');
+assert.equal(dry.build, 'PASS');
+
+const browser = recipe.evidencias.browserExactOrigin;
+assert.equal(browser.runId, '34045349911');
+assert.equal(browser.classificacao, 'PROVEN_CONTROLLED_BROWSER');
+assert.equal(browser.harnessSourceCommit, 'b21ece6eac5a5bb903036291271ca4bbb473e628');
+for (const key of [
+  'exactOrigins',
+  'oneReadonlyRpcPerOpen',
+  'noWritePrimitives',
+  'minimization',
+  'transientOnly',
+  'frequencyInfluence',
+  'failClosedFallback',
+  'zeroLiveSupabaseNetwork',
+  'mobileNoOverflow'
+]) {
+  assert.equal(browser[key], 'PASS', `${key} deve permanecer PASS na evidencia controlada`);
+}
+const proofLimit = recipe.evidencias.limiteDaProva;
+assert.equal(proofLimit.supabaseSessionAndRpcResponse, 'SIMULATION');
+assert.equal(proofLimit.liveRpcSignatureGrantsRlsBehavior, 'UNKNOWN_NOT_PROVEN_LIVE');
+assert.equal(proofLimit.productionAuthorized, false);
+assert.equal(proofLimit.plannerWriteAuthorized, false);
+
 const perfis = Object.fromEntries(recipe.perfis.map((p) => [p.id, p]));
 assert.ok(perfis.transport_only);
 assert.ok(perfis.readonly_intelligence_parity);
@@ -53,6 +84,9 @@ assert.equal(recipe.invariantes.humanAuthorizationRequired, true);
 assert.equal(recipe.invariantes.freshReadBeforeEffectBoundary, true);
 
 console.log('CLEAN_CANDIDATE_RECIPE=PASS');
+console.log('CLEAN_CANDIDATE_DRYRUN_EVIDENCE=PASS');
+console.log('CLEAN_CANDIDATE_BROWSER_EVIDENCE=PASS');
+console.log('CLEAN_CANDIDATE_PROOF_LIMIT=PASS');
 console.log('CLEAN_CANDIDATE_TRANSPORT_NOT_INTELLIGENCE=PASS');
 console.log('CLEAN_CANDIDATE_READONLY_PARITY_PROFILE=PASS');
 console.log('CLEAN_CANDIDATE_SCENARIO_SUBSTRATE=PASS');
