@@ -1,0 +1,185 @@
+name: TATA House source-unit roundtrip final temporary
+
+on:
+  push:
+    branches: [feat/tatahouse-governanca-phase1]
+
+permissions:
+  contents: write
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tatahouse-governanca-phase1
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: cesarspichencoff-cmyk/tata-house.github.io
+          ref: feat/house-governanca-phase1
+          path: house
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build House without integration backend
+        working-directory: house
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install Chromium
+        run: |
+          mkdir -p /tmp/house-roundtrip
+          cd /tmp/house-roundtrip
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Prepare exact-origin HTTPS proof
+        run: |
+          cat > /tmp/roundtrip-cert.cnf <<'EOF'
+          [req]
+          distinguished_name=req_dn
+          x509_extensions=v3_req
+          prompt=no
+          [req_dn]
+          CN=tata-house-roundtrip
+          [v3_req]
+          subjectAltName=@alt_names
+          [alt_names]
+          DNS.1=tata-house.github.io
+          DNS.2=lideres.tatasushi.tech
+          EOF
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 -keyout /tmp/roundtrip-key.pem -out /tmp/roundtrip-cert.pem -config /tmp/roundtrip-cert.cnf >/dev/null 2>&1
+
+          cat > /tmp/roundtrip.cjs <<'NODE'
+          const https=require('https'),fs=require('fs'),path=require('path');
+          const mode=process.argv[2];
+          const root=process.env.GITHUB_WORKSPACE;
+          const houseRoot=path.join(root,'house','out');
+          const gateStub=`(function(){
+            document.documentElement.dataset.auth='ok';
+            window.GOV_PAGE_ID='governanca-kpis-tatahouse-cardapio';
+            window.__lideresSession={displayName:'E2E',perfil:'gestao'};
+            window.__DIA={dia_id:'roundtrip-dia-1',data:'2026-09-06',unidade:'Itaim',status:'aguardando_preparo',resumo:'Frango Roundtrip',aprovado_em:'2026-09-05T18:00:00Z',comprado_em:null,recebido_em:null,n_restricoes:0,almoco:60,jantar:0,marmitas:10,obs:'',itens:[{tipo:'principal',item:'Frango Roundtrip',qtd:null,un:'',custo:null,insumos:[]},{tipo:'guarnicao',item:'Arroz Roundtrip',qtd:null,un:'',custo:null,insumos:[]},{tipo:'salada',item:'Folhas Roundtrip',qtd:null,un:'',custo:null,insumos:[]}]};
+            function r(data){return Promise.resolve({data,error:null});}
+            window.__lideresSupa={schema:function(){return {rpc:function(name){
+              if(name==='cozinhas_lista') return r([{chave:'Itaim',nome:'TATÁ House - Itaim'}]);
+              if(name==='refeicoes_elab_primeira_data') return r('2026-09-06');
+              if(name==='refeicoes_processamento') return r([JSON.parse(JSON.stringify(window.__DIA))]);
+              return r([]);
+            },from:function(){return {select:function(){return r([]);}};}};}};
+          })();`;
+
+          function mime(f){if(f.endsWith('.html'))return'text/html; charset=utf-8';if(f.endsWith('.js')||f.endsWith('.mjs'))return'application/javascript; charset=utf-8';if(f.endsWith('.css'))return'text/css; charset=utf-8';if(f.endsWith('.json'))return'application/json; charset=utf-8';if(f.endsWith('.svg'))return'image/svg+xml';if(f.endsWith('.png'))return'image/png';if(f.endsWith('.woff2'))return'font/woff2';return'application/octet-stream';}
+          function send(res,c,b,t='text/plain; charset=utf-8'){res.writeHead(c,{'content-type':t,'cache-control':'no-store'});res.end(b);}
+          function serve(res,base,p){let rel=decodeURIComponent(p);while(rel.startsWith('/'))rel=rel.slice(1);if(!rel)rel='index.html';if(rel.endsWith('/'))rel+='index.html';const br=path.resolve(base),f=path.resolve(base,rel);if(!f.startsWith(br+path.sep)&&f!==br)return send(res,403,'forbidden');try{if(!fs.statSync(f).isFile())return send(res,404,'not found');res.writeHead(200,{'content-type':mime(f),'cache-control':'no-store'});fs.createReadStream(f).pipe(res);}catch{return send(res,404,'not found');}}
+          function server(){https.createServer({key:fs.readFileSync('/tmp/roundtrip-key.pem'),cert:fs.readFileSync('/tmp/roundtrip-cert.pem')},(req,res)=>{const host=(req.headers.host||'').split(':')[0],p=new URL(req.url,'https://'+host).pathname;if(host==='lideres.tatasushi.tech'){if(p==='/compliance/gate.js')return send(res,200,gateStub,'application/javascript; charset=utf-8');return serve(res,root,p);}if(host==='tata-house.github.io')return serve(res,houseRoot,p);return send(res,421,'unknown host');}).listen(443,'0.0.0.0',()=>console.log('ROUNDTRIP_SERVER=READY'));}
+
+          async function test(){
+            const {chromium}=require('/tmp/house-roundtrip/node_modules/playwright');
+            const browser=await chromium.launch({headless:true,args:['--host-resolver-rules=MAP tata-house.github.io 127.0.0.1, MAP lideres.tatasushi.tech 127.0.0.1','--no-proxy-server']});
+            const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:390,height:844},timezoneId:'America/Sao_Paulo'});
+            const writes=[];
+            context.on('request',r=>{if(!['GET','HEAD','OPTIONS'].includes(r.method())) writes.push({method:r.method(),url:r.url()});});
+            await context.addInitScript(()=>{window.__ROUNDTRIP_MESSAGES=[];window.addEventListener('message',e=>{try{window.__ROUNDTRIP_MESSAGES.push({origin:e.origin,type:e.data&&e.data.type,correlationId:e.data&&e.data.correlationId});}catch{}});});
+
+            const leaders=await context.newPage();
+            leaders.on('dialog',d=>d.dismiss());
+            const leaderErrors=[];leaders.on('pageerror',e=>leaderErrors.push(String(e)));
+            await leaders.goto('https://lideres.tatasushi.tech/compliance/kpis/tatahouse/cardapio.html',{waitUntil:'domcontentloaded'});
+            await leaders.locator('.tab-btn[data-tab="processamento"]').click();
+            await leaders.waitForFunction(()=>document.querySelectorAll('.btn-proc-dia').length>0);
+            await leaders.locator('#pf-unidade').selectOption('Itaim');
+            await leaders.locator('.btn-proc-dia').first().click();
+
+            const popup=context.waitForEvent('page');
+            await leaders.locator('#md-publicar-house').click();
+            const house=await popup;
+            house.on('dialog',d=>d.dismiss());
+            const houseErrors=[];house.on('pageerror',e=>houseErrors.push(String(e)));
+            await house.waitForLoadState('domcontentloaded');
+
+            await house.waitForFunction(()=>{
+              try{
+                const menu=JSON.parse(localStorage.getItem('tata.governanca.cardapio.v1.tata-house.2026-09-06')||'null');
+                const source=JSON.parse(localStorage.getItem('tata.governanca.unidade-fonte.v1')||'null');
+                return menu?.principal==='Frango Roundtrip'&&source?.unidadeFonte==='Itaim';
+              }catch{return false;}
+            },null,{timeout:15000});
+            await leaders.waitForFunction(()=>{const msgs=window.__ROUNDTRIP_MESSAGES||[];return msgs.some(m=>m.origin==='https://tata-house.github.io'&&m.type==='tata-house:governanca:ack:v1');},null,{timeout:15000});
+            const publishStatus=(await leaders.locator('#md-house-publish-status').textContent())||'';
+            if(!publishStatus.includes('ACK ')) throw new Error('ACK não refletido no status: '+publishStatus);
+            console.log('ROUNDTRIP_CARDAPIO_ACK=PASS');
+
+            await house.waitForFunction(()=>document.body.innerText.includes('Frango Roundtrip'),null,{timeout:5000});
+            const persisted=await house.evaluate(()=>({menu:JSON.parse(localStorage.getItem('tata.governanca.cardapio.v1.tata-house.2026-09-06')),source:JSON.parse(localStorage.getItem('tata.governanca.unidade-fonte.v1'))}));
+            if(persisted.menu.unidade!=='tata-house'||persisted.source.unidadeFonte!=='Itaim') throw new Error('persistência inválida '+JSON.stringify(persisted));
+            console.log('ROUNDTRIP_SOURCE_UNIT=PASS',JSON.stringify(persisted.source));
+
+            await house.getByRole('button',{name:/Ótimo/i}).click();
+            await house.getByRole('button',{name:/Enviar avaliação/i}).click();
+            await house.waitForFunction(()=>{try{return JSON.parse(localStorage.getItem('tata.governanca.outbox.v1')||'[]').length===1;}catch{return false;}},null,{timeout:5000});
+            const itaimVote=await house.evaluate(()=>JSON.parse(localStorage.getItem('tata.governanca.outbox.v1'))[0]);
+            if(!itaimVote||itaimVote.tipo!=='avaliacao.prato'||itaimVote.origem!=='tata-house'||itaimVote.data!=='2026-09-06'||itaimVote.unidade!=='Itaim'||itaimVote.prato!=='Frango Roundtrip'||itaimVote.voto!=='bom') throw new Error('voto Itaim inválido '+JSON.stringify(itaimVote));
+            console.log('ROUNDTRIP_ITAIM_VOTE=PASS',JSON.stringify(itaimVote));
+
+            await house.evaluate(()=>{localStorage.removeItem('tata.governanca.unidade-fonte.v1');localStorage.removeItem('tata.governanca.outbox.v1');});
+            await house.waitForFunction(()=>document.body.innerText.toUpperCase().includes('REGULAR'),null,{timeout:7000});
+            await house.getByRole('button',{name:/Regular/i}).click();
+            await house.getByRole('button',{name:/Enviar avaliação/i}).click();
+            await house.waitForFunction(()=>{try{return JSON.parse(localStorage.getItem('tata.governanca.outbox.v1')||'[]').length===1;}catch{return false;}},null,{timeout:5000});
+            const fallbackVote=await house.evaluate(()=>JSON.parse(localStorage.getItem('tata.governanca.outbox.v1'))[0]);
+            if(!fallbackVote||fallbackVote.unidade!=='tata-house'||fallbackVote.prato!=='Frango Roundtrip'||fallbackVote.voto!=='ok') throw new Error('fallback inválido '+JSON.stringify(fallbackVote));
+            console.log('ROUNDTRIP_FALLBACK_VOTE=PASS',JSON.stringify(fallbackVote));
+
+            const overflow=await house.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth);
+            if(overflow) throw new Error('overflow mobile');
+            if(leaderErrors.length||houseErrors.length) throw new Error('page errors '+JSON.stringify({leaderErrors,houseErrors}));
+            const externalWrites=writes.filter(x=>!x.url.startsWith('https://lideres.tatasushi.tech/')&&!x.url.startsWith('https://tata-house.github.io/'));
+            if(externalWrites.length) throw new Error('write externo inesperado '+JSON.stringify(externalWrites));
+            console.log('ROUNDTRIP_NO_EXTERNAL_WRITE=PASS');
+            console.log('ROUNDTRIP_MOBILE=PASS');
+            console.log('ROUNDTRIP_FULL=PASS');
+            await browser.close();
+          }
+          if(mode==='server')server();else if(mode==='test')test().catch(e=>{console.error(e);process.exit(1);});else process.exit(2);
+          NODE
+          node --check /tmp/roundtrip.cjs
+
+      - name: Start exact-origin HTTPS harness
+        run: |
+          sudo -E node /tmp/roundtrip.cjs server >/tmp/roundtrip-server.log 2>&1 &
+          for i in $(seq 1 20); do
+            if curl --noproxy '*' --resolve lideres.tatasushi.tech:443:127.0.0.1 -ksSf https://lideres.tatasushi.tech/compliance/kpis/tatahouse/cardapio.html >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/roundtrip-server.log
+          exit 1
+
+      - name: Prove source-unit evaluation roundtrip and fallback
+        run: node /tmp/roundtrip.cjs test
+
+      - name: Diff hygiene
+        run: git diff --check
+
+      - name: Remove temporary workflow safely
+        if: always()
+        run: |
+          git config user.name "cesarspichencoff-cmyk"
+          git config user.email "cesar.spichencoff@gmail.com"
+          for attempt in 1 2 3; do
+            git fetch origin feat/tatahouse-governanca-phase1
+            git reset --hard origin/feat/tatahouse-governanca-phase1
+            if [ ! -f .github/workflows/tatahouse-source-unit-roundtrip-final-temp.yml ]; then exit 0; fi
+            rm -f .github/workflows/tatahouse-source-unit-roundtrip-final-temp.yml
+            git add -A
+            git commit -m "test(tatahouse): remove temporary final source-unit roundtrip" || exit 0
+            if git push origin HEAD:feat/tatahouse-governanca-phase1; then exit 0; fi
+            sleep 1
+          done
+          exit 1
