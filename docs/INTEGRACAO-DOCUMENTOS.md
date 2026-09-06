@@ -269,6 +269,28 @@ matrícula certo/errado, envio completo com sucesso (upload + pendência +
 de falha parcial (1 de 2 falha, o outro é enviado normalmente, modal continua
 aberto com o erro em vez de fechar como se tudo tivesse dado certo).
 
+Feito (2026-09-06): **`doc.html` — botão "Baixar Documentos do Colaborador"
+no drawer**, abrindo modal com um `<select>` de colaborador (roster ativo,
+`docColaboradores`) e baixando **todos** os arquivos desse colaborador num
+`.zip` — todas as versões de todos os tipos, não só a mais recente. Lê
+direto de `colaboradorDocumentos` (já carregado inteiro em `loadAllData`,
+sem RPC nova). Pra cada linha: `createSignedUrl` no bucket certo
+(`link_bucket`) + `fetch` do blob, processado em sequência com progresso
+("Baixando 8/40…") e falha isolada por arquivo (um PDF quebrado não derruba
+o lote — fica de fora do zip e some no resumo final). Nome de cada entrada
+no zip: nome do tipo + competência (com o período por extenso quando é um
+período customizado tipo Cartão de Ponto, não só "YYYY-MM") + versão
+quando > 1; colisão residual é desempatada com um contador.
+Usa JSZip (`cdnjs`, mesmo CDN já usado pro `html2pdf.js`) carregado direto
+no `<head>` — aqui não precisa do truque de iframe do `html2pdf` (não há
+CSS/DOM pra rasterizar, só bytes de arquivos existentes indo pro zip).
+Testado com Playwright mockando Storage/`fetch`/JSZip: seleção lista o
+roster ordenado por nome, resumo mostra a contagem certa de arquivos
+(somando todas as versões), zip final com os nomes de entrada esperados e
+sem colisão, falha parcial isolada (reporta X de Y baixados) e uma falha
+inesperada na montagem do zip (`generateAsync`) é capturada e reabilita o
+botão em vez de travar o modal.
+
 **Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
 é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões
 lado a lado (mesmo padrão de `admissao.html` com "Gerar PDF" +
