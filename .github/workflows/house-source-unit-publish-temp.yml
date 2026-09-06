@@ -1,0 +1,67 @@
+name: TATA House source-unit publication gate
+on:
+  push:
+    branches: [feat/tatahouse-governanca-phase1]
+    paths: [.github/workflows/house-source-unit-publish-temp.yml]
+permissions:
+  contents: write
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tatahouse-governanca-phase1
+          fetch-depth: 0
+      - name: Apply fail-closed source-unit patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('compliance/kpis/tatahouse/house_governanca_local_bridge_v1.js'); s=p.read_text()
+          a="""    var timeoutMs = Number(opcoes.timeoutMs) > 0 ? Number(opcoes.timeoutMs) : 12000;\n    var aoStatus = typeof opcoes.aoStatus === 'function' ? opcoes.aoStatus : function () {};\n"""
+          b="""    var timeoutMs = Number(opcoes.timeoutMs) > 0 ? Number(opcoes.timeoutMs) : 12000;\n    var unidadeFonte = texto(opcoes.unidadeFonte);\n    var aoStatus = typeof opcoes.aoStatus === 'function' ? opcoes.aoStatus : function () {};\n"""
+          if s.count(a)!=1: raise SystemExit('bridge options anchor mismatch')
+          s=s.replace(a,b,1)
+          a="""          janela.postMessage({\n            type: MSG_CARDAPIO,\n            correlationId: corr,\n            payload: snapshot\n          }, HOUSE_ORIGIN);\n"""
+          b="""          janela.postMessage({\n            type: MSG_CARDAPIO,\n            correlationId: corr,\n            ...(unidadeFonte ? { sourceUnit: unidadeFonte } : {}),\n            payload: snapshot\n          }, HOUSE_ORIGIN);\n"""
+          if s.count(a)!=1: raise SystemExit('bridge message anchor mismatch')
+          p.write_text(s.replace(a,b,1))
+
+          p=Path('compliance/kpis/tatahouse/cardapio.html'); s=p.read_text()
+          a="""    bridge.abrirEEnviar(snapshot,{aoStatus:function(etapa){\n"""
+          b="""    bridge.abrirEEnviar(snapshot,{unidadeFonte:_uniProc,aoStatus:function(etapa){\n"""
+          if s.count(a)!=1: raise SystemExit('cardapio publish anchor mismatch')
+          p.write_text(s.replace(a,b,1))
+          PY
+      - name: Syntax and boundary proof
+        run: |
+          node --check compliance/kpis/tatahouse/house_governanca_local_bridge_v1.js
+          python3 - <<'PY'
+          from pathlib import Path
+          b=Path('compliance/kpis/tatahouse/house_governanca_local_bridge_v1.js').read_text()
+          c=Path('compliance/kpis/tatahouse/cardapio.html').read_text()
+          assert 'sourceUnit: unidadeFonte' in b
+          assert 'unidadeFonte:_uniProc' in c
+          assert "unidade: 'tata-house'" in b
+          print('HOUSE_SOURCE_UNIT_ENVELOPE=PASS')
+          print('HOUSE_SNAPSHOT_TARGET_UNCHANGED=PASS')
+          PY
+          git diff --check
+      - name: Commit functional traceability
+        run: |
+          git config user.name "cesarspichencoff-cmyk"
+          git config user.email "cesar.spichencoff@gmail.com"
+          git add compliance/kpis/tatahouse/house_governanca_local_bridge_v1.js compliance/kpis/tatahouse/cardapio.html
+          git commit -m "feat(tatahouse): preserve source unit in House handoff"
+          git push origin HEAD:feat/tatahouse-governanca-phase1
+      - name: Remove temporary workflow
+        if: always()
+        run: |
+          git fetch origin feat/tatahouse-governanca-phase1
+          git reset --hard origin/feat/tatahouse-governanca-phase1
+          git config user.name "cesarspichencoff-cmyk"
+          git config user.email "cesar.spichencoff@gmail.com"
+          rm -f .github/workflows/house-source-unit-publish-temp.yml
+          git add .github/workflows/house-source-unit-publish-temp.yml
+          git commit -m "test(tatahouse): remove temporary source-unit publication gate" || exit 0
+          git push origin HEAD:feat/tatahouse-governanca-phase1
