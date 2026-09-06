@@ -195,6 +195,39 @@ um bug, é só uma margem fina/0.375in por design). Se algum dia quiserem
 margem maior, é mudança deliberada no `BENEF_TERMO_CSS`/`ADM_CSS`/etc, não
 um bug a corrigir.
 
+Feito (2026-09-06): mais dois termos entraram no fluxo de assinatura digital —
+
+- **Termo de Compromisso e Autorização de Desconto (Vale-Transporte)** — em
+  **`beneficios.html` E `admissao.html`**, os dois apontando pro **mesmo**
+  `doc_tipos` ("Termo de Compromisso e Autorização de Desconto"), pra manter
+  um histórico de versões único por colaborador independente de qual página
+  gerou. Em `admissao.html` era item especial (`vale_transporte`, "não vem do
+  catálogo" — comentário no próprio código), só com impressão; `_admSalvarUmTermo`
+  agora escolhe entre `_admBuildDocPageHtml` (termos normais) e `_admVtBuildPage`
+  (Vale-Transporte, campos próprios: endereço, opção sim/não, linhas casa↔trabalho)
+  conforme o `doc.id`, e `salvarTermosParaAssinatura`/`_admCarregarDocTipos` foram
+  ajustados pra incluir esse item especial no fluxo. Removida a linha de
+  assinatura física dos dois (mesmo padrão já estabelecido — só assinatura
+  digital via app).
+- **Termo de Autorização de Desconto em Folha - Plano de Saúde de Dependente**
+  — novo, só em `beneficios.html`. Novo `doc_tipos` próprio.
+
+Em `beneficios.html`, a função `enviarMutuoParaAssinatura` (que só mandava o
+Mútuo) virou `enviarTermosParaAssinatura`, que percorre **todos** os termos
+marcados (VT, Mútuo, Desconto de Dependente) e manda cada um pra assinatura
+em sequência — mesmo padrão do `salvarTermosParaAssinatura` de
+`admissao.html`. O núcleo de upload+pendência+envio foi extraído pra
+`_benefEnviarUmTermo(tipoNome, pageHtml, nomeArquivo, matricula, emitidoPor)`,
+reaproveitado pelos três. `_benefCarregarTipoMutuo` (fixo no Mútuo) virou
+`_benefCarregarTipoPorNome(nome)`, com cache por nome.
+
+Testado (Playwright, sem depender do gate.js real): PDF de cada termo
+gerado via `page.pdf()` — cabe numa página só, sem assinatura física; fluxo
+de múltipla seleção testado mockando `_benefEnviarUmTermo`/`_admSalvarUmTermo`,
+confirmando que os termos marcados são todos enfileirados e enviados.
+
+Assistência Médica segue de fora (sem checkbox reativado, sem `doc_tipos`).
+
 **Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
 é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões
 lado a lado (mesmo padrão de `admissao.html` com "Gerar PDF" +

@@ -1679,7 +1679,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <div class="benef-spin" id="benef-spin"></div>
           <span id="benef-btn-label">Gerar PDF</span>
         </button>
-        <button class="benef-btn" id="benef-btn-digital" onclick="enviarMutuoParaAssinatura()">
+        <button class="benef-btn" id="benef-btn-digital" onclick="enviarTermosParaAssinatura()">
           <div class="benef-spin" id="benef-spin-digital"></div>
           <span id="benef-btn-digital-label">Enviar para Assinatura Digital</span>
         </button>
@@ -2125,6 +2125,111 @@ function _benefShowError(msg) {
     );
   }
 
+  // Monta a página do Termo de Vale Transporte — usada tanto pela impressão em lote
+  // (gerarTermosBenef) quanto pelo envio pra assinatura digital (enviarTermosParaAssinatura).
+  // Mesmo termo/doc_tipos usado em admissao.html (_admVtBuildPage) — histórico de versões
+  // no doc.html fica unificado independente de qual página gerou.
+  function _benefBuildVtPageHtml(p) {
+    var esc = _benefEsc, b = _benefBlank;
+    var boxOn  = '<span style="display:inline-block;width:11px;height:11px;border:1.2px solid #333;text-align:center;line-height:10px;font-size:9px;vertical-align:middle;margin-right:5px;">✓</span>';
+    var boxOff = '<span style="display:inline-block;width:11px;height:11px;border:1.2px solid #333;vertical-align:middle;margin-right:5px;"></span>';
+    function vtGrid(rows){
+      if (!rows.length) return '<div style="font-size:10.5px;color:#777;padding:2px 0;">— nenhuma linha informada —</div>';
+      return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">'+ rows.map(function(e){
+        var txt = '<strong>'+esc(e.bilhete||'—')+'</strong>' + (e.linha?' — '+esc(e.linha):'') + (e.valor?': R$ '+esc(e.valor):'');
+        return '<div class="vt-row">'+boxOn+'<span>'+txt+'</span></div>';
+      }).join('') +'</div>';
+    }
+    var introHtml =
+      '<div class="rp-intro">'+
+        '<div class="rp-intro-field grow"><span class="rp-intro-label">Colaborador</span><span class="rp-intro-value">'+esc(p.nome)+'</span></div>'+
+        (p.matricula ? '<div class="rp-intro-field"><span class="rp-intro-label">Matrícula</span><span class="rp-intro-value">'+esc(p.matricula)+'</span></div>' : '')+
+        '<div class="rp-intro-field"><span class="rp-intro-label">Cargo</span><span class="rp-intro-value">'+esc(p.cargo||'—')+'</span></div>'+
+        '<div class="rp-intro-field"><span class="rp-intro-label">Unidade</span><span class="rp-intro-value">'+esc(p.unidade||'—')+'</span></div>'+
+      '</div>';
+    return (
+      '<div class="page">'+
+        '<div class="rp-header">'+
+          '<img class="rp-logo" src="'+_BENEF_LOGO+'" alt="TATÁ">'+
+          '<div class="rp-header-title">Termo de Compromisso e Autorização de Desconto</div>'+
+          '<div class="rp-header-right">Emitido em <strong>'+p.nowFmt+'</strong></div>'+
+        '</div>'+
+        introHtml+
+        '<p style="font-size:10.5px;color:#222;line-height:1.7;text-align:justify;margin-bottom:10px;">Nos termos do artigo 7° do Decreto nº 95.247 de 17 de novembro de 1987, solicito receber o Vale Transporte e comprometo-me:</p>'+
+        '<div style="font-size:10.5px;color:#222;line-height:1.7;margin-bottom:14px;padding-left:8px;">'+
+          '<p style="margin-bottom:6px;"><strong>a)</strong> A utilizá-lo exclusivamente para meu efetivo deslocamento casa-trabalho e trabalho-casa;</p>'+
+          '<p style="margin-bottom:6px;"><strong>b)</strong> A atualizar anualmente ou sempre que ocorrer alteração do meu endereço residencial ou dos serviços e meios de transporte mais adequados ao meu deslocamento casa-trabalho e trabalho-casa;</p>'+
+          '<p style="margin-bottom:6px;"><strong>c)</strong> Autorizo a empresa a descontar mensalmente de meus vencimentos, a parcela equivalente até 6% (seis por cento) do meu salário básico ou vencimento, a título de participações nos custos de Vale Transporte, conforme determina o artigo 9° do Decreto nº 95.247/87;</p>'+
+          '<p><strong>d)</strong> Declaro estar ciente de que a declaração falsa ou o uso indevido do Vale Transporte constituem falta grave, conforme parágrafo 3° do artigo 7° do Decreto nº 95.247/87.</p>'+
+        '</div>'+
+        '<p style="text-align:center;font-size:11px;margin-bottom:12px;">'+
+          '<span style="margin-right:32px;">'+(p.vtOpcao==='sim'?boxOn:boxOff)+' SIM opto pela utilização do Vale Transporte</span>'+
+          '<span>'+(p.vtOpcao==='nao'?boxOn:boxOff)+' NÃO opto pela utilização do Vale Transporte</span>'+
+        '</p>'+
+        '<p style="font-size:10.5px;color:#222;margin-bottom:12px;"><strong>Endereço residencial:</strong> '+(p.vtEndereco.trim()?esc(p.vtEndereco.trim()):b('420px'))+'</p>'+
+        '<div style="margin-bottom:14px;">'+
+          '<div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:#f4f4f4;padding:6px 10px;margin-bottom:8px;border-left:3px solid #35383f;">Opção Casa → Trabalho:</div>'+
+          vtGrid(p.vtCT)+
+        '</div>'+
+        '<div style="margin-bottom:18px;">'+
+          '<div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:#f4f4f4;padding:6px 10px;margin-bottom:8px;border-left:3px solid #35383f;">Opção Trabalho → Casa:</div>'+
+          vtGrid(p.vtTC)+
+        '</div>'+
+        // Sem linha de assinatura física — mesmo padrão do Mútuo/admissao.html.
+        '<p class="rp-ass-declaro">Declaro que li, compreendi e estou de acordo com os termos deste documento, tendo recebido uma cópia.</p>'+
+        '<div class="rp-cidade-data">São Paulo, '+p.dataFmt+'.</div>'+
+      '</div>'
+    );
+  }
+
+  // Monta a página do Termo de Autorização de Desconto em Folha — Plano de Saúde de
+  // Dependente — usada tanto pela impressão em lote quanto pela assinatura digital.
+  function _benefBuildPsPageHtml(p) {
+    var esc = _benefEsc, b = _benefBlank;
+    var nomeUp = (p.nome||'').toUpperCase();
+    var depCpfF = _benefFmtCPF(p.psDepCpf);
+    return (
+      '<div class="page">'+
+        '<div class="rp-header">'+
+          '<img class="rp-logo" src="'+_BENEF_LOGO+'" alt="TATÁ">'+
+          '<div class="rp-header-title">Termo de Autorização de Desconto em Folha<br>Plano de Saúde de Dependente</div>'+
+          '<div class="rp-header-right">Emitido em <strong>'+p.nowFmt+'</strong><br>Emitido por <strong>'+esc(p.emitidoPor)+'</strong></div>'+
+        '</div>'+
+        '<div class="rp-section">'+
+          '<p class="rp-p">Pelo presente instrumento, de um lado, <strong>EMPRESA TATA SUSHI COMERCIO DE ALIMENTOS LTDA</strong>, inscrita no CNPJ nº <strong>23.894.533/0001-60</strong>, doravante denominada <strong>EMPREGADOR</strong>, e, de outro lado, <strong>'+esc(nomeUp)+'</strong>, inscrito(a) no CPF nº <strong>'+(p.mtCpf.trim()?esc(p.mtCpf.trim()):b('140px'))+'</strong>, matrícula nº <strong>'+(p.matricula?esc(p.matricula):b('80px'))+'</strong>, doravante denominado(a) <strong>EMPREGADO(A)</strong>, firmam o presente termo.</p>'+
+
+          '<p class="rp-p" style="margin-top:12px;"><strong>Da Inclusão do Dependente</strong></p>'+
+          '<p class="rp-p">O(A) EMPREGADO(A) declara ter solicitado e autorizado a inclusão do dependente abaixo identificado no plano de saúde disponibilizado pelo EMPREGADOR:</p>'+
+          '<div style="font-size:10.5px;color:#222;line-height:1.9;margin:6px 0 8px 8px;">'+
+            '<div><strong>Nome do dependente:</strong> '+(p.psDepNome.trim()?esc(p.psDepNome.trim()):b('260px'))+'</div>'+
+            '<div><strong>CPF:</strong> '+(depCpfF.trim()?esc(depCpfF.trim()):b('160px'))+'</div>'+
+            '<div><strong>Grau de parentesco:</strong> '+(p.psDepPar.trim()?esc(p.psDepPar.trim()):b('160px'))+'</div>'+
+          '</div>'+
+          '<p class="rp-p">O(A) EMPREGADO(A) declara estar ciente de que o custo referente à inclusão e manutenção do dependente será de sua responsabilidade, conforme as condições do plano contratado pelo EMPREGADOR.</p>'+
+
+          '<p class="rp-p" style="margin-top:12px;"><strong>Da Autorização de Desconto</strong></p>'+
+          '<p class="rp-p">O(A) EMPREGADO(A), de forma livre, expressa e consciente, autoriza o EMPREGADOR a descontar mensalmente em sua folha de pagamento o valor correspondente ao plano de saúde do dependente acima identificado.</p>'+
+          '<p class="rp-p">O desconto permanecerá vigente enquanto o dependente estiver regularmente vinculado ao plano de saúde do EMPREGADOR.</p>'+
+
+          '<p class="rp-p" style="margin-top:12px;"><strong>Dos Reajustes</strong></p>'+
+          '<p class="rp-p">O(A) EMPREGADO(A) declara estar ciente de que o valor do plano poderá sofrer alterações decorrentes de reajustes da operadora, mudança de faixa etária, alteração contratual ou outras condições previstas no plano de saúde.</p>'+
+
+          '<p class="rp-p" style="margin-top:12px;"><strong>Da Exclusão do Dependente</strong></p>'+
+          '<p class="rp-p">O(A) EMPREGADO(A) poderá solicitar a exclusão do dependente, observados os procedimentos e prazos estabelecidos pelo EMPREGADOR e pela operadora do plano de saúde.</p>'+
+          '<p class="rp-p">O desconto permanecerá devido até a efetiva exclusão do dependente junto à operadora, incluindo eventuais valores já faturados antes da conclusão do cancelamento.</p>'+
+
+          '<p class="rp-p" style="margin-top:12px;"><strong>Das Disposições Gerais</strong></p>'+
+          '<p class="rp-p">O(A) EMPREGADO(A) declara ter conhecimento das condições aqui estabelecidas e autoriza expressamente o desconto em folha referente ao plano de saúde de seu dependente.</p>'+
+          '<p class="rp-p">A presente autorização refere-se exclusivamente aos valores relacionados ao dependente identificado neste termo e observará a legislação e as normas coletivas aplicáveis.</p>'+
+          '<p class="rp-p">O benefício de assistência médica, inclusive quando oferecido em diferentes modalidades de cobertura, não integra o salário do empregado para efeitos trabalhistas, conforme o art. 458, §5º, da CLT.</p>'+
+        '</div>'+
+        // Sem linha de assinatura física — mesmo padrão do Mútuo/admissao.html.
+        '<p class="rp-ass-declaro">Por estar de acordo, o(a) EMPREGADO(A) firma o presente termo.</p>'+
+        '<div class="rp-cidade-data" style="margin:8px 0 0;">São Paulo, '+p.dataFmt+'.</div>'+
+      '</div>'
+    );
+  }
+
   function gerarTermosBenef() {
     var colabKey = document.getElementById('benef-colab').value;
     if (!colabKey) { _benefShowError('Selecione o colaborador.'); return; }
@@ -2199,96 +2304,19 @@ function _benefShowError(msg) {
     var pages = '';
 
     if (vtChecked) {
-      // Caixa marcada (✓) / vazia
-      var boxOn  = '<span style="display:inline-block;width:11px;height:11px;border:1.2px solid #333;text-align:center;line-height:10px;font-size:9px;vertical-align:middle;margin-right:5px;">✓</span>';
-      var boxOff = '<span style="display:inline-block;width:11px;height:11px;border:1.2px solid #333;vertical-align:middle;margin-right:5px;"></span>';
-      // Um quadro (grid) a partir das linhas preenchidas no modal
-      function vtGrid(rows){
-        if (!rows.length) return '<div style="font-size:10.5px;color:#777;padding:2px 0;">— nenhuma linha informada —</div>';
-        return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">'+ rows.map(function(e){
-          var txt = '<strong>'+esc(e.bilhete||'—')+'</strong>' + (e.linha?' — '+esc(e.linha):'') + (e.valor?': R$ '+esc(e.valor):'');
-          return '<div class="vt-row">'+boxOn+'<span>'+txt+'</span></div>';
-        }).join('') +'</div>';
-      }
-      pages +=
-        '<div class="page">'+
-          '<div class="rp-header">'+
-            '<img class="rp-logo" src="'+_BENEF_LOGO+'" alt="TATÁ">'+
-            '<div class="rp-header-title">Termo de Compromisso e Autorização de Desconto</div>'+
-            '<div class="rp-header-right">Emitido em <strong>'+nowFmt+'</strong></div>'+
-          '</div>'+
-          introHtml+
-          '<p style="font-size:10.5px;color:#222;line-height:1.7;text-align:justify;margin-bottom:10px;">Nos termos do artigo 7° do Decreto nº 95.247 de 17 de novembro de 1987, solicito receber o Vale Transporte e comprometo-me:</p>'+
-          '<div style="font-size:10.5px;color:#222;line-height:1.7;margin-bottom:14px;padding-left:8px;">'+
-            '<p style="margin-bottom:6px;"><strong>a)</strong> A utilizá-lo exclusivamente para meu efetivo deslocamento casa-trabalho e trabalho-casa;</p>'+
-            '<p style="margin-bottom:6px;"><strong>b)</strong> A atualizar anualmente ou sempre que ocorrer alteração do meu endereço residencial ou dos serviços e meios de transporte mais adequados ao meu deslocamento casa-trabalho e trabalho-casa;</p>'+
-            '<p style="margin-bottom:6px;"><strong>c)</strong> Autorizo a empresa a descontar mensalmente de meus vencimentos, a parcela equivalente até 6% (seis por cento) do meu salário básico ou vencimento, a título de participações nos custos de Vale Transporte, conforme determina o artigo 9° do Decreto nº 95.247/87;</p>'+
-            '<p><strong>d)</strong> Declaro estar ciente de que a declaração falsa ou o uso indevido do Vale Transporte constituem falta grave, conforme parágrafo 3° do artigo 7° do Decreto nº 95.247/87.</p>'+
-          '</div>'+
-          '<p style="text-align:center;font-size:11px;margin-bottom:12px;">'+
-            '<span style="margin-right:32px;">'+(vtOpcao==='sim'?boxOn:boxOff)+' SIM opto pela utilização do Vale Transporte</span>'+
-            '<span>'+(vtOpcao==='nao'?boxOn:boxOff)+' NÃO opto pela utilização do Vale Transporte</span>'+
-          '</p>'+
-          '<p style="font-size:10.5px;color:#222;margin-bottom:12px;"><strong>Endereço residencial:</strong> '+(vtEndereco.trim()?esc(vtEndereco.trim()):b('420px'))+'</p>'+
-          '<div style="margin-bottom:14px;">'+
-            '<div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:#f4f4f4;padding:6px 10px;margin-bottom:8px;border-left:3px solid #35383f;">Opção Casa → Trabalho:</div>'+
-            vtGrid(vtCT)+
-          '</div>'+
-          '<div style="margin-bottom:18px;">'+
-            '<div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:#f4f4f4;padding:6px 10px;margin-bottom:8px;border-left:3px solid #35383f;">Opção Trabalho → Casa:</div>'+
-            vtGrid(vtTC)+
-          '</div>'+
-          '<div class="rp-cidade-data">São Paulo, '+dataFmt+'.</div>'+
-          '<div class="rp-assinaturas">'+
-            '<div class="rp-assinatura"><div class="rp-ass-line"></div><div class="rp-ass-lbl">Assinatura do Colaborador</div><div class="rp-ass-name">'+esc(nome)+'</div></div>'+
-          '</div>'+
-        '</div>';
+      pages += _benefBuildVtPageHtml({
+        nome: nome, matricula: matricula, cargo: cargo, unidade: unidade,
+        vtEndereco: vtEndereco, vtOpcao: vtOpcao, vtCT: vtCT, vtTC: vtTC,
+        dataFmt: dataFmt, nowFmt: nowFmt
+      });
     }
 
     if (psChecked) {
-      var _psEmpUp = (nome||'').toUpperCase();
-      var _psDepCpfF = _benefFmtCPF(psDepCpf);
-      pages +=
-        '<div class="page">'+
-          '<div class="rp-header">'+
-            '<img class="rp-logo" src="'+_BENEF_LOGO+'" alt="TATÁ">'+
-            '<div class="rp-header-title">Termo de Autorização de Desconto em Folha<br>Plano de Saúde de Dependente</div>'+
-            '<div class="rp-header-right">Emitido em <strong>'+nowFmt+'</strong><br>Emitido por <strong>'+esc(emitidoPor)+'</strong></div>'+
-          '</div>'+
-          '<div class="rp-section">'+
-            '<p class="rp-p">Pelo presente instrumento, de um lado, <strong>EMPRESA TATA SUSHI COMERCIO DE ALIMENTOS LTDA</strong>, inscrita no CNPJ nº <strong>23.894.533/0001-60</strong>, doravante denominada <strong>EMPREGADOR</strong>, e, de outro lado, <strong>'+esc(_psEmpUp)+'</strong>, inscrito(a) no CPF nº <strong>'+(mtCpf.trim()?esc(mtCpf.trim()):b('140px'))+'</strong>, matrícula nº <strong>'+(matricula?esc(matricula):b('80px'))+'</strong>, doravante denominado(a) <strong>EMPREGADO(A)</strong>, firmam o presente termo.</p>'+
-
-            '<p class="rp-p" style="margin-top:12px;"><strong>Da Inclusão do Dependente</strong></p>'+
-            '<p class="rp-p">O(A) EMPREGADO(A) declara ter solicitado e autorizado a inclusão do dependente abaixo identificado no plano de saúde disponibilizado pelo EMPREGADOR:</p>'+
-            '<div style="font-size:10.5px;color:#222;line-height:1.9;margin:6px 0 8px 8px;">'+
-              '<div><strong>Nome do dependente:</strong> '+(psDepNome.trim()?esc(psDepNome.trim()):b('260px'))+'</div>'+
-              '<div><strong>CPF:</strong> '+(_psDepCpfF.trim()?esc(_psDepCpfF.trim()):b('160px'))+'</div>'+
-              '<div><strong>Grau de parentesco:</strong> '+(psDepPar.trim()?esc(psDepPar.trim()):b('160px'))+'</div>'+
-            '</div>'+
-            '<p class="rp-p">O(A) EMPREGADO(A) declara estar ciente de que o custo referente à inclusão e manutenção do dependente será de sua responsabilidade, conforme as condições do plano contratado pelo EMPREGADOR.</p>'+
-
-            '<p class="rp-p" style="margin-top:12px;"><strong>Da Autorização de Desconto</strong></p>'+
-            '<p class="rp-p">O(A) EMPREGADO(A), de forma livre, expressa e consciente, autoriza o EMPREGADOR a descontar mensalmente em sua folha de pagamento o valor correspondente ao plano de saúde do dependente acima identificado.</p>'+
-            '<p class="rp-p">O desconto permanecerá vigente enquanto o dependente estiver regularmente vinculado ao plano de saúde do EMPREGADOR.</p>'+
-
-            '<p class="rp-p" style="margin-top:12px;"><strong>Dos Reajustes</strong></p>'+
-            '<p class="rp-p">O(A) EMPREGADO(A) declara estar ciente de que o valor do plano poderá sofrer alterações decorrentes de reajustes da operadora, mudança de faixa etária, alteração contratual ou outras condições previstas no plano de saúde.</p>'+
-
-            '<p class="rp-p" style="margin-top:12px;"><strong>Da Exclusão do Dependente</strong></p>'+
-            '<p class="rp-p">O(A) EMPREGADO(A) poderá solicitar a exclusão do dependente, observados os procedimentos e prazos estabelecidos pelo EMPREGADOR e pela operadora do plano de saúde.</p>'+
-            '<p class="rp-p">O desconto permanecerá devido até a efetiva exclusão do dependente junto à operadora, incluindo eventuais valores já faturados antes da conclusão do cancelamento.</p>'+
-
-            '<p class="rp-p" style="margin-top:12px;"><strong>Das Disposições Gerais</strong></p>'+
-            '<p class="rp-p">O(A) EMPREGADO(A) declara ter conhecimento das condições aqui estabelecidas e autoriza expressamente o desconto em folha referente ao plano de saúde de seu dependente.</p>'+
-            '<p class="rp-p">A presente autorização refere-se exclusivamente aos valores relacionados ao dependente identificado neste termo e observará a legislação e as normas coletivas aplicáveis.</p>'+
-            '<p class="rp-p">O benefício de assistência médica, inclusive quando oferecido em diferentes modalidades de cobertura, não integra o salário do empregado para efeitos trabalhistas, conforme o art. 458, §5º, da CLT.</p>'+
-            '<p class="rp-p">Por estar de acordo, o(a) EMPREGADO(A) firma o presente termo.</p>'+
-          '</div>'+
-          '<div class="rp-cidade-data">São Paulo, '+dataFmt+'.</div>'+
-          '<div class="rp-assinaturas">'+
-            '<div class="rp-assinatura"><div class="rp-ass-line"></div><div class="rp-ass-lbl">Assinatura do Colaborador</div><div class="rp-ass-name">'+esc(nome)+'</div></div>'+
-          '</div>'+
-        '</div>';
+      pages += _benefBuildPsPageHtml({
+        nome: nome, matricula: matricula, mtCpf: mtCpf,
+        psDepNome: psDepNome, psDepCpf: psDepCpf, psDepPar: psDepPar,
+        dataFmt: dataFmt, nowFmt: nowFmt, emitidoPor: emitidoPor
+      });
     }
 
     if (amChecked) {
@@ -2350,20 +2378,21 @@ function _benefShowError(msg) {
     }, 600);
   }
 
-/* ── Assinatura digital do Contrato de Mútuo Financeiro (mesmo pipeline de
+/* ── Assinatura digital dos termos de Benefícios (mesmo pipeline de
    admissao.html/armarios.html/estoqueadm.html — ver docs/INTEGRACAO-DOCUMENTOS.md).
-   Vale-Transporte e Assistência Médica seguem só impressão por enquanto — não têm
-   checkbox reativado no modal e não têm doc_tipos cadastrado. ── */
-var _benefMutuoTipoIdCache = null;
-function _benefCarregarTipoMutuo() {
-  if (_benefMutuoTipoIdCache) return Promise.resolve(_benefMutuoTipoIdCache);
+   Vale-Transporte, Contrato de Mútuo e Desconto de Dependente no Plano de Saúde
+   entram nesse fluxo. Assistência Médica segue só impressão por enquanto — não
+   tem checkbox reativado no modal e não tem doc_tipos cadastrado. ── */
+var _benefTipoIdCachePorNome = {};
+function _benefCarregarTipoPorNome(nome) {
+  if (_benefTipoIdCachePorNome[nome]) return Promise.resolve(_benefTipoIdCachePorNome[nome]);
   return new Promise(function(resolve, reject) {
     comSupa(function(supa) {
       supa.rpc('doc_tipos_sandbox_listar').then(function(r) {
         if (r.error) { reject(r.error); return; }
-        var t = (r.data || []).find(function(x) { return x.nome === 'Contrato de Mútuo Financeiro com Autorização de Desconto em Folha'; });
-        if (!t) { reject(new Error('Tipo "Contrato de Mútuo Financeiro com Autorização de Desconto em Folha" não encontrado no catálogo (dp_rh.doc_tipos).')); return; }
-        _benefMutuoTipoIdCache = t.id;
+        var t = (r.data || []).find(function(x) { return x.nome === nome; });
+        if (!t) { reject(new Error('Tipo "'+nome+'" não encontrado no catálogo (dp_rh.doc_tipos).')); return; }
+        _benefTipoIdCachePorNome[nome] = t.id;
         resolve(t.id);
       }).catch(reject);
     });
@@ -2431,54 +2460,14 @@ function _benefSetLoadingDigital(loading, label) {
   if (label) { var l = document.getElementById('benef-btn-digital-label'); if (l) l.textContent = label; }
 }
 
-function enviarMutuoParaAssinatura() {
-  var colabKey = document.getElementById('benef-colab').value;
-  _benefShowError('');
-  if (!colabKey) { _benefShowError('Selecione o colaborador.'); return; }
-  var mtChecked = (document.getElementById('benef-doc-mt')||{}).checked;
-  if (!mtChecked) { _benefShowError('Marque o Contrato de Mútuo Financeiro para enviar por assinatura digital.'); return; }
-
-  var mtValor    = (document.getElementById('benef-mt-valor')    ||{}).value||'';
-  var mtExtenso  = (document.getElementById('benef-mt-extenso')  ||{}).value||'';
-  var mtParcs    = (document.getElementById('benef-mt-parcelas')||{}).value||'';
-  var mtParc     = (document.getElementById('benef-mt-parcela') ||{}).value||'';
-  var mtMeio     = (document.getElementById('benef-mt-meio')    ||{}).value||'';
-  var mtDataDisp = (document.getElementById('benef-mt-datadisp')||{}).value||'';
-  var mtMes1     = (document.getElementById('benef-mt-mes1')    ||{}).value||'';
-
-  var colab     = window.__benefColabMap[colabKey] || {};
-  var nome      = colab.nome || colabKey;
-  var matricula = colab.matricula || '';
-  if (!matricula) { _benefShowError('Colaborador sem matrícula cadastrada — não é possível enviar pra assinatura.'); return; }
-  var mtCpf     = _benefFmtCPF(colab.cpf || '');
-  var nomeUp    = (nome||'').toUpperCase();
-
-  var _MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
-  var mtDataDispFmt = mtDataDisp ? (function(){ var p=mtDataDisp.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; })() : '';
-  var mtMes1Fmt = mtMes1 ? (function(){ var p=mtMes1.split('-'); return (_MESES[parseInt(p[1],10)-1]||'')+' de '+p[0]; })() : '';
-  var mtNParc = parseInt(mtParcs, 10) || 0;
-  var _totalNum = _benefParseBRL(mtValor);
-  if (_totalNum > 0 && mtNParc > 0) mtParc = _benefFmtBRL(_totalNum / mtNParc);
-  if (_totalNum > 0) mtExtenso = _extensoReais(_totalNum);
-
-  var _hoje = new Date();
-  var _p2 = function(n){ return String(n).padStart(2,'0'); };
-  var dataFmt = _p2(_hoje.getDate())+'/'+_p2(_hoje.getMonth()+1)+'/'+_hoje.getFullYear();
-  var nowFmt = dataFmt + ', ' + _p2(_hoje.getHours())+':'+_p2(_hoje.getMinutes());
-  var emitidoPor = window.__lideresUser || (window.__lideresSession && window.__lideresSession.displayName) || '—';
-
-  var pageHtml = _benefBuildMutuoPageHtml({
-    nomeUp: nomeUp, matricula: matricula, mtCpf: mtCpf,
-    mtValor: mtValor, mtExtenso: mtExtenso, mtParcs: mtParcs, mtParc: mtParc, mtMeio: mtMeio,
-    mtDataDispFmt: mtDataDispFmt, mtMes1Fmt: mtMes1Fmt, mtNParc: mtNParc,
-    dataFmt: dataFmt, nowFmt: nowFmt, emitidoPor: emitidoPor
-  });
-
-  _benefSetLoadingDigital(true, 'Enviando…');
-  _benefCarregarTipoMutuo().then(function(tipoId) {
+// Núcleo compartilhado: sobe o PDF, cria a pendência no portal e manda pra
+// assinatura de verdade (mesmo pipeline usado em admissao.html/armarios.html —
+// ver docs/INTEGRACAO-DOCUMENTOS.md). Usado por qualquer termo de Benefícios
+// que entre no fluxo de assinatura digital (VT, Mútuo, Desconto de Dependente).
+function _benefEnviarUmTermo(tipoNome, pageHtml, nomeArquivo, matricula, emitidoPor) {
+  return _benefCarregarTipoPorNome(tipoNome).then(function(tipoId) {
     return _benefHtmlParaPdfBlob(pageHtml).then(function(blob) {
       var arquivoPath = 'docs/' + _benefUuid() + '.pdf';
-      var nomeArquivo = nome + ' - Contrato de Mútuo Financeiro.pdf';
       return new Promise(function(resolve, reject) {
         comSupa(function(supa) {
           supa.storage.from('assinaturas').upload(arquivoPath, blob, { upsert: true, contentType: 'application/pdf' }).then(function(rUp) {
@@ -2491,7 +2480,7 @@ function enviarMutuoParaAssinatura() {
           }).then(function(rRow) {
             if (rRow.error) throw rRow.error;
             var linha = rRow.data;
-            var tituloVersionado = 'Contrato de Mútuo Financeiro com Autorização de Desconto em Folha' + (linha.versao > 1 ? ' (v' + linha.versao + ')' : '');
+            var tituloVersionado = tipoNome + (linha.versao > 1 ? ' (v' + linha.versao + ')' : '');
             return supa.schema('tata_plus').rpc('docs_enviar_para_assinatura', {
               p_matricula: matricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
               p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
@@ -2512,10 +2501,90 @@ function enviarMutuoParaAssinatura() {
         });
       });
     });
-  }).then(function() {
+  });
+}
+
+function enviarTermosParaAssinatura() {
+  var colabKey = document.getElementById('benef-colab').value;
+  _benefShowError('');
+  if (!colabKey) { _benefShowError('Selecione o colaborador.'); return; }
+  var vtChecked = (document.getElementById('benef-doc-vt')||{}).checked;
+  var mtChecked = (document.getElementById('benef-doc-mt')||{}).checked;
+  var psChecked = (document.getElementById('benef-doc-ps')||{}).checked;
+  if (!vtChecked && !mtChecked && !psChecked) { _benefShowError('Selecione ao menos um documento (Assistência Médica não entra nesse fluxo — só impressão).'); return; }
+
+  var colab     = window.__benefColabMap[colabKey] || {};
+  var nome      = colab.nome || colabKey;
+  var matricula = colab.matricula || '';
+  if (!matricula) { _benefShowError('Colaborador sem matrícula cadastrada — não é possível enviar pra assinatura.'); return; }
+  var cpfColab  = _benefFmtCPF(colab.cpf || '');
+
+  var _hoje = new Date();
+  var _p2 = function(n){ return String(n).padStart(2,'0'); };
+  var dataFmt = _p2(_hoje.getDate())+'/'+_p2(_hoje.getMonth()+1)+'/'+_hoje.getFullYear();
+  var nowFmt = dataFmt + ', ' + _p2(_hoje.getHours())+':'+_p2(_hoje.getMinutes());
+  var emitidoPor = window.__lideresUser || (window.__lideresSession && window.__lideresSession.displayName) || '—';
+
+  var jobs = [];
+
+  if (vtChecked) {
+    var vtEndereco = (document.getElementById('benef-vt-endereco')||{}).value||'';
+    var vtOpcao = (document.getElementById('benef-vt-opcao')||{}).value||'sim';
+    var vtPageHtml = _benefBuildVtPageHtml({
+      nome: nome, matricula: matricula, cargo: colab.cargo||'', unidade: colab.unidade||'',
+      vtEndereco: vtEndereco, vtOpcao: vtOpcao, vtCT: _vtReadRows('ct'), vtTC: _vtReadRows('tc'),
+      dataFmt: dataFmt, nowFmt: nowFmt
+    });
+    jobs.push(function() {
+      return _benefEnviarUmTermo('Termo de Compromisso e Autorização de Desconto', vtPageHtml, nome + ' - Termo de Vale Transporte.pdf', matricula, emitidoPor);
+    });
+  }
+
+  if (mtChecked) {
+    var mtValor    = (document.getElementById('benef-mt-valor')    ||{}).value||'';
+    var mtExtenso  = (document.getElementById('benef-mt-extenso')  ||{}).value||'';
+    var mtParcs    = (document.getElementById('benef-mt-parcelas')||{}).value||'';
+    var mtParc     = (document.getElementById('benef-mt-parcela') ||{}).value||'';
+    var mtMeio     = (document.getElementById('benef-mt-meio')    ||{}).value||'';
+    var mtDataDisp = (document.getElementById('benef-mt-datadisp')||{}).value||'';
+    var mtMes1     = (document.getElementById('benef-mt-mes1')    ||{}).value||'';
+    var _MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    var mtDataDispFmt = mtDataDisp ? (function(){ var p=mtDataDisp.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; })() : '';
+    var mtMes1Fmt = mtMes1 ? (function(){ var p=mtMes1.split('-'); return (_MESES[parseInt(p[1],10)-1]||'')+' de '+p[0]; })() : '';
+    var mtNParc = parseInt(mtParcs, 10) || 0;
+    var _totalNum = _benefParseBRL(mtValor);
+    if (_totalNum > 0 && mtNParc > 0) mtParc = _benefFmtBRL(_totalNum / mtNParc);
+    if (_totalNum > 0) mtExtenso = _extensoReais(_totalNum);
+    var mtPageHtml = _benefBuildMutuoPageHtml({
+      nomeUp: (nome||'').toUpperCase(), matricula: matricula, mtCpf: cpfColab,
+      mtValor: mtValor, mtExtenso: mtExtenso, mtParcs: mtParcs, mtParc: mtParc, mtMeio: mtMeio,
+      mtDataDispFmt: mtDataDispFmt, mtMes1Fmt: mtMes1Fmt, mtNParc: mtNParc,
+      dataFmt: dataFmt, nowFmt: nowFmt, emitidoPor: emitidoPor
+    });
+    jobs.push(function() {
+      return _benefEnviarUmTermo('Contrato de Mútuo Financeiro com Autorização de Desconto em Folha', mtPageHtml, nome + ' - Contrato de Mútuo Financeiro.pdf', matricula, emitidoPor);
+    });
+  }
+
+  if (psChecked) {
+    var psDepNome = (document.getElementById('benef-ps-dep-nome')||{}).value||'';
+    var psDepCpf  = (document.getElementById('benef-ps-dep-cpf') ||{}).value||'';
+    var psDepPar  = (document.getElementById('benef-ps-dep-parentesco')||{}).value||'';
+    var psPageHtml = _benefBuildPsPageHtml({
+      nome: nome, matricula: matricula, mtCpf: cpfColab,
+      psDepNome: psDepNome, psDepCpf: psDepCpf, psDepPar: psDepPar,
+      dataFmt: dataFmt, nowFmt: nowFmt, emitidoPor: emitidoPor
+    });
+    jobs.push(function() {
+      return _benefEnviarUmTermo('Termo de Autorização de Desconto em Folha - Plano de Saúde de Dependente', psPageHtml, nome + ' - Termo de Desconto de Dependente.pdf', matricula, emitidoPor);
+    });
+  }
+
+  _benefSetLoadingDigital(true, 'Enviando…');
+  jobs.reduce(function(promise, job) { return promise.then(job); }, Promise.resolve()).then(function() {
     _benefSetLoadingDigital(false, 'Enviar para Assinatura Digital');
     closeModalBenef();
-    alert('Contrato de Mútuo Financeiro enviado para assinatura digital!');
+    alert(jobs.length + ' termo(s) enviado(s) para assinatura digital!');
   }, function(err) {
     _benefSetLoadingDigital(false, 'Enviar para Assinatura Digital');
     _benefShowError('Erro ao enviar: ' + (err && err.message || err));
