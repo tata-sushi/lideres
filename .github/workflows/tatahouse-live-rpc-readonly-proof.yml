@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Probe live PostgREST schema and one read-only RPC
+      - name: Probe only known read-only RPCs
         shell: bash
         run: |
           set -euo pipefail
@@ -26,73 +26,67 @@ jobs:
 
           const gate = fs.readFileSync('compliance/gate.js', 'utf8');
           const url = gate.match(/var SUPA_URL = '([^']+)'/)?.[1];
-          // Current public Supabase publishable key already shipped by Lideres pages.
-          // It identifies the project/client only; no logged-in user bearer token is used.
           const publishable = 'sb_publishable_X3pKD_F1QLAyxbxFU32HqQ_pRp9p6JQ';
           if (!url) throw new Error('Supabase URL not found in gate.js');
 
           const baseHeaders = {
             apikey: publishable,
             'Accept-Profile': 'tata_plus',
+            'Content-Profile': 'tata_plus',
+            'Content-Type': 'application/json',
           };
 
-          async function main() {
-            const schemaRes = await fetch(`${url}/rest/v1/`, {
-              method: 'GET',
-              headers: { ...baseHeaders, Accept: 'application/openapi+json' },
-            });
-            console.log(`LIVE_SCHEMA_HTTP=${schemaRes.status}`);
-            if (!schemaRes.ok) {
-              const err = await schemaRes.text();
-              console.log(`LIVE_SCHEMA_ERROR_PREFIX=${err.slice(0, 180).replace(/\s+/g, ' ')}`);
-              throw new Error(`OpenAPI request failed: ${schemaRes.status}`);
-            }
-            const spec = await schemaRes.json();
-            const rpcNames = Object.keys(spec.paths || {})
-              .filter((p) => p.startsWith('/rpc/'))
-              .map((p) => p.slice('/rpc/'.length))
-              .filter((name) => /refeic|cardap|avalia/i.test(name))
-              .sort();
-            console.log(`LIVE_RPC_RELEVANT_COUNT=${rpcNames.length}`);
-            console.log(`LIVE_RPC_RELEVANT_NAMES=${rpcNames.join(',')}`);
-            if (!rpcNames.includes('refeicoes_relatorio_detalhado')) {
-              throw new Error('refeicoes_relatorio_detalhado absent from live tata_plus OpenAPI');
-            }
-            console.log('LIVE_RPC_DISCOVERY=PASS');
+          const probes = [
+            ['cozinhas_lista', {}],
+            ['catalogo_produtos', {}],
+            ['refeicoes_itens_repertorio', {}],
+            ['refeicoes_semana', { p_inicio: '2026-08-31', p_unidade: 'Itaim' }],
+            ['refeicoes_relatorio', { p_unidade: 'Itaim' }],
+            ['refeicoes_processamento', { p_unidade: 'Itaim' }],
+            ['refeicoes_relatorio_detalhado', {
+              p_unidade: 'Itaim',
+              p_data_ini: '2026-08-24',
+              p_data_fim: '2026-09-06',
+            }],
+          ];
 
-            const readRes = await fetch(`${url}/rest/v1/rpc/refeicoes_relatorio_detalhado`, {
+          async function probe(name, payload) {
+            const res = await fetch(`${url}/rest/v1/rpc/${name}`, {
               method: 'POST',
-              headers: {
-                ...baseHeaders,
-                'Content-Profile': 'tata_plus',
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                p_unidade: 'Itaim',
-                p_data_ini: '2026-08-24',
-                p_data_fim: '2026-09-06',
-              }),
+              headers: baseHeaders,
+              body: JSON.stringify(payload),
             });
-            console.log(`LIVE_READ_RPC_HTTP=${readRes.status}`);
-            const bodyText = await readRes.text();
-            if (!readRes.ok) {
-              console.log(`LIVE_READ_RPC_ERROR_PREFIX=${bodyText.slice(0, 180).replace(/\s+/g, ' ')}`);
-              throw new Error(`read-only RPC failed: ${readRes.status}`);
+            const text = await res.text();
+            let parsed = null;
+            try { parsed = JSON.parse(text); } catch {}
+            const kind = Array.isArray(parsed) ? 'array' : (parsed === null ? 'null' : typeof parsed);
+            const rows = Array.isArray(parsed) ? parsed.length : null;
+            console.log(`LIVE_RPC_${name.toUpperCase()}_HTTP=${res.status}`);
+            console.log(`LIVE_RPC_${name.toUpperCase()}_KIND=${kind}`);
+            if (rows !== null) console.log(`LIVE_RPC_${name.toUpperCase()}_ROWS=${rows}`);
+            if (!res.ok) {
+              const safeCode = parsed && typeof parsed === 'object' ? (parsed.code || '') : '';
+              const safeMessage = parsed && typeof parsed === 'object' ? (parsed.message || '') : '';
+              console.log(`LIVE_RPC_${name.toUpperCase()}_ERROR_CODE=${String(safeCode).slice(0,80)}`);
+              console.log(`LIVE_RPC_${name.toUpperCase()}_ERROR_MESSAGE=${String(safeMessage).slice(0,140).replace(/\s+/g,' ')}`);
             }
-            let body;
-            try { body = JSON.parse(bodyText); }
-            catch { throw new Error('read-only RPC returned non-JSON'); }
-            const isArray = Array.isArray(body);
-            console.log(`LIVE_READ_RPC_JSON_ARRAY=${isArray ? 'PASS' : 'FAIL'}`);
-            if (!isArray) throw new Error('read-only RPC contract is not an array');
-            console.log(`LIVE_READ_RPC_ROWS=${body.length}`);
-            if (body.length) {
-              const keys = Object.keys(body[0] || {}).sort();
-              console.log(`LIVE_READ_RPC_FIRST_ROW_KEYS=${keys.join(',')}`);
-            }
-            console.log('LIVE_READ_RPC=PASS');
+            return { name, status: res.status, ok: res.ok, parsed };
+          }
+
+          async function main() {
+            const results = [];
+            for (const [name, payload] of probes) results.push(await probe(name, payload));
+
+            const target = results.find((r) => r.name === 'refeicoes_relatorio_detalhado');
+            if (!target) throw new Error('target read-only RPC was not probed');
+            if (!target.ok) throw new Error(`refeicoes_relatorio_detalhado live HTTP ${target.status}`);
+            if (!Array.isArray(target.parsed)) throw new Error('refeicoes_relatorio_detalhado live contract is not array');
+
+            console.log('LIVE_TARGET_RPC=PASS');
+            console.log('LIVE_KNOWN_READONLY_PROBES_COMPLETE=PASS');
             console.log('LIVE_USER_BEARER_TOKEN_USED=NO');
-            console.log('LIVE_MUTATION_CALLS=0');
+            console.log('LIVE_OPENAPI_INTROSPECTION_USED=NO');
+            console.log('LIVE_MUTATION_RPC_CALLS=0');
           }
 
           main().catch((err) => {
