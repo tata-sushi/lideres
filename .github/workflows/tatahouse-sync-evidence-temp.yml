@@ -1,0 +1,47 @@
+name: TATA House sync evidence temporary
+
+on:
+  push:
+    branches:
+      - feat/tatahouse-governanca-phase1
+    paths:
+      - '.github/workflows/tatahouse-sync-evidence-temp.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tatahouse-governanca-phase1
+          fetch-depth: 0
+      - name: Sync one evidence reference
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('compliance/kpis/tatahouse/house_governanca_readiness_v1.test.cjs')
+          s=p.read_text()
+          old="assert.equal(manifesto.fontes.lideresFeature.sha, 'eb9c7d2bf45bd2c5e2b1814d3857edcbdbc5f275');"
+          new="assert.equal(manifesto.fontes.lideresFeature.sha, '30f887b283873e2195e7bf2a3fed4d21b8a5824c');"
+          if s.count(old) != 1:
+              raise SystemExit('expected exactly one stale evidence reference')
+          p.write_text(s.replace(old,new))
+          PY
+      - name: Validate all permanent gates
+        run: |
+          node compliance/kpis/tatahouse/house_governanca_live_readonly_preflight_v1.test.cjs
+          node compliance/kpis/tatahouse/house_governanca_promotion_map_v1.test.cjs
+          node compliance/kpis/tatahouse/house_governanca_readiness_v1.test.cjs
+          git diff --check
+      - name: Commit synchronized regression
+        run: |
+          git config user.name 'VÉRTICE CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add compliance/kpis/tatahouse/house_governanca_readiness_v1.test.cjs
+          git diff --cached --quiet && exit 1
+          git commit -m 'test(tatahouse): sync final evidence reference'
+          git pull --rebase origin feat/tatahouse-governanca-phase1
+          git push origin HEAD:feat/tatahouse-governanca-phase1
