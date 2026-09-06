@@ -31,6 +31,7 @@ const gateReadiness = manifesto.gates.find((g) => g.id === 'readiness_fail_close
 assert.ok(gateReadiness, 'gate de prontidão browser ausente');
 assert.equal(gateReadiness.status, 'PASS', 'painel readiness precisa permanecer registrado como PASS após prova browser');
 assert.match(gateReadiness.evidencia || '', /34016194494/, 'gate readiness precisa apontar para a prova browser atual');
+assert.match(gateReadiness.evidencia || '', /34016327970/, 'gate readiness precisa apontar para a regressão final');
 
 const prodBlockers = new Set(todos.resultados.production_promotion.blockers.map((g) => g.id));
 for (const id of [
@@ -86,6 +87,7 @@ assert.match(painel, /overflow-wrap:anywhere/, 'evidências longas precisam queb
 assert.equal(manifesto.fontes.houseProducao.sha, '6dc04827b195aaca9d4653618e5a40ca64a1a6f4');
 assert.equal(manifesto.fontes.lideresProducao.sha, '88d20d1fa24591234d3276ffac380dd63eefa8f5');
 assert.equal(manifesto.fontes.vertice.branch, 'vertice-active');
+assert.equal(manifesto.evidenceHead, '88a74bd28ba94168288994b18dff207c0bcd0f22');
 
 console.log('READINESS_MANIFEST=PASS');
 console.log('READINESS_PRE_SUPABASE=PASS');
