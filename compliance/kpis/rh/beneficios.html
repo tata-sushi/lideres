@@ -1555,10 +1555,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <option value="">— Selecione —</option>
         </select>
       </div>
-      <div class="form-row">
-        <label class="form-label" for="benef-data">Data do documento</label>
-        <input class="form-input" type="date" id="benef-data">
-      </div>
       <div class="form-divider">Documentos</div>
       <div class="benef-doc-list">
         <div class="benef-doc-item" style="flex-direction:column;align-items:stretch;cursor:default;">
@@ -1572,24 +1568,20 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
             <div class="benef-mt-fg">
               <div class="form-row">
                 <label class="form-label" for="benef-mt-valor">Valor concedido (R$)</label>
-                <input class="form-input" type="text" id="benef-mt-valor" placeholder="0,00" onclick="event.stopPropagation()">
+                <input class="form-input" type="text" id="benef-mt-valor" placeholder="0,00" oninput="_benefParcelaAuto()" onclick="event.stopPropagation()">
               </div>
               <div class="form-row">
                 <label class="form-label" for="benef-mt-parcelas">Número de parcelas</label>
-                <input class="form-input" type="number" id="benef-mt-parcelas" min="1" placeholder="12" onclick="event.stopPropagation()">
+                <input class="form-input" type="number" id="benef-mt-parcelas" min="1" placeholder="12" oninput="_benefParcelaAuto()" onclick="event.stopPropagation()">
               </div>
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="benef-mt-parcela">Valor da parcela (R$) — calculado</label>
+              <input class="form-input" type="text" id="benef-mt-parcela" placeholder="0,00" readonly style="background:var(--bg);cursor:not-allowed;" onclick="event.stopPropagation()">
             </div>
             <div class="form-row">
               <label class="form-label" for="benef-mt-extenso">Valor por extenso</label>
               <input class="form-input" type="text" id="benef-mt-extenso" placeholder="ex: dois mil reais" onclick="event.stopPropagation()">
-            </div>
-            <div class="form-row">
-              <label class="form-label" for="benef-mt-parcela">Valor da parcela (R$)</label>
-              <input class="form-input" type="text" id="benef-mt-parcela" placeholder="0,00" onclick="event.stopPropagation()">
-            </div>
-            <div class="form-row">
-              <label class="form-label" for="benef-mt-cpf">CPF do colaborador</label>
-              <input class="form-input" type="text" id="benef-mt-cpf" placeholder="000.000.000-00" onclick="event.stopPropagation()">
             </div>
             <div class="benef-mt-fg">
               <div class="form-row">
@@ -1597,6 +1589,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
                 <select class="form-select" id="benef-mt-meio" onclick="event.stopPropagation()">
                   <option value="PIX">PIX</option>
                   <option value="transferência bancária">Transferência bancária</option>
+                  <option value="folha de pagamento">Folha de pagamento</option>
+                  <option value="dinheiro">Dinheiro</option>
                 </select>
               </div>
               <div class="form-row">
@@ -1775,9 +1769,28 @@ function closeModalBenef() {
 function _benefToggleMtFields(on) {
   var f = document.getElementById('benef-mt-fields');
   if (f) f.style.display = on ? 'block' : 'none';
-  if (!on) ['benef-mt-valor','benef-mt-extenso','benef-mt-parcelas','benef-mt-parcela','benef-mt-cpf','benef-mt-datadisp','benef-mt-mes1'].forEach(function(id){
+  if (!on) ['benef-mt-valor','benef-mt-extenso','benef-mt-parcelas','benef-mt-parcela','benef-mt-datadisp','benef-mt-mes1'].forEach(function(id){
     var el = document.getElementById(id); if (el) el.value = '';
   });
+}
+
+// Moeda BR: "1.234,56" -> 1234.56 ; 1234.5 -> "1.234,50"
+function _benefParseBRL(s){
+  s = String(s==null?'':s).trim().replace(/[^0-9.,-]/g,'');
+  if (!s) return 0;
+  s = s.replace(/\./g,'').replace(',', '.');   // remove milhar, vírgula->ponto
+  var n = parseFloat(s); return isNaN(n) ? 0 : n;
+}
+function _benefFmtBRL(n){
+  return (Number(n)||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+// Preenche o campo (readonly) "Valor da parcela" = total / nº parcelas.
+function _benefParcelaAuto(){
+  var total = _benefParseBRL((document.getElementById('benef-mt-valor')||{}).value);
+  var n = parseInt((document.getElementById('benef-mt-parcelas')||{}).value, 10) || 0;
+  var out = document.getElementById('benef-mt-parcela');
+  if (!out) return;
+  out.value = (total > 0 && n > 0) ? _benefFmtBRL(total / n) : '';
 }
 
 function _benefLoadColaboradores() {
@@ -1849,6 +1862,9 @@ function _benefShowError(msg) {
     var mtDataDispFmt = mtDataDisp ? (function(){ var p=mtDataDisp.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; })() : '';
     var mtMes1Fmt = mtMes1 ? (function(){ var p=mtMes1.split('-'); return (_MESES[parseInt(p[1],10)-1]||'')+' de '+p[0]; })() : '';
     var mtNParc = parseInt(mtParcs, 10) || 0;
+    // Valor da parcela = total / nº parcelas (sem juros). Calcula aqui como fonte da verdade.
+    var _totalNum = _benefParseBRL(mtValor);
+    if (_totalNum > 0 && mtNParc > 0) mtParc = _benefFmtBRL(_totalNum / mtNParc);
 
     var colab    = window.__benefColabMap[colabKey] || {};
     var nome     = colab.nome     || colabKey;
@@ -1856,8 +1872,10 @@ function _benefShowError(msg) {
     var unidade  = colab.unidade  || '—';
     var matricula= colab.matricula|| '';
 
-    var dataVal = document.getElementById('benef-data').value;
-    var dataFmt = dataVal ? (function(){ var p=dataVal.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; })() : '—';
+    // Data do documento = hoje
+    var _hoje = new Date();
+    var _p2 = function(n){ return String(n).padStart(2,'0'); };
+    var dataFmt = _p2(_hoje.getDate())+'/'+_p2(_hoje.getMonth()+1)+'/'+_hoje.getFullYear();
 
     var w = window.open('', '_blank');
     if (!w) { _benefShowError('Permita pop-ups para gerar o documento.'); return; }
