@@ -11,6 +11,7 @@ const central = fs.readFileSync(path.join(base, 'central.html'), 'utf8');
 const painel = fs.readFileSync(path.join(base, 'prontidao.html'), 'utf8');
 const preflightExpectations = JSON.parse(fs.readFileSync(path.join(base, 'house_governanca_live_readonly_expectations_v1.json'), 'utf8'));
 const promotionMap = JSON.parse(fs.readFileSync(path.join(base, 'house_governanca_promotion_map_v1.json'), 'utf8'));
+const legacyEvaluationEvidence = JSON.parse(fs.readFileSync(path.join(base, 'house_governanca_legacy_evaluation_schema_evidence_v1.json'), 'utf8'));
 
 function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
@@ -66,9 +67,24 @@ assert.equal(livePermissions.status, 'SIMULATION');
 assert.match(livePermissions.resumo || '', /falta de permissão/i, 'falta de permissão live deve permanecer explícita');
 
 const liveSchema = manifesto.gates.find((g) => g.id === 'legacy_evaluation_schema_live');
-assert.equal(liveSchema.status, 'UNKNOWN');
+assert.equal(liveSchema.status, 'UNKNOWN', 'histórico conhecido não pode liberar schema live');
+assert.match(liveSchema.classificacao || '', /KNOWN_HISTORICAL/, 'schema deve preservar forma histórica conhecida');
+assert.match(liveSchema.classificacao || '', /CURRENT_LIVE_UNKNOWN/, 'schema live atual deve permanecer UNKNOWN');
+assert.match(liveSchema.resumo || '', /NOT_FOUND_IN_VERSIONED_HISTORY/, 'ausência de idempotência no histórico precisa ser explícita');
+assert.match(liveSchema.resumo || '', /não significa inexistente no banco live/i, 'ausência no histórico não pode virar afirmação sobre o live');
+assert.match(liveSchema.resumo || '', /DDL, constraints, índices, RLS, policies, grants/i, 'unknowns live precisam permanecer explícitos');
 assert.match(liveSchema.resumo || '', /catalog-only/i, 'schema live deve registrar preflight preparado');
-assert.match(liveSchema.resumo || '', /sem ler linhas de negócio/i, 'preflight deve permanecer metadata-only');
+for (const evidence of ['#2308', '#2355', '#2360', '#2412', '43c92937', 'house_governanca_legacy_evaluation_schema_evidence_v1.json']) {
+  assert.match(liveSchema.evidencia || '', new RegExp(evidence.replace('#', '\\#')), `evidência histórica de avaliação ausente: ${evidence}`);
+}
+
+assert.equal(legacyEvaluationEvidence.classificacaoGlobal, 'KNOWN_HISTORICAL__CURRENT_LIVE_UNKNOWN');
+assert.equal(legacyEvaluationEvidence.target.table, 'cardapio_avaliacoes');
+assert.equal(legacyEvaluationEvidence.usoVersionadoAtual.classificacao, 'PROVEN_VERSIONED__NOT_PROVEN_LIVE_SCHEMA');
+assert.ok(legacyEvaluationEvidence.compatibilidadeComContratoHouseV1.gaps.every((gap) => gap.live === 'UNKNOWN'));
+assert.ok(legacyEvaluationEvidence.compatibilidadeComContratoHouseV1.gaps.every((gap) => gap.historySearch === 'NOT_FOUND_IN_VERSIONED_HISTORY'));
+assert.equal(legacyEvaluationEvidence.effectBoundary.supabaseMutationPerformed, false);
+assert.equal(legacyEvaluationEvidence.effectBoundary.productionChanged, false);
 
 const prodBlockers = new Set(todos.resultados.production_promotion.blockers.map((g) => g.id));
 assert.equal(prodBlockers.has('pdfjs_runtime_security'), false, 'PDF.js corrigido não pode continuar como bloqueador de produção');
@@ -90,6 +106,9 @@ assert.ok(plannerBlockers.has('legacy_rpc_write_semantics'), 'RPC histórico con
 const historicalEvidenceCannotPass = clone(manifesto);
 historicalEvidenceCannotPass.gates.find((g) => g.id === 'legacy_rpc_write_semantics').classificacao = 'PROVEN_HISTORICAL';
 assert.equal(evaluator.avaliarTarget(historicalEvidenceCannotPass, 'planner_write_activation').ready, false, 'classificação histórica não pode substituir status PASS');
+const historicalEvaluationCannotPass = clone(manifesto);
+historicalEvaluationCannotPass.gates.find((g) => g.id === 'legacy_evaluation_schema_live').classificacao = 'PROVEN_HISTORICAL';
+assert.equal(evaluator.avaliarTarget(historicalEvaluationCannotPass, 'backend_activation').ready, false, 'histórico de avaliações não pode substituir status PASS live');
 
 const unknownInjected = clone(manifesto);
 unknownInjected.gates.find((g) => g.id === 'contracts_versioned').status = 'UNKNOWN';
@@ -123,6 +142,7 @@ assert.match(manifesto.evidenceHeadNota || '', /34020542078/, 'nota de evidênci
 assert.match(manifesto.evidenceHeadNota || '', /34030492627/, 'nota de evidência deve registrar o preflight catalog-only');
 assert.match(manifesto.evidenceHeadNota || '', /34030736194/, 'nota de evidência deve registrar a regressão final');
 assert.match(manifesto.evidenceHeadNota || '', /aoqsbusfrffapjglpqjk/, 'nota de evidência deve registrar o projeto live alvo');
+assert.match(manifesto.evidenceHeadNota || '', /house_governanca_legacy_evaluation_schema_evidence_v1\.json/, 'nota de evidência deve registrar o histórico de avaliações separado');
 
 assert.equal(preflightExpectations.projectRefEsperado, 'aoqsbusfrffapjglpqjk');
 assert.ok(preflightExpectations.funcoes.every((f) => f.podeInvocarNestePreflight === false), 'readiness não pode incorporar preflight que invoque RPC');
@@ -136,6 +156,9 @@ console.log('READINESS_BACKEND_LIVE_BLOCKED=PASS');
 console.log('READINESS_PDFJS_SECURITY=PASS');
 console.log('READINESS_LEGACY_RPC_HISTORICAL=KNOWN');
 console.log('READINESS_LEGACY_RPC_LIVE=UNKNOWN');
+console.log('READINESS_LEGACY_EVALUATION_HISTORY=KNOWN');
+console.log('READINESS_LEGACY_EVALUATION_LIVE=UNKNOWN');
+console.log('READINESS_LEGACY_EVALUATION_IDEMPOTENCY_HISTORY=NOT_FOUND');
 console.log('READINESS_LIVE_ACCESS_BLOCKED=PASS');
 console.log('READINESS_LIVE_PREFLIGHT_PREPARED=PASS');
 console.log('READINESS_LEGACY_RPC_FAIL_CLOSED=PASS');
