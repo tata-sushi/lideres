@@ -169,7 +169,7 @@
     st.textContent = [
       '#house-proposal-panel{margin:14px auto 0;max-width:1180px;padding:0 16px}',
       '.hep-shell{background:#fff;border:1px solid #dfe3d4;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.05);overflow:hidden}',
-      '.hep-head{padding:16px 18px;background:#f8fbeF;border-bottom:1px solid #e1e8cb;display:flex;gap:14px;justify-content:space-between;align-items:flex-start}',
+      '.hep-head{padding:16px 18px;background:#f8fbef;border-bottom:1px solid #e1e8cb;display:flex;gap:14px;justify-content:space-between;align-items:flex-start}',
       '.hep-eyebrow{font:700 9px "DM Mono",monospace;letter-spacing:1.1px;text-transform:uppercase;color:#607800}',
       '.hep-title{font-size:18px;font-weight:700;color:#202225;margin-top:4px}',
       '.hep-meta{font:500 10px "DM Mono",monospace;color:#777;margin-top:5px}',
@@ -189,6 +189,17 @@
       '@media(max-width:640px){#house-proposal-panel{padding:0 10px}.hep-head{flex-direction:column}.hep-days{grid-template-columns:repeat(7,145px)}}'
     ].join('');
     global.document.head.appendChild(st);
+  }
+
+  function ativarElaboracao() {
+    if (!global.document) return;
+    var btn = global.document.querySelector('.tab-btn[data-tab="cardapio"]');
+    var pane = global.document.getElementById('tab-cardapio');
+    if (!btn || !pane) return;
+    global.document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+    global.document.querySelectorAll('.tab-pane').forEach(function (p) { p.classList.remove('active'); });
+    btn.classList.add('active');
+    pane.classList.add('active');
   }
 
   function renderizarPainel(registro, avaliacao) {
@@ -226,6 +237,7 @@
     var proposalId = proposalIdDaUrl();
     if (!proposalId) return;
     var registro = lerRegistro(proposalId);
+    ativarElaboracao();
     renderizarPainel(registro, null);
     global.addEventListener(EVENTO_SEMANA, function (ev) {
       if (!registro) return;
@@ -248,6 +260,7 @@
     itensDoDia: itensDoDia,
     criarCargaCandidata: criarCargaCandidata,
     avaliarConflitos: avaliarConflitos,
+    ativarElaboracao: ativarElaboracao,
     renderizarPainel: renderizarPainel,
     iniciar: iniciar
   });
