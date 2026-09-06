@@ -82,7 +82,8 @@ async function test(){
   const r=record[0];
   if(r.semanaId!=='2026-S37'||r.unidadeFonte!=='Itaim'||r.dias.length!==7||!r.proposalId||!r.correlationId) throw new Error('planning receipt invalid: '+JSON.stringify(r));
   if(localStorageHasForbidden(await leaders.evaluate(()=>Object.keys(localStorage)))) throw new Error('unexpected official publication storage written');
-  await house.getByText('Rascunho recebido pela Governança. Ele ainda precisa de decisão humana para virar cardápio oficial.').waitFor({timeout:10000});
+  const ackText=await house.getByText('Rascunho recebido pela Governança. Ele ainda precisa de decisão humana para virar cardápio oficial.').textContent();
+  if(!ackText||!ackText.includes('Rascunho recebido pela Governança')) throw new Error('draft ACK message missing');
   console.log('PHASE4_DRAFT_ACK=PASS',JSON.stringify({proposalId:r.proposalId,correlationId:r.correlationId,semanaId:r.semanaId,unidadeFonte:r.unidadeFonte,dias:r.dias.length}));
   console.log('PHASE4_HUMAN_BOUNDARY=PASS',badge);
   await browser.close();
