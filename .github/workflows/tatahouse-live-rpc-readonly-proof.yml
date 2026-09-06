@@ -1,0 +1,96 @@
+name: TATÁ House live RPC read-only proof
+
+on:
+  push:
+    branches:
+      - 'feat/tatahouse-governanca-phase1'
+    paths:
+      - '.github/workflows/tatahouse-live-rpc-readonly-proof.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  live-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Probe live PostgREST schema and one read-only RPC
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+
+          const gate = fs.readFileSync('compliance/gate.js', 'utf8');
+          const url = gate.match(/var SUPA_URL = '([^']+)'/)?.[1];
+          const anon = gate.match(/var SUPA_ANON\s*=\s*\n?\s*'([^']+)'/)?.[1];
+          if (!url || !anon) throw new Error('Supabase public runtime config not found in gate.js');
+
+          const baseHeaders = {
+            apikey: anon,
+            Authorization: `Bearer ${anon}`,
+            'Accept-Profile': 'tata_plus',
+          };
+
+          async function main() {
+            const schemaRes = await fetch(`${url}/rest/v1/`, {
+              method: 'GET',
+              headers: { ...baseHeaders, Accept: 'application/openapi+json' },
+            });
+            console.log(`LIVE_SCHEMA_HTTP=${schemaRes.status}`);
+            if (!schemaRes.ok) throw new Error(`OpenAPI request failed: ${schemaRes.status}`);
+            const spec = await schemaRes.json();
+            const rpcNames = Object.keys(spec.paths || {})
+              .filter((p) => p.startsWith('/rpc/'))
+              .map((p) => p.slice('/rpc/'.length))
+              .filter((name) => /refeic|cardap|avalia/i.test(name))
+              .sort();
+            console.log(`LIVE_RPC_RELEVANT_COUNT=${rpcNames.length}`);
+            console.log(`LIVE_RPC_RELEVANT_NAMES=${rpcNames.join(',')}`);
+            if (!rpcNames.includes('refeicoes_relatorio_detalhado')) {
+              throw new Error('refeicoes_relatorio_detalhado absent from live tata_plus OpenAPI');
+            }
+            console.log('LIVE_RPC_DISCOVERY=PASS');
+
+            const readRes = await fetch(`${url}/rest/v1/rpc/refeicoes_relatorio_detalhado`, {
+              method: 'POST',
+              headers: {
+                ...baseHeaders,
+                'Content-Profile': 'tata_plus',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                p_unidade: 'Itaim',
+                p_data_ini: '2026-08-24',
+                p_data_fim: '2026-09-06',
+              }),
+            });
+            console.log(`LIVE_READ_RPC_HTTP=${readRes.status}`);
+            const bodyText = await readRes.text();
+            if (!readRes.ok) {
+              console.log(`LIVE_READ_RPC_ERROR_PREFIX=${bodyText.slice(0, 180).replace(/\s+/g, ' ')}`);
+              throw new Error(`read-only RPC failed: ${readRes.status}`);
+            }
+            let body;
+            try { body = JSON.parse(bodyText); }
+            catch { throw new Error('read-only RPC returned non-JSON'); }
+            const isArray = Array.isArray(body);
+            console.log(`LIVE_READ_RPC_JSON_ARRAY=${isArray ? 'PASS' : 'FAIL'}`);
+            if (!isArray) throw new Error('read-only RPC contract is not an array');
+            console.log(`LIVE_READ_RPC_ROWS=${body.length}`);
+            if (body.length) {
+              const keys = Object.keys(body[0] || {}).sort();
+              console.log(`LIVE_READ_RPC_FIRST_ROW_KEYS=${keys.join(',')}`);
+            }
+            console.log('LIVE_READ_RPC=PASS');
+            console.log('LIVE_MUTATION_CALLS=0');
+          }
+
+          main().catch((err) => {
+            console.error(`PROOF_FAILURE=${err.message}`);
+            process.exit(1);
+          });
+          NODE
