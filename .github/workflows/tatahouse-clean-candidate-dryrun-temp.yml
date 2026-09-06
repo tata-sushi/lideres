@@ -1,0 +1,96 @@
+name: TATA House clean candidate dry-run temporary
+
+on:
+  push:
+    branches:
+      - feat/tatahouse-governanca-phase1
+    paths:
+      - '.github/workflows/tatahouse-clean-candidate-dryrun-temp.yml'
+
+jobs:
+  dryrun:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tatahouse-governanca-phase1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validate recipe contracts
+        run: |
+          node compliance/kpis/tatahouse/house_governanca_clean_candidate_recipe_v1.test.cjs
+          node compliance/kpis/tatahouse/house_governanca_house_slice_manifest_v1.test.cjs
+          node compliance/kpis/tatahouse/house_governanca_promotion_map_v1.test.cjs
+      - name: Reconstruct clean candidate from production
+        env:
+          BASE: 6dc04827b195aaca9d4653618e5a40ca64a1a6f4
+          FEATURE: e7b3b791750ba85b1da2f6f229a3168e69c0a217
+          PLANNER_SCENARIOS: 05f17fd0cae2438389dfb03973644131c7a2820e
+          READONLY_OVERLAY: e6980d8c69f35252bd113d2a96f6594cf278bc48
+          SCENARIO_COMPONENT: 36bbd9346bea7ac3a29a09329b5907213684b5ac
+          PDFJS_SECURITY: a1302762b9c8ac82e77556f05020b044605ce843
+        run: |
+          git clone --quiet https://github.com/cesarspichencoff-cmyk/tata-house.github.io.git /tmp/house
+          cd /tmp/house
+          git fetch --quiet origin "$BASE" "$FEATURE" "$PLANNER_SCENARIOS" "$READONLY_OVERLAY" "$SCENARIO_COMPONENT" "$PDFJS_SECURITY"
+          git checkout --quiet --detach "$BASE"
+
+          MANIFEST="$GITHUB_WORKSPACE/compliance/kpis/tatahouse/house_governanca_house_slice_manifest_v1.json"
+          jq -r '.classificacoes[] | select(.id=="WHOLE_FILE_INTEGRATION") | .arquivos[]' "$MANIFEST" | while IFS= read -r p; do
+            mkdir -p "$(dirname "$p")"
+            git show "$FEATURE:$p" > "$p"
+          done
+
+          mkdir -p src/components/cardapio
+          git show "$PLANNER_SCENARIOS:src/components/cardapio/PlanejadorGovernanca.tsx" > src/components/cardapio/PlanejadorGovernanca.tsx
+          git show "$SCENARIO_COMPONENT:src/components/cardapio/CenariosGovernanca.tsx" > src/components/cardapio/CenariosGovernanca.tsx
+
+          git diff "$READONLY_OVERLAY^" "$READONLY_OVERLAY" -- src/components/cardapio/PlanejadorGovernanca.tsx > /tmp/readonly-overlay.patch
+          test -s /tmp/readonly-overlay.patch
+          git apply --verbose /tmp/readonly-overlay.patch
+
+          for p in package.json package-lock.json public/pdf.worker.min.mjs; do
+            mkdir -p "$(dirname "$p")"
+            git show "$PDFJS_SECURITY:$p" > "$p"
+          done
+
+          ! grep -q 'TrocaInteligenteGovernanca' src/components/cardapio/PlanejadorGovernanca.tsx
+          ! grep -q 'useMostrarBasicos' src/components/cardapio/PlanejadorGovernanca.tsx
+          grep -q 'CenariosGovernanca' src/components/cardapio/PlanejadorGovernanca.tsx
+          grep -q 'governanca-readonly' src/components/cardapio/PlanejadorGovernanca.tsx
+          grep -q 'frequenciaOficial4Semanas' src/components/cardapio/PlanejadorGovernanca.tsx
+          grep -q 'Math.max(cont\[chave\] ?? 0, qtd)' src/components/cardapio/PlanejadorGovernanca.tsx
+          grep -q 'data-testid="evidencia-readonly-lideres"' src/components/cardapio/PlanejadorGovernanca.tsx
+
+          for p in src/app/page.tsx src/components/BottomNav.tsx src/components/TourOnboarding.tsx src/components/cardapio/AbaCardapio.tsx src/lib/cardapio/login.ts; do
+            git diff --quiet "$BASE" -- "$p"
+          done
+          for p in src/components/cardapio/TrocaInteligenteGovernanca.tsx src/lib/cardapio/governanca-candidatos.ts src/lib/cardapio/governanca-trocas.ts .github/workflows/tatahouse-trocas-v2-temp.yml .github/workflows/tatahouse-trocas-v2-e2e-temp.yml; do
+            test ! -e "$p"
+          done
+
+          git add -N .
+          git diff --name-only "$BASE" | sort > /tmp/candidate-files.txt
+          test "$(wc -l < /tmp/candidate-files.txt)" -eq 29
+          ! grep -Fx 'src/app/page.tsx' /tmp/candidate-files.txt
+          ! grep -Fx 'src/components/BottomNav.tsx' /tmp/candidate-files.txt
+          ! grep -F 'governanca-trocas' /tmp/candidate-files.txt
+          ! grep -F '.github/workflows/' /tmp/candidate-files.txt
+          echo 'CLEAN_CANDIDATE_29_FILES=PASS'
+          echo 'CLEAN_CANDIDATE_SCENARIOS_WITHOUT_TROCAS=PASS'
+          echo 'CLEAN_CANDIDATE_GLOBAL_UX_UNCHANGED=PASS'
+          echo 'CLEAN_CANDIDATE_READONLY_OVERLAY=PASS'
+      - name: Test clean candidate
+        working-directory: /tmp/house
+        run: |
+          npm ci
+          npm test
+          npm run typecheck
+          npm run lint
+          npm run build
+          git diff --check
+          echo 'CLEAN_CANDIDATE_TESTS=PASS'
+          echo 'CLEAN_CANDIDATE_TYPECHECK=PASS'
+          echo 'CLEAN_CANDIDATE_LINT=PASS'
+          echo 'CLEAN_CANDIDATE_BUILD=PASS'
