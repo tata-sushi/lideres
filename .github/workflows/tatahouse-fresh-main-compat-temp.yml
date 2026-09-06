@@ -1,0 +1,49 @@
+name: TATA House fresh main compatibility temporary
+
+on:
+  push:
+    branches: [feat/tatahouse-governanca-phase1]
+    paths:
+      - '.github/workflows/tatahouse-fresh-main-compat-temp.yml'
+
+jobs:
+  compat:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tatahouse-governanca-phase1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Fetch fresh canonical main
+        env:
+          EXPECTED_MAIN: 4b378fd3722fde0b5ff9f2cb0bc804b29133b3f8
+          OLD_BASE: 88d20d1fa24591234d3276ffac380dd63eefa8f5
+        run: |
+          git remote add canonical https://github.com/tata-sushi/lideres.git
+          git fetch --quiet canonical main "$OLD_BASE"
+          test "$(git rev-parse canonical/main)" = "$EXPECTED_MAIN"
+          git diff --name-only "$OLD_BASE" canonical/main | tee /tmp/main-drift.txt
+          test "$(wc -l < /tmp/main-drift.txt)" -eq 1
+          grep -Fx 'compliance/kpis/rh/beneficios.html' /tmp/main-drift.txt
+          ! grep -q '^compliance/kpis/tatahouse/' /tmp/main-drift.txt
+          echo 'FRESH_MAIN_DRIFT_ISOLATED=PASS'
+      - name: Simulate merge with fresh main
+        run: |
+          git config user.name 'VÉRTICE CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git merge --no-commit --no-ff canonical/main
+          test "$(git diff --cached --name-only | wc -l)" -eq 1
+          git diff --cached --name-only | grep -Fx 'compliance/kpis/rh/beneficios.html'
+          node compliance/kpis/tatahouse/house_governanca_clean_candidate_recipe_v1.test.cjs
+          node compliance/kpis/tatahouse/house_governanca_house_slice_manifest_v1.test.cjs
+          node compliance/kpis/tatahouse/house_governanca_promotion_map_v1.test.cjs
+          node compliance/kpis/tatahouse/house_governanca_readiness_v1.test.cjs
+          node compliance/kpis/tatahouse/house_governanca_live_readonly_preflight_v1.test.cjs
+          git diff --check
+          git merge --abort
+          echo 'FRESH_MAIN_MERGE_SIMULATION=PASS'
+          echo 'FRESH_MAIN_TATAHOUSE_CONTRACTS=PASS'
+          echo 'FRESH_MAIN_NO_PRODUCTION_WRITE=PASS'
