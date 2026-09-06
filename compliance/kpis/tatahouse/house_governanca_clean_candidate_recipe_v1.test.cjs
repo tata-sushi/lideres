@@ -37,6 +37,31 @@ for (const key of [
 ]) {
   assert.equal(browser[key], 'PASS', `${key} deve permanecer PASS na evidencia controlada`);
 }
+
+const visual = recipe.evidencias.visualUxPolish;
+assert.equal(visual.runId, '34046942557');
+assert.equal(visual.classificacao, 'PROVEN_CONTROLLED_VISUAL_BROWSER');
+assert.equal(visual.houseUxOverlayCommit, '23a31f7217ac1e150a9c9cc194acaa907141f72f');
+assert.equal(visual.lideresUxCommit, 'dae530203b495564314aa58da187100dd8df8c3f');
+assert.equal(visual.candidateFiles, 31);
+assert.equal(visual.testsPassed, 190);
+assert.equal(visual.typecheck, 'PASS');
+assert.equal(visual.build, 'PASS');
+assert.equal(visual.desktopOverflow, '0/0');
+assert.equal(visual.mobileOverflow, '0/0');
+assert.deepEqual(visual.mobilePrimaryNav, ['Operação', 'Cardápio', 'Planejar semana']);
+for (const key of [
+  'technicalIntegrationRemovedFromPrimaryNav',
+  'plannerHeroCollapsedAfterOpenOnMobile',
+  'truncatedBlockersExposeRemainder',
+  'duplicateMissingPrincipalAlertSuppressed',
+  'backendVocabularyRemovedFromOperationalCopy',
+  'technicalDiagnosticPagePreserved'
+]) {
+  assert.equal(visual[key], true, `${key} deve permanecer verdadeiro na prova visual`);
+}
+assert.match(visual.environmentNote || '', /runner controlado/i);
+
 const proofLimit = recipe.evidencias.limiteDaProva;
 assert.equal(proofLimit.supabaseSessionAndRpcResponse, 'SIMULATION');
 assert.equal(proofLimit.liveRpcSignatureGrantsRlsBehavior, 'UNKNOWN_NOT_PROVEN_LIVE');
@@ -95,6 +120,7 @@ assert.equal(recipe.invariantes.freshReadBeforeEffectBoundary, true);
 console.log('CLEAN_CANDIDATE_RECIPE=PASS');
 console.log('CLEAN_CANDIDATE_DRYRUN_EVIDENCE=PASS');
 console.log('CLEAN_CANDIDATE_BROWSER_EVIDENCE=PASS');
+console.log('CLEAN_CANDIDATE_VISUAL_EVIDENCE=PASS');
 console.log('CLEAN_CANDIDATE_PROOF_LIMIT=PASS');
 console.log('CLEAN_CANDIDATE_TRANSPORT_NOT_INTELLIGENCE=PASS');
 console.log('CLEAN_CANDIDATE_READONLY_PARITY_PROFILE=PASS');
