@@ -1899,7 +1899,7 @@ function setTab(t){
 <script>
 /* ── ANALÍTICO · Performance 360 (profiles + ausencias) ── */
 (function(){
-  var LOADED=false, COLABS=[], AUS={}, SANC={}, AVAL={}, PAGE=50, shown=PAGE, rows=[];
+  var LOADED=false, COLABS=[], AUS={}, SANC={}, AVAL={}, FBK={}, PAGE=50, shown=PAGE, rows=[];
   var collapsed={}, collapsedInit=false;
   function esc(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function pad(n){ return String(n).padStart(2,'0'); }
@@ -1931,7 +1931,10 @@ function setTab(t){
     ]},
     { label:'Desligamento', sigla:'D', cols:[ ['Tipo de dispensa', ph],['Fez Homologação', ph],['Tem processo', ph] ]},
     { label:'Tempo desde o desligamento', sigla:'T', cols:[ ['Tempo', function(c){ return c.data_demissao?tempoDesde(c.data_demissao):'—'; }] ]},
-    { label:'Feedback', sigla:'F', cols:[ ['Qtd', ph],['Último', ph] ]}
+    { label:'Feedback', sigla:'F', cols:[
+      ['Qtd',    function(c){ var f=FBK[c.matricula]; var n=f?f.qtd:0; return n?String(n):'<span class="anl-ph">0</span>'; }],
+      ['Último', function(c){ var f=FBK[c.matricula]; return (f&&f.ultimo)?f.ultimo:'<span class="anl-ph">—</span>'; }]
+    ]}
   ]; }
   function headHtml(){
     var G=GROUPS();
@@ -1996,14 +1999,17 @@ function setTab(t){
       var pA=supa.schema('tata_plus').rpc('ausencia_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
       var pS=supa.schema('tata_plus').rpc('sancoes_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
       var pV=supa.schema('tata_plus').rpc('avaliacoes_experiencia_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
-      Promise.all([pC,pA,pS,pV]).then(function(res){
-        var colabs=res[0], aus=res[1], sanc=res[2], avals=res[3];
+      var pF=supa.schema('tata_plus').rpc('feedbacks_analitico_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
+      Promise.all([pC,pA,pS,pV,pF]).then(function(res){
+        var colabs=res[0], aus=res[1], sanc=res[2], avals=res[3], fbks=res[4];
         AUS={};
         aus.forEach(function(a){ var mt=a.matricula; if(!mt) return; if(!AUS[mt]) AUS[mt]={faltas:0,just:0}; if(isFalta(a.tipo)) AUS[mt].faltas++; else if(isJust(a.tipo)) AUS[mt].just++; });
         SANC={};
         sanc.forEach(function(s){ var mt=s.matricula; if(!mt) return; if(!SANC[mt]) SANC[mt]={adv:0,susp:0}; if(isSusp(s.tipo_sancao)) SANC[mt].susp++; else SANC[mt].adv++; });
         AVAL={};
         avals.forEach(function(v){ var mt=v.matricula; if(!mt) return; AVAL[mt]={lider_p1:v.lider_p1,lider_p2:v.lider_p2,colab_p1:v.colab_p1,colab_p2:v.colab_p2}; });
+        FBK={};
+        fbks.forEach(function(f){ var mt=f.matricula; if(!mt) return; FBK[mt]={qtd:f.qtd,ultimo:f.ultimo}; });
         COLABS=colabs.slice().sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
         function fill(id,key){ var sel=document.getElementById(id); if(!sel) return; var cur=sel.value; var vals=Array.from(new Set(COLABS.map(function(c){return c[key];}).filter(Boolean))).sort(function(a,b){return String(a).localeCompare(String(b),'pt-BR');}); sel.innerHTML='<option value="">'+esc(sel.dataset.all||'Todos')+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'">'+esc(v)+'</option>';}).join(''); sel.value=cur; }
         fill('anl-f-unidade','unidade'); fill('anl-f-depto','departamento');
