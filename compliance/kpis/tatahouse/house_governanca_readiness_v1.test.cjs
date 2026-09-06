@@ -34,43 +34,24 @@ assert.match(gateReadiness.evidencia || '', /34016194494/, 'gate readiness preci
 assert.match(gateReadiness.evidencia || '', /34016327970/, 'gate readiness precisa apontar para a regressão final');
 
 const prodBlockers = new Set(todos.resultados.production_promotion.blockers.map((g) => g.id));
-for (const id of [
-  'pdfjs_runtime_security',
-  'integration_live_transport',
-  'live_permission_data_verification',
-  'ux_layer_selection',
-  'human_production_authorization',
-]) {
+for (const id of ['pdfjs_runtime_security','integration_live_transport','live_permission_data_verification','ux_layer_selection','human_production_authorization']) {
   assert.ok(prodBlockers.has(id), `bloqueador obrigatório ausente: ${id}`);
 }
 
 const plannerBlockers = new Set(todos.resultados.planner_write_activation.blockers.map((g) => g.id));
-for (const id of [
-  'legacy_rpc_write_semantics',
-  'integration_live_transport',
-  'live_permission_data_verification',
-  'human_planner_write_authorization',
-]) {
+for (const id of ['legacy_rpc_write_semantics','integration_live_transport','live_permission_data_verification','human_planner_write_authorization']) {
   assert.ok(plannerBlockers.has(id), `bloqueador do Planejador ausente: ${id}`);
 }
 
 const unknownInjected = clone(manifesto);
 unknownInjected.gates.find((g) => g.id === 'contracts_versioned').status = 'UNKNOWN';
-assert.equal(
-  evaluator.avaliarTarget(unknownInjected, 'pre_supabase_functional').ready,
-  false,
-  'UNKNOWN nunca pode satisfazer um gate',
-);
+assert.equal(evaluator.avaliarTarget(unknownInjected, 'pre_supabase_functional').ready, false, 'UNKNOWN nunca pode satisfazer um gate');
 
 const missingGate = clone(manifesto);
 missingGate.gates = missingGate.gates.filter((g) => g.id !== 'contracts_versioned');
 const missingValidation = evaluator.validarManifesto(missingGate);
 assert.equal(missingValidation.valido, false, 'gate obrigatório ausente deve invalidar manifesto');
-assert.equal(
-  evaluator.avaliarTarget(missingGate, 'pre_supabase_functional').failClosed,
-  true,
-  'manifesto inválido deve falhar fechado',
-);
+assert.equal(evaluator.avaliarTarget(missingGate, 'pre_supabase_functional').failClosed, true, 'manifesto inválido deve falhar fechado');
 
 const invalidStatus = clone(manifesto);
 invalidStatus.gates.find((g) => g.id === 'contracts_versioned').status = 'PROBABLY';
@@ -88,6 +69,7 @@ assert.equal(manifesto.fontes.houseProducao.sha, '6dc04827b195aaca9d4653618e5a40
 assert.equal(manifesto.fontes.lideresProducao.sha, '88d20d1fa24591234d3276ffac380dd63eefa8f5');
 assert.equal(manifesto.fontes.vertice.branch, 'vertice-active');
 assert.equal(manifesto.evidenceHead, '88a74bd28ba94168288994b18dff207c0bcd0f22');
+assert.match(manifesto.evidenceHeadNota || '', /HEAD limpo imediatamente após a regressão final 34016327970/, 'semântica do evidenceHead precisa permanecer explícita');
 
 console.log('READINESS_MANIFEST=PASS');
 console.log('READINESS_PRE_SUPABASE=PASS');
@@ -96,3 +78,4 @@ console.log('READINESS_PLANNER_WRITE_BLOCKED=PASS');
 console.log('READINESS_FAIL_CLOSED=PASS');
 console.log('READINESS_CENTRAL_LINK=PASS');
 console.log('READINESS_BROWSER_EVIDENCE=PASS');
+console.log('READINESS_EVIDENCE_HEAD_SEMANTICS=PASS');
