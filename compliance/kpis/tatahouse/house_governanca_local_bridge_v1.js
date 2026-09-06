@@ -7,7 +7,7 @@
   var ORIGEM = 'governanca';
 
   var HOUSE_ORIGIN = 'https://tata-house.github.io';
-  var HOUSE_AVALIAR_URL = HOUSE_ORIGIN + '/avaliar';
+  var HOUSE_AVALIAR_URL = HOUSE_ORIGIN + '/avaliar.html';
 
   var MSG_READY = 'tata-house:governanca:ready:v1';
   var MSG_CARDAPIO = 'tata-house:governanca:cardapio:v1';
