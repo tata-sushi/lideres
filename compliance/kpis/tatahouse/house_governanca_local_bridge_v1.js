@@ -8,6 +8,7 @@
 
   var HOUSE_ORIGIN = 'https://tata-house.github.io';
   var HOUSE_AVALIAR_URL = HOUSE_ORIGIN + '/avaliar.html';
+  var PLANEJADOR_GOVERNANCA_URL = '/compliance/kpis/tatahouse/planejador-v2.html';
 
   var MSG_READY = 'tata-house:governanca:ready:v1';
   var MSG_CARDAPIO = 'tata-house:governanca:cardapio:v1';
@@ -92,6 +93,82 @@
       guarnicao: itensDoTipo(dia, 'guarnicao').join(' · '),
       salada: itensDoTipo(dia, 'salada').join(' · ')
     });
+  }
+
+  /**
+   * Torna o Planejador VÉRTICE 2.0 descobrível dentro da página oficial
+   * sem tocar no menu global nem alterar o fluxo de aprovação existente.
+   */
+  function instalarAtalhoPlanejador(doc) {
+    doc = doc || (global && global.document);
+    if (!doc || !doc.body || !global.location || !/\/compliance\/kpis\/tatahouse\/cardapio\.html$/.test(global.location.pathname)) return null;
+    var existente = doc.getElementById('tatahouse-planejador-v2-entry');
+    if (existente) return existente;
+
+    var faixa = doc.createElement('section');
+    faixa.id = 'tatahouse-planejador-v2-entry';
+    faixa.setAttribute('aria-label', 'Planejador inteligente do TATÁ House');
+    faixa.style.cssText = [
+      'max-width:1100px',
+      'margin:10px auto 4px',
+      'padding:0 16px',
+      'font-family:DM Sans,Arial,sans-serif'
+    ].join(';');
+
+    var caixa = doc.createElement('div');
+    caixa.style.cssText = [
+      'display:flex',
+      'align-items:center',
+      'justify-content:space-between',
+      'gap:14px',
+      'padding:14px 16px',
+      'border:1px solid rgba(124,150,0,.25)',
+      'border-radius:14px',
+      'background:linear-gradient(135deg,#f7fbe9 0%,#ffffff 72%)',
+      'box-shadow:0 1px 4px rgba(0,0,0,.04)'
+    ].join(';');
+
+    var copy = doc.createElement('div');
+    copy.style.cssText = 'min-width:0;flex:1';
+    var rotulo = doc.createElement('div');
+    rotulo.textContent = 'NOVO · PLANEJADOR VÉRTICE 2.0';
+    rotulo.style.cssText = 'font:600 9px DM Mono,monospace;letter-spacing:1.1px;color:#617900;margin-bottom:4px';
+    var titulo = doc.createElement('div');
+    titulo.textContent = 'Planeje com inteligência antes de aprovar';
+    titulo.style.cssText = 'font-size:14px;font-weight:700;color:#25282d;line-height:1.25';
+    var desc = doc.createElement('div');
+    desc.textContent = 'Histórico, aceitação, custo, rotação e alertas do motor do House — com decisão humana no final.';
+    desc.style.cssText = 'font-size:11px;color:#6f7278;line-height:1.45;margin-top:3px';
+    copy.appendChild(rotulo);
+    copy.appendChild(titulo);
+    copy.appendChild(desc);
+
+    var link = doc.createElement('a');
+    link.href = PLANEJADOR_GOVERNANCA_URL;
+    link.textContent = 'Planejar com inteligência';
+    link.style.cssText = [
+      'display:inline-flex',
+      'align-items:center',
+      'justify-content:center',
+      'min-height:38px',
+      'padding:0 14px',
+      'border-radius:10px',
+      'background:#35383f',
+      'color:#cfff00',
+      'font:700 10px DM Mono,monospace',
+      'letter-spacing:.25px',
+      'text-decoration:none',
+      'white-space:nowrap'
+    ].join(';');
+
+    caixa.appendChild(copy);
+    caixa.appendChild(link);
+    faixa.appendChild(caixa);
+
+    var header = doc.querySelector('.header');
+    if (header && header.parentNode) header.parentNode.insertBefore(faixa, header.nextSibling);
+    else doc.body.insertBefore(faixa, doc.body.firstChild);
+    return faixa;
   }
 
   function abrirEEnviar(snapshot, opcoes) {
@@ -185,13 +262,25 @@
     });
   }
 
-  global.TataHouseGovernancaLocalBridgeV1 = Object.freeze({
+  var api = Object.freeze({
     contrato: CONTRATO,
     versao: VERSAO,
     houseOrigin: HOUSE_ORIGIN,
     houseUrl: HOUSE_AVALIAR_URL,
+    planejadorUrl: PLANEJADOR_GOVERNANCA_URL,
     criarSnapshot: criarSnapshot,
     criarSnapshotDoCardapioDia: criarSnapshotDoCardapioDia,
+    instalarAtalhoPlanejador: instalarAtalhoPlanejador,
     abrirEEnviar: abrirEEnviar
   });
+
+  global.TataHouseGovernancaLocalBridgeV1 = api;
+
+  if (global.document) {
+    if (global.document.readyState === 'loading') {
+      global.document.addEventListener('DOMContentLoaded', function () { instalarAtalhoPlanejador(global.document); }, { once: true });
+    } else {
+      instalarAtalhoPlanejador(global.document);
+    }
+  }
 })(window);
