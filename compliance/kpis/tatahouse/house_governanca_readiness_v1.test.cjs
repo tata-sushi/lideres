@@ -39,6 +39,20 @@ assert.match(gatePdf.resumo || '', /6\.2\.108/, 'gate PDF.js precisa registrar a
 assert.match(gatePdf.evidencia || '', /34017747800/, 'gate PDF.js precisa apontar para o run final');
 assert.match(gatePdf.evidencia || '', /a1302762b9c8ac82e77556f05020b044605ce843/, 'gate PDF.js precisa apontar para o commit de produto');
 
+const gateRpc = manifesto.gates.find((g) => g.id === 'legacy_rpc_write_semantics');
+assert.ok(gateRpc, 'gate do RPC legado ausente');
+assert.equal(gateRpc.status, 'UNKNOWN', 'evidência histórica não pode liberar o RPC live sem definição SQL atual');
+assert.match(gateRpc.classificacao || '', /KNOWN_HISTORICAL/, 'classificação deve preservar o que é conhecido historicamente');
+assert.match(gateRpc.classificacao || '', /CURRENT_LIVE_UNKNOWN/, 'classificação deve preservar o live atual como UNKNOWN');
+assert.match(gateRpc.resumo || '', /SECURITY DEFINER/, 'semântica histórica deve registrar SECURITY DEFINER');
+assert.match(gateRpc.resumo || '', /upsert do dia \+ substituição dos itens/, 'semântica histórica deve registrar upsert + substituição dos itens');
+assert.match(gateRpc.resumo || '', /insumos por prato/, 'semântica histórica deve registrar persistência de insumos');
+assert.match(gateRpc.resumo || '', /transição aguardando_aprovacao→aguardando_compra/, 'semântica histórica deve registrar a transição documentada');
+assert.match(gateRpc.resumo || '', /corpo SQL atual/, 'limite de prova live precisa permanecer explícito');
+for (const evidence of ['#2293', '#2324', '#2304', '#2327', '88d20d1f']) {
+  assert.match(gateRpc.evidencia || '', new RegExp(evidence.replace('#', '\\#')), `evidência histórica ausente: ${evidence}`);
+}
+
 const prodBlockers = new Set(todos.resultados.production_promotion.blockers.map((g) => g.id));
 assert.equal(prodBlockers.has('pdfjs_runtime_security'), false, 'PDF.js corrigido não pode continuar como bloqueador de produção');
 for (const id of ['integration_live_transport','live_permission_data_verification','legacy_evaluation_schema_live','ux_layer_selection','human_production_authorization']) {
@@ -54,6 +68,11 @@ const plannerBlockers = new Set(todos.resultados.planner_write_activation.blocke
 for (const id of ['legacy_rpc_write_semantics','integration_live_transport','live_permission_data_verification','human_planner_write_authorization']) {
   assert.ok(plannerBlockers.has(id), `bloqueador do Planejador ausente: ${id}`);
 }
+assert.ok(plannerBlockers.has('legacy_rpc_write_semantics'), 'RPC histórico conhecido deve continuar bloqueando escrita enquanto live for UNKNOWN');
+
+const historicalEvidenceCannotPass = clone(manifesto);
+historicalEvidenceCannotPass.gates.find((g) => g.id === 'legacy_rpc_write_semantics').classificacao = 'PROVEN_HISTORICAL';
+assert.equal(evaluator.avaliarTarget(historicalEvidenceCannotPass, 'planner_write_activation').ready, false, 'classificação histórica não pode substituir status PASS');
 
 const unknownInjected = clone(manifesto);
 unknownInjected.gates.find((g) => g.id === 'contracts_versioned').status = 'UNKNOWN';
@@ -82,11 +101,15 @@ assert.match(manifesto.fontes.houseFeature.nota || '', /PDF\.js 6\.2\.108/, 'fon
 assert.equal(manifesto.evidenceHead, 'd74a477af160a1abd44d37f5dd6c3eecd0a83f9b');
 assert.match(manifesto.evidenceHeadNota || '', /fronteira backend-ready/i, 'semântica do evidenceHead backend-ready precisa permanecer explícita');
 assert.match(manifesto.evidenceHeadNota || '', /34017747800/, 'nota de evidência deve registrar a prova PDF.js separadamente');
+assert.match(manifesto.evidenceHeadNota || '', /SQL live atual permanece não carregado/i, 'nota de evidência deve preservar limite de prova do RPC live');
 
 console.log('READINESS_MANIFEST=PASS');
 console.log('READINESS_PRE_SUPABASE=PASS');
 console.log('READINESS_BACKEND_LIVE_BLOCKED=PASS');
 console.log('READINESS_PDFJS_SECURITY=PASS');
+console.log('READINESS_LEGACY_RPC_HISTORICAL=KNOWN');
+console.log('READINESS_LEGACY_RPC_LIVE=UNKNOWN');
+console.log('READINESS_LEGACY_RPC_FAIL_CLOSED=PASS');
 console.log('READINESS_PRODUCTION_BLOCKED=PASS');
 console.log('READINESS_PLANNER_WRITE_BLOCKED=PASS');
 console.log('READINESS_FAIL_CLOSED=PASS');
