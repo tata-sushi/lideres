@@ -141,19 +141,24 @@ com Autorização de Desconto em Folha (o único termo com checkbox reativo no
 modal hoje; Vale-Transporte e Assistência Médica seguem só impressão, sem
 doc_tipos cadastrado). Novo `doc_tipos`: "Contrato de Mútuo Financeiro com
 Autorização de Desconto em Folha" (mesma categoria, `requer_assinatura=true`).
-Esse contrato não tinha bloco de assinatura nenhum antes (nem físico) — foi
-adicionado junto, agrupado com a seção "Disposições Gerais" inteira + data
-num bloco só (`.rp-fechamento`, `page-break-inside:avoid`) pra reduzir o
-risco de a assinatura isolar sozinha numa página quase em branco quando o
-contrato não cabe inteiro numa página (mesmo problema já visto em termos
-longos como Código de Ética). **Testado gerando o PDF de verdade
-(`page.pdf()`, não só a tela)**: o contrato realmente estoura pra 2 páginas;
-agrupar só o último parágrafo não bastava (a página 2 ficava só com a
-assinatura); agrupando a seção inteira, a página 2 fica com conteúdo de
-verdade antes da assinatura — ainda sobra espaço em branco depois dela, mas
-deixou de ser "quase vazia". O cálculo de altura restante pra decidir a
-quebra de página (a solução mais robusta, discutida mas não implementada)
-ainda fica pra depois, se o problema persistir em outros termos.
+
+**Correção de rumo:** na primeira tentativa foi adicionado um bloco de
+assinatura física (`.rp-assinaturas`) nesse termo — errado. `admissao.html`
+(Código de Ética e os demais) documenta explicitamente que **não leva linha
+de assinatura física nenhuma**: a assinatura do colaborador é só a digital,
+capturada no app via rubrica+selfie, sem contrapartida em papel. O Mútuo
+Financeiro foi corrigido pra seguir o mesmo padrão — sem `.rp-assinaturas`,
+só a declaração final ("As partes declaram ter lido...", classe
+`.rp-ass-declaro`, mesmo estilo do `admissao.html`) + a linha de cidade/data.
+Isso também resolveu boa parte do "vazamento" pra 2ª página, já que o bloco
+de assinatura era conteúdo extra que empurrava o contrato pra além de 1
+página.
+
+Restava um transbordo residual de ~21px (medido com `page.pdf()`, motor de
+impressão real — não só a tela) — só a linha final "São Paulo, DD/MM/AAAA."
+sobrando sozinha numa 2ª página quase em branco. Resolvido reduzindo a
+margem dessa linha (era pensada pra dar respiro antes de uma assinatura que
+não existe mais). Resultado: o contrato cabe inteiro numa página só.
 
 De passagem, também fica registrado: medi a margem lateral do PDF impresso
 pixel a pixel (36px, igual em todas as páginas de termo do sistema — não é
