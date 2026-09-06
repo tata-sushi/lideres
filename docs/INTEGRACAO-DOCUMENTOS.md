@@ -174,6 +174,21 @@ viewport largo (1440px) + `page.pdf()`: sem esse fix o `.page` media
 1440px de largura; com o fix, ~210mm centralizado, e o PDF real saiu sem
 cortar nada.
 
+**Terceira causa (a que sobrava, confirmada pelo print de `doc.html` — "v7"
+do Mútuo vs "v2" do Código de Ética):** as duas primeiras correções foram no
+CSS de impressão (`@media print`, usado só pelo "Gerar PDF" via
+`window.print()`). Mas "Enviar para Assinatura Digital" usa outra rota —
+`_benefHtmlParaPdfBlob`, html2canvas dentro de um iframe — que rasteriza a
+página como ela está **na tela** (CSS de tela, sem `@media print` nenhum).
+`BENEF_TERMO_CSS` só tinha padding/largura da `.page` dentro do
+`@media print`; nessa rota específica a página saía sem margem nenhuma nas
+laterais. `admissao.html` já resolve isso desde sempre com um `pdfOverrides`
+próprio dentro do `_admHtmlParaPdfBlob` (`ADM_CSS + pdfOverrides`, achatando
+pro equivalente do `@media print`) — replicado o mesmo padrão em
+`_benefHtmlParaPdfBlob`. Testado: com o fix, `.page` no iframe (800px de
+largura) passa a ter `padding:24px 36px 36px` de verdade, e o conteúdo ainda
+cabe numa página só (1090px de 1131px — ~40px de folga).
+
 De passagem, também fica registrado: medi a margem lateral do PDF impresso
 pixel a pixel (36px, igual em todas as páginas de termo do sistema — não é
 um bug, é só uma margem fina/0.375in por design). Se algum dia quiserem
