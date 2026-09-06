@@ -1,0 +1,159 @@
+name: TATÁ House avaliações durable E2E (temp)
+
+on:
+  push:
+    branches:
+      - feat/tatahouse-governanca-phase1
+    paths:
+      - '.github/workflows/tatahouse-avaliacoes-durable-e2e-temp.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  durable-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tatahouse-governanca-phase1
+      - uses: actions/checkout@v4
+        with:
+          repository: cesarspichencoff-cmyk/tata-house.github.io
+          ref: feat/house-governanca-phase1
+          path: house
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build current House feature
+        working-directory: house
+        run: npm ci && npm run build
+      - name: Install Playwright Chromium
+        run: |
+          mkdir -p /tmp/tatahouse-durable-e2e
+          cd /tmp/tatahouse-durable-e2e
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Prepare exact-origin harness
+        run: |
+          cat > /tmp/tatahouse-durable-cert.cnf <<'EOF'
+          [req]
+          distinguished_name=req_dn
+          x509_extensions=v3_req
+          prompt=no
+          [req_dn]
+          CN=tatahouse-durable-e2e
+          [v3_req]
+          subjectAltName=@alt_names
+          [alt_names]
+          DNS.1=tata-house.github.io
+          DNS.2=lideres.tatasushi.tech
+          EOF
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 -keyout /tmp/tatahouse-durable-key.pem -out /tmp/tatahouse-durable-cert.pem -config /tmp/tatahouse-durable-cert.cnf >/dev/null 2>&1
+          cat > /tmp/tatahouse-durable-e2e.cjs <<'NODE'
+          const https=require('https'),fs=require('fs'),path=require('path');
+          const mode=process.argv[2],root=process.env.GITHUB_WORKSPACE,houseRoot=path.join(root,'house','out');
+          const HOUSE='https://tata-house.github.io';
+          const harness=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body,iframe{margin:0;width:100%;height:100%;border:0}body{overflow:hidden}</style></head><body>
+          <script src="/compliance/kpis/tatahouse/house_governanca_avaliacoes_ingest_v1.js"><\/script>
+          <script src="/compliance/kpis/tatahouse/house_governanca_avaliacoes_local_v1.js"><\/script>
+          <iframe id="house" src="${HOUSE}/avaliar.html"></iframe>
+          <script>
+          (function(){
+            const HOUSE='${HOUSE}', store=new Map();
+            window.__durableStore=[]; window.__cardAck=null; window.__lastReceiver=null;
+            const api=window.TataHouseGovernancaAvaliacoesLocalV1;
+            window.__durableActivated=api.definirPersistidorDuravel(async function(p){
+              if(p.unidade!=='Itaim'||p.data!=='2026-09-06') return {status:'rejeitado',motivo:'cardapio_dia_nao_encontrado'};
+              const prev=store.get(p.eventoId);
+              if(prev){
+                if(JSON.stringify(prev)!==JSON.stringify(p)) return {status:'rejeitado',motivo:'id_conflito'};
+                return {status:'ja_existia'};
+              }
+              store.set(p.eventoId,JSON.parse(JSON.stringify(p)));
+              window.__durableStore=Array.from(store.values());
+              return {status:'persistido'};
+            });
+            window.addEventListener('tatahouse:governanca:avaliacoes-recebidas',e=>{window.__lastReceiver=e.detail||null});
+            window.addEventListener('message',function(e){
+              if(e.origin!==HOUSE||!e.data||typeof e.data!=='object') return;
+              if(e.data.type==='tata-house:governanca:ready:v1'){
+                e.source.postMessage({
+                  type:'tata-house:governanca:cardapio:v1',
+                  correlationId:'durable-card-1',
+                  sourceUnit:'Itaim',
+                  payload:{contrato:'tata-house-governanca',versao:1,tipo:'cardapio.dia',origem:'governanca',atualizadoEm:'2026-09-06T06:45:00.000Z',data:'2026-09-06',unidade:'tata-house',principal:'Frango Durable E2E',guarnicao:'Arroz Durable',salada:'Folhas Durable'}
+                },HOUSE);
+              }
+              if(e.data.type==='tata-house:governanca:ack:v1') window.__cardAck=e.data;
+            });
+          })();
+          <\/script></body></html>`;
+          function mime(f){if(f.endsWith('.html'))return'text/html; charset=utf-8';if(f.endsWith('.js')||f.endsWith('.mjs'))return'application/javascript; charset=utf-8';if(f.endsWith('.css'))return'text/css; charset=utf-8';if(f.endsWith('.json'))return'application/json';if(f.endsWith('.svg'))return'image/svg+xml';if(f.endsWith('.png'))return'image/png';if(f.endsWith('.woff2'))return'font/woff2';return'application/octet-stream'}
+          function send(res,c,b,t='text/plain; charset=utf-8'){res.writeHead(c,{'content-type':t,'cache-control':'no-store'});res.end(b)}
+          function serve(res,base,p){let rel=decodeURIComponent(p);while(rel.startsWith('/'))rel=rel.slice(1);if(!rel)rel='index.html';if(rel.endsWith('/'))rel+='index.html';const br=path.resolve(base),f=path.resolve(base,rel);if(!f.startsWith(br+path.sep)&&f!==br)return send(res,403,'forbidden');try{if(!fs.statSync(f).isFile())return send(res,404,'not found');res.writeHead(200,{'content-type':mime(f),'cache-control':'no-store'});fs.createReadStream(f).pipe(res)}catch{return send(res,404,'not found')}}
+          function server(){https.createServer({key:fs.readFileSync('/tmp/tatahouse-durable-key.pem'),cert:fs.readFileSync('/tmp/tatahouse-durable-cert.pem')},(req,res)=>{const host=(req.headers.host||'').split(':')[0],p=new URL(req.url,'https://'+host).pathname;if(host==='lideres.tatasushi.tech'){if(p==='/harness.html')return send(res,200,harness,'text/html; charset=utf-8');return serve(res,root,p)}if(host==='tata-house.github.io')return serve(res,houseRoot,p);return send(res,421,'unknown host')}).listen(443,'0.0.0.0',()=>console.log('DURABLE_E2E_SERVER=READY'))}
+          async function test(){
+            const {chromium}=require('/tmp/tatahouse-durable-e2e/node_modules/playwright');
+            const browser=await chromium.launch({headless:true,args:['--host-resolver-rules=MAP tata-house.github.io 127.0.0.1, MAP lideres.tatasushi.tech 127.0.0.1','--no-proxy-server']});
+            const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:390,height:844},timezoneId:'America/Sao_Paulo'});
+            const writes=[];context.on('request',r=>{if(!['GET','HEAD','OPTIONS'].includes(r.method()))writes.push({method:r.method(),url:r.url()})});
+            const page=await context.newPage();
+            await page.goto('https://lideres.tatasushi.tech/harness.html',{waitUntil:'domcontentloaded'});
+            await page.waitForFunction(()=>window.__durableActivated===true);
+            await page.waitForFunction(()=>window.__cardAck&&window.__cardAck.ok===true,null,{timeout:15000});
+            console.log('DURABLE_E2E_CARDAPIO_ACK=PASS');
+            const frame=page.frames().find(f=>f.url().startsWith('https://tata-house.github.io/avaliar'));
+            if(!frame)throw new Error('House avaliar frame not found');
+            await frame.waitForFunction(()=>document.body.innerText.toLocaleLowerCase('pt-BR').includes('frango durable e2e'),null,{timeout:15000});
+            console.log('DURABLE_E2E_HOUSE_RENDER=PASS');
+            await frame.getByRole('button',{name:/Ótimo/i}).click();
+            await frame.locator('textarea').fill('Muito bom');
+            await frame.getByRole('button',{name:/Enviar avaliação/i}).click();
+            await page.waitForFunction(()=>window.__durableStore&&window.__durableStore.length===1&&window.__lastReceiver&&window.__lastReceiver.modo==='duravel',null,{timeout:10000});
+            const projection=await page.evaluate(()=>window.__durableStore[0]);
+            if(!projection||projection.unidade!=='Itaim'||projection.data!=='2026-09-06'||projection.prato!=='Frango Durable E2E'||projection.voto!=='bom'||projection.notaLegada!==5||projection.comentario!=='Muito bom')throw new Error('projection mismatch '+JSON.stringify(projection));
+            console.log('DURABLE_E2E_PROJECTION=PASS',JSON.stringify(projection));
+            await frame.waitForFunction(()=>{try{return JSON.parse(localStorage.getItem('tata.governanca.outbox.v1')||'[]').length===0}catch{return false}},null,{timeout:10000});
+            const localReceipt=await page.evaluate(()=>localStorage.getItem('tata.house.avaliacoes.recebidas.v1'));
+            if(localReceipt!==null)throw new Error('durable mode wrote local receiver receipt');
+            console.log('DURABLE_E2E_ACK_CLEARS_OUTBOX=PASS');
+            console.log('DURABLE_E2E_NO_LOCAL_FALLBACK=PASS');
+
+            const retryEvent={id:projection.eventoId,tipo:'avaliacao.prato',origem:'tata-house',criadoEm:projection.criadoEm,data:projection.data,unidade:projection.unidade,prato:projection.prato,voto:projection.voto,comentario:projection.comentario};
+            await frame.evaluate(e=>localStorage.setItem('tata.governanca.outbox.v1',JSON.stringify([e])),retryEvent);
+            await frame.evaluate(()=>location.reload());
+            await frame.waitForFunction(()=>{try{return JSON.parse(localStorage.getItem('tata.governanca.outbox.v1')||'[]').length===0}catch{return false}},null,{timeout:15000});
+            const afterRetry=await page.evaluate(()=>window.__durableStore.length);
+            if(afterRetry!==1)throw new Error('retry duplicated durable event');
+            console.log('DURABLE_E2E_RETRY_IDEMPOTENT=PASS');
+
+            const rejected={id:'11111111-1111-4111-8111-111111111111',tipo:'avaliacao.prato',origem:'tata-house',criadoEm:'2026-09-06T06:50:00.000Z',data:'2026-09-07',unidade:'Itaim',prato:'Frango Durable E2E',voto:'ruim'};
+            await frame.evaluate(e=>localStorage.setItem('tata.governanca.outbox.v1',JSON.stringify([e])),rejected);
+            await frame.evaluate(()=>location.reload());
+            await frame.waitForTimeout(1000);
+            const pendingRejected=await frame.evaluate(()=>JSON.parse(localStorage.getItem('tata.governanca.outbox.v1')||'[]'));
+            if(pendingRejected.length!==1||pendingRejected[0].id!==rejected.id)throw new Error('rejected event was incorrectly cleared');
+            console.log('DURABLE_E2E_REJECTION_PRESERVES_OUTBOX=PASS');
+
+            const externalWrites=writes.filter(x=>!x.url.startsWith('https://lideres.tatasushi.tech/')&&!x.url.startsWith('https://tata-house.github.io/'));
+            if(externalWrites.length)throw new Error('unexpected external write '+JSON.stringify(externalWrites));
+            console.log('DURABLE_E2E_NO_EXTERNAL_WRITE=PASS');
+            await browser.close();
+            console.log('HOUSE_GOVERNANCA_DURABLE_E2E=PASS');
+          }
+          if(mode==='server')server();else if(mode==='test')test().catch(e=>{console.error(e);process.exit(1)});else process.exit(2);
+          NODE
+          node --check /tmp/tatahouse-durable-e2e.cjs
+      - name: Start exact-origin harness
+        run: |
+          sudo -E node /tmp/tatahouse-durable-e2e.cjs server >/tmp/tatahouse-durable-server.log 2>&1 &
+          for i in $(seq 1 20); do
+            if curl --noproxy '*' --resolve lideres.tatasushi.tech:443:127.0.0.1 -ksSf https://lideres.tatasushi.tech/harness.html >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/tatahouse-durable-server.log
+          exit 1
+      - name: Prove exact-origin durable seam
+        run: node /tmp/tatahouse-durable-e2e.cjs test
