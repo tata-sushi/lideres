@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Reconstruct clean candidate
+      - name: Reconstruct clean candidate with UX overlay
         env:
           BASE: 6dc04827b195aaca9d4653618e5a40ca64a1a6f4
           FEATURE: e7b3b791750ba85b1da2f6f229a3168e69c0a217
@@ -26,11 +26,12 @@ jobs:
           SCENARIO_COMPONENT: 36bbd9346bea7ac3a29a09329b5907213684b5ac
           CANDIDATES_SOURCE: 15ee28bbeabef3c5c1220db79396168929984f0f
           CANDIDATES_TEST_SOURCE: 447df60c9dbe8b156b9f2bd993cd92aac484e3a0
+          UX_OVERLAY: 23a31f7217ac1e150a9c9cc194acaa907141f72f
           PDFJS_SECURITY: a1302762b9c8ac82e77556f05020b044605ce843
         run: |
           git clone --quiet https://github.com/cesarspichencoff-cmyk/tata-house.github.io.git /tmp/house
           cd /tmp/house
-          git fetch --quiet origin "$BASE" "$FEATURE" "$PLANNER_SCENARIOS" "$READONLY_OVERLAY" "$SCENARIO_COMPONENT" "$CANDIDATES_SOURCE" "$CANDIDATES_TEST_SOURCE" "$PDFJS_SECURITY"
+          git fetch --quiet origin "$BASE" "$FEATURE" "$PLANNER_SCENARIOS" "$READONLY_OVERLAY" "$SCENARIO_COMPONENT" "$CANDIDATES_SOURCE" "$CANDIDATES_TEST_SOURCE" "$UX_OVERLAY" "$PDFJS_SECURITY"
           git checkout --quiet --detach "$BASE"
           MANIFEST="$GITHUB_WORKSPACE/compliance/kpis/tatahouse/house_governanca_house_slice_manifest_v1.json"
           jq -r '.classificacoes[] | select(.id=="WHOLE_FILE_INTEGRATION") | .arquivos[]' "$MANIFEST" | while IFS= read -r p; do mkdir -p "$(dirname "$p")"; git show "$FEATURE:$p" > "$p"; done
@@ -41,9 +42,24 @@ jobs:
           git show "$CANDIDATES_TEST_SOURCE:src/lib/cardapio/governanca-candidatos.test.ts" > src/lib/cardapio/governanca-candidatos.test.ts
           git diff "$READONLY_OVERLAY^" "$READONLY_OVERLAY" -- src/components/cardapio/PlanejadorGovernanca.tsx > /tmp/readonly-overlay.patch
           git apply /tmp/readonly-overlay.patch
+          git diff "$UX_OVERLAY^" "$UX_OVERLAY" -- src/components/cardapio/PlanejadorGovernanca.tsx src/components/cardapio/CenariosGovernanca.tsx > /tmp/ux-overlay.patch
+          test -s /tmp/ux-overlay.patch
+          git apply /tmp/ux-overlay.patch
           for p in package.json package-lock.json public/pdf.worker.min.mjs; do mkdir -p "$(dirname "$p")"; git show "$PDFJS_SECURITY:$p" > "$p"; done
+          git add -N .
+          test "$(git diff --name-only "$BASE" | wc -l)" -eq 31
+          ! grep -q 'TrocaInteligenteGovernanca' src/components/cardapio/PlanejadorGovernanca.tsx
+          grep -q 'Histórico oficial carregado' src/components/cardapio/PlanejadorGovernanca.tsx
+          grep -q 'alertasUteis' src/components/cardapio/PlanejadorGovernanca.tsx
+          grep -q 'Nada é publicado sem sua revisão e aprovação' src/components/cardapio/CenariosGovernanca.tsx
           npm ci
+          npm test
+          npm run typecheck
+          npm run lint
           npm run build
+          git diff --check
+          echo 'VISUAL_POLISHED_CANDIDATE_31_FILES=PASS'
+          echo 'VISUAL_POLISHED_UX_OVERLAY=PASS'
       - name: Install Playwright
         run: |
           mkdir -p /tmp/e2e && cd /tmp/e2e
@@ -56,6 +72,6 @@ jobs:
         run: node compliance/kpis/tatahouse/__tmp_visual_audit.cjs
       - uses: actions/upload-artifact@v4
         with:
-          name: tatahouse-visual-audit
+          name: tatahouse-visual-audit-polished
           path: /tmp/visual-audit
           if-no-files-found: error
