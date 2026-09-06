@@ -1,0 +1,95 @@
+name: TATA House source-unit message diagnostic temporary
+
+on:
+  push:
+    branches: [feat/tatahouse-governanca-phase1]
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tatahouse-governanca-phase1
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: cesarspichencoff-cmyk/tata-house.github.io
+          ref: feat/house-governanca-phase1
+          path: house
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Build House
+        working-directory: house
+        run: npm ci && npm run build
+      - name: Install browser
+        run: |
+          mkdir -p /tmp/diag && cd /tmp/diag && npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Prepare diagnostic
+        run: |
+          cat > /tmp/diag-cert.cnf <<'EOF'
+          [req]
+          distinguished_name=req_dn
+          x509_extensions=v3_req
+          prompt=no
+          [req_dn]
+          CN=tata-house-diag
+          [v3_req]
+          subjectAltName=@alt_names
+          [alt_names]
+          DNS.1=tata-house.github.io
+          DNS.2=lideres.tatasushi.tech
+          EOF
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 -keyout /tmp/diag-key.pem -out /tmp/diag-cert.pem -config /tmp/diag-cert.cnf >/dev/null 2>&1
+          cat > /tmp/diag.cjs <<'NODE'
+          const https=require('https'),fs=require('fs'),path=require('path');
+          const mode=process.argv[2],root=process.env.GITHUB_WORKSPACE,houseRoot=path.join(root,'house','out');
+          const gateStub=`(function(){document.documentElement.dataset.auth='ok';window.GOV_PAGE_ID='governanca-kpis-tatahouse-cardapio';window.__lideresSession={displayName:'DIAG',perfil:'gestao'};window.__D={dia_id:'d1',data:'2026-09-06',unidade:'Itaim',status:'aguardando_preparo',resumo:'Frango Fonte DIAG',aprovado_em:'2026-09-05T18:00:00Z',n_restricoes:0,almoco:60,jantar:0,marmitas:10,obs:'',itens:[{tipo:'principal',item:'Frango Fonte DIAG'},{tipo:'guarnicao',item:'Arroz DIAG'},{tipo:'salada',item:'Folhas DIAG'}]};function r(data){return Promise.resolve({data,error:null})}window.__lideresSupa={schema:function(){return{rpc:function(n){if(n==='cozinhas_lista')return r([{chave:'Itaim',nome:'Itaim'}]);if(n==='refeicoes_elab_primeira_data')return r('2026-09-06');if(n==='refeicoes_processamento')return r([JSON.parse(JSON.stringify(window.__D))]);return r([])},from:function(){return{select:function(){return r([])}}}}}}})();`;
+          function mime(f){if(f.endsWith('.html'))return'text/html';if(f.endsWith('.js')||f.endsWith('.mjs'))return'application/javascript';if(f.endsWith('.css'))return'text/css';if(f.endsWith('.json'))return'application/json';return'application/octet-stream'}
+          function send(res,c,b,t='text/plain'){res.writeHead(c,{'content-type':t,'cache-control':'no-store'});res.end(b)}
+          function serve(res,base,p){let rel=decodeURIComponent(p);while(rel.startsWith('/'))rel=rel.slice(1);if(!rel)rel='index.html';const br=path.resolve(base),f=path.resolve(base,rel);try{if(!f.startsWith(br+path.sep)&&f!==br)return send(res,403,'forbidden');if(!fs.statSync(f).isFile())return send(res,404,'not found');res.writeHead(200,{'content-type':mime(f),'cache-control':'no-store'});fs.createReadStream(f).pipe(res)}catch{return send(res,404,'not found')}}
+          function server(){https.createServer({key:fs.readFileSync('/tmp/diag-key.pem'),cert:fs.readFileSync('/tmp/diag-cert.pem')},(req,res)=>{const host=(req.headers.host||'').split(':')[0],p=new URL(req.url,'https://'+host).pathname;if(host==='lideres.tatasushi.tech'){if(p==='/compliance/gate.js')return send(res,200,gateStub,'application/javascript');return serve(res,root,p)}if(host==='tata-house.github.io')return serve(res,houseRoot,p);return send(res,421,'host')}).listen(443,'0.0.0.0')}
+          async function diag(){
+            const {chromium}=require('/tmp/diag/node_modules/playwright');
+            const browser=await chromium.launch({headless:true,args:['--host-resolver-rules=MAP tata-house.github.io 127.0.0.1, MAP lideres.tatasushi.tech 127.0.0.1','--no-proxy-server']});
+            const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:390,height:844},timezoneId:'America/Sao_Paulo'});
+            await context.addInitScript(()=>{window.__E2E_MESSAGES=[];window.addEventListener('message',e=>{try{window.__E2E_MESSAGES.push({origin:e.origin,type:e.data&&e.data.type,correlationId:e.data&&e.data.correlationId,hasPayload:!!(e.data&&e.data.payload),sourceIsOpener:e.source===window.opener,sourceIsParent:e.source===window.parent})}catch{}})});
+            const leaders=await context.newPage(),le=[];leaders.on('pageerror',e=>le.push(String(e)));leaders.on('console',m=>console.log('LEADERS_CONSOLE',m.type(),m.text()));
+            await leaders.goto('https://lideres.tatasushi.tech/compliance/kpis/tatahouse/cardapio.html',{waitUntil:'domcontentloaded'});
+            await leaders.locator('.tab-btn[data-tab="processamento"]').click();await leaders.waitForFunction(()=>document.querySelectorAll('.btn-proc-dia').length>0);await leaders.locator('#pf-unidade').selectOption('Itaim');await leaders.locator('.btn-proc-dia').first().click();
+            const pp=context.waitForEvent('page');await leaders.locator('#md-publicar-house').click();const house=await pp,he=[];house.on('pageerror',e=>he.push(String(e)));house.on('console',m=>console.log('HOUSE_CONSOLE',m.type(),m.text()));await house.waitForLoadState('domcontentloaded');
+            await new Promise(r=>setTimeout(r,13000));
+            console.log('DIAG_LEADERS_STATUS',JSON.stringify(await leaders.locator('#md-house-publish-status').textContent()));
+            console.log('DIAG_LEADERS_MESSAGES',JSON.stringify(await leaders.evaluate(()=>window.__E2E_MESSAGES)));
+            console.log('DIAG_HOUSE_URL',house.url());
+            console.log('DIAG_HOUSE_MESSAGES',JSON.stringify(await house.evaluate(()=>window.__E2E_MESSAGES)));
+            console.log('DIAG_HOUSE_OPENER',JSON.stringify(await house.evaluate(()=>({hasOpener:!!window.opener,parentIsSelf:window.parent===window}))));
+            console.log('DIAG_HOUSE_STATE',JSON.stringify(await house.evaluate(()=>({cardapio:Object.keys(localStorage).filter(k=>k.startsWith('tata.governanca.cardapio')),source:localStorage.getItem('tata.governanca.unidade-fonte.v1'),body:document.body.innerText.slice(0,400)}))));
+            console.log('DIAG_PAGE_ERRORS',JSON.stringify({leaders:le,house:he}));
+            await browser.close();
+          }
+          if(mode==='server')server();else diag().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Start servers
+        run: |
+          sudo -E node /tmp/diag.cjs server >/tmp/diag-server.log 2>&1 &
+          for i in $(seq 1 20); do if curl --noproxy '*' --resolve lideres.tatasushi.tech:443:127.0.0.1 -ksSf https://lideres.tatasushi.tech/compliance/kpis/tatahouse/cardapio.html >/dev/null; then exit 0; fi; sleep 1; done
+          cat /tmp/diag-server.log; exit 1
+      - name: Capture cross-window state
+        run: node /tmp/diag.cjs diag
+      - name: Remove diagnostic
+        if: always()
+        run: |
+          git config user.name "cesarspichencoff-cmyk"
+          git config user.email "cesar.spichencoff@gmail.com"
+          rm -f .github/workflows/tatahouse-source-unit-diagnostic-temp.yml
+          git add -A .github/workflows/tatahouse-source-unit-diagnostic-temp.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "test(tatahouse): remove temporary source-unit diagnostic"
+          git push origin HEAD:feat/tatahouse-governanca-phase1
