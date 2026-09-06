@@ -291,6 +291,19 @@ sem colisão, falha parcial isolada (reporta X de Y baixados) e uma falha
 inesperada na montagem do zip (`generateAsync`) é capturada e reabilita o
 botão em vez de travar o modal.
 
+**Bug encontrado (2026-09-06) e corrigido:** o checklist mensal de "Cartão de
+Ponto" em `doc.html` (uma linha por mês desde a admissão) sempre ficava
+"Pendente" mesmo depois de enviar pelo `escalas.html`, porque `_docVersoes`
+comparava a `competencia` por **igualdade exata de string** — e o Cartão de
+Ponto passou a gravar o período customizado (`YYYY-MM-DD_YYYY-MM-DD`), não
+o "YYYY-MM" que o checklist itera mês a mês, então nunca batia.
+Corrigido com `_docCompetenciaCobre(rowCompetencia, mesAlvo)`: quando a
+`competencia` da linha é um período (tem `_`), ela "cobre" qualquer mês
+calendário que o período toque (ex.: 21/07–20/08 cobre Jul/2026 **e**
+Ago/2026), em vez de só um mês exato. Pra todo o resto do catálogo
+(`competencia` já em "YYYY-MM" ou `null`) o comportamento é idêntico ao de
+antes — só muda pra período customizado.
+
 **Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
 é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões
 lado a lado (mesmo padrão de `admissao.html` com "Gerar PDF" +
