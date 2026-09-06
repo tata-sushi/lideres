@@ -1899,7 +1899,7 @@ function setTab(t){
 <script>
 /* ── ANALÍTICO · Performance 360 (profiles + ausencias) ── */
 (function(){
-  var LOADED=false, COLABS=[], AUS={}, SANC={}, AVAL={}, FBK={}, PAGE=50, shown=PAGE, rows=[];
+  var LOADED=false, COLABS=[], AUS={}, SANC={}, AVAL={}, FBK={}, DESEMP={}, PAGE=50, shown=PAGE, rows=[];
   var collapsed={}, collapsedInit=false;
   function esc(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function pad(n){ return String(n).padStart(2,'0'); }
@@ -1928,6 +1928,10 @@ function setTab(t){
       ['Líder 2º',  notaCol('lider_p2')],
       ['Colab. 1º', notaCol('colab_p1')],
       ['Colab. 2º', notaCol('colab_p2')]
+    ]},
+    { label:'Desempenho', sigla:'P', cols:[
+      ['Nota',  function(c){ var d=DESEMP[c.matricula]; return d?fmtNota(d.nota):'<span class="anl-ph">—</span>'; }],
+      ['Data',  function(c){ var d=DESEMP[c.matricula]; return (d&&d.data)?d.data:'<span class="anl-ph">—</span>'; }]
     ]},
     { label:'Desligamento', sigla:'D', cols:[ ['Tipo de dispensa', ph],['Fez Homologação', ph],['Tem processo', ph] ]},
     { label:'Tempo desde o desligamento', sigla:'T', cols:[ ['Tempo', function(c){ return c.data_demissao?tempoDesde(c.data_demissao):'—'; }] ]},
@@ -2000,8 +2004,9 @@ function setTab(t){
       var pS=supa.schema('tata_plus').rpc('sancoes_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
       var pV=supa.schema('tata_plus').rpc('avaliacoes_experiencia_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
       var pF=supa.schema('tata_plus').rpc('feedbacks_analitico_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
-      Promise.all([pC,pA,pS,pV,pF]).then(function(res){
-        var colabs=res[0], aus=res[1], sanc=res[2], avals=res[3], fbks=res[4];
+      var pD=supa.schema('tata_plus').rpc('desempenho_analitico_listar').then(function(r){ return (r&&!r.error&&Array.isArray(r.data))?r.data:[]; }, function(){ return []; });
+      Promise.all([pC,pA,pS,pV,pF,pD]).then(function(res){
+        var colabs=res[0], aus=res[1], sanc=res[2], avals=res[3], fbks=res[4], desemps=res[5];
         AUS={};
         aus.forEach(function(a){ var mt=a.matricula; if(!mt) return; if(!AUS[mt]) AUS[mt]={faltas:0,just:0}; if(isFalta(a.tipo)) AUS[mt].faltas++; else if(isJust(a.tipo)) AUS[mt].just++; });
         SANC={};
@@ -2010,6 +2015,8 @@ function setTab(t){
         avals.forEach(function(v){ var mt=v.matricula; if(!mt) return; AVAL[mt]={lider_p1:v.lider_p1,lider_p2:v.lider_p2,colab_p1:v.colab_p1,colab_p2:v.colab_p2}; });
         FBK={};
         fbks.forEach(function(f){ var mt=f.matricula; if(!mt) return; FBK[mt]={qtd:f.qtd,ultimo:f.ultimo}; });
+        DESEMP={};
+        desemps.forEach(function(d){ var mt=d.matricula; if(!mt) return; DESEMP[mt]={nota:d.nota,data:d.data}; });
         COLABS=colabs.slice().sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
         function fill(id,key){ var sel=document.getElementById(id); if(!sel) return; var cur=sel.value; var vals=Array.from(new Set(COLABS.map(function(c){return c[key];}).filter(Boolean))).sort(function(a,b){return String(a).localeCompare(String(b),'pt-BR');}); sel.innerHTML='<option value="">'+esc(sel.dataset.all||'Todos')+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'">'+esc(v)+'</option>';}).join(''); sel.value=cur; }
         fill('anl-f-unidade','unidade'); fill('anl-f-depto','departamento');
