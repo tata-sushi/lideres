@@ -26,9 +26,18 @@ assert.equal(parity.componentes.readonlyOverlay.aplicarSomentePatchDoArquivo, tr
 assert.equal(parity.componentes.scenarioComponent.sourceCommit, '36bbd9346bea7ac3a29a09329b5907213684b5ac');
 assert.equal(parity.componentes.pdfjsSecurity.sourceCommit, 'a1302762b9c8ac82e77556f05020b044605ce843');
 
+const shared = parity.componentes.scenarioSharedSubstrate;
+assert.match(shared.descricao || '', /cenarios/i);
+const sharedByPath = Object.fromEntries(shared.arquivos.map((x) => [x.path, x]));
+assert.equal(sharedByPath['src/lib/cardapio/governanca-candidatos.ts'].sourceCommit, '15ee28bbeabef3c5c1220db79396168929984f0f');
+assert.equal(sharedByPath['src/lib/cardapio/governanca-candidatos.test.ts'].sourceCommit, '447df60c9dbe8b156b9f2bd993cd92aac484e3a0');
+assert.equal(parity.exclusoesObrigatorias.includes('src/lib/cardapio/governanca-candidatos.ts'), false, 'gerador de cenarios nao pode permanecer excluido da paridade inteligente');
+assert.equal(parity.exclusoesObrigatorias.includes('src/lib/cardapio/governanca-candidatos.test.ts'), false, 'teste do gerador de cenarios nao pode permanecer excluido da paridade inteligente');
+
 for (const forbidden of [
   'src/components/cardapio/TrocaInteligenteGovernanca.tsx',
   'src/lib/cardapio/governanca-trocas.ts',
+  'src/lib/cardapio/governanca-trocas.test.ts',
   'src/app/page.tsx',
   'src/components/BottomNav.tsx',
   'src/components/cardapio/AbaCardapio.tsx',
@@ -46,6 +55,7 @@ assert.equal(recipe.invariantes.freshReadBeforeEffectBoundary, true);
 console.log('CLEAN_CANDIDATE_RECIPE=PASS');
 console.log('CLEAN_CANDIDATE_TRANSPORT_NOT_INTELLIGENCE=PASS');
 console.log('CLEAN_CANDIDATE_READONLY_PARITY_PROFILE=PASS');
+console.log('CLEAN_CANDIDATE_SCENARIO_SUBSTRATE=PASS');
 console.log('CLEAN_CANDIDATE_TROCAS_EXCLUDED=PASS');
 console.log('CLEAN_CANDIDATE_GLOBAL_UX_EXCLUDED=PASS');
 console.log('CLEAN_CANDIDATE_EFFECT_BOUNDARY_LOCKED=PASS');
