@@ -332,6 +332,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 <!-- Supabase-js mantido para a fase de migração (o cliente será criado quando ligarmos os dados). -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- JSZip: empacota o download em lote de todos os documentos de um colaborador. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <!-- Gate: abre só via Tatá Plus (sessão real + acesso por página/aba). -->
 <script>window.GOV_PAGE_ID = 'governanca-kpis-rh-doc';</script>
 <script src="/compliance/gate.js"></script>
@@ -449,6 +451,28 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
   </div>
 </div>
+<!-- Modal Baixar Documentos — .zip com TODOS os arquivos (todas as versões) de um colaborador -->
+<div class="modal-overlay" id="doc-download-overlay">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="candidate-name">Baixar Documentos</div>
+      <button class="modal-close" onclick="fecharDocDownload()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="ev-field">
+        <span class="modal-section-title">Colaborador</span>
+        <select class="modal-select" id="dl-colab-select" onchange="_dlColabChanged(this.value)"></select>
+      </div>
+      <div class="field-value" id="dl-resumo" style="display:none;color:var(--mid);font-weight:400;"></div>
+      <div class="field-value" id="dl-progress" style="display:none;color:var(--mid);font-weight:400;"></div>
+      <div class="field-value" id="dl-erro" style="display:none;color:#B93232;font-weight:400;font-size:12px;"></div>
+    </div>
+    <div class="modal-footer" style="gap:10px">
+      <button class="modal-btn modal-btn-cancel" onclick="fecharDocDownload()" style="flex:1">Cancelar</button>
+      <button class="modal-btn modal-btn-save" id="dl-btn" onclick="baixarDocumentosColaborador()" style="flex:1" disabled>Baixar .zip</button>
+    </div>
+  </div>
+</div>
 <!-- LOADING -->
 <div class="loading-overlay" id="loading-overlay">
   <div class="spinner"></div>
@@ -503,6 +527,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="drawer-section-label">Ações</div>
       <button class="drawer-sam-btn" onclick="abrirDocCargos()">Documentos por Cargo</button>
       <button class="drawer-sam-btn" style="margin-top:8px" onclick="abrirDocTipoNovo()">Cadastrar Documento</button>
+      <button class="drawer-sam-btn" style="margin-top:8px" onclick="abrirDocDownload()">Baixar Documentos do Colaborador</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -1184,6 +1209,141 @@ function _docTipoNovoSalvar() {
     fecharDocTipoNovo();
     if (state.tab === 'analitico') renderDocGestao();
   }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
+}
+
+// ─── Baixar Documentos (drawer) — .zip com TODOS os arquivos de um colaborador,
+// todas as versões, não só a mais recente. Lê direto de `colaboradorDocumentos`
+// (já carregado inteiro em loadAllData) — sem RPC nova. ──────────────────────
+function abrirDocDownload() {
+  closeDrawer();
+  var sel = document.getElementById('dl-colab-select');
+  sel.innerHTML = '<option value="">Selecione um colaborador</option>' +
+    (docColaboradores || []).slice().sort(function (a, b) { return (a.nome || '').localeCompare(b.nome || ''); })
+      .map(function (c) { return '<option value="' + escH(c.matricula) + '">' + escH(c.nome || c.matricula) + '</option>'; }).join('');
+  document.getElementById('dl-resumo').style.display = 'none';
+  document.getElementById('dl-progress').style.display = 'none';
+  document.getElementById('dl-erro').style.display = 'none';
+  var btn = document.getElementById('dl-btn');
+  btn.disabled = true; btn.textContent = 'Baixar .zip';
+  document.getElementById('doc-download-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function fecharDocDownload() {
+  if (window._dlBaixando) return; // não deixa fechar no meio do download
+  document.getElementById('doc-download-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function _dlColabChanged(matricula) {
+  var resumo = document.getElementById('dl-resumo');
+  var btn = document.getElementById('dl-btn');
+  document.getElementById('dl-erro').style.display = 'none';
+  if (!matricula) { resumo.style.display = 'none'; btn.disabled = true; return; }
+  var qtd = (colaboradorDocumentos || []).filter(function (d) { return d.matricula === matricula; }).length;
+  resumo.style.display = 'block';
+  resumo.textContent = qtd ? (qtd + ' arquivo(s) encontrado(s), todas as versões.') : 'Nenhum documento encontrado pra esse colaborador.';
+  btn.disabled = !qtd;
+}
+
+// "2026-07-21_2026-08-20" (período customizado, ex.: Cartão de Ponto) ou
+// "2026-08" (competência mês/ano tradicional) → rótulo pra nome do arquivo.
+function _dlCompetenciaLabel(c) {
+  if (!c) return '';
+  var fmtIso = function (iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '-' + p[1] + '-' + p[0] : iso; };
+  if (c.indexOf('_') > -1) {
+    var partes = c.split('_');
+    return fmtIso(partes[0]) + ' a ' + fmtIso(partes[1]);
+  }
+  return _docFmtCompetencia(c).replace('/', '-');
+}
+
+// Só troca por "-" o que quebraria um nome de arquivo — mantém acentos/espaços
+// legíveis (ao contrário de _slug, feito pra path/URL, não pra exibição humana).
+function _dlNomeArquivo(row) {
+  var tipo = (docTipos || []).find(function (t) { return t.id === row.tipo_id; });
+  var base = (tipo ? tipo.nome : row.nome_arquivo) || 'documento';
+  var comp = _dlCompetenciaLabel(row.competencia);
+  var ext = (row.mime === 'application/pdf' || /\.pdf$/i.test(row.nome_arquivo || '')) ? 'pdf' : (String(row.nome_arquivo || '').split('.').pop() || 'bin');
+  var nome = base + (comp ? ' - ' + comp : '') + (row.versao > 1 ? ' (v' + row.versao + ')' : '');
+  return nome.replace(/[\/\\:*?"<>|]/g, '-') + '.' + ext;
+}
+
+function baixarDocumentosColaborador() {
+  if (window._dlBaixando) return;
+  var matricula = (document.getElementById('dl-colab-select') || {}).value || '';
+  var colab = _docColaborador(matricula);
+  var rows = (colaboradorDocumentos || []).filter(function (d) { return d.matricula === matricula; });
+  var erroBox = document.getElementById('dl-erro');
+  erroBox.style.display = 'none';
+  if (!matricula || !rows.length) return;
+  var SB = window.__lideresSupa;
+  if (!SB) { erroBox.style.display = 'block'; erroBox.textContent = 'Conexão indisponível, tenta de novo.'; return; }
+  if (!window.JSZip) { erroBox.style.display = 'block'; erroBox.textContent = 'Falha ao carregar biblioteca de .zip.'; return; }
+
+  window._dlBaixando = true;
+  var btn = document.getElementById('dl-btn');
+  btn.disabled = true;
+  var progresso = document.getElementById('dl-progress');
+  progresso.style.display = 'block';
+
+  var zip = new JSZip();
+  var falhas = [];
+  var total = rows.length;
+  var usados = {}; // desempata nomes repetidos dentro do zip
+
+  rows.reduce(function (promise, row, idx) {
+    return promise.then(function () {
+      progresso.textContent = 'Baixando ' + (idx + 1) + '/' + total + '…';
+      if (!row.link) { falhas.push(row); return; }
+      return SB.storage.from(row.link_bucket || 'dp-documentos').createSignedUrl(row.link, 3600).then(function (r) {
+        if (r.error || !r.data || !r.data.signedUrl) throw (r.error || new Error('sem link assinado'));
+        return fetch(r.data.signedUrl).then(function (resp) {
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          return resp.blob();
+        });
+      }).then(function (blob) {
+        var nome = _dlNomeArquivo(row);
+        if (usados[nome]) { usados[nome]++; nome = nome.replace(/(\.[^.]+)$/, ' (' + usados[nome] + ')$1'); }
+        else usados[nome] = 1;
+        zip.file(nome, blob);
+      }).catch(function () { falhas.push(row); });
+    });
+  }, Promise.resolve()).then(function () {
+    if (!Object.keys(zip.files).length) {
+      window._dlBaixando = false;
+      btn.disabled = false;
+      progresso.style.display = 'none';
+      erroBox.style.display = 'block';
+      erroBox.textContent = 'Nenhum arquivo pôde ser baixado.';
+      return;
+    }
+    progresso.textContent = 'Montando .zip…';
+    return zip.generateAsync({ type: 'blob' }).then(function (blob) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (colab && colab.nome ? colab.nome : matricula) + ' - Documentos.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 30000);
+
+      window._dlBaixando = false;
+      btn.disabled = false;
+      progresso.style.display = 'none';
+      if (falhas.length) {
+        erroBox.style.display = 'block';
+        erroBox.textContent = (total - falhas.length) + ' de ' + total + ' arquivo(s) baixado(s) — ' + falhas.length + ' falharam e ficaram de fora do .zip.';
+      } else {
+        fecharDocDownload();
+      }
+    });
+  }).catch(function (err) {
+    window._dlBaixando = false;
+    btn.disabled = false;
+    progresso.style.display = 'none';
+    erroBox.style.display = 'block';
+    erroBox.textContent = 'Erro ao montar o .zip: ' + ((err && err.message) || String(err));
+  });
 }
 
 function _docCargoChanged(cargo) {
