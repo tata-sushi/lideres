@@ -12,6 +12,7 @@
   var MSG_READY = 'tata-house:governanca:ready:v1';
   var MSG_CARDAPIO = 'tata-house:governanca:cardapio:v1';
   var MSG_ACK = 'tata-house:governanca:ack:v1';
+  var DATA_HORA_RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
   function texto(v) {
     return typeof v === 'string' ? v.trim() : '';
@@ -28,7 +29,7 @@
   }
 
   function dataHoraValida(v) {
-    return Boolean(v && !Number.isNaN(Date.parse(v)));
+    return DATA_HORA_RFC3339.test(v) && !Number.isNaN(Date.parse(v));
   }
 
   function correlationId() {
