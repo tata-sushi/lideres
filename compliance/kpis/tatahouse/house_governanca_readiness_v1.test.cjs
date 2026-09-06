@@ -14,7 +14,6 @@ function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
 const validacao = evaluator.validarManifesto(manifesto);
 assert.equal(validacao.valido, true, `manifesto inválido: ${validacao.erros.join(' | ')}`);
-
 const todos = evaluator.avaliarTodos(manifesto);
 assert.equal(todos.valido, true);
 assert.equal(todos.resultados.pre_supabase_functional.ready, true, 'pré-Supabase deve estar pronto no evidence head atual');
@@ -33,19 +32,16 @@ assert.match(gateReadiness.evidencia || '', /34016327970/, 'gate readiness preci
 
 const prodBlockers = new Set(todos.resultados.production_promotion.blockers.map((g) => g.id));
 for (const id of ['pdfjs_runtime_security','integration_live_transport','live_permission_data_verification','ux_layer_selection','human_production_authorization']) assert.ok(prodBlockers.has(id), `bloqueador obrigatório ausente: ${id}`);
-
 const plannerBlockers = new Set(todos.resultados.planner_write_activation.blockers.map((g) => g.id));
 for (const id of ['legacy_rpc_write_semantics','integration_live_transport','live_permission_data_verification','human_planner_write_authorization']) assert.ok(plannerBlockers.has(id), `bloqueador do Planejador ausente: ${id}`);
 
 const unknownInjected = clone(manifesto);
 unknownInjected.gates.find((g) => g.id === 'contracts_versioned').status = 'UNKNOWN';
 assert.equal(evaluator.avaliarTarget(unknownInjected, 'pre_supabase_functional').ready, false, 'UNKNOWN nunca pode satisfazer um gate');
-
 const missingGate = clone(manifesto);
 missingGate.gates = missingGate.gates.filter((g) => g.id !== 'contracts_versioned');
 assert.equal(evaluator.validarManifesto(missingGate).valido, false, 'gate obrigatório ausente deve invalidar manifesto');
 assert.equal(evaluator.avaliarTarget(missingGate, 'pre_supabase_functional').failClosed, true, 'manifesto inválido deve falhar fechado');
-
 const invalidStatus = clone(manifesto);
 invalidStatus.gates.find((g) => g.id === 'contracts_versioned').status = 'PROBABLY';
 assert.equal(evaluator.validarManifesto(invalidStatus).valido, false, 'status não reconhecido deve invalidar manifesto');
