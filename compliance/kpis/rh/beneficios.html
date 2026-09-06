@@ -595,6 +595,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .benef-doc-item:hover { border-color:var(--carbon); }
 .benef-doc-item input[type=checkbox] { width:15px;height:15px;flex-shrink:0;margin-top:3px;cursor:pointer;accent-color:var(--carbon); }
 .benef-doc-name { font-size:13px;font-weight:500;color:var(--t1);line-height:1.4; }
+.vt-addrow { margin-top:2px;padding:6px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--t1);cursor:pointer; }
+.vt-addrow:hover { border-color:var(--carbon); }
+.vt-row-edit .form-select, .vt-row-edit .form-input { padding:7px 9px;font-size:12px; }
 .benef-mt-fg { display:grid;grid-template-columns:1fr 1fr;gap:0 10px; }
 @keyframes benefModalIn { from { opacity:0; transform:translateY(8px) scale(.98); } to { opacity:1; transform:none; } }
 @keyframes benefBtnRot { to { transform:rotate(360deg); } }
@@ -1571,6 +1574,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
               <label class="form-label" for="benef-vt-endereco">Endereço residencial</label>
               <input class="form-input" type="text" id="benef-vt-endereco" placeholder="rua, nº, bairro, cidade/UF, CEP" onclick="event.stopPropagation()">
             </div>
+            <div class="form-row">
+              <label class="form-label" for="benef-vt-opcao">Opção do colaborador</label>
+              <select class="form-select" id="benef-vt-opcao" onclick="event.stopPropagation()">
+                <option value="sim">SIM — opto pela utilização do Vale Transporte</option>
+                <option value="nao">NÃO — opto pela utilização do Vale Transporte</option>
+              </select>
+            </div>
+            <div class="form-divider">Casa → Trabalho</div>
+            <div id="benef-vt-ct-rows"></div>
+            <button type="button" class="vt-addrow" onclick="event.stopPropagation();_vtAddRow('ct')">+ linha</button>
+            <div class="form-divider">Trabalho → Casa</div>
+            <div id="benef-vt-tc-rows"></div>
+            <button type="button" class="vt-addrow" onclick="event.stopPropagation();_vtAddRow('tc')">+ linha</button>
           </div>
         </div>
         <div class="benef-doc-item" style="flex-direction:column;align-items:stretch;cursor:default;">
@@ -1798,10 +1814,45 @@ function _benefToggleMtFields(on) {
   });
 }
 
+var VT_BILHETES = ['BENFÁCIL BARUERI','BENFICA (BBTT) ITAPEVI','BRASIL ITAQUAQUECETUBA','ETCD DIADEMA','RADIAL SUZANO','RADIAL FERRAZ DE VASCONCELOS','SOU DIADEMA','SPTRANS UNITÁRIO','SPTRANS INTEGRAÇÃO','TOP UNITÁRIO','OUTROS'];
+function _vtRowHtml(){
+  var opts = VT_BILHETES.map(function(x){ return '<option value="'+_premEsc(x)+'">'+_premEsc(x)+'</option>'; }).join('');
+  return '<div class="vt-row-edit" style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">'+
+    '<select class="form-select vt-bilhete" style="flex:1.4;" onclick="event.stopPropagation()">'+opts+'</select>'+
+    '<input class="form-input vt-linha" type="text" placeholder="linha (nome/nº)" style="flex:1;" onclick="event.stopPropagation()">'+
+    '<input class="form-input vt-valor" type="text" placeholder="R$" style="width:74px;flex:none;" onclick="event.stopPropagation()">'+
+    '<button type="button" title="Remover" onclick="event.stopPropagation();this.closest(\'.vt-row-edit\').remove()" style="border:none;background:none;cursor:pointer;font-size:18px;line-height:1;color:var(--muted);flex-shrink:0;">×</button>'+
+  '</div>';
+}
+function _vtAddRow(dir){
+  var c = document.getElementById(dir==='ct'?'benef-vt-ct-rows':'benef-vt-tc-rows');
+  if (c) c.insertAdjacentHTML('beforeend', _vtRowHtml());
+}
+function _vtReadRows(dir){
+  var c = document.getElementById(dir==='ct'?'benef-vt-ct-rows':'benef-vt-tc-rows');
+  if (!c) return [];
+  return Array.prototype.map.call(c.querySelectorAll('.vt-row-edit'), function(r){
+    return {
+      bilhete: ((r.querySelector('.vt-bilhete')||{}).value||'').trim(),
+      linha:   ((r.querySelector('.vt-linha')  ||{}).value||'').trim(),
+      valor:   ((r.querySelector('.vt-valor')  ||{}).value||'').trim()
+    };
+  }).filter(function(e){ return e.bilhete || e.linha || e.valor; });
+}
 function _benefToggleVtFields(on) {
   var f = document.getElementById('benef-vt-fields');
   if (f) f.style.display = on ? 'block' : 'none';
-  if (!on) { var el = document.getElementById('benef-vt-endereco'); if (el) el.value = ''; }
+  if (on) {
+    // começa com uma linha em cada sentido, se estiver vazio
+    ['ct','tc'].forEach(function(dir){
+      var c = document.getElementById(dir==='ct'?'benef-vt-ct-rows':'benef-vt-tc-rows');
+      if (c && !c.children.length) _vtAddRow(dir);
+    });
+  } else {
+    var el = document.getElementById('benef-vt-endereco'); if (el) el.value = '';
+    var op = document.getElementById('benef-vt-opcao'); if (op) op.value = 'sim';
+    ['benef-vt-ct-rows','benef-vt-tc-rows'].forEach(function(id){ var c=document.getElementById(id); if(c) c.innerHTML=''; });
+  }
 }
 
 // Moeda BR: "1.234,56" -> 1234.56 ; 1234.5 -> "1.234,50"
@@ -2045,6 +2096,9 @@ function _benefShowError(msg) {
     var mtDataDisp = (document.getElementById('benef-mt-datadisp')||{}).value||'';
     var mtMes1     = (document.getElementById('benef-mt-mes1')    ||{}).value||'';
     var vtEndereco = (document.getElementById('benef-vt-endereco')||{}).value||'';
+    var vtOpcao = (document.getElementById('benef-vt-opcao')||{}).value||'sim';
+    var vtCT = _vtReadRows('ct');
+    var vtTC = _vtReadRows('tc');
     if (!vtChecked && !amChecked && !mtChecked) { _benefShowError('Selecione ao menos um documento.'); return; }
 
     var emitidoPor = window.__lideresUser || (window.__lideresSession && window.__lideresSession.displayName) || '—';
@@ -2098,21 +2152,17 @@ function _benefShowError(msg) {
     var pages = '';
 
     if (vtChecked) {
-      var vtOpts = [
-        {l:'BENFÁCIL BARUERI',r:true},{l:'BENFICA (BBTT) ITAPEVI',r:true},
-        {l:'BRASIL ITAQUAQUECETUBA',r:true},{l:'ETCD DIADEMA',r:true},
-        {l:'RADIAL SUZANO',r:true},{l:'RADIAL FERRAZ DE VASCONCELOS',r:true},
-        {l:'SOU DIADEMA',r:false},{l:'SPTRANS UNITÁRIO',r:false},
-        {l:'SPTRANS INTEGRAÇÃO',r:false},{l:'TOP UNITÁRIO',r:true},
-        {l:'OUTROS',r:'blank'}
-      ];
-      var sq = '<span style="display:inline-block;width:10px;height:10px;border:1.2px solid #333;vertical-align:middle;margin-right:6px;flex-shrink:0;"></span>';
-      function vtRow(o){
-        if(o.r==='blank') return '<div class="vt-row">'+sq+'<span><strong>'+o.l+':</strong> '+b('200px')+'</span></div>';
-        if(o.r) return '<div class="vt-row">'+sq+'<span><strong>'+o.l+':</strong> R$ '+b('70px')+'</span></div>';
-        return '<div class="vt-row">'+sq+'<span><strong>'+o.l+'</strong></span></div>';
+      // Caixa marcada (✓) / vazia
+      var boxOn  = '<span style="display:inline-block;width:11px;height:11px;border:1.2px solid #333;text-align:center;line-height:10px;font-size:9px;vertical-align:middle;margin-right:5px;">✓</span>';
+      var boxOff = '<span style="display:inline-block;width:11px;height:11px;border:1.2px solid #333;vertical-align:middle;margin-right:5px;"></span>';
+      // Um quadro (grid) a partir das linhas preenchidas no modal
+      function vtGrid(rows){
+        if (!rows.length) return '<div style="font-size:10.5px;color:#777;padding:2px 0;">— nenhuma linha informada —</div>';
+        return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">'+ rows.map(function(e){
+          var txt = '<strong>'+esc(e.bilhete||'—')+'</strong>' + (e.linha?' — '+esc(e.linha):'') + (e.valor?': R$ '+esc(e.valor):'');
+          return '<div class="vt-row">'+boxOn+'<span>'+txt+'</span></div>';
+        }).join('') +'</div>';
       }
-      var vtRows = vtOpts.map(vtRow).join('');
       pages +=
         '<div class="page">'+
           '<div class="rp-header">'+
@@ -2123,8 +2173,8 @@ function _benefShowError(msg) {
           introHtml+
           '<p style="font-size:10.5px;color:#222;margin-bottom:12px;"><strong>Endereço residencial:</strong> '+(vtEndereco.trim()?esc(vtEndereco.trim()):b('420px'))+'</p>'+
           '<p style="text-align:center;font-size:11px;margin-bottom:12px;">'+
-            '<span style="margin-right:32px;"><span style="display:inline-block;border:1px solid #333;width:10px;height:10px;vertical-align:middle;margin-right:4px;"></span> SIM opto pela utilização do Vale Transporte</span>'+
-            '<span><span style="display:inline-block;border:1px solid #333;width:10px;height:10px;vertical-align:middle;margin-right:4px;"></span> NÃO opto pela utilização do Vale Transporte</span>'+
+            '<span style="margin-right:32px;">'+(vtOpcao==='sim'?boxOn:boxOff)+' SIM opto pela utilização do Vale Transporte</span>'+
+            '<span>'+(vtOpcao==='nao'?boxOn:boxOff)+' NÃO opto pela utilização do Vale Transporte</span>'+
           '</p>'+
           '<p style="font-size:10.5px;color:#222;line-height:1.7;text-align:justify;margin-bottom:10px;">Nos termos do artigo 7° do Decreto nº 95.247 de 17 de novembro de 1987, solicito receber o Vale Transporte e comprometo-me:</p>'+
           '<div style="font-size:10.5px;color:#222;line-height:1.7;margin-bottom:14px;padding-left:8px;">'+
@@ -2134,12 +2184,12 @@ function _benefShowError(msg) {
             '<p><strong>d)</strong> Declaro estar ciente de que a declaração falsa ou o uso indevido do Vale Transporte constituem falta grave, conforme parágrafo 3° do artigo 7° do Decreto nº 95.247/87.</p>'+
           '</div>'+
           '<div style="margin-bottom:14px;">'+
-            '<div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:#f4f4f4;padding:6px 10px;margin-bottom:8px;border-left:3px solid #35383f;">Assinalar a opção Casa → Trabalho:</div>'+
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">'+vtRows+'</div>'+
+            '<div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:#f4f4f4;padding:6px 10px;margin-bottom:8px;border-left:3px solid #35383f;">Opção Casa → Trabalho:</div>'+
+            vtGrid(vtCT)+
           '</div>'+
           '<div style="margin-bottom:18px;">'+
-            '<div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:#f4f4f4;padding:6px 10px;margin-bottom:8px;border-left:3px solid #35383f;">Assinalar a opção Trabalho → Casa:</div>'+
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">'+vtRows+'</div>'+
+            '<div style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:#f4f4f4;padding:6px 10px;margin-bottom:8px;border-left:3px solid #35383f;">Opção Trabalho → Casa:</div>'+
+            vtGrid(vtTC)+
           '</div>'+
           '<div class="rp-cidade-data">São Paulo, '+dataFmt+'.</div>'+
           '<div class="rp-assinaturas">'+
