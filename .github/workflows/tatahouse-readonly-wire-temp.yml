@@ -1,0 +1,73 @@
+name: TATÁ House readonly wire temporary
+on:
+  push:
+    branches: [feat/tatahouse-governanca-phase1]
+permissions:
+  contents: write
+jobs:
+  wire:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/tatahouse-governanca-phase1
+          fetch-depth: 0
+      - name: Patch planner shell
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('compliance/kpis/tatahouse/planejador-v2.html')
+          s=p.read_text()
+          old='  <script src="/compliance/kpis/tatahouse/house_governanca_planejador_v1.js"></script>'
+          new='  <script src="/compliance/kpis/tatahouse/house_governanca_readonly_v1.js"></script>\n'+old
+          assert old in s and 'house_governanca_readonly_v1.js' not in s
+          s=s.replace(old,new,1)
+          old2="      var api=window.TataHouseGovernancaPlanejadorV1;\n      var iframe=document.getElementById('house-frame');"
+          new2="      var api=window.TataHouseGovernancaPlanejadorV1;\n      var ro=window.TataHouseGovernancaReadonlyV1;\n      var evidenciaAtual=null;\n      var housePronto=false;\n      var iframe=document.getElementById('house-frame');"
+          assert old2 in s
+          s=s.replace(old2,new2,1)
+          old3="      function statusTexto(etapa){\n        var mapa={"
+          new3="      function enviarEvidenciaSePronto(){\n        if(!housePronto||!evidenciaAtual||!ro)return false;\n        return ro.enviarParaHouse(iframe,evidenciaAtual);\n      }\n\n      function statusTexto(etapa){\n        if(etapa==='house-pronto'){housePronto=true;enviarEvidenciaSePronto();}\n        var mapa={"
+          assert old3 in s
+          s=s.replace(old3,new3,1)
+          old4="          var ctx=contextoAtual();\n          receipt.classList.remove('show');"
+          new4="          var ctx=contextoAtual();\n          evidenciaAtual=null;\n          housePronto=false;\n          receipt.classList.remove('show');"
+          assert old4 in s
+          s=s.replace(old4,new4,1)
+          old5="          limparConexao=api.conectarIframe(iframe,ctx,{aoStatus:statusTexto,aoDraft:mostrarDraft});\n        }catch(e){status.textContent=e&&e.message?e.message:'Não foi possível abrir o planejador.';}"
+          new5="          limparConexao=api.conectarIframe(iframe,ctx,{aoStatus:statusTexto,aoDraft:mostrarDraft});\n          if(ro&&window.__lideresSupa){\n            ro.carregar({supa:window.__lideresSupa,unidade:ctx.unidadeFonte,semanaId:ctx.semanaId}).then(function(resultado){\n              if(!resultado||resultado.ok!==true||!resultado.evidencia)return;\n              evidenciaAtual=resultado.evidencia;\n              enviarEvidenciaSePronto();\n            }).catch(function(){});\n          }\n        }catch(e){status.textContent=e&&e.message?e.message:'Não foi possível abrir o planejador.';}"
+          assert old5 in s
+          s=s.replace(old5,new5,1)
+          p.write_text(s)
+          PY
+      - name: Read-only adapter regression
+        run: node compliance/kpis/tatahouse/house_governanca_readonly_v1.test.cjs
+      - name: Structural assertions
+        run: |
+          grep -q 'house_governanca_readonly_v1.js' compliance/kpis/tatahouse/planejador-v2.html
+          grep -q 'ro.carregar({supa:window.__lideresSupa' compliance/kpis/tatahouse/planejador-v2.html
+          grep -q "etapa==='house-pronto'" compliance/kpis/tatahouse/planejador-v2.html
+          ! grep -E '\.(insert|update|delete|upsert)\(' compliance/kpis/tatahouse/house_governanca_readonly_v1.js
+          ! grep -q "refeicoes_dia_salvar" compliance/kpis/tatahouse/house_governanca_readonly_v1.js
+          git diff --check
+      - name: Commit planner wiring
+        run: |
+          if ! git diff --quiet -- compliance/kpis/tatahouse/planejador-v2.html; then
+            git config user.name 'cesarspichencoff-cmyk'
+            git config user.email 'cesar.spichencoff@gmail.com'
+            git add compliance/kpis/tatahouse/planejador-v2.html
+            git commit -m 'feat(tatahouse): feed planner from readonly Lideres evidence'
+            git push origin HEAD:feat/tatahouse-governanca-phase1
+          fi
+      - name: Remove temporary workflow only
+        if: always()
+        run: |
+          git fetch origin feat/tatahouse-governanca-phase1
+          git reset --hard origin/feat/tatahouse-governanca-phase1
+          if [ -f .github/workflows/tatahouse-readonly-wire-temp.yml ]; then
+            git config user.name 'cesarspichencoff-cmyk'
+            git config user.email 'cesar.spichencoff@gmail.com'
+            git rm .github/workflows/tatahouse-readonly-wire-temp.yml
+            git commit -m 'test(tatahouse): remove temporary readonly wire harness'
+            git push origin HEAD:feat/tatahouse-governanca-phase1
+          fi
