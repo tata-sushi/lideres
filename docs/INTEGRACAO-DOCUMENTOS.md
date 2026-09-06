@@ -160,6 +160,20 @@ sobrando sozinha numa 2ª página quase em branco. Resolvido reduzindo a
 margem dessa linha (era pensada pra dar respiro antes de uma assinatura que
 não existe mais). Resultado: o contrato cabe inteiro numa página só.
 
+**Segunda causa do "vazamento" (a real, pelo relato com captura de tela):**
+o CSS de impressão tirava o limite de largura da página
+(`.page{width:100%;max-width:100%}`) — e o "Gerar PDF" abre a janela via
+`window.open('', '_blank')`, que herda o tamanho da janela do navegador
+(pode ser bem mais larga que uma A4, ex.: 1440px numa tela grande). O
+conteúdo lay-outava na largura da janela inteira; na hora de imprimir/salvar
+em PDF de verdade (papel bem mais estreito), o que passava da largura do
+papel ficava cortado nas laterais. Corrigido travando a página em
+`210mm` (`@page{size:A4;margin:0}` + `.page{width:210mm;max-width:210mm}`)
+— físico, independente do tamanho da janela. Testado reproduzindo com
+viewport largo (1440px) + `page.pdf()`: sem esse fix o `.page` media
+1440px de largura; com o fix, ~210mm centralizado, e o PDF real saiu sem
+cortar nada.
+
 De passagem, também fica registrado: medi a margem lateral do PDF impresso
 pixel a pixel (36px, igual em todas as páginas de termo do sistema — não é
 um bug, é só uma margem fina/0.375in por design). Se algum dia quiserem
