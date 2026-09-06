@@ -32,9 +32,24 @@ assert.equal(byId.smart_substitutions_trocas_v2.tratamento, 'CONCURRENT_REVIEW_R
 assert.equal(byId.pdfjs_security.commitProduto, 'a1302762b9c8ac82e77556f05020b044605ce843');
 assert.ok(byId.readonly_official_history.commitsConhecidos.includes('e6980d8c69f35252bd113d2a96f6594cf278bc48'));
 assert.ok(byId.readonly_official_history.commitsConhecidos.includes('b4cc1eebabfd37fdf26330cefa5aa03d26568124'));
-assert.ok(byId.planner_intelligence_scenarios.commitsConhecidos.includes('36bbd9346bea7ac3a29a09329b5907213684b5ac'));
+for (const sha of [
+  '15ee28bbeabef3c5c1220db79396168929984f0f',
+  '447df60c9dbe8b156b9f2bd993cd92aac484e3a0',
+  '36bbd9346bea7ac3a29a09329b5907213684b5ac',
+  '05f17fd0cae2438389dfb03973644131c7a2820e'
+]) assert.ok(byId.planner_intelligence_scenarios.commitsConhecidos.includes(sha), `commit de cenarios ausente: ${sha}`);
+for (const p of [
+  'src/components/cardapio/CenariosGovernanca.tsx',
+  'src/lib/cardapio/governanca-candidatos.ts',
+  'src/lib/cardapio/governanca-candidatos.test.ts'
+]) assert.ok(byId.planner_intelligence_scenarios.arquivos.includes(p), `arquivo de cenarios ausente: ${p}`);
+assert.equal(byId.smart_substitutions_trocas_v2.arquivos.includes('src/lib/cardapio/governanca-candidatos.ts'), false, 'gerador compartilhado nao pode ser propriedade de trocas-v2');
+assert.deepEqual(new Set(byId.smart_substitutions_trocas_v2.arquivos), new Set([
+  'src/components/cardapio/TrocaInteligenteGovernanca.tsx',
+  'src/lib/cardapio/governanca-trocas.ts',
+  'src/lib/cardapio/governanca-trocas.test.ts'
+]));
 assert.equal(byId.integration_core.arquivos.includes('src/components/cardapio/CenariosGovernanca.tsx'), false, 'cenarios nao pertencem ao core estrutural');
-assert.ok(byId.planner_intelligence_scenarios.arquivos.includes('src/components/cardapio/CenariosGovernanca.tsx'));
 
 const misto = mapa.arquivosMistosQueExigemPatchReview.find((x) => x.arquivo === 'src/components/cardapio/PlanejadorGovernanca.tsx');
 assert.ok(misto, 'PlanejadorGovernanca.tsx deve permanecer marcado como arquivo misto');
@@ -50,13 +65,14 @@ assert.ok(mapa.procedimentoFuturo.some((x) => /autorizacao humana explicita/i.te
 assert.ok(mapa.procedimentoFuturo.some((x) => /Excluir todos os temporary_harnesses/i.test(x)));
 assert.ok(mapa.procedimentoFuturo.some((x) => /PATCH_ONLY/i.test(x)));
 assert.ok(mapa.procedimentoFuturo.some((x) => /100% do diff fresco/i.test(x)));
+assert.ok(mapa.procedimentoFuturo.some((x) => /34020542078/.test(x) && /governanca-candidatos/.test(x)));
 
 console.log('PROMOTION_MAP=PASS');
 console.log('PROMOTION_WHOLE_HOUSE_BRANCH_FORBIDDEN=PASS');
 console.log('PROMOTION_41_FILE_MANIFEST_LINKED=PASS');
 console.log('PROMOTION_TEMP_HARNESSES_NEVER=PASS');
 console.log('PROMOTION_UX_SEPARATE=PASS');
-console.log('PROMOTION_SCENARIOS_SEPARATE=PASS');
+console.log('PROMOTION_SCENARIO_SUBSTRATE_SHARED=PASS');
 console.log('PROMOTION_TROCAS_CONCURRENT=PASS');
 console.log('PROMOTION_MIXED_FILE_PATCH_REVIEW=PASS');
 console.log('PROMOTION_HUMAN_AUTH_REQUIRED=PASS');
