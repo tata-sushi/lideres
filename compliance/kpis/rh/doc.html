@@ -735,11 +735,27 @@ function _docFmtCompetencia(c) {
   return (MES_NOMES[mi] || p[1]) + '/' + p[0];
 }
 
+// competencia de uma linha pode ser "YYYY-MM" (mês calendário, a maioria dos
+// recorrentes) OU um período customizado "YYYY-MM-DD_YYYY-MM-DD" (Cartão de
+// Ponto — a folha raramente fecha alinhada ao mês, ver escalas.html). Nesse
+// segundo caso o documento "cobre" qualquer mês calendário que o período
+// toque, não só um mês exato — senão o checklist por mês nunca casava com
+// nada e ficava "Pendente" mesmo depois de enviado.
+function _docCompetenciaCobre(rowCompetencia, mesAlvo) {
+  if (!mesAlvo) return !rowCompetencia;
+  if (!rowCompetencia) return false;
+  if (rowCompetencia === mesAlvo) return true;
+  if (rowCompetencia.indexOf('_') === -1) return false;
+  var partes = rowCompetencia.split('_');
+  var mesIni = (partes[0] || '').slice(0, 7), mesFim = (partes[1] || '').slice(0, 7);
+  return !!mesIni && !!mesFim && mesAlvo >= mesIni && mesAlvo <= mesFim;
+}
+
 // Todas as versões de um termo (mais recente primeiro) — cada geração cria uma linha nova,
 // nunca sobrescreve (ver colaborador_documento_pendente_assinatura_sandbox_salvar).
 function _docVersoes(matricula, tipoId, competencia) {
   return (colaboradorDocumentos || []).filter(function (d) {
-    return d.matricula === matricula && d.tipo_id === tipoId && (d.competencia || null) === (competencia || null);
+    return d.matricula === matricula && d.tipo_id === tipoId && _docCompetenciaCobre(d.competencia, competencia);
   }).sort(function (a, b) { return (b.versao || 1) - (a.versao || 1); });
 }
 
