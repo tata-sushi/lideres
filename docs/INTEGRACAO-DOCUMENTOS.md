@@ -328,6 +328,44 @@ De passagem, o modal "pasta do colaborador" (`doc-colab-overlay`) ganhou
 +20% de largura (480px → 576px) pra caber os rótulos mais longos sem
 quebrar linha.
 
+Feito (2026-09-06): **`folha.html` — "Enviar Holerites" em lote, mesmo
+mecanismo do Cartão de Ponto, mas SEM assinatura.** Botão no drawer ("Ações",
+seção nova nessa página — `folha.html` não tinha nenhuma até então) abre
+modal com competência (mês/ano — holerite fecha com o mês calendário,
+diferente do Cartão de Ponto; não precisou de período inicial/final) e
+anexo múltiplo de PDFs. Casamento de arquivo↔colaborador idêntico ao Cartão
+de Ponto: matrícula é a substring antes do primeiro `_` no nome do arquivo,
+casada contra `hc_colaboradores_listar`.
+
+Diferença central: holerite não passa pelo pipeline de assinatura do app.
+Em vez de `colaborador_documento_pendente_assinatura_sandbox_salvar` +
+`docs_enviar_para_assinatura` (bucket `assinaturas`), usa o mesmo caminho do
+anexo manual "Documentos Pessoais" de `doc.html`
+(`colaborador_documentos_sandbox_salvar`, bucket `dp-documentos`) — grava
+`status='entregue'` direto, sem rubrica/selfie. Bônus: `dp-documentos` não
+tem a política de RLS restritiva de `assinaturas` (`docs_pode_gerir()` —
+ver "Em aberto" abaixo), então quem usa `folha.html` não esbarra nesse
+bloqueio. Também não versiona (a RPC é update-or-insert por
+`(matricula, tipo_id, competencia)`) — reenviar o holerite do mesmo mês
+substitui o arquivo, não empilha histórico; não tem por que preservar
+versões de um documento que não é assinado.
+
+Novo `doc_tipos`: "Holerite" (categoria própria "Holerites",
+`categoria_ordem=6`, `periodicidade='recorrente'`, `intervalo_meses=1`,
+`requer_assinatura=false`) — aparece em `doc.html` como mais uma seção do
+checklist mensal, igual Cartão de Ponto.
+
+`folha.html` não tinha nenhuma infra de modal/drawer-ação/upload (era só
+uma página estática de framework/governança) — todo o CSS de modal e as
+funções `comSupa`/`escH` foram portadas pra lá nessa mudança, adaptadas pro
+próprio conjunto de variáveis CSS da página (`--t1/--t2/--t3/--white/--r`
+em vez de `--text/--mid/--muted/--surface/--radius`).
+
+Testado com Playwright mockando `window.__lideresSupa`: casamento de
+matrícula certo/errado, envio completo (upload + `colaborador_documentos_
+sandbox_salvar`, confirmando que NENHUMA chamada de assinatura acontece) e
+falha parcial (1 de 2 falha, modal continua aberto com o erro).
+
 **Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
 é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões
 lado a lado (mesmo padrão de `admissao.html` com "Gerar PDF" +
