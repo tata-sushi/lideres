@@ -52,7 +52,7 @@ assert.match(gateRpc.resumo || '', /insumos por prato/, 'semântica histórica d
 assert.match(gateRpc.resumo || '', /transição aguardando_aprovacao→aguardando_compra/, 'semântica histórica deve registrar a transição documentada');
 assert.match(gateRpc.resumo || '', /probe catalog-only/i, 'RPC live deve registrar que o probe catalog-only está preparado');
 assert.match(gateRpc.resumo || '', /aoqsbusfrffapjglpqjk/, 'RPC live deve manter o project ref alvo explícito');
-for (const evidence of ['#2293', '#2324', '#2304', '#2327', '88d20d1f', '34030492627', '34030605413']) {
+for (const evidence of ['#2293', '#2324', '#2304', '#2327', '88d20d1f', '34030492627', '34030605413', '34030736194']) {
   assert.match(gateRpc.evidencia || '', new RegExp(evidence.replace('#', '\\#')), `evidência ausente: ${evidence}`);
 }
 
@@ -115,12 +115,13 @@ assert.equal(manifesto.fontes.lideresProducao.sha, '88d20d1fa24591234d3276ffac38
 assert.equal(manifesto.fontes.vertice.branch, 'vertice-active');
 assert.equal(manifesto.fontes.houseFeature.sha, 'e7b3b791750ba85b1da2f6f229a3168e69c0a217');
 assert.match(manifesto.fontes.houseFeature.nota || '', /não é unidade promovível inteira/i, 'fonte House deve registrar que a branch inteira não é promovível');
-assert.equal(manifesto.fontes.lideresFeature.sha, 'c97cc4399ed15d628e1caaacab24fef55f1eb51f');
+assert.equal(manifesto.fontes.lideresFeature.sha, 'eb9c7d2bf45bd2c5e2b1814d3857edcbdbc5f275');
 assert.equal(manifesto.evidenceHead, 'd74a477af160a1abd44d37f5dd6c3eecd0a83f9b');
 assert.match(manifesto.evidenceHeadNota || '', /fronteira backend-ready/i, 'semântica do evidenceHead backend-ready precisa permanecer explícita');
 assert.match(manifesto.evidenceHeadNota || '', /34017747800/, 'nota de evidência deve registrar a prova PDF.js separadamente');
 assert.match(manifesto.evidenceHeadNota || '', /34020542078/, 'nota de evidência deve registrar o feed read-only controlado');
 assert.match(manifesto.evidenceHeadNota || '', /34030492627/, 'nota de evidência deve registrar o preflight catalog-only');
+assert.match(manifesto.evidenceHeadNota || '', /34030736194/, 'nota de evidência deve registrar a regressão final');
 assert.match(manifesto.evidenceHeadNota || '', /aoqsbusfrffapjglpqjk/, 'nota de evidência deve registrar o projeto live alvo');
 
 assert.equal(preflightExpectations.projectRefEsperado, 'aoqsbusfrffapjglpqjk');
