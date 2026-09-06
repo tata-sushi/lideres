@@ -298,11 +298,22 @@ comparava a `competencia` por **igualdade exata de string** — e o Cartão de
 Ponto passou a gravar o período customizado (`YYYY-MM-DD_YYYY-MM-DD`), não
 o "YYYY-MM" que o checklist itera mês a mês, então nunca batia.
 Corrigido com `_docCompetenciaCobre(rowCompetencia, mesAlvo)`: quando a
-`competencia` da linha é um período (tem `_`), ela "cobre" qualquer mês
-calendário que o período toque (ex.: 21/07–20/08 cobre Jul/2026 **e**
-Ago/2026), em vez de só um mês exato. Pra todo o resto do catálogo
-(`competencia` já em "YYYY-MM" ou `null`) o comportamento é idêntico ao de
-antes — só muda pra período customizado.
+`competencia` da linha é um período (tem `_`), ela conta só pro mês em que
+o período FECHA — a referência da folha (ex.: 21/07–20/08 é "referente a
+agosto", conta só pra Ago/2026). Pra todo o resto do catálogo (`competencia`
+já em "YYYY-MM" ou `null`) o comportamento é idêntico ao de antes.
+
+**Ajuste (2026-09-06):** a primeira versão do fix acima fazia o período
+cobrir os dois meses que ele toca (Jul/2026 **e** Ago/2026) — reportado como
+confuso, já que a folha só reconhece isso como "referente a agosto".
+Também trocado o rótulo exibido: quando a linha do checklist bate com um
+documento de período customizado, mostra o período real
+("Cartão de Ponto — 21/07/2026 a 20/08/2026") em vez do mês genérico
+iterado ("Cartão de Ponto — Ago/2026"), pra ficar óbvio que não é um mês
+fechado normal. Novo helper `_docFmtCompetenciaPeriodo(c)` — nome
+deliberadamente diferente do `_docFmtPeriodo(evento)` já existente (usado
+pros eventos de ausência/sanção, assinatura de função diferente), que
+tinha o mesmo nome e foi pego de sobreposição na primeira tentativa.
 
 **Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
 é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões

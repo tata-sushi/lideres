@@ -735,20 +735,27 @@ function _docFmtCompetencia(c) {
   return (MES_NOMES[mi] || p[1]) + '/' + p[0];
 }
 
+// "2026-07-21_2026-08-20" (período customizado de competencia) → "21/07/2026 a 20/08/2026".
+function _docFmtCompetenciaPeriodo(c) {
+  var partes = (c || '').split('_');
+  var fmt = function (iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (iso || ''); };
+  return fmt(partes[0]) + ' a ' + fmt(partes[1]);
+}
+
 // competencia de uma linha pode ser "YYYY-MM" (mês calendário, a maioria dos
 // recorrentes) OU um período customizado "YYYY-MM-DD_YYYY-MM-DD" (Cartão de
 // Ponto — a folha raramente fecha alinhada ao mês, ver escalas.html). Nesse
-// segundo caso o documento "cobre" qualquer mês calendário que o período
-// toque, não só um mês exato — senão o checklist por mês nunca casava com
-// nada e ficava "Pendente" mesmo depois de enviado.
+// segundo caso o documento conta pro mês em que o período FECHA (referência
+// da folha — ex.: 21/07 a 20/08 é "referente a agosto"), nunca pros dois
+// meses que ele toca.
 function _docCompetenciaCobre(rowCompetencia, mesAlvo) {
   if (!mesAlvo) return !rowCompetencia;
   if (!rowCompetencia) return false;
   if (rowCompetencia === mesAlvo) return true;
   if (rowCompetencia.indexOf('_') === -1) return false;
   var partes = rowCompetencia.split('_');
-  var mesIni = (partes[0] || '').slice(0, 7), mesFim = (partes[1] || '').slice(0, 7);
-  return !!mesIni && !!mesFim && mesAlvo >= mesIni && mesAlvo <= mesFim;
+  var mesFim = (partes[1] || '').slice(0, 7);
+  return !!mesFim && mesFim === mesAlvo;
 }
 
 // Todas as versões de um termo (mais recente primeiro) — cada geração cria uma linha nova,
@@ -822,6 +829,12 @@ function _docItemHtml(matricula, tipo, competencia, label) {
   }
   var versoes = _docVersoes(matricula, tipo.id, competencia);
   var doc = versoes[0] || null;
+  // Período customizado (Cartão de Ponto) raramente bate com o mês calendário
+  // iterado — mostra o período de verdade no rótulo (ex.: "21/07 a
+  // 20/08/2026"), senão fica só "Ago/2026" e parece um mês fechado normal.
+  if (doc && doc.competencia && doc.competencia.indexOf('_') > -1) {
+    label = tipo.nome + ' — ' + _docFmtCompetenciaPeriodo(doc.competencia);
+  }
   var status = doc ? doc.status : null;
   var badge, acao;
   if (status === 'entregue') {
