@@ -563,9 +563,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 <!-- Gate modelo novo: abre so via Tata Plus, com checagem de acesso ao vivo por pagina. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<!-- QPDF.js: adiciona senha (4 primeiros dígitos do CPF) ao PDF do holerite antes do upload. -->
-<script src="https://cdn.jsdelivr.net/npm/qpdf.js@2.0.0/src/qpdf.js"></script>
-<script>window.QPDF && (QPDF.path = 'https://cdn.jsdelivr.net/npm/qpdf.js@2.0.0/src/');</script>
+<!-- QPDF.js: adiciona senha (4 primeiros dígitos do CPF) ao PDF do holerite antes do upload.
+     Servido do próprio domínio (vendor/qpdf/), não via CDN: um Worker clássico
+     (new Worker(url)) não pode ser instanciado com script de outra origem —
+     o navegador barra com "Script cannot be accessed from origin" mesmo com
+     CORS liberado no CDN. Vendorizado de https://github.com/j3k0/qpdf.js. -->
+<script src="/compliance/kpis/rh/vendor/qpdf/qpdf.js"></script>
+<script>window.QPDF && (QPDF.path = '/compliance/kpis/rh/vendor/qpdf/');</script>
 <script>window.GOV_PAGE_ID = 'governanca-kpis-rh-folha';</script>
 <script src="/compliance/gate.js"></script>
 
@@ -1040,7 +1044,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         </div>
         <input type="file" id="hol-files" accept="application/pdf" multiple style="display:none;" onchange="_holOnFilesSelected(this.files)">
       </div>
-      <div class="hol-drop-sub">🔒 Cada PDF sai criptografado com senha = 4 primeiros dígitos do CPF do colaborador.</div>
       <div class="hol-summary" id="hol-summary" style="display:none;"></div>
       <div class="hol-file-list" id="hol-file-list"></div>
       <div class="hol-progress" id="hol-progress" style="display:none;"></div>
@@ -1328,8 +1331,12 @@ function _holCriptografarPdf(file, senha) {
   return file.arrayBuffer().then(function(buf) {
     return new Promise(function(resolve, reject) {
       if (!window.QPDF) { reject(new Error('Biblioteca de criptografia de PDF não carregou.')); return; }
+      // keyLength 256 = AES-256 (R6) de verdade. 128 nessa lib mapeia pro modo
+      // legado RC4-128 do qpdf — que a própria ferramenta recusa a escrever
+      // por ser fraco ("refusing to write a file with RC4"), então nem dava
+      // pra usar. 256 é bem suportado por qualquer leitor de PDF atual.
       QPDF.encrypt({
-        arrayBuffer: buf, userPassword: senha, ownerPassword: senha, keyLength: 128,
+        arrayBuffer: buf, userPassword: senha, ownerPassword: senha, keyLength: 256,
         callback: function(err, arrayBuffer) {
           if (err) { reject(err); return; }
           resolve(new Blob([arrayBuffer], { type: 'application/pdf' }));
