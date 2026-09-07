@@ -433,6 +433,15 @@ abre com a senha certa (`1234`, derivada do CPF de teste), e reporta
 criptografia. Também testado (mockado) casamento de matrícula/CPF, falha
 isolada por arquivo e falha de criptografia isolada.
 
+**Feito (2026-09-07): colaborador inativo (ou `Bot`) barrado no casamento
+de arquivo, nos dois lotes (Cartão de Ponto em `escalas.html` e Holerite em
+`folha.html`).** Antes só checava se a matrícula existia — um arquivo com
+matrícula de alguém desligado passava como "reconhecido" normalmente. Os
+dois `_.*OnFilesSelected` agora também checam `colab.status !== 'Ativo'` e
+marcam como não reconhecido ("Colaborador inativo — não recebe X por
+aqui"), com o mesmo tratamento visual/de bloqueio de matrícula não
+encontrada — fica fora do lote, não trava os demais arquivos.
+
 Testado com Playwright mockando `window.__lideresSupa`: casamento de
 matrícula certo/errado, envio completo (upload + `colaborador_documentos_
 sandbox_salvar`, confirmando que NENHUMA chamada de assinatura acontece) e
