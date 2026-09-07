@@ -506,6 +506,21 @@ texto esperado, e o parser de volta pra "YYYY-MM" bate certo pros 4,
 inclusive distinguindo "Pagamento" de "Pagamento 13º" (ordem de checagem
 importa — os rótulos com "13º" são checados primeiro).
 
+**Bug de infraestrutura encontrado (2026-09-07) e corrigido:** reenviar o
+Holerite pro **mesmo** matrícula+competência+tipo (ex.: testar de novo
+depois do ajuste acima, no mesmo mês) falhava com
+`"new row violates row-level security policy"`. Causa: o bucket
+`dp-documentos` tinha policy de **INSERT** (`dp_documentos_upload`) e de
+**SELECT** (`dp_documentos_select`), mas nenhuma de **UPDATE** — e
+`storage.upload(path, file, {upsert:true})` faz um UPDATE quando o objeto
+já existe naquele path (reenvio pro mesmo mês sempre bate no mesmo path).
+Sem policy de UPDATE, RLS nega por padrão. Corrigido com uma policy nova
+`dp_documentos_update` (`for update ... using/with check bucket_id =
+'dp-documentos'`), espelhando a mesma abertura da policy de insert já
+existente — não é regressão de nenhuma mudança deste projeto, só nunca
+tinha sido exercitado (era o primeiro reenvio pro mesmo path desde que
+esse bucket existe).
+
 **Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
 é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões
 lado a lado (mesmo padrão de `admissao.html` com "Gerar PDF" +
