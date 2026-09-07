@@ -563,6 +563,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 <!-- Gate modelo novo: abre so via Tata Plus, com checagem de acesso ao vivo por pagina. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- QPDF.js: adiciona senha (4 primeiros dígitos do CPF) ao PDF do holerite antes do upload. -->
+<script src="https://cdn.jsdelivr.net/npm/qpdf.js@2.0.0/src/qpdf.js"></script>
+<script>window.QPDF && (QPDF.path = 'https://cdn.jsdelivr.net/npm/qpdf.js@2.0.0/src/');</script>
 <script>window.GOV_PAGE_ID = 'governanca-kpis-rh-folha';</script>
 <script src="/compliance/gate.js"></script>
 
@@ -1037,6 +1040,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         </div>
         <input type="file" id="hol-files" accept="application/pdf" multiple style="display:none;" onchange="_holOnFilesSelected(this.files)">
       </div>
+      <div class="hol-drop-sub">🔒 Cada PDF sai criptografado com senha = 4 primeiros dígitos do CPF do colaborador.</div>
       <div class="hol-summary" id="hol-summary" style="display:none;"></div>
       <div class="hol-file-list" id="hol-file-list"></div>
       <div class="hol-progress" id="hol-progress" style="display:none;"></div>
@@ -1187,16 +1191,25 @@ function _holCarregarColaboradores() {
   if (_holColabPorMatricula) return Promise.resolve(_holColabPorMatricula);
   return new Promise(function(resolve) {
     comSupa(function(supa) {
-      supa.rpc('hc_colaboradores_listar').then(function(r) {
+      // holerite_colaboradores_listar (não hc_colaboradores_listar): precisa do CPF
+      // pra gerar a senha do PDF — RPC própria, escopo estreito, não expõe CPF
+      // pras outras páginas que só listam colaborador (hc.html, performance.html etc).
+      supa.rpc('holerite_colaboradores_listar').then(function(r) {
         var mapa = {};
         (!r.error && Array.isArray(r.data) ? r.data : []).forEach(function(c) {
-          if (c.matricula != null) mapa[String(c.matricula)] = { nome: c.nome || '', status: c.status || '' };
+          if (c.matricula != null) mapa[String(c.matricula)] = { nome: c.nome || '', status: c.status || '', cpf: c.cpf || '' };
         });
         _holColabPorMatricula = mapa;
         resolve(mapa);
       }, function() { _holColabPorMatricula = {}; resolve({}); });
     });
   });
+}
+
+// Convenção do holerite por e-mail: senha = 4 primeiros dígitos do CPF.
+function _holSenha(cpf) {
+  var digitos = String(cpf || '').replace(/\D/g, '');
+  return digitos.slice(0, 4);
 }
 
 function _holCarregarTipoId() {
@@ -1248,11 +1261,16 @@ function _holOnFilesSelected(fileList) {
     files.forEach(function(file) {
       var matricula = String(file.name.split('_')[0] || '').trim();
       var colab = mapaColab[matricula];
+      var senha = colab ? _holSenha(colab.cpf) : '';
+      var ok = !!colab && senha.length === 4;
+      var motivo = !colab ? ('Matrícula "' + escH(matricula) + '" não encontrada')
+        : (senha.length !== 4 ? 'Colaborador sem CPF cadastrado — não é possível gerar a senha do PDF' : '');
       _holArquivos.push({
         file: file, matricula: matricula,
         nome: colab ? colab.nome : '',
-        status: colab ? 'ok' : 'bad',
-        motivo: colab ? '' : 'Matrícula "' + escH(matricula) + '" não encontrada'
+        senha: senha,
+        status: ok ? 'ok' : 'bad',
+        motivo: motivo
       });
     });
     _holRenderFileList();
@@ -1304,23 +1322,42 @@ function _holRemoverArquivo(i) { _holArquivos.splice(i, 1); _holRenderFileList()
 // doc.html (matricula/categoria/base-nome.ext) — o upsert na RPC substitui
 // o holerite do mesmo mês se reenviado, não acumula versão (não precisa,
 // não tem histórico de assinatura pra preservar aqui).
+// QPDF.js (WASM) roda no navegador, sem mandar o PDF pra lugar nenhum antes de
+// criptografar — o arquivo só sai da máquina de quem envia já com senha.
+function _holCriptografarPdf(file, senha) {
+  return file.arrayBuffer().then(function(buf) {
+    return new Promise(function(resolve, reject) {
+      if (!window.QPDF) { reject(new Error('Biblioteca de criptografia de PDF não carregou.')); return; }
+      QPDF.encrypt({
+        arrayBuffer: buf, userPassword: senha, ownerPassword: senha, keyLength: 128,
+        callback: function(err, arrayBuffer) {
+          if (err) { reject(err); return; }
+          resolve(new Blob([arrayBuffer], { type: 'application/pdf' }));
+        }
+      });
+    });
+  });
+}
+
 function _holEnviarUmArquivo(item, tipoId, competencia, emitidoPor) {
-  return new Promise(function(resolve, reject) {
-    comSupa(function(supa) {
-      var ext = (item.file.name.split('.').pop() || 'pdf');
-      var path = item.matricula + '/holerites/holerite-' + competencia + '-' + _holSlug(item.nome || item.matricula) + '.' + ext;
-      var nomeArquivo = (item.nome || item.matricula) + ' - Holerite ' + competencia + '.' + ext;
-      supa.storage.from('dp-documentos').upload(path, item.file, { upsert: true, contentType: item.file.type || 'application/pdf' }).then(function(rUp) {
-        if (rUp.error) throw rUp.error;
-        return supa.rpc('colaborador_documentos_sandbox_salvar', {
-          p_matricula: item.matricula, p_tipo_id: tipoId, p_competencia: competencia,
-          p_nome_arquivo: nomeArquivo, p_link: path, p_mime: item.file.type || 'application/pdf',
-          p_tamanho: item.file.size, p_enviado_por: emitidoPor
-        });
-      }).then(function(rRow) {
-        if (rRow.error) throw rRow.error;
-        resolve();
-      }).catch(reject);
+  return _holCriptografarPdf(item.file, item.senha).then(function(blobCriptografado) {
+    return new Promise(function(resolve, reject) {
+      comSupa(function(supa) {
+        var ext = (item.file.name.split('.').pop() || 'pdf');
+        var path = item.matricula + '/holerites/holerite-' + competencia + '-' + _holSlug(item.nome || item.matricula) + '.' + ext;
+        var nomeArquivo = (item.nome || item.matricula) + ' - Holerite ' + competencia + '.' + ext;
+        supa.storage.from('dp-documentos').upload(path, blobCriptografado, { upsert: true, contentType: 'application/pdf' }).then(function(rUp) {
+          if (rUp.error) throw rUp.error;
+          return supa.rpc('colaborador_documentos_sandbox_salvar', {
+            p_matricula: item.matricula, p_tipo_id: tipoId, p_competencia: competencia,
+            p_nome_arquivo: nomeArquivo, p_link: path, p_mime: 'application/pdf',
+            p_tamanho: blobCriptografado.size, p_enviado_por: emitidoPor
+          });
+        }).then(function(rRow) {
+          if (rRow.error) throw rRow.error;
+          resolve();
+        }).catch(reject);
+      });
     });
   });
 }
@@ -1348,7 +1385,7 @@ function enviarHoleritesLote() {
   _holCarregarTipoId().then(function(tipoId) {
     return validos.reduce(function(promise, item, idx) {
       return promise.then(function() {
-        progresso.textContent = 'Enviando ' + (idx + 1) + '/' + total + '… (' + item.matricula + ' — ' + item.nome + ')';
+        progresso.textContent = 'Criptografando e enviando ' + (idx + 1) + '/' + total + '… (' + item.matricula + ' — ' + item.nome + ')';
         return _holEnviarUmArquivo(item, tipoId, competencia, emitidoPor).catch(function(err) {
           falhas.push({ item: item, erro: (err && err.message) || String(err) });
         });

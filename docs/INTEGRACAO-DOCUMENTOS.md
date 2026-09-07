@@ -361,6 +361,56 @@ funções `comSupa`/`escH` foram portadas pra lá nessa mudança, adaptadas pro
 próprio conjunto de variáveis CSS da página (`--t1/--t2/--t3/--white/--r`
 em vez de `--text/--mid/--muted/--surface/--radius`).
 
+**⚠️ Achado de segurança (2026-09-07), ainda em aberto:** a policy
+`dp_documentos_select` do bucket `dp-documentos` libera SELECT pra
+`{anon, authenticated}` sem nenhum filtro de dono — qualquer sessão logada
+(e hoje até anônima) consegue gerar signed URL e ler **qualquer** arquivo
+desse bucket bastando saber/adivinhar o caminho. Isso já existia antes do
+Holerite (mesmo bucket usado pelo anexo manual de `doc.html`), mas ficou
+mais crítico agora com dado de salário nele. Correção real ainda **não
+aplicada** — precisa ser feita com cuidado: travar "só a própria matrícula"
+quebraria `doc.html`/`folha.html`/`escalas.html` (ferramentas de RH que
+precisam ver/baixar documento de *qualquer* colaborador), não só o dono.
+A policy certa libera leitura quando (a) o caminho é da própria matrícula
+de quem pede **OU** (b) quem pede é RH/admin — mesmo tipo de checagem que
+`assinaturas_insert` já faz com `tata_plus.docs_pode_gerir()`. Decisão do
+usuário: priorizar a criptografia do PDF (abaixo) primeiro; RLS fica pra
+depois.
+
+**Feito (2026-09-07) como mitigação: PDF do Holerite sai criptografado com
+senha.** Enquanto a policy do bucket não é corrigida, cada holerite sai do
+navegador já protegido — mesmo que alguém consiga a signed URL, o PDF pede
+senha pra abrir. Senha = **4 primeiros dígitos do CPF** do colaborador
+(convenção comum de holerite por e-mail no Brasil). Implementado com
+[qpdf.js](https://github.com/j3k0/qpdf.js) (QPDF real compilado pra WASM,
+roda 100% no navegador via Web Worker — o PDF nunca sai da máquina de quem
+envia sem senha), carregado via CDN
+(`cdn.jsdelivr.net/npm/qpdf.js@2.0.0/src/qpdf.js`, `QPDF.path` apontando
+pro mesmo diretório do CDN pra achar o worker/wasm). `QPDF.encrypt({
+arrayBuffer, userPassword, ownerPassword, keyLength: 128, callback })` —
+AES-128 (não 256) por compatibilidade mais ampla com leitores de PDF mais
+antigos.
+
+Precisou de CPF por matrícula, que `hc_colaboradores_listar` (usada em
+várias outras páginas) não expõe — criada RPC própria e estreita
+`holerite_colaboradores_listar()` (`{matricula, nome, status, cpf}`), só
+usada aqui, pra não alargar a exposição de CPF nas páginas que só listam
+colaborador sem precisar dele (hc.html, performance.html, semanal.html,
+Cartão de Ponto). Arquivo cujo colaborador não tem CPF cadastrado fica
+marcado como não reconhecido (mesmo tratamento de matrícula não
+encontrada) — sem CPF não dá pra gerar senha, não entra no lote.
+
+Testado com Playwright mockando `window.QPDF`/`window.__lideresSupa`: senha
+derivada corretamente do CPF (com e sem máscara), colaborador sem CPF fica
+de fora do lote, `QPDF.encrypt` chamado com a senha certa por arquivo antes
+do upload (o Storage recebe o blob criptografado, não o arquivo cru), e
+falha de criptografia isolada por arquivo (não derruba o lote inteiro).
+**Não verificado:** o carregamento real do WASM via CDN — o sandbox deste
+agente bloqueia egress pra `cdn.jsdelivr.net`, então só a lógica de
+orquestração foi testada (com `QPDF.encrypt` mockado), não o pipeline WASM
+de verdade. Precisa de um teste manual num navegador real depois do
+deploy pra confirmar que o PDF final abre pedindo a senha certa.
+
 Testado com Playwright mockando `window.__lideresSupa`: casamento de
 matrícula certo/errado, envio completo (upload + `colaborador_documentos_
 sandbox_salvar`, confirmando que NENHUMA chamada de assinatura acontece) e
