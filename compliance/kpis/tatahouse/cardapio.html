@@ -1973,6 +1973,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="field-wrap" id="md-obs-wrap"><div class="field-label">Observação para compras</div><textarea class="field-input cardapio-obs" id="md-obs" rows="1" placeholder="Anotações que vão para o Compras…"></textarea></div>
       <div class="dia-total"><span id="md-total-lbl">Custo do cardápio</span><strong class="dia-total-val" id="md-total">R$ 0,00</strong></div>
     </div>
+    <div id="md-house-publish-wrap" style="display:none;padding:0 20px 14px;">
+      <button type="button" class="modal-btn modal-btn-save" id="md-publicar-house" style="width:100%;">Publicar no TATÁ House</button>
+      <div id="md-house-publish-status" style="margin-top:8px;font-family:'DM Mono',monospace;font-size:10px;line-height:1.4;color:var(--muted);"></div>
+    </div>
     <div class="md-status-banner" id="md-status-banner"></div>
     <div class="modal-footer">
       <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('modal-dia').classList.remove('active');document.body.style.overflow=''">Cancelar</button>
@@ -2054,6 +2058,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<script src="/compliance/kpis/tatahouse/house_governanca_local_bridge_v1.js"></script>
+<script src="/compliance/kpis/tatahouse/house_governanca_planejador_v1.js"></script>
+<script src="/compliance/kpis/tatahouse/house_governanca_elaboracao_v1.js"></script>
 <script>
 (function() {
   var DIAS_ABREV = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
@@ -2095,7 +2102,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   var _supa = null;
   function comSupa(cb){ if(window.__lideresSupa){ cb(window.__lideresSupa); return; } window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, { once:true }); }
 
-  var currentWeekOffset = 0, _monday = null, _semana = [], _editIdx = -1, _catalogo = [], _repertorio = [], _uniElab = '__todas__', _uniProc = '__todas__', _cozinhas = [];
+  var _houseElab = window.TataHouseGovernancaElaboracaoV1 || null;
+  var _houseProposalAtiva = !!(_houseElab && _houseElab.proposalIdDaUrl && _houseElab.proposalIdDaUrl());
+  var currentWeekOffset = _houseElab ? _houseElab.offsetInicial() : 0, _monday = null, _semana = [], _editIdx = -1, _catalogo = [], _repertorio = [], _uniElab = (_houseElab && _houseElab.unidadeInicial()) || '__todas__', _uniProc = '__todas__', _cozinhas = [];
   function cozOrdem(ch){ for(var i=0;i<_cozinhas.length;i++){ if(_cozinhas[i].chave===ch) return i; } return 99; }
   function unisSelecionadas(sel){ return sel==='__todas__' ? _cozinhas.map(function(c){ return c.chave; }) : [sel]; }
   function diaSemCurtoData(dt){ return diaSemanaCurto((dt.getDay()+6)%7); }
@@ -2165,6 +2174,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         flat.sort(function(a,b){ return a.data<b.data?-1:a.data>b.data?1:(cozOrdem(a.unidade)-cozOrdem(b.unidade)); });
         _semana=flat;
         renderGrid();
+        try {
+          window.dispatchEvent(new CustomEvent('tata:governanca:semana',{detail:{
+            inicio:inicio,
+            unidade:_uniElab,
+            dias:flat.map(function(d){ return { data:d.data, unidade:d.unidade, dia_id:d.dia_id, status:d.status||'', resumo:d.resumo||'' }; })
+          }}));
+        } catch(e) {}
         } catch(e){ showToast('Erro ao exibir: '+((e&&e.message)||e)); }
         hideLoading();
       }, function(err){ showToast('Erro ao carregar: '+((err&&err.message)||'falha de rede')); hideLoading(); });
@@ -2465,6 +2481,149 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   // Botões de ação: círculo girando (.ia-spin) + texto, igual ao "Gerar".
   function _btnCarregando(btn, txt){ if(!btn) return; btn.disabled=true; btn.classList.add('loading'); btn.innerHTML='<span class="ia-spin"></span><span>'+(txt||'')+'</span>'; }
   function _btnPronto(btn, txt){ if(!btn) return; btn.disabled=false; btn.classList.remove('loading'); btn.textContent=(txt||''); }
+
+  var HOUSE_PUB_RECEIPTS_KEY='tata.governanca.publicacoes.v1';
+  function recibosHouseVazios(){ return {versao:1,itens:{}}; }
+  function lerRecibosHouse(){
+    try{
+      var raw=localStorage.getItem(HOUSE_PUB_RECEIPTS_KEY);
+      if(!raw) return recibosHouseVazios();
+      var x=JSON.parse(raw);
+      if(!x || x.versao!==1 || !x.itens || typeof x.itens!=='object' || Array.isArray(x.itens)) return recibosHouseVazios();
+      return x;
+    }catch(e){ return recibosHouseVazios(); }
+  }
+  function chaveReciboHouse(unidadeFonte,data){ return String(unidadeFonte||'')+'|'+String(data||''); }
+  function mesmoSnapshotHouse(r,s){
+    return !!r && !!s &&
+      r.data===s.data && r.unidadeAlvo===s.unidade &&
+      r.principal===s.principal && r.guarnicao===s.guarnicao && r.salada===s.salada;
+  }
+  function reciboHousePara(unidadeFonte,snapshot){
+    var estado=lerRecibosHouse();
+    return estado.itens[chaveReciboHouse(unidadeFonte,snapshot&&snapshot.data)]||null;
+  }
+  function salvarReciboHouse(unidadeFonte,origemNome,snapshot,ack){
+    try{
+      var estado=lerRecibosHouse();
+      var key=chaveReciboHouse(unidadeFonte,snapshot.data);
+      estado.itens[key]={
+        versao:1,
+        unidadeFonte:String(unidadeFonte||''),
+        origemNome:String(origemNome||''),
+        data:snapshot.data,
+        unidadeAlvo:snapshot.unidade,
+        principal:snapshot.principal,
+        guarnicao:snapshot.guarnicao,
+        salada:snapshot.salada,
+        correlationId:String((ack&&ack.correlationId)||''),
+        confirmadoEm:new Date().toISOString()
+      };
+      var keys=Object.keys(estado.itens);
+      if(keys.length>80){
+        keys.sort(function(a,b){ return String(estado.itens[a].confirmadoEm||'').localeCompare(String(estado.itens[b].confirmadoEm||'')); });
+        keys.slice(0,keys.length-80).forEach(function(k){ delete estado.itens[k]; });
+      }
+      localStorage.setItem(HOUSE_PUB_RECEIPTS_KEY,JSON.stringify(estado));
+      return estado.itens[key];
+    }catch(e){ return null; }
+  }
+  function horaReciboHouse(v){
+    var d=new Date(v); if(isNaN(d)) return 'horário desconhecido';
+    return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  }
+  function configurarPublicacaoHouseModal(dia) {
+    var wrap=document.getElementById('md-house-publish-wrap');
+    var btn=document.getElementById('md-publicar-house');
+    var status=document.getElementById('md-house-publish-status');
+    if(!wrap || !btn || !status) return;
+    if(!dia){ wrap.style.display='none'; status.textContent=''; return; }
+    wrap.style.display='';
+    var unidadeFonte=dia.unidade||_uniProc;
+    var origem=cozNome(unidadeFonte);
+    var unidadeExplicita=_uniProc!=='__todas__';
+    _btnPronto(btn,'Publicar no TATÁ House');
+    btn.disabled=!unidadeExplicita;
+    btn.title=unidadeExplicita?'Publicar este cardápio aprovado no TATÁ House':'Selecione uma unidade no filtro de Processamento antes de publicar';
+    if(!unidadeExplicita){
+      status.textContent='Selecione uma unidade no filtro de Processamento antes de publicar no House.';
+    }else{
+      var bridge=window.TataHouseGovernancaLocalBridgeV1;
+      if(!bridge || typeof bridge.criarSnapshotDoCardapioDia!=='function'){
+        btn.disabled=true;
+        status.textContent='Bridge do TATÁ House indisponível.';
+      }else{
+        try{
+          var snapshot=bridge.criarSnapshotDoCardapioDia(dia);
+          var recibo=reciboHousePara(unidadeFonte,snapshot);
+          if(recibo && mesmoSnapshotHouse(recibo,snapshot)){
+            btn.textContent='Publicar novamente no TATÁ House';
+            status.textContent='Já publicado neste navegador em '+horaReciboHouse(recibo.confirmadoEm)+' · '+origem+' → TATÁ House · ACK '+recibo.correlationId+'.';
+          }else if(recibo){
+            btn.textContent='Publicar atualização no TATÁ House';
+            status.textContent='Atenção: este cardápio mudou desde a última publicação confirmada neste navegador em '+horaReciboHouse(recibo.confirmadoEm)+'. Publicar enviará a versão atual.';
+          }else{
+            status.textContent='Origem: '+origem+' → TATÁ House · envio manual, sem backend novo.';
+          }
+        }catch(e){
+          btn.disabled=true;
+          status.textContent='Não publicado: '+((e&&e.message)?e.message:String(e));
+        }
+      }
+    }
+    if(!btn.dataset.houseBound){
+      btn.dataset.houseBound='1';
+      btn.addEventListener('click', publicarHouseModal);
+    }
+  }
+
+  function publicarHouseModal(){
+    if(!_procData) return;
+    if(_uniProc==='__todas__'){
+      showToast('Selecione uma unidade no Processamento antes de publicar.');
+      return;
+    }
+    var bridge=window.TataHouseGovernancaLocalBridgeV1;
+    if(!bridge || typeof bridge.criarSnapshotDoCardapioDia!=='function'){
+      showToast('Bridge do TATÁ House indisponível.');
+      return;
+    }
+    var btn=document.getElementById('md-publicar-house');
+    var status=document.getElementById('md-house-publish-status');
+    var origem=cozNome(_procData.unidade||_uniProc);
+    var snapshot;
+    try{
+      snapshot=bridge.criarSnapshotDoCardapioDia(_procData);
+    }catch(e){
+      var msg=e&&e.message?e.message:String(e);
+      if(status) status.textContent='Não publicado: '+msg;
+      showToast('Não publicado: '+msg);
+      return;
+    }
+    _btnCarregando(btn,'Publicando…');
+    if(status) status.textContent='Abrindo o House para '+snapshot.data+' · '+origem+'…';
+    bridge.abrirEEnviar(snapshot,{unidadeFonte:_uniProc,aoStatus:function(etapa){
+      var mapa={
+        'abrindo-house':'Abrindo o TATÁ House…',
+        'house-pronto':'House pronto. Enviando cardápio aprovado…',
+        'enviado':'Cardápio enviado. Aguardando confirmação…',
+        'confirmado':'House confirmou a persistência local.'
+      };
+      if(status && mapa[etapa]) status.textContent=mapa[etapa];
+    }}).then(function(r){
+      salvarReciboHouse(_procData.unidade||_uniProc,origem,snapshot,r);
+      if(status) status.textContent='Publicado: '+origem+' → TATÁ House · '+r.data+' · ACK '+r.correlationId;
+      showToast('Cardápio publicado no TATÁ House ✓');
+    }).catch(function(e){
+      var msg=e&&e.message?e.message:String(e);
+      if(status) status.textContent='Falha ao publicar: '+msg;
+      showToast('Falha ao publicar no House');
+    }).finally(function(){
+      if(_procData) configurarPublicacaoHouseModal(_procData);
+      else _btnPronto(btn,'Publicar no TATÁ House');
+    });
+  }
+
   function onModalPrimary(){
     if(_modalMode==='proc'){
       if(_procData && _procData.status==='aguardando_avaliacao'){ salvarServirModal(); }
@@ -2538,6 +2697,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var _rw=document.getElementById('md-refeicoes-wrap'); if(_rw) _rw.style.display=''; /* refeições servidas: visível no processamento */
     var _ow=document.getElementById('md-obs-wrap'); if(_ow) _ow.style.display='none'; /* obs p/ compras: só na elaboração */
     setModalReadonly(true, isAval);
+    configurarPublicacaoHouseModal(dia);
     document.getElementById('modal-dia').classList.add('active');
     document.body.style.overflow='hidden';
   }
@@ -2569,10 +2729,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var _rw=document.getElementById('md-refeicoes-wrap'); if(_rw) _rw.style.display='none'; /* refeições servidas: só no processamento */
     var _ow=document.getElementById('md-obs-wrap'); if(_ow) _ow.style.display=''; /* obs p/ compras: visível na elaboração */
     setModalReadonly(false, true);
+    configurarPublicacaoHouseModal(null);
     document.getElementById('modal-dia').classList.add('active');
     document.body.style.overflow='hidden';
   }
-  function fecharModal(){ document.getElementById('modal-dia').classList.remove('active'); document.body.style.overflow=''; _editIdx=-1; _modalMode='elab'; _procData=null; var _b=document.getElementById('md-status-banner'); if(_b) _b.innerHTML=''; }
+  function fecharModal(){ document.getElementById('modal-dia').classList.remove('active'); document.body.style.overflow=''; _editIdx=-1; _modalMode='elab'; _procData=null; configurarPublicacaoHouseModal(null); var _b=document.getElementById('md-status-banner'); if(_b) _b.innerHTML=''; }
   // Processamento: troca o custo do catálogo (estimado) pelo VALOR REAL do Compras,
   // pela regra do ÚLTIMO PREÇO (recebimento → compra → inicial), via refeicoes_dia_detalhe.
   // Insumo e dia batem por ordem (itens por ci.id, insumos por cii.id nas duas RPCs).
@@ -2899,13 +3060,17 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     function irParaPrimeiraDataElab(){
       comSupa(function(supa){
         supa.schema('tata_plus').rpc('refeicoes_elab_primeira_data',{ p_unidade:_uniElab }).then(function(r){
-          var dt=(r&&!r.error&&r.data)?r.data:null;
+          var dt=(r&&!r.error&&typeof r.data==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(r.data))?r.data:null;
           currentWeekOffset = dt ? Math.round((mondayOf(new Date(dt+'T12:00:00'))-mondayOf(new Date()))/604800000) : 0;
+          if(!Number.isFinite(currentWeekOffset)) currentWeekOffset=0;
           carregarSemana();
         }, function(){ carregarSemana(); });
       });
     }
-    carregarCozinhas(function(){ irParaPrimeiraDataElab(); });
+    carregarCozinhas(function(){
+      if(_houseProposalAtiva) carregarSemana();
+      else irParaPrimeiraDataElab();
+    });
   });
 })();
 

@@ -1,0 +1,143 @@
+{
+  "contrato": "tata-house-governanca-legacy-evaluation-schema-evidence",
+  "versao": 1,
+  "classificacaoGlobal": "KNOWN_HISTORICAL__CURRENT_LIVE_UNKNOWN",
+  "target": {
+    "projectRef": "aoqsbusfrffapjglpqjk",
+    "schema": "tata_refeicoes",
+    "table": "cardapio_avaliacoes"
+  },
+  "historico": [
+    {
+      "pr": 2308,
+      "mergeCommit": "366e0141e841fb10f239d92e88cb7c4625fb64eb",
+      "classificacao": "KNOWN_HISTORICAL",
+      "facts": [
+        "cardapio_avaliacoes ganhou coluna unidade",
+        "unidade historicamente documentada como Itaim ou Pinheiros; null contribuia apenas para o geral",
+        "avaliacoes eram agregadas em escala numerica 1-5 pelas dimensoes qualidade, variedade e atendimento",
+        "refeicoes_processamento passou a devolver medias e totais por unidade"
+      ],
+      "limite": "O PR alterou apenas frontend no GitHub e declarou mudanca Supabase aplicada fora do repositorio; DDL/constraints/RLS exatos nao ficaram versionados."
+    },
+    {
+      "pr": 2355,
+      "mergeCommit": "006e3b6719cb7d0708e61ad2940f1b7428b130e8",
+      "classificacao": "KNOWN_HISTORICAL",
+      "facts": [
+        "cardapio_dia passou a chave unica historica (data_refeicao, unidade)",
+        "dias existentes foram duplicados por Itaim e Pinheiros",
+        "avaliacoes foram religadas aos dias por unidade",
+        "app do colaborador cardapio_app/avaliar_cardapio passou a filtrar e anexar pela unidade do perfil"
+      ],
+      "limite": "A evidência descreve a migracao e o comportamento, mas nao versiona a definicao de cardapio_avaliacoes nem a implementacao live de avaliar_cardapio."
+    },
+    {
+      "pr": 2360,
+      "mergeCommit": "10122bca19ca075cc74678fe6a05a0de29be1715",
+      "classificacao": "KNOWN_HISTORICAL",
+      "facts": [
+        "unidades passaram a ser roteadas para cozinhas por tata_refeicoes.cozinha_map",
+        "cardapio_app/avaliar_cardapio passaram a usar o mapeamento de cozinha",
+        "Poke - Pinheiros foi historicamente corrigido para Pinheiros; Administrativo/Tata House para Itaim"
+      ],
+      "limite": "O mapeamento historico reduz ambiguidade de unidade, mas nao substitui validacao server-side atual nem prova a configuracao live."
+    },
+    {
+      "pr": 2412,
+      "mergeCommit": "4705a7b004407e08d41c21e9c33ef99d6d5cc607",
+      "classificacao": "KNOWN_HISTORICAL",
+      "facts": [
+        "refeicoes_relatorio_detalhado passou a devolver matricula e colaborador em comentarios",
+        "avaliacoes anonimas do termometro sem matricula permaneciam em branco"
+      ],
+      "limite": "Este PR prova exposicao historica de identidade no relatorio, nao a existencia de uma constraint de identidade ou idempotencia na tabela."
+    }
+  ],
+  "usoVersionadoAtual": {
+    "classificacao": "PROVEN_VERSIONED__NOT_PROVEN_LIVE_SCHEMA",
+    "observedProductionSha": "43c929374db324bf71bce770c1188b729d9be620",
+    "path": "compliance/kpis/tatahouse/refeicoes_relatorio_detalhado.sql",
+    "fieldsReferenced": [
+      "cardapio_dia_id",
+      "voto",
+      "qualidade",
+      "variedade",
+      "atendimento",
+      "fonte",
+      "comentario",
+      "created_at"
+    ],
+    "relationship": "cardapio_avaliacoes.cardapio_dia_id = cardapio_dia.id",
+    "aggregation": "avg(voto) e medias por dimensao com fallback coalesce(dimensao, voto)",
+    "nota": "O SQL presente prova quais campos o relatorio versionado espera, mas nao e DDL da tabela nem prova constraints, RLS, policies ou grants implantados."
+  },
+  "compatibilidadeComContratoHouseV1": {
+    "classificacao": "PARTIAL_COMPATIBILITY_PROVEN_FROM_VERSIONED_AND_HISTORICAL_EVIDENCE",
+    "matches": [
+      {
+        "house": "unidade/sourceUnit",
+        "legacy": "unidade + cardapio_dia por data/unidade",
+        "status": "COMPATIBLE_IN_PRINCIPLE"
+      },
+      {
+        "house": "voto bom/ok/ruim -> 5/3/1",
+        "legacy": "voto/dimensoes numericos historicamente 1-5",
+        "status": "COMPATIBLE_IN_PRINCIPLE"
+      },
+      {
+        "house": "comentario opcional",
+        "legacy": "comentario",
+        "status": "COMPATIBLE_IN_PRINCIPLE"
+      }
+    ],
+    "gaps": [
+      {
+        "requirement": "id do evento House como chave idempotente duravel",
+        "historySearch": "NOT_FOUND_IN_VERSIONED_HISTORY",
+        "live": "UNKNOWN",
+        "consequence": "Nao e seguro ACKar/remover outbox usando apenas a tabela legada sem uma prova de idempotencia duravel."
+      },
+      {
+        "requirement": "conflito do mesmo UUID com payload divergente",
+        "historySearch": "NOT_FOUND_IN_VERSIONED_HISTORY",
+        "live": "UNKNOWN",
+        "consequence": "Contrato backend-ready exige deteccao explicita; nao inferir por cardapio_dia, matricula, unidade ou timestamp."
+      },
+      {
+        "requirement": "persistencia atomica de recibo idempotente + projecao legada",
+        "historySearch": "NOT_FOUND_IN_VERSIONED_HISTORY",
+        "live": "UNKNOWN",
+        "consequence": "Permanece necessario inspecionar schema/RPC live antes de definir migration ou persistidor final."
+      }
+    ]
+  },
+  "searchBoundary": {
+    "queries": [
+      "cardapio_avaliacoes",
+      "cardapio_avaliacoes uuid",
+      "cardapio_avaliacoes unique",
+      "idempot avaliacao cardapio",
+      "avaliar_cardapio",
+      "matricula comentario termometro"
+    ],
+    "result": "Nenhuma evidencia versionada recuperada de UUID/event_id/idempotency/UNIQUE por evento de avaliacao.",
+    "semantics": "NOT_FOUND_IN_VERSIONED_HISTORY nao significa NOT_EXISTENT_LIVE."
+  },
+  "liveUnknowns": [
+    "DDL atual completo de tata_refeicoes.cardapio_avaliacoes",
+    "constraints e indices atuais",
+    "RLS e policies atuais",
+    "grants atuais",
+    "definicao live atual de avaliar_cardapio/refeicao_avaliar se existir",
+    "regra de identidade atual do colaborador",
+    "idempotencia/UUID atual",
+    "comportamento transacional atual"
+  ],
+  "effectBoundary": {
+    "supabaseMutationPerformed": false,
+    "productionChanged": false,
+    "backendMutationAuthorized": false,
+    "productionPromotionAuthorized": false
+  }
+}
