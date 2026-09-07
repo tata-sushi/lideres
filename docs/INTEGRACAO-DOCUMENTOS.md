@@ -384,12 +384,29 @@ senha pra abrir. Senha = **4 primeiros dígitos do CPF** do colaborador
 (convenção comum de holerite por e-mail no Brasil). Implementado com
 [qpdf.js](https://github.com/j3k0/qpdf.js) (QPDF real compilado pra WASM,
 roda 100% no navegador via Web Worker — o PDF nunca sai da máquina de quem
-envia sem senha), carregado via CDN
-(`cdn.jsdelivr.net/npm/qpdf.js@2.0.0/src/qpdf.js`, `QPDF.path` apontando
-pro mesmo diretório do CDN pra achar o worker/wasm). `QPDF.encrypt({
-arrayBuffer, userPassword, ownerPassword, keyLength: 128, callback })` —
-AES-128 (não 256) por compatibilidade mais ampla com leitores de PDF mais
-antigos.
+envia sem senha). `QPDF.encrypt({ arrayBuffer, userPassword, ownerPassword,
+keyLength: 256, callback })` — AES-256 (R6), não 128.
+
+**Duas correções de rumo descobertas só ao testar de verdade** (a primeira
+tentativa, mergeada na PR anterior, só tinha sido testada com `QPDF`
+mockado):
+1. **CDN não funciona pra isso.** `qpdf.js` cria um Web Worker clássico
+   (`new Worker(url)`) pra rodar o WASM — e um Worker clássico não pode ser
+   instanciado com script de outra origem, mesmo com CORS liberado no CDN
+   ("Script cannot be accessed from origin"). Corrigido **vendorizando** a
+   lib inteira pra dentro do próprio repo
+   (`compliance/kpis/rh/vendor/qpdf/`: `qpdf.js`, `qpdf-worker.js`,
+   `lib/qpdf.js`, `lib/qpdf.wasm` — baixados de
+   github.com/j3k0/qpdf.js @ master, Apache-2.0, ~1.9MB), servida do mesmo
+   domínio do site. `QPDF.path` aponta pro path relativo local.
+2. **`keyLength: 128` não é "AES-128 compatível"** — nessa lib, o parâmetro
+   mapeia direto pro terceiro argumento do `qpdf --encrypt user owner
+   key-length`, onde `128` significa o modo legado **RC4-128**, não AES. O
+   qpdf atual **recusa escrever** arquivo com RC4 ("refusing to write a
+   file with RC4, a weak cryptographic algorithm"), então todo envio
+   falhava com "Command failed". Corrigido usando `keyLength: 256` (default
+   da própria lib), que é AES-256 de verdade e bem suportado por qualquer
+   leitor de PDF atual.
 
 Precisou de CPF por matrícula, que `hc_colaboradores_listar` (usada em
 várias outras páginas) não expõe — criada RPC própria e estreita
@@ -398,18 +415,23 @@ usada aqui, pra não alargar a exposição de CPF nas páginas que só listam
 colaborador sem precisar dele (hc.html, performance.html, semanal.html,
 Cartão de Ponto). Arquivo cujo colaborador não tem CPF cadastrado fica
 marcado como não reconhecido (mesmo tratamento de matrícula não
-encontrada) — sem CPF não dá pra gerar senha, não entra no lote.
+encontrada) — sem CPF não dá pra gerar senha, não entra no lote. O aviso
+visível no modal sobre a senha foi removido a pedido do usuário (fica só
+documentado aqui, não na tela).
 
-Testado com Playwright mockando `window.QPDF`/`window.__lideresSupa`: senha
-derivada corretamente do CPF (com e sem máscara), colaborador sem CPF fica
-de fora do lote, `QPDF.encrypt` chamado com a senha certa por arquivo antes
-do upload (o Storage recebe o blob criptografado, não o arquivo cru), e
-falha de criptografia isolada por arquivo (não derruba o lote inteiro).
-**Não verificado:** o carregamento real do WASM via CDN — o sandbox deste
-agente bloqueia egress pra `cdn.jsdelivr.net`, então só a lógica de
-orquestração foi testada (com `QPDF.encrypt` mockado), não o pipeline WASM
-de verdade. Precisa de um teste manual num navegador real depois do
-deploy pra confirmar que o PDF final abre pedindo a senha certa.
+**Testado de ponta a ponta de verdade** (não só mockado): subiu um servidor
+estático local servindo o repo, rodou `folha.html` de verdade contra ele
+(mesma origem que o `vendor/qpdf/`, reproduzindo o ambiente de produção), e
+deixou o `QPDF.encrypt` real rodar (sem mock) contra um PDF de verdade
+(gerado via `page.pdf()` do Playwright) através do fluxo completo
+(`_holOnFilesSelected` → `enviarHoleritesLote` → upload). O arquivo que
+seria enviado pro Storage foi capturado e aberto com **pikepdf** (biblioteca
+Python independente, sem nenhuma relação com o código deste projeto) pra
+confirmar de verdade: recusa abrir sem senha, recusa abrir com senha errada,
+abre com a senha certa (`1234`, derivada do CPF de teste), e reporta
+`R=6, V=5, aesv3, bits=256` — AES-256 de verdade, não só a aparência de
+criptografia. Também testado (mockado) casamento de matrícula/CPF, falha
+isolada por arquivo e falha de criptografia isolada.
 
 Testado com Playwright mockando `window.__lideresSupa`: casamento de
 matrícula certo/errado, envio completo (upload + `colaborador_documentos_
