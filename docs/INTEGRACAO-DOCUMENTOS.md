@@ -442,6 +442,18 @@ marcam como não reconhecido ("Colaborador inativo — não recebe X por
 aqui"), com o mesmo tratamento visual/de bloqueio de matrícula não
 encontrada — fica fora do lote, não trava os demais arquivos.
 
+**Bug encontrado (2026-09-07) e corrigido, testado com arquivos reais de
+RH:** o casamento de matrícula assumia que o nome do arquivo sempre usa
+`_` como separador ("7_NOME_id.pdf"), mas um lote real de holerite veio
+nomeado "24416 – NOME.pdf" (espaço, travessão, espaço) — `split('_')[0]`
+pegava o nome do arquivo inteiro (com ".pdf" e tudo) como se fosse a
+matrícula, e todos os arquivos do lote saíam como "não reconhecido".
+Corrigido nos dois lotes (Cartão de Ponto e Holerite): a matrícula agora é
+extraída como a sequência de dígitos no início do nome do arquivo
+(`file.name.match(/^\d+/)`), não depende de qual separador vem depois —
+funciona tanto pra "7_NOME_id.pdf" quanto "24416 – NOME.pdf" (ou qualquer
+outro separador).
+
 Testado com Playwright mockando `window.__lideresSupa`: casamento de
 matrícula certo/errado, envio completo (upload + `colaborador_documentos_
 sandbox_salvar`, confirmando que NENHUMA chamada de assinatura acontece) e
