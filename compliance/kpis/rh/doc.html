@@ -742,6 +742,11 @@ function _docFmtCompetenciaPeriodo(c) {
   return fmt(partes[0]) + ' a ' + fmt(partes[1]);
 }
 
+// Tipo de pagamento do Holerite (ver folha.html) — mesmo mapa lá, duplicado
+// aqui só pra exibição do rótulo (padrão do projeto: cada página tem suas
+// próprias cópias de helper, não módulo compartilhado).
+var DOC_TIPOS_PAGAMENTO = { pagamento: 'Pagamento', adiantamento: 'Adiantamento', adiantamento_13: 'Adiantamento 13º', pagamento_13: 'Pagamento 13º' };
+
 // Período padrão da folha (dia 21 do mês anterior a dia 20 do mês de competência —
 // "referente" a esse mês), usado como rótulo de toda linha de Cartão de Ponto no
 // checklist, mesmo antes de existir um documento enviado. Se um documento real já
@@ -757,15 +762,19 @@ function _docPeriodoPadraoCartaoPonto(comp) {
 }
 
 // competencia de uma linha pode ser "YYYY-MM" (mês calendário, a maioria dos
-// recorrentes) OU um período customizado "YYYY-MM-DD_YYYY-MM-DD" (Cartão de
-// Ponto — a folha raramente fecha alinhada ao mês, ver escalas.html). Nesse
-// segundo caso o documento conta pro mês em que o período FECHA (referência
-// da folha — ex.: 21/07 a 20/08 é "referente a agosto"), nunca pros dois
-// meses que ele toca.
+// recorrentes), um período customizado "YYYY-MM-DD_YYYY-MM-DD" (Cartão de
+// Ponto — a folha raramente fecha alinhada ao mês, ver escalas.html), ou
+// "YYYY-MM:tipo" (Holerite — Pagamento/Adiantamento/13º do mesmo mês são
+// documentos diferentes, o tipo entra na chave só pra não sobrescrever um
+// ao outro; pro checklist mensal, qualquer tipo enviado nesse mês conta,
+// ver folha.html). Período customizado conta pro mês em que FECHA
+// (referência da folha — ex.: 21/07 a 20/08 é "referente a agosto"), nunca
+// pros dois meses que ele toca.
 function _docCompetenciaCobre(rowCompetencia, mesAlvo) {
   if (!mesAlvo) return !rowCompetencia;
   if (!rowCompetencia) return false;
   if (rowCompetencia === mesAlvo) return true;
+  if (rowCompetencia.indexOf(':') !== -1) return rowCompetencia.split(':')[0] === mesAlvo;
   if (rowCompetencia.indexOf('_') === -1) return false;
   var partes = rowCompetencia.split('_');
   var mesFim = (partes[1] || '').slice(0, 7);
@@ -848,6 +857,11 @@ function _docItemHtml(matricula, tipo, competencia, label) {
   // 20/08/2026"), senão fica só "Ago/2026" e parece um mês fechado normal.
   if (doc && doc.competencia && doc.competencia.indexOf('_') > -1) {
     label = tipo.nome + ' — ' + _docFmtCompetenciaPeriodo(doc.competencia);
+  } else if (doc && doc.competencia && doc.competencia.indexOf(':') > -1) {
+    // Holerite: "YYYY-MM:tipo" — mostra o tipo de pagamento (Pagamento/
+    // Adiantamento/13º) no rótulo, não só o mês (ver folha.html).
+    var _partesComp = doc.competencia.split(':');
+    label = tipo.nome + ' — ' + (DOC_TIPOS_PAGAMENTO[_partesComp[1]] || _partesComp[1]) + ' (' + _docFmtCompetencia(_partesComp[0]) + ')';
   }
   var status = doc ? doc.status : null;
   var badge, acao;

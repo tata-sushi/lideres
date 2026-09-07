@@ -449,6 +449,8 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
 .modal-field-label { font-family:"DM Mono",monospace; font-size:9px; font-weight:500; letter-spacing:.8px; text-transform:uppercase; color:var(--t3); margin-bottom:6px; display:block; }
 .modal-time { border:1px solid var(--border); border-radius:var(--r); padding:8px 10px; font-family:"DM Mono",monospace; font-size:13px; color:var(--t1); background:var(--bg); width:100%; }
 .modal-time:focus { outline:none; border-color:var(--carbon); }
+.modal-select { border:1px solid var(--border); border-radius:var(--r); padding:8px 10px; font-family:"DM Sans",sans-serif; font-size:13px; color:var(--t1); background:var(--bg); width:100%; cursor:pointer; }
+.modal-select:focus { outline:none; border-color:var(--carbon); }
 .hol-drop { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:24px 12px; border:1.5px dashed var(--border); border-radius:var(--r); background:var(--bg); cursor:pointer; text-align:center; transition:all .15s; }
 .hol-drop-label { font-family:"DM Mono",monospace; font-size:10px; letter-spacing:.5px; text-transform:uppercase; color:var(--t2); }
 .hol-drop-sub { font-size:11px; color:var(--t3); }
@@ -1037,6 +1039,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <input class="modal-time" type="month" id="hol-competencia">
       </div>
       <div>
+        <span class="modal-field-label">Tipo de Pagamento</span>
+        <select class="modal-select" id="hol-tipo-pagamento">
+          <option value="pagamento">Pagamento</option>
+          <option value="adiantamento">Adiantamento</option>
+          <option value="adiantamento_13">Adiantamento 13º</option>
+          <option value="pagamento_13">Pagamento 13º</option>
+        </select>
+      </div>
+      <div>
         <span class="modal-field-label">Arquivos (PDF, um por colaborador)</span>
         <div class="hol-drop" id="hol-drop" onclick="document.getElementById('hol-files').click()">
           <div class="hol-drop-label">Clique ou arraste os PDFs aqui</div>
@@ -1345,17 +1356,25 @@ function _holCriptografarPdf(file, senha) {
   });
 }
 
-function _holEnviarUmArquivo(item, tipoId, competencia, emitidoPor) {
+// "pagamento"/"adiantamento" (mensal) ou "adiantamento_13"/"pagamento_13" (13º).
+var HOL_TIPOS_PAGAMENTO = { pagamento: 'Pagamento', adiantamento: 'Adiantamento', adiantamento_13: 'Adiantamento 13º', pagamento_13: 'Pagamento 13º' };
+
+function _holEnviarUmArquivo(item, tipoId, competencia, tipoPagamento, emitidoPor) {
   return _holCriptografarPdf(item.file, item.senha).then(function(blobCriptografado) {
     return new Promise(function(resolve, reject) {
       comSupa(function(supa) {
         var ext = (item.file.name.split('.').pop() || 'pdf');
-        var path = item.matricula + '/holerites/holerite-' + competencia + '-' + _holSlug(item.nome || item.matricula) + '.' + ext;
-        var nomeArquivo = (item.nome || item.matricula) + ' - Holerite ' + competencia + '.' + ext;
+        var tipoLabel = HOL_TIPOS_PAGAMENTO[tipoPagamento] || tipoPagamento;
+        // Pagamento e Adiantamento do mesmo mês são documentos diferentes — o tipo
+        // entra na chave de versionamento (competencia) pra um não sobrescrever o
+        // outro, e no path pra não colidir o arquivo no Storage.
+        var competenciaChave = competencia + ':' + tipoPagamento;
+        var path = item.matricula + '/holerites/holerite-' + competencia + '-' + _holSlug(tipoPagamento) + '-' + _holSlug(item.nome || item.matricula) + '.' + ext;
+        var nomeArquivo = (item.nome || item.matricula) + ' - Holerite ' + tipoLabel + ' ' + competencia + '.' + ext;
         supa.storage.from('dp-documentos').upload(path, blobCriptografado, { upsert: true, contentType: 'application/pdf' }).then(function(rUp) {
           if (rUp.error) throw rUp.error;
           return supa.rpc('colaborador_documentos_sandbox_salvar', {
-            p_matricula: item.matricula, p_tipo_id: tipoId, p_competencia: competencia,
+            p_matricula: item.matricula, p_tipo_id: tipoId, p_competencia: competenciaChave,
             p_nome_arquivo: nomeArquivo, p_link: path, p_mime: 'application/pdf',
             p_tamanho: blobCriptografado.size, p_enviado_por: emitidoPor
           });
@@ -1373,6 +1392,7 @@ function enviarHoleritesLote() {
   var erroBox = document.getElementById('hol-erro');
   erroBox.style.display = 'none';
   var competencia = (document.getElementById('hol-competencia') || {}).value || '';
+  var tipoPagamento = (document.getElementById('hol-tipo-pagamento') || {}).value || 'pagamento';
   if (!competencia) { erroBox.style.display = 'block'; erroBox.textContent = 'Selecione a competência.'; return; }
   var validos = _holArquivos.filter(function(i) { return i.status === 'ok'; });
   if (!validos.length) { erroBox.style.display = 'block'; erroBox.textContent = 'Anexe ao menos um arquivo reconhecido.'; return; }
@@ -1392,7 +1412,7 @@ function enviarHoleritesLote() {
     return validos.reduce(function(promise, item, idx) {
       return promise.then(function() {
         progresso.textContent = 'Criptografando e enviando ' + (idx + 1) + '/' + total + '… (' + item.matricula + ' — ' + item.nome + ')';
-        return _holEnviarUmArquivo(item, tipoId, competencia, emitidoPor).catch(function(err) {
+        return _holEnviarUmArquivo(item, tipoId, competencia, tipoPagamento, emitidoPor).catch(function(err) {
           falhas.push({ item: item, erro: (err && err.message) || String(err) });
         });
       });

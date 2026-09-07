@@ -459,6 +459,36 @@ matrícula certo/errado, envio completo (upload + `colaborador_documentos_
 sandbox_salvar`, confirmando que NENHUMA chamada de assinatura acontece) e
 falha parcial (1 de 2 falha, modal continua aberto com o erro).
 
+**Feito (2026-09-07): "Tipo de Pagamento" no envio de Holerite
+(`folha.html`).** Faltava distinguir Pagamento de Adiantamento do mesmo
+mês (e o 13º salário, que também tem as duas parcelas) — sem isso, mandar
+o Adiantamento depois do Pagamento (ou vice-versa) do mesmo mês
+sobrescreveria o outro (a RPC é update-or-insert por
+`(matricula, tipo_id, competencia)`, e os dois usavam a mesma
+`competencia`). Novo `<select>` no modal com 4 opções: Pagamento,
+Adiantamento, Adiantamento 13º, Pagamento 13º (`HOL_TIPOS_PAGAMENTO`). O
+tipo entra na chave de versionamento como `"YYYY-MM:tipo"` (ex.:
+`"2026-08:adiantamento"`) — cada combinação mês+tipo agora é uma linha
+própria, e entra também no path do Storage e no nome do arquivo pra não
+colidir.
+
+Isso teria quebrado de novo o checklist mensal do `doc.html` (mesmo bug do
+período customizado do Cartão de Ponto: comparação por igualdade exata
+nunca bateria com o "YYYY-MM" que o checklist itera) — corrigido de
+antemão em `_docCompetenciaCobre`: quando a `competencia` tem `:`, o mês
+antes dos dois-pontos é o que conta pro checklist (ignora o tipo pra fins
+de "esse mês tem holerite ou não" — **decisão deliberada de não separar
+Pagamento/Adiantamento em linhas próprias no checklist**, qualquer um dos
+dois já marca o mês como entregue; seria preciso um `doc_tipos` por tipo
+pra rastrear os dois independentemente, fica pra depois se for pedido). O
+rótulo do item também mostra o tipo quando disponível ("Holerite —
+Adiantamento (Ago/2026)"), em vez de só o mês.
+
+Testado com Playwright: `<select>` default "Pagamento", envio com
+"Adiantamento" grava `competencia="2026-08:adiantamento"` e nome de
+arquivo/path corretos; checklist do `doc.html` reconhece o mês como
+"Entregue" com o rótulo do tipo certo.
+
 **Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
 é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões
 lado a lado (mesmo padrão de `admissao.html` com "Gerar PDF" +
