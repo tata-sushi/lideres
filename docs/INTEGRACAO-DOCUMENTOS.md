@@ -489,6 +489,23 @@ Testado com Playwright: `<select>` default "Pagamento", envio com
 arquivo/path corretos; checklist do `doc.html` reconhece o mês como
 "Entregue" com o rótulo do tipo certo.
 
+**Ajuste (2026-09-07):** o formato `"YYYY-MM:tipo"` acima quebrava numa
+tela do **app** (`tata_plus`, outro repo — sem acesso pra corrigir a
+renderização por lá): ela mostra a `competencia` crua como título do
+documento, e um código tipo `"2026-08:pagamento"` aparecia literalmente
+na tela em vez de algo legível. Corrigido gravando a competencia **já no
+formato de exibição final**: `"Pagamento Agosto/2026"`,
+`"Adiantamento Agosto/2026"`, `"Adiantamento 13º Novembro/2026"`,
+`"Pagamento 13º Dezembro/2026"` — em vez de um código que só faz sentido
+sendo reformatado por quem lê. `_docCompetenciaCobre`/`_docItemHtml` em
+`doc.html` ajustados pra reconhecer esse formato (novo
+`_docCompetenciaMesDoHolerite(c)`, que tenta casar um dos 4 rótulos de
+tipo conhecidos no início da string e devolve o mês em ISO pro checklist
+mensal) em vez do split por `:`. Testado: os 4 tipos gravam exatamente o
+texto esperado, e o parser de volta pra "YYYY-MM" bate certo pros 4,
+inclusive distinguindo "Pagamento" de "Pagamento 13º" (ordem de checagem
+importa — os rótulos com "13º" são checados primeiro).
+
 **Decisão (2026-08-22): impressão em papel e assinatura digital coexistem, não
 é uma coisa OU outra.** Nas duas páginas acima cada termo tem os dois botões
 lado a lado (mesmo padrão de `admissao.html` com "Gerar PDF" +
