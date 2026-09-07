@@ -1358,6 +1358,14 @@ function _holCriptografarPdf(file, senha) {
 
 // "pagamento"/"adiantamento" (mensal) ou "adiantamento_13"/"pagamento_13" (13º).
 var HOL_TIPOS_PAGAMENTO = { pagamento: 'Pagamento', adiantamento: 'Adiantamento', adiantamento_13: 'Adiantamento 13º', pagamento_13: 'Pagamento 13º' };
+var MESES_EXTENSO = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+// "2026-08" → "Agosto/2026".
+function _holFmtMesExtenso(competencia) {
+  var p = String(competencia || '').split('-');
+  var mi = parseInt(p[1], 10) - 1;
+  return (MESES_EXTENSO[mi] || p[1]) + '/' + p[0];
+}
 
 function _holEnviarUmArquivo(item, tipoId, competencia, tipoPagamento, emitidoPor) {
   return _holCriptografarPdf(item.file, item.senha).then(function(blobCriptografado) {
@@ -1367,8 +1375,11 @@ function _holEnviarUmArquivo(item, tipoId, competencia, tipoPagamento, emitidoPo
         var tipoLabel = HOL_TIPOS_PAGAMENTO[tipoPagamento] || tipoPagamento;
         // Pagamento e Adiantamento do mesmo mês são documentos diferentes — o tipo
         // entra na chave de versionamento (competencia) pra um não sobrescrever o
-        // outro, e no path pra não colidir o arquivo no Storage.
-        var competenciaChave = competencia + ':' + tipoPagamento;
+        // outro. A chave já sai no formato "Pagamento Agosto/2026" (não um código
+        // tipo "2026-08:pagamento") porque o app (tata_plus, outro repo) mostra a
+        // competencia crua como título em algumas telas — precisa já vir legível
+        // de qualquer lugar que leia esse campo direto, não só daqui.
+        var competenciaChave = tipoLabel + ' ' + _holFmtMesExtenso(competencia);
         var path = item.matricula + '/holerites/holerite-' + competencia + '-' + _holSlug(tipoPagamento) + '-' + _holSlug(item.nome || item.matricula) + '.' + ext;
         var nomeArquivo = (item.nome || item.matricula) + ' - Holerite ' + tipoLabel + ' ' + competencia + '.' + ext;
         supa.storage.from('dp-documentos').upload(path, blobCriptografado, { upsert: true, contentType: 'application/pdf' }).then(function(rUp) {
