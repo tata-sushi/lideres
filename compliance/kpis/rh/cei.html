@@ -974,15 +974,31 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     #view-dashboard .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
     #view-dashboard .chart-card .chart-title span { color: var(--t3); font-weight: 500; text-transform: none; letter-spacing: 0; }
 
-    /* BARRAS internas */
-    #view-dashboard .cl-bars { display: flex; flex-direction: column; gap: 9px; }
-    #view-dashboard .cl-bar-row { display: grid; grid-template-columns: 118px 1fr 40px; align-items: center; gap: 8px; }
-    #view-dashboard .cl-bar-label { font-size: 13px; color: var(--t1); line-height: 1.25; }
-    #view-dashboard .cl-bar-label small { display: block; font-family: 'DM Mono', monospace; font-size: 9px; color: var(--t3); letter-spacing: .03em; margin-top: 1px; }
-    #view-dashboard .cl-bar-track { background: #ECECEC; border-radius: 5px; height: 20px; overflow: hidden; }
-    #view-dashboard .cl-bar-fill { height: 100%; border-radius: 5px; min-width: 2px; transition: width .45s ease; }
-    #view-dashboard .cl-bar-val { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 600; color: var(--carbon); text-align: right; font-variant-numeric: tabular-nums; }
-    #view-dashboard .cl-bar-val.empty { color: var(--t3); font-weight: 500; }
+    /* BARRAS — padrão performance ("Avaliação por Tema") */
+    #view-dashboard .bar-list { display: flex; flex-direction: column; gap: 9px; }
+    #view-dashboard .bar-row { display: grid; grid-template-columns: 120px 1fr 40px; align-items: center; gap: 8px; }
+    #view-dashboard .bar-name { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--t2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #view-dashboard .bar-track { height: 18px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+    #view-dashboard .bar-fill { height: 100%; background: var(--carbon); border-radius: 4px; transition: width 0.4s ease; }
+    #view-dashboard .bar-val { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--t1); text-align: right; font-variant-numeric: tabular-nums; }
+    #view-dashboard .bar-val.empty { color: var(--t3); font-weight: 500; }
+    @media (min-width: 640px) {
+      #view-dashboard #cl-temas .bar-row { grid-template-columns: 190px 1fr 40px; }
+    }
+
+    /* TABELA de Perguntas — padrão Colaboradores em performance */
+    #view-dashboard .table-wrap { overflow-x: auto; }
+    #view-dashboard .table-wrap table { width: 100%; border-collapse: collapse; }
+    #view-dashboard .table-wrap thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--t3); padding: 8px 6px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--white); white-space: nowrap; }
+    #view-dashboard .table-wrap tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    #view-dashboard .table-wrap tbody tr:hover { background: #FAFAFA; }
+    #view-dashboard .table-wrap tbody tr:last-child { border-bottom: none; }
+    #view-dashboard .table-wrap tbody td { padding: 10px 6px; font-size: 13px; font-weight: 400; color: var(--carbon); vertical-align: middle; }
+    #view-dashboard .perg-cell { display: flex; flex-direction: column; gap: 2px; }
+    #view-dashboard .perg-name { font-size: 13px; font-weight: 500; color: var(--t1); line-height: 1.3; white-space: normal; }
+    #view-dashboard .perg-role { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.06em; }
+    #view-dashboard .perg-nota { font-family: 'DM Mono', monospace; font-weight: 700; color: var(--t1); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #view-dashboard .perg-nota.empty { color: var(--t3); font-weight: 500; }
 
     /* COMENTÁRIOS */
     #view-dashboard .cl-coments { display: flex; flex-direction: column; gap: 8px; }
@@ -1040,11 +1056,21 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <main id="dashboard">
       <div class="chart-card">
         <div class="chart-title">Temas <span>· média por tema (1–5)</span></div>
-        <div class="cl-bars" id="cl-temas"></div>
+        <div class="bar-list" id="cl-temas"></div>
       </div>
       <div class="chart-card">
         <div class="chart-title">Perguntas <span>· detalhe por item</span></div>
-        <div class="cl-bars" id="cl-perguntas"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Pergunta</th>
+                <th style="text-align:right;width:70px">Nota</th>
+              </tr>
+            </thead>
+            <tbody id="cl-perguntas"></tbody>
+          </table>
+        </div>
       </div>
       <div class="chart-card full">
         <div class="chart-title">Comentários <span>· o que ajudaria a melhorar</span></div>
@@ -1465,15 +1491,22 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
   };
   var TEMA_ORDER=['Liderança & Comunicação','Reconhecimento','Desenvolvimento','Relacionamento & Equipe','Respeito & Bem-estar','Cultura & Valores','Estrutura & Recursos'];
 
-  function bar(label, sub, media){
+  function bar(label, media){
     var has = media!=null;
     var pct = has ? Math.max(2, Math.round(media/5*100)) : 0;
-    var f = has ? faixa(media) : null;
-    return '<div class="cl-bar-row">'+
-      '<div class="cl-bar-label">'+esc(label)+(sub?'<small>'+esc(sub)+'</small>':'')+'</div>'+
-      '<div class="cl-bar-track">'+(has?'<div class="cl-bar-fill" style="width:'+pct+'%;background:'+f.cor+'"></div>':'')+'</div>'+
-      '<div class="cl-bar-val'+(has?'':' empty')+'">'+(has?media.toFixed(2):'—')+'</div>'+
+    return '<div class="bar-row">'+
+      '<div class="bar-name" title="'+esc(label)+'">'+esc(label)+'</div>'+
+      '<div class="bar-track">'+(has?'<div class="bar-fill" style="width:'+pct+'%"></div>':'')+'</div>'+
+      '<div class="bar-val'+(has?'':' empty')+'">'+(has?media.toFixed(2).replace('.',','):'—')+'</div>'+
     '</div>';
+  }
+  function pergRow(texto, sub, media){
+    var has = media!=null;
+    var subHtml = sub?'<div class="perg-role">'+esc(sub)+'</div>':'';
+    return '<tr>'+
+      '<td><div class="perg-cell"><div class="perg-name">'+esc(texto)+'</div>'+subHtml+'</div></td>'+
+      '<td class="perg-nota'+(has?'':' empty')+'">'+(has?media.toFixed(2).replace('.',','):'—')+'</td>'+
+    '</tr>';
   }
   function el(id){ return document.getElementById(id); }
 
@@ -1503,11 +1536,11 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
     });
     var ordem = TEMA_ORDER.slice(); Object.keys(acc).forEach(function(k){ if(ordem.indexOf(k)<0) ordem.push(k); });
     el('cl-temas').innerHTML = ordem.filter(function(t){return acc[t];})
-      .map(function(t){ return bar(t, null, acc[t].s/acc[t].n); }).join('');
+      .map(function(t){ return bar(t, acc[t].s/acc[t].n); }).join('');
 
     el('cl-perguntas').innerHTML = rows.filter(function(r){ return !isRec(r); })
       .sort(function(a,b){ return (b.media==null?-1:+b.media) - (a.media==null?-1:+a.media); })
-      .map(function(r){ return bar(r.texto, r.dimensao, (r.n>0&&r.media!=null)? +r.media : null); }).join('');
+      .map(function(r){ return pergRow(r.texto, r.dimensao, (r.n>0&&r.media!=null)? +r.media : null); }).join('');
 
     if (coments && coments.length){
       el('cl-coments').innerHTML = coments.map(function(c){
@@ -1516,7 +1549,7 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
         return txt ? ('<div class="cl-coment">'+esc(txt)+(meta?'<small>'+meta+'</small>':'')+'</div>') : '';
       }).join('');
     } else {
-      el('cl-coments').innerHTML = '<div class="cl-bar-val empty" style="text-align:left">Sem comentários ainda.</div>';
+      el('cl-coments').innerHTML = '<div class="bar-val empty" style="text-align:left">Sem comentários ainda.</div>';
     }
 
     el('cl-legenda').innerHTML = FAIXAS.slice().reverse().map(function(f){
