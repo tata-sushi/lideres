@@ -5382,12 +5382,35 @@ function abrirInfoGrafico(key){
 }
 function closeInfoGrafico(){ document.getElementById('info-overlay').classList.remove('active'); document.body.style.overflow=''; }
 
-// candidato tem entrevista no período do funil (2026) — pela mãe ou pela filha
+// Candidato sem NENHUMA data de entrevista/teste (ex.: "Não respondeu", "Não aceitou a
+// proposta", "Aguardando Entrevista" sem data). Para esses o funil usa a DATA DE
+// CADASTRO (created_at) como referência de período/mês.
+function _funilSemData(r) {
+  if (parseDateBR(r.data_entrevista)) return false;
+  var es = r.entrevistas || []; for (var i=0;i<es.length;i++){ if (parseDateBR(es[i].data)) return false; }
+  var ds = r.dias || [];        for (var j=0;j<ds.length;j++){ if (parseDateBR(ds[j].data_teste)) return false; }
+  return true;
+}
+// Mês/ano de referência do candidato no funil: pela entrevista; sem entrevista, pela data de cadastro.
+function _funilMY(r) {
+  if (parseDateBR(r.data_entrevista)) return dataToMY(r.data_entrevista);
+  var es = r.entrevistas || []; for (var i=0;i<es.length;i++){ if (parseDateBR(es[i].data)) return dataToMY(es[i].data); }
+  return dataToMY(r.created_at);   // sem entrevista → data de cadastro
+}
+// Intervalo De/Até do funil, com fallback para a data de cadastro em candidatos sem entrevista/teste.
+function _funilInRange(r, ini, fim) {
+  if (!ini && !fim) return true;
+  if (_rowInRange(r, ini, fim)) return true;
+  return _funilSemData(r) && _dateInRange(r.created_at, ini, fim);
+}
+// candidato tem entrevista no período do funil (2026) — pela mãe ou pela filha;
+// sem entrevista com data, considera a data de cadastro (candidato contatado que não respondeu).
 function _funilEntNoPeriodo(r) {
   var d = parseDateBR(r.data_entrevista);
   if (d && d >= FUNIL_DATA_INICIO) return true;
   var ents = r.entrevistas || [];
   for (var i=0;i<ents.length;i++){ var e=parseDateBR(ents[i].data); if (e && e >= FUNIL_DATA_INICIO) return true; }
+  if (_funilSemData(r)) { var c = parseDateBR(r.created_at); if (c && c >= FUNIL_DATA_INICIO) return true; }
   return false;
 }
 // deduplica candidaturas por nome (mantém a 1ª ocorrência) — p/ etapas de teste do funil
@@ -5408,9 +5431,9 @@ function buildFunnelData() {
     if (!_funilEntNoPeriodo(r)) return false;                 // entrevista em 2026+
     if (f.unidade && f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
     if (f.departamento && f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
-    if (f.periodo && f.periodo!=='Todos' && dataToMY(r.data_entrevista)!==f.periodo) return false;
-    if ((f.dataIni||f.dataFim) && !_rowInRange(r, f.dataIni, f.dataFim)) return false;
-    if (_cfMes && dataToMY(r.data_entrevista)!==_cfMes) return false;
+    if (f.periodo && f.periodo!=='Todos' && _funilMY(r)!==f.periodo) return false;
+    if ((f.dataIni||f.dataFim) && !_funilInRange(r, f.dataIni, f.dataFim)) return false;
+    if (_cfMes && _funilMY(r)!==_cfMes) return false;
     if (_cfRecrutador && (r.responsavel||'').trim()!==_cfRecrutador) return false;
     return true;
   });
