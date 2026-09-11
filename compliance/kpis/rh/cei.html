@@ -974,6 +974,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     #view-dashboard .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
     #view-dashboard .chart-card .chart-title span { color: var(--t3); font-weight: 500; text-transform: none; letter-spacing: 0; }
 
+    /* RADAR */
+    #view-dashboard .radar-wrap { display: block; padding: 6px 0 4px; }
+    #view-dashboard #cl-radar-svg text { font-family: 'DM Mono', monospace; }
+
     /* BARRAS — padrão performance ("Avaliação por Tema") */
     #view-dashboard .bar-list { display: flex; flex-direction: column; gap: 9px; }
     #view-dashboard .bar-row { display: grid; grid-template-columns: 120px 1fr 40px; align-items: center; gap: 8px; }
@@ -1051,6 +1055,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
 
     <main id="dashboard">
+      <div class="chart-card full">
+        <div class="chart-title">Radar dos Temas <span>· média por tema (1–5)</span></div>
+        <div class="radar-wrap"><svg id="cl-radar-svg" viewBox="0 0 520 420" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;"></svg></div>
+      </div>
       <div class="chart-card full">
         <div class="chart-title">Temas <span>· média por tema (1–5)</span></div>
         <div class="bar-list" id="cl-temas"></div>
@@ -1495,6 +1503,74 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
   };
   var TEMA_ORDER=['Liderança & Comunicação','Reconhecimento','Desenvolvimento','Relacionamento & Equipe','Respeito & Bem-estar','Cultura & Valores','Estrutura & Recursos'];
 
+  function drawRadar(pontos){
+    var svg = document.getElementById('cl-radar-svg');
+    if (!svg) return;
+    var W = 520, H = 420;
+    var cx = W/2, cy = H/2 + 6;
+    var R = 150;
+    var MAX = 5;
+    var n = pontos.length;
+    if (n < 3) { svg.innerHTML = ''; return; }
+    function pt(i, r) {
+      var a = -Math.PI/2 + i * (2*Math.PI / n);
+      return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a), a: a };
+    }
+    var c = '';
+    // rings 1..5
+    for (var k = 1; k <= MAX; k++) {
+      var rr = R * (k / MAX);
+      var d = '';
+      for (var i = 0; i < n; i++) {
+        var p = pt(i, rr);
+        d += (i === 0 ? 'M ' : 'L ') + p.x.toFixed(1) + ' ' + p.y.toFixed(1) + ' ';
+      }
+      d += 'Z';
+      c += '<path d="' + d + '" fill="none" stroke="#E2E2E2" stroke-width="1"/>';
+      // scale label
+      c += '<text x="' + (cx + 4) + '" y="' + (cy - rr + 3).toFixed(1) + '" font-size="9" fill="#999">' + k + '</text>';
+    }
+    // axes + outer labels
+    for (var j = 0; j < n; j++) {
+      var po = pt(j, R);
+      c += '<line x1="' + cx + '" y1="' + cy + '" x2="' + po.x.toFixed(1) + '" y2="' + po.y.toFixed(1) + '" stroke="#E2E2E2" stroke-width="1"/>';
+      var pl = pt(j, R + 22);
+      var anchor = 'middle';
+      if (pl.x > cx + 4) anchor = 'start';
+      else if (pl.x < cx - 4) anchor = 'end';
+      var dy = pl.y < cy - 4 ? -2 : (pl.y > cy + 4 ? 10 : 4);
+      // wrap label if too long
+      var label = pontos[j].label;
+      var wrap = label.split(' & ');
+      if (wrap.length === 2) {
+        c += '<text x="' + pl.x.toFixed(1) + '" y="' + (pl.y + dy - 5).toFixed(1) + '" text-anchor="' + anchor + '" font-size="10" font-weight="600" fill="#35383F">' + escH(wrap[0]) + ' &amp;</text>';
+        c += '<text x="' + pl.x.toFixed(1) + '" y="' + (pl.y + dy + 6).toFixed(1) + '" text-anchor="' + anchor + '" font-size="10" font-weight="600" fill="#35383F">' + escH(wrap[1]) + '</text>';
+      } else {
+        c += '<text x="' + pl.x.toFixed(1) + '" y="' + (pl.y + dy).toFixed(1) + '" text-anchor="' + anchor + '" font-size="10" font-weight="600" fill="#35383F">' + escH(label) + '</text>';
+      }
+    }
+    // data polygon
+    var dd = '';
+    for (var i2 = 0; i2 < n; i2++) {
+      var v = Math.max(0, Math.min(MAX, pontos[i2].media || 0));
+      var pd = pt(i2, R * (v / MAX));
+      dd += (i2 === 0 ? 'M ' : 'L ') + pd.x.toFixed(1) + ' ' + pd.y.toFixed(1) + ' ';
+    }
+    dd += 'Z';
+    c += '<path d="' + dd + '" fill="#35383F" fill-opacity="0.14" stroke="#35383F" stroke-width="2" stroke-linejoin="round"/>';
+    // points + values
+    for (var i3 = 0; i3 < n; i3++) {
+      var v3 = Math.max(0, Math.min(MAX, pontos[i3].media || 0));
+      var pv = pt(i3, R * (v3 / MAX));
+      c += '<circle cx="' + pv.x.toFixed(1) + '" cy="' + pv.y.toFixed(1) + '" r="3.5" fill="#CFFF00" stroke="#35383F" stroke-width="1.5"/>';
+      // valor deslocado radialmente para fora do ponto
+      var pvl = pt(i3, R * (v3 / MAX) + 14);
+      c += '<text x="' + pvl.x.toFixed(1) + '" y="' + (pvl.y + 3).toFixed(1) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#35383F" stroke="#FFF" stroke-width="2.5" paint-order="stroke">' + v3.toFixed(2).replace('.', ',') + '</text>';
+    }
+    svg.innerHTML = c;
+  }
+  function escH(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
   function bar(label, media){
     var has = media!=null;
     var pct = has ? Math.max(2, Math.round(media/5*100)) : 0;
@@ -1537,8 +1613,10 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
       acc[t]=acc[t]||{s:0,n:0}; acc[t].s+=(+r.media)*(+r.n); acc[t].n+=(+r.n);
     });
     var ordem = TEMA_ORDER.slice(); Object.keys(acc).forEach(function(k){ if(ordem.indexOf(k)<0) ordem.push(k); });
-    el('cl-temas').innerHTML = ordem.filter(function(t){return acc[t];})
-      .map(function(t){ return bar(t, acc[t].s/acc[t].n); }).join('');
+    var temas = ordem.filter(function(t){return acc[t];})
+      .map(function(t){ return { label: t, media: acc[t].s/acc[t].n }; });
+    el('cl-temas').innerHTML = temas.map(function(t){ return bar(t.label, t.media); }).join('');
+    drawRadar(temas);
 
     el('cl-perguntas').innerHTML = rows.filter(function(r){ return !isRec(r); })
       .sort(function(a,b){ return (b.media==null?-1:+b.media) - (a.media==null?-1:+a.media); })
