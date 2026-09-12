@@ -960,6 +960,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <div id="view-dashboard" class="dash-view">
   <style>
+    /* FILTROS */
+    #view-dashboard .filters-wrap { background: var(--white); border-bottom: 1px solid var(--border); padding: 14px 16px 10px; display: grid; grid-template-columns: 1fr; gap: 10px; }
+    #view-dashboard .filter-group { display: flex; flex-direction: column; gap: 4px; }
+    #view-dashboard .filter-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: .8px; text-transform: uppercase; color: var(--t2); }
+    #view-dashboard .filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--r); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--t1); cursor: pointer; width: 100%; }
+    #view-dashboard .filter-select:focus { outline: none; border-color: var(--carbon); }
+    @media (min-width: 640px) {
+      #view-dashboard .filters-wrap { grid-template-columns: 1fr 1fr; padding: 14px 20px 10px; }
+    }
+
     /* KPIS STRIP (padrão feriados/recrutamento) */
     #view-dashboard .kpis-wrap { background: var(--white); border-bottom: 1px solid var(--border); padding: 14px 16px; display: grid; grid-template-columns: 1fr; gap: 10px; }
     #view-dashboard .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
@@ -1049,14 +1059,25 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 
   <div id="cl-content" hidden>
+    <div class="filters-wrap" id="cl-filters">
+      <div class="filter-group">
+        <label class="filter-label" for="cl-f-uni">Unidade</label>
+        <select class="filter-select" id="cl-f-uni"><option value="">Todas as unidades</option></select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" for="cl-f-dep">Departamento</label>
+        <select class="filter-select" id="cl-f-dep"><option value="">Todos os departamentos</option></select>
+      </div>
+    </div>
+
     <div class="kpis-wrap">
       <div class="kpi-card">
         <span class="kpi-label">Média geral</span>
         <span class="kpi-number" id="cl-media">—</span>
       </div>
       <div class="kpi-card">
-        <span class="kpi-label">Índice de Recomendação</span>
-        <span class="kpi-number" id="cl-irec">—</span>
+        <span class="kpi-label">Feedback</span>
+        <span class="kpi-number" id="cl-fb-count">—</span>
       </div>
       <div class="kpi-card">
         <span class="kpi-label">Respostas</span>
@@ -1743,20 +1764,65 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
   }
   function el(id){ return document.getElementById(id); }
 
+  var _COMENTS = [];
+  function _fbGetDept(c){ return (c && (c.departamento||c.depto||c.dept)) || ''; }
+  function _fbGetUni(c){ return (c && c.unidade) || ''; }
+  function _fbFiltered(){
+    var u = (el('cl-f-uni')||{}).value || '';
+    var d = (el('cl-f-dep')||{}).value || '';
+    return _COMENTS.filter(function(c){
+      if (u && _fbGetUni(c) !== u) return false;
+      if (d && _fbGetDept(c) !== d) return false;
+      return true;
+    });
+  }
+  function _fbRow(c){
+    if (typeof c === 'string') { c = { texto: c }; }
+    c = c || {};
+    var txt  = c.texto || c.comentario || c.mensagem || '';
+    if (!txt) return '';
+    var data = _fbDate(c.dia || c.data || c.criado_em || c.created_at);
+    var uni  = _fbGetUni(c) || '—';
+    var user = c.autor || c.usuario || c.user || c.colaborador || c.matricula || '—';
+    return '<tr>'+
+      '<td class="fb-data">'+esc(data)+'</td>'+
+      '<td class="fb-uni">'+esc(uni)+'</td>'+
+      '<td class="fb-user">'+esc(user)+'</td>'+
+      '<td class="fb-txt">'+esc(txt)+'</td>'+
+    '</tr>';
+  }
+  function _fbApply(){
+    var list = _fbFiltered();
+    el('cl-fb-count').textContent = list.length;
+    if (list.length){
+      el('cl-coments').innerHTML = list.map(_fbRow).join('');
+    } else {
+      el('cl-coments').innerHTML = '<tr><td colspan="4" class="perg-nota empty" style="text-align:center;font-family:\'DM Mono\',monospace;font-size:11px;letter-spacing:.5px;text-transform:uppercase;">Sem comentários para este filtro.</td></tr>';
+    }
+  }
+  function _populateFilter(id, values, allLabel){
+    var sel = el(id); if (!sel) return;
+    var cur = sel.value;
+    var opts = ['<option value="">'+allLabel+'</option>'];
+    values.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); }).forEach(function(v){
+      opts.push('<option value="'+esc(v)+'">'+esc(v)+'</option>');
+    });
+    sel.innerHTML = opts.join('');
+    if (cur && values.indexOf(cur) >= 0) sel.value = cur;
+  }
+
   function render(rows, liderRows, coments){
     var withData = rows.filter(function(r){ return r.n>0 && r.media!=null; });
     el('cl-loading').hidden=true;
     if (!withData.length){ el('cl-content').hidden=true; el('cl-empty').hidden=false; return; }
 
-    var sw=0, swn=0, maxn=0, irec=null;
+    var sw=0, swn=0, maxn=0;
     rows.forEach(function(r){
       if (r.n>0 && r.media!=null && !isRec(r)){ sw+=(+r.media)*(+r.n); swn+=(+r.n); }
       if ((+r.n)>maxn) maxn=+r.n;
-      if (isRec(r) && r.media!=null) irec=+r.media;
     });
     var mg = swn ? sw/swn : null;
     el('cl-media').textContent = mg!=null ? mg.toFixed(2) : '—';
-    el('cl-irec').textContent = irec!=null ? irec.toFixed(2) : '—';
     el('cl-n').textContent = maxn || '—';
 
     function _roll(rws){
@@ -1779,25 +1845,18 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
       .sort(function(a,b){ return (b.media==null?-1:+b.media) - (a.media==null?-1:+a.media); })
       .map(function(r){ return pergRow(r.texto, (r.n>0&&r.media!=null)? +r.media : null); }).join('');
 
-    if (coments && coments.length){
-      el('cl-coments').innerHTML = coments.map(function(c){
-        if (typeof c === 'string') { c = { texto: c }; }
-        c = c || {};
-        var txt  = c.texto || c.comentario || c.mensagem || '';
-        if (!txt) return '';
-        var data = _fbDate(c.dia || c.data || c.criado_em || c.created_at);
-        var uni  = c.unidade || '—';
-        var user = c.autor || c.usuario || c.user || c.colaborador || c.matricula || '—';
-        return '<tr>'+
-          '<td class="fb-data">'+esc(data)+'</td>'+
-          '<td class="fb-uni">'+esc(uni)+'</td>'+
-          '<td class="fb-user">'+esc(user)+'</td>'+
-          '<td class="fb-txt">'+esc(txt)+'</td>'+
-        '</tr>';
-      }).join('');
-    } else {
-      el('cl-coments').innerHTML = '<tr><td colspan="4" class="perg-nota empty" style="text-align:center;font-family:\'DM Mono\',monospace;font-size:11px;letter-spacing:.5px;text-transform:uppercase;">Sem comentários ainda.</td></tr>';
-    }
+    _COMENTS = (coments || []).map(function(c){ return (typeof c==='string') ? { texto: c } : (c||{}); });
+    var setU = {}, setD = {};
+    _COMENTS.forEach(function(c){
+      var u = _fbGetUni(c); if (u) setU[u]=1;
+      var d = _fbGetDept(c); if (d) setD[d]=1;
+    });
+    _populateFilter('cl-f-uni', Object.keys(setU), 'Todas as unidades');
+    _populateFilter('cl-f-dep', Object.keys(setD), 'Todos os departamentos');
+    var uSel = el('cl-f-uni'), dSel = el('cl-f-dep');
+    if (uSel && !uSel._wired) { uSel._wired = true; uSel.addEventListener('change', _fbApply); }
+    if (dSel && !dSel._wired) { dSel._wired = true; dSel.addEventListener('change', _fbApply); }
+    _fbApply();
 
     el('cl-empty').hidden=true; el('cl-content').hidden=false;
   }
