@@ -1765,6 +1765,7 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
   function el(id){ return document.getElementById(id); }
 
   var _COMENTS = [];
+  var _supa = null;
   function _fbGetDept(c){ return (c && (c.departamento||c.depto||c.dept)) || ''; }
   function _fbGetUni(c){ return (c && c.unidade) || ''; }
   function _fbFiltered(){
@@ -1811,13 +1812,12 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
     if (cur && values.indexOf(cur) >= 0) sel.value = cur;
   }
 
-  function render(rows, liderRows, coments){
-    var withData = rows.filter(function(r){ return r.n>0 && r.media!=null; });
-    el('cl-loading').hidden=true;
-    if (!withData.length){ el('cl-content').hidden=true; el('cl-empty').hidden=false; return; }
-
+  // Atualiza KPIs (média/respostas), radar (Geral+Liderança) e a tabela de
+  // perguntas a partir de um conjunto de respostas já agregado (pode vir
+  // filtrado por unidade/departamento).
+  function _renderRespostas(rows, liderRows){
     var sw=0, swn=0, maxn=0;
-    rows.forEach(function(r){
+    (rows||[]).forEach(function(r){
       if (r.n>0 && r.media!=null && !isRec(r)){ sw+=(+r.media)*(+r.n); swn+=(+r.n); }
       if ((+r.n)>maxn) maxn=+r.n;
     });
@@ -1841,9 +1841,30 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
       .map(function(t){ return { label: t, media: acc[t].s/acc[t].n, mediaLider: (accL[t] ? accL[t].s/accL[t].n : null) }; });
     drawRadar(temas);
 
-    el('cl-perguntas').innerHTML = rows.filter(function(r){ return !isRec(r); })
+    el('cl-perguntas').innerHTML = (rows||[]).filter(function(r){ return !isRec(r); })
       .sort(function(a,b){ return (b.media==null?-1:+b.media) - (a.media==null?-1:+a.media); })
       .map(function(r){ return pergRow(r.texto, (r.n>0&&r.media!=null)? +r.media : null); }).join('');
+  }
+
+  function _filtroVals(){
+    return { u: ((el('cl-f-uni')||{}).value || null), d: ((el('cl-f-dep')||{}).value || null) };
+  }
+  // Troca de filtro: comentários (client-side) + radar/KPIs/perguntas (re-consulta as RPCs com unidade/departamento)
+  function _onFiltroChange(){
+    _fbApply();
+    if (!_supa) return;
+    var f = _filtroVals();
+    var pLider = _supa.schema('tata_plus').rpc('av_clima_resumo_grupo',{p_grupo:'lider',p_desde:null,p_min_n:0,p_unidade:f.u,p_departamento:f.d}).then(_arr).catch(function(){ return []; });
+    _supa.schema('tata_plus').rpc('av_clima_resumo',{p_desde:null,p_min_n:0,p_unidade:f.u,p_departamento:f.d}).then(_arr).catch(function(){ return []; })
+      .then(function(rows){ pLider.then(function(lider){ _renderRespostas(rows, lider); }); });
+  }
+
+  function render(rows, liderRows, coments){
+    var withData = rows.filter(function(r){ return r.n>0 && r.media!=null; });
+    el('cl-loading').hidden=true;
+    if (!withData.length){ el('cl-content').hidden=true; el('cl-empty').hidden=false; return; }
+
+    _renderRespostas(rows, liderRows);
 
     _COMENTS = (coments || []).map(function(c){ return (typeof c==='string') ? { texto: c } : (c||{}); });
     var setU = {}, setD = {};
@@ -1854,8 +1875,8 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
     _populateFilter('cl-f-uni', Object.keys(setU), 'Todas as unidades');
     _populateFilter('cl-f-dep', Object.keys(setD), 'Todos os departamentos');
     var uSel = el('cl-f-uni'), dSel = el('cl-f-dep');
-    if (uSel && !uSel._wired) { uSel._wired = true; uSel.addEventListener('change', _fbApply); }
-    if (dSel && !dSel._wired) { dSel._wired = true; dSel.addEventListener('change', _fbApply); }
+    if (uSel && !uSel._wired) { uSel._wired = true; uSel.addEventListener('change', _onFiltroChange); }
+    if (dSel && !dSel._wired) { dSel._wired = true; dSel.addEventListener('change', _onFiltroChange); }
     _fbApply();
 
     el('cl-empty').hidden=true; el('cl-content').hidden=false;
@@ -1866,6 +1887,7 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
   window.climaDashLoad=function(){
     if (loaded) return; loaded=true;
     function go(supa){
+      _supa = supa; // guarda p/ re-consultar ao trocar o filtro de unidade/departamento
       // .then(_arr) ANTES do .catch: o builder do supabase-js é thenable mas não
       // tem .catch próprio — só vira Promise real depois do .then.
       var rLider = supa.schema('tata_plus').rpc('av_clima_resumo_grupo',{p_grupo:'lider',p_desde:null,p_min_n:0}).then(_arr).catch(function(){ return []; });
