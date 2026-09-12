@@ -1617,32 +1617,11 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
       .replace(/\s+/g,' ').trim();
   }
 
-  function drawWordCloud(rows, coments){
+  function drawWordCloud(items){
     var svg = document.getElementById('cl-wordcloud');
     if (!svg) return;
     var W = 800, H = 380;
-    // Coleta corpus: perguntas + dimensões + comentários
-    var corpus = [];
-    (rows||[]).forEach(function(r){
-      if (r.texto) corpus.push(r.texto);
-      if (r.dimensao) corpus.push(r.dimensao);
-    });
-    (coments||[]).forEach(function(c){
-      var t = (typeof c==='string') ? c : (c && (c.texto||c.comentario||c.mensagem||''));
-      if (t) corpus.push(t);
-    });
-    // Contagem
-    var freq = {};
-    corpus.forEach(function(txt){
-      _wcNorm(txt).split(' ').forEach(function(w){
-        if (!w || w.length < 3) return;
-        if (_WC_STOP.indexOf(w) >= 0) return;
-        freq[w] = (freq[w]||0) + 1;
-      });
-    });
-    var items = Object.keys(freq).map(function(w){ return { w: w, n: freq[w] }; });
-    items.sort(function(a,b){ return b.n - a.n; });
-    items = items.slice(0, 45);
+    items = (items||[]).slice().sort(function(a,b){ return b.n - a.n; }).slice(0, 60);
     if (!items.length) { svg.innerHTML = '<text x="'+(W/2)+'" y="'+(H/2)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="12" fill="#999">Sem dados suficientes</text>'; return; }
 
     var maxN = items[0].n;
@@ -1740,7 +1719,6 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
     var temas = ordem.filter(function(t){return acc[t];})
       .map(function(t){ return { label: t, media: acc[t].s/acc[t].n, mediaLider: (accL[t] ? accL[t].s/accL[t].n : null) }; });
     drawRadar(temas);
-    drawWordCloud(rows, coments);
 
     el('cl-perguntas').innerHTML = rows.filter(function(r){ return !isRec(r); })
       .sort(function(a,b){ return (b.media==null?-1:+b.media) - (a.media==null?-1:+a.media); })
@@ -1770,6 +1748,13 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
       // tem .catch próprio — só vira Promise real depois do .then.
       var rLider = supa.schema('tata_plus').rpc('av_clima_resumo_grupo',{p_grupo:'lider',p_desde:null,p_min_n:0}).then(_arr).catch(function(){ return []; });
       var rCom   = supa.schema('tata_plus').rpc('av_clima_comentarios',{p_desde:null,p_limite:50}).then(_arr).catch(function(){ return []; });
+      // Nuvem de Palavras: mesma fonte da página de Clima/Brainstorm
+      supa.schema('tata_plus').rpc('brainstorm_palavras', { p_sessao: 'Brainstorm Geral' })
+        .then(_arr)
+        .then(function(arr){
+          drawWordCloud(arr.map(function(x){ return { w: (x.word || x.palavra || '').trim(), n: +x.count || 1 }; }).filter(function(x){ return x.w; }));
+        })
+        .catch(function(){ drawWordCloud([]); });
       supa.schema('tata_plus').rpc('av_clima_resumo',{p_desde:null,p_min_n:0}).then(function(res){
         var rows = _arr(res);
         Promise.all([rLider, rCom]).then(function(x){ render(rows, x[0], x[1]); });
