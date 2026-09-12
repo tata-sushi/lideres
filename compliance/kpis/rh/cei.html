@@ -1004,6 +1004,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     #view-dashboard .perg-role { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.06em; }
     #view-dashboard .perg-nota { font-family: 'DM Mono', monospace; font-weight: 700; color: var(--t1); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     #view-dashboard .perg-nota.empty { color: var(--t3); font-weight: 500; }
+    #view-dashboard .fb-data { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--t3); white-space: nowrap; }
+    #view-dashboard .fb-uni { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--t2); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+    #view-dashboard .fb-user { font-size: 12px; color: var(--t2); white-space: nowrap; }
+    #view-dashboard .fb-txt { font-size: 13px; color: var(--t1); line-height: 1.4; }
 
     /* COMENTÁRIOS */
     #view-dashboard .cl-coments { display: flex; flex-direction: column; gap: 8px; }
@@ -1065,13 +1069,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="wordcloud-wrap"><svg id="cl-wordcloud" viewBox="0 0 800 380" preserveAspectRatio="xMidYMid meet" style="width:100%;max-width:820px;height:auto;max-height:60vh;display:block;margin:0 auto;"></svg></div>
       </div>
       <div class="chart-card full">
-        <div class="chart-title">Perguntas</div>
+        <div class="chart-title">Analítico</div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>Pergunta</th>
-                <th style="text-align:right;width:70px">Nota</th>
+                <th style="text-align:right;width:80px">Média</th>
               </tr>
             </thead>
             <tbody id="cl-perguntas"></tbody>
@@ -1079,11 +1083,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         </div>
       </div>
       <div class="chart-card full">
-        <div class="chart-title">Comentários <span>· o que ajudaria a melhorar</span></div>
+        <div class="chart-title">Feedback</div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
+                <th style="width:110px">Data</th>
+                <th style="width:160px">Unidade</th>
+                <th style="width:160px">Usuário</th>
                 <th>Comentário</th>
               </tr>
             </thead>
@@ -1589,11 +1596,20 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
         c += '<circle cx="' + pvl2.x.toFixed(1) + '" cy="' + pvl2.y.toFixed(1) + '" r="3.2" fill="' + COR_LIDER + '"/>';
       }
     }
-    // 5) rótulos de valor da série GERAL (com halo branco, legíveis por cima de tudo)
+    // 5) rótulos de valor da série GERAL (para fora do ponto)
     for (var i5 = 0; i5 < n; i5++) {
       var v5 = Math.max(0, Math.min(MAX, pontos[i5].media || 0));
       var pvl = pt(i5, R * (v5 / MAX) + 20);
       c += '<text x="' + pvl.x.toFixed(1) + '" y="' + (pvl.y + 3).toFixed(1) + '" text-anchor="middle" font-size="10" font-weight="700" fill="' + COR_GERAL + '">' + v5.toFixed(2).replace('.', ',') + '</text>';
+    }
+    // 5b) rótulos de valor da série LIDERANÇA (para dentro do ponto)
+    if (hasLider) {
+      for (var i5b = 0; i5b < n; i5b++) {
+        if (liderVals[i5b] == null) continue;
+        var v5b = liderVals[i5b];
+        var pvli = pt(i5b, Math.max(12, R * (v5b / MAX) - 18));
+        c += '<text x="' + pvli.x.toFixed(1) + '" y="' + (pvli.y + 3).toFixed(1) + '" text-anchor="middle" font-size="10" font-weight="700" fill="' + COR_LIDER + '">' + v5b.toFixed(2).replace('.', ',') + '</text>';
+      }
     }
     // 6) legenda (só quando há série de liderança) — na faixa inferior (y 420–452)
     if (hasLider) {
@@ -1627,7 +1643,7 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
 
     var maxN = items[0].n;
     var minN = items[items.length-1].n;
-    var MIN_SZ = 12, MAX_SZ = 46;
+    var MIN_SZ = 20, MAX_SZ = 72;
     var placed = [];
     // paleta discreta: alterna carbon, mid, citric-dark
     var COLORS = ['#35383F', '#555555', '#7A8600', '#35383F', '#8B8B8B'];
@@ -1679,13 +1695,19 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
       '<div class="bar-val'+(has?'':' empty')+'">'+(has?media.toFixed(2).replace('.',','):'—')+'</div>'+
     '</div>';
   }
-  function pergRow(texto, sub, media){
+  function pergRow(texto, media){
     var has = media!=null;
-    var subHtml = sub?'<div class="perg-role">'+esc(sub)+'</div>':'';
     return '<tr>'+
-      '<td><div class="perg-cell"><div class="perg-name">'+esc(texto)+'</div>'+subHtml+'</div></td>'+
+      '<td><div class="perg-cell"><div class="perg-name">'+esc(texto)+'</div></div></td>'+
       '<td class="perg-nota'+(has?'':' empty')+'">'+(has?media.toFixed(2).replace('.',','):'—')+'</td>'+
     '</tr>';
+  }
+  function _fbDate(d){
+    if (!d) return '—';
+    var s = String(d);
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return m[3]+'/'+m[2]+'/'+m[1];
+    return s;
   }
   function el(id){ return document.getElementById(id); }
 
@@ -1723,18 +1745,26 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
 
     el('cl-perguntas').innerHTML = rows.filter(function(r){ return !isRec(r); })
       .sort(function(a,b){ return (b.media==null?-1:+b.media) - (a.media==null?-1:+a.media); })
-      .map(function(r){ return pergRow(r.texto, r.dimensao, (r.n>0&&r.media!=null)? +r.media : null); }).join('');
+      .map(function(r){ return pergRow(r.texto, (r.n>0&&r.media!=null)? +r.media : null); }).join('');
 
     if (coments && coments.length){
       el('cl-coments').innerHTML = coments.map(function(c){
-        var txt = (typeof c==='string') ? c : (c.texto||c.comentario||c.mensagem||'');
-        var meta = c && (c.unidade||c.dia) ? esc([c.unidade,c.dia].filter(Boolean).join(' · ')) : '';
+        if (typeof c === 'string') { c = { texto: c }; }
+        c = c || {};
+        var txt  = c.texto || c.comentario || c.mensagem || '';
         if (!txt) return '';
-        var subHtml = meta ? '<div class="perg-role">'+meta+'</div>' : '';
-        return '<tr><td><div class="perg-cell"><div class="perg-name">'+esc(txt)+'</div>'+subHtml+'</div></td></tr>';
+        var data = _fbDate(c.dia || c.data || c.criado_em || c.created_at);
+        var uni  = c.unidade || '—';
+        var user = c.autor || c.usuario || c.user || c.colaborador || c.matricula || '—';
+        return '<tr>'+
+          '<td class="fb-data">'+esc(data)+'</td>'+
+          '<td class="fb-uni">'+esc(uni)+'</td>'+
+          '<td class="fb-user">'+esc(user)+'</td>'+
+          '<td class="fb-txt">'+esc(txt)+'</td>'+
+        '</tr>';
       }).join('');
     } else {
-      el('cl-coments').innerHTML = '<tr><td class="perg-nota empty" style="text-align:left;font-family:\'DM Mono\',monospace;font-size:11px;letter-spacing:.5px;text-transform:uppercase;">Sem comentários ainda.</td></tr>';
+      el('cl-coments').innerHTML = '<tr><td colspan="4" class="perg-nota empty" style="text-align:center;font-family:\'DM Mono\',monospace;font-size:11px;letter-spacing:.5px;text-transform:uppercase;">Sem comentários ainda.</td></tr>';
     }
 
     el('cl-empty').hidden=true; el('cl-content').hidden=false;
