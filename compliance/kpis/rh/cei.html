@@ -1060,8 +1060,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="radar-wrap"><svg id="cl-radar-svg" viewBox="0 0 520 452" preserveAspectRatio="xMidYMid meet" style="width:100%;max-width:440px;height:auto;max-height:64vh;display:block;margin:0 auto;"></svg></div>
       </div>
       <div class="chart-card full">
-        <div class="chart-title">Temas <span>· média por tema (1–5)</span></div>
-        <div class="bar-list" id="cl-temas"></div>
+        <div class="chart-title">Nuvem de Palavras <span>· palavras mais frequentes na pesquisa</span></div>
+        <div class="wordcloud-wrap"><svg id="cl-wordcloud" viewBox="0 0 800 380" preserveAspectRatio="xMidYMid meet" style="width:100%;max-width:820px;height:auto;max-height:60vh;display:block;margin:0 auto;"></svg></div>
       </div>
       <div class="chart-card full">
         <div class="chart-title">Perguntas <span>· detalhe por item</span></div>
@@ -1608,6 +1608,88 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
   }
   function escH(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 
+  var _WC_STOP = ('a as ao aos os o um uma uns umas de do da dos das no na nos nas em e ou mas se sem sob sobre pelo pela pelos pelas para por com sua seu suas seus meu minha nosso nossa nossos nossas eu voce vocês nos você vc que quem qual quais quando onde como porque porquê por que mais menos muito pouco tudo todo toda todos todas tao tão isso isto aquele aquela aqueles aquelas este esta estes estas esse essa esses essas ele ela eles elas ha há tem têm tens tenho ter ser era foi sao são está estão estamos estar estou fica ficar sido sendo é sim nao não também tambem já ja ainda so só la lá aqui ai só p pra pro ate até quanto quantos entao então nesse nessa nesses nessas neste nesta nestes nestas quer quais deve devo devem qtd qtde qq').split(/\s+/);
+
+  function _wcNorm(s){
+    return String(s||'').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9\s]/g,' ')
+      .replace(/\s+/g,' ').trim();
+  }
+
+  function drawWordCloud(rows, coments){
+    var svg = document.getElementById('cl-wordcloud');
+    if (!svg) return;
+    var W = 800, H = 380;
+    // Coleta corpus: perguntas + dimensões + comentários
+    var corpus = [];
+    (rows||[]).forEach(function(r){
+      if (r.texto) corpus.push(r.texto);
+      if (r.dimensao) corpus.push(r.dimensao);
+    });
+    (coments||[]).forEach(function(c){
+      var t = (typeof c==='string') ? c : (c && (c.texto||c.comentario||c.mensagem||''));
+      if (t) corpus.push(t);
+    });
+    // Contagem
+    var freq = {};
+    corpus.forEach(function(txt){
+      _wcNorm(txt).split(' ').forEach(function(w){
+        if (!w || w.length < 3) return;
+        if (_WC_STOP.indexOf(w) >= 0) return;
+        freq[w] = (freq[w]||0) + 1;
+      });
+    });
+    var items = Object.keys(freq).map(function(w){ return { w: w, n: freq[w] }; });
+    items.sort(function(a,b){ return b.n - a.n; });
+    items = items.slice(0, 45);
+    if (!items.length) { svg.innerHTML = '<text x="'+(W/2)+'" y="'+(H/2)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="12" fill="#999">Sem dados suficientes</text>'; return; }
+
+    var maxN = items[0].n;
+    var minN = items[items.length-1].n;
+    var MIN_SZ = 12, MAX_SZ = 46;
+    var placed = [];
+    // paleta discreta: alterna carbon, mid, citric-dark
+    var COLORS = ['#35383F', '#555555', '#7A8600', '#35383F', '#8B8B8B'];
+
+    function overlaps(x, y, w, h){
+      for (var i = 0; i < placed.length; i++){
+        var p = placed[i];
+        if (x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y) return true;
+      }
+      return false;
+    }
+
+    var cx = W/2, cy = H/2;
+    var out = '';
+    items.forEach(function(it, idx){
+      var t = maxN === minN ? 1 : (it.n - minN) / (maxN - minN);
+      var sz = MIN_SZ + Math.pow(t, 0.75) * (MAX_SZ - MIN_SZ);
+      var word = it.w;
+      // largura estimada: ~0.55em por char + padding
+      var w = word.length * sz * 0.58 + 8;
+      var h = sz * 1.05;
+      // Espiral de Arquimedes
+      var placedOk = false, x=cx, y=cy;
+      var step = 0.35, r = 0, angle = idx * 0.7;
+      for (var tries = 0; tries < 900 && !placedOk; tries++){
+        r = 2 + tries * 0.9;
+        angle += step;
+        x = cx + r * Math.cos(angle) - w/2;
+        y = cy + r * Math.sin(angle) - h/2;
+        if (x < 4 || x + w > W - 4 || y < 4 || y + h > H - 4) continue;
+        if (!overlaps(x, y, w, h)) placedOk = true;
+      }
+      if (!placedOk) return;
+      placed.push({x:x, y:y, w:w, h:h});
+      var cor = COLORS[idx % COLORS.length];
+      var weight = sz > 30 ? 700 : (sz > 20 ? 600 : 500);
+      var tx = x + w/2, ty = y + h/2 + sz*0.32;
+      out += '<text x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="middle" font-family="DM Sans,sans-serif" font-size="'+sz.toFixed(1)+'" font-weight="'+weight+'" fill="'+cor+'">'+escH(word)+'</text>';
+    });
+    svg.innerHTML = out;
+  }
+
   function bar(label, media){
     var has = media!=null;
     var pct = has ? Math.max(2, Math.round(media/5*100)) : 0;
@@ -1657,8 +1739,8 @@ function toggleFta(id) { document.getElementById(id).classList.toggle('open'); }
     var ordem = TEMA_ORDER.slice(); Object.keys(acc).forEach(function(k){ if(ordem.indexOf(k)<0) ordem.push(k); });
     var temas = ordem.filter(function(t){return acc[t];})
       .map(function(t){ return { label: t, media: acc[t].s/acc[t].n, mediaLider: (accL[t] ? accL[t].s/accL[t].n : null) }; });
-    el('cl-temas').innerHTML = temas.map(function(t){ return bar(t.label, t.media); }).join('');
     drawRadar(temas);
+    drawWordCloud(rows, coments);
 
     el('cl-perguntas').innerHTML = rows.filter(function(r){ return !isRec(r); })
       .sort(function(a,b){ return (b.media==null?-1:+b.media) - (a.media==null?-1:+a.media); })
