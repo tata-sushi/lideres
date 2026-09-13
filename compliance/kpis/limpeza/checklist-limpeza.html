@@ -323,6 +323,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .lk-line-svg { min-width: 720px; height: 220px; display: block; }
 .lk-line-svg text { font-family: 'DM Mono', monospace; }
 
+.lk-heat-wrap { overflow-x: auto; }
+.lk-heat { display: grid; gap: 3px; min-width: max-content; }
+.lk-heat-hh { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); text-align: center; padding-bottom: 2px; }
+.lk-heat-day { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--mid); display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; white-space: nowrap; }
+.lk-heat-cell { min-width: 30px; height: 26px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lk-heat-legend { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 12px; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); }
+.lk-heat-legend i { width: 18px; height: 12px; border-radius: 3px; display: inline-block; }
+
 .lk-table-wrap { overflow-x: auto; }
 .lk-table { width: 100%; border-collapse: collapse; }
 .lk-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 6px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); white-space: nowrap; }
@@ -873,6 +881,11 @@ function renderKPIsPage() {
 
 function _lkDashCardsHtml(){
   return '<div class="lk-card full"><div class="lk-card-title">Checks por dia</div><div class="lk-line-wrap"><svg id="lk-svg-line" class="lk-line-svg"></svg></div></div>'+
+    '<div class="lk-card full"><div class="lk-card-title">Mapa de Calor <span>· volume por dia e hora</span></div>'+
+      '<div class="lk-heat-wrap"><div class="lk-heat" id="lk-heat"></div></div>'+
+      '<div class="lk-heat-legend"><span>menos</span>'+
+        '<i style="background:var(--bg)"></i><i style="background:rgba(46,125,50,.30)"></i><i style="background:rgba(46,125,50,.55)"></i><i style="background:rgba(46,125,50,.80)"></i><i style="background:rgba(46,125,50,1)"></i>'+
+        '<span>mais</span></div></div>'+
     '<div class="lk-card"><div class="lk-card-title">Checks por Unidade</div><div class="lk-bar-list" id="lk-bars-uni"></div></div>'+
     '<div class="lk-card"><div class="lk-card-title">Checks por Banheiro</div><div class="lk-bar-list" id="lk-bars-ban"></div></div>'+
     '<div class="lk-card"><div class="lk-card-title">Itens Reprovados <span>· % de checks com pendência</span></div><div class="lk-bar-list" id="lk-bars-itens"></div></div>'+
@@ -965,6 +978,7 @@ function _lkRender(){
   var eP = document.getElementById('lk-k-pct'); if (eP) eP.textContent = okCnt ? Math.round((okSum/okCnt)*100)+'%' : '—';
 
   _lkRenderLine(rows);
+  _lkRenderHeat(rows);
   _lkRenderBars('lk-bars-uni', _lkAgg(rows, 'unidade'));
   _lkRenderBars('lk-bars-ban', _lkAgg(rows, 'banheiro'));
   _lkRenderItens(rows);
@@ -1049,6 +1063,41 @@ function _lkRenderLast(rows){
       '<td class="lk-td-ok">'+badge+'</td>'+
     '</tr>';
   }).join('');
+}
+
+function _lkRenderHeat(rows){
+  var el = document.getElementById('lk-heat'); if (!el) return;
+  var days = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  var counts = {}, max = 0, present = {};
+  rows.forEach(function(r){
+    var dt = new Date(r.quando); if (isNaN(dt.getTime())) return;
+    var d = dt.getDay(), h = dt.getHours();
+    var k = d+'-'+h;
+    counts[k] = (counts[k]||0)+1;
+    if (counts[k] > max) max = counts[k];
+    present[h] = 1;
+  });
+  var hrs = Object.keys(present).map(Number).sort(function(a,b){ return a-b; });
+  if (!hrs.length){ el.style.gridTemplateColumns=''; el.innerHTML = '<div class="lk-state">Sem dados</div>'; return; }
+  var hmin = hrs[0], hmax = hrs[hrs.length-1];
+  var cols = []; for (var h = hmin; h <= hmax; h++) cols.push(h);
+  el.style.gridTemplateColumns = '48px repeat('+cols.length+', minmax(30px,1fr))';
+
+  var html = '<div></div>'; // canto
+  cols.forEach(function(h){ html += '<div class="lk-heat-hh">'+String(h).padStart(2,'0')+'h</div>'; });
+  for (var d = 0; d < 7; d++){
+    html += '<div class="lk-heat-day">'+days[d]+'</div>';
+    cols.forEach(function(h){
+      var c = counts[d+'-'+h] || 0;
+      var tip = days[d]+' '+String(h).padStart(2,'0')+'h · '+c+(c===1?' check':' checks');
+      if (!c){ html += '<div class="lk-heat-cell" style="background:var(--bg)" title="'+tip+'"></div>'; return; }
+      var a = 0.15 + 0.85*(c/max);
+      var bg = 'rgba(46,125,50,'+a.toFixed(2)+')';
+      var txt = a > 0.5 ? '#fff' : '#1A5C2A';
+      html += '<div class="lk-heat-cell" style="background:'+bg+';color:'+txt+'" title="'+tip+'">'+c+'</div>';
+    });
+  }
+  el.innerHTML = html;
 }
 
 function _lkOpenCheck(i){
