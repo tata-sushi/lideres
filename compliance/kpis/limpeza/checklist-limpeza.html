@@ -267,8 +267,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .lk-chk-sec-title { font-family:'DM Mono', monospace; font-size:9px; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); margin:16px 0 8px; }
 .lk-chk-obs { background:var(--bg); border-radius:10px; padding:12px 14px; font-size:13px; color:var(--carbon); line-height:1.5; white-space:pre-wrap; }
 .lk-chk-fotos { display:flex; flex-wrap:wrap; gap:10px; margin-top:8px; }
-.lk-chk-fotos a { display:block; width:120px; height:120px; border-radius:10px; overflow:hidden; border:1px solid var(--border); }
+.lk-chk-fotos a { display:flex; align-items:center; justify-content:center; width:120px; height:120px; border-radius:10px; overflow:hidden; border:1px solid var(--border); background:var(--bg); }
 .lk-chk-fotos img { width:100%; height:100%; object-fit:cover; display:block; }
+.lk-foto-load { font-family:'DM Mono', monospace; font-size:9px; color:var(--muted); letter-spacing:.4px; }
 .lk-chk-fotos .cap { font-family:'DM Mono', monospace; font-size:9px; color:var(--muted); text-align:center; margin-top:4px; letter-spacing:.4px; }
 #lk-tb-last tr.clickable { cursor:pointer; }
 #lk-tb-last tr.clickable:hover { background:var(--bg); }
@@ -1089,13 +1090,17 @@ function _lkOpenCheck(i){
     html += '<div class="lk-chk-sec-title">Observação</div><div class="lk-chk-obs">'+_lkEsc(r.observacao)+'</div>';
   }
 
+  function _cap(t){ t = String(t||'Foto'); return t.charAt(0).toUpperCase()+t.slice(1); }
   var fotos = [];
-  if (r.foto_url) fotos.push({ url:r.foto_url, cap:(r.foto_tipo||'Foto') });
-  if (r.foto_obs_url) fotos.push({ url:r.foto_obs_url, cap:'Observação' });
+  if (r.foto_url) fotos.push({ path:r.foto_url, cap:_cap(r.foto_tipo||'Foto') });
+  if (r.foto_obs_url) fotos.push({ path:r.foto_obs_url, cap:'Observação' });
   if (fotos.length){
     html += '<div class="lk-chk-sec-title">Fotos</div><div class="lk-chk-fotos">';
-    fotos.forEach(function(f){
-      html += '<div><a href="'+_lkEsc(f.url)+'" target="_blank" rel="noopener"><img src="'+_lkEsc(f.url)+'" alt="'+_lkEsc(f.cap)+'" loading="lazy"></a><div class="cap">'+_lkEsc(f.cap)+'</div></div>';
+    fotos.forEach(function(f, k){
+      f.id = 'lk-foto-'+i+'-'+k;
+      html += '<div><a id="'+f.id+'-a" href="#" target="_blank" rel="noopener" class="lk-foto-ph">'+
+        '<img id="'+f.id+'-img" alt="'+_lkEsc(f.cap)+'" loading="lazy" style="display:none">'+
+        '<span class="lk-foto-load">carregando…</span></a><div class="cap">'+_lkEsc(f.cap)+'</div></div>';
     });
     html += '</div>';
   }
@@ -1103,6 +1108,30 @@ function _lkOpenCheck(i){
   bodyEl.innerHTML = html;
   var ov = document.getElementById('lk-check-modal');
   if (ov) ov.classList.add('open');
+
+  // Assina as URLs do bucket privado "limpeza" (paths do tipo "24732/uuid.jpg")
+  if (fotos.length){
+    var s = (typeof _rlSupa === 'function') ? _rlSupa() : (window.__lideresSupa || null);
+    fotos.forEach(function(f){
+      var aEl = document.getElementById(f.id+'-a');
+      var imgEl = document.getElementById(f.id+'-img');
+      var loadEl = aEl ? aEl.querySelector('.lk-foto-load') : null;
+      function _fail(){ if (loadEl) loadEl.textContent = 'sem foto'; }
+      function _ok(url){
+        if (imgEl){ imgEl.src = url; imgEl.style.display='block'; imgEl.onload=function(){ if(loadEl) loadEl.style.display='none'; }; imgEl.onerror=_fail; }
+        if (aEl){ aEl.href = url; }
+      }
+      var p = f.path;
+      if (/^https?:\/\//i.test(p)) { _ok(p); return; }
+      if (!s || !s.storage) { _fail(); return; }
+      try {
+        s.storage.from('limpeza').createSignedUrl(p, 3600).then(function(res){
+          if (res && res.data && res.data.signedUrl) _ok(res.data.signedUrl);
+          else _fail();
+        }).catch(_fail);
+      } catch(e){ _fail(); }
+    });
+  }
 }
 
 function _lkCloseCheck(){
