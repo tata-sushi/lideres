@@ -247,6 +247,31 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .rl-close-btn { background:none; border:none; font-size:20px; color:var(--muted,#999); cursor:pointer; padding:4px 8px; }
 .rl-modal-body { padding:16px 20px; }
 .rl-modal-footer { padding:12px 20px 20px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:8px; position:sticky; bottom:0; background:#fff; }
+.lk-chk-sub { font-family:'DM Mono', monospace; font-size:11px; color:var(--muted); margin-top:3px; letter-spacing:.2px; }
+.lk-chk-meta { display:flex; flex-wrap:wrap; gap:8px 18px; margin-bottom:14px; }
+.lk-chk-meta div { display:flex; flex-direction:column; gap:2px; }
+.lk-chk-meta .k { font-family:'DM Mono', monospace; font-size:9px; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); }
+.lk-chk-meta .v { font-size:13px; font-weight:600; color:var(--carbon); }
+.lk-chk-score { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:100px; font-family:'DM Mono', monospace; font-size:12px; font-weight:700; margin-bottom:14px; }
+.lk-chk-score.ok { background:#E6F4EA; color:#1E7E34; }
+.lk-chk-score.warn { background:#FEF3E2; color:#B26A00; }
+.lk-chk-score.bad { background:#FCE8E8; color:#C0392B; }
+.lk-chk-itens { display:flex; flex-direction:column; gap:0; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.lk-chk-item { display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--border); font-size:13px; color:var(--carbon); }
+.lk-chk-item:last-child { border-bottom:none; }
+.lk-chk-item .ico { width:20px; height:20px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
+.lk-chk-item.yes .ico { background:#E6F4EA; color:#1E7E34; }
+.lk-chk-item.no  .ico { background:#FCE8E8; color:#C0392B; }
+.lk-chk-item.no  { color:var(--mid); }
+.lk-chk-item .lbl { flex:1; }
+.lk-chk-sec-title { font-family:'DM Mono', monospace; font-size:9px; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); margin:16px 0 8px; }
+.lk-chk-obs { background:var(--bg); border-radius:10px; padding:12px 14px; font-size:13px; color:var(--carbon); line-height:1.5; white-space:pre-wrap; }
+.lk-chk-fotos { display:flex; flex-wrap:wrap; gap:10px; margin-top:8px; }
+.lk-chk-fotos a { display:block; width:120px; height:120px; border-radius:10px; overflow:hidden; border:1px solid var(--border); }
+.lk-chk-fotos img { width:100%; height:100%; object-fit:cover; display:block; }
+.lk-chk-fotos .cap { font-family:'DM Mono', monospace; font-size:9px; color:var(--muted); text-align:center; margin-top:4px; letter-spacing:.4px; }
+#lk-tb-last tr.clickable { cursor:pointer; }
+#lk-tb-last tr.clickable:hover { background:var(--bg); }
 .rl-form-row { margin-bottom:12px; }
 .rl-form-label { display:block; font-family:'DM Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted,#999); margin-bottom:6px; }
 .rl-form-input { width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:6px; font-family:'DM Sans',sans-serif; font-size:13px; color:var(--carbon); background:#fff; }
@@ -1009,11 +1034,11 @@ function _lkRenderLast(rows){
   var el = document.getElementById('lk-tb-last'); if (!el) return;
   var arr = rows.slice(0, 30);
   if (!arr.length) { el.innerHTML = '<tr><td colspan="5" class="lk-state">Sem dados</td></tr>'; return; }
-  el.innerHTML = arr.map(function(r){
+  el.innerHTML = arr.map(function(r, i){
     var st = _lkOkStats(r);
     var cls = st.pct==null ? '' : (st.pct >= 1 ? 'ok' : (st.pct >= 0.7 ? 'warn' : 'bad'));
     var badge = st.total ? '<span class="lk-badge '+cls+'">'+st.ok+'/'+st.total+'</span>' : '<span class="lk-badge">—</span>';
-    return '<tr>'+
+    return '<tr class="clickable" onclick="_lkOpenCheck('+i+')">'+
       '<td class="lk-td-data">'+_lkEsc(_lkFmtDT(r.quando))+'</td>'+
       '<td class="lk-td-uni">'+_lkEsc(r.unidade||'—')+'</td>'+
       '<td class="lk-td-ban">'+_lkEsc(r.banheiro||'—')+'</td>'+
@@ -1022,6 +1047,73 @@ function _lkRenderLast(rows){
     '</tr>';
   }).join('');
 }
+
+function _lkOpenCheck(i){
+  var arr = (LK_STATE.filtered || []).slice(0, 30);
+  var r = arr[i]; if (!r) return;
+  var st = _lkOkStats(r);
+  var cls = st.pct==null ? '' : (st.pct >= 1 ? 'ok' : (st.pct >= 0.7 ? 'warn' : 'bad'));
+
+  var titEl = document.getElementById('lk-chk-title');
+  var subEl = document.getElementById('lk-chk-sub');
+  var bodyEl = document.getElementById('lk-chk-body');
+  if (!bodyEl) return;
+  if (titEl) titEl.textContent = r.banheiro || 'Check';
+  if (subEl) subEl.textContent = (r.unidade ? r.unidade+' · ' : '') + _lkFmtDT(r.quando);
+
+  var itens = Array.isArray(r.itens) ? r.itens : [];
+  var html = '';
+
+  html += '<div class="lk-chk-score '+cls+'">'+(st.total ? st.ok+' de '+st.total+' itens OK' : 'Sem itens')+
+          (st.pct!=null ? ' · '+Math.round(st.pct*100)+'%' : '')+'</div>';
+
+  html += '<div class="lk-chk-meta">'+
+    '<div><span class="k">Unidade</span><span class="v">'+_lkEsc(r.unidade||'—')+'</span></div>'+
+    '<div><span class="k">Responsável</span><span class="v">'+_lkEsc(r.quem||'—')+'</span></div>'+
+    '<div><span class="k">Data</span><span class="v">'+_lkEsc(_lkFmtDT(r.quando))+'</span></div>'+
+  '</div>';
+
+  if (itens.length){
+    html += '<div class="lk-chk-sec-title">Itens verificados</div><div class="lk-chk-itens">';
+    itens.forEach(function(it){
+      var ok = !!(it && it.ok);
+      html += '<div class="lk-chk-item '+(ok?'yes':'no')+'">'+
+        '<span class="ico">'+(ok?'✓':'✕')+'</span>'+
+        '<span class="lbl">'+_lkEsc((it && it.label) || (it && it.chave) || '—')+'</span>'+
+      '</div>';
+    });
+    html += '</div>';
+  }
+
+  if (r.observacao){
+    html += '<div class="lk-chk-sec-title">Observação</div><div class="lk-chk-obs">'+_lkEsc(r.observacao)+'</div>';
+  }
+
+  var fotos = [];
+  if (r.foto_url) fotos.push({ url:r.foto_url, cap:(r.foto_tipo||'Foto') });
+  if (r.foto_obs_url) fotos.push({ url:r.foto_obs_url, cap:'Observação' });
+  if (fotos.length){
+    html += '<div class="lk-chk-sec-title">Fotos</div><div class="lk-chk-fotos">';
+    fotos.forEach(function(f){
+      html += '<div><a href="'+_lkEsc(f.url)+'" target="_blank" rel="noopener"><img src="'+_lkEsc(f.url)+'" alt="'+_lkEsc(f.cap)+'" loading="lazy"></a><div class="cap">'+_lkEsc(f.cap)+'</div></div>';
+    });
+    html += '</div>';
+  }
+
+  bodyEl.innerHTML = html;
+  var ov = document.getElementById('lk-check-modal');
+  if (ov) ov.classList.add('open');
+}
+
+function _lkCloseCheck(){
+  var ov = document.getElementById('lk-check-modal');
+  if (ov) ov.classList.remove('open');
+}
+window._lkOpenCheck = _lkOpenCheck;
+window._lkCloseCheck = _lkCloseCheck;
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape'){ var ov = document.getElementById('lk-check-modal'); if (ov && ov.classList.contains('open')) _lkCloseCheck(); }
+});
 
 function _lkRenderLine(rows){
   var svg = document.getElementById('lk-svg-line'); if (!svg) return;
@@ -2150,6 +2242,20 @@ function hardRefresh() {
         <span id="rl-btn-label">Gerar PDF</span>
       </button>
     </div>
+  </div>
+</div>
+
+<!-- Modal: detalhe do check -->
+<div class="rl-overlay" id="lk-check-modal" onclick="if(event.target===this) _lkCloseCheck()">
+  <div class="rl-modal">
+    <div class="rl-modal-header">
+      <div>
+        <div class="rl-modal-title" id="lk-chk-title">Check</div>
+        <div class="lk-chk-sub" id="lk-chk-sub"></div>
+      </div>
+      <button class="modal-close" onclick="_lkCloseCheck()" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="rl-modal-body" id="lk-chk-body"></div>
   </div>
 </div>
 
