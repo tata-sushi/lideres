@@ -351,6 +351,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 .lk-state { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px; font-family: 'DM Mono', monospace; letter-spacing: 0.06em; text-transform: uppercase; }
 
+/* Ver mais (padrão performance/Colaboradores) */
+.lk-vm-wrap { text-align: center; padding: 10px 0 2px; }
+.lk-btn-vm { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--carbon); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+.lk-btn-vm:hover { background: #FAFAFA; }
+
 @media (min-width: 768px) {
   .lk-filters { grid-template-columns: 1fr 1fr 1fr; padding: 14px 20px 10px; }
   .lk-kpis { grid-template-columns: repeat(4, 1fr); padding: 14px 20px; }
@@ -891,7 +896,7 @@ function _lkDashCardsHtml(){
     '<div class="lk-card"><div class="lk-card-title">Limpezas por Banheiro</div><div class="lk-bar-list" id="lk-bars-ban"></div></div>'+
     '<div class="lk-card full"><div class="lk-card-title">Itens Reprovados</div><div class="lk-bar-list" id="lk-bars-itens"></div></div>'+
     '<div class="lk-card full"><div class="lk-card-title">Limpezas por dia</div><div class="lk-line-wrap"><svg id="lk-svg-line" class="lk-line-svg"></svg></div></div>'+
-    '<div class="lk-card full"><div class="lk-card-title">Analítico</div><div class="lk-table-wrap"><table class="lk-table"><thead><tr><th style="width:110px">Data</th><th style="width:120px">Unidade</th><th>Banheiro</th><th>Quem</th><th style="text-align:right;width:100px">Itens OK</th></tr></thead><tbody id="lk-tb-last"></tbody></table></div></div>';
+    '<div class="lk-card full"><div class="lk-card-title">Analítico</div><div class="lk-table-wrap"><table class="lk-table"><thead><tr><th style="width:110px">Data</th><th style="width:120px">Unidade</th><th>Banheiro</th><th>Quem</th><th style="text-align:right;width:100px">Itens OK</th></tr></thead><tbody id="lk-tb-last"></tbody></table></div><div class="lk-vm-wrap" id="lk-vm-wrap-last" style="display:none;"><button class="lk-btn-vm" id="lk-btn-vm-last" onclick="_lkVerMaisLast()">Ver mais</button></div></div>';
 }
 
 function _lkLoad(){
@@ -953,6 +958,7 @@ function _lkOnFilter(){
     if (since) { var d = new Date(r.quando); if (isNaN(d.getTime()) || d < since) return false; }
     return true;
   });
+  LK_STATE.lastShow = LK_LAST_PAGE;
   _lkRender();
 }
 
@@ -1047,24 +1053,46 @@ function _lkRenderRankQuem(rows){
   }).join('');
 }
 
+var LK_LAST_PAGE = 20;
 function _lkRenderLast(rows){
   var el = document.getElementById('lk-tb-last'); if (!el) return;
-  var arr = rows.slice(0, 30);
-  if (!arr.length) { el.innerHTML = '<tr><td colspan="5" class="lk-state">Sem dados</td></tr>'; return; }
-  el.innerHTML = arr.map(function(r, i){
-    var st = _lkOkStats(r);
-    var cls = st.pct==null ? '' : (st.pct >= 1 ? 'ok' : (st.pct >= 0.7 ? 'warn' : 'bad'));
-    var badge = st.total ? '<span class="lk-badge '+cls+'">'+st.ok+'/'+st.total+'</span>' : '<span class="lk-badge">—</span>';
-    var foto = (r.foto_url || r.foto_obs_url) ? ' <span class="lk-foto-tag" title="Contém foto">📷</span>' : '';
-    return '<tr class="clickable" onclick="_lkOpenCheck('+i+')">'+
-      '<td class="lk-td-data">'+_lkEsc(_lkFmtDT(r.quando))+'</td>'+
-      '<td class="lk-td-uni">'+_lkEsc(r.unidade||'—')+'</td>'+
-      '<td class="lk-td-ban">'+_lkEsc(r.banheiro||'—')+'</td>'+
-      '<td class="lk-td-quem">'+_lkEsc(r.quem||'—')+foto+'</td>'+
-      '<td class="lk-td-ok">'+badge+'</td>'+
-    '</tr>';
-  }).join('');
+  if (LK_STATE.lastShow == null) LK_STATE.lastShow = LK_LAST_PAGE;
+  var limit = Math.min(LK_STATE.lastShow, rows.length);
+  var arr = rows.slice(0, limit);
+  if (!arr.length) { el.innerHTML = '<tr><td colspan="5" class="lk-state">Sem dados</td></tr>'; }
+  else {
+    el.innerHTML = arr.map(function(r, i){
+      var st = _lkOkStats(r);
+      var cls = st.pct==null ? '' : (st.pct >= 1 ? 'ok' : (st.pct >= 0.7 ? 'warn' : 'bad'));
+      var badge = st.total ? '<span class="lk-badge '+cls+'">'+st.ok+'/'+st.total+'</span>' : '<span class="lk-badge">—</span>';
+      var foto = (r.foto_url || r.foto_obs_url) ? ' <span class="lk-foto-tag" title="Contém foto">📷</span>' : '';
+      return '<tr class="clickable" onclick="_lkOpenCheck('+i+')">'+
+        '<td class="lk-td-data">'+_lkEsc(_lkFmtDT(r.quando))+'</td>'+
+        '<td class="lk-td-uni">'+_lkEsc(r.unidade||'—')+'</td>'+
+        '<td class="lk-td-ban">'+_lkEsc(r.banheiro||'—')+'</td>'+
+        '<td class="lk-td-quem">'+_lkEsc(r.quem||'—')+foto+'</td>'+
+        '<td class="lk-td-ok">'+badge+'</td>'+
+      '</tr>';
+    }).join('');
+  }
+  var wrap = document.getElementById('lk-vm-wrap-last');
+  var btn  = document.getElementById('lk-btn-vm-last');
+  if (wrap && btn){
+    var resto = rows.length - limit;
+    if (resto > 0){
+      wrap.style.display = 'block';
+      var prox = Math.min(LK_LAST_PAGE, resto);
+      btn.textContent = 'Ver mais (' + prox + ')';
+    } else {
+      wrap.style.display = 'none';
+    }
+  }
 }
+function _lkVerMaisLast(){
+  LK_STATE.lastShow = (LK_STATE.lastShow || LK_LAST_PAGE) + LK_LAST_PAGE;
+  _lkRenderLast(LK_STATE.filtered || []);
+}
+window._lkVerMaisLast = _lkVerMaisLast;
 
 function _lkRenderHeat(rows){
   var el = document.getElementById('lk-heat'); if (!el) return;
@@ -1103,7 +1131,8 @@ function _lkRenderHeat(rows){
 }
 
 function _lkOpenCheck(i){
-  var arr = (LK_STATE.filtered || []).slice(0, 30);
+  var lim = Math.min(LK_STATE.lastShow || LK_LAST_PAGE, (LK_STATE.filtered || []).length);
+  var arr = (LK_STATE.filtered || []).slice(0, lim);
   var r = arr[i]; if (!r) return;
   var st = _lkOkStats(r);
   var cls = st.pct==null ? '' : (st.pct >= 1 ? 'ok' : (st.pct >= 0.7 ? 'warn' : 'bad'));
