@@ -1715,7 +1715,9 @@ function norm(s) {
 }
 
 // \u2500\u2500\u2500 PENDENTES DE ASSINATURA (aba Pend\u00eancias) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-function setPendBusca(v) { state.pendBusca = v; renderDocPendencias(); }
+// Busca: s\u00f3 re-renderiza a tabela/contador (n\u00e3o recria o input) \u2014 assim o campo
+// n\u00e3o perde o foco a cada tecla.
+function setPendBusca(v) { state.pendBusca = v; _pendAplicar(); }
 function setPendUnidadeFiltro(v) { state.pendUnidadeFiltro = v; state.pendDepartamentoFiltro = 'Todos'; renderDocPendencias(); }
 function setPendDepartamentoFiltro(v) { state.pendDepartamentoFiltro = v; renderDocPendencias(); }
 function clearPendFiltros() { state.pendUnidadeFiltro = 'Todos'; state.pendDepartamentoFiltro = 'Todos'; state.pendBusca = ''; renderDocPendencias(); }
@@ -1749,21 +1751,13 @@ function _pendItens() {
   });
 }
 
-function renderDocPendencias() {
-  if (!state.pendUnidadeFiltro) state.pendUnidadeFiltro = 'Todos';
-  if (!state.pendDepartamentoFiltro) state.pendDepartamentoFiltro = 'Todos';
-
+// Filtra o conjunto pendente conforme os filtros/busca atuais.
+function _pendFiltrados() {
   var todos = _pendItens();
-
-  // op\u00e7\u00f5es de filtro derivadas do pr\u00f3prio conjunto pendente
-  var unidades = unique(todos.map(function (r) { return r.unidade; }).filter(Boolean));
-  var deptoSrc = state.pendUnidadeFiltro === 'Todos' ? todos : todos.filter(function (r) { return r.unidade === state.pendUnidadeFiltro; });
-  var deptos = unique(deptoSrc.map(function (r) { return r.depto; }).filter(Boolean));
-
   var busca = norm((state.pendBusca || '').toLowerCase());
   var filtrados = todos.filter(function (r) {
-    if (state.pendUnidadeFiltro !== 'Todos' && r.unidade !== state.pendUnidadeFiltro) return false;
-    if (state.pendDepartamentoFiltro !== 'Todos' && r.depto !== state.pendDepartamentoFiltro) return false;
+    if (state.pendUnidadeFiltro && state.pendUnidadeFiltro !== 'Todos' && r.unidade !== state.pendUnidadeFiltro) return false;
+    if (state.pendDepartamentoFiltro && state.pendDepartamentoFiltro !== 'Todos' && r.depto !== state.pendDepartamentoFiltro) return false;
     if (!busca) return true;
     return norm((r.nome || '').toLowerCase()).indexOf(busca) >= 0 ||
       norm((r.documento || '').toLowerCase()).indexOf(busca) >= 0 ||
@@ -1771,30 +1765,21 @@ function renderDocPendencias() {
       norm((r.depto || '').toLowerCase()).indexOf(busca) >= 0 ||
       norm((r.cargo || '').toLowerCase()).indexOf(busca) >= 0;
   });
-
   filtrados.sort(function (a, b) {
     return (a.nome || '').localeCompare(b.nome || '', 'pt-BR') ||
       (a.documento || '').localeCompare(b.documento || '', 'pt-BR');
   });
+  return filtrados;
+}
 
-  // \u2500\u2500 Filtros (mesmo padr\u00e3o do Anal\u00edtico) \u2500\u2500
-  function sel(label, opts, curVal, onchange) {
-    var h = '<div class="filter-group"><label class="filter-label">' + label + '</label><select class="filter-select" onchange="' + onchange + '(this.value)">';
-    h += '<option value="Todos"' + (curVal === 'Todos' ? ' selected' : '') + '>Todos</option>';
-    opts.forEach(function (o) { h += '<option value="' + escH(o) + '"' + (curVal === o ? ' selected' : '') + '>' + escH(o) + '</option>'; });
-    return h + '</select></div>';
-  }
-  var fh = '<div class="anl-filters-line">';
-  fh += sel('Unidade', unidades, state.pendUnidadeFiltro, 'setPendUnidadeFiltro');
-  fh += sel('Departamento', deptos, state.pendDepartamentoFiltro, 'setPendDepartamentoFiltro');
-  fh += '</div>';
-  fh += '<div class="filters-actions"><button class="btn-clear" onclick="clearPendFiltros()">Limpar filtros</button>' +
-    '<span class="results-count"><span>' + filtrados.length + '</span> resultado(s)</span></div>';
-  fh += '<div class="anl-busca-bar"><input type="text" class="anl-busca" placeholder="Buscar colaborador, documento, unidade\u2026" value="' + escH(state.pendBusca || '') + '" oninput="setPendBusca(this.value)"></div>';
-  document.getElementById('filters-wrap').innerHTML = fh;
+// Re-renderiza s\u00f3 a tabela e o contador (n\u00e3o recria os filtros/input).
+function _pendAplicar() {
+  var filtrados = _pendFiltrados();
+  var cnt = document.querySelector('#filters-wrap .results-count span');
+  if (cnt) cnt.textContent = filtrados.length;
 
-  // \u2500\u2500 Tabela \u2500\u2500
   var c = document.getElementById('content');
+  if (!c) return;
   if (!filtrados.length) { c.innerHTML = emptyState(); return; }
 
   var head = '<thead><tr>' +
@@ -1814,6 +1799,35 @@ function renderDocPendencias() {
   }).join('') + '</tbody>';
 
   c.innerHTML = '<div class="anl-box"><div class="pend-table-wrap"><table class="ent-table pend-table">' + head + body + '</table></div></div>';
+}
+
+function renderDocPendencias() {
+  if (!state.pendUnidadeFiltro) state.pendUnidadeFiltro = 'Todos';
+  if (!state.pendDepartamentoFiltro) state.pendDepartamentoFiltro = 'Todos';
+
+  var todos = _pendItens();
+  // op\u00e7\u00f5es de filtro derivadas do pr\u00f3prio conjunto pendente
+  var unidades = unique(todos.map(function (r) { return r.unidade; }).filter(Boolean));
+  var deptoSrc = state.pendUnidadeFiltro === 'Todos' ? todos : todos.filter(function (r) { return r.unidade === state.pendUnidadeFiltro; });
+  var deptos = unique(deptoSrc.map(function (r) { return r.depto; }).filter(Boolean));
+
+  // \u2500\u2500 Filtros (mesmo padr\u00e3o do Anal\u00edtico) \u2500\u2500
+  function sel(label, opts, curVal, onchange) {
+    var h = '<div class="filter-group"><label class="filter-label">' + label + '</label><select class="filter-select" onchange="' + onchange + '(this.value)">';
+    h += '<option value="Todos"' + (curVal === 'Todos' ? ' selected' : '') + '>Todos</option>';
+    opts.forEach(function (o) { h += '<option value="' + escH(o) + '"' + (curVal === o ? ' selected' : '') + '>' + escH(o) + '</option>'; });
+    return h + '</select></div>';
+  }
+  var fh = '<div class="anl-filters-line">';
+  fh += sel('Unidade', unidades, state.pendUnidadeFiltro, 'setPendUnidadeFiltro');
+  fh += sel('Departamento', deptos, state.pendDepartamentoFiltro, 'setPendDepartamentoFiltro');
+  fh += '</div>';
+  fh += '<div class="filters-actions"><button class="btn-clear" onclick="clearPendFiltros()">Limpar filtros</button>' +
+    '<span class="results-count"><span>0</span> resultado(s)</span></div>';
+  fh += '<div class="anl-busca-bar"><input type="text" class="anl-busca" placeholder="Buscar colaborador, documento, unidade\u2026" value="' + escH(state.pendBusca || '') + '" oninput="setPendBusca(this.value)"></div>';
+  document.getElementById('filters-wrap').innerHTML = fh;
+
+  _pendAplicar();
 }
 function parseDateBR(s) {
   if (!s) return null;
