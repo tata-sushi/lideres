@@ -196,6 +196,15 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 /* Testes: coluna de ações alinhada à direita */
 .ent-testes tbody td.ett-acoes, .ent-testes thead th:last-child { text-align: right; }
 
+/* ── PENDENTES DE ASSINATURA (aba Pendências) ── */
+.count-label { color: var(--muted); font-weight: 500; letter-spacing: 0; text-transform: none; font-size: 11px; }
+.pend-busca-bar { margin: 4px 0 14px; }
+.pend-table-wrap { overflow-x: auto; }
+.pend-table { width: 100%; }
+.pend-table tbody td { white-space: nowrap; }
+.pend-table td.ptd-doc { white-space: normal; min-width: 220px; text-align: left; }
+.pend-table td.ptd-data { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+
 /* ── ANALÍTICO (tabela gigante, rolagem lateral) ── */
 .anl-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .anl-wrap { overflow: auto; max-height: 70vh; background: var(--surface); -webkit-overflow-scrolling: touch; }
@@ -387,8 +396,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 <div id="pendencias">
   <div class="chart-card">
-    <div class="chart-title">Pendências</div>
-    <div style="padding:16px;color:var(--mid);text-align:center;">Em construção.</div>
+    <div class="chart-title">Pendentes de Assinatura <span class="count-label" id="pend-count"></span></div>
+    <div class="pend-busca-bar"><input type="text" class="anl-busca" id="pend-busca" placeholder="Buscar colaborador, documento, unidade…" oninput="setPendBusca(this.value)"></div>
+    <div class="pend-table-wrap"><table class="ent-table pend-table" id="pend-table"></table></div>
   </div>
 </div>
 <div class="filters-wrap" id="filters-wrap"></div>
@@ -1711,6 +1721,92 @@ function escH(s) {
 function norm(s) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 }
+
+// \u2500\u2500\u2500 PENDENTES DE ASSINATURA (aba Pend\u00eancias) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function setPendBusca(v) {
+  state.pendBusca = v;
+  renderDocPendencias();
+}
+
+function renderDocPendencias() {
+  var tbl = document.getElementById('pend-table');
+  var lbl = document.getElementById('pend-count');
+  if (!tbl) return;
+
+  // Uma linha por (colaborador, tipo, compet\u00eancia) pendente de assinatura \u2014 vers\u00e3o mais recente.
+  var mapa = {};
+  (colaboradorDocumentos || []).forEach(function (d) {
+    if (d.status !== 'pendente_assinatura') return;
+    var k = d.matricula + '|' + d.tipo_id + '|' + (d.competencia || '');
+    var cur = mapa[k];
+    if (!cur || (d.versao || 1) > (cur.versao || 1)) mapa[k] = d;
+  });
+
+  var itens = Object.keys(mapa).map(function (k) {
+    var d = mapa[k];
+    var c = _docColaborador(d.matricula) || {};
+    var t = (docTipos || []).find(function (x) { return x.id === d.tipo_id; }) || {};
+    var docNome = t.nome || '\u2014';
+    if (d.competencia) {
+      if (d.competencia.indexOf('_') > -1) docNome += ' \u2014 ' + _docFmtCompetenciaPeriodo(d.competencia);
+      else if (_docCompetenciaMesDoHolerite(d.competencia)) docNome += ' \u2014 ' + d.competencia;
+    }
+    return {
+      nome: c.nome || d.matricula,
+      unidade: c.unidade || '\u2014',
+      depto: c.departamento || '\u2014',
+      cargo: c.cargo || '\u2014',
+      documento: docNome,
+      geradoEm: d.enviado_em || d.created_at || null
+    };
+  });
+
+  var busca = norm((state.pendBusca || '').toLowerCase());
+  var filtrados = itens.filter(function (r) {
+    if (!busca) return true;
+    return norm((r.nome || '').toLowerCase()).indexOf(busca) >= 0 ||
+      norm((r.documento || '').toLowerCase()).indexOf(busca) >= 0 ||
+      norm((r.unidade || '').toLowerCase()).indexOf(busca) >= 0 ||
+      norm((r.depto || '').toLowerCase()).indexOf(busca) >= 0 ||
+      norm((r.cargo || '').toLowerCase()).indexOf(busca) >= 0;
+  });
+
+  filtrados.sort(function (a, b) {
+    return (a.nome || '').localeCompare(b.nome || '', 'pt-BR') ||
+      (a.documento || '').localeCompare(b.documento || '', 'pt-BR');
+  });
+
+  // contagem de pessoas distintas
+  var pessoas = {}; filtrados.forEach(function (r) { pessoas[r.nome] = 1; });
+  if (lbl) lbl.textContent = filtrados.length
+    ? '\u00b7 ' + filtrados.length + (filtrados.length === 1 ? ' documento' : ' documentos') + ' \u00b7 ' + Object.keys(pessoas).length + (Object.keys(pessoas).length === 1 ? ' pessoa' : ' pessoas')
+    : '';
+
+  if (!filtrados.length) {
+    tbl.innerHTML = '<tbody><tr><td style="text-align:center;padding:40px 20px;color:var(--muted);font-family:\'DM Mono\',monospace;font-size:12px;text-transform:uppercase;letter-spacing:.5px">' +
+      (state.pendBusca ? 'Nenhum resultado' : 'Nenhum documento pendente de assinatura') + '</td></tr></tbody>';
+    return;
+  }
+
+  var head = '<thead><tr>' +
+    '<th>Colaborador</th><th>Unidade</th><th>Departamento</th><th>Cargo</th>' +
+    '<th>Documento</th><th>Gerado em</th><th>Status</th>' +
+    '</tr></thead>';
+
+  var body = '<tbody>' + filtrados.map(function (r) {
+    return '<tr>' +
+      '<td class="ett-nome">' + escH(r.nome) + '</td>' +
+      '<td>' + escH(r.unidade) + '</td>' +
+      '<td>' + escH(r.depto) + '</td>' +
+      '<td>' + escH(r.cargo) + '</td>' +
+      '<td class="ptd-doc">' + escH(r.documento) + '</td>' +
+      '<td class="ptd-data">' + escH(r.geradoEm ? _docFmtDataHora(r.geradoEm) : '\u2014') + '</td>' +
+      '<td><span class="status-badge sel-red">Pendente</span></td>' +
+    '</tr>';
+  }).join('') + '</tbody>';
+
+  tbl.innerHTML = head + body;
+}
 function parseDateBR(s) {
   if (!s) return null;
   s = String(s).trim();
@@ -1778,8 +1874,11 @@ function render() {
   if (state.tab === 'dashboard') {
     return;   // aba estática (em construção); nada a renderizar
   }
-  if (state.tab === 'sobre' || state.tab === 'pendencias') {
-    return;   // abas estáticas (em construção); nada a renderizar
+  if (state.tab === 'sobre') {
+    return;   // aba estática (em construção); nada a renderizar
+  }
+  if (state.tab === 'pendencias') {
+    renderDocPendencias();
   }
   if (state.tab === 'analitico') {
     renderDocGestao();
