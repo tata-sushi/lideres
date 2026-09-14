@@ -35,12 +35,10 @@ body:not([data-view="dashboard"]) .dash-filters-wrap,
 body[data-view="dashboard"] .filters-wrap,
 body[data-view="dashboard"] .content,
 body[data-view="sobre"] .filters-wrap,
-body[data-view="sobre"] .content,
-body[data-view="pendencias"] .filters-wrap,
-body[data-view="pendencias"] .content { display: none; }
+body[data-view="sobre"] .content { display: none; }
 body:not([data-view="sobre"]) #sobre { display: none; }
-body:not([data-view="pendencias"]) #pendencias { display: none; }
-#sobre, #pendencias { padding: 14px 20px 80px; }
+#sobre { padding: 14px 20px 80px; }
+body[data-view="pendencias"] .filters-wrap { border-bottom: none; }
 .kpi-card-vagas { display: none; }
 body:not([data-view="dashboard"]) #dashboard { display: none; }
 .dash-filters-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
@@ -197,10 +195,9 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 .ent-testes tbody td.ett-acoes, .ent-testes thead th:last-child { text-align: right; }
 
 /* ── PENDENTES DE ASSINATURA (aba Pendências) ── */
-.count-label { color: var(--muted); font-weight: 500; letter-spacing: 0; text-transform: none; font-size: 11px; }
-.pend-busca-bar { margin: 4px 0 14px; }
-.pend-table-wrap { overflow-x: auto; }
+.pend-table-wrap { overflow: auto; max-height: 70vh; -webkit-overflow-scrolling: touch; }
 .pend-table { width: 100%; }
+.pend-table thead th { position: sticky; top: 0; z-index: 2; }
 .pend-table thead th, .pend-table tbody td { text-align: left; }
 .pend-table tbody td { white-space: nowrap; }
 .pend-table td.ptd-colab .candidate-name { font-weight: 600; }
@@ -394,13 +391,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="chart-card">
     <div class="chart-title">Sobre</div>
     <div style="padding:16px;color:var(--mid);text-align:center;">Em construção.</div>
-  </div>
-</div>
-<div id="pendencias">
-  <div class="chart-card">
-    <div class="chart-title">Pendentes de Assinatura <span class="count-label" id="pend-count"></span></div>
-    <div class="pend-busca-bar"><input type="text" class="anl-busca" id="pend-busca" placeholder="Buscar colaborador, documento, unidade…" oninput="setPendBusca(this.value)"></div>
-    <div class="pend-table-wrap"><table class="ent-table pend-table" id="pend-table"></table></div>
   </div>
 </div>
 <div class="filters-wrap" id="filters-wrap"></div>
@@ -1725,17 +1715,13 @@ function norm(s) {
 }
 
 // \u2500\u2500\u2500 PENDENTES DE ASSINATURA (aba Pend\u00eancias) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-function setPendBusca(v) {
-  state.pendBusca = v;
-  renderDocPendencias();
-}
+function setPendBusca(v) { state.pendBusca = v; renderDocPendencias(); }
+function setPendUnidadeFiltro(v) { state.pendUnidadeFiltro = v; state.pendDepartamentoFiltro = 'Todos'; renderDocPendencias(); }
+function setPendDepartamentoFiltro(v) { state.pendDepartamentoFiltro = v; renderDocPendencias(); }
+function clearPendFiltros() { state.pendUnidadeFiltro = 'Todos'; state.pendDepartamentoFiltro = 'Todos'; state.pendBusca = ''; renderDocPendencias(); }
 
-function renderDocPendencias() {
-  var tbl = document.getElementById('pend-table');
-  var lbl = document.getElementById('pend-count');
-  if (!tbl) return;
-
-  // Uma linha por (colaborador, tipo, compet\u00eancia) pendente de assinatura \u2014 vers\u00e3o mais recente.
+// Monta a lista de pendentes de assinatura (uma linha por colaborador+tipo+compet\u00eancia, vers\u00e3o mais recente).
+function _pendItens() {
   var mapa = {};
   (colaboradorDocumentos || []).forEach(function (d) {
     if (d.status !== 'pendente_assinatura') return;
@@ -1743,8 +1729,7 @@ function renderDocPendencias() {
     var cur = mapa[k];
     if (!cur || (d.versao || 1) > (cur.versao || 1)) mapa[k] = d;
   });
-
-  var itens = Object.keys(mapa).map(function (k) {
+  return Object.keys(mapa).map(function (k) {
     var d = mapa[k];
     var c = _docColaborador(d.matricula) || {};
     var t = (docTipos || []).find(function (x) { return x.id === d.tipo_id; }) || {};
@@ -1762,9 +1747,23 @@ function renderDocPendencias() {
       geradoEm: d.enviado_em || d.created_at || null
     };
   });
+}
+
+function renderDocPendencias() {
+  if (!state.pendUnidadeFiltro) state.pendUnidadeFiltro = 'Todos';
+  if (!state.pendDepartamentoFiltro) state.pendDepartamentoFiltro = 'Todos';
+
+  var todos = _pendItens();
+
+  // op\u00e7\u00f5es de filtro derivadas do pr\u00f3prio conjunto pendente
+  var unidades = unique(todos.map(function (r) { return r.unidade; }).filter(Boolean));
+  var deptoSrc = state.pendUnidadeFiltro === 'Todos' ? todos : todos.filter(function (r) { return r.unidade === state.pendUnidadeFiltro; });
+  var deptos = unique(deptoSrc.map(function (r) { return r.depto; }).filter(Boolean));
 
   var busca = norm((state.pendBusca || '').toLowerCase());
-  var filtrados = itens.filter(function (r) {
+  var filtrados = todos.filter(function (r) {
+    if (state.pendUnidadeFiltro !== 'Todos' && r.unidade !== state.pendUnidadeFiltro) return false;
+    if (state.pendDepartamentoFiltro !== 'Todos' && r.depto !== state.pendDepartamentoFiltro) return false;
     if (!busca) return true;
     return norm((r.nome || '').toLowerCase()).indexOf(busca) >= 0 ||
       norm((r.documento || '').toLowerCase()).indexOf(busca) >= 0 ||
@@ -1778,22 +1777,29 @@ function renderDocPendencias() {
       (a.documento || '').localeCompare(b.documento || '', 'pt-BR');
   });
 
-  // contagem de pessoas distintas
-  var pessoas = {}; filtrados.forEach(function (r) { pessoas[r.nome] = 1; });
-  if (lbl) lbl.textContent = filtrados.length
-    ? '\u00b7 ' + filtrados.length + (filtrados.length === 1 ? ' documento' : ' documentos') + ' \u00b7 ' + Object.keys(pessoas).length + (Object.keys(pessoas).length === 1 ? ' pessoa' : ' pessoas')
-    : '';
-
-  if (!filtrados.length) {
-    tbl.innerHTML = '<tbody><tr><td style="text-align:center;padding:40px 20px;color:var(--muted);font-family:\'DM Mono\',monospace;font-size:12px;text-transform:uppercase;letter-spacing:.5px">' +
-      (state.pendBusca ? 'Nenhum resultado' : 'Nenhum documento pendente de assinatura') + '</td></tr></tbody>';
-    return;
+  // \u2500\u2500 Filtros (mesmo padr\u00e3o do Anal\u00edtico) \u2500\u2500
+  function sel(label, opts, curVal, onchange) {
+    var h = '<div class="filter-group"><label class="filter-label">' + label + '</label><select class="filter-select" onchange="' + onchange + '(this.value)">';
+    h += '<option value="Todos"' + (curVal === 'Todos' ? ' selected' : '') + '>Todos</option>';
+    opts.forEach(function (o) { h += '<option value="' + escH(o) + '"' + (curVal === o ? ' selected' : '') + '>' + escH(o) + '</option>'; });
+    return h + '</select></div>';
   }
+  var fh = '<div class="anl-filters-line">';
+  fh += sel('Unidade', unidades, state.pendUnidadeFiltro, 'setPendUnidadeFiltro');
+  fh += sel('Departamento', deptos, state.pendDepartamentoFiltro, 'setPendDepartamentoFiltro');
+  fh += '</div>';
+  fh += '<div class="filters-actions"><button class="btn-clear" onclick="clearPendFiltros()">Limpar filtros</button>' +
+    '<span class="results-count"><span>' + filtrados.length + '</span> resultado(s)</span></div>';
+  fh += '<div class="anl-busca-bar"><input type="text" class="anl-busca" placeholder="Buscar colaborador, documento, unidade\u2026" value="' + escH(state.pendBusca || '') + '" oninput="setPendBusca(this.value)"></div>';
+  document.getElementById('filters-wrap').innerHTML = fh;
+
+  // \u2500\u2500 Tabela \u2500\u2500
+  var c = document.getElementById('content');
+  if (!filtrados.length) { c.innerHTML = emptyState(); return; }
 
   var head = '<thead><tr>' +
     '<th>Colaborador</th><th>Documento</th><th>Gerado em</th><th>Status</th>' +
     '</tr></thead>';
-
   var body = '<tbody>' + filtrados.map(function (r) {
     var sub = escH(r.cargo || '') + (r.unidade ? ' \u00b7 ' + escH(r.unidade) : '');
     return '<tr>' +
@@ -1807,7 +1813,7 @@ function renderDocPendencias() {
     '</tr>';
   }).join('') + '</tbody>';
 
-  tbl.innerHTML = head + body;
+  c.innerHTML = '<div class="anl-box"><div class="pend-table-wrap"><table class="ent-table pend-table">' + head + body + '</table></div></div>';
 }
 function parseDateBR(s) {
   if (!s) return null;
