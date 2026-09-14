@@ -336,9 +336,10 @@ FRONT (HTML) ──▶ DADOS (Sheets→Supabase) ◀──▶ n8n (fluxos) ─�
 - **Front** `feriados.html`: `feriado_listar` / `feriado_decisao_gravar`. Removidos Apps Script/COLAB_URL/`__nomeResponsavel`.
 - **Backfill**: 332 linhas da aba `Feriados` (213 Pagamento / 60 Folga / 59 Não tem direito; 4 feriados). Rodado via MCP em 4 blocos (usuário não podia rodar SQL).
 - **Sync = Edge Function `rhid-feriados-sync`** (substitui `relatórioFeriados`): detecta feriados da semana → quem trabalhou (horas) + saldo do dia anterior → `feriado_sync`. Unidade/depto/nome do `profiles`, matrícula normalizada. Testada: detectou Revolução Const. (09/07), 124 ativos, 73 linhas / 12,7s, preservou as 332 decisões.
-- **Agendada**: pg_cron `rhid-feriados-semanal` (jobid 13), `5 9 * * 1` (seg 06:05 SP).
+- **Agendada**: pg_cron `rhid-feriados-semanal` (jobid 13), `0 21 * * 1` (seg 18:00 SP). *(era `5 9 * * 1` = seg 06:05 SP até 14/09.)*
 
 - 2026-08-16 — **Feriados EXECUTADA** (tabela+RPCs+front+backfill 332+Edge Function+cron). Módulo RHID (Experiências/Ausências/Feriados) COMPLETO. Apps Scripts podem ser desligados.
+- 2026-09-14 — **Feriados: horário do cron alterado** `5 9 * * 1` (seg 06:05 SP) → `0 21 * * 1` (seg 18:00 SP), via `cron.alter_job(job_id := 13)`. Comando/token preservados; janela de dados inalterada (semana anterior seg→dom); Edge Function `rhid-feriados-sync` não mudou.
 
 ## Módulo ORGANOGRAMA (`compliance/areas/organograma.html`) — Parte 1 ✅ 16/08
 > Migração do Apps Script (ENDPOINT do Web App) → Supabase. Armário + Medicina ficam pra **Parte 2**.
