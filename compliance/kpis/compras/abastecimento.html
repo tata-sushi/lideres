@@ -873,6 +873,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           </table>
         </div>
       </div>
+      <div class="view-section">
+        <div class="view-section-label">Adicionar item ao pedido</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <select class="fctrl" id="proc-add-prod" style="flex:2;min-width:180px;"><option value="">Adicionar item ao pedido…</option></select>
+          <input class="fctrl" type="number" id="proc-add-qty" min="1" step="1" placeholder="Qtd" style="width:90px;flex:0 0 auto;">
+          <button type="button" class="modal-btn modal-btn-confirm" style="flex:0 0 auto;" onclick="adicionarItemAoPedido()">Adicionar item</button>
+        </div>
+      </div>
       <div class="proc-resumo">
         <span><span class="proc-resumo-lbl">Fornecedores</span> <span class="proc-resumo-val" id="proc-r-forn">—</span></span>
         <span class="proc-resumo-sep">·</span>
@@ -887,7 +895,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-btn-cancel" onclick="fecharModalProc()">Cancelar</button>
-      <button class="modal-btn modal-btn-confirm" onclick="confirmarPedido()">Confirmar</button>
+      <button class="modal-btn" style="background:#F1A208;color:#111;font-weight:600;" onclick="confirmarPedido('parcial')" title="Compra os itens preenchidos agora e manda o restante para um pedido-filho, para comprar depois">Salvar parcial</button>
+      <button class="modal-btn modal-btn-confirm" onclick="confirmarPedido('finalizar')">Confirmar</button>
     </div>
   </div>
 </div>
@@ -2274,6 +2283,8 @@ function abrirModalProc(id, fornIdx) {
   procItens.forEach(function(item,idx){
     tbody.appendChild(criarLinhaProcItem(item, idx, null, entregaDefault));
   });
+  popularProdSelectProc();
+  var addQty = document.getElementById('proc-add-qty'); if (addQty) addQty.value = '';
   document.getElementById('modal-proc').classList.add('active'); lockBodyScroll();
   recalcResumo();
 }
@@ -2299,8 +2310,106 @@ function recalcResumo() {
 
 function fecharModalProc() { document.getElementById('modal-proc').classList.remove('active'); unlockBodyScroll(); procOrderId=null; procFornIdx=null; procItens=null; procSplits={}; procSplitSeq=0; }
 
+// ── DESMEMBRAR / ADICIONAR ITEM ──────────────────────────────────────────────
+// Gera o id_display de um "pedido-filho" a partir do pedido atual: mesma raiz +
+// sufixo "-N" incremental (ex.: #Pinh0008 → #Pinh0008-2 → #Pinh0008-3). A raiz é
+// o id sem qualquer sufixo "-N" já existente, para não empilhar "-2-2".
+async function gerarIdFilho(idAtual) {
+  var root = String(idAtual || '').replace(/-\d+$/, '');
+  var maxN = 1; // a raiz conta como "parte 1"
+  if (supa) {
+    try {
+      var res = await supa.from('abastecimento').select('id_display');
+      if (!res.error && res.data) {
+        var seen = {};
+        res.data.forEach(function(r){
+          var id = r.id_display || '';
+          if (seen[id]) return; seen[id] = 1;
+          if (id.indexOf(root + '-') === 0) {
+            var suf = id.slice(root.length + 1);
+            if (/^\d+$/.test(suf)) { var n = parseInt(suf, 10); if (n > maxN) maxN = n; }
+          }
+        });
+      }
+    } catch(e) { /* usa maxN=1 */ }
+  }
+  return root + '-' + (maxN + 1);
+}
+
+// Preenche o select de produtos do modal de compra a partir do catálogo.
+function popularProdSelectProc() {
+  var sel = document.getElementById('proc-add-prod');
+  if (!sel) return;
+  var vistos = {};
+  var opts = ['<option value="">Adicionar item ao pedido…</option>'];
+  Object.keys(CATALOGO).sort(function(a,b){
+    return String((CATALOGO[a]||{}).label||a).localeCompare(String((CATALOGO[b]||{}).label||b),'pt-BR');
+  }).forEach(function(k){
+    (CATALOGO[k].produtos||[]).forEach(function(p){
+      var key = String(p.nome)+'||'+String(p.un||'');
+      if (vistos[key]) return; vistos[key] = 1;
+      var val = String(p.nome).replace(/"/g,'&quot;');
+      var lbl = String(p.nome) + (p.un ? (' ('+p.un+')') : '');
+      opts.push('<option value="'+val+'">'+lbl+'</option>');
+    });
+  });
+  sel.innerHTML = opts.join('');
+}
+
+// Adiciona um item novo ao pedido em processamento: insere a linha (status
+// 'solicitado', mesmo id_display) e já a mostra na tabela para comprar agora.
+async function adicionarItemAoPedido() {
+  var order=null; for(var i=0;i<ORDERS.length;i++){ if(ORDERS[i].id===procOrderId){ order=ORDERS[i]; break; } }
+  if(!order){ return; }
+  var sel = document.getElementById('proc-add-prod');
+  var nome = sel ? sel.value : '';
+  var qty = parseFloat((document.getElementById('proc-add-qty')||{}).value) || 0;
+  if (!nome) { alert('Selecione um produto.'); return; }
+  if (!(qty > 0)) { alert('Informe a quantidade.'); return; }
+  var prod = null, catKey = '';
+  Object.keys(CATALOGO).forEach(function(k){
+    (CATALOGO[k].produtos||[]).forEach(function(p){ if (!prod && p.nome === nome) { prod = p; catKey = k; } });
+  });
+  if (!prod) { alert('Produto não encontrado no catálogo.'); return; }
+  if (!supa) { alert('Supabase não inicializado.'); return; }
+  try {
+    var novaLinha = {
+      id_display:       order.id,
+      unidade:          (order.raw && order.raw.unidade) || null,
+      departamento:     (order.raw && order.raw.departamento) || null,
+      solicitante:      (order.raw && order.raw.solicitante) || null,
+      data_solicitacao: (order.raw && order.raw.dataSolicitacao) || null,
+      categoria:        catKey || null,
+      subcategoria:     prod.subcategoria || null,
+      produto_nome:     prod.nome,
+      unidade_medida:   prod.un || null,
+      qtd_solicitada:   qty,
+      valor_inicial:    Number(prod.valorUnitario) || null,
+      status:           'solicitado',
+      atualizado_por:   (currentUser && currentUser.name) || null
+    };
+    var res = await supa.from('abastecimento').insert(novaLinha).select('id').single();
+    if (res.error) throw new Error(res.error.message);
+    var novoItem = {
+      cat: (CATALOGO[catKey] && CATALOGO[catKey].label) || catKey, nome: prod.nome, un: prod.un || '',
+      qty: qty, vlPedido: Number(prod.valorUnitario) || 0, vlCompra: 0, fornecedor: '',
+      qtdComprada: 0, qtdRecebida: 0, _supaId: res.data.id, isBonus: false
+    };
+    if (!procItens) procItens = order.itensList;
+    procItens.push(novoItem);
+    var idx = procItens.length - 1;
+    var entregaDefault = order.entrega ? (function(dd){var p=dd.split('/');return p[2]+'-'+p[1]+'-'+p[0];})(order.entrega) : '';
+    document.getElementById('proc-tbody').appendChild(criarLinhaProcItem(novoItem, idx, null, entregaDefault));
+    if (sel) sel.value = '';
+    var q = document.getElementById('proc-add-qty'); if (q) q.value = '';
+    recalcResumo();
+    toast('Item adicionado ao pedido.');
+  } catch(e) { toast('Erro ao adicionar item: ' + e.message, true); }
+}
+
 // ── CONFIRMAR PROCESSAMENTO (Estágio 2 — Compras) ────────────────────────────
-async function confirmarPedido() {
+async function confirmarPedido(modo) {
+  var parcial = (modo === 'parcial');
   var order = null;
   for(var i=0;i<ORDERS.length;i++){ if(ORDERS[i].id===procOrderId){ order=ORDERS[i]; break; } }
   if(!order){ alert('Erro ao confirmar pedido.'); fecharModalProc(); return; }
@@ -2343,6 +2452,17 @@ async function confirmarPedido() {
   var semData = linhas.some(function(linha){ return linha.d.conf > 0 && !linha.d.entregaISO; });
   if (semData) { alert('Informe a data de entrega para todos os itens confirmados.'); return; }
 
+  // Compra PARCIAL: exige ao menos um item comprado agora; os itens não comprados
+  // vão para um pedido-filho (mantendo 'solicitado') em vez de virarem 'não realizado',
+  // para poderem ser comprados depois sem travar os que já seguiram adiante.
+  var childId = null;
+  if (parcial) {
+    var algumCompradoP = linhas.some(function(l){ return l.d.conf > 0; });
+    if (!algumCompradoP) { alert('Para salvar parcial, informe ao menos um item comprado agora.'); return; }
+    var haPendentes = linhas.some(function(l){ return !l.splitKey && l.d.conf === 0; });
+    if (haPendentes) { childId = await gerarIdFilho(order.id); }
+  }
+
   if (!reprocessandoForn) {
     // Pedido inteiro (primeira compra) — reconstrói a lista de fornecedores do zero
     order.fornecedores = Object.keys(fornGroups).map(function(forn){
@@ -2366,6 +2486,54 @@ async function confirmarPedido() {
       var novasLinhas = [];
       linhas.forEach(function(linha){
         var d = linha.d;
+        var comprou = d.conf > 0;
+
+        // Divisão entre fornecedores: só gera linha nova quando há quantidade comprada.
+        if (linha.splitKey) {
+          if (!comprou) return;
+          var catKeySplit = '';
+          Object.keys(CATALOGO).forEach(function(k){
+            (CATALOGO[k].produtos||[]).forEach(function(p){ if (!catKeySplit && p.nome === linha.item.nome) catKeySplit = k; });
+          });
+          novasLinhas.push({
+            id_display:       order.id,
+            unidade:          (order.raw && order.raw.unidade) || null,
+            departamento:     (order.raw && order.raw.departamento) || null,
+            solicitante:      (order.raw && order.raw.solicitante) || null,
+            data_solicitacao: (order.raw && order.raw.dataSolicitacao) || null,
+            categoria:        catKeySplit || null,
+            produto_nome:     linha.item.nome,
+            unidade_medida:   linha.item.un || null,
+            qtd_solicitada:   0,
+            valor_inicial:    linha.item.vlPedido || null,
+            qtd_comprada:     d.conf,
+            valor_compra:     d.conf * (d.vl || 0),
+            fornecedor:       d.forn !== '—' ? d.forn : null,
+            data_compra:      dataCompraISO,
+            data_entrega:     d.entregaISO || null,
+            comprador:        comprador,
+            obs_compras:      obsCompras || null,
+            status:           'comprado',
+            atualizado_por:   comprador
+          });
+          return;
+        }
+
+        var item = linha.item;
+
+        // Item NÃO comprado numa compra PARCIAL: move para o pedido-filho e mantém 'solicitado'
+        // (não grava dados de compra) — ele volta para a fila de Processamento.
+        if (!comprou && parcial && childId) {
+          var mv = { id_display: childId, atualizado_por: comprador };
+          updatesPromises.push(
+            item._supaId
+              ? supa.from('abastecimento').update(mv).eq('id', item._supaId)
+              : supa.from('abastecimento').update(mv).eq('id_display', order.id).eq('produto_nome', item.nome)
+          );
+          return;
+        }
+
+        // Comprado (comprou) OU não comprado numa finalização (vira 'nao_realizado').
         var dadosComuns = {
           qtd_comprada:  d.conf,
           valor_compra:  d.conf * (d.vl || 0),
@@ -2374,38 +2542,15 @@ async function confirmarPedido() {
           data_entrega:  d.entregaISO || null,
           comprador:     comprador,
           obs_compras:   obsCompras || null,
-          status:        d.conf > 0 ? 'comprado' : 'nao_realizado',
+          status:        comprou ? 'comprado' : 'nao_realizado',
           atualizado_por: comprador
         };
-        if (!linha.splitKey) {
-          if (d.vlNovo) dadosComuns.valor_inicial = d.vl; // só sobrescreve se usuário digitou
-          var item = linha.item;
-          updatesPromises.push(
-            item._supaId
-              ? supa.from('abastecimento').update(dadosComuns).eq('id', item._supaId)
-              : supa.from('abastecimento').update(dadosComuns).eq('id_display', order.id).eq('produto_nome', item.nome)
-          );
-        } else {
-          // Divisão entre fornecedores: cria uma linha nova no banco pro mesmo produto,
-          // clonando os dados de contexto do pedido original.
-          var catKey = '';
-          Object.keys(CATALOGO).forEach(function(k){
-            (CATALOGO[k].produtos||[]).forEach(function(p){ if (!catKey && p.nome === linha.item.nome) catKey = k; });
-          });
-          var stub = {
-            id_display:       order.id,
-            unidade:          (order.raw && order.raw.unidade) || null,
-            departamento:     (order.raw && order.raw.departamento) || null,
-            solicitante:      (order.raw && order.raw.solicitante) || null,
-            data_solicitacao: (order.raw && order.raw.dataSolicitacao) || null,
-            categoria:        catKey || null,
-            produto_nome:     linha.item.nome,
-            unidade_medida:   linha.item.un || null,
-            qtd_solicitada:   0,
-            valor_inicial:    linha.item.vlPedido || null
-          };
-          novasLinhas.push(Object.assign(stub, dadosComuns));
-        }
+        if (d.vlNovo) dadosComuns.valor_inicial = d.vl; // só sobrescreve se usuário digitou
+        updatesPromises.push(
+          item._supaId
+            ? supa.from('abastecimento').update(dadosComuns).eq('id', item._supaId)
+            : supa.from('abastecimento').update(dadosComuns).eq('id_display', order.id).eq('produto_nome', item.nome)
+        );
       });
 
       var results = await Promise.all(updatesPromises);
@@ -2421,7 +2566,11 @@ async function confirmarPedido() {
         var algumComprado = linhas.some(function(linha){ return linha.d.conf > 0; });
         if (order.raw) { order.raw.status = algumComprado ? 'comprado' : 'nao_realizado'; order.raw.comprador = comprador; }
       }
-      alert('Pedido '+order.id+' enviado para entregas.');
+      if (parcial && childId) {
+        alert('Compra parcial salva. Os itens não comprados foram para o pedido ' + childId + ' (Processamento), para finalizar depois.');
+      } else {
+        alert('Pedido '+order.id+' enviado para entregas.');
+      }
     } catch(e) {
       toast('Erro ao atualizar Compras: ' + e.message, true);
     }
@@ -2568,6 +2717,8 @@ async function gerarIdDisplay(unidade) {
           var id = row.id_display;
           if (!id || seen[id]) return;
           seen[id] = 1;
+          // Pedidos-filho (desmembramento, sufixo "-N") não contam na sequência.
+          if (/-\d+$/.test(id)) return;
           // Aceita o sufixo 'c' (pedidos vindos da contagem semanal de estoque)
           // ao ler o número, para a sequência da unidade continuar contínua.
           var m = id.match(/(\d+)c?$/i);
