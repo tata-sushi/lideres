@@ -878,7 +878,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <select class="fctrl" id="proc-add-prod" style="flex:2;min-width:180px;"><option value="">Adicionar item ao pedido…</option></select>
           <input class="fctrl" type="number" id="proc-add-qty" min="1" step="1" placeholder="Qtd" style="width:90px;flex:0 0 auto;">
-          <button type="button" class="modal-btn modal-btn-confirm" style="flex:0 0 auto;" onclick="adicionarItemAoPedido()">Adicionar item</button>
+          <button type="button" class="modal-btn modal-btn-confirm" style="flex:0 0 auto;font-size:18px;line-height:1;padding-left:16px;padding-right:16px;" title="Adicionar item ao pedido" onclick="adicionarItemAoPedido()">+</button>
         </div>
       </div>
       <div class="proc-resumo">
@@ -895,7 +895,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-btn-cancel" onclick="fecharModalProc()">Cancelar</button>
-      <button class="modal-btn" style="background:#F1A208;color:#111;font-weight:600;" onclick="confirmarPedido('parcial')" title="Compra os itens preenchidos agora e manda o restante para um pedido-filho, para comprar depois">Salvar parcial</button>
+      <button class="modal-btn" style="background:#F1A208;color:#111;font-weight:600;" onclick="confirmarPedido('parcial')" title="Compra os itens com quantidade e data agora; o restante vai para um pedido-filho, para comprar depois">Processar Parcialmente</button>
       <button class="modal-btn modal-btn-confirm" onclick="confirmarPedido('finalizar')">Confirmar</button>
     </div>
   </div>
@@ -2441,25 +2441,28 @@ async function confirmarPedido(modo) {
     var vlEfetivo  = vl > 0 ? vl : vlOriginal;   // usa catálogo se não preenchido
     if (!linha.splitKey) linha.item.vlPedido = vlEfetivo;
     linha.d = {conf:conf, vl:vlEfetivo, vlNovo:(vl>0), forn:forn||'—', entrega:entrega, entregaISO:entregaISO};
+    // "Comprado agora": tem quantidade e, na parcial, também data de entrega.
+    // (na parcial, item com quantidade mas SEM data conta como pendente → vai pro filho)
+    linha.comprou = conf > 0 && (!parcial || !!entregaISO);
     totalGeral += conf * vlEfetivo;
-    if(conf>0){
+    if(linha.comprou){
       var key = forn || '—';
       if(!fornGroups[key]) fornGroups[key] = [];
       fornGroups[key].push({ nome:linha.item.nome, un:linha.item.un, qty:conf, vlPedido:vlEfetivo, _supaId:linha.splitKey?null:linha.item._supaId });
     }
   });
 
-  var semData = linhas.some(function(linha){ return linha.d.conf > 0 && !linha.d.entregaISO; });
-  if (semData) { alert('Informe a data de entrega para todos os itens confirmados.'); return; }
-
-  // Compra PARCIAL: exige ao menos um item comprado agora; os itens não comprados
-  // vão para um pedido-filho (mantendo 'solicitado') em vez de virarem 'não realizado',
-  // para poderem ser comprados depois sem travar os que já seguiram adiante.
   var childId = null;
-  if (parcial) {
-    var algumCompradoP = linhas.some(function(l){ return l.d.conf > 0; });
-    if (!algumCompradoP) { alert('Para salvar parcial, informe ao menos um item comprado agora.'); return; }
-    var haPendentes = linhas.some(function(l){ return !l.splitKey && l.d.conf === 0; });
+  if (!parcial) {
+    // Finalização: todo item com quantidade precisa de data de entrega.
+    var semData = linhas.some(function(linha){ return linha.d.conf > 0 && !linha.d.entregaISO; });
+    if (semData) { alert('Informe a data de entrega para todos os itens confirmados.'); return; }
+  } else {
+    // Parcial: compra agora só os itens com quantidade E data. O resto (sem data
+    // ou zerado) vai para um pedido-filho mantendo 'solicitado', para comprar depois.
+    var algumCompradoP = linhas.some(function(l){ return l.comprou; });
+    if (!algumCompradoP) { alert('Para processar parcialmente, preencha a quantidade e a data de entrega em ao menos um item.'); return; }
+    var haPendentes = linhas.some(function(l){ return !l.splitKey && !l.comprou; });
     if (haPendentes) { childId = await gerarIdFilho(order.id); }
   }
 
@@ -2486,7 +2489,7 @@ async function confirmarPedido(modo) {
       var novasLinhas = [];
       linhas.forEach(function(linha){
         var d = linha.d;
-        var comprou = d.conf > 0;
+        var comprou = linha.comprou; // quantidade (+ data, na parcial)
 
         // Divisão entre fornecedores: só gera linha nova quando há quantidade comprada.
         if (linha.splitKey) {
