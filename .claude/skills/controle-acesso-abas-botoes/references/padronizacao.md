@@ -26,6 +26,10 @@ Mantenha a correspondência classe → `tipo` do catálogo, para não misturar d
 | `drawer-sam-btn`, `btn-avaliar`, `btn-copia-card`, `btn-registrar`, botões de ação | `botao` | oculto |
 | (área de valor R$, sem elemento próprio) | `valor` | oculto |
 
+**Botão é um nível único** — drawer e página não se distinguem (todos `tipo='botao'`).
+**Botões de navegação do header** (`header-plus`: zoom, fixar, abrir drawer, "+") **não
+recebem id** — vêm junto com o acesso à página.
+
 ## 3. Vocabulário canônico de abas
 
 Padronize as abas comuns nestes slugs (são os mais espalhados hoje):
