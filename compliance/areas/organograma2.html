@@ -833,23 +833,22 @@
 </div>
 
 <!-- ══ SCRIPT ══════════════════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 (function() {
   'use strict';
 
-  // ============================================
-  // CONFIGURAÇÃO — cole aqui a URL do Web App
-  // ============================================
-  var ENDPOINT = 'https://script.google.com/macros/s/AKfycbxUWUoOmv-Cn19-FjUJ18jYTu5G_embOGDaQDsgC4Jd8agVfgqs98Tbu3qlqa9e7tpu/exec';
-  var CES_URL  = 'https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec';
-  // Armários — mesma base usada em /compliance/kpis/rh/armarios.html
-  var ARMARIO_URL = 'https://script.google.com/macros/s/AKfycbxD9BwHYMh44Zzob_94BKUgoetxhRxm7s7_cYncnQkCYpPrwhzpIO0t3ihSpY72Amxp-A/exec';
-  // Medicina ocupacional — mesma base usada em /compliance/kpis/rh/medicina.html
-  var MEDICINA_URL = 'https://script.google.com/macros/s/AKfycbw2d8S-nsu0cvs5oPyRZTsXtYvBC_9B85IBkE8t5IGoAsoq2nEumkNGllhSdIGUoXnTbg/exec';
+  // Cliente Supabase anon (página de acesso liberado). Armário/Medicina via RPCs públicos enxutos.
+  var _supa = (window.supabase && window.supabase.createClient)
+    ? window.supabase.createClient(
+        'https://aoqsbusfrffapjglpqjk.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvcXNidXNmcmZmYXBqZ2xwcWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MzcxMjQsImV4cCI6MjA5ODUxMzEyNH0.Dd9Z3SR3-18mQVX_yqUbIi0PG-eltLNjmOZB1Xu7W9o')
+    : null;
 
-  // Aba "Salarios" → sub-modal REMUNERAÇÃO  |  Aba "Cargos" → sub-modal DESC. DO CARGO
-  var _cesSalarios = {};
-  var _cesCargos   = {};
+  // ============================================
+  // Árvore agora vem do Supabase (org_arvore_publico). CES (cargo/salário) segue no Apps Script.
+  // ============================================
+
 
   // Armários indexados por matrícula e por nome do colaborador
   var _armariosByMatricula = {};
@@ -862,32 +861,6 @@
   var arvore = null;
   var nodeMap = {};
   var peerNos = [];  // sócios vindos da planilha (sem supervisor, não-CEO)
-
-  function fmtMoney(val) {
-    if (val === null || val === undefined || val === '') return '—';
-    var n = parseFloat(String(val).replace(',', '.'));
-    if (isNaN(n) || n === 0) return '—';
-    return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-
-  function normCargoId(s) {
-    return String(s || '').trim().toLowerCase();
-  }
-
-  function carregarCES() {
-    fetch(CES_URL + '?action=getAll')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (!data.ok) return;
-        (data.salarios || []).forEach(function(s) {
-          if (s.cargo_id) _cesSalarios[normCargoId(s.cargo_id)] = s;
-        });
-        (data.cargos || []).forEach(function(c) {
-          if (c.cargo_id) _cesCargos[normCargoId(c.cargo_id)] = c;
-        });
-      })
-      .catch(function() {});
-  }
 
   // ============================================
   // CARREGAR ARMÁRIOS (mesma base de armarios.html)
@@ -902,10 +875,11 @@
   }
 
   function carregarArmarios() {
-    fetch(ARMARIO_URL + '?action=armarios')
-      .then(function(r) { return r.json(); })
-      .then(function(lista) {
-        (lista || []).forEach(function(a) {
+    if (!_supa) return;
+    _supa.rpc('org_armarios_publico')
+      .then(function(res) {
+        var lista = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
+        lista.forEach(function(a) {
           if (!a || !a.num) return;
           if (a.matricula) _armariosByMatricula[normMat(a.matricula)] = a;
           if (a.colaborador) _armariosByNome[normNome(a.colaborador)] = a;
@@ -935,35 +909,20 @@
   }
 
   function carregarExames() {
-    fetch(MEDICINA_URL + '?action=getData')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        var rows = (data && data.values) || [];
-        if (rows.length < 2) return;
-        var headers = rows[0].map(_headerKey);
-        function col() {  // retorna índice da 1ª chave existente
-          for (var i = 0; i < arguments.length; i++) {
-            var idx = headers.indexOf(arguments[i]);
-            if (idx !== -1) return idx;
-          }
-          return -1;
-        }
-        var iMat   = col('matricula');
-        var iNome  = col('nome');
-        var iProx  = col('proxima_realizacao', 'data_do_proximo_exame', 'data_proximo_exame', 'proximo_exame');
-        var iReal  = col('realiza_exame', 'realiza');
-        for (var r = 1; r < rows.length; r++) {
-          var row = rows[r];
-          if (!row || !row.some(function(c) { return c && String(c).trim(); })) continue;
+    if (!_supa) return;
+    _supa.rpc('org_exames_publico')
+      .then(function(res) {
+        var lista = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
+        lista.forEach(function(e) {
           var rec = {
-            proxima: iProx !== -1 ? String(row[iProx] || '').trim() : '',
-            realiza: iReal !== -1 ? String(row[iReal] || '').trim() : ''
+            proxima: String(e.proxima_realizacao || '').trim(),
+            realiza: String(e.realiza_exame || '').trim()
           };
-          var mat = iMat !== -1 ? String(row[iMat] || '').trim() : '';
-          var nm  = iNome !== -1 ? String(row[iNome] || '').trim() : '';
+          var mat = String(e.matricula || '').trim();
+          var nm  = String(e.nome || '').trim();
           if (mat) _exameByMatricula[normMat(mat)] = rec;
           if (nm)  _exameByNome[normNome(nm)] = rec;
-        }
+        });
       })
       .catch(function() {});
   }
@@ -994,47 +953,173 @@
   // ============================================
   // CARREGAR DADOS DO APPS SCRIPT
   // ============================================
+  // ==== ÁRVORE via Supabase — helpers portados de organograma.html ====
+  var NIVEL_ORD = { diretoria: 0, gerencia: 1, supervisor: 2, operacional: 3 };
+  function _norm(s) {
+    return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  }
+
+  function gerarIniciais(nome) {
+    var partes = String(nome || '').trim().split(/\s+/).filter(Boolean);
+    if (partes.length === 0) return '?';
+    var a = partes[0].charAt(0);
+    var b = partes.length > 1 ? partes[partes.length - 1].charAt(0) : '';
+    return (a + b).toUpperCase();
+  }
+
+  function classeUnidade(unidade) {
+    var u = _norm(unidade);
+    if (!u) return null;
+    if (u.indexOf('puc') >= 0 || u.indexOf('poke') >= 0) return 'puc';
+    if (u.indexOf('itaim') >= 0) return 'itaim';
+    if (u.indexOf('pinheiros') >= 0) return 'pinheiros';
+    if (u.indexOf('tata house') >= 0 || u.indexOf('house') >= 0) return 'tatahouse';
+    return null;
+  }
+
+  function detectarNivel(cargo) {
+    var c = _norm(cargo);
+    if (/^(diretor|ceo|socio|presidente|coo|cfo|chro|cco)/.test(c)) return 'diretoria';
+    if (/^(gerente|coord|chef executivo)/.test(c)) return 'gerencia';
+    if (/^(sup|lider|encarregado|chef|maitre)/.test(c)) return 'supervisor';
+    return 'operacional';
+  }
+
+  function ordenarNode(n) {
+    if (!n.children || n.children.length === 0) return;
+    n.children.sort(function(a, b) {
+      var na = NIVEL_ORD[a.nivel] !== undefined ? NIVEL_ORD[a.nivel] : 3;
+      var nb = NIVEL_ORD[b.nivel] !== undefined ? NIVEL_ORD[b.nivel] : 3;
+      if (na !== nb) return na - nb;
+      return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
+    });
+    n.children.forEach(ordenarNode);
+  }
+
+  function construirHierarquia(colaboradores) {
+    var mapa = {};
+    var nodes = colaboradores.map(function(c) {
+      var idPessoa = c.id_pessoa || '';
+      var matricula = c.matricula || '';
+      var node = {
+        id: idPessoa || ('fixo_' + matricula),
+        idPessoa: idPessoa,
+        matricula: matricula,
+        nome: c.nome || '',
+        cargo: c.cargo || '',
+        cargoId: c.cargo_id || '',
+        supervisorId: c.id_superior || '',
+        unidade: c.unidade || '',
+        departamento: c.departamento || '',
+        admissao: c.data_admissao || '',
+        dataNascimento: c.data_nascimento || '',
+        foto: c.foto || '',
+        nivel: detectarNivel(c.cargo),
+        unitClass: classeUnidade(c.unidade),
+        iniciais: gerarIniciais(c.nome),
+        children: []
+      };
+      mapa[node.id] = node;
+      return node;
+    });
+
+    var orfaos = [];
+    var semSuperior = [];
+    nodes.forEach(function(n) {
+      var sup = n.supervisorId;
+      if (sup && sup === n.id) { orfaos.push(n); return; }         // auto-referência
+      if (sup && mapa[sup]) { mapa[sup].children.push(n); return; } // filho do líder
+      if (sup) { orfaos.push(n); return; }                          // líder ausente
+      semSuperior.push(n);                                          // sem superior → raiz/sócio
+    });
+
+    // Escolhe raiz entre os "sem superior": CEO primeiro, senão maior nível.
+    semSuperior.sort(function(a, b) {
+      var ca = /^ceo$/.test(_norm(a.cargo)) ? 0 : 1;
+      var cb = /^ceo$/.test(_norm(b.cargo)) ? 0 : 1;
+      if (ca !== cb) return ca - cb;
+      var na = NIVEL_ORD[a.nivel] !== undefined ? NIVEL_ORD[a.nivel] : 3;
+      var nb = NIVEL_ORD[b.nivel] !== undefined ? NIVEL_ORD[b.nivel] : 3;
+      if (na !== nb) return na - nb;
+      return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
+    });
+
+    var raiz = semSuperior[0] || null;
+    var peers = [];
+    for (var i = 1; i < semSuperior.length; i++) {
+      var s = semSuperior[i];
+      if (s.nivel === 'diretoria') peers.push(s); // sócios/diretores ao lado do CEO
+      else orfaos.push(s);
+    }
+
+    // Órfãos entram sob a raiz.
+    if (raiz) {
+      orfaos.forEach(function(o) { if (o !== raiz) raiz.children.push(o); });
+      ordenarNode(raiz);
+    }
+
+    return { arvore: raiz, peers: peers };
+  }
+
+  function calcularStats(nodes) {
+    var stats = { itaim: 0, pinheiros: 0, puc: 0, tatahouse: 0, backoffice: 0 };
+    nodes.forEach(function(n) {
+      var u = n.unitClass;
+      if (u === 'itaim') stats.itaim++;
+      else if (u === 'pinheiros') stats.pinheiros++;
+      else if (u === 'puc') stats.puc++;
+      else if (u === 'tatahouse') stats.tatahouse++;
+      else stats.backoffice++;
+    });
+    return stats;
+  }
+
+  function coletarTodos(n) {
+    if (!n) return [];
+    var out = [n];
+    (n.children || []).forEach(function(c) { out = out.concat(coletarTodos(c)); });
+    return out;
+  }
+
   function carregarDados(opts) {
     opts = opts || {};
     showLoading(true);
     document.getElementById('errBox').classList.remove('show');
+    if (!_supa) { showError('Supabase indisponivel'); return; }
 
-    var url = ENDPOINT + (opts.refresh ? (ENDPOINT.indexOf('?') >= 0 ? '&' : '?') + 'refresh=1' : '');
-    fetch(url)
-      .then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(function(data) {
-        if (data.erro) throw new Error(data.erro);
-        if (!data.arvore) throw new Error('Resposta invalida (sem arvore)');
+    _supa.rpc('org_arvore_publico').then(function(res) {
+        if (res.error) throw new Error(res.error.message || 'org_arvore_publico');
+        var linhas = res.data || [];
+        if (!linhas.length) throw new Error('Nenhum colaborador ativo encontrado');
 
-        arvore = inicializarNode(data.arvore);
+        var built = construirHierarquia(linhas);
+        if (!built.arvore) throw new Error('Nao foi possivel montar a arvore (sem raiz)');
+
+        var stats = calcularStats(coletarTodos(built.arvore).concat(built.peers));
+        var total = linhas.length;
+
+        arvore = inicializarNode(built.arvore);
         sortChildren(arvore);
         nodeMap = {};
         mapearNos(arvore, null);
-        peerNos = (data.peers || []).map(function(p) { return Object.assign({ children: [] }, p); });
+        peerNos = built.peers.map(function(p) { return Object.assign({ children: [] }, p); });
         peerNos.forEach(function(p) { nodeMap[p.id] = p; });
 
-        atualizarStats(data.stats || {}, data.total || 0);
-        // Filtro inicial: Itaim (recalcula flags e reflete no seletor antes do 1º render)
+        atualizarStats(stats, total);
         recomputeFilterFlags(arvore);
         var _uf0 = document.getElementById('unitFilter');
         if (_uf0) { _uf0.value = _unitFilter; _uf0.classList.toggle('active', !!_unitFilter); }
         showLoading(false);
         detectMode(true);
-        // Avisos só depois que o carregamento terminou
         setTimeout(showHints, 600);
         var _cv = document.getElementById('canvas');
         if (_cv) _cv.scrollTop = 0;
         if (window.scrollTo) window.scrollTo(0, 0);
-        // Reaplica o zoom/centralização depois do layout assentar (fitScreen centraliza)
         setTimeout(function() { if (window.fitScreen) window.fitScreen(); }, 200);
 
-        console.log('Carregado:', data.total, 'colaboradores');
-      })
-      .catch(function(err) {
-        showError(err.message + '. Verifique se o ENDPOINT esta correto e o Web App publicado como "Qualquer pessoa".');
+        console.log('Carregado:', total, 'colaboradores');
+      }).catch(function(err) {
+        showError((err && err.message ? err.message : err) + '. (falha ao carregar do Supabase)');
       });
   }
 
@@ -1991,96 +2076,6 @@
     return str.split(/,|;/).map(function(s) { return s.trim(); }).filter(Boolean);
   }
 
-  window.abrirDescricaoCargo = function() {
-    if (!_modalNode) return;
-    var cargoId = _modalNode.cargoId;
-    var desc = cargoId ? _cesCargos[normCargoId(cargoId)] : null;
-    document.getElementById('smCargoTitle').textContent = _modalNode.cargo || '—';
-
-    var body = document.getElementById('smCargoBody');
-    if (!desc) {
-      body.innerHTML =
-        '<div style="padding:16px 0;text-align:center;font-family:\'DM Mono\',monospace;font-size:11px;color:var(--muted);">' +
-        (cargoId ? 'Descrição não cadastrada para este cargo.' : 'cargo_id não disponível para este colaborador.') +
-        '</div>';
-    } else {
-      var html = '';
-      if (desc.objetivos) {
-        html += '<div class="sub-modal-section"><div class="sub-modal-label">Objetivo</div>' +
-          '<p class="sub-modal-text">' + escapeHtml(desc.objetivos) + '</p></div>';
-      }
-      var resp = splitLines(desc.responsabilidades);
-      if (resp.length) {
-        html += '<div class="sub-modal-section"><div class="sub-modal-label">Responsabilidades</div><ul class="sub-modal-list">' +
-          resp.map(function(r) { return '<li>' + escapeHtml(r) + '</li>'; }).join('') +
-          '</ul></div>';
-      }
-      var qualItems = [];
-      if (desc.formacao)     qualItems.push({ key: 'Formação',      val: desc.formacao });
-      if (desc.experiencia)  qualItems.push({ key: 'Experiências',  val: desc.experiencia });
-      if (desc.competencias || desc.comp_tec) qualItems.push({ key: 'Competências Técnicas',        val: desc.comp_tec || desc.competencias });
-      if (desc.cnh          || desc.comp_comp) qualItems.push({ key: 'Competências Comportamentais', val: desc.comp_comp || desc.cnh });
-      if (qualItems.length) {
-        html += '<div class="sub-modal-section"><div class="sub-modal-label">Qualificações</div><ul class="qual-list">' +
-          qualItems.map(function(q) {
-            return '<li><strong>' + escapeHtml(q.key) + ':</strong> ' + escapeHtml(q.val) + '</li>';
-          }).join('') + '</ul></div>';
-      }
-      var epiItems = [];
-      if (desc.uniformes)  epiItems.push({ key: 'Uniformes', val: desc.uniformes });
-      if (desc.epis)       epiItems.push({ key: 'EPIs',       val: desc.epis });
-      if (epiItems.length) {
-        html += '<div class="sub-modal-section"><div class="sub-modal-label">Uniformes e Epi\'s</div><ul class="qual-list">' +
-          epiItems.map(function(q) {
-            return '<li><strong>' + escapeHtml(q.key) + ':</strong> ' + escapeHtml(q.val) + '</li>';
-          }).join('') + '</ul></div>';
-      }
-      if (!html) {
-        html = '<div style="padding:16px 0;text-align:center;font-family:\'DM Mono\',monospace;font-size:11px;color:var(--muted);">Descrição não cadastrada para este cargo.</div>';
-      }
-      body.innerHTML = html;
-    }
-    document.getElementById('modal').classList.add('modal-bg--hidden');
-    document.getElementById('subModalCargo').classList.add('show');
-  };
-
-  window.abrirRemuneracao = function() {
-    if (!_modalNode) return;
-    var _p = ((window.__lideresSession && window.__lideresSession.perfil) || '').toLowerCase();
-    if (_p !== 'admin' && _p !== 'analista-rh') return;
-    var cargoId = _modalNode.cargoId;
-    var sal = cargoId ? _cesSalarios[normCargoId(cargoId)] : null;
-    document.getElementById('smRemTitle').textContent = _modalNode.cargo || '—';
-
-    var body = document.getElementById('smRemBody');
-    if (!sal) {
-      body.innerHTML =
-        '<div style="padding:16px 0;text-align:center;font-family:\'DM Mono\',monospace;font-size:11px;color:var(--muted);">' +
-        (cargoId ? 'Remuneração não cadastrada para este cargo.' : 'cargo_id não disponível para este colaborador.') +
-        '</div>';
-    } else {
-      function remRow(label, val) {
-        return '<div class="modal-row"><span>' + label + '</span><span>' + val + '</span></div>';
-      }
-      var html = '';
-      html += remRow('Salário Fixo',  escapeHtml(fmtMoney(sal.salario_fixo)));
-      html += remRow('Bruto Aprox.',  escapeHtml(fmtMoney(sal.bruto_aproximado)));
-      if (sal.periculosidade && parseFloat(sal.periculosidade) > 0)
-        html += remRow('Periculosidade', escapeHtml(fmtMoney(sal.periculosidade)));
-      if (sal.insalubridade && parseFloat(sal.insalubridade) > 0)
-        html += remRow('Insalubridade', escapeHtml(fmtMoney(sal.insalubridade)));
-      if (sal.ponto_gorjeta && parseInt(sal.ponto_gorjeta, 10) > 0)
-        html += remRow('Pts Gorjeta', parseInt(sal.ponto_gorjeta, 10) + ' pt' + (parseInt(sal.ponto_gorjeta, 10) !== 1 ? 's' : ''));
-      if (sal.ponto_premio && parseInt(sal.ponto_premio, 10) > 0)
-        html += remRow('Pts Prêmio', parseInt(sal.ponto_premio, 10) + ' pt' + (parseInt(sal.ponto_premio, 10) !== 1 ? 's' : ''));
-      if (sal.obs)
-        html += remRow('Obs', escapeHtml(sal.obs));
-      body.innerHTML = html;
-    }
-    document.getElementById('modal').classList.add('modal-bg--hidden');
-    document.getElementById('subModalRem').classList.add('show');
-  };
-
   window.closeSubModal = function(id) {
     document.getElementById(id).classList.remove('show');
     document.getElementById('modal').classList.remove('modal-bg--hidden');
@@ -2192,7 +2187,6 @@
   }
 
   carregarDados();
-  carregarCES();
   carregarArmarios();
   carregarExames();
 

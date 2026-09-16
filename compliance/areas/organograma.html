@@ -70,6 +70,11 @@
 .header-plus { width: 28px; height: 28px; background: var(--citric); border: none; border-radius: 4px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: opacity 0.15s; }
   .header-plus:hover { opacity: 0.85; }
   .header-plus svg { width: 16px; height: 16px; stroke: var(--carbon); fill: none; stroke-width: 2.5; stroke-linecap: round; }
+@keyframes hr-spin { to { transform: rotate(360deg); } }
+#btn-hard-refresh.is-loading svg { animation: hr-spin .7s linear infinite; }
+#btn-hard-refresh.is-loading { pointer-events: none; opacity: .7; }
+#btn-pin.is-pinned svg { fill: var(--citric); }
+#btn-zoom-out:disabled,#btn-zoom-in:disabled{opacity:.32;cursor:default;}
   .header-title {
     font-size: 18px;
     font-weight: 700;
@@ -528,6 +533,31 @@
     overflow: hidden; border: 3px solid var(--carbon);
   }
   .modal-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .modal-avatar.clickable { cursor: zoom-in; }
+  .modal-avatar.clickable:hover { border-color: var(--vinho); }
+  /* Lightbox da foto — clicar na foto do modal amplia */
+  .photo-lightbox {
+    position: fixed; inset: 0; z-index: 4000;
+    background: rgba(0,0,0,.85);
+    display: none; align-items: center; justify-content: center;
+    padding: 24px; cursor: zoom-out;
+    animation: photoLightboxIn .12s ease-out;
+  }
+  .photo-lightbox.show { display: flex; }
+  .photo-lightbox img {
+    max-width: 92vw; max-height: 88vh; object-fit: contain;
+    border-radius: 14px; border: 3px solid #FFFFFF;
+    box-shadow: 0 24px 70px rgba(0,0,0,.55);
+  }
+  .photo-lightbox-close {
+    position: absolute; top: 18px; right: 18px;
+    width: 40px; height: 40px; border-radius: 50%;
+    border: none; background: rgba(255,255,255,.14); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .photo-lightbox-close:hover { background: rgba(255,255,255,.28); }
+  .photo-lightbox-close svg { width: 18px; height: 18px; stroke: #FFFFFF; fill: none; stroke-width: 2.4; stroke-linecap: round; }
+  @keyframes photoLightboxIn { from { opacity: 0; } to { opacity: 1; } }
   .modal h3 { font-size: 18px; font-weight: 700; color: var(--carbon); letter-spacing: -0.3px; text-align: center; margin-bottom: 4px; }
   .modal-role { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); text-align: center; margin-bottom: 9px; }
   /* selos de avaliação — círculos com check (apagados por padrão, acendem conforme avaliações) */
@@ -842,18 +872,32 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <img src="/compliance/areas/institucional/logos/logocompliance.png" alt="TATÁ" class="header-logo">
   <div class="header-divider"></div>
   <div class="header-text">
-    <div class="header-title">Organograma</div>
     <div class="header-subtitle">TATÁ Sushi · Gente &amp; Gestão</div>
   </div>
   <div class="header-right">
     <button class="header-plus" onclick="history.back()" title="Voltar">
       <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
     </button>
+  <button class="header-plus" id="btn-hard-refresh" onclick="hardRefresh()" title="Atualizar">
+    <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+  </button>
+  <button class="header-plus" id="btn-zoom-out" onclick="zoomOut()" title="Diminuir zoom">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+  </button>
+  <button class="header-plus" id="btn-zoom-in" onclick="zoomIn()" title="Aumentar zoom">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/><line x1="11" y1="8" x2="11" y2="14"/></svg>
+  </button>
+  <button class="header-plus" id="btn-pin" onclick="pinNoApp()" title="Fixar no menu do app" style="display:none">
+    <svg viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
+  </button>
+
     <button class="header-plus" onclick="openDrawer()" title="Drawer">
       <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </button>
   </div>
 </header>
+
+<div id="zoom-content">
 
 <!-- ESTADOS -->
 <div class="err-box"><div class="err-inner" id="errBox"></div></div>
@@ -971,6 +1015,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<!-- LIGHTBOX DA FOTO -->
+<div class="photo-lightbox" id="photoLightbox" onclick="closePhotoLightbox()">
+  <button class="photo-lightbox-close" type="button" aria-label="Fechar" onclick="closePhotoLightbox()">
+    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+  <img id="photoLightboxImg" src="" alt=""/>
+</div>
+
 <!-- SUB-MODAL: DESC. DO CARGO -->
 <div class="sub-modal-bg" id="subModalCargo">
   <div class="sub-modal cargo">
@@ -1002,6 +1054,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <!-- FOOTER -->
+</div><!-- /zoom-content -->
 <footer class="footer">
   <div class="footer-brand">TATÁ SUSHI &nbsp;|&nbsp; TATÁ POKE &nbsp;|&nbsp; 2016 – 2026</div>
   <div class="footer-updated" id="footerDate">Atualizado em —</div>
@@ -1091,18 +1144,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   'use strict';
 
   // ============================================
-  // CONFIGURAÇÃO — cole aqui a URL do Web App
+  // CONFIGURAÇÃO
+  // Árvore + CES vêm do Supabase (schema tata_plus).
   // ============================================
-  var ENDPOINT = 'https://script.google.com/macros/s/AKfycbxUWUoOmv-Cn19-FjUJ18jYTu5G_embOGDaQDsgC4Jd8agVfgqs98Tbu3qlqa9e7tpu/exec';
-  var CES_URL  = 'https://script.google.com/macros/s/AKfycbw2xzOPIsuWKeKwgpKatRyzAOWsvurH8QessggIRaKK3ftrPHdZeDguMJZGxr01z7Y5/exec';
-  // Armários — mesma base usada em /compliance/kpis/rh/armarios.html
-  var ARMARIO_URL = 'https://script.google.com/macros/s/AKfycbxD9BwHYMh44Zzob_94BKUgoetxhRxm7s7_cYncnQkCYpPrwhzpIO0t3ihSpY72Amxp-A/exec';
-  // Medicina ocupacional — mesma base usada em /compliance/kpis/rh/medicina.html
-  var MEDICINA_URL = 'https://script.google.com/macros/s/AKfycbw2d8S-nsu0cvs5oPyRZTsXtYvBC_9B85IBkE8t5IGoAsoq2nEumkNGllhSdIGUoXnTbg/exec';
+  function comSupa(cb){ if(window.__lideresSupa){cb(window.__lideresSupa);return;} window.addEventListener('lideres:supa',function(){cb(window.__lideresSupa);},{once:true}); }
+  // Armário e Próximo exame do colaborador agora vêm do Supabase
+  // (RPCs armarios_listar / exames_listar — mesma base de armarios.html/medicina.html).
 
   // Aba "Salarios" → sub-modal REMUNERAÇÃO  |  Aba "Cargos" → sub-modal DESC. DO CARGO
   var _cesSalarios = {};
   var _cesCargos   = {};
+  // Permissão de ver valores financeiros (área 'cargos') — resolvida no servidor
+  // (painel admin → Valores financeiros). Sem trava de perfil no front.
+  var _podeVerValores = false;
 
   // Armários indexados por matrícula e por nome do colaborador
   var _armariosByMatricula = {};
@@ -1138,18 +1192,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   }
 
   function carregarCES() {
-    fetch(CES_URL + '?action=getAll')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (!data.ok) return;
+    comSupa(function(supa) {
+      supa.schema('tata_plus').rpc('organograma_ces').then(function(res) {
+        var data = res && res.data;
+        if (!data || !data.ok) return;
+        _podeVerValores = !!data.pode_ver_valores;
         (data.salarios || []).forEach(function(s) {
           if (s.cargo_id) _cesSalarios[normCargoId(s.cargo_id)] = s;
         });
         (data.cargos || []).forEach(function(c) {
           if (c.cargo_id) _cesCargos[normCargoId(c.cargo_id)] = c;
         });
-      })
-      .catch(function() {});
+      }, function() {});
+    });
   }
 
   // ============================================
@@ -1165,16 +1220,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   }
 
   function carregarArmarios() {
-    fetch(ARMARIO_URL + '?action=armarios')
-      .then(function(r) { return r.json(); })
-      .then(function(lista) {
-        (lista || []).forEach(function(a) {
+    comSupa(function(supa) {
+      supa.schema('tata_plus').rpc('armarios_listar').then(function(res) {
+        if (res.error) return;
+        (res.data || []).forEach(function(a) {
           if (!a || !a.num) return;
-          if (a.matricula) _armariosByMatricula[normMat(a.matricula)] = a;
+          if (a.matricula)   _armariosByMatricula[normMat(a.matricula)] = a;
           if (a.colaborador) _armariosByNome[normNome(a.colaborador)] = a;
         });
-      })
-      .catch(function() {});
+      }, function() {});
+    });
   }
 
   // Retorna o armário do colaborador (por matrícula ou nome) ou null
@@ -1188,47 +1243,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   // ============================================
   // CARREGAR PRÓXIMO EXAME (mesma base de medicina.html)
   // ============================================
-  // normaliza cabeçalho da planilha → chave (igual a medicina.html)
-  function _headerKey(h) {
-    return String(h || '').toLowerCase().trim()
-      .replace(/[áàâã]/g, 'a').replace(/[éê]/g, 'e')
-      .replace(/[í]/g, 'i').replace(/[óôõ]/g, 'o')
-      .replace(/[ú]/g, 'u').replace(/[ç]/g, 'c')
-      .replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '_');
-  }
-
   function carregarExames() {
-    fetch(MEDICINA_URL + '?action=getData')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        var rows = (data && data.values) || [];
-        if (rows.length < 2) return;
-        var headers = rows[0].map(_headerKey);
-        function col() {  // retorna índice da 1ª chave existente
-          for (var i = 0; i < arguments.length; i++) {
-            var idx = headers.indexOf(arguments[i]);
-            if (idx !== -1) return idx;
-          }
-          return -1;
-        }
-        var iMat   = col('matricula');
-        var iNome  = col('nome');
-        var iProx  = col('proxima_realizacao', 'data_do_proximo_exame', 'data_proximo_exame', 'proximo_exame');
-        var iReal  = col('realiza_exame', 'realiza');
-        for (var r = 1; r < rows.length; r++) {
-          var row = rows[r];
-          if (!row || !row.some(function(c) { return c && String(c).trim(); })) continue;
+    comSupa(function(supa) {
+      supa.schema('tata_plus').rpc('exames_listar').then(function(res) {
+        if (res.error) return;
+        (res.data || []).forEach(function(row) {
           var rec = {
-            proxima: iProx !== -1 ? String(row[iProx] || '').trim() : '',
-            realiza: iReal !== -1 ? String(row[iReal] || '').trim() : ''
+            proxima: String(row.proxima_realizacao || '').trim(),
+            realiza: String(row.realiza_exame || '').trim()
           };
-          var mat = iMat !== -1 ? String(row[iMat] || '').trim() : '';
-          var nm  = iNome !== -1 ? String(row[iNome] || '').trim() : '';
+          var mat = String(row.matricula || '').trim();
+          var nm  = String(row.nome || '').trim();
           if (mat) _exameByMatricula[normMat(mat)] = rec;
           if (nm)  _exameByNome[normNome(nm)] = rec;
-        }
-      })
-      .catch(function() {});
+        });
+      }, function() {});
+    });
   }
 
   // Texto do próximo exame para o colaborador
@@ -1255,31 +1285,160 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   }
 
   // ============================================
-  // CARREGAR DADOS DO APPS SCRIPT
+  // CONSTRUÇÃO DA HIERARQUIA (portado do Apps Script)
+  // Fonte: profiles (Supabase) via RPC organograma_colaboradores.
+  // ============================================
+  function _norm(s) {
+    return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  }
+
+  function detectarNivel(cargo) {
+    var c = _norm(cargo);
+    if (/^(diretor|ceo|socio|presidente|coo|cfo|chro|cco)/.test(c)) return 'diretoria';
+    if (/^(gerente|coord|chef executivo)/.test(c)) return 'gerencia';
+    if (/^(sup|lider|encarregado|chef|maitre)/.test(c)) return 'supervisor';
+    return 'operacional';
+  }
+
+  function classeUnidade(unidade) {
+    var u = _norm(unidade);
+    if (!u) return null;
+    if (u.indexOf('puc') >= 0 || u.indexOf('poke') >= 0) return 'puc';
+    if (u.indexOf('itaim') >= 0) return 'itaim';
+    if (u.indexOf('pinheiros') >= 0) return 'pinheiros';
+    if (u.indexOf('tata house') >= 0 || u.indexOf('house') >= 0) return 'tatahouse';
+    return null;
+  }
+
+  function gerarIniciais(nome) {
+    var partes = String(nome || '').trim().split(/\s+/).filter(Boolean);
+    if (partes.length === 0) return '?';
+    var a = partes[0].charAt(0);
+    var b = partes.length > 1 ? partes[partes.length - 1].charAt(0) : '';
+    return (a + b).toUpperCase();
+  }
+
+  var NIVEL_ORD = { diretoria: 0, gerencia: 1, supervisor: 2, operacional: 3 };
+
+  function ordenarNode(n) {
+    if (!n.children || n.children.length === 0) return;
+    n.children.sort(function(a, b) {
+      var na = NIVEL_ORD[a.nivel] !== undefined ? NIVEL_ORD[a.nivel] : 3;
+      var nb = NIVEL_ORD[b.nivel] !== undefined ? NIVEL_ORD[b.nivel] : 3;
+      if (na !== nb) return na - nb;
+      return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
+    });
+    n.children.forEach(ordenarNode);
+  }
+
+  // colaboradores: linhas cruas da RPC → { arvore, peers }
+  function construirHierarquia(colaboradores) {
+    var mapa = {};
+    var nodes = colaboradores.map(function(c) {
+      var idPessoa = c.id_pessoa || '';
+      var matricula = c.matricula || '';
+      var node = {
+        id: idPessoa || ('fixo_' + matricula),
+        idPessoa: idPessoa,
+        matricula: matricula,
+        nome: c.nome || '',
+        cargo: c.cargo || '',
+        cargoId: c.cargo_id || '',
+        supervisorId: c.id_superior || '',
+        unidade: c.unidade || '',
+        departamento: c.departamento || '',
+        admissao: c.data_admissao || '',
+        dataNascimento: c.data_nascimento || '',
+        foto: c.foto || '',
+        nivel: detectarNivel(c.cargo),
+        unitClass: classeUnidade(c.unidade),
+        iniciais: gerarIniciais(c.nome),
+        children: []
+      };
+      mapa[node.id] = node;
+      return node;
+    });
+
+    var orfaos = [];
+    var semSuperior = [];
+    nodes.forEach(function(n) {
+      var sup = n.supervisorId;
+      if (sup && sup === n.id) { orfaos.push(n); return; }         // auto-referência
+      if (sup && mapa[sup]) { mapa[sup].children.push(n); return; } // filho do líder
+      if (sup) { orfaos.push(n); return; }                          // líder ausente
+      semSuperior.push(n);                                          // sem superior → raiz/sócio
+    });
+
+    // Escolhe raiz entre os "sem superior": CEO primeiro, senão maior nível.
+    semSuperior.sort(function(a, b) {
+      var ca = /^ceo$/.test(_norm(a.cargo)) ? 0 : 1;
+      var cb = /^ceo$/.test(_norm(b.cargo)) ? 0 : 1;
+      if (ca !== cb) return ca - cb;
+      var na = NIVEL_ORD[a.nivel] !== undefined ? NIVEL_ORD[a.nivel] : 3;
+      var nb = NIVEL_ORD[b.nivel] !== undefined ? NIVEL_ORD[b.nivel] : 3;
+      if (na !== nb) return na - nb;
+      return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
+    });
+
+    var raiz = semSuperior[0] || null;
+    var peers = [];
+    for (var i = 1; i < semSuperior.length; i++) {
+      var s = semSuperior[i];
+      if (s.nivel === 'diretoria') peers.push(s); // sócios/diretores ao lado do CEO
+      else orfaos.push(s);
+    }
+
+    // Órfãos entram sob a raiz.
+    if (raiz) {
+      orfaos.forEach(function(o) { if (o !== raiz) raiz.children.push(o); });
+      ordenarNode(raiz);
+    }
+
+    return { arvore: raiz, peers: peers };
+  }
+
+  function calcularStats(nodes) {
+    var stats = { itaim: 0, pinheiros: 0, puc: 0, tatahouse: 0, backoffice: 0 };
+    nodes.forEach(function(n) {
+      var u = n.unitClass;
+      if (u === 'itaim') stats.itaim++;
+      else if (u === 'pinheiros') stats.pinheiros++;
+      else if (u === 'puc') stats.puc++;
+      else if (u === 'tatahouse') stats.tatahouse++;
+      else stats.backoffice++;
+    });
+    return stats;
+  }
+
+  // ============================================
+  // CARREGAR DADOS DO SUPABASE (profiles)
   // ============================================
   function carregarDados(opts) {
     opts = opts || {};
     showLoading(true);
     document.getElementById('errBox').classList.remove('show');
 
-    var url = ENDPOINT + (opts.refresh ? (ENDPOINT.indexOf('?') >= 0 ? '&' : '?') + 'refresh=1' : '');
-    fetch(url)
-      .then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(function(data) {
-        if (data.erro) throw new Error(data.erro);
-        if (!data.arvore) throw new Error('Resposta invalida (sem arvore)');
+    comSupa(function(supa) {
+      supa.schema('tata_plus').rpc('organograma_colaboradores').then(function(res) {
+        if (res.error) throw new Error(res.error.message || 'RPC organograma_colaboradores');
+        var linhas = res.data || [];
+        if (!linhas.length) throw new Error('Nenhum colaborador ativo encontrado');
 
-        arvore = inicializarNode(data.arvore);
+        var built = construirHierarquia(linhas);
+        if (!built.arvore) throw new Error('Não foi possível montar a árvore (sem raiz)');
+
+        // stats considera TODOS os nós da árvore + os peers (sócios)
+        var stats = calcularStats(coletarTodos(built.arvore).concat(built.peers));
+        var total = linhas.length;
+
+        arvore = inicializarNode(built.arvore);
         sortChildren(arvore);
         nodeMap = {};
         mapearNos(arvore, null);
-        peerNos = (data.peers || []).map(function(p) { return Object.assign({ children: [] }, p); });
+        peerNos = built.peers.map(function(p) { return Object.assign({ children: [] }, p); });
         peerNos.forEach(function(p) { nodeMap[p.id] = p; });
 
-        atualizarStats(data.stats || {}, data.total || 0);
+        atualizarStats(stats, total);
         showLoading(false);
         detectMode(true);
         var _cv = document.getElementById('canvas');
@@ -1290,11 +1449,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           if (window.scrollTo) window.scrollTo(0, 0);
         }, 200);
 
-        console.log('Carregado:', data.total, 'colaboradores');
-      })
-      .catch(function(err) {
-        showError(err.message + '. Verifique se o ENDPOINT esta correto e o Web App publicado como "Qualquer pessoa".');
+        console.log('Carregado:', total, 'colaboradores');
+      }).catch(function(err) {
+        showError((err && err.message ? err.message : err) + '. Verifique a conexão com o Supabase.');
       });
+    });
+  }
+
+  // Achata a árvore em uma lista de nós (para estatísticas).
+  function coletarTodos(n) {
+    if (!n) return [];
+    var out = [n];
+    (n.children || []).forEach(function(c) { out = out.concat(coletarTodos(c)); });
+    return out;
   }
 
   function inicializarNode(n) {
@@ -2154,9 +2321,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     _modalNode = n;
     var avatarEl = document.getElementById('mAvatar');
     if (n.foto) {
-      avatarEl.innerHTML = '<img src="' + escapeHtml(n.foto) + '" onerror="this.parentNode.innerHTML=\'' + escapeHtml(n.iniciais || '?') + '\'"/>';
+      avatarEl.innerHTML = '<img src="' + escapeHtml(n.foto) + '" onerror="this.parentNode.innerHTML=\'' + escapeHtml(n.iniciais || '?') + '\';this.parentNode.classList.remove(\'clickable\');this.parentNode.onclick=null;"/>';
+      avatarEl.classList.add('clickable');
+      avatarEl.onclick = function() { openPhotoLightbox(n.foto, n.nome); };
     } else {
       avatarEl.textContent = n.iniciais || '?';
+      avatarEl.classList.remove('clickable');
+      avatarEl.onclick = null;
     }
     document.getElementById('mName').textContent = n.nome;
     document.getElementById('mRole').textContent = n.cargo;
@@ -2181,10 +2352,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     document.getElementById('mAdmissao').textContent = formatarData(n.admissao);
     document.getElementById('mTempoCasa').textContent = tempoDeCasa(n.admissao);
     document.getElementById('mAniversario').textContent = formatarAniversario(n.dataNascimento);
-    var _perfil = ((window.__lideresSession && window.__lideresSession.perfil) || '').toLowerCase();
-    var _canRem = (_perfil === 'admin' || _perfil === 'analista-rh');
     var btnRem = document.getElementById('btnRemuneracao');
-    if (btnRem) btnRem.style.display = _canRem ? '' : 'none';
+    if (btnRem) btnRem.style.display = _podeVerValores ? '' : 'none';
     document.getElementById('modal').classList.add('show');
   }
 
@@ -2252,8 +2421,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   window.abrirRemuneracao = function() {
     if (!_modalNode) return;
-    var _p = ((window.__lideresSession && window.__lideresSession.perfil) || '').toLowerCase();
-    if (_p !== 'admin' && _p !== 'analista-rh') return;
+    if (!_podeVerValores) return;   // valores só p/ quem tem permissão (painel admin)
     var cargoId = _modalNode.cargoId;
     var sal = cargoId ? _cesSalarios[normCargoId(cargoId)] : null;
     document.getElementById('smRemTitle').textContent = _modalNode.cargo || '—';
@@ -2290,6 +2458,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   window.closeSubModal = function(id) {
     document.getElementById(id).classList.remove('show');
     document.getElementById('modal').classList.remove('modal-bg--hidden');
+  };
+
+  function openPhotoLightbox(src, alt) {
+    if (!src) return;
+    var img = document.getElementById('photoLightboxImg');
+    img.src = src;
+    img.alt = alt || '';
+    document.getElementById('photoLightbox').classList.add('show');
+  }
+  window.closePhotoLightbox = function() {
+    var lb = document.getElementById('photoLightbox');
+    lb.classList.remove('show');
+    document.getElementById('photoLightboxImg').src = '';
   };
 
   window.closeModal = function() {
@@ -2329,7 +2510,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   // ============================================
   // DRAWER
   // ============================================
-  var COLAB_URL = 'https://script.google.com/macros/s/AKfycbzuQApMUW4OAuxz_tnvH4u7O3hFOv2gbklFcl2sdMKqyix5SZed0VM87XGcQwzFdsRPyg/exec';
   var _drawerKpisLoaded = false;
   function loadDrawerKPIs() {
     if (_drawerKpisLoaded) return;
@@ -2389,7 +2569,11 @@ window.openDrawer = function() {
   };
 
   document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') { closeDrawer(); closeModal(); }
+    if (e.key === 'Escape') {
+      var _lb = document.getElementById('photoLightbox');
+      if (_lb && _lb.classList.contains('show')) { closePhotoLightbox(); return; }
+      closeDrawer(); closeModal();
+    }
   });
 
   // ============================================
@@ -2548,6 +2732,66 @@ window.openDrawer = function() {
   // Visibilidade do botão fica a cargo do gate.js (data-aba-id → gov_minhas_abas_bloqueadas):
   // escondido por padrão, liberado por pessoa no painel admin; admin vê sempre.
   // O backend (avatar_pode_gerir) reforça a mesma regra no salvar.
+})();
+</script>
+<script>
+function hardRefresh() {
+  var btn = document.getElementById('btn-hard-refresh');
+  if (btn) btn.classList.add('is-loading');
+  function reload() { location.replace(location.pathname + '?r=' + Date.now()); }
+  if (window.caches && caches.keys) {
+    caches.keys().then(function(ks) { return Promise.all(ks.map(function(k){ return caches.delete(k); })); }).then(reload).catch(reload);
+  } else { reload(); }
+}
+</script>
+<script>
+(function () {
+  var btn = document.getElementById('btn-pin');
+  if (!btn) return;
+  if (window.top === window.self) return;
+  if (!window.GOV_PAGE_ID) return;
+  btn.style.display = '';
+  var PAGE = {
+    id: window.GOV_PAGE_ID,
+    label: 'Organograma',
+    url: location.origin + location.pathname,
+    icon: 'Users'
+  };
+  var appOrigin = '*';
+  function marcar(p) { btn.classList.toggle('is-pinned', !!p); btn.title = p ? 'Fixado no app · clique para desafixar' : 'Fixar no menu do app'; }
+  function enviar(m) { try { window.parent.postMessage(m, appOrigin); } catch(e) {} }
+  window.addEventListener('message', function (ev) {
+    var d = ev.data || {};
+    if (d.tp === 'gov-pin-state' && d.id === PAGE.id) {
+      appOrigin = ev.origin;
+      if (d.error === 'limit') alert('Você atingiu o limite de atalhos fixados. Desafixe algum para fixar este.');
+      marcar(d.pinned);
+    }
+  });
+  window.pinNoApp = function () { enviar({ tp: 'gov-pin-toggle', page: PAGE }); };
+  enviar({ tp: 'gov-pin-query', id: PAGE.id });
+})();
+</script>
+<script>
+/* ══ ZOOM ══ */
+(function(){
+  var KEY='lideres-zoom', MIN=0.7, MAX=1.6, STEP=0.1, DEF=1;
+  function clamp(v){ return Math.min(MAX, Math.max(MIN, Math.round(v*10)/10)); }
+  var z=DEF;
+  try{ var s=parseFloat(localStorage.getItem(KEY)); if(!isNaN(s)) z=clamp(s); }catch(e){}
+  function apply(){
+    var content=document.getElementById('zoom-content');
+    if(content) content.style.zoom=z;
+    document.documentElement.style.zoom='';
+    try{ localStorage.setItem(KEY,String(z)); }catch(e){}
+    var pct=Math.round(z*100)+'%';
+    var out=document.getElementById('btn-zoom-out'), inb=document.getElementById('btn-zoom-in');
+    if(out){ out.disabled=(z<=MIN); out.title='Diminuir zoom · '+pct; }
+    if(inb){ inb.disabled=(z>=MAX); inb.title='Aumentar zoom · '+pct; }
+  }
+  window.zoomIn=function(){ z=clamp(z+STEP); apply(); };
+  window.zoomOut=function(){ z=clamp(z-STEP); apply(); };
+  apply();
 })();
 </script>
 </body>
