@@ -95,6 +95,10 @@ body:not([data-view="dashboard"]) #dashboard { display: none; }
 
 .content { padding: 16px 20px 80px; display: flex; flex-direction: column; gap: 12px; }
 .cards-grid { display: flex; flex-direction: column; gap: 12px; }
+.med-section-title { display: flex; align-items: center; gap: 8px; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin: 4px 0 12px; }
+.med-section-title span { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 100px; background: var(--carbon); color: var(--citric); font-size: 10px; font-weight: 700; }
+.med-section-empty { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); padding: 4px 0 8px; }
+.card.card-agendado { border-left: 3px solid #1E7E34; }
 
 .card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; box-shadow: var(--shadow); transition: box-shadow 0.15s; }
 .card:hover { box-shadow: 0 3px 12px rgba(0,0,0,0.1); }
@@ -1487,6 +1491,32 @@ function getFiltered() {
   });
 }
 
+function _temAgendamento(r) { return !!(r.dataAgendada && String(r.dataAgendada).trim()); }
+
+// Pendentes = precisam de atenção e ainda NÃO foram agendados.
+function getPendentes() {
+  return getFiltered().filter(function(r){ return !_temAgendamento(r); });
+}
+
+// Agendados = têm data marcada (independente do status do exame), respeitando
+// os filtros de Unidade/Departamento/Tipo. Ordenados pela data mais próxima.
+function getAgendados() {
+  var f = state.filters;
+  return exames.filter(function(r){
+    if (!_temAgendamento(r)) return false;
+    var realiza = norm((r.realizaExame||'').toLowerCase().trim());
+    if (realiza !== 'sim') return false;
+    if (norm((r.statusColab||'').toLowerCase().trim()) !== 'ativo') return false;
+    if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
+    if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
+    if (f.tipoExame!=='Todos' && r.tipoExame!==f.tipoExame) return false;
+    return true;
+  }).sort(function(a,b){
+    var da = parseDateBR(a.dataAgendada), db = parseDateBR(b.dataAgendada);
+    return (da?da.getTime():0) - (db?db.getTime():0);
+  });
+}
+
 function renderFilters() {
   var wrap = document.getElementById('filters-wrap');
   if (!wrap) return;
@@ -1498,7 +1528,7 @@ function renderFilters() {
     return h+'</select></div>';
   }
   var deptSrc = f.unidade==='Todos' ? exames : exames.filter(function(r){return r.unidade===f.unidade;});
-  var filtered = getFiltered();
+  var filtered = getPendentes();
   var html = '<div class="filters-row">';
   html += sel('Unidade','unidade',unique(exames.map(function(r){return r.unidade;})),f.unidade);
   html += sel('Departamento','departamento',unique(deptSrc.map(function(r){return r.departamento;})),f.departamento);
@@ -1581,6 +1611,28 @@ function buildCard(r) {
     '<div class="card-footer">'+footerInfo+
     '<button class="btn-avaliar" data-aba-id="governanca-kpis-rh-medicina::agendar-exame" onclick="openAgendarModal(\''+matEsc+'\')">'+
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>'+btnLabel+'</button>'+
+    '</div>'+
+    '</div>';
+}
+
+function buildAgendadoCard(r) {
+  var matEsc = escH(r.matricula).replace(/'/g,"\\'");
+  return '<div class="card card-agendado">'+
+    '<div class="card-header"><div>'+
+    '<div class="candidate-name">'+escH(r.nome)+'</div>'+
+    '<div class="candidate-contact">'+escH(r.cargo||'')+(r.unidade?' · '+escH(r.unidade):'')+'</div>'+
+    '</div>'+
+    '<span class="status-badge m-agendado">Agendado</span>'+
+    '</div>'+
+    '<div class="card-body">'+
+    '<div class="card-field"><span class="field-label">Departamento</span><span class="field-value">'+escH(r.departamento||'—')+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Tipo de Exame</span><span class="field-value">'+escH(r.tipoExame||'—')+'</span></div>'+
+    '<div class="card-field"><span class="field-label">Data do Exame</span><span class="field-value" style="color:#1E7E34;font-weight:700">'+escH(r.dataAgendada)+'</span></div>'+
+    '</div>'+
+    '<div class="card-footer">'+
+    '<span class="agenda-info"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Exame em: '+escH(r.dataAgendada)+'</span>'+
+    '<button class="btn-avaliar" data-aba-id="governanca-kpis-rh-medicina::agendar-exame" onclick="openAgendarModal(\''+matEsc+'\')">'+
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>Remarcar</button>'+
     '</div>'+
     '</div>';
 }
@@ -1840,16 +1892,28 @@ function render() {
   }
   if (state.tab === 'exames') {
     renderFilters();
-    var filtered = getFiltered();
     var content = document.getElementById('content');
     if (!content) return;
     if (state.error) {
       content.innerHTML = '<div class="empty-state"><p style="color:#7A1A1A">Erro ao carregar dados</p><p style="font-size:11px;opacity:.7;margin-top:6px">'+escH(state.error)+'</p><button onclick="loadAllData()" style="margin-top:16px;padding:8px 18px;background:#35383F;color:#CFFF00;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-family:\'DM Mono\',monospace;text-transform:uppercase">↻ Tentar novamente</button></div>';
-    } else if (filtered.length === 0) {
-      content.innerHTML = '<div class="empty-state"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><p>Nenhum colaborador encontrado</p></div>';
-    } else {
-      content.innerHTML = '<div class="cards-grid">'+filtered.map(buildCard).join('')+'</div>';
+      return;
     }
+    var pendentes = getPendentes();
+    var agendados = getAgendados();
+    if (pendentes.length === 0 && agendados.length === 0) {
+      content.innerHTML = '<div class="empty-state"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><p>Nenhum colaborador encontrado</p></div>';
+      return;
+    }
+    var html = '';
+    html += '<div class="med-section-title">Pendentes de agendamento <span>'+pendentes.length+'</span></div>';
+    html += pendentes.length
+      ? '<div class="cards-grid">'+pendentes.map(buildCard).join('')+'</div>'
+      : '<div class="med-section-empty">Nenhum exame pendente de agendamento.</div>';
+    if (agendados.length) {
+      html += '<div class="med-section-title" style="margin-top:22px">Exames agendados <span>'+agendados.length+'</span></div>';
+      html += '<div class="cards-grid">'+agendados.map(buildAgendadoCard).join('')+'</div>';
+    }
+    content.innerHTML = html;
   }
 }
 
