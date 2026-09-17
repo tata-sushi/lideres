@@ -595,4 +595,22 @@ matrícula reconhecida/inativa/inexistente no nome do arquivo, tipo novo
 Storage confere byte a byte com o esperado, modal fecha só quando todo o
 lote sobe sem falha.
 
+**Backlog — Certificados (`agenda.html`), pendente de teste real:**
+- PR #2798 mesclado (2026-09-17), mas só validado com mock até agora — falta
+  testar um envio de verdade (upload real, ver o certificado aparecendo em
+  `doc.html` na categoria "Certificados" da pessoa).
+- Data do certificado não aparece em lugar nenhum da tela hoje — só no nome
+  do arquivo e na coluna `observacao` (banco). Se o RH quiser ver a data sem
+  abrir o arquivo, precisa de um ajuste pequeno em `doc.html`
+  (`_docItemHtml`) pra exibir `doc.observacao` no rótulo, tipo já existe
+  precedente (competencia do Holerite/Cartão de Ponto entra no rótulo do
+  mesmo jeito).
+- Sem histórico de renovação: reenviar o mesmo tipo de certificado pra
+  mesma pessoa substitui o anterior (upsert, sem versão) — ver decisão
+  registrada acima. Só vira problema se o RH precisar comparar certificados
+  antigos (ex.: comprovar que a NR-35 de 2025 também foi feita).
+- Fica pausado enquanto `agenda.html` é editado por outro motivo — checar
+  se a próxima mudança na página não desfaz nada do bloco de Certificados
+  (CSS `.cert-*`, modal `#cert-overlay`, botão no drawer).
+
 _Última atualização: 2026-09-17._
