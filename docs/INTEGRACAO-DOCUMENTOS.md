@@ -547,4 +547,52 @@ Em aberto:
   líder/admin, ou também RH em geral) e o ajuste em si ficam pra depois — é
   função do lado `tata_plus`, então também precisa alinhar com o outro time.
 
-_Última atualização: 2026-09-06._
+**Feito (2026-09-17): envio em lote de Certificados, em `agenda.html`.**
+Terceira instância do mecanismo de upload em lote (Cartão de Ponto em
+`escalas.html`, Holerite em `folha.html`), agora pra certificados de
+curso/treinamento (NR-35, brigada de incêndio etc.) anexados ao perfil de
+documentos da pessoa (`doc.html`). Botão "Enviar Certificado" dentro do
+drawer "Sobre" (seção "Ações") de `agenda.html` — não uma aba nova no
+calendário, só o ponto de entrada do upload mora lá.
+
+Diferenças de propósito em relação aos outros dois:
+- **Sem assinatura** (como Holerite): certificado é comprovante emitido por
+  terceiro, não algo que o colaborador assina — upload direto pro bucket
+  `dp-documentos` + RPC única `colaborador_documentos_sandbox_salvar`.
+- **Tipo de certificado é campo livre**, não fixo como os 4 tipos de
+  Holerite: `<input list="cert-tipos-datalist">` sugere os já cadastrados
+  (categoria "Certificados" em `dp_rh.doc_tipos`) mas aceita qualquer nome
+  novo — cria o `doc_tipo` na hora (`doc_tipo_sandbox_criar`,
+  `periodicidade:'unico'`, `obrigatorio:false`, `requer_assinatura:false`)
+  casando por nome (trim + case-insensitive) antes de decidir se cria ou
+  reaproveita, pra não duplicar tipo dentro do mesmo lote nem entre lotes.
+- **Data única do certificado, sem versionamento.** Tipo fica
+  `periodicidade:'unico'` (1 slot atual por colaborador, igual RG/CPF/ASO em
+  `doc.html`) — e isso **exige `p_competencia = null`** em todo envio: pra
+  tipos `unico`, `doc.html` sempre busca a linha com
+  `_docVersoes(matricula, tipoId, null)`, e `_docCompetenciaCobre(row, null)`
+  só bate se `row.competencia` também for vazio. Guardar a data ali quebraria
+  a exibição (o certificado ficaria "Pendente" pra sempre, mesmo enviado).
+  Por isso a data digitada não vai pra `competencia`: vai pro nome do arquivo
+  gravado (`certificado-<tipo>-<data-iso>-<nome>.<ext>` no Storage,
+  `"<Nome> - <Tipo> - <data BR>.<ext>"` como `nome_arquivo`) e pro campo
+  `p_observacao` (`"Emitido em dd/mm/aaaa"`) — coluna que a RPC já aceita e
+  que `doc.html` já carrega (`select *`), só não renderiza ainda.
+  **Consequência aceita:** reenviar o mesmo tipo de certificado pra mesma
+  pessoa **substitui** o certificado anterior (upsert por
+  matrícula+tipo+competência-nula, sem histórico de versão) — igual
+  Holerite, diferente do Cartão de Ponto. Faz sentido pro caso de uso
+  (saber se o certificado *atual* está válido), mas é uma limitação
+  deliberada, não um bug: se um dia precisar do histórico de renovações
+  (ex.: NR-35 renovada todo ano), vai precisar de um desenho novo (chave de
+  versionamento que não seja `competencia`, ou mudança em `doc.html`).
+- **Arquivo aceita PDF ou foto** (`application/pdf,image/jpeg,image/png`),
+  não só PDF — certificado físico às vezes só existe fotografado.
+
+Testado com Playwright + mock de `window.__lideresSupa` (sem rede real):
+matrícula reconhecida/inativa/inexistente no nome do arquivo, tipo novo
+(cria) e tipo já cadastrado (reaproveita, não duplica), payload da RPC e do
+Storage confere byte a byte com o esperado, modal fecha só quando todo o
+lote sobe sem falha.
+
+_Última atualização: 2026-09-17._
