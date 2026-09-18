@@ -660,4 +660,17 @@ validação de título/data, payload da RPC correto, modal só fecha com
 sucesso) e uma chamada real da RPC direto no banco (linha de teste criada
 e apagada na sequência).
 
+**Ajuste (2026-09-18): "Movimentações & Pagamentos" separada em duas
+categorias** (`movimentacao` e `pagamento`, cada uma com cor própria no
+calendário) — o usuário já tinha usado o "Novo Evento" pra cadastrar 6
+eventos reais nessa categoria combinada (VT, salário, janelas de
+transferência/admissão) antes de pedir a separação. Reclassificados pelo
+texto da própria descrição (`"Pagamentos e comemorações."` →
+`pagamento`, `"Janela de movimentações."` → `movimentacao`) — os 3 de
+cada lado bateram exatamente com o título de cada evento, sem
+ambiguidade. Constraint `agenda_eventos_categoria_check` ampliada de novo
+pra incluir `pagamento`. Nenhuma RPC mudou (a de criar/listar já são
+genéricas por categoria) — só o array `CATEGORIAS`/`CAT_COLOR` do front e
+o dado já gravado.
+
 _Última atualização: 2026-09-18._
