@@ -547,4 +547,130 @@ Em aberto:
   líder/admin, ou também RH em geral) e o ajuste em si ficam pra depois — é
   função do lado `tata_plus`, então também precisa alinhar com o outro time.
 
-_Última atualização: 2026-09-06._
+**Feito (2026-09-17): envio em lote de Certificados, em `agenda.html`.**
+Terceira instância do mecanismo de upload em lote (Cartão de Ponto em
+`escalas.html`, Holerite em `folha.html`), agora pra certificados de
+curso/treinamento (NR-35, brigada de incêndio etc.) anexados ao perfil de
+documentos da pessoa (`doc.html`). Botão "Enviar Certificado" dentro do
+drawer "Sobre" (seção "Ações") de `agenda.html` — não uma aba nova no
+calendário, só o ponto de entrada do upload mora lá.
+
+Diferenças de propósito em relação aos outros dois:
+- **Sem assinatura** (como Holerite): certificado é comprovante emitido por
+  terceiro, não algo que o colaborador assina — upload direto pro bucket
+  `dp-documentos` + RPC única `colaborador_documentos_sandbox_salvar`.
+- **Tipo de certificado é campo livre**, não fixo como os 4 tipos de
+  Holerite: `<input list="cert-tipos-datalist">` sugere os já cadastrados
+  (categoria "Certificados" em `dp_rh.doc_tipos`) mas aceita qualquer nome
+  novo — cria o `doc_tipo` na hora (`doc_tipo_sandbox_criar`,
+  `periodicidade:'unico'`, `obrigatorio:false`, `requer_assinatura:false`)
+  casando por nome (trim + case-insensitive) antes de decidir se cria ou
+  reaproveita, pra não duplicar tipo dentro do mesmo lote nem entre lotes.
+- **Data única do certificado, sem versionamento.** Tipo fica
+  `periodicidade:'unico'` (1 slot atual por colaborador, igual RG/CPF/ASO em
+  `doc.html`) — e isso **exige `p_competencia = null`** em todo envio: pra
+  tipos `unico`, `doc.html` sempre busca a linha com
+  `_docVersoes(matricula, tipoId, null)`, e `_docCompetenciaCobre(row, null)`
+  só bate se `row.competencia` também for vazio. Guardar a data ali quebraria
+  a exibição (o certificado ficaria "Pendente" pra sempre, mesmo enviado).
+  Por isso a data digitada não vai pra `competencia`: vai pro nome do arquivo
+  gravado (`certificado-<tipo>-<data-iso>-<nome>.<ext>` no Storage,
+  `"<Nome> - <Tipo> - <data BR>.<ext>"` como `nome_arquivo`) e pro campo
+  `p_observacao` (`"Emitido em dd/mm/aaaa"`) — coluna que a RPC já aceita e
+  que `doc.html` já carrega (`select *`), só não renderiza ainda.
+  **Consequência aceita:** reenviar o mesmo tipo de certificado pra mesma
+  pessoa **substitui** o certificado anterior (upsert por
+  matrícula+tipo+competência-nula, sem histórico de versão) — igual
+  Holerite, diferente do Cartão de Ponto. Faz sentido pro caso de uso
+  (saber se o certificado *atual* está válido), mas é uma limitação
+  deliberada, não um bug: se um dia precisar do histórico de renovações
+  (ex.: NR-35 renovada todo ano), vai precisar de um desenho novo (chave de
+  versionamento que não seja `competencia`, ou mudança em `doc.html`).
+- **Arquivo aceita PDF ou foto** (`application/pdf,image/jpeg,image/png`),
+  não só PDF — certificado físico às vezes só existe fotografado.
+
+Testado com Playwright + mock de `window.__lideresSupa` (sem rede real):
+matrícula reconhecida/inativa/inexistente no nome do arquivo, tipo novo
+(cria) e tipo já cadastrado (reaproveita, não duplica), payload da RPC e do
+Storage confere byte a byte com o esperado, modal fecha só quando todo o
+lote sobe sem falha.
+
+**Backlog — Certificados (`agenda.html`), pendente de teste real:**
+- PR #2798 mesclado (2026-09-17), mas só validado com mock até agora — falta
+  testar um envio de verdade (upload real, ver o certificado aparecendo em
+  `doc.html` na categoria "Certificados" da pessoa).
+- Data do certificado não aparece em lugar nenhum da tela hoje — só no nome
+  do arquivo e na coluna `observacao` (banco). Se o RH quiser ver a data sem
+  abrir o arquivo, precisa de um ajuste pequeno em `doc.html`
+  (`_docItemHtml`) pra exibir `doc.observacao` no rótulo, tipo já existe
+  precedente (competencia do Holerite/Cartão de Ponto entra no rótulo do
+  mesmo jeito).
+- Sem histórico de renovação: reenviar o mesmo tipo de certificado pra
+  mesma pessoa substitui o anterior (upsert, sem versão) — ver decisão
+  registrada acima. Só vira problema se o RH precisar comparar certificados
+  antigos (ex.: comprovar que a NR-35 de 2025 também foi feita).
+- Fica pausado enquanto `agenda.html` é editado por outro motivo — checar
+  se a próxima mudança na página não desfaz nada do bloco de Certificados
+  (CSS `.cert-*`, modal `#cert-overlay`, botão no drawer).
+
+**Feito (2026-09-18): categoria "Movimentações & Pagamentos" + botão/modal
+"Novo Evento" em `agenda.html`.**
+
+Categoria nova (`id: 'movimentacao'`) pra marcar no calendário datas de
+movimentação de pessoal e de pagamento. Igual "Feriado", ela não dispara o
+card automático que o cron `agenda-eventos-kanban` (roda todo dia às 12h,
+`dp_rh.agenda_eventos_para_kanban()`) cria pra avisar sobre eventos
+próximos — essa função só processa `categoria='evento'`, então qualquer
+outra categoria já fica de fora por natureza, sem precisar de exceção.
+Precisou de migration (`agenda_eventos_categoria_movimentacao`): a
+constraint `agenda_eventos_categoria_check` só aceitava os 5 valores
+antigos (`reuniao`, `treinamento`, `evento`, `feriado`, `outro`).
+
+Até aqui `dp_rh.agenda_eventos` não tinha NENHUMA RPC de criação — só
+listagem (`agenda_rh_eventos_listar`) e o toggle "mostrar no app”
+(`agenda_evento_app_set`, restrito a `categoria='evento'`). Os eventos
+existentes foram todos inseridos direto no banco. Criada
+`tata_plus.agenda_evento_sandbox_criar` (mesmo padrão SECURITY DEFINER +
+`grant ... to authenticated` das outras RPCs da agenda) e um botão "Novo
+Evento" no drawer "Sobre" de `agenda.html` (seção "Ações", acima de
+"Enviar Certificado") abrindo um modal com os campos da tabela (título,
+data, horário início/fim, local, responsável, descrição) + um select de
+categoria alimentado direto do array `CATEGORIAS` já usado no calendário
+(assim as duas listas nunca desalinham) + o toggle "Mostrar na agenda do
+app", que só aparece quando a categoria selecionada é "Evento" — mesma
+regra que já existia no modal de detalhe do evento (`e.categoria ===
+'evento'`), porque `agenda_evento_app_set` também só liberava esse toggle
+pra essa categoria. Como defesa em profundidade, a própria RPC ignora
+`p_mostrar_no_app=true` se `p_categoria` não for `'evento'` (gravei o valor
+condicionado a isso na hora do insert), então mesmo que o front mude e pare
+de esconder esse campo condicionalmente, não dá pra ligar o toggle numa
+categoria errada direto pela RPC.
+
+**Bug pego antes de subir:** a função recém-criada saiu com `EXECUTE`
+liberado pra `PUBLIC` (Postgres concede isso por padrão em função nova,
+diferente de `CREATE OR REPLACE` numa função que já existia) — ou seja,
+`anon` conseguiria chamar e inserir evento sem estar autenticado. Corrigido
+com `revoke execute ... from public` na sequência, deixando só
+`postgres`/`authenticated`, igual as outras RPCs da agenda. Vale de lição
+pra qualquer função NOVA criada por aqui daqui pra frente: sempre conferir
+`information_schema.routine_privileges` depois de criar.
+
+Testado: Playwright + mock (categoria certa esconde/mostra o toggle,
+validação de título/data, payload da RPC correto, modal só fecha com
+sucesso) e uma chamada real da RPC direto no banco (linha de teste criada
+e apagada na sequência).
+
+**Ajuste (2026-09-18): "Movimentações & Pagamentos" separada em duas
+categorias** (`movimentacao` e `pagamento`, cada uma com cor própria no
+calendário) — o usuário já tinha usado o "Novo Evento" pra cadastrar 6
+eventos reais nessa categoria combinada (VT, salário, janelas de
+transferência/admissão) antes de pedir a separação. Reclassificados pelo
+texto da própria descrição (`"Pagamentos e comemorações."` →
+`pagamento`, `"Janela de movimentações."` → `movimentacao`) — os 3 de
+cada lado bateram exatamente com o título de cada evento, sem
+ambiguidade. Constraint `agenda_eventos_categoria_check` ampliada de novo
+pra incluir `pagamento`. Nenhuma RPC mudou (a de criar/listar já são
+genéricas por categoria) — só o array `CATEGORIAS`/`CAT_COLOR` do front e
+o dado já gravado.
+
+_Última atualização: 2026-09-18._

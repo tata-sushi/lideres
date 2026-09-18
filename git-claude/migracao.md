@@ -47,6 +47,11 @@
 - [ ] **Brainstorm** — **refazer o conceito** (não é migração 1:1).
 - Fora do escopo (Power BI): `hc2`, `desligamentos2`, `bancodehoras2`.
 
+### Medicina Ocupacional (SST) — Agendamento de exames ⏸️ EM PAUSA (18/09)
+- [x] **Agendamento de exame por colaborador** (`kpis/rh/medicina.html`, aba Pendências). Líder escolhe a data em que o exame será realizado (modal com date picker). Persistência: coluna `dp_rh.exames.data_agendada` (+ `agendado_por`, `agendado_em`); RPC `tata_plus.exame_agendar(matricula, data)` (upsert, aceita ISO ou DD/MM/AAAA, `null` limpa); `tata_plus.exames_listar` passa a retornar `data_agendada`.
+- [x] **Duas listas na aba Pendências:** "Pendentes de agendamento" (sem data) e "Exames agendados" (com data, ordenados pela mais próxima, borda verde) + botão **Remarcar**. Botões Agendar/Reagendar/Remarcar com `data-aba-id="governanca-kpis-rh-medicina::agendar-exame"`.
+- [ ] **EM PAUSA** (usuário pediu para pausar 18/09). Possíveis próximos passos discutidos, ainda não feitos: destacar em vermelho agendamentos **vencidos** (data passou sem o exame ser registrado), mostrar **quem agendou/quando**, e levar os "Agendados" ao **KPI's/dashboard**. **Não retomar sem "ok" explícito.**
+
 ### Demandas
 - [x] **`demandas.html` + `demandas2.html`** — leem `rpc('demandas_rh_lista')` (tabela `tata_plus.demandas_rh`, 2971 linhas históricas) ✅ 19/08.
 
