@@ -613,4 +613,51 @@ lote sobe sem falha.
   se a próxima mudança na página não desfaz nada do bloco de Certificados
   (CSS `.cert-*`, modal `#cert-overlay`, botão no drawer).
 
-_Última atualização: 2026-09-17._
+**Feito (2026-09-18): categoria "Movimentações & Pagamentos" + botão/modal
+"Novo Evento" em `agenda.html`.**
+
+Categoria nova (`id: 'movimentacao'`) pra marcar no calendário datas de
+movimentação de pessoal e de pagamento. Igual "Feriado", ela não dispara o
+card automático que o cron `agenda-eventos-kanban` (roda todo dia às 12h,
+`dp_rh.agenda_eventos_para_kanban()`) cria pra avisar sobre eventos
+próximos — essa função só processa `categoria='evento'`, então qualquer
+outra categoria já fica de fora por natureza, sem precisar de exceção.
+Precisou de migration (`agenda_eventos_categoria_movimentacao`): a
+constraint `agenda_eventos_categoria_check` só aceitava os 5 valores
+antigos (`reuniao`, `treinamento`, `evento`, `feriado`, `outro`).
+
+Até aqui `dp_rh.agenda_eventos` não tinha NENHUMA RPC de criação — só
+listagem (`agenda_rh_eventos_listar`) e o toggle "mostrar no app”
+(`agenda_evento_app_set`, restrito a `categoria='evento'`). Os eventos
+existentes foram todos inseridos direto no banco. Criada
+`tata_plus.agenda_evento_sandbox_criar` (mesmo padrão SECURITY DEFINER +
+`grant ... to authenticated` das outras RPCs da agenda) e um botão "Novo
+Evento" no drawer "Sobre" de `agenda.html` (seção "Ações", acima de
+"Enviar Certificado") abrindo um modal com os campos da tabela (título,
+data, horário início/fim, local, responsável, descrição) + um select de
+categoria alimentado direto do array `CATEGORIAS` já usado no calendário
+(assim as duas listas nunca desalinham) + o toggle "Mostrar na agenda do
+app", que só aparece quando a categoria selecionada é "Evento" — mesma
+regra que já existia no modal de detalhe do evento (`e.categoria ===
+'evento'`), porque `agenda_evento_app_set` também só liberava esse toggle
+pra essa categoria. Como defesa em profundidade, a própria RPC ignora
+`p_mostrar_no_app=true` se `p_categoria` não for `'evento'` (gravei o valor
+condicionado a isso na hora do insert), então mesmo que o front mude e pare
+de esconder esse campo condicionalmente, não dá pra ligar o toggle numa
+categoria errada direto pela RPC.
+
+**Bug pego antes de subir:** a função recém-criada saiu com `EXECUTE`
+liberado pra `PUBLIC` (Postgres concede isso por padrão em função nova,
+diferente de `CREATE OR REPLACE` numa função que já existia) — ou seja,
+`anon` conseguiria chamar e inserir evento sem estar autenticado. Corrigido
+com `revoke execute ... from public` na sequência, deixando só
+`postgres`/`authenticated`, igual as outras RPCs da agenda. Vale de lição
+pra qualquer função NOVA criada por aqui daqui pra frente: sempre conferir
+`information_schema.routine_privileges` depois de criar.
+
+Testado: Playwright + mock (categoria certa esconde/mostra o toggle,
+validação de título/data, payload da RPC correto, modal só fecha com
+sucesso) e uma chamada real da RPC direto no banco (linha de teste criada
+e apagada na sequência).
+
+_Última atualização: 2026-09-18._
