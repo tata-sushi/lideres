@@ -438,6 +438,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         </div>
       </div>
       <div class="form-group">
+        <label class="form-label">Executor</label>
+        <select class="form-select form-input" id="dev-executor"><option value="">A definir</option></select>
+      </div>
+      <div class="form-group">
           <label class="form-label">Custo (R$)</label>
           <input class="form-input" id="dev-custo" type="text" placeholder="Ex: 350,00">
         </div>
@@ -534,7 +538,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </div>
       <div class="form-group">
         <label class="form-label">Executor</label>
-        <input class="form-input" id="fab-executor" type="text" value="Carlos Arlindo" readonly style="background:#F4F4F4;color:#777;">
+        <select class="form-select form-input" id="fab-executor"><option value="">A definir</option></select>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -994,7 +998,12 @@ function openModal(id) {
   }
 
   document.getElementById('dev-status').value = r.status;
-  document.getElementById('dev-responsavel').value = r.executor||'';
+  // Autor da devolutiva = usuário logado (não o executor)
+  var _autor = (typeof LOGGED_USER === 'string' && LOGGED_USER) ? LOGGED_USER : '';
+  document.getElementById('dev-responsavel').value = _autor;
+  _manutMeuPerfil(function(p){ if (p && p.nome) document.getElementById('dev-responsavel').value = p.nome; });
+  // Executor (reatribuível) — lista de Manutenção, com o executor atual pré-selecionado
+  _manutPopularExecutores('dev-executor', r.executor || '');
   document.getElementById('dev-custo').value = '';
   document.getElementById('dev-obs').value = '';
   document.getElementById('modal-overlay').classList.add('open');
@@ -1037,6 +1046,8 @@ function submitDevolutiva() {
   var obs = document.getElementById('dev-obs').value.trim();
   if (!obs) { document.getElementById('dev-obs').focus(); return; }
   var resp       = document.getElementById('dev-responsavel').value || r.executor;
+  var execEl     = document.getElementById('dev-executor');
+  var execVal    = execEl ? execEl.value.trim() : (r.executor || '');
   var novoStatus = document.getElementById('dev-status').value;
   var custo      = document.getElementById('dev-custo').value;
   var fotoInput  = document.getElementById('dev-foto');
@@ -1046,13 +1057,13 @@ function submitDevolutiva() {
     showLoading('Salvando...');
     apiPost({
       action: 'registrar_devolutiva',
-      data: { id_chamado:r.id, responsavel:resp, status:novoStatus, obs:obs, custo:custo, tipo:'update', needs_help:novoStatus==='Finalizado'?false:r.needs_help, foto:fotoB64||'' }
+      data: { id_chamado:r.id, responsavel:resp, executor:execVal, status:novoStatus, obs:obs, custo:custo, tipo:'update', needs_help:novoStatus==='Finalizado'?false:r.needs_help, foto:fotoB64||'' }
     }, function(err, data) {
       hideLoading();
       if (err) { alert('Erro ao salvar: '+err); return; }
       r.devolutivas.unshift({ ts:(data&&data.ts?data.ts:nowLocal()), responsavel:resp, status:novoStatus, obs:obs, custo:custo, tipo:'update', foto:fotoB64||'' });
       r.status = novoStatus;
-      r.executor = resp;
+      r.executor = execVal || r.executor;
       if (novoStatus==='Finalizado') r.needs_help = false;
       if (fotoInput) fotoInput.value = '';
       var fp = document.getElementById('dev-foto-preview'); if(fp){fp.style.display='none';fp.querySelector('img').src='';}
@@ -1109,6 +1120,7 @@ function openFab() {
   var el = document.getElementById('fab-solicitante');
   if (el && typeof LOGGED_USER === 'string' && LOGGED_USER) el.value = LOGGED_USER; // fallback imediato; o profile sobrescreve
   _manutPopularFormColabs(); // solicitante + unidade + departamento vêm do profile do usuário logado
+  _manutPopularExecutores('fab-executor', ''); // executor = lista de Manutenção (default "A definir")
 }
 function closeFab() { document.getElementById('fab-overlay').classList.remove('open'); }
 function handleFabOverlayClick(e) { if (e.target===document.getElementById('fab-overlay')) closeFab(); }
@@ -1135,7 +1147,7 @@ function submitNovoChamado() {
         categoria:    document.getElementById('fab-categoria').value,
         prioridade:   document.getElementById('fab-prioridade').value,
         executor:     document.getElementById('fab-executor').value.trim(),
-        apoio:        'Fabio Shiguematsu',
+        apoio:        _manutLiderNome(),
         solicitante:  document.getElementById('fab-solicitante').value.trim(),
         data_prazo:   '',
         obs:          document.getElementById('fab-obs').value.trim(),
@@ -1400,6 +1412,39 @@ function _manutMeuPerfil(cb) {
       }
       if (cb) cb(_meuPerfilCache);
     }, function(){ if (cb) cb(null); });
+  });
+}
+// Executores de manutenção — colaboradores ATIVOS do departamento Manutenção (profiles).
+var _manutExecutoresCache = null;
+function _manutCarregarExecutores(cb) {
+  if (_manutExecutoresCache) { if (cb) cb(_manutExecutoresCache); return; }
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('manut_executores_listar').then(function(r){
+      _manutExecutoresCache = (!r.error && Array.isArray(r.data)) ? r.data : [];
+      if (cb) cb(_manutExecutoresCache);
+    }, function(){ _manutExecutoresCache = []; if (cb) cb(_manutExecutoresCache); });
+  });
+}
+// Líder/coordenador de Manutenção (recebe os pedidos de apoio). Deriva do cargo; fallback Wellington.
+function _manutLiderNome() {
+  var list = _manutExecutoresCache || [];
+  var lider = list.find(function(c){ return /coorden|l[íi]der|gerente|superv/i.test(c.cargo || ''); });
+  return (lider && lider.nome) || 'Wellington Benigno Da Silva';
+}
+// Popula um <select> de executor com "A definir" + os ativos de Manutenção.
+// Se "selected" não estiver na lista (ex.: executor inativo/antigo), inclui-o marcado como (inativo).
+function _manutPopularExecutores(selectId, selected) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
+  _manutCarregarExecutores(function(list){
+    sel.innerHTML = '';
+    var o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'A definir'; sel.appendChild(o0);
+    (list || []).forEach(function(c){ var o = document.createElement('option'); o.value = c.nome; o.textContent = c.nome; sel.appendChild(o); });
+    if (selected) {
+      var has = Array.prototype.some.call(sel.options, function(o){ return o.value === selected; });
+      if (!has) { var oi = document.createElement('option'); oi.value = selected; oi.textContent = selected + ' (inativo)'; sel.appendChild(oi); }
+      sel.value = selected;
+    }
   });
 }
 // Garante que a opção exista no <select> e a seleciona.
