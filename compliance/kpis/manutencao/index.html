@@ -30,6 +30,13 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .section-header { display: flex; align-items: center; justify-content: space-between; }
 .photo-upload-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 10px; color: var(--mid); cursor: pointer; text-transform: uppercase; letter-spacing: 0.4px; transition: border-color 0.15s; }
 .photo-upload-btn:hover { border-color: var(--carbon); color: var(--carbon); }
+.foto-thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+.foto-thumb { position: relative; width: 84px; height: 84px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+.foto-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.foto-thumb .foto-rm { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; border: none; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+.foto-thumb .foto-rm:hover { background: rgba(200,40,40,.9); }
+.foto-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.foto-links a { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
 .btn-nova { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; background: var(--carbon); color: var(--citric); border: none; border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; cursor: pointer; text-transform: uppercase; transition: opacity 0.15s; white-space: nowrap; flex-shrink: 0; }
 .btn-nova:hover { opacity: 0.85; }
 
@@ -453,10 +460,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <label class="form-label">Foto</label>
         <label class="photo-upload-btn" for="dev-foto">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-          Adicionar foto
+          Adicionar fotos
         </label>
-        <input type="file" id="dev-foto" accept="image/*" style="display:none;" onchange="previewFoto('dev-foto','dev-foto-preview')">
-        <div id="dev-foto-preview" style="display:none;margin-top:8px;"><img style="max-width:100%;max-height:160px;border-radius:6px;border:1px solid var(--border);" /></div>
+        <input type="file" id="dev-foto" accept="image/*" multiple style="display:none;" onchange="previewFotos('dev-foto','dev-foto-preview')">
+        <div id="dev-foto-preview" class="foto-thumbs" style="display:none;margin-top:8px;"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -554,10 +561,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <label class="form-label">Foto</label>
         <label class="photo-upload-btn" for="fab-foto">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-          Adicionar foto
+          Adicionar fotos
         </label>
-        <input type="file" id="fab-foto" accept="image/*" style="display:none;" onchange="previewFoto('fab-foto','fab-foto-preview')">
-        <div id="fab-foto-preview" style="display:none;margin-top:8px;"><img style="max-width:100%;max-height:160px;border-radius:6px;border:1px solid var(--border);" /></div>
+        <input type="file" id="fab-foto" accept="image/*" multiple style="display:none;" onchange="previewFotos('fab-foto','fab-foto-preview')">
+        <div id="fab-foto-preview" class="foto-thumbs" style="display:none;margin-top:8px;"></div>
       </div>
 
     </div>
@@ -602,6 +609,21 @@ var state = {
 // UTILITARIOS
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// Links de foto (uma ou várias). Usa obj.fotos (array); cai p/ obj.foto (legado).
+function _fotoLista(obj) {
+  var arr = (obj && Array.isArray(obj.fotos) && obj.fotos.length) ? obj.fotos : (obj && obj.foto ? [obj.foto] : []);
+  return arr.filter(function(u){ return !!u; });
+}
+function _fotoLinks(obj, label) {
+  var arr = _fotoLista(obj);
+  if (!arr.length) return '';
+  var lbl = label || 'Ver foto';
+  var links = arr.map(function(u, i){
+    var txt = arr.length > 1 ? (lbl + ' ' + (i+1)) : lbl;
+    return '<a href="'+u+'" target="_blank">&#128247; '+esc(txt)+'</a>';
+  }).join('');
+  return '<div class="foto-links">'+links+'</div>';
 }
 function uniq(arr) {
   var seen={}, out=[];
@@ -679,7 +701,8 @@ function _manutUploadFoto(supa, foto, ctx) {
       var blob  = new Blob([arr], { type: mime });
       var ext   = mime.indexOf('png') >= 0 ? 'png' : (mime.indexOf('webp') >= 0 ? 'webp' : 'jpg');
       var base  = String((ctx && (ctx.id_chamado || ctx.titulo)) || 'foto').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40) || 'foto';
-      var path  = base + '_' + Date.now() + '.' + ext;
+      var rand  = Math.random().toString(36).slice(2, 8);
+      var path  = base + '_' + Date.now() + '_' + rand + '.' + ext;
       supa.storage.from('manutencao').upload(path, blob, { contentType: mime, upsert: false }).then(function(res){
         if (res.error) { reject(res.error); return; }
         var pub = supa.storage.from('manutencao').getPublicUrl(path);
@@ -709,15 +732,20 @@ function apiPost(payload, callback) {
               : null;
   if (!rpcName) { callback('Ação desconhecida: ' + action); return; }
   comSupa(function(supa){
-    _manutUploadFoto(supa, d.foto, d).then(function(fotoUrl){
-      var body = {};
-      for (var k in d) { if (Object.prototype.hasOwnProperty.call(d, k)) body[k] = d[k]; }
-      body.foto = fotoUrl;
-      supa.schema('tata_plus').rpc(rpcName, { p: body }).then(function(r){
-        if (r.error) { console.error(rpcName, r.error); callback(r.error.message || 'Erro no servidor'); return; }
-        callback(null, r.data || {});
-      });
-    }).catch(function(e){ callback((e && e.message) || 'Erro ao enviar foto'); });
+    // sobe todas as fotos (array) — ou a única legada (d.foto)
+    var entradas = Array.isArray(d.fotos) && d.fotos.length ? d.fotos : (d.foto ? [d.foto] : []);
+    Promise.all(entradas.map(function(f){ return _manutUploadFoto(supa, f, d); }))
+      .then(function(urls){
+        urls = (urls || []).filter(function(u){ return !!u; });
+        var body = {};
+        for (var k in d) { if (Object.prototype.hasOwnProperty.call(d, k)) body[k] = d[k]; }
+        body.fotos = urls;
+        body.foto  = urls[0] || '';
+        supa.schema('tata_plus').rpc(rpcName, { p: body }).then(function(r){
+          if (r.error) { console.error(rpcName, r.error); callback(r.error.message || 'Erro no servidor'); return; }
+          callback(null, r.data || {});
+        });
+      }).catch(function(e){ callback((e && e.message) || 'Erro ao enviar foto'); });
   });
 }
 
@@ -855,15 +883,15 @@ function histHTML(r) {
       feed += '<span class="h-resp">'+esc(dv.responsavel)+'</span></div>';
       feed += '<div class="h-obs">'+esc(dv.obs)+'</div>';
       if (dv.custo) feed += '<div class="h-cost">Custo: R$ '+esc(dv.custo)+'</div>';
-      if (dv.foto) feed += '<div style="margin-top:6px"><a href="'+dv.foto+'" target="_blank" style="font-family:DM Mono,monospace;font-size:10px;color:var(--blue);text-decoration:underline;text-underline-offset:2px;">&#128247; Ver foto</a></div>';
+      feed += _fotoLinks(dv);
       feed += '</div>';
     }
   }
-  // Foto da abertura aparece como primeira entrada do histórico
-  if (r.foto) {
+  // Foto(s) da abertura aparecem como primeira entrada do histórico
+  if (_fotoLista(r).length) {
     feed = '<div class="hist-item">' +
       '<div class="h-meta"><span class="h-status s-pendente">Abertura</span></div>' +
-      '<div style="margin-top:6px"><a href="'+r.foto+'" target="_blank" style="font-family:DM Mono,monospace;font-size:10px;color:var(--blue);text-decoration:underline;text-underline-offset:2px;">&#128247; Ver foto da abertura</a></div>' +
+      _fotoLinks(r, 'Ver foto da abertura') +
       '</div>' + feed;
   }
   var openClass = isOpen ? ' open' : '';
@@ -966,7 +994,7 @@ function buildHistFeed(devolutivas) {
       h += '<span class="mh-ts">'+esc(dv.ts)+'</span><span class="mh-resp">'+esc(dv.responsavel)+'</span></div>';
       h += '<div class="mh-text">'+esc(dv.obs)+'</div>';
       if (dv.custo) h += '<div class="mh-cost">Custo: R$ '+esc(dv.custo)+'</div>';
-      if (dv.foto) h += '<div style="margin-top:6px"><a href="'+dv.foto+'" target="_blank" style="font-family:DM Mono,monospace;font-size:10px;color:var(--blue);text-decoration:underline;text-underline-offset:2px;">&#128247; Ver foto</a></div>';
+      h += _fotoLinks(dv);
     }
     h += '</div>';
   });
@@ -1052,39 +1080,26 @@ function submitDevolutiva() {
   if (!_govPodeBotao('governanca-kpis-manutencao::definir-executor')) execVal = r.executor || '';
   var novoStatus = document.getElementById('dev-status').value;
   var custo      = document.getElementById('dev-custo').value;
-  var fotoInput  = document.getElementById('dev-foto');
-  var fotoFile   = fotoInput && fotoInput.files && fotoInput.files[0];
+  var fotos      = (document.getElementById('dev-foto')._fotos) || [];
 
-  function doSubmit(fotoB64) {
-    showLoading('Salvando...');
-    apiPost({
-      action: 'registrar_devolutiva',
-      data: { id_chamado:r.id, responsavel:resp, executor:execVal, status:novoStatus, obs:obs, custo:custo, tipo:'update', needs_help:novoStatus==='Finalizado'?false:r.needs_help, foto:fotoB64||'' }
-    }, function(err, data) {
-      hideLoading();
-      if (err) { alert('Erro ao salvar: '+err); return; }
-      r.devolutivas.unshift({ ts:(data&&data.ts?data.ts:nowLocal()), responsavel:resp, status:novoStatus, obs:obs, custo:custo, tipo:'update', foto:fotoB64||'' });
-      r.status = novoStatus;
-      r.executor = execVal || r.executor;
-      if (novoStatus==='Finalizado') r.needs_help = false;
-      if (fotoInput) fotoInput.value = '';
-      var fp = document.getElementById('dev-foto-preview'); if(fp){fp.style.display='none';fp.querySelector('img').src='';}
-      closeModal();
-      render();
-      var t = document.getElementById('toast');
-      t.classList.add('show');
-      setTimeout(function(){ t.classList.remove('show'); }, 2500);
-    });
-  }
-  if (fotoFile && fotoInput.dataset.compressed) {
-    doSubmit(fotoInput.dataset.compressed);
-  } else if (fotoFile) {
-    var reader = new FileReader();
-    reader.onload = function(e){ doSubmit(e.target.result); };
-    reader.readAsDataURL(fotoFile);
-  } else {
-    doSubmit('');
-  }
+  showLoading('Salvando...');
+  apiPost({
+    action: 'registrar_devolutiva',
+    data: { id_chamado:r.id, responsavel:resp, executor:execVal, status:novoStatus, obs:obs, custo:custo, tipo:'update', needs_help:novoStatus==='Finalizado'?false:r.needs_help, fotos:fotos }
+  }, function(err, data) {
+    hideLoading();
+    if (err) { alert('Erro ao salvar: '+err); return; }
+    r.devolutivas.unshift({ ts:(data&&data.ts?data.ts:nowLocal()), responsavel:resp, status:novoStatus, obs:obs, custo:custo, tipo:'update', foto:(data&&data.foto)||'', fotos:(data&&data.fotos)||[] });
+    r.status = novoStatus;
+    r.executor = execVal || r.executor;
+    if (novoStatus==='Finalizado') r.needs_help = false;
+    _resetFotos('dev-foto','dev-foto-preview');
+    closeModal();
+    render();
+    var t = document.getElementById('toast');
+    t.classList.add('show');
+    setTimeout(function(){ t.classList.remove('show'); }, 2500);
+  });
 }
 
 // FAB — NOVO CHAMADO
@@ -1116,6 +1131,58 @@ function previewFoto(inputId, previewId) {
   reader.readAsDataURL(file);
 }
 
+// ── Múltiplas fotos: comprime cada arquivo, acumula em input._fotos e renderiza thumbs ──
+function _manutCompressFile(file) {
+  return new Promise(function(resolve){
+    var img = new Image(), reader = new FileReader();
+    reader.onload = function(e){
+      img.onload = function(){
+        var MAX = 800, w = img.width, h = img.height;
+        if (w > h && w > MAX) { h = Math.round(h*MAX/w); w = MAX; }
+        else if (h > MAX) { w = Math.round(w*MAX/h); h = MAX; }
+        var canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = function(){ resolve(null); };
+      img.src = e.target.result;
+    };
+    reader.onerror = function(){ resolve(null); };
+    reader.readAsDataURL(file);
+  });
+}
+function _renderFotoThumbs(inputId, previewId) {
+  var input = document.getElementById(inputId), wrap = document.getElementById(previewId);
+  if (!wrap) return;
+  var arr = (input && input._fotos) || [];
+  if (!arr.length) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  wrap.style.display = 'flex';
+  wrap.innerHTML = arr.map(function(src, i){
+    return '<div class="foto-thumb"><img src="'+src+'"><button type="button" class="foto-rm" title="Remover" onclick="_removeFoto(\''+inputId+'\',\''+previewId+'\','+i+')">&times;</button></div>';
+  }).join('');
+}
+function _removeFoto(inputId, previewId, i) {
+  var input = document.getElementById(inputId);
+  if (input && input._fotos) input._fotos.splice(i, 1);
+  _renderFotoThumbs(inputId, previewId);
+}
+function _resetFotos(inputId, previewId) {
+  var input = document.getElementById(inputId);
+  if (input) { input._fotos = []; input.value = ''; }
+  _renderFotoThumbs(inputId, previewId);
+}
+function previewFotos(inputId, previewId) {
+  var input = document.getElementById(inputId);
+  if (!input || !input.files || !input.files.length) return;
+  var files = Array.prototype.slice.call(input.files);
+  input._fotos = input._fotos || [];
+  Promise.all(files.map(_manutCompressFile)).then(function(list){
+    list.forEach(function(b64){ if (b64) input._fotos.push(b64); });
+    input.value = ''; // permite adicionar mais fotos depois
+    _renderFotoThumbs(inputId, previewId);
+  });
+}
+
 function openFab() {
   document.getElementById('fab-overlay').classList.add('open');
   document.getElementById('fab-box').scrollTop = 0;
@@ -1135,10 +1202,9 @@ function submitNovoChamado() {
   if (!unidade)      { document.getElementById('fab-unidade').focus(); return; }
   if (!departamento) { document.getElementById('fab-departamento').focus(); return; }
 
-  var fotoInput = document.getElementById('fab-foto');
-  var fotoFile  = fotoInput && fotoInput.files && fotoInput.files[0];
+  var fotos = (document.getElementById('fab-foto')._fotos) || [];
 
-  function doEnviar(fotoB64) {
+  function doEnviar() {
     showLoading('Criando chamado...');
     apiPost({
       action: 'criar_chamado',
@@ -1153,7 +1219,7 @@ function submitNovoChamado() {
         solicitante:  document.getElementById('fab-solicitante').value.trim(),
         data_prazo:   '',
         obs:          document.getElementById('fab-obs').value.trim(),
-        foto:         fotoB64 || ''
+        fotos:        fotos
       }
     }, function(err, data) {
     hideLoading();
@@ -1162,12 +1228,7 @@ function submitNovoChamado() {
     ['fab-titulo','fab-obs'].forEach(function(id){
       var el=document.getElementById(id); if(el) el.value='';
     });
-    // reset foto fab
-    var _fi2=document.getElementById('fab-foto'); if(_fi2) _fi2.value='';
-    var _fp2=document.getElementById('fab-foto-preview'); if(_fp2){_fp2.style.display='none';_fp2.querySelector('img').src='';}
-    // reset foto
-    var _fi=document.getElementById('fab-foto'); if(_fi) _fi.value='';
-    var _fp=document.getElementById('fab-foto-preview'); if(_fp){_fp.style.display='none';_fp.querySelector('img').src='';}
+    _resetFotos('fab-foto','fab-foto-preview');
     ['fab-unidade','fab-departamento','fab-categoria'].forEach(function(id){
       var el=document.getElementById(id); if(el) el.selectedIndex=0;
     });
@@ -1179,17 +1240,7 @@ function submitNovoChamado() {
     });
   }
 
-  var fotoInput2 = document.getElementById('fab-foto');
-  var fotoFile2  = fotoInput2 && fotoInput2.files && fotoInput2.files[0];
-  if (fotoFile2 && fotoInput2.dataset.compressed) {
-    doEnviar(fotoInput2.dataset.compressed);
-  } else if (fotoFile2) {
-    var reader2 = new FileReader();
-    reader2.onload = function(e){ doEnviar(e.target.result); };
-    reader2.readAsDataURL(fotoFile2);
-  } else {
-    doEnviar('');
-  }
+  doEnviar();
 }
 
 // RENDER
