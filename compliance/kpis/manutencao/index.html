@@ -437,7 +437,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <input class="form-input" id="dev-responsavel" type="text" readonly style="background:#F4F4F4;color:#777;" placeholder="Carregando...">
         </div>
       </div>
-      <div class="form-group">
+      <div class="form-group" data-botao-id="governanca-kpis-manutencao::definir-executor">
         <label class="form-label">Executor</label>
         <select class="form-select form-input" id="dev-executor"><option value="">A definir</option></select>
       </div>
@@ -536,7 +536,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           </select>
         </div>
       </div>
-      <div class="form-group">
+      <div class="form-group" data-botao-id="governanca-kpis-manutencao::definir-executor">
         <label class="form-label">Executor</label>
         <select class="form-select form-input" id="fab-executor"><option value="">A definir</option></select>
       </div>
@@ -1048,6 +1048,8 @@ function submitDevolutiva() {
   var resp       = document.getElementById('dev-responsavel').value || r.executor;
   var execEl     = document.getElementById('dev-executor');
   var execVal    = execEl ? execEl.value.trim() : (r.executor || '');
+  // Trava a reatribuição do executor a quem não tem o botão liberado
+  if (!_govPodeBotao('governanca-kpis-manutencao::definir-executor')) execVal = r.executor || '';
   var novoStatus = document.getElementById('dev-status').value;
   var custo      = document.getElementById('dev-custo').value;
   var fotoInput  = document.getElementById('dev-foto');
@@ -1146,7 +1148,7 @@ function submitNovoChamado() {
         departamento: departamento,
         categoria:    document.getElementById('fab-categoria').value,
         prioridade:   document.getElementById('fab-prioridade').value,
-        executor:     document.getElementById('fab-executor').value.trim(),
+        executor:     _govPodeBotao('governanca-kpis-manutencao::definir-executor') ? document.getElementById('fab-executor').value.trim() : '',
         apoio:        _manutLiderNome(),
         solicitante:  document.getElementById('fab-solicitante').value.trim(),
         data_prazo:   '',
@@ -1425,6 +1427,30 @@ function _manutCarregarExecutores(cb) {
     }, function(){ _manutExecutoresCache = []; if (cb) cb(_manutExecutoresCache); });
   });
 }
+// ── Controle de acesso por botão (skill controle-acesso-abas-botoes) ──
+// "Definir executor" é ação com 2 pontos de entrada (Novo Chamado + Devolutiva):
+// oculto por padrão (allowlist), liberado por pessoa pelo admin do Plus.
+var GOV_BOTOES = ['governanca-kpis-manutencao::definir-executor'];
+var GOV_BTN_OK = {};
+function _govPodeBotao(id) { return GOV_BTN_OK[id] === true; }
+function aplicarBotoes() {
+  var st = document.getElementById('gov-btn-css');
+  if (!st) { st = document.createElement('style'); st.id = 'gov-btn-css'; document.head.appendChild(st); }
+  function repintar() {
+    st.textContent = GOV_BOTOES.filter(function(id){ return GOV_BTN_OK[id] !== true; })
+      .map(function(id){ return '[data-botao-id="'+id+'"]{display:none!important}'; }).join('');
+  }
+  repintar();
+  comSupa(function(supa){
+    GOV_BOTOES.forEach(function(id){
+      supa.schema('tata_plus').rpc('pode_botao', { p_aba_id: id }).then(function(r){
+        GOV_BTN_OK[id] = (!r.error && r.data === true); repintar();
+      }, function(){ GOV_BTN_OK[id] = false; repintar(); });
+    });
+  });
+}
+comSupa(function(){ aplicarBotoes(); });
+
 // Líder/coordenador de Manutenção (recebe os pedidos de apoio). Deriva do cargo; fallback Wellington.
 function _manutLiderNome() {
   var list = _manutExecutoresCache || [];
