@@ -1262,11 +1262,8 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
 .cs-info-text strong { color:var(--t1); font-weight:600; }
 
 /* ── FILTROS TABELA ── */
-.cs-table-filters { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:14px; }
-@media (max-width:560px){
-  .cs-table-filters { grid-template-columns:1fr 1fr; }
-  .cs-table-filters .cs-filter-group:last-child { grid-column:1 / -1; }
-}
+.cs-table-filters { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+@media (min-width:768px){ .cs-table-filters { grid-template-columns:repeat(4, 1fr); } }
 .cs-filter-group { display:flex; flex-direction:column; gap:4px; }
 .cs-filter-label { font-family:"DM Mono",monospace; font-size:10px; font-weight:500; letter-spacing:.8px; text-transform:uppercase; color:var(--t3); }
 .cs-filter-sel {
@@ -1619,19 +1616,25 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="cs-table-filters">
           <div class="cs-filter-group">
             <label class="cs-filter-label">Unidade</label>
-            <select class="cs-filter-sel" id="cs-filter-unidade" onchange="csPopulateDeptFilter(this.value);csPopulateCargoFilter();csRecalc()">
+            <select class="cs-filter-sel" id="cs-filter-unidade" onchange="csPopulateDeptFilter(this.value);csPopulateCargoFilter();csPopulateNivelFilter();csRecalc()">
               <option value="">Todas</option>
             </select>
           </div>
           <div class="cs-filter-group">
             <label class="cs-filter-label">Departamento</label>
-            <select class="cs-filter-sel" id="cs-filter-dept" onchange="csPopulateCargoFilter();csRecalc()">
+            <select class="cs-filter-sel" id="cs-filter-dept" onchange="csPopulateCargoFilter();csPopulateNivelFilter();csRecalc()">
               <option value="">Todos</option>
             </select>
           </div>
           <div class="cs-filter-group">
             <label class="cs-filter-label">Cargo</label>
-            <select class="cs-filter-sel" id="cs-filter-cargo" onchange="csRecalc()">
+            <select class="cs-filter-sel" id="cs-filter-cargo" onchange="csPopulateNivelFilter();csRecalc()">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div class="cs-filter-group">
+            <label class="cs-filter-label">Nível</label>
+            <select class="cs-filter-sel" id="cs-filter-nivel" onchange="csRecalc()">
               <option value="">Todos</option>
             </select>
           </div>
@@ -2068,6 +2071,7 @@ function csRecalc() {
   var selUnit  = (document.getElementById("cs-filter-unidade") || {}).value || "";
   var selDept  = (document.getElementById("cs-filter-dept")    || {}).value || "";
   var selCargo = (document.getElementById("cs-filter-cargo")   || {}).value || "";
+  var selNivel = (document.getElementById("cs-filter-nivel")   || {}).value || "";
   var tbody    = document.getElementById("cs-tbody");
   var toggleBtn = document.getElementById("cs-table-toggle-btn");
   tbody.innerHTML = "";
@@ -2084,6 +2088,7 @@ function csRecalc() {
     if (selUnit && c.unidade !== selUnit) return false;
     if (selDept && c.dept   !== selDept)  return false;
     if (selCargo && (c.cargo_base || c.nome) !== selCargo) return false;
+    if (selNivel && csNivelBucket(c.niveis_raw) !== selNivel) return false;
     return true;
   });
 
@@ -2196,6 +2201,37 @@ function csPopulateCargoFilter() {
   sel.innerHTML = '<option value="">Todos</option>';
   cargos.forEach(function(nome){ sel.innerHTML += '<option'+(nome===cur?' selected':'')+'>'+nome+'</option>'; });
   if (cur && cargos.indexOf(cur) < 0) sel.value = "";
+}
+
+// Agrupa o nível bruto (JR/PL/SR, SR 1..4, aprendiz…) em rótulo amigável.
+function csNivelBucket(raw) {
+  var n = String(raw || "").trim().toUpperCase();
+  if (!n) return "";
+  if (n === "JR" || n.indexOf("JÚNIOR") >= 0 || n.indexOf("JUNIOR") >= 0) return "Júnior";
+  if (n === "PL" || n.indexOf("PLENO") >= 0) return "Pleno";
+  if (n.indexOf("SR") === 0 || n.indexOf("SÊNIOR") >= 0 || n.indexOf("SENIOR") >= 0) return "Sênior";
+  return String(raw).trim();
+}
+
+function csPopulateNivelFilter() {
+  var sel = document.getElementById("cs-filter-nivel");
+  if (!sel) return;
+  var selUnit  = (document.getElementById("cs-filter-unidade") || {}).value || "";
+  var selDept  = (document.getElementById("cs-filter-dept")    || {}).value || "";
+  var selCargo = (document.getElementById("cs-filter-cargo")   || {}).value || "";
+  var source = CS_CARGOS.filter(function(c){
+    return (!selUnit || c.unidade === selUnit)
+        && (!selDept || c.dept === selDept)
+        && (!selCargo || (c.cargo_base || c.nome) === selCargo);
+  });
+  var niveis = [];
+  source.forEach(function(c){ var b = csNivelBucket(c.niveis_raw); if (b && niveis.indexOf(b) < 0) niveis.push(b); });
+  var ordem = { "Júnior":1, "Pleno":2, "Sênior":3 };
+  niveis.sort(function(a,b){ return (ordem[a]||9) - (ordem[b]||9) || a.localeCompare(b, 'pt-BR'); });
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>';
+  niveis.forEach(function(nv){ sel.innerHTML += '<option'+(nv===cur?' selected':'')+'>'+nv+'</option>'; });
+  if (cur && niveis.indexOf(cur) < 0) sel.value = "";
 }
 
 /* ── RENDER CARGOS ── */
@@ -2378,6 +2414,7 @@ function csSyncSheets() {
     csPopulateUnidadeFilter();
     csPopulateDeptFilter();
     csPopulateCargoFilter();
+    csPopulateNivelFilter();
     csRecalc();
     csRenderCargos();
     hideLoading();
@@ -2540,6 +2577,7 @@ function csPrintDesc() {
 /* ── INIT ── */
 csPopulateDeptFilter();
 csPopulateCargoFilter();
+csPopulateNivelFilter();
 csRecalc();
 csRenderCargos();
 csSyncSheets();
