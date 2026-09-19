@@ -65,6 +65,9 @@
   .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
   .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
   .chart-wrap { position: relative; height: 260px; }
+  .tp-charts { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  #view-tataplus .kpi-wrap { padding: 16px 16px 0; }
+  @media (min-width: 768px) { .tp-charts { padding: 20px 24px; } }
 
   /* TABLE CARD (padrão bancodehoras) */
   .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); padding: 16px; display: flex; flex-direction: column; overflow: hidden; }
@@ -324,6 +327,29 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <button class="nav-tab" data-aba-id="governanca-kpis-rh-beneficios::empresa" onclick="setTab('empresa')">Aniversariantes de Empresa</button>
   <button class="nav-tab" data-aba-id="governanca-kpis-rh-beneficios::aniv" onclick="setTab('aniv')">Aniversariantes do Mês</button>
   <button class="nav-tab" data-aba-id="governanca-kpis-rh-beneficios::assist" onclick="setTab('assist')">Assistência Médica</button>
+  <button class="nav-tab" data-aba-id="governanca-kpis-rh-beneficios::tataplus" onclick="setTab('tataplus')">TataPlus</button>
+</div>
+
+<div id="view-tataplus" style="display:none">
+  <div class="kpi-wrap" id="tp-kpiRow"></div>
+  <div class="filter-bar">
+    <div class="filters-row">
+      <div class="filter-group">
+        <label class="filter-label">Unidade</label>
+        <select class="filter-select" id="tp-fUni" onchange="tpUni=this.value;renderTataPlus()"><option value="Todos">Todas as unidades</option></select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Departamento</label>
+        <select class="filter-select" id="tp-fDepto" onchange="tpDepto=this.value;renderTataPlus()"><option value="Todos">Todos os departamentos</option></select>
+      </div>
+    </div>
+  </div>
+  <div class="tp-charts">
+    <div class="chart-card"><div class="chart-title">Ranking por pontuação (saldo)</div><div class="chart-wrap"><canvas id="tp-chart-rank"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Resgates por recompensa</div><div class="chart-wrap"><canvas id="tp-chart-resg"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Compras por produto</div><div class="chart-wrap"><canvas id="tp-chart-compra"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Ranking de resgatantes (pontos utilizados)</div><div class="chart-wrap"><canvas id="tp-chart-resgatantes"></canvas></div></div>
+  </div>
 </div>
 
 <div id="view-dashboard" style="display:none">
@@ -2919,19 +2945,77 @@ function setActiveCfMes(v) {
   else cfMesMed = v;
 }
 
+// ── Aba TataPlus (KPIs do app) ──
+var tpUni = 'Todos', tpDepto = 'Todos', _tpCharts = {}, _tpFiltrosLoaded = false;
+function _tpFirst(n){ n = (n||'').trim(); return n.split(/\s+/).slice(0,2).join(' '); }
+function _tpBar(id, labels, data, horizontal){
+  var cv = document.getElementById(id); if (!cv || typeof Chart === 'undefined') return;
+  if (_tpCharts[id]) _tpCharts[id].destroy();
+  _tpCharts[id] = new Chart(cv, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: '#35383F', borderRadius: 4, maxBarThickness: 34 }] },
+    options: {
+      indexAxis: horizontal ? 'y' : 'x',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: true } },
+      scales: {
+        x: { beginAtZero: true, grid: { color: '#EEE' }, ticks: { precision: 0, font: { family: 'DM Mono', size: 10 }, color: '#999' } },
+        y: { beginAtZero: true, grid: { display: false }, ticks: { font: { family: 'DM Mono', size: 10 }, color: '#555', autoSkip: false } }
+      }
+    }
+  });
+}
+function _tpCards(k){
+  var el = document.getElementById('tp-kpiRow'); if (!el) return;
+  var nf = function(n){ return (Number(n)||0).toLocaleString('pt-BR'); };
+  function card(lbl, val){ return '<div class="kpi-card"><span class="kpi-label">'+lbl+'</span><span class="kpi-value">'+val+'</span></div>'; }
+  el.innerHTML = card('Usuários no app', nf(k.usuarios)) + card('Pontos (saldo)', nf(k.pontos)) + card('Resgates', nf(k.resgates)) + card('Compras na loja', nf(k.compras));
+}
+function renderTataPlus(){
+  comSupa(function(supa){
+    var T = supa.schema('tata_plus');
+    if (!_tpFiltrosLoaded) {
+      T.rpc('tataplus_filtros').then(function(r){
+        var d = (r && r.data) || {};
+        var fu = document.getElementById('tp-fUni'), fd = document.getElementById('tp-fDepto');
+        (d.unidades || []).forEach(function(u){ var o = document.createElement('option'); o.value = u; o.textContent = u; if (fu) fu.appendChild(o); });
+        (d.departamentos || []).forEach(function(x){ var o = document.createElement('option'); o.value = x; o.textContent = x; if (fd) fd.appendChild(o); });
+        _tpFiltrosLoaded = true;
+      });
+    }
+    var args = { p_unidade: tpUni, p_departamento: tpDepto };
+    T.rpc('tataplus_kpis', args).then(function(r){ if (r && r.data) _tpCards(r.data); });
+    T.rpc('tataplus_ranking', { p_unidade: tpUni, p_departamento: tpDepto, p_limit: 10 }).then(function(r){
+      var a = (r && r.data) || []; _tpBar('tp-chart-rank', a.map(function(x){ return _tpFirst(x.nome); }), a.map(function(x){ return x.saldo; }), true);
+    });
+    T.rpc('tataplus_resgates_por', args).then(function(r){
+      var a = ((r && r.data) || []).slice(0, 12); _tpBar('tp-chart-resg', a.map(function(x){ return x.rotulo; }), a.map(function(x){ return x.n; }), true);
+    });
+    T.rpc('tataplus_compras_por', args).then(function(r){
+      var a = ((r && r.data) || []).slice(0, 12); _tpBar('tp-chart-compra', a.map(function(x){ return x.rotulo; }), a.map(function(x){ return x.n; }), true);
+    });
+    T.rpc('tataplus_resgatantes', { p_unidade: tpUni, p_departamento: tpDepto, p_limit: 10 }).then(function(r){
+      var a = (r && r.data) || []; _tpBar('tp-chart-resgatantes', a.map(function(x){ return _tpFirst(x.nome); }), a.map(function(x){ return x.pts; }), true);
+    });
+  });
+}
+
 function setTab(tab) {
   if (activeTab === tab) return;
   activeTab = tab;
   sKey = 'diasFaltando'; sDir = 'asc';
-  var order = ['sobre','empresa','aniv','assist'];
+  var order = ['sobre','empresa','aniv','assist','tataplus'];
   document.querySelectorAll('.nav-tab').forEach(function(btn, i) {
     btn.classList.toggle('active', order[i] === tab);
   });
   var isSobre = tab === 'sobre';
-  var vd = document.getElementById('view-dashboard'); if (vd) vd.style.display = isSobre ? 'none' : '';
+  var isTP = tab === 'tataplus';
+  var vtp = document.getElementById('view-tataplus'); if (vtp) vtp.style.display = isTP ? '' : 'none';
+  var vd = document.getElementById('view-dashboard'); if (vd) vd.style.display = (isSobre || isTP) ? 'none' : '';
   var vs = document.getElementById('view-sobre'); if (vs) vs.style.display = isSobre ? '' : 'none';
   document.body.classList.toggle('tab-empresa', tab === 'empresa');
   if (isSobre) return;
+  if (isTP) { renderTataPlus(); return; }
   var acm = getActiveCfMes();
   var hasEmpCF = (tab === 'empresa' && cfEmpFaixa !== null);
   document.body.classList.toggle('cf-active', acm !== null || hasEmpCF);
