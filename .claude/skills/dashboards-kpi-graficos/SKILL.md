@@ -29,6 +29,11 @@ tamanho diferente = dashboard fora do padrão.
 Aprofundamento de gráficos (plugins, multi-série, tabela-info, scroll) →
 `references/graficos-chartjs.md`.
 
+**Escopo:** esta skill cobre o **miolo do dashboard** — cards de KPI, gráficos, status
+e painéis. **Fora do escopo:**
+- **Header e rodapé** → `README-HEADER-FOOTER-DASHBOARD.md` (logo, título, chip do líder).
+- **Auth gate e acesso por aba/botão** → skill `controle-acesso-abas-botoes`.
+
 ---
 
 ## 1. Tokens (`:root`) — a base de tudo
@@ -234,5 +239,4 @@ Status/estado usa pílula DM Mono `10px`, `border-radius:100px`, com paleta sem�
 - [ ] Muitas categorias → `min-width` no `.chart-scroll` + scroll lateral (não encolher).
 - [ ] Status/distribuição = tabela (`.status-row`), nunca pizza.
 - [ ] Responsivo: mobile padding lateral 12, desktop 24; `.chart-card` com margem no mobile.
-- [ ] Header segue `README-HEADER-FOOTER-DASHBOARD.md`; acesso/abas segue a skill
-      `controle-acesso-abas-botoes`.
+- [ ] (Fora do escopo: header/rodapé e acesso por aba/botão — ver **Escopo** no topo.)
