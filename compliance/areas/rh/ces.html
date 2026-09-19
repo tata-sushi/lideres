@@ -1262,7 +1262,11 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
 .cs-info-text strong { color:var(--t1); font-weight:600; }
 
 /* ── FILTROS TABELA ── */
-.cs-table-filters { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+.cs-table-filters { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:14px; }
+@media (max-width:560px){
+  .cs-table-filters { grid-template-columns:1fr 1fr; }
+  .cs-table-filters .cs-filter-group:last-child { grid-column:1 / -1; }
+}
 .cs-filter-group { display:flex; flex-direction:column; gap:4px; }
 .cs-filter-label { font-family:"DM Mono",monospace; font-size:10px; font-weight:500; letter-spacing:.8px; text-transform:uppercase; color:var(--t3); }
 .cs-filter-sel {
@@ -1611,13 +1615,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="cs-table-filters">
           <div class="cs-filter-group">
             <label class="cs-filter-label">Unidade</label>
-            <select class="cs-filter-sel" id="cs-filter-unidade" onchange="csPopulateDeptFilter(this.value);csRecalc()">
+            <select class="cs-filter-sel" id="cs-filter-unidade" onchange="csPopulateDeptFilter(this.value);csPopulateCargoFilter();csRecalc()">
               <option value="">Todas</option>
             </select>
           </div>
           <div class="cs-filter-group">
             <label class="cs-filter-label">Departamento</label>
-            <select class="cs-filter-sel" id="cs-filter-dept" onchange="csRecalc()">
+            <select class="cs-filter-sel" id="cs-filter-dept" onchange="csPopulateCargoFilter();csRecalc()">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div class="cs-filter-group">
+            <label class="cs-filter-label">Cargo</label>
+            <select class="cs-filter-sel" id="cs-filter-cargo" onchange="csRecalc()">
               <option value="">Todos</option>
             </select>
           </div>
@@ -2052,6 +2062,7 @@ function csToggleTable() {
 function csRecalc() {
   var selUnit  = (document.getElementById("cs-filter-unidade") || {}).value || "";
   var selDept  = (document.getElementById("cs-filter-dept")    || {}).value || "";
+  var selCargo = (document.getElementById("cs-filter-cargo")   || {}).value || "";
   var tbody    = document.getElementById("cs-tbody");
   var toggleBtn = document.getElementById("cs-table-toggle-btn");
   tbody.innerHTML = "";
@@ -2067,6 +2078,7 @@ function csRecalc() {
   var filtered = CS_CARGOS.filter(function(c) {
     if (selUnit && c.unidade !== selUnit) return false;
     if (selDept && c.dept   !== selDept)  return false;
+    if (selCargo && (c.cargo_base || c.nome) !== selCargo) return false;
     return true;
   });
 
@@ -2158,6 +2170,26 @@ function csPopulateDeptFilter(selUnit) {
   sel.innerHTML = '<option value="">Todos os departamentos</option>';
   depts.forEach(function(d){ sel.innerHTML += '<option'+(d===cur?' selected':'')+'>'+d+'</option>'; });
   if (cur && depts.indexOf(cur) < 0) sel.value = "";
+}
+
+function csPopulateCargoFilter() {
+  var sel = document.getElementById("cs-filter-cargo");
+  if (!sel) return;
+  var selUnit = (document.getElementById("cs-filter-unidade") || {}).value || "";
+  var selDept = (document.getElementById("cs-filter-dept")    || {}).value || "";
+  var source = CS_CARGOS.filter(function(c){
+    return (!selUnit || c.unidade === selUnit) && (!selDept || c.dept === selDept);
+  });
+  var cargos = [];
+  source.forEach(function(c){
+    var nome = c.cargo_base || c.nome;
+    if (nome && cargos.indexOf(nome) < 0) cargos.push(nome);
+  });
+  cargos.sort(function(a,b){ return a.localeCompare(b, 'pt-BR'); });
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>';
+  cargos.forEach(function(nome){ sel.innerHTML += '<option'+(nome===cur?' selected':'')+'>'+nome+'</option>'; });
+  if (cur && cargos.indexOf(cur) < 0) sel.value = "";
 }
 
 /* ── RENDER CARGOS ── */
@@ -2339,6 +2371,7 @@ function csSyncSheets() {
     CS_OBS = Object.keys(obsMap).map(function(k){ return obsMap[k]; });
     csPopulateUnidadeFilter();
     csPopulateDeptFilter();
+    csPopulateCargoFilter();
     csRecalc();
     csRenderCargos();
     hideLoading();
@@ -2500,6 +2533,7 @@ function csPrintDesc() {
 
 /* ── INIT ── */
 csPopulateDeptFilter();
+csPopulateCargoFilter();
 csRecalc();
 csRenderCargos();
 csSyncSheets();
