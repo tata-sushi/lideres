@@ -100,6 +100,61 @@ Regras:
 - Precisa de destaque de cor por card? Use uma classe modificadora que só troca
   cor/acento (ex.: `.kpi-card-vagas`), mantendo a estrutura.
 
+> ⚠️ **Cores invertidas na zona de KPI/filtros.** Aqui a **faixa é branca**
+> (`--surface`) e o **card/campo é cinza** (`--bg`) — o **inverso** dos chart-cards
+> (card branco `--surface` sobre fundo cinza `--bg`). Não "conserte" isso.
+> **Full-bleed:** a faixa de KPIs e a de filtros vão **de margem a margem** (largura
+> total, com `border-bottom`, sem margem lateral) — diferente dos chart-cards, que
+> têm respiro/margem lateral. KPIs e filtros são faixas coladas no topo; gráficos são
+> cards soltos.
+
+## Filtros (logo abaixo dos KPIs)
+
+Toda página dashboard com dados filtráveis tem a **faixa de filtros** logo abaixo dos
+KPIs — **mesma faixa branca full-bleed**. Selects **cinza** (`--bg`), rótulo DM Mono, e
+uma linha de ações com "Limpar filtros" + contagem de resultados.
+
+HTML:
+```html
+<div class="filters-wrap" id="dash-filters-wrap">
+  <div class="filters-row">
+    <div class="filter-group">
+      <label class="filter-label">Unidade</label>
+      <select class="filter-select"><option>Todos</option><!-- … --></select>
+    </div>
+    <!-- Departamento, Competência (mês), + intervalo De/Até -->
+  </div>
+  <div class="filters-actions">
+    <button class="btn-clear" onclick="clearDashFilters()">Limpar filtros</button>
+    <span class="results-count"><span>0</span> resultado(s)</span>
+  </div>
+</div>
+```
+
+CSS (copiar exatamente):
+```css
+.filters-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+.filters-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filter-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
+.filter-select { appearance: none; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); width: 100%; cursor: pointer; }
+.filter-select:focus { outline: none; border-color: var(--carbon); }
+.filters-actions { display: flex; align-items: center; justify-content: space-between; padding-top: 2px; }
+.btn-clear { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px 0; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
+.btn-clear:hover { color: var(--carbon); }
+.results-count { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+.results-count span { color: var(--carbon); font-weight: 500; }
+```
+
+Regras dos filtros:
+- **Faixa branca full-bleed** (igual aos KPIs), com `border-bottom` — encostada nas margens.
+- **Selects/inputs cinza** (`--bg`) com chevron; rótulo DM Mono 10px uppercase.
+- Conjunto padrão do RH: **Unidade · Departamento · Competência (mês) + intervalo De/Até**.
+  Começa em "Todos"; o Departamento pode depender da Unidade escolhida.
+- Rodapé: **"Limpar filtros"** (link sublinhado, esquerda) + **contagem de resultados**
+  (direita; o número vem num `<span>` em carbon).
+- Trocar filtro **re-renderiza os gráficos** (cada chart faz `chartInst.destroy()` antes).
+
 ---
 
 ## 3. Gráficos (chart-card + Chart.js 4)
