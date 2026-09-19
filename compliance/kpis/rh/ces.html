@@ -6,6 +6,7 @@
 <title>TATÁ SUSHI - Cargos e Salários</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 :root {
@@ -1520,6 +1521,14 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
 #view-dashboard .dash-table-toggle { display:block; margin:14px auto 0; padding:9px 18px; background:var(--carbon); color:var(--citric); border:none; border-radius:var(--r); font-family:"DM Mono",monospace; font-size:10px; font-weight:500; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; }
 #view-dashboard .dash-table-toggle:hover { opacity:.85; }
 
+#view-dashboard .chart-controls { display:flex; flex-wrap:wrap; gap:8px 10px; margin-bottom:12px; }
+#view-dashboard .chart-controls .cc-group { display:flex; flex-direction:column; gap:3px; flex:1 1 150px; min-width:0; }
+#view-dashboard .chart-wrap { position:relative; height:250px; overflow-x:auto; overflow-y:hidden; }
+#view-dashboard .chart-scroll { position:relative; height:100%; }
+#view-dashboard .chart-empty { padding:34px 0; text-align:center; font-family:"DM Mono",monospace; font-size:11px; color:var(--t3); text-transform:uppercase; letter-spacing:.8px; }
+#view-dashboard .chart-caption { margin-top:12px; text-align:center; font-family:"DM Mono",monospace; font-size:11px; color:var(--t2); line-height:1.5; }
+#view-dashboard .chart-caption strong { color:var(--carbon); font-weight:600; }
+
 @media (min-width:768px){ #view-dashboard .dashboard { padding:14px 24px 90px; } }
 @media (max-width:767px){
   #view-dashboard .filters-row { grid-template-columns:1fr 1fr; }
@@ -2082,6 +2091,42 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </div>
       <button class="dash-table-toggle" id="csd-toggle" onclick="csdToggle()" style="display:none;">Ver mais</button>
     </div>
+
+    <!-- Gráfico 1: mesmo cargo × unidades (variação % do Bruto) -->
+    <div class="chart-card">
+      <div class="chart-title">Mesmo cargo × unidades — variação % (Bruto)</div>
+      <div class="chart-controls">
+        <div class="cc-group">
+          <label class="filter-label">Cargo</label>
+          <select class="filter-select" id="g1-cargo" onchange="g1OnCargo()"></select>
+        </div>
+        <div class="cc-group">
+          <label class="filter-label">Nível</label>
+          <select class="filter-select" id="g1-nivel" onchange="g1Render()"></select>
+        </div>
+      </div>
+      <div class="chart-wrap"><div class="chart-scroll" id="g1-scroll"><canvas id="g1-canvas"></canvas></div></div>
+      <div class="chart-empty" id="g1-empty" style="display:none;"></div>
+      <div class="chart-caption" id="g1-caption"></div>
+    </div>
+
+    <!-- Gráfico 2: comparar dois cargos escolhidos (variação % do Bruto) -->
+    <div class="chart-card">
+      <div class="chart-title">Comparar dois cargos — variação % (Bruto)</div>
+      <div class="chart-controls">
+        <div class="cc-group">
+          <label class="filter-label">Cargo A</label>
+          <select class="filter-select" id="g2-a" onchange="g2Render()"></select>
+        </div>
+        <div class="cc-group">
+          <label class="filter-label">Cargo B</label>
+          <select class="filter-select" id="g2-b" onchange="g2Render()"></select>
+        </div>
+      </div>
+      <div class="chart-wrap"><div class="chart-scroll" id="g2-scroll"><canvas id="g2-canvas"></canvas></div></div>
+      <div class="chart-empty" id="g2-empty" style="display:none;"></div>
+      <div class="chart-caption" id="g2-caption"></div>
+    </div>
   </div>
 
 </div>
@@ -2374,6 +2419,7 @@ function csdInit() {
   csdPopulateDept();
   csdPopulateCargo();
   csdRender();
+  csdChartsInit();
 }
 
 function csdPopulateUnidade() {
@@ -2496,6 +2542,151 @@ function csdRender() {
     }
   }
 }
+
+/* ── ABA DASHBOARD: gráficos de variação % de salário (base = Bruto Aproximado) ── */
+var _g1Chart = null, _g2Chart = null, _g2List = [];
+
+// Bruto Aproximado da linha: usa o valor calculado/mascarado da view; fallback recalcula.
+function csdBruto(c) {
+  if (c.bruto != null && c.bruto !== '') return parseFloat(c.bruto) || 0;
+  var fixo = parseFloat(c.fixo) || 0, insal = parseFloat(c.insalubridade) || 0, peric = parseFloat(c.periculosidade) || 0;
+  var gorj = parseFloat(c.gorjeta) || 0, prem = parseFloat(c.premio) || 0;
+  var obs = {};
+  if (CS_OBS && CS_OBS.length) { for (var i = 0; i < CS_OBS.length; i++) { if (CS_OBS[i].loja_nome === c.unidade) { obs = CS_OBS[i]; break; } } if (!obs.loja_nome) obs = CS_OBS[0] || {}; }
+  return fixo + insal + peric + (gorj * (parseFloat(obs.valor_pt_gorjeta) || 0)) + (prem * (parseFloat(obs.valor_pt_premio) || 0));
+}
+
+function _milhar(n) { return (Math.round(n) || 0).toLocaleString('pt-BR'); }
+function _fmtPct(p) { return (p > 0 ? '+' : '') + (Math.round(p * 10) / 10).toString().replace('.', ',') + '%'; }
+function _pctColor(p) { return p > 0 ? '#8B1A1A' : (p < 0 ? '#1A5C2A' : '#999999'); }
+
+// plugin: duas linhas por barra — valor em R$ (topo) e variação % (embaixo).
+var salBarLabelsPlugin = {
+  id: 'salBarLabels',
+  afterDatasetsDraw: function(chart) {
+    var meta = chart.getDatasetMeta(0); if (!meta.data) return;
+    var ds = chart.data.datasets[0];
+    var tops = ds._tops || [], bots = ds._bots || [], cols = ds._botColors || [];
+    var ctx = chart.ctx; ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    for (var i = 0; i < meta.data.length; i++) {
+      var bar = meta.data[i];
+      if (tops[i] != null) { ctx.font = '700 11px "DM Mono", monospace'; ctx.fillStyle = '#35383F'; ctx.fillText(tops[i], bar.x, bar.y - 16); }
+      if (bots[i] != null) { ctx.font = '600 10px "DM Mono", monospace'; ctx.fillStyle = cols[i] || '#999999'; ctx.fillText(bots[i], bar.x, bar.y - 4); }
+    }
+    ctx.restore();
+  }
+};
+
+function _barCfg(labels, data, tops, bots, botColors) {
+  return {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ label: 'Bruto', data: data, backgroundColor: '#35383F', borderWidth: 0, borderRadius: 5, barPercentage: 0.6, categoryPercentage: 0.8, _tops: tops, _bots: bots, _botColors: botColors }] },
+    plugins: [salBarLabelsPlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { top: 34 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 }, autoSkip: false, maxRotation: 0, minRotation: 0 } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true, grace: '14%' }
+      }
+    }
+  };
+}
+
+function csdChartsInit() {
+  // Gráfico 1 — seletor de Cargo
+  var selC = document.getElementById('g1-cargo');
+  if (selC) {
+    var cargos = [];
+    CS_CARGOS.forEach(function(c){ var n = c.cargo_base || c.nome; if (n && cargos.indexOf(n) < 0) cargos.push(n); });
+    cargos.sort(function(a,b){ return a.localeCompare(b, 'pt-BR'); });
+    var curC = selC.value;
+    selC.innerHTML = cargos.map(function(n){ return '<option'+(n===curC?' selected':'')+'>'+n+'</option>'; }).join('');
+  }
+  g1PopulateNivel();
+  // Gráfico 2 — lista de posições (cargo · unidade)
+  _g2List = CS_CARGOS.map(function(c, i){ return { i: i, label: (c.nome || '') + ' · ' + (c.unidade || '') }; });
+  _g2List.sort(function(a,b){ return a.label.localeCompare(b.label, 'pt-BR'); });
+  [['g2-a', 0], ['g2-b', 1]].forEach(function(pair){
+    var sel = document.getElementById(pair[0]); if (!sel) return;
+    var cur = sel.value;
+    sel.innerHTML = _g2List.map(function(o){ return '<option value="'+o.i+'"'+(String(o.i)===cur?' selected':'')+'>'+o.label+'</option>'; }).join('');
+    if (!cur && _g2List.length > pair[1]) sel.value = String(_g2List[pair[1]].i);
+  });
+  csdChartsRenderAll();
+}
+
+function g1PopulateNivel() {
+  var sel = document.getElementById('g1-nivel'); if (!sel) return;
+  var cargo = (document.getElementById('g1-cargo') || {}).value || '';
+  var rows = CS_CARGOS.filter(function(c){ return (c.cargo_base || c.nome) === cargo; });
+  var niveis = [];
+  rows.forEach(function(c){ var r = (c.niveis_raw == null ? '' : String(c.niveis_raw)); if (niveis.indexOf(r) < 0) niveis.push(r); });
+  var ord = { JR: 1, PL: 2, SR: 3 };
+  niveis.sort(function(a,b){ var ra = ord[a.toUpperCase()] || (a ? 9 : 0), rb = ord[b.toUpperCase()] || (b ? 9 : 0); return ra - rb || a.localeCompare(b, 'pt-BR'); });
+  var cur = sel.value;
+  sel.innerHTML = niveis.map(function(r){
+    var lab = r === '' ? 'Único' : (csNivelBucket(r) + (/^sr\s*\d/i.test(r) ? ' (' + r + ')' : ''));
+    return '<option value="' + r + '"' + (r === cur ? ' selected' : '') + '>' + lab + '</option>';
+  }).join('');
+  if (niveis.indexOf(cur) < 0 && niveis.length) sel.value = niveis[0];
+}
+
+function g1OnCargo() { g1PopulateNivel(); g1Render(); }
+
+function g1Render() {
+  var canvas = document.getElementById('g1-canvas'); if (!canvas) return;
+  var empty = document.getElementById('g1-empty'), caption = document.getElementById('g1-caption'), scroll = document.getElementById('g1-scroll');
+  if (_g1Chart) { _g1Chart.destroy(); _g1Chart = null; }
+  function showEmpty(m){ if (empty) { empty.style.display = ''; empty.textContent = m; } canvas.style.display = 'none'; if (caption) caption.textContent = ''; }
+  function hideEmpty(){ if (empty) empty.style.display = 'none'; canvas.style.display = ''; }
+  if (!_podeVerValores) return showEmpty('Valores ocultos — sem permissão.');
+  if (typeof Chart === 'undefined') return showEmpty('Carregando biblioteca de gráficos…');
+  var cargo = (document.getElementById('g1-cargo') || {}).value || '';
+  var nivel = (document.getElementById('g1-nivel') || {}).value || '';
+  var rows = CS_CARGOS.filter(function(c){ return (c.cargo_base || c.nome) === cargo && (c.niveis_raw == null ? '' : String(c.niveis_raw)) === nivel; });
+  var byUnit = {};
+  rows.forEach(function(c){ var b = csdBruto(c); if (byUnit[c.unidade] == null || b > byUnit[c.unidade]) byUnit[c.unidade] = b; });
+  var units = Object.keys(byUnit);
+  if (!units.length) return showEmpty('Sem dados para esta seleção.');
+  hideEmpty();
+  units.sort(function(a,b){ return byUnit[a] - byUnit[b]; });
+  var base = byUnit[units[0]];
+  var data = units.map(function(u){ return Math.round(byUnit[u]); });
+  var tops = units.map(function(u){ return 'R$ ' + _milhar(byUnit[u]); });
+  var bots = units.map(function(u, idx){ return idx === 0 ? 'base' : _fmtPct(base > 0 ? (byUnit[u] / base - 1) * 100 : 0); });
+  var cols = units.map(function(u, idx){ return idx === 0 ? '#999999' : _pctColor(base > 0 ? (byUnit[u] / base - 1) * 100 : 0); });
+  if (scroll) scroll.style.minWidth = Math.max(units.length * 78, 220) + 'px';
+  _g1Chart = new Chart(canvas, _barCfg(units, data, tops, bots, cols));
+  if (caption) {
+    var maxU = units[units.length - 1], pmax = base > 0 ? (byUnit[maxU] / base - 1) * 100 : 0;
+    caption.innerHTML = units.length > 1
+      ? ('Base: <strong>' + units[0] + '</strong> (menor Bruto). Maior diferença: <strong>' + maxU + '</strong> ' + _fmtPct(pmax) + '.')
+      : ('Só há uma unidade para este cargo/nível.');
+  }
+}
+
+function g2Render() {
+  var canvas = document.getElementById('g2-canvas'); if (!canvas) return;
+  var empty = document.getElementById('g2-empty'), caption = document.getElementById('g2-caption'), scroll = document.getElementById('g2-scroll');
+  if (_g2Chart) { _g2Chart.destroy(); _g2Chart = null; }
+  function showEmpty(m){ if (empty) { empty.style.display = ''; empty.textContent = m; } canvas.style.display = 'none'; if (caption) caption.textContent = ''; }
+  function hideEmpty(){ if (empty) empty.style.display = 'none'; canvas.style.display = ''; }
+  if (!_podeVerValores) return showEmpty('Valores ocultos — sem permissão.');
+  if (typeof Chart === 'undefined') return showEmpty('Carregando biblioteca de gráficos…');
+  var a = CS_CARGOS[parseInt((document.getElementById('g2-a') || {}).value, 10)];
+  var b = CS_CARGOS[parseInt((document.getElementById('g2-b') || {}).value, 10)];
+  if (!a || !b) return showEmpty('Selecione dois cargos.');
+  hideEmpty();
+  var va = csdBruto(a), vb = csdBruto(b), pct = va > 0 ? (vb / va - 1) * 100 : 0;
+  var labels = [[a.nome || '', a.unidade || ''], [b.nome || '', b.unidade || '']];
+  if (scroll) scroll.style.minWidth = '220px';
+  _g2Chart = new Chart(canvas, _barCfg(labels, [Math.round(va), Math.round(vb)], ['R$ ' + _milhar(va), 'R$ ' + _milhar(vb)], ['base', _fmtPct(pct)], ['#999999', _pctColor(pct)]));
+  if (caption) caption.innerHTML = '<strong>B</strong> (' + (b.nome || '') + ' · ' + (b.unidade || '') + ') é <strong>' + _fmtPct(pct) + '</strong> vs <strong>A</strong> (' + (a.nome || '') + ' · ' + (a.unidade || '') + ').';
+}
+
+function csdChartsRenderAll() { g1Render(); g2Render(); }
 
 /* ── RENDER CARGOS ── */
 function csRenderCargos() {
@@ -3754,7 +3945,7 @@ function setTab(t){
   var btn=document.getElementById('tab-'+t); if(btn) btn.classList.add('active');
   document.querySelectorAll('.dash-view').forEach(function(v){v.classList.remove('active');});
   var v=document.getElementById(t==='sobre'?'view-sobre':'view-dashboard'); if(v) v.classList.add('active');
-  if (t === 'dashboard' && typeof csdRender === 'function') csdRender();
+  if (t === 'dashboard' && typeof csdRender === 'function') { csdRender(); if (typeof csdChartsRenderAll === 'function') csdChartsRenderAll(); }
   window.scrollTo(0,0);
 }
 </script>
