@@ -84,6 +84,29 @@ body:not([data-view="chamados"]) #view-chamados { display: none; }
 
 .mnt-state { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px; font-family: 'DM Mono', monospace; letter-spacing: 0.06em; text-transform: uppercase; }
 
+/* Heatmap (Picos) — padrão checklist-limpeza */
+.mnt-heat-wrap { overflow-x: auto; }
+.mnt-heat { display: grid; gap: 3px; min-width: max-content; }
+.mnt-heat-hh { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); text-align: center; padding-bottom: 2px; }
+.mnt-heat-day { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--mid); display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; white-space: nowrap; }
+.mnt-heat-cell { min-width: 30px; height: 26px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mnt-heat-legend { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 12px; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); }
+.mnt-heat-legend i { width: 18px; height: 12px; border-radius: 3px; display: inline-block; }
+
+/* Ranking Solicitantes — tabela + Ver mais (padrão performance/checklist) */
+.mnt-table-wrap { overflow-x: auto; }
+.mnt-table { width: 100%; border-collapse: collapse; }
+.mnt-table thead th { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding: 8px 6px; text-align: left; border-bottom: 2px solid var(--carbon); background: var(--surface); white-space: nowrap; }
+.mnt-table tbody tr { border-bottom: 1px solid var(--border); }
+.mnt-table tbody tr:last-child { border-bottom: none; }
+.mnt-table tbody tr:hover { background: #FAFAFA; }
+.mnt-table tbody td { padding: 8px 6px; font-size: 13px; color: var(--carbon); vertical-align: middle; }
+.mnt-table td.mnt-td-nome { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; }
+.mnt-table td.mnt-td-n { text-align: right; font-family: 'DM Mono', monospace; font-weight: 700; color: var(--carbon); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mnt-vm-wrap { text-align: center; padding: 10px 0 2px; }
+.mnt-btn-vm { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--carbon); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+.mnt-btn-vm:hover { background: #FAFAFA; }
+
 @media (min-width: 768px) { .kpis-charts { padding: 14px 32px 60px; } }
 
 /* KPI */
@@ -451,8 +474,26 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="kpis-wrap" id="kpi-grid"></div>
   <div class="kpis-charts">
     <div class="chart-card"><div class="chart-title">Chamados por mês</div><div class="mnt-line-wrap"><svg id="mnt-svg-mes" class="mnt-line-svg"></svg></div></div>
+    <div class="chart-card"><div class="chart-title">Tempo médio de resolução <span>· dias, por mês</span></div><div class="mnt-line-wrap"><svg id="mnt-svg-sla" class="mnt-line-svg"></svg></div></div>
+    <div class="chart-card"><div class="chart-title">Picos de Abertura</div>
+      <div class="mnt-heat-wrap"><div class="mnt-heat" id="mnt-heat"></div></div>
+      <div class="mnt-heat-legend"><span>menos</span>
+        <i style="background:var(--bg)"></i><i style="background:rgba(53,56,63,.30)"></i><i style="background:rgba(53,56,63,.55)"></i><i style="background:rgba(53,56,63,.80)"></i><i style="background:rgba(53,56,63,1)"></i>
+        <span>mais</span></div>
+    </div>
     <div class="chart-card"><div class="chart-title">Chamados por categoria</div><div class="mnt-bar-list" id="mnt-bars-cat"></div></div>
     <div class="chart-card"><div class="chart-title">Chamados por unidade</div><div class="mnt-bar-list" id="mnt-bars-uni"></div></div>
+    <div class="chart-card"><div class="chart-title">Chamados por departamento</div><div class="mnt-bar-list" id="mnt-bars-dep"></div></div>
+    <div class="chart-card">
+      <div class="chart-title">Ranking Solicitantes</div>
+      <div class="mnt-table-wrap">
+        <table class="mnt-table">
+          <thead><tr><th>Solicitante</th><th style="text-align:right;width:80px">Chamados</th></tr></thead>
+          <tbody id="mnt-tb-sol"></tbody>
+        </table>
+      </div>
+      <div class="mnt-vm-wrap" id="mnt-vm-wrap-sol" style="display:none;"><button class="mnt-btn-vm" id="mnt-btn-vm-sol" onclick="_mntVerMaisSol()">Ver mais</button></div>
+    </div>
   </div>
 </div>
 
@@ -1447,6 +1488,25 @@ function _mntContagem(campo) {
   (manutencoes || []).forEach(function(r){ var k = (r[campo] || '—').trim() || '—'; m[k] = (m[k]||0)+1; });
   return Object.keys(m).map(function(k){ return { label:k, n:m[k] }; }).sort(function(a,b){ return b.n - a.n; });
 }
+// Helpers datas: "DD/MM/YYYY" -> Date (base 12:00 para evitar TZ). Aceita " HH:MI" opcional.
+function _mntParseDate(s){
+  if (!s) return null;
+  var m = String(s).trim().match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
+  if (!m) return null;
+  var d = new Date(+m[3], +m[2]-1, +m[1], m[4]?+m[4]:12, m[5]?+m[5]:0);
+  return isNaN(d.getTime()) ? null : d;
+}
+function _mntFimChamado(r){
+  // Data-hora em que o chamado foi finalizado (última devolutiva com status Finalizado).
+  var devs = Array.isArray(r.devolutivas) ? r.devolutivas : [];
+  for (var i = devs.length - 1; i >= 0; i--){
+    var d = devs[i];
+    if ((d.status||'').toLowerCase() === 'finalizado') return _mntParseDate(d.ts);
+  }
+  if ((r.status||'').toLowerCase() === 'finalizado' && devs.length) return _mntParseDate(devs[devs.length-1].ts);
+  return null;
+}
+
 function renderManutCharts() {
   // Por mês (abertura) — últimos 12 meses com dados
   var porMes = {};
@@ -1461,11 +1521,103 @@ function renderManutCharts() {
   if (keys.length > 12) keys = keys.slice(keys.length - 12);
   var mesPoints = keys.map(function(k){ var p=k.split('-'); return { label: _MES_ABREV[parseInt(p[1],10)-1] + '/' + p[0].slice(2), n: porMes[k] }; });
   _mntRenderLine('mnt-svg-mes', mesPoints);
-  // Por categoria
+
+  // Tempo médio de resolução por mês (SLA em dias — só chamados finalizados)
+  var slaBuckets = {};
+  (manutencoes || []).forEach(function(r){
+    var fim = _mntFimChamado(r);
+    var ini = _mntParseDate(r.data_abertura);
+    if (!fim || !ini) return;
+    var dias = (fim - ini) / (1000 * 60 * 60 * 24);
+    if (dias < 0) return;
+    var y = fim.getFullYear(), mo = fim.getMonth()+1;
+    var key = y + '-' + String(mo).padStart(2,'0');
+    if (!slaBuckets[key]) slaBuckets[key] = { soma: 0, n: 0 };
+    slaBuckets[key].soma += dias; slaBuckets[key].n++;
+  });
+  var slaKeys = Object.keys(slaBuckets).sort();
+  if (slaKeys.length > 12) slaKeys = slaKeys.slice(slaKeys.length - 12);
+  var slaPoints = slaKeys.map(function(k){
+    var p = k.split('-'), b = slaBuckets[k];
+    return { label: _MES_ABREV[parseInt(p[1],10)-1] + '/' + p[0].slice(2), n: Math.round((b.soma / b.n) * 10) / 10 };
+  });
+  _mntRenderLine('mnt-svg-sla', slaPoints);
+
+  // Barras (padrão performance)
   _mntRenderBars('mnt-bars-cat', _mntContagem('categoria'));
-  // Por unidade
   _mntRenderBars('mnt-bars-uni', _mntContagem('unidade'));
+  _mntRenderBars('mnt-bars-dep', _mntContagem('departamento'));
+
+  // Picos de Abertura (heatmap dia da semana × hora)
+  _mntRenderHeat(manutencoes || []);
+
+  // Ranking Solicitantes
+  _MNT_RANK_SOL = _mntContagem('solicitante');
+  _MNT_SOL_SHOW = _MNT_SOL_PAGE;
+  _mntRenderRankSol();
 }
+
+// ── Heatmap Picos de Abertura ────────────────────────────────────────────────
+function _mntRenderHeat(rows){
+  var el = document.getElementById('mnt-heat'); if (!el) return;
+  var dias = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  var counts = {}, max = 0, present = {};
+  rows.forEach(function(r){
+    var dt = _mntParseDate(r.created_at || r.data_abertura);
+    if (!dt) return;
+    var d = dt.getDay(), h = dt.getHours();
+    var k = d + '-' + h;
+    counts[k] = (counts[k] || 0) + 1;
+    if (counts[k] > max) max = counts[k];
+    present[h] = 1;
+  });
+  var hrs = Object.keys(present).map(Number).sort(function(a,b){ return a - b; });
+  if (!hrs.length){ el.style.gridTemplateColumns = ''; el.innerHTML = '<div class="mnt-state">Sem dados</div>'; return; }
+  var hmin = hrs[0], hmax = hrs[hrs.length - 1];
+  var rowsH = []; for (var h = hmin; h <= hmax; h++) rowsH.push(h);
+  el.style.gridTemplateColumns = '48px repeat(7, minmax(30px,1fr))';
+  var html = '<div></div>';
+  for (var d = 0; d < 7; d++){ html += '<div class="mnt-heat-hh">' + dias[d] + '</div>'; }
+  rowsH.forEach(function(h){
+    html += '<div class="mnt-heat-day">' + String(h).padStart(2,'0') + 'h</div>';
+    for (var d = 0; d < 7; d++){
+      var c = counts[d + '-' + h] || 0;
+      var tip = dias[d] + ' ' + String(h).padStart(2,'0') + 'h · ' + c + (c === 1 ? ' chamado' : ' chamados');
+      if (!c){ html += '<div class="mnt-heat-cell" style="background:var(--bg)" title="' + tip + '"></div>'; continue; }
+      var a = 0.15 + 0.85 * (c / max);
+      var bg = 'rgba(53,56,63,' + a.toFixed(2) + ')';
+      var txt = a > 0.5 ? '#fff' : 'var(--carbon)';
+      html += '<div class="mnt-heat-cell" style="background:' + bg + ';color:' + txt + '" title="' + tip + '">' + c + '</div>';
+    }
+  });
+  el.innerHTML = html;
+}
+
+// ── Ranking Solicitantes com Ver mais (padrão performance) ───────────────────
+var _MNT_RANK_SOL = [], _MNT_SOL_PAGE = 10, _MNT_SOL_SHOW = 10;
+function _mntRenderRankSol(){
+  var el = document.getElementById('mnt-tb-sol'); if (!el) return;
+  if (!_MNT_RANK_SOL.length){ el.innerHTML = '<tr><td colspan="2" class="mnt-state">Sem dados</td></tr>'; }
+  else {
+    var arr = _MNT_RANK_SOL.slice(0, Math.min(_MNT_SOL_SHOW, _MNT_RANK_SOL.length));
+    el.innerHTML = arr.map(function(x){
+      return '<tr><td class="mnt-td-nome">' + _mntEsc(x.label) + '</td><td class="mnt-td-n">' + x.n + '</td></tr>';
+    }).join('');
+  }
+  var wrap = document.getElementById('mnt-vm-wrap-sol');
+  var btn  = document.getElementById('mnt-btn-vm-sol');
+  if (wrap && btn){
+    var resto = _MNT_RANK_SOL.length - _MNT_SOL_SHOW;
+    if (resto > 0){
+      wrap.style.display = 'block';
+      btn.textContent = 'Ver mais (' + Math.min(_MNT_SOL_PAGE, resto) + ')';
+    } else {
+      wrap.style.display = 'none';
+    }
+  }
+}
+function _mntVerMaisSol(){ _MNT_SOL_SHOW += _MNT_SOL_PAGE; _mntRenderRankSol(); }
+window._mntVerMaisSol = _mntVerMaisSol;
 
 carregarDados();
 </script>
