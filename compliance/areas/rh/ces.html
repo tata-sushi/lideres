@@ -1262,7 +1262,11 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
 .cs-info-text strong { color:var(--t1); font-weight:600; }
 
 /* ── FILTROS TABELA ── */
-.cs-table-filters { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+.cs-table-filters { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:14px; }
+@media (max-width:560px){
+  .cs-table-filters { grid-template-columns:1fr 1fr; }
+  .cs-table-filters .cs-filter-group:last-child { grid-column:1 / -1; }
+}
 .cs-filter-group { display:flex; flex-direction:column; gap:4px; }
 .cs-filter-label { font-family:"DM Mono",monospace; font-size:10px; font-weight:500; letter-spacing:.8px; text-transform:uppercase; color:var(--t3); }
 .cs-filter-sel {
@@ -1283,17 +1287,19 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
 
 /* ── TABELA ── */
 .cs-table-wrap { overflow-x:auto; border-radius:var(--r); border:1px solid rgba(255,255,255,.06); margin-bottom:20px; }
-.cs-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:580px; }
+.cs-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:660px; }
 .cs-table thead tr { background:#1c1e24; }
 .cs-table th { padding:10px 14px; font-family:"DM Mono",monospace; font-size:8.5px; font-weight:500; letter-spacing:.14em; text-transform:uppercase; color:var(--citric); border-bottom:1px solid rgba(255,255,255,.07); white-space:nowrap; text-align:center; }
 .cs-table th:first-child { text-align:left; }
 .cs-table th.right, .cs-table td.right { text-align:right; }
+.cs-table th.left, .cs-table td.left { text-align:left; }
 .cs-table tbody { background:#2a2d34; }
 .cs-table tbody tr { border-bottom:1px solid rgba(255,255,255,.06); cursor:pointer; transition:background .1s; }
 .cs-table tbody tr:last-child { border-bottom:none; }
 .cs-table tbody tr:hover td { background:rgba(255,255,255,.03); }
 .cs-table td { padding:10px 14px; color:rgba(255,255,255,.65); vertical-align:middle; }
 .cs-table td.cargo-name { font-weight:600; font-size:13px; color:var(--white); white-space:nowrap; }
+.cs-table td.cs-unidade { color:rgba(255,255,255,.75); white-space:nowrap; }
 .cs-table .cs-mob-preview { display:none; }
 .cs-table td.mono { font-family:"DM Mono",monospace; font-size:11px; color:rgba(255,255,255,.5); }
 .cs-table td.valor { font-family:"DM Mono",monospace; font-size:12px; font-weight:600; color:rgba(255,255,255,.8); }
@@ -1323,6 +1329,7 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
   .cs-table tbody tr.expanded td[data-col] { display:flex; font-size:12px; font-family:"DM Mono",monospace; color:rgba(255,255,255,.65); padding:3px 14px; }
   .cs-table tbody tr.expanded td[data-col]:first-of-type { padding-top:4px; }
   .cs-table tbody tr.expanded td[data-col]:last-of-type { padding-bottom:12px; }
+  .cs-table tbody tr.expanded td[data-col="unidade"] { order:1; }
   .cs-table tbody tr.expanded td[data-col="fixo"]  { order:2; }
   .cs-table tbody tr.expanded td[data-col="insal"] { order:3; }
   .cs-table tbody tr.expanded td[data-col="peric"] { order:4; }
@@ -1331,6 +1338,7 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
   .cs-table tbody tr.expanded td[data-col="pct"]   { order:7; }
   .cs-table tbody tr.expanded td[data-col="bruto"] { order:8; color:var(--white); font-size:13px; font-weight:700; padding-top:6px; padding-bottom:12px; }
   .cs-table td[data-col]::before { font-family:"DM Mono",monospace; font-size:8px; font-weight:500; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.3); }
+  .cs-table td[data-col="unidade"]::before { content:"Unidade"; }
   .cs-table td[data-col="fixo"]::before  { content:"Salário Fixo"; }
   .cs-table td[data-col="insal"]::before { content:"Insalubridade"; }
   .cs-table td[data-col="peric"]::before { content:"Periculosidade"; }
@@ -1611,13 +1619,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="cs-table-filters">
           <div class="cs-filter-group">
             <label class="cs-filter-label">Unidade</label>
-            <select class="cs-filter-sel" id="cs-filter-unidade" onchange="csPopulateDeptFilter(this.value);csRecalc()">
+            <select class="cs-filter-sel" id="cs-filter-unidade" onchange="csPopulateDeptFilter(this.value);csPopulateCargoFilter();csRecalc()">
               <option value="">Todas</option>
             </select>
           </div>
           <div class="cs-filter-group">
             <label class="cs-filter-label">Departamento</label>
-            <select class="cs-filter-sel" id="cs-filter-dept" onchange="csRecalc()">
+            <select class="cs-filter-sel" id="cs-filter-dept" onchange="csPopulateCargoFilter();csRecalc()">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div class="cs-filter-group">
+            <label class="cs-filter-label">Cargo</label>
+            <select class="cs-filter-sel" id="cs-filter-cargo" onchange="csRecalc()">
               <option value="">Todos</option>
             </select>
           </div>
@@ -1627,7 +1641,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <table class="cs-table" id="cs-main-table">
             <thead>
               <tr>
-                <th>Cargo</th>
+                <th class="left">Unidade</th>
+                <th class="left">Cargo</th>
                 <th class="right">Salário Fixo</th>
                 <th class="right">Insalubridade</th>
                 <th class="right">Periculosidade</th>
@@ -2052,6 +2067,7 @@ function csToggleTable() {
 function csRecalc() {
   var selUnit  = (document.getElementById("cs-filter-unidade") || {}).value || "";
   var selDept  = (document.getElementById("cs-filter-dept")    || {}).value || "";
+  var selCargo = (document.getElementById("cs-filter-cargo")   || {}).value || "";
   var tbody    = document.getElementById("cs-tbody");
   var toggleBtn = document.getElementById("cs-table-toggle-btn");
   tbody.innerHTML = "";
@@ -2067,6 +2083,7 @@ function csRecalc() {
   var filtered = CS_CARGOS.filter(function(c) {
     if (selUnit && c.unidade !== selUnit) return false;
     if (selDept && c.dept   !== selDept)  return false;
+    if (selCargo && (c.cargo_base || c.nome) !== selCargo) return false;
     return true;
   });
 
@@ -2092,6 +2109,7 @@ function csRecalc() {
         '<span class="cs-mob-preview-bruto">'+brl(bruto)+'</span>'+
         chevronSvg+
       '</div>'+
+      '<td class="cs-unidade" data-col="unidade">'+(c.unidade || dash)+'</td>'+
       '<td class="cargo-name">'+c.nome+'</td>'+
       '<td class="right mono" data-col="fixo">'+brl(fixo)+'</td>'+
       '<td class="right mono'+(insal?'':' hidden-dash')+'" data-col="insal">'+(_podeVerValores ? (insal ? brl(insal) : dash) : VALOR_BLUR)+'</td>'+
@@ -2158,6 +2176,26 @@ function csPopulateDeptFilter(selUnit) {
   sel.innerHTML = '<option value="">Todos os departamentos</option>';
   depts.forEach(function(d){ sel.innerHTML += '<option'+(d===cur?' selected':'')+'>'+d+'</option>'; });
   if (cur && depts.indexOf(cur) < 0) sel.value = "";
+}
+
+function csPopulateCargoFilter() {
+  var sel = document.getElementById("cs-filter-cargo");
+  if (!sel) return;
+  var selUnit = (document.getElementById("cs-filter-unidade") || {}).value || "";
+  var selDept = (document.getElementById("cs-filter-dept")    || {}).value || "";
+  var source = CS_CARGOS.filter(function(c){
+    return (!selUnit || c.unidade === selUnit) && (!selDept || c.dept === selDept);
+  });
+  var cargos = [];
+  source.forEach(function(c){
+    var nome = c.cargo_base || c.nome;
+    if (nome && cargos.indexOf(nome) < 0) cargos.push(nome);
+  });
+  cargos.sort(function(a,b){ return a.localeCompare(b, 'pt-BR'); });
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>';
+  cargos.forEach(function(nome){ sel.innerHTML += '<option'+(nome===cur?' selected':'')+'>'+nome+'</option>'; });
+  if (cur && cargos.indexOf(cur) < 0) sel.value = "";
 }
 
 /* ── RENDER CARGOS ── */
@@ -2339,6 +2377,7 @@ function csSyncSheets() {
     CS_OBS = Object.keys(obsMap).map(function(k){ return obsMap[k]; });
     csPopulateUnidadeFilter();
     csPopulateDeptFilter();
+    csPopulateCargoFilter();
     csRecalc();
     csRenderCargos();
     hideLoading();
@@ -2500,6 +2539,7 @@ function csPrintDesc() {
 
 /* ── INIT ── */
 csPopulateDeptFilter();
+csPopulateCargoFilter();
 csRecalc();
 csRenderCargos();
 csSyncSheets();
