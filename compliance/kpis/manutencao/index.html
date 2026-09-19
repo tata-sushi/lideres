@@ -60,6 +60,13 @@ body:not([data-view="chamados"]) #view-chamados { display: none; }
 .sobre-card ol, .sobre-card ul { margin: 0; padding-left: 18px; }
 .sobre-card li { font-size: 13px; color: var(--mid); line-height: 1.7; }
 @media (min-width: 768px) { .sobre-wrap { padding: 28px 32px 60px; } }
+/* KPI's — gráficos */
+.kpis-charts { padding: 14px 20px 40px; }
+.chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px 16px; display: flex; flex-direction: column; margin-bottom: 14px; position: relative; }
+.chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
+.chart-wrap { position: relative; height: 240px; overflow-x: auto; overflow-y: hidden; }
+.chart-scroll { position: relative; height: 100%; }
+@media (min-width: 768px) { .kpis-charts { padding: 14px 32px 60px; } }
 
 /* KPI */
 .kpis-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -377,6 +384,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 <!-- Gate modelo novo: abre so via Tata Plus, com checagem de acesso ao vivo por pagina. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>window.GOV_PAGE_ID = 'governanca-kpis-manutencao';</script>
 <script src="/compliance/gate.js"></script>
 <script>
@@ -424,6 +432,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <div id="view-kpis">
   <div class="kpis-wrap" id="kpi-grid"></div>
+  <div class="kpis-charts">
+    <div class="chart-card"><div class="chart-title">Chamados por mês</div><div class="chart-wrap"><div class="chart-scroll" id="mnt-mes-scroll"><canvas id="mnt-chart-mes"></canvas></div></div></div>
+    <div class="chart-card"><div class="chart-title">Chamados por categoria</div><div class="chart-wrap"><canvas id="mnt-chart-cat"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Chamados por unidade</div><div class="chart-wrap"><canvas id="mnt-chart-uni"></canvas></div></div>
+  </div>
 </div>
 
 <div id="view-chamados">
@@ -1352,6 +1365,7 @@ function render() {
     c.innerHTML = mobile + desk;
   }
   var _fd=new Date(),_fp=function(n){return n<10?'0'+n:String(n);}; document.getElementById('footer-date').textContent='Atualizado: '+_fp(_fd.getDate())+'/'+_fp(_fd.getMonth()+1)+'/'+_fd.getFullYear()+', '+_fp(_fd.getHours())+':'+_fp(_fd.getMinutes())+':'+_fp(_fd.getSeconds());
+  if (document.body.dataset.view === 'kpis') renderManutCharts();
 }
 
 function setTab(tab) {
@@ -1360,6 +1374,63 @@ function setTab(tab) {
     var b = document.getElementById('tab-'+t);
     if (b) b.classList.toggle('active', t === tab);
   });
+  if (tab === 'kpis') renderManutCharts();
+}
+
+// ── KPI's: gráficos de barra (Chart.js) sobre todos os chamados ──
+var _mntCharts = {};
+var _MES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+function _mntBar(canvasId, labels, valores, opts) {
+  opts = opts || {};
+  var cv = document.getElementById(canvasId);
+  if (!cv || typeof Chart === 'undefined') return;
+  if (_mntCharts[canvasId]) { _mntCharts[canvasId].destroy(); }
+  // largura mínima por barra p/ rolagem lateral (só onde há scroll)
+  if (opts.scrollHost) {
+    var host = document.getElementById(opts.scrollHost);
+    if (host) host.style.minWidth = Math.max(320, labels.length * 46) + 'px';
+  }
+  _mntCharts[canvasId] = new Chart(cv, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ data: valores, backgroundColor: '#35383F', borderRadius: 4, maxBarThickness: 40 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: true } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { family: 'DM Mono', size: 10 }, color: '#555', maxRotation: 0, autoSkip: false } },
+        y: { beginAtZero: true, ticks: { precision: 0, font: { family: 'DM Mono', size: 10 }, color: '#999' }, grid: { color: '#EEE' } }
+      }
+    }
+  });
+}
+function _mntContagem(campo) {
+  var m = {};
+  (manutencoes || []).forEach(function(r){ var k = (r[campo] || '—').trim() || '—'; m[k] = (m[k]||0)+1; });
+  var arr = Object.keys(m).map(function(k){ return { k:k, n:m[k] }; }).sort(function(a,b){ return b.n - a.n; });
+  return { labels: arr.map(function(x){return x.k;}), valores: arr.map(function(x){return x.n;}) };
+}
+function renderManutCharts() {
+  if (typeof Chart === 'undefined') return;
+  // Por mês (abertura) — últimos 12 meses com dados
+  var porMes = {};
+  (manutencoes || []).forEach(function(r){
+    var s = (r.data_abertura || '').trim();
+    var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) return;
+    var key = m[3] + '-' + m[2];
+    porMes[key] = (porMes[key]||0)+1;
+  });
+  var keys = Object.keys(porMes).sort();
+  if (keys.length > 12) keys = keys.slice(keys.length - 12);
+  var mesLabels = keys.map(function(k){ var p=k.split('-'); return _MES_ABREV[parseInt(p[1],10)-1] + '/' + p[0].slice(2); });
+  var mesVals = keys.map(function(k){ return porMes[k]; });
+  _mntBar('mnt-chart-mes', mesLabels, mesVals, { scrollHost: 'mnt-mes-scroll' });
+  // Por categoria
+  var cat = _mntContagem('categoria');
+  _mntBar('mnt-chart-cat', cat.labels, cat.valores);
+  // Por unidade
+  var uni = _mntContagem('unidade');
+  _mntBar('mnt-chart-uni', uni.labels, uni.valores);
 }
 
 carregarDados();
