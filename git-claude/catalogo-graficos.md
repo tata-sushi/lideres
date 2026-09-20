@@ -80,7 +80,7 @@ Fonte base **DM Mono** (salvo indicado); cor **carbon `#35383F`** (salvo indicad
 - **Cor:** tudo **carbon**. Única variação = **escurecimento das barras não-selecionadas** (carbon 45%) ao clicar/filtrar no Chart.js. Única exceção de **matiz** no catálogo = o **radar** (2ª série verde `#5AA469`).
 - **Pesos:** título 700 · valor na barra 600 · eixos/legenda/categoria 400.
 - Categoria e legenda **não são obrigatórias** — só aparecem em quem tem; quando aparecem, seguem os tamanhos acima.
-- **Botão "i" de informação:** todo gráfico tem um `.chart-info-btn` no **canto superior direito** (cinza `#CFCFCF`, hover muted, ícone "i" em círculo — SVG 15px, `top:10px right:12px`), que abre o **modal padrão do recrutamento** (`.modal-overlay`/`.modal`, `abrirInfoGrafico`/`closeInfoGrafico`, toggle `.active`). Conteúdo em `.info-note` (frase-resumo centralizada) e, quando faz sentido, uma `.info-table` (`# / Etapa / Medidas` — ex.: as 9 etapas do Funil).
+- **Botão "i" de informação:** todo gráfico tem um `.chart-info-btn` no **canto superior direito** (cinza `#CFCFCF`, hover muted, ícone "i" em círculo — SVG 15px, `top:10px right:12px`), que abre o **modal padrão do recrutamento** (`.modal-overlay`/`.modal`, `abrirInfoGrafico`/`closeInfoGrafico`, toggle `.active`). Conteúdo em `.info-note` (frase-resumo, alinhada à esquerda) e, **sempre que ajudar a ler, uma `.info-table`** no mesmo padrão do recrutamento (`# / rótulo / descrição`) — ex.: as 9 etapas do **Funil** e a **legenda de cores das Pílulas de Status** (nº · pílula real · significado). Não descrever cores/etapas só em texto corrido quando cabem numa tabelinha.
 
 ## Mapeamento dos blocos (na ordem da página)
 
