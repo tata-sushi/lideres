@@ -1284,7 +1284,7 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
 
 /* ── TABELA ── */
 .cs-table-wrap { overflow-x:auto; border-radius:var(--r); border:1px solid rgba(255,255,255,.06); margin-bottom:20px; }
-.cs-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:660px; }
+.cs-table { width:100%; border-collapse:collapse; font-size:12.5px; min-width:760px; }
 .cs-table thead tr { background:#1c1e24; }
 .cs-table th { padding:10px 14px; font-family:"DM Mono",monospace; font-size:8.5px; font-weight:500; letter-spacing:.14em; text-transform:uppercase; color:var(--citric); border-bottom:1px solid rgba(255,255,255,.07); white-space:nowrap; text-align:center; }
 .cs-table th:first-child { text-align:left; }
@@ -1326,22 +1326,26 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
   .cs-table tbody tr.expanded td[data-col] { display:flex; font-size:12px; font-family:"DM Mono",monospace; color:rgba(255,255,255,.65); padding:3px 14px; }
   .cs-table tbody tr.expanded td[data-col]:first-of-type { padding-top:4px; }
   .cs-table tbody tr.expanded td[data-col]:last-of-type { padding-bottom:12px; }
-  .cs-table tbody tr.expanded td[data-col="unidade"] { order:1; }
-  .cs-table tbody tr.expanded td[data-col="fixo"]  { order:2; }
-  .cs-table tbody tr.expanded td[data-col="insal"] { order:3; }
-  .cs-table tbody tr.expanded td[data-col="peric"] { order:4; }
-  .cs-table tbody tr.expanded td[data-col="gorj"]  { order:5; }
-  .cs-table tbody tr.expanded td[data-col="prem"]  { order:6; }
-  .cs-table tbody tr.expanded td[data-col="pct"]   { order:7; }
-  .cs-table tbody tr.expanded td[data-col="bruto"] { order:8; color:var(--white); font-size:13px; font-weight:700; padding-top:6px; padding-bottom:12px; }
+  .cs-table tbody tr.expanded td[data-col="unidade"]  { order:1; }
+  .cs-table tbody tr.expanded td[data-col="fixo"]     { order:2; }
+  .cs-table tbody tr.expanded td[data-col="varfixo"]  { order:3; }
+  .cs-table tbody tr.expanded td[data-col="insal"]    { order:4; }
+  .cs-table tbody tr.expanded td[data-col="peric"]    { order:5; }
+  .cs-table tbody tr.expanded td[data-col="gorj"]     { order:6; }
+  .cs-table tbody tr.expanded td[data-col="prem"]     { order:7; }
+  .cs-table tbody tr.expanded td[data-col="pct"]      { order:8; }
+  .cs-table tbody tr.expanded td[data-col="varbruto"] { order:9; }
+  .cs-table tbody tr.expanded td[data-col="bruto"]    { order:10; color:var(--white); font-size:13px; font-weight:700; padding-top:6px; padding-bottom:12px; }
   .cs-table td[data-col]::before { font-family:"DM Mono",monospace; font-size:8px; font-weight:500; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.3); }
   .cs-table td[data-col="unidade"]::before { content:"Unidade"; }
   .cs-table td[data-col="fixo"]::before  { content:"Salário Fixo"; }
+  .cs-table td[data-col="varfixo"]::before { content:"Var. Fixo (nível ant.)"; }
   .cs-table td[data-col="insal"]::before { content:"Insalubridade"; }
   .cs-table td[data-col="peric"]::before { content:"Periculosidade"; }
   .cs-table td[data-col="gorj"]::before  { content:"Pts Gorjeta"; }
   .cs-table td[data-col="prem"]::before  { content:"Pts Prêmio"; }
   .cs-table td[data-col="pct"]::before   { content:"% Bruto"; }
+  .cs-table td[data-col="varbruto"]::before { content:"Var. Bruto (nível ant.)"; }
   .cs-table td[data-col="bruto"]::before { content:"Bruto Aprox."; color:rgba(255,255,255,.4); font-size:8px; font-weight:500; }
 }
 /* valor borrado para quem não tem permissão (perm_ver_valores). O número não vem do servidor — o blur é só visual. */
@@ -1647,11 +1651,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
                 <th class="left">Unidade</th>
                 <th class="left">Cargo</th>
                 <th class="right">Salário Fixo</th>
+                <th class="right">Var. Fixo</th>
                 <th class="right">Insalubridade</th>
                 <th class="right">Periculosidade</th>
                 <th class="right">Pts Gorjeta</th>
                 <th class="right">Pts Prêmio</th>
                 <th class="right">Bruto Aproximado</th>
+                <th class="right">Var. Bruto</th>
                 <th class="right">% Bruto</th>
               </tr>
             </thead>
@@ -2034,6 +2040,21 @@ function brl(n){
 // Pontos (gorjeta/prêmio) sempre com 2 casas — mostra valores quebrados (ex.: 7,50).
 function fmtPts(n){ return (parseFloat(n) || 0).toLocaleString("pt-BR", {minimumFractionDigits:2, maximumFractionDigits:2}); }
 
+// Variação % de um nível para o anterior (mesmo cargo + unidade), no fixo e no bruto.
+function fmtVarPct(p){ if (p == null || isNaN(p)) return ''; return (p > 0 ? '+' : '') + (Math.round(p * 10) / 10).toString().replace('.', ',') + '%'; }
+function csComputeVars(){
+  var last = {};
+  CS_CARGOS.forEach(function(c){
+    var key = (c.unidade || '') + '||' + (c.cargo_base || c.nome || '');
+    var fixo  = (c.fixo  != null && c.fixo  !== '') ? parseFloat(c.fixo)  : null;
+    var bruto = (c.bruto != null && c.bruto !== '') ? parseFloat(c.bruto) : null;
+    var prev = last[key] || {};
+    c.varFixo  = (prev.fixo  != null && prev.fixo  > 0 && fixo  != null) ? (fixo  / prev.fixo  - 1) * 100 : null;
+    c.varBruto = (prev.bruto != null && prev.bruto > 0 && bruto != null) ? (bruto / prev.bruto - 1) * 100 : null;
+    last[key] = { fixo: (fixo != null ? fixo : prev.fixo), bruto: (bruto != null ? bruto : prev.bruto) };
+  });
+}
+
 function nivelCls(n){
   return {N1:"n1",N2:"n2",N3:"n3",N4:"n4",NS:"ns"}[n] || "n1";
 }
@@ -2120,11 +2141,13 @@ function csRecalc() {
       '<td class="cs-unidade" data-col="unidade">'+(c.unidade || dash)+'</td>'+
       '<td class="cargo-name">'+c.nome+'</td>'+
       '<td class="right mono" data-col="fixo">'+brl(fixo)+'</td>'+
+      '<td class="right mono" data-col="varfixo">'+(_podeVerValores ? (c.varFixo!=null ? fmtVarPct(c.varFixo) : dash) : VALOR_BLUR)+'</td>'+
       '<td class="right mono'+(insal?'':' hidden-dash')+'" data-col="insal">'+(_podeVerValores ? (insal ? brl(insal) : dash) : VALOR_BLUR)+'</td>'+
       '<td class="right mono'+(peric?'':' hidden-dash')+'" data-col="peric">'+(_podeVerValores ? (peric ? brl(peric) : dash) : VALOR_BLUR)+'</td>'+
       '<td class="right gorjeta-pts'+(gorj?'':' hidden-dash')+'" data-col="gorj">'+(gorj ? fmtPts(gorj) : dash)+'</td>'+
       '<td class="right premio-pts'+(prem?'':' hidden-dash')+'" data-col="prem">'+(prem ? fmtPts(prem) : dash)+'</td>'+
       '<td class="right valor calculado" data-col="bruto">'+brl(bruto)+'</td>'+
+      '<td class="right mono" data-col="varbruto">'+(_podeVerValores ? (c.varBruto!=null ? fmtVarPct(c.varBruto) : dash) : VALOR_BLUR)+'</td>'+
       '<td class="right mono" data-col="pct">'+(_podeVerValores ? (c.pct_bruto ? ((parseFloat(c.pct_bruto)*100).toFixed(2)+'%') : dash) : VALOR_BLUR)+'</td>';
     // mobile: seta expande/recolhe; nome abre detalhes
     (function(cargo, row) {
@@ -2414,6 +2437,7 @@ function csSyncSheets() {
       }
     });
     CS_OBS = Object.keys(obsMap).map(function(k){ return obsMap[k]; });
+    csComputeVars();
     csPopulateUnidadeFilter();
     csPopulateDeptFilter();
     csPopulateCargoFilter();
