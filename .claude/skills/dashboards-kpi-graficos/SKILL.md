@@ -241,6 +241,11 @@ Regras dos gráficos:
   valor na barra = 11px/600; eixos/legenda/categoria = peso 400. Legenda (quando houver):
   `boxWidth:12, padding:12`. **Nada de cinza** nos rótulos de eixo — tudo carbon (a única
   variação de cor é o escurecimento das barras não-selecionadas ao filtrar).
+- **Botão "i" de informação (padrão).** Todo gráfico tem um `.chart-info-btn` no canto
+  **superior direito** (cinza `#CFCFCF`, hover `--muted`, ícone "i" em círculo, SVG 15px,
+  `position:absolute; top:10px; right:12px`) que abre um **modal** explicando o gráfico
+  (copie de `recrutamento.html`: `abrirInfoGrafico`/`closeInfoGrafico` + overlay). O card
+  precisa de `position:relative`.
 - Sempre `if (chartInst) chartInst.destroy()` antes de recriar, e guarde
   `if (typeof Chart === 'undefined') return;` (a lib pode não ter carregado).
 
