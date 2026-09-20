@@ -46,6 +46,27 @@ implementação: `compliance/kpis/rh/recrutamento.html`.
   tabela continuam com cor semântica (não são gráfico).
 - Tokens, tipografia (DM Sans + DM Mono) e paleta: ver a skill `dashboards-kpi-graficos`.
 
+## Tipografia e cor dos gráficos (padrão oficial)
+
+Fonte base **DM Mono** (salvo indicado); cor **carbon `#35383F`** (salvo indicado).
+
+| Papel do texto | Fonte | Tam | Peso | Cor | Alinhamento |
+|---|---|---|---|---|---|
+| Título do card | DM Mono | 11px | 700 | carbon | centro (UPPERCASE) |
+| **Valores do eixo X** (datas, ratings, números) | DM Mono | **10px** | 400 | carbon | eixo |
+| **Categoria** (nomes no eixo — quando houver) | DM Mono | **11px** | 400 | carbon | eixo |
+| Escala de valor (eixo Y numérico — quando visível) | DM Mono | 10px | 400 | carbon | eixo |
+| **Legenda** (quando houver) | DM Mono | **11px** | 400 | carbon | inferior · boxWidth 12 · padding 12 |
+| Rótulo de valor na barra (plugin) | DM Mono | 11px | **600** | carbon | acima (V) / após a barra (H) |
+| Vértices do radar (pointLabels) | DM Mono | 11px | 400 | carbon | ao redor |
+| Dica/hint | DM Mono | 10px | 400 | muted `#999` | centro |
+
+**Regras firmadas:**
+- **Datas no eixo X:** formato **`dd/mm`** ou **`mm/aa`** (2 dígitos no ano) — nunca `mm/aaaa`.
+- **Cor:** tudo **carbon**. Única variação = **escurecimento das barras não-selecionadas** (carbon 45%) ao clicar/filtrar no Chart.js. Única exceção de **matiz** no catálogo = o **radar** (2ª série verde `#5AA469`).
+- **Pesos:** título 700 · valor na barra 600 · eixos/legenda/categoria 400.
+- Categoria e legenda **não são obrigatórias** — só aparecem em quem tem; quando aparecem, seguem os tamanhos acima.
+
 ## Mapeamento dos blocos (na ordem da página)
 
 | Bloco (título no HTML) | Tipo | Onde é usado no portal | Situação |
