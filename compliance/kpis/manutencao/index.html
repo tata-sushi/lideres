@@ -1486,6 +1486,57 @@ function _mntScrollWidth(scrollId, n){
   if (host) host.style.minWidth = Math.max(320, n * _MNT_CATEG_W) + 'px';
 }
 
+// Plugin: rótulo do valor à direita da barra horizontal
+var _mntBarHValueLabelsPlugin = {
+  id: '_mntBarHValueLabels',
+  afterDatasetsDraw: function(chart){
+    var ctx = chart.ctx;
+    var meta = chart.getDatasetMeta(0);
+    if (!meta || !meta.data) return;
+    ctx.save();
+    ctx.font = '800 12px "DM Sans", sans-serif';
+    ctx.fillStyle = '#35383F';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    meta.data.forEach(function(el, i){
+      var v = chart.data.datasets[0].data[i];
+      if (v == null || v === 0) return;
+      ctx.fillText(String(v).replace('.', ','), el.x + 6, el.y);
+    });
+    ctx.restore();
+  }
+};
+
+function _mntChartBarH(canvasId, labels, values, scrollId){
+  if (typeof Chart === 'undefined') return;
+  var cv = document.getElementById(canvasId); if (!cv) return;
+  if (_mntCharts[canvasId]) _mntCharts[canvasId].destroy();
+  // Barras horizontais: altura cresce com o nº de categorias (30px por categoria)
+  var host = document.getElementById(scrollId);
+  if (host) host.style.minWidth = '';
+  var wrap = cv.parentElement && cv.parentElement.parentElement; // .chart-wrap
+  if (wrap) wrap.style.height = Math.max(120, labels.length * 30 + 24) + 'px';
+  _mntCharts[canvasId] = new Chart(cv, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{
+      data: values,
+      backgroundColor: '#35383F', borderWidth: 0, borderRadius: 5,
+      barPercentage: 0.6, categoryPercentage: 0.8, maxBarThickness: 22
+    }]},
+    plugins: [_mntBarHValueLabelsPlugin],
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { right: 34, top: 4, bottom: 4 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true },
+        y: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Sans', size: 12, weight: '400' }, autoSkip: false } }
+      }
+    }
+  });
+}
+
 function _mntChartBarV(canvasId, labels, values, scrollId){
   if (typeof Chart === 'undefined') return;
   var cv = document.getElementById(canvasId); if (!cv) return;
@@ -1609,8 +1660,8 @@ function _mntDrawCharts() {
   var uni = _mntContagem('unidade');
   var dep = _mntContagem('departamento');
   _mntChartBarV('mnt-canvas-cat', cat.map(function(x){return x.label;}), cat.map(function(x){return x.n;}), 'mnt-scroll-cat');
-  _mntChartBarV('mnt-canvas-uni', uni.map(function(x){return x.label;}), uni.map(function(x){return x.n;}), 'mnt-scroll-uni');
-  _mntChartBarV('mnt-canvas-dep', dep.map(function(x){return x.label;}), dep.map(function(x){return x.n;}), 'mnt-scroll-dep');
+  _mntChartBarH('mnt-canvas-uni', uni.map(function(x){return x.label;}), uni.map(function(x){return x.n;}), 'mnt-scroll-uni');
+  _mntChartBarH('mnt-canvas-dep', dep.map(function(x){return x.label;}), dep.map(function(x){return x.n;}), 'mnt-scroll-dep');
 
   // Picos de Abertura (heatmap dia da semana × hora)
   _mntRenderHeat(manutencoes || []);
