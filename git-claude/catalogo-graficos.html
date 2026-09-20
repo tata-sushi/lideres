@@ -69,6 +69,28 @@
   .chart-wrap > canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
   /* barra vertical de série temporal: barras com largura fixa + rolagem lateral (não comprime) */
   .chart-scroll { position: relative; height: 100%; }
+
+  /* calendário mensal (agenda) */
+  .cal-card { grid-column: 1 / -1; }
+  .calendar { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-top: 10px; }
+  .cal-month-label { text-align: center; font-size: 13px; font-weight: 700; color: var(--carbon); letter-spacing: -0.2px; padding: 10px; border-bottom: 1px solid var(--border); }
+  .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--border); background: var(--bg); }
+  .cal-weekday { padding: 8px 4px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.6px; text-transform: uppercase; color: var(--muted); text-align: center; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .cal-day { min-height: 62px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px 4px 2px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+  .cal-day:nth-child(7n) { border-right: none; }
+  .cal-grid > .cal-day:nth-last-child(-n+7) { border-bottom: none; }
+  .cal-day.other-month { background: #FAFAFA; }
+  .cal-day.other-month .cal-day-num { color: var(--muted); }
+  .cal-day.today .cal-day-num { background: var(--carbon); color: var(--citric); }
+  .cal-day-num { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; align-self: flex-end; }
+  .cal-day-events { display: flex; flex-direction: column; gap: 2px; flex: 1; min-height: 0; }
+  .cal-evt { font-size: 9px; font-weight: 600; padding: 1px 4px; border-radius: 3px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cal-evt-more { font-family: 'DM Mono', monospace; font-size: 8px; color: var(--muted); padding: 0 2px; letter-spacing: 0.3px; }
+  .evt-reuniao { background: var(--blue-bg); color: var(--blue); }
+  .evt-treinamento { background: var(--green-bg); color: var(--green); }
+  .evt-feriado { background: var(--red-bg); color: var(--red); }
+  .evt-outro { background: var(--amber-bg); color: var(--amber); }
   .chart-fallback { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; padding: 10px; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); }
   .chart-hint { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-align: center; margin-top: 8px; }
   code { font-family: 'DM Mono', monospace; font-size: 0.9em; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--carbon); }
@@ -258,9 +280,18 @@
 
     <div class="chart-card">
       <div class="chart-head"><span class="chart-title">Status dos Testes</span></div>
-      
+
       <div class="status-table" id="statusTbl2"></div>
-      
+
+    </div>
+
+    <div class="cal-card">
+      <div class="chart-head"><span class="chart-title">Agenda do Mês</span></div>
+      <div class="calendar">
+        <div class="cal-month-label">Setembro 2026</div>
+        <div class="cal-weekdays"><div class="cal-weekday">Dom</div><div class="cal-weekday">Seg</div><div class="cal-weekday">Ter</div><div class="cal-weekday">Qua</div><div class="cal-weekday">Qui</div><div class="cal-weekday">Sex</div><div class="cal-weekday">Sáb</div></div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
     </div>
 
   </div>
@@ -412,6 +443,24 @@
     (function(){
       var words=[['engajamento',30],['liderança',23],['reconhecimento',26],['comunicação',24],['carreira',22],['propósito',21],['carga',20],['equipe',19],['autonomia',18],['clima',18],['salário',17],['feedback',16],['ferramentas',15],['pressão',14],['rotina',13]], wmax=30;
       document.getElementById('cloud').innerHTML=words.map(function(w){ var op=(0.45+0.55*(w[1]/wmax)).toFixed(2); return '<span style="font-size:'+Math.round(11+w[1]*0.7)+'px;color:rgba(53,56,63,'+op+')">'+w[0]+'</span>'; }).join('');
+    })();
+
+    (function(){
+      var grid=document.getElementById('calGrid'); if(!grid) return;
+      var Y=2026, M=8, hoje=20; // setembro/2026 (fictício)
+      var start=new Date(Y,M,1).getDay(), diM=new Date(Y,M+1,0).getDate(), prev=new Date(Y,M,0).getDate();
+      var EV={2:[['Reunião de líderes','evt-reuniao']],4:[['Treinamento NR-35','evt-treinamento']],7:[['Feriado','evt-feriado']],9:[['Reunião RH','evt-reuniao'],['1:1 gestores','evt-outro'],['Onboarding','evt-treinamento']],15:[['Treinamento','evt-treinamento']],18:[['Reunião mensal','evt-reuniao']],21:[['Feriado','evt-feriado']],24:[['Avaliações','evt-outro']],29:[['Fechamento do mês','evt-reuniao']]};
+      var cells=[],i;
+      for(i=start;i>0;i--) cells.push({d:prev-i+1,out:true});
+      for(i=1;i<=diM;i++) cells.push({d:i,out:false});
+      for(i=1;cells.length<42;i++) cells.push({d:i,out:true});
+      grid.innerHTML=cells.map(function(c){
+        var cls='cal-day'+(c.out?' other-month':'')+(!c.out&&c.d===hoje?' today':'');
+        var evs=(!c.out&&EV[c.d])||[];
+        var shown=evs.slice(0,2).map(function(e){ return '<span class="cal-evt '+e[1]+'">'+e[0]+'</span>'; }).join('');
+        var more=evs.length>2?'<span class="cal-evt-more">+'+(evs.length-2)+' mais</span>':'';
+        return '<div class="'+cls+'"><span class="cal-day-num">'+c.d+'</span><span class="cal-day-events">'+shown+more+'</span></div>';
+      }).join('');
     })();
   }
   renderStaticViz();

@@ -67,6 +67,7 @@ implementação: `compliance/kpis/rh/recrutamento.html`.
 | **Absenteísmo por Mês** | barra vertical em CSS/div | performance | sem Chart.js |
 | **Picos de Abertura** | heatmap dia × hora (opacidade do carbon) | manutenção | sem Chart.js |
 | **Brainstorm de Líderes** | nuvem de palavras (tamanho por frequência, tons de carbon) | cei | sem Chart.js |
+| **Agenda do Mês** | calendário mensal (grid 7×6, pílulas de evento por categoria, estados hoje/outro-mês) | agenda | tipo próprio (não é gráfico de métrica; pílulas de evento seguem cor de categoria, como as pílulas de status) |
 | **Analítico — candidaturas** | tabela | páginas com aba Analítico | **padrão** |
 
 ## Padrão x desvio (resumo)
