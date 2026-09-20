@@ -214,6 +214,9 @@ chartInst = new Chart(canvas, {
 Regras dos gráficos:
 - **Barras carbon** (`--carbon`). Para destacar uma barra selecionada, use
   `rgba(53,56,63,0.45)` nas demais (padrão do recrutamento).
+- **Largura da barra vertical ~22px** (categoria 46px × `barPercentage:0.6`), a mesma em
+  todos os gráficos. Em gráfico com **poucas barras** (ex.: rating 1–5), use
+  `maxBarThickness: 22` para não engordarem preenchendo o card e ficarem diferentes.
 - **Sem legenda e sem tooltip nativo** — o valor aparece **acima da barra** via
   `barValueLabelsPlugin` (copie de recrutamento; detalhes em `references/`).
 - **Sem gridlines e sem escala numérica no eixo de valor** em todos os gráficos — o

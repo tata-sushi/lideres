@@ -30,6 +30,9 @@ implementação: `compliance/kpis/rh/recrutamento.html`.
   (`overflow-x:auto`); em barra CSS, a coluna é `flex: 0 0 42px` num container `overflow-x:auto`.
   **Folga na base:** deixe espaço entre o rótulo do eixo X e a barra de rolagem —
   `layout.padding.bottom` (~14) no Chart.js e `padding-bottom` (~12) no container CSS.
+- **Largura da barra vertical = ~22px** (categoria 46px × 0.6), a mesma em todos os
+  gráficos. Em gráfico com **poucas barras** (ex.: rating 1–5), use `maxBarThickness: 22`
+  pra elas não engordarem pra preencher o card e ficarem diferentes das outras.
   **Cuidado:** o `.chart-card` precisa de `min-width:0` (e o grid, colunas `minmax(0, 1fr)`),
   senão a barra larga empurra a largura da **página inteira** em vez de rolar por dentro do card.
 - **Rótulo do eixo X sempre com data:** **dia/mês** (`09/03`) ou **mês/ano** (`09/2026`),
