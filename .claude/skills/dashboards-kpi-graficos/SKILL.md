@@ -53,17 +53,24 @@ paleta fixa dos status/pílulas, na §5).
 body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
 ```
 
-Fontes (no `<head>`): **DM Sans** (texto e **números** dos gráficos/tabelas — carregar até **800**) + **DM Mono** (só título do card, pílulas e chrome de KPI/filtro).
+Fontes (no `<head>`): **DM Sans** (texto, **números** dos gráficos/tabelas — carregar
+até **800** — pílulas, filtros, abas e botões) + **DM Mono** (só título do card,
+rótulo/sub do KPI, cabeçalho de tabela, dia da semana do calendário e hints). Inclua
+**`preconnect`** para acelerar a fonte:
 
 ```html
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 ```
 
-Convenções de tipografia:
-- **Texto/conteúdo** → `'DM Sans'`.
-- **Rótulos, números, pílulas, títulos de gráfico** → `'DM Mono'`, geralmente
-  `10–11px`, `uppercase`, `letter-spacing` ~`0.8px`.
-- **Números** → sempre `font-variant-numeric: tabular-nums` (alinham em coluna).
+Convenções de tipografia (padrão do catálogo):
+- **Na área de gráfico/tabela é tudo `'DM Sans'`; o peso faz a hierarquia:**
+  **número/valor → 800**, **nome/eixo/legenda/categoria/pílula → 400** (labels ~500).
+- **`'DM Mono'` só em:** título do card (11px/700), rótulo e sub do KPI, cabeçalho de
+  tabela (`thead th`), dia da semana do calendário e hints. `uppercase`, `letter-spacing` ~`0.8px`.
+- **Números** → sempre `font-variant-numeric: tabular-nums`.
+- Tamanhos por papel: ver a tabela na §3.
 
 ---
 
@@ -87,7 +94,7 @@ CSS (copiar exatamente):
 ```css
 .kpis-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
-.kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
+.kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); }
 .kpi-number { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
 .kpi-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
 .kpi-sub strong { color: var(--carbon); font-weight: 600; }
@@ -136,13 +143,13 @@ CSS (copiar exatamente):
 .filters-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
 .filters-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .filter-group { display: flex; flex-direction: column; gap: 4px; }
-.filter-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
-.filter-select { appearance: none; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); width: 100%; cursor: pointer; }
+.filter-label { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); }
+.filter-select { appearance: none; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); width: 100%; cursor: pointer; }
 .filter-select:focus { outline: none; border-color: var(--carbon); }
 .filters-actions { display: flex; align-items: center; justify-content: space-between; padding-top: 2px; }
-.btn-clear { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px 0; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
+.btn-clear { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px 0; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
 .btn-clear:hover { color: var(--carbon); }
-.results-count { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+.results-count { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; color: var(--muted); }
 .results-count span { color: var(--carbon); font-weight: 500; }
 ```
 
@@ -204,7 +211,7 @@ chartInst = new Chart(canvas, {
     layout: { padding: { top: 18 } },
     plugins: { legend: { display: false }, tooltip: { enabled: false } },
     scales: {
-      x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Sans', size: 11 } } },
+      x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Sans', size: 12 } } },
       y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
     }
   }
@@ -223,7 +230,7 @@ Regras dos gráficos:
   eixo de valor é o **Y** nas verticais/linhas e o **X** nas horizontais/empilhadas:
   `grid.display:false`, `ticks.display:false` no eixo de valor, `beginAtZero`. O valor
   vem do **rótulo de dados** — acima/depois da barra e **em cada ponto** das linhas
-  (plugin, **DM Sans 11px/800** carbon) — nunca do eixo. Só o **eixo de categoria** mostra
+  (plugin, **DM Sans 12px/800** carbon) — nunca do eixo. Só o **eixo de categoria** mostra
   texto (nomes, em **DM Sans 12px** carbon — ver Tipografia). A **teia do radar**
   (`#E2E2E2`) é estrutura, não grade.
 - `maintainAspectRatio:false` + `.chart-wrap` com `height:220px` fixa a altura.
@@ -242,19 +249,21 @@ Regras dos gráficos:
   Ex.: `String(mes).padStart(2,'0') + '/' + String(ano).slice(-2)`.
 - **Tipografia (padrão): tudo DM Sans; o peso faz a hierarquia.** Cor **carbon** em tudo.
   Na área de gráfico/tabela o texto é **DM Sans**, com **número/valor em peso 800** (rótulo de
-  valor na barra/ponto via plugin, total da empilhada, contagem `.status-count`) e
-  **nome/eixo/legenda/categoria em 400** (nomes no eixo, datas do eixo X em **11px**, vértices
-  do radar `pointLabels`, legendas, `.status-name`). **Únicas exceções em DM Mono:** título do
-  card (11px/700) e pílulas/badges (10px/500). No JS: `SANS12={family:'DM Sans',size:12}` em
-  categoria/legenda/`pointLabels`, `SANS11={family:'DM Sans',size:11}` no eixo X; os plugins de
-  rótulo desenham em `'800 11px "DM Sans", sans-serif'`. **Peso 800 exige carregar a DM Sans com
+  valor na barra/ponto via plugin, total da empilhada, contagem `.status-count`, média/nota das
+  tabelas) e **nome/eixo/legenda/categoria em 400** (nomes no eixo, datas do eixo X, vértices
+  do radar `pointLabels`, legendas, `.status-name`). Tamanhos: **rótulo de valor e eixo X = 12px**;
+  categoria/legenda/radar = 12px; nome/contagem do status = 13px; título do card = 11px/700.
+  **Únicas exceções em DM Mono:** título do card, rótulo/sub do KPI, cabeçalho de tabela, dia da
+  semana do calendário e hints (pílulas, filtros, abas e botões são **DM Sans**). No JS:
+  `SANS12={family:'DM Sans',size:12}` em **eixo X, categoria, legenda e `pointLabels`**; os plugins
+  de rótulo desenham em `'800 12px "DM Sans", sans-serif'`. **Peso 800 exige carregar a DM Sans com
   `800`** no Google Fonts (`family=DM+Sans:wght@...;800`), senão o browser cai pra 700. Legenda
-  (quando houver): `boxWidth:12, padding:12`. **Nada de cinza** nos rótulos de eixo — tudo carbon
-  (a única variação de cor é o escurecimento das barras não-selecionadas ao filtrar).
+  (quando houver): DM Sans 12px carbon, `boxWidth:12, padding:12`. **Nada de cinza** nos rótulos de
+  eixo — tudo carbon (a única variação de cor é o escurecimento das barras não-selecionadas ao filtrar).
 - **Fonte antes de desenhar (evita flash no canvas).** O canvas do Chart.js **não** redesenha
   quando a webfont chega, então desenhe os gráficos só depois da DM Sans pronta: no `<head>`,
   `preconnect` para `fonts.googleapis.com` e `fonts.gstatic.com`; no boot, aguarde
-  `document.fonts.load('800 11px "DM Sans"')` (e `'400 12px "DM Sans"'`) antes do `new Chart(...)`,
+  `document.fonts.load('800 12px "DM Sans"')` (e `'400 12px "DM Sans"'`) antes do `new Chart(...)`,
   com um `setTimeout` de ~2s como fallback. Sem isso, o rótulo aparece numa fonte errada no
   carregamento e só corrige no próximo redraw.
 - **Botão "i" de informação (padrão).** Todo gráfico tem um `.chart-info-btn` no canto
@@ -325,7 +334,7 @@ respiro lateral.
 Subtabs internas do dashboard (trocar a fonte do gráfico, ex.: Entrevistas × Testes):
 ```css
 .dash-subtabs { display: flex; justify-content: center; gap: 8px; padding: 14px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; }
-.dash-subtab { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; background: #FDEAEA; color: #7A1A1A; border: none; cursor: pointer; transition: opacity 0.18s; }
+.dash-subtab { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; text-transform: uppercase; background: #FDEAEA; color: #7A1A1A; border: none; cursor: pointer; transition: opacity 0.18s; }
 .dash-subtab.active { background: #35383F; color: #CFFF00; }
 ```
 
@@ -333,7 +342,7 @@ Subtabs internas do dashboard (trocar a fonte do gráfico, ex.: Entrevistas × T
 
 ## 5. Pílulas de status (paleta fixa)
 
-Status/estado usa pílula DM Mono `10px`, `border-radius:100px`, com paleta semântica
+Status/estado usa pílula **DM Sans** `10px/500`, `border-radius:100px`, com paleta semântica
 **fixa** (estes hex são o padrão — pode hardcodar, é o design system). As pílulas aparecem
 na **tabela completa do analítico** (e numa seção de referência), **não** nas tabelas
 compactas de status, que mostram só o nome + a contagem (`.status-name`):
@@ -346,8 +355,58 @@ compactas de status, que mostram só o nome + a contagem (`.status-name`):
 | **Negativo** (situação negativa) | `#FDEAEA` | `#7A1A1A` |
 
 ```css
-.status-badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; flex-shrink: 0; }
+.status-badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; flex-shrink: 0; }
 ```
+
+---
+
+## 6. Barras, heatmap, nuvem, tabelas e datas (padrões do catálogo)
+
+Padrões consolidados no catálogo visual (`git-claude/catalogo-graficos.html`).
+
+### Barras
+- **Raio 5 em todas** as barras (`borderRadius:5`), verticais e horizontais; barra em CSS usa
+  `border-radius:5px 5px 0 0` (topo). Funil e demais "barras" também raio 5.
+- **Carbon** `#35383F`. Tom secundário (2ª série) = **`CARBON2 = 'rgba(53,56,63,0.45)'`**
+  (ex.: PJ na empilhada). Defina como constante e reutilize; não invente outra opacidade.
+- **Empilhada = uma barra só, sem "degrau" na junção.** Arredonde só as pontas externas por
+  segmento: 1º segmento `{topLeft:5,bottomLeft:5,topRight:0,bottomRight:0}`, último o espelho,
+  ambos com `borderSkipped:false`.
+- **Rótulo da empilhada = valores no formato slash** (ex.: `28/6`) ao fim da barra
+  (DM Sans 12px/800); reserve folga à direita (`layout.padding.right`) pro rótulo não cortar.
+- **Barra CSS com poucas colunas** → `justify-content: space-around` no container pra distribuir
+  na largura (a barra segue ~22px; não engorda). Muitas colunas → volta a rolar lateral.
+
+### Heatmap (dia × hora) — célula em banda, não quadrado
+```css
+.heat-grid { display: grid; grid-template-columns: 48px repeat(7, minmax(30px,1fr)); gap: 3px; }
+.heat-cell { height: 26px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-family: 'DM Sans', sans-serif; font-size: 12px; }
+```
+Cor por opacidade do carbon (`rgba(53,56,63,a)`, `a` de ~0.15 a 1); texto branco quando `a>0.5`.
+
+### Nuvem de palavras — cor por categoria (paleta das pílulas)
+Palavra colorida pela **categoria**, com as cores das pílulas, + legenda:
+```js
+var CLOUD_CAT = { 'Emoções':'#7A4A00', 'Dores/Problemas':'#7A1A1A', 'Ações':'#35383F', 'Forças':'#1A3A5C' };
+```
+Palavra em DM Sans, `font-size` por frequência, peso 600–800 por tamanho, `color = CLOUD_CAT[cat]`.
+Legenda `.cloud-leg` = **DM Sans 12px carbon**, chip 12px (mesmo padrão das legendas dos gráficos).
+
+### Tabelas de lista (pergunta/média e colaboradores)
+Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (média/nota) em
+**DM Sans 13px/800** (`.tbl-nota`); nome em DM Sans 13px/600, pergunta em DM Sans 13px/400 que
+**quebra linha**. Colaborador: avatar circular carbon 34px com inicial citric (DM Mono) + nome +
+`cargo · unidade` (DM Mono 9px uppercase muted).
+- **Botão "Ver mais"** padrão: `.btn-ver-mais` — DM Sans 10px/500, `border:1px solid var(--border)`,
+  `border-radius:6px`, `padding:7px 16px`, hover `background:var(--bg)`; centralizado em `.ver-mais-wrap`.
+  Mostra N linhas e revela o resto ao clicar.
+- **Toda tabela tem título** (`.chart-head` + `.chart-title`), como os demais cards.
+
+### Datas nas tabelas
+- Data na tabela completa/analítica: **`DD/MM/AAAA`**; com horário, **`DD/MM/AAAA · HHhMM`**
+  (ex.: `11/09/2026 · 09H15`) — separador `·` (bolinha), o mesmo do `cargo · unidade`.
+- **Rótulo do eixo X** (série temporal) segue curto: `dd/mm` ou `mm/aa` — não confundir com a
+  data completa das tabelas.
 
 ---
 
@@ -360,6 +419,16 @@ compactas de status, que mostram só o nome + a contagem (`.status-name`):
 - [ ] `chartInst.destroy()` antes de recriar + guarda `typeof Chart`.
 - [ ] Muitas categorias → `min-width` no `.chart-scroll` + scroll lateral (não encolher).
 - [ ] Status/distribuição = tabela (`.status-row`), nunca pizza.
+- [ ] Tipografia: **tudo DM Sans**; número/valor **800**, nome/eixo/legenda **400**; DM Mono só
+      título do card, rótulo/sub do KPI, cabeçalho de tabela, dia da semana e hints.
+- [ ] Carregar DM Sans até **800** + `preconnect`; desenhar o gráfico só após
+      `document.fonts.load('800 12px "DM Sans"')` (evita flash de fonte no canvas).
+- [ ] Barras **raio 5**; 2ª série = **`CARBON2`** (`rgba(53,56,63,0.45)`); empilhada sem "degrau"
+      (cantos arredondados por segmento) + rótulo slash `28/6`.
+- [ ] Heatmap em **bandas** (height 26px, raio 4); nuvem colorida **por categoria** (cores das
+      pílulas) + legenda DM Sans 12px.
+- [ ] Tabelas de lista (pergunta/média, colaboradores) com **título**, número em **DM Sans 800**,
+      botão **"Ver mais"**; datas `DD/MM/AAAA` (+ ` · HHhMM` quando tem hora).
 - [ ] Layout **full-width, não centralizado**: KPIs e filtros = faixas **full-bleed**
       (encostam nas laterais); gráficos = respiro lateral (12px mobile / 24px desktop).
 - [ ] KPIs/filtros com **cores invertidas** (faixa branca, card/campo cinza) — ver §2.
