@@ -1,0 +1,52 @@
+# Catálogo de Gráficos — specs (anexo do HTML)
+
+Documento de referência que acompanha **`git-claude/catalogo-graficos.html`**.
+
+O **HTML é a página visual** — feito para parecer uma página real do portal (mesmos
+tokens, mesmo layout, sem "andaime" de catálogo), para servir de referência fiel quando
+a skill `dashboards-kpi-graficos` for invocada. **Este `.md` guarda as especificações**:
+o que cada bloco é, o tipo, onde é usado no portal e se é padrão ou desvio.
+
+Todos os dados no HTML são **fictícios** (demonstração). Referência canônica de
+implementação: `compliance/kpis/rh/recrutamento.html`.
+
+## Layout (regras da página)
+
+- **Full-width, sem centralizar.** Nada de `max-width`/coluna estreita centralizada.
+- **KPIs e filtros = faixas full-bleed:** encostam nas laterais (100% da largura,
+  `padding:14px 20px`, `border-bottom`), sem margem externa.
+- **Gráficos = respiro lateral pequeno** (12px no mobile / 24px no desktop), não centralizados.
+- **Cores invertidas na zona de KPI/filtros:** faixa **branca** (`--surface`) com
+  **card/campo cinza** (`--bg`) — o inverso dos chart-cards (card branco sobre fundo cinza).
+- Tokens, tipografia (DM Sans + DM Mono) e paleta: ver a skill `dashboards-kpi-graficos`.
+
+## Mapeamento dos blocos (na ordem da página)
+
+| Bloco (título no HTML) | Tipo | Onde é usado no portal | Situação |
+|---|---|---|---|
+| **Cards de KPI** | número em destaque (28px tabular) | quase todas as páginas | **padrão** |
+| **Filtros** | Unidade · Departamento · Competência + De/Até | páginas com dados filtráveis | **padrão** |
+| **Entrevistas por Mês** (subtabs Entrevistas/Testes) | barra vertical (Chart.js), carbon, clique-filtra, rótulo por plugin, cfOutline | recrutamento, feriados, solicitações, medicina, absenteísmo, benefícios, hc | **PADRÃO** (referência) |
+| **Status das Entrevistas / dos Testes** | status em tabela + pílulas | recrutamento, absenteísmo, cardápio | **padrão** |
+| **Vagas por Unidade** | barra horizontal (`indexAxis:'y'`) | reclamações, benefícios (TataPlus), desligamentos | desvio de tipo |
+| **Status das Demandas** | pizza (cores semânticas) | demandas2, desligamentos, recrutamento-novo | **desvio** (padrão manda tabela) |
+| **Identificou-se?** | doughnut | ouvidoria | **desvio** (legenda visível + plugin datalabels externo) |
+| **Avaliação por Nota** | barra multicolor (nota 1→5, vermelho→verde) | desligamentos (avaliações) | desvio de cor |
+| **Turnover Mensal** | linha + área | semanal, hc, hc2 | hoje em **SVG à mão** (não Chart.js) |
+| **Chamados por Categoria** | barras em CSS/div (`.bar-fill`) | medicina, demandas, absenteísmo, solicitações, manutenção | sem Chart.js |
+| **Funil de Recrutamento** | funil em `<div>` | recrutamento, recrutamento-novo | sem Chart.js |
+| **Clima por Tema** | radar (2 séries: Geral × Liderança) | cei (Cultura & Clima) | hoje em **SVG à mão** |
+| **Banco de Horas** | multi-linha (2 séries: + sólido / − tracejado) | performance, hc | hoje em **SVG à mão** |
+| **Absenteísmo por Mês** | barra vertical em CSS/div | performance | sem Chart.js |
+| **Picos de Abertura** | heatmap dia × hora (opacidade do carbon) | manutenção | sem Chart.js |
+| **Brainstorm de Líderes** | nuvem de palavras (tamanho por frequência, cor por categoria) | cei | sem Chart.js |
+| **Analítico — candidaturas** | tabela | páginas com aba Analítico | **padrão** |
+
+## Padrão x desvio (resumo)
+
+- **Padrão** = barra vertical carbon (Chart.js), sem legenda/tooltip/grid, rótulo por
+  plugin, clique-filtra; status em **tabela** (nunca pizza); KPIs/filtros full-bleed invertidos.
+- **Desvios** recorrentes no portal: pizza/doughnut para status, barra horizontal,
+  tooltip nativo/legenda ligados, cores fora do carbon, e várias viz feitas em **SVG à mão**
+  ou **barras CSS** em vez de Chart.js. O inventário completo (18 páginas, 34 gráficos) e as
+  recomendações de padronização estão na skill `dashboards-kpi-graficos`.
