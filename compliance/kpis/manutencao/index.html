@@ -89,6 +89,30 @@ body:not([data-view="chamados"]) #view-chamados { display: none; }
 .tbl-mini tbody td { padding: 8px 6px; font-size: 13px; color: var(--carbon); vertical-align: middle; }
 .tbl-mini td.tbl-nome { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--carbon); white-space: nowrap; }
 .tbl-mini td.tbl-nota { text-align: right; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 800; color: var(--carbon); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tbl-mini td.tbl-data { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--carbon); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tbl-mini td.tbl-cat { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--carbon); }
+.tbl-mini td.tbl-titulo { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 400; color: var(--carbon); }
+.tbl-mini td.tbl-fotos { text-align: center; }
+.tbl-fotos-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; color: var(--carbon); transition: background 0.15s, border-color 0.15s; }
+.tbl-fotos-btn:hover { background: var(--bg); border-color: var(--carbon); }
+.tbl-fotos-btn svg { width: 14px; height: 14px; }
+.tbl-fotos-btn[disabled] { opacity: .35; cursor: default; }
+.tbl-fotos-btn[disabled]:hover { background: var(--surface); border-color: var(--border); }
+.tbl-fotos-count { display: inline-block; margin-left: 4px; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 800; color: var(--carbon); }
+
+/* Lightbox de fotos */
+.mnt-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 24px; }
+.mnt-lightbox.open { display: flex; }
+.mnt-lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; box-shadow: 0 8px 40px rgba(0,0,0,.5); border-radius: 6px; }
+.mnt-lightbox .mnt-lb-close { position: absolute; top: 16px; right: 16px; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(255,255,255,.15); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.mnt-lightbox .mnt-lb-close:hover { background: rgba(255,255,255,.25); }
+.mnt-lightbox .mnt-lb-close svg { width: 18px; height: 18px; }
+.mnt-lightbox .mnt-lb-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: none; background: rgba(255,255,255,.15); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.mnt-lightbox .mnt-lb-nav:hover { background: rgba(255,255,255,.25); }
+.mnt-lightbox .mnt-lb-nav svg { width: 20px; height: 20px; }
+.mnt-lightbox .mnt-lb-prev { left: 16px; }
+.mnt-lightbox .mnt-lb-next { right: 16px; }
+.mnt-lightbox .mnt-lb-count { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); font-family: 'DM Mono', monospace; font-size: 11px; color: rgba(255,255,255,.75); letter-spacing: 0.5px; }
 .ver-mais-wrap { text-align: center; padding: 10px 0 2px; }
 .btn-ver-mais { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; color: var(--carbon); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 7px 16px; cursor: pointer; }
 .btn-ver-mais:hover { background: var(--bg); }
@@ -494,14 +518,20 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-card"><div class="chart-title">Chamados por unidade</div><div class="chart-wrap"><div class="chart-scroll" id="mnt-scroll-uni"><canvas id="mnt-canvas-uni"></canvas></div></div></div>
     <div class="chart-card"><div class="chart-title">Chamados por departamento</div><div class="chart-wrap"><div class="chart-scroll" id="mnt-scroll-dep"><canvas id="mnt-canvas-dep"></canvas></div></div></div>
     <div class="chart-card">
-      <div class="chart-title">Ranking Solicitantes</div>
+      <div class="chart-title">Analítico</div>
       <div style="overflow-x:auto">
         <table class="tbl-mini">
-          <thead><tr><th>Solicitante</th><th style="text-align:right;width:80px">Chamados</th></tr></thead>
-          <tbody id="mnt-tb-sol"></tbody>
+          <thead><tr>
+            <th style="width:96px">Data</th>
+            <th>Solicitante</th>
+            <th>Categoria</th>
+            <th>Chamado</th>
+            <th style="text-align:center;width:56px">Fotos</th>
+          </tr></thead>
+          <tbody id="mnt-tb-anl"></tbody>
         </table>
       </div>
-      <div class="ver-mais-wrap" id="mnt-vm-wrap-sol" style="display:none;"><button class="btn-ver-mais" id="mnt-btn-vm-sol" onclick="_mntVerMaisSol()">Ver mais</button></div>
+      <div class="ver-mais-wrap" id="mnt-vm-wrap-anl" style="display:none;"><button class="btn-ver-mais" id="mnt-btn-vm-anl" onclick="_mntVerMaisAnl()">Ver mais</button></div>
     </div>
   </div>
 </div>
@@ -1790,10 +1820,16 @@ function _mntDrawCharts() {
   // Picos de Abertura (heatmap dia da semana × hora)
   _mntRenderHeat(rows);
 
-  // Ranking Solicitantes
-  _MNT_RANK_SOL = _mntContagem('solicitante', rows);
-  _MNT_SOL_SHOW = _MNT_SOL_PAGE;
-  _mntRenderRankSol();
+  // Analítico (chamados ordenados por data desc, com fotos)
+  _MNT_ANL_ROWS = rows.slice().sort(function(a,b){
+    var da = _mntParseDate(a.data_abertura), db = _mntParseDate(b.data_abertura);
+    if (da && db) return db - da;
+    if (da && !db) return -1;
+    if (!da && db) return 1;
+    return 0;
+  });
+  _MNT_ANL_SHOW = _MNT_ANL_PAGE;
+  _mntRenderAnl();
 }
 
 // ── Heatmap Picos de Abertura ────────────────────────────────────────────────
@@ -1831,34 +1867,104 @@ function _mntRenderHeat(rows){
   el.innerHTML = html;
 }
 
-// ── Ranking Solicitantes com Ver mais (padrão da skill) ───────────────────
-var _MNT_RANK_SOL = [], _MNT_SOL_PAGE = 10, _MNT_SOL_SHOW = 10;
-function _mntRenderRankSol(){
-  var el = document.getElementById('mnt-tb-sol'); if (!el) return;
-  if (!_MNT_RANK_SOL.length){ el.innerHTML = '<tr><td colspan="2" class="mnt-state">Sem dados</td></tr>'; }
-  else {
-    var arr = _MNT_RANK_SOL.slice(0, Math.min(_MNT_SOL_SHOW, _MNT_RANK_SOL.length));
-    el.innerHTML = arr.map(function(x){
-      return '<tr><td class="tbl-nome">' + _mntEsc(x.label) + '</td><td class="tbl-nota">' + x.n + '</td></tr>';
+// ── Analítico com Ver mais + lightbox de fotos ───────────────────────────
+var _MNT_ANL_ROWS = [], _MNT_ANL_PAGE = 20, _MNT_ANL_SHOW = 20;
+var _MNT_LB = { fotos: [], idx: 0 };
+
+function _mntRenderAnl(){
+  var el = document.getElementById('mnt-tb-anl'); if (!el) return;
+  if (!_MNT_ANL_ROWS.length){
+    el.innerHTML = '<tr><td colspan="5" class="mnt-state">Sem dados</td></tr>';
+  } else {
+    var arr = _MNT_ANL_ROWS.slice(0, Math.min(_MNT_ANL_SHOW, _MNT_ANL_ROWS.length));
+    el.innerHTML = arr.map(function(r, i){
+      var fotos = _fotoLista(r);
+      var iconCam = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+      var btn;
+      if (fotos.length){
+        btn = '<button class="tbl-fotos-btn" title="'+fotos.length+' foto'+(fotos.length>1?'s':'')+'" onclick="_mntOpenLightbox('+i+')">'+iconCam+(fotos.length>1?'<span class="tbl-fotos-count">'+fotos.length+'</span>':'')+'</button>';
+      } else {
+        btn = '<button class="tbl-fotos-btn" disabled title="Sem fotos">'+iconCam+'</button>';
+      }
+      return '<tr>'+
+        '<td class="tbl-data">'+_mntEsc(r.data_abertura || '—')+'</td>'+
+        '<td class="tbl-nome">'+_mntEsc(r.solicitante || '—')+'</td>'+
+        '<td class="tbl-cat">'+_mntEsc(r.categoria || '—')+'</td>'+
+        '<td class="tbl-titulo">'+_mntEsc(r.titulo || '—')+'</td>'+
+        '<td class="tbl-fotos">'+btn+'</td>'+
+      '</tr>';
     }).join('');
   }
-  var wrap = document.getElementById('mnt-vm-wrap-sol');
-  var btn  = document.getElementById('mnt-btn-vm-sol');
+  var wrap = document.getElementById('mnt-vm-wrap-anl');
+  var btn  = document.getElementById('mnt-btn-vm-anl');
   if (wrap && btn){
-    var resto = _MNT_RANK_SOL.length - _MNT_SOL_SHOW;
+    var resto = _MNT_ANL_ROWS.length - _MNT_ANL_SHOW;
     if (resto > 0){
       wrap.style.display = 'block';
-      btn.textContent = 'Ver mais (' + Math.min(_MNT_SOL_PAGE, resto) + ')';
+      btn.textContent = 'Ver mais (' + Math.min(_MNT_ANL_PAGE, resto) + ')';
     } else {
       wrap.style.display = 'none';
     }
   }
 }
-function _mntVerMaisSol(){ _MNT_SOL_SHOW += _MNT_SOL_PAGE; _mntRenderRankSol(); }
-window._mntVerMaisSol = _mntVerMaisSol;
+function _mntVerMaisAnl(){ _MNT_ANL_SHOW += _MNT_ANL_PAGE; _mntRenderAnl(); }
+window._mntVerMaisAnl = _mntVerMaisAnl;
+
+function _mntOpenLightbox(rowIdx){
+  var r = _MNT_ANL_ROWS[rowIdx]; if (!r) return;
+  var fotos = _fotoLista(r); if (!fotos.length) return;
+  _MNT_LB.fotos = fotos; _MNT_LB.idx = 0;
+  _mntShowLightbox();
+}
+function _mntShowLightbox(){
+  var lb = document.getElementById('mnt-lightbox'); if (!lb) return;
+  var img = document.getElementById('mnt-lb-img');
+  var cnt = document.getElementById('mnt-lb-count');
+  var prev = document.getElementById('mnt-lb-prev');
+  var next = document.getElementById('mnt-lb-next');
+  var total = _MNT_LB.fotos.length;
+  img.src = _MNT_LB.fotos[_MNT_LB.idx];
+  if (cnt) cnt.textContent = total > 1 ? ((_MNT_LB.idx + 1) + ' / ' + total) : '';
+  if (prev) prev.style.display = total > 1 ? '' : 'none';
+  if (next) next.style.display = total > 1 ? '' : 'none';
+  lb.classList.add('open');
+}
+function _mntCloseLightbox(){
+  var lb = document.getElementById('mnt-lightbox'); if (lb) lb.classList.remove('open');
+}
+function _mntLightboxNav(delta){
+  var total = _MNT_LB.fotos.length; if (!total) return;
+  _MNT_LB.idx = ((_MNT_LB.idx + delta) % total + total) % total;
+  _mntShowLightbox();
+}
+window._mntOpenLightbox = _mntOpenLightbox;
+window._mntCloseLightbox = _mntCloseLightbox;
+window._mntLightboxNav = _mntLightboxNav;
+document.addEventListener('keydown', function(e){
+  var lb = document.getElementById('mnt-lightbox');
+  if (!lb || !lb.classList.contains('open')) return;
+  if (e.key === 'Escape') _mntCloseLightbox();
+  else if (e.key === 'ArrowLeft') _mntLightboxNav(-1);
+  else if (e.key === 'ArrowRight') _mntLightboxNav(1);
+});
 
 carregarDados();
 </script>
+
+<!-- ══ LIGHTBOX DE FOTOS ══ -->
+<div class="mnt-lightbox" id="mnt-lightbox" onclick="if(event.target===this)_mntCloseLightbox()">
+  <button class="mnt-lb-close" onclick="_mntCloseLightbox()" title="Fechar (Esc)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+  <button class="mnt-lb-nav mnt-lb-prev" id="mnt-lb-prev" onclick="_mntLightboxNav(-1)" title="Anterior (←)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+  <img id="mnt-lb-img" alt="Foto do chamado">
+  <button class="mnt-lb-nav mnt-lb-next" id="mnt-lb-next" onclick="_mntLightboxNav(1)" title="Próxima (→)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+  </button>
+  <div class="mnt-lb-count" id="mnt-lb-count"></div>
+</div>
 
 <!-- ══ DRAWER ══ -->
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
