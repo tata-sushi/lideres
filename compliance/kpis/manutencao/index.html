@@ -468,6 +468,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <div id="view-kpis">
   <div class="kpis-wrap" id="kpi-grid"></div>
+  <div class="filters-wrap" id="kpi-filters">
+    <div class="filters-row">
+      <div class="filter-group"><label class="filter-label">Unidade</label><select class="filter-select" id="kpi-f-unidade"><option value="">Todas</option></select></div>
+      <div class="filter-group"><label class="filter-label">Departamento</label><select class="filter-select" id="kpi-f-depto"><option value="">Todos</option></select></div>
+      <div class="filter-group"><label class="filter-label">Status</label><select class="filter-select" id="kpi-f-status"><option value="">Todos</option></select></div>
+      <div class="filter-group"><label class="filter-label">Categoria</label><select class="filter-select" id="kpi-f-categoria"><option value="">Todas</option></select></div>
+    </div>
+    <div class="filters-actions">
+      <button class="btn-clear" onclick="_mntKpiClearFilters()">Limpar filtros</button>
+      <span class="results-count"><span id="kpi-results-n">0</span> resultado(s)</span>
+    </div>
+  </div>
   <div class="kpis-charts">
     <div class="chart-card"><div class="chart-title">Chamados por mês</div><div class="chart-wrap"><div class="chart-scroll" id="mnt-scroll-mes"><canvas id="mnt-canvas-mes"></canvas></div></div></div>
     <div class="chart-card"><div class="chart-title">Tempo médio de resolução</div><div class="chart-wrap"><div class="chart-scroll" id="mnt-scroll-sla"><canvas id="mnt-canvas-sla"></canvas></div></div></div>
@@ -912,18 +924,69 @@ function parseDataAbertura(str) {
 }
 
 // KPIs
+var _MNT_KPI_FILTERS = { unidade: '', depto: '', status: '', categoria: '' };
+function _mntKpiRows(){
+  var f = _MNT_KPI_FILTERS;
+  return (manutencoes || []).filter(function(r){
+    if (f.unidade   && r.unidade      !== f.unidade)   return false;
+    if (f.depto     && r.departamento !== f.depto)     return false;
+    if (f.status    && r.status       !== f.status)    return false;
+    if (f.categoria && r.categoria    !== f.categoria) return false;
+    return true;
+  });
+}
+function _mntKpiPopulateFilters(){
+  var opts = function(sel, arr, cur, allLabel){
+    var el = document.getElementById(sel); if (!el) return;
+    var html = ['<option value="">'+allLabel+'</option>'];
+    arr.forEach(function(v){ html.push('<option value="'+String(v).replace(/"/g,'&quot;')+'">'+v+'</option>'); });
+    el.innerHTML = html.join('');
+    if (cur) el.value = cur;
+  };
+  opts('kpi-f-unidade',   uniq((manutencoes||[]).map(function(r){return r.unidade;})),      _MNT_KPI_FILTERS.unidade,   'Todas');
+  opts('kpi-f-depto',     uniq((manutencoes||[]).map(function(r){return r.departamento;})), _MNT_KPI_FILTERS.depto,     'Todos');
+  opts('kpi-f-status',    uniq((manutencoes||[]).map(function(r){return r.status;})),       _MNT_KPI_FILTERS.status,    'Todos');
+  opts('kpi-f-categoria', uniq((manutencoes||[]).map(function(r){return r.categoria;})),    _MNT_KPI_FILTERS.categoria, 'Todas');
+  ['kpi-f-unidade','kpi-f-depto','kpi-f-status','kpi-f-categoria'].forEach(function(id){
+    var el = document.getElementById(id); if (!el || el._mntWired) return;
+    el._mntWired = true;
+    el.addEventListener('change', _mntKpiOnFilter);
+  });
+}
+function _mntKpiOnFilter(){
+  _MNT_KPI_FILTERS.unidade   = (document.getElementById('kpi-f-unidade')   ||{}).value || '';
+  _MNT_KPI_FILTERS.depto     = (document.getElementById('kpi-f-depto')     ||{}).value || '';
+  _MNT_KPI_FILTERS.status    = (document.getElementById('kpi-f-status')    ||{}).value || '';
+  _MNT_KPI_FILTERS.categoria = (document.getElementById('kpi-f-categoria') ||{}).value || '';
+  renderKPIs();
+  renderManutCharts();
+}
+function _mntKpiClearFilters(){
+  _MNT_KPI_FILTERS = { unidade: '', depto: '', status: '', categoria: '' };
+  ['kpi-f-unidade','kpi-f-depto','kpi-f-status','kpi-f-categoria'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  renderKPIs();
+  renderManutCharts();
+}
+window._mntKpiClearFilters = _mntKpiClearFilters;
+
 function kpi(l, v, sub) {
   var subHtml = sub ? '<span class="kpi-sub">'+sub+'</span>' : '';
   return '<div class="kpi-card"><span class="kpi-label">'+l+'</span><span class="kpi-number">'+v+'</span>'+subHtml+'</div>';
 }
 function renderKPIs() {
-  var total = manutencoes.length;
-  var pend  = manutencoes.filter(function(r){ return r.status==='Pendente'; }).length;
-  var and   = manutencoes.filter(function(r){ return r.status==='Em Andamento'; }).length;
-  var fin   = manutencoes.filter(function(r){ return r.status==='Finalizado'; }).length;
+  _mntKpiPopulateFilters();
+  var rows = _mntKpiRows();
+  var total = rows.length;
+  var pend  = rows.filter(function(r){ return r.status==='Pendente'; }).length;
+  var and   = rows.filter(function(r){ return r.status==='Em Andamento'; }).length;
+  var fin   = rows.filter(function(r){ return r.status==='Finalizado'; }).length;
   var subTotal = '<strong>'+fin+'</strong> finalizados / <strong>'+pend+'</strong> pendentes';
   document.getElementById('kpi-grid').innerHTML =
     kpi('Total', total, subTotal) + kpi('Em Andamento', and);
+  var n = document.getElementById('kpi-results-n');
+  if (n) n.textContent = total;
 }
 
 // FILTROS RENDER
@@ -1650,9 +1713,10 @@ function _mntChartLine(canvasId, labels, values, scrollId){
 }
 
 var _MES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-function _mntContagem(campo) {
+function _mntContagem(campo, rowsArg) {
+  var src = rowsArg || (manutencoes || []);
   var m = {};
-  (manutencoes || []).forEach(function(r){ var k = (r[campo] || '—').trim() || '—'; m[k] = (m[k]||0)+1; });
+  src.forEach(function(r){ var k = (r[campo] || '—').trim() || '—'; m[k] = (m[k]||0)+1; });
   return Object.keys(m).map(function(k){ return { label:k, n:m[k] }; }).sort(function(a,b){ return b.n - a.n; });
 }
 // Helpers datas: "DD/MM/YYYY" -> Date (base 12:00 para evitar TZ). Aceita " HH:MI" opcional.
@@ -1679,10 +1743,11 @@ function renderManutCharts() {
 
 function _mntDrawCharts() {
   if (typeof Chart === 'undefined') return;
+  var rows = _mntKpiRows();
 
   // Chamados por mês — bar chart (categórico com rótulo mm/aa)
   var porMes = {};
-  (manutencoes || []).forEach(function(r){
+  rows.forEach(function(r){
     var s = (r.data_abertura || '').trim();
     var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
     if (!m) return;
@@ -1697,7 +1762,7 @@ function _mntDrawCharts() {
 
   // Tempo médio de resolução (SLA em dias por mês) — line chart
   var slaBuckets = {};
-  (manutencoes || []).forEach(function(r){
+  rows.forEach(function(r){
     var fim = _mntFimChamado(r);
     var ini = _mntParseDate(r.data_abertura);
     if (!fim || !ini) return;
@@ -1714,20 +1779,18 @@ function _mntDrawCharts() {
   var slaVals   = slaKeys.map(function(k){ var b=slaBuckets[k]; return Math.round((b.soma/b.n)*10)/10; });
   _mntChartLine('mnt-canvas-sla', slaLabels, slaVals, 'mnt-scroll-sla');
 
-  // Barras verticais categóricas
-  ['cat','uni','dep'].forEach(function(_){});
-  var cat = _mntContagem('categoria');
-  var uni = _mntContagem('unidade');
-  var dep = _mntContagem('departamento');
+  var cat = _mntContagem('categoria', rows);
+  var uni = _mntContagem('unidade', rows);
+  var dep = _mntContagem('departamento', rows);
   _mntChartPie('mnt-canvas-cat', 'mnt-pie-legend-cat', cat.map(function(x){return x.label;}), cat.map(function(x){return x.n;}));
   _mntChartBarH('mnt-canvas-uni', uni.map(function(x){return x.label;}), uni.map(function(x){return x.n;}), 'mnt-scroll-uni');
   _mntChartBarH('mnt-canvas-dep', dep.map(function(x){return x.label;}), dep.map(function(x){return x.n;}), 'mnt-scroll-dep');
 
   // Picos de Abertura (heatmap dia da semana × hora)
-  _mntRenderHeat(manutencoes || []);
+  _mntRenderHeat(rows);
 
   // Ranking Solicitantes
-  _MNT_RANK_SOL = _mntContagem('solicitante');
+  _MNT_RANK_SOL = _mntContagem('solicitante', rows);
   _MNT_SOL_SHOW = _MNT_SOL_PAGE;
   _mntRenderRankSol();
 }
