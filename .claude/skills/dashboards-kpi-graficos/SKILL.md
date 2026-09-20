@@ -248,9 +248,11 @@ Regras dos gráficos:
   **superior direito** (cinza `#CFCFCF`, hover `--muted`, ícone "i" em círculo, SVG 15px,
   `position:absolute; top:10px; right:12px`) que abre o **modal padrão** do
   `recrutamento.html` — `.modal-overlay`/`.modal` + `abrirInfoGrafico`/`closeInfoGrafico`
-  (toggle `.active`), com conteúdo em `.info-note` (frase-resumo) e, quando fizer sentido,
-  uma `.info-table` (`# / Etapa / Medidas`, ex.: etapas do funil). O card precisa de
-  `position:relative`.
+  (toggle `.active`), com conteúdo em `.info-note` (frase-resumo, alinhada à esquerda) e,
+  **sempre que ajudar a ler, uma `.info-table`** no mesmo formato (`# / rótulo / descrição`):
+  ex.: as etapas do **funil** e a **legenda de cores das pílulas** (nº · pílula real ·
+  significado). Não descrever etapas/cores só em texto corrido quando cabem numa tabelinha.
+  O card precisa de `position:relative`.
 - **Espaçamento e disposição.** 12px entre gráficos (colunas, linhas e **entre seções** —
   `gap:12px` + `margin-top:12px`; nunca 0). **Mesma linha = mesmo tipo ou, no mínimo, mesma
   altura** — nunca pareie um gráfico curto com um alto (ex.: barra + heatmap). Gráficos
