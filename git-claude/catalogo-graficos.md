@@ -28,6 +28,8 @@ implementação: `compliance/kpis/rh/recrutamento.html`.
   horizontal** (assim como as barras horizontais mantêm altura fixa). Padrão Chart.js:
   `chart-scroll.style.minWidth = nº_barras * 46 + 'px'` dentro de `.chart-wrap`
   (`overflow-x:auto`); em barra CSS, a coluna é `flex: 0 0 42px` num container `overflow-x:auto`.
+  **Folga na base:** deixe espaço entre o rótulo do eixo X e a barra de rolagem —
+  `layout.padding.bottom` (~14) no Chart.js e `padding-bottom` (~12) no container CSS.
   **Cuidado:** o `.chart-card` precisa de `min-width:0` (e o grid, colunas `minmax(0, 1fr)`),
   senão a barra larga empurra a largura da **página inteira** em vez de rolar por dentro do card.
 - **Rótulo do eixo X sempre com data:** **dia/mês** (`09/03`) ou **mês/ano** (`09/2026`),

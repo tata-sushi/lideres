@@ -227,7 +227,9 @@ Regras dos gráficos:
   original (~46px) e o gráfico gera **rolagem lateral** para mostrar o restante —
   jamais encolher as barras para tudo caber na largura do card:
   `document.getElementById('chart-scroll').style.minWidth = (labels.length * 46) + 'px'`
-  e deixe o `.chart-wrap` rolar (já tem `overflow-x:auto`).
+  e deixe o `.chart-wrap` rolar (já tem `overflow-x:auto`). **Folga na base:** dê espaço
+  entre o rótulo do eixo X e a barra de rolagem (`layout.padding.bottom` no Chart.js;
+  `padding-bottom` no container CSS).
   **Cuidado (grid/flex):** o card do gráfico precisa de `min-width:0` (e, se for grid,
   colunas `minmax(0, 1fr)`), senão a barra larga empurra a largura da **página inteira**
   em vez de rolar por dentro do card.
