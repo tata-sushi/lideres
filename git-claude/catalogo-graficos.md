@@ -79,7 +79,7 @@ Fonte base **DM Mono** (salvo indicado); cor **carbon `#35383F`** (salvo indicad
 | **Cards de KPI** | número em destaque (28px tabular) | quase todas as páginas | **padrão** |
 | **Filtros** | Unidade · Departamento · Competência + De/Até | páginas com dados filtráveis | **padrão** |
 | **Entrevistas por Mês** (subtabs Entrevistas/Testes) | barra vertical (Chart.js), carbon, **largura fixa 46px + scroll lateral**, rótulo mês/ano, clique-filtra, cfOutline | recrutamento, feriados, solicitações, medicina, absenteísmo, benefícios, hc | **PADRÃO** (referência) |
-| **Status das Entrevistas / dos Testes** | status em tabela + pílulas | recrutamento, absenteísmo, cardápio | **padrão** |
+| **Status das Entrevistas / dos Testes** | status em **tabela simples** (nome + contagem, sem pílula) | recrutamento, absenteísmo, cardápio | **padrão** |
 | **Vagas por Unidade** | barra horizontal (`indexAxis:'y'`) | reclamações, benefícios (TataPlus), desligamentos | desvio de tipo |
 | **CLT × PJ por Unidade** | barra empilhada (`stacked:true`, 2 séries, `indexAxis:'y'`, legenda) | hc, hc2, semanal | **desvio** (no portal: carbon + citric; no catálogo em tons de carbon) |
 | **Status das Demandas** | pizza (cores semânticas) | demandas2, desligamentos, recrutamento-novo | **desvio** (padrão manda tabela) |
@@ -94,7 +94,8 @@ Fonte base **DM Mono** (salvo indicado); cor **carbon `#35383F`** (salvo indicad
 | **Picos de Abertura** | heatmap dia × hora (opacidade do carbon) | manutenção | sem Chart.js |
 | **Brainstorm de Líderes** | nuvem de palavras (tamanho por frequência, tons de carbon) | cei | sem Chart.js |
 | **Agenda do Mês** | calendário mensal (grid 7×6, pílulas de evento por categoria, estados hoje/outro-mês) | agenda | tipo próprio (não é gráfico de métrica; pílulas de evento seguem cor de categoria, como as pílulas de status) |
-| **Analítico — candidaturas** | tabela | páginas com aba Analítico | **padrão** |
+| **Analítico — candidaturas** | tabela (status em **pílula**) | páginas com aba Analítico | **padrão** |
+| **Pílulas de Status** (seção) | pílulas semânticas (carbon / azul / âmbar / vermelho) | só na tabela do Analítico | referência do design system |
 
 ## Padrão x desvio (resumo)
 

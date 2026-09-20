@@ -312,7 +312,9 @@ Subtabs internas do dashboard (trocar a fonte do gráfico, ex.: Entrevistas × T
 ## 5. Pílulas de status (paleta fixa)
 
 Status/estado usa pílula DM Mono `10px`, `border-radius:100px`, com paleta semântica
-**fixa** (estes hex são o padrão — pode hardcodar, é o design system):
+**fixa** (estes hex são o padrão — pode hardcodar, é o design system). As pílulas aparecem
+na **tabela completa do analítico** (e numa seção de referência), **não** nas tabelas
+compactas de status, que mostram só o nome + a contagem (`.status-name`):
 
 | Uso | bg | text |
 |---|---|---|
