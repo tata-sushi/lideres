@@ -220,7 +220,11 @@ Regras dos gráficos:
 - `maintainAspectRatio:false` + `.chart-wrap` com `height:220px` fixa a altura.
 - **Muitas categorias** → não encolha as barras: rode
   `document.getElementById('chart-scroll').style.minWidth = (labels.length * 46) + 'px'`
-  e deixe o `.chart-wrap` rolar (já tem `overflow-x:auto`).
+  e deixe o `.chart-wrap` rolar (já tem `overflow-x:auto`). As barras mantêm a
+  largura original (~46px) e o gráfico gera **rolagem lateral** — nunca comprimem.
+- **Rótulo do eixo X sempre com data** em barra temporal: **dia/mês** (`09/03`) ou
+  **mês/ano** (`09/2026`), nunca só o nome do mês. Ex. recrutamento:
+  `String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear()`.
 - Sempre `if (chartInst) chartInst.destroy()` antes de recriar, e guarde
   `if (typeof Chart === 'undefined') return;` (a lib pode não ter carregado).
 
