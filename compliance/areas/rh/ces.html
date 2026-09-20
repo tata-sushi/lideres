@@ -1328,25 +1328,23 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
   .cs-table tbody tr.expanded td[data-col]:last-of-type { padding-bottom:12px; }
   .cs-table tbody tr.expanded td[data-col="unidade"]  { order:1; }
   .cs-table tbody tr.expanded td[data-col="fixo"]     { order:2; }
-  .cs-table tbody tr.expanded td[data-col="varfixo"]  { order:3; }
-  .cs-table tbody tr.expanded td[data-col="insal"]    { order:4; }
-  .cs-table tbody tr.expanded td[data-col="peric"]    { order:5; }
-  .cs-table tbody tr.expanded td[data-col="gorj"]     { order:6; }
-  .cs-table tbody tr.expanded td[data-col="prem"]     { order:7; }
-  .cs-table tbody tr.expanded td[data-col="pct"]      { order:8; }
+  .cs-table tbody tr.expanded td[data-col="insal"]    { order:3; }
+  .cs-table tbody tr.expanded td[data-col="peric"]    { order:4; }
+  .cs-table tbody tr.expanded td[data-col="gorj"]     { order:5; }
+  .cs-table tbody tr.expanded td[data-col="prem"]     { order:6; }
+  .cs-table tbody tr.expanded td[data-col="bruto"]    { order:7; color:var(--white); font-size:13px; font-weight:700; padding-top:6px; }
+  .cs-table tbody tr.expanded td[data-col="varfixo"]  { order:8; }
   .cs-table tbody tr.expanded td[data-col="varbruto"] { order:9; }
-  .cs-table tbody tr.expanded td[data-col="bruto"]    { order:10; color:var(--white); font-size:13px; font-weight:700; padding-top:6px; padding-bottom:12px; }
   .cs-table td[data-col]::before { font-family:"DM Mono",monospace; font-size:8px; font-weight:500; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.3); }
   .cs-table td[data-col="unidade"]::before { content:"Unidade"; }
   .cs-table td[data-col="fixo"]::before  { content:"Salário Fixo"; }
-  .cs-table td[data-col="varfixo"]::before { content:"Var. Fixo (nível ant.)"; }
   .cs-table td[data-col="insal"]::before { content:"Insalubridade"; }
   .cs-table td[data-col="peric"]::before { content:"Periculosidade"; }
   .cs-table td[data-col="gorj"]::before  { content:"Pts Gorjeta"; }
   .cs-table td[data-col="prem"]::before  { content:"Pts Prêmio"; }
-  .cs-table td[data-col="pct"]::before   { content:"% Bruto"; }
-  .cs-table td[data-col="varbruto"]::before { content:"Var. Bruto (nível ant.)"; }
   .cs-table td[data-col="bruto"]::before { content:"Bruto Aprox."; color:rgba(255,255,255,.4); font-size:8px; font-weight:500; }
+  .cs-table td[data-col="varfixo"]::before { content:"% Fixo (vs anterior)"; }
+  .cs-table td[data-col="varbruto"]::before { content:"% Bruto (vs anterior)"; }
 }
 /* valor borrado para quem não tem permissão (perm_ver_valores). O número não vem do servidor — o blur é só visual. */
 .valor-oculto { filter:blur(5px); -webkit-user-select:none; user-select:none; pointer-events:none; }
@@ -1651,13 +1649,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
                 <th class="left">Unidade</th>
                 <th class="left">Cargo</th>
                 <th class="right">Salário Fixo</th>
-                <th class="right">Var. Fixo</th>
                 <th class="right">Insalubridade</th>
                 <th class="right">Periculosidade</th>
                 <th class="right">Pts Gorjeta</th>
                 <th class="right">Pts Prêmio</th>
                 <th class="right">Bruto Aproximado</th>
-                <th class="right">Var. Bruto</th>
+                <th class="right">% Fixo</th>
                 <th class="right">% Bruto</th>
               </tr>
             </thead>
@@ -2043,15 +2040,29 @@ function fmtPts(n){ return (parseFloat(n) || 0).toLocaleString("pt-BR", {minimum
 // Variação % de um nível para o anterior (mesmo cargo + unidade), no fixo e no bruto.
 function fmtVarPct(p){ if (p == null || isNaN(p)) return ''; return (p > 0 ? '+' : '') + (Math.round(p * 10) / 10).toString().replace('.', ',') + '%'; }
 function csComputeVars(){
-  var last = {};
+  // Agrupa por unidade+departamento e ordena pela hierarquia (a escala de cargos do
+  // departamento na planilha, ex.: Compras 1=Jovem Aprendiz ... 8=Coordenador).
+  // A variação de cada linha é vs o passo anterior dessa escala.
+  var groups = {};
   CS_CARGOS.forEach(function(c){
-    var key = (c.unidade || '') + '||' + (c.cargo_base || c.nome || '');
-    var fixo  = (c.fixo  != null && c.fixo  !== '') ? parseFloat(c.fixo)  : null;
-    var bruto = (c.bruto != null && c.bruto !== '') ? parseFloat(c.bruto) : null;
-    var prev = last[key] || {};
-    c.varFixo  = (prev.fixo  != null && prev.fixo  > 0 && fixo  != null) ? (fixo  / prev.fixo  - 1) * 100 : null;
-    c.varBruto = (prev.bruto != null && prev.bruto > 0 && bruto != null) ? (bruto / prev.bruto - 1) * 100 : null;
-    last[key] = { fixo: (fixo != null ? fixo : prev.fixo), bruto: (bruto != null ? bruto : prev.bruto) };
+    c.varFixo = null; c.varBruto = null;
+    var key = (c.unidade || '') + '||' + (c.dept || '');
+    (groups[key] || (groups[key] = [])).push(c);
+  });
+  function hnum(c){ var h = String(c.hierarquia == null ? '' : c.hierarquia).trim(); return /^[0-9]+(\.[0-9]+)?$/.test(h) ? parseFloat(h) : 999999; }
+  function lvl(c){ var n = String(c.niveis_raw || '').trim().toUpperCase(); return n === 'JR' ? 1 : n === 'PL' ? 2 : (n.indexOf('SR') === 0 ? 3 : 4); }
+  Object.keys(groups).forEach(function(k){
+    var arr = groups[k].slice().sort(function(a,b){ return hnum(a) - hnum(b) || lvl(a) - lvl(b); });
+    var prev = null;
+    arr.forEach(function(c){
+      var fixo  = (c.fixo  != null && c.fixo  !== '') ? parseFloat(c.fixo)  : null;
+      var bruto = (c.bruto != null && c.bruto !== '') ? parseFloat(c.bruto) : null;
+      if (prev) {
+        c.varFixo  = (prev.fixo  > 0 && fixo  != null) ? (fixo  / prev.fixo  - 1) * 100 : null;
+        c.varBruto = (prev.bruto > 0 && bruto != null) ? (bruto / prev.bruto - 1) * 100 : null;
+      }
+      prev = { fixo: (fixo != null ? fixo : (prev ? prev.fixo : null)), bruto: (bruto != null ? bruto : (prev ? prev.bruto : null)) };
+    });
   });
 }
 
@@ -2141,14 +2152,13 @@ function csRecalc() {
       '<td class="cs-unidade" data-col="unidade">'+(c.unidade || dash)+'</td>'+
       '<td class="cargo-name">'+c.nome+'</td>'+
       '<td class="right mono" data-col="fixo">'+brl(fixo)+'</td>'+
-      '<td class="right mono" data-col="varfixo">'+(_podeVerValores ? (c.varFixo!=null ? fmtVarPct(c.varFixo) : dash) : VALOR_BLUR)+'</td>'+
       '<td class="right mono'+(insal?'':' hidden-dash')+'" data-col="insal">'+(_podeVerValores ? (insal ? brl(insal) : dash) : VALOR_BLUR)+'</td>'+
       '<td class="right mono'+(peric?'':' hidden-dash')+'" data-col="peric">'+(_podeVerValores ? (peric ? brl(peric) : dash) : VALOR_BLUR)+'</td>'+
       '<td class="right gorjeta-pts'+(gorj?'':' hidden-dash')+'" data-col="gorj">'+(gorj ? fmtPts(gorj) : dash)+'</td>'+
       '<td class="right premio-pts'+(prem?'':' hidden-dash')+'" data-col="prem">'+(prem ? fmtPts(prem) : dash)+'</td>'+
       '<td class="right valor calculado" data-col="bruto">'+brl(bruto)+'</td>'+
-      '<td class="right mono" data-col="varbruto">'+(_podeVerValores ? (c.varBruto!=null ? fmtVarPct(c.varBruto) : dash) : VALOR_BLUR)+'</td>'+
-      '<td class="right mono" data-col="pct">'+(_podeVerValores ? (c.pct_bruto ? ((parseFloat(c.pct_bruto)*100).toFixed(2)+'%') : dash) : VALOR_BLUR)+'</td>';
+      '<td class="right mono" data-col="varfixo">'+(_podeVerValores ? (c.varFixo!=null ? fmtVarPct(c.varFixo) : dash) : VALOR_BLUR)+'</td>'+
+      '<td class="right mono" data-col="varbruto">'+(_podeVerValores ? (c.varBruto!=null ? fmtVarPct(c.varBruto) : dash) : VALOR_BLUR)+'</td>';
     // mobile: seta expande/recolhe; nome abre detalhes
     (function(cargo, row) {
       var preview = row.querySelector('.cs-mob-preview');
