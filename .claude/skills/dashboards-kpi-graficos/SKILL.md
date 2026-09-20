@@ -216,11 +216,12 @@ Regras dos gráficos:
   `rgba(53,56,63,0.45)` nas demais (padrão do recrutamento).
 - **Sem legenda e sem tooltip nativo** — o valor aparece **acima da barra** via
   `barValueLabelsPlugin` (copie de recrutamento; detalhes em `references/`).
-- **Sem gridlines e sem escala numérica no eixo Y** em todos os gráficos (inclusive
-  linhas): `grid.display:false` nos dois eixos, `ticks.display:false` no Y, `beginAtZero`.
-  O valor vem do **rótulo de dados**, nunca do eixo Y. Exceções: eixo Y = **nome de
-  categoria** (Mono 11px carbon) em barra horizontal/empilhada; e a **teia do radar**
-  (`#E2E2E2`) é estrutura do gráfico, não grade de fundo.
+- **Sem gridlines e sem escala numérica no eixo de valor** em todos os gráficos — o
+  eixo de valor é o **Y** nas verticais/linhas e o **X** nas horizontais/empilhadas:
+  `grid.display:false`, `ticks.display:false` no eixo de valor, `beginAtZero`. O valor
+  vem do **rótulo de dados** — acima/depois da barra e **em cada ponto** das linhas
+  (plugin, Mono 11px/600 carbon) — nunca do eixo. Só o **eixo de categoria** mostra
+  texto (nomes, Mono 11px carbon). A **teia do radar** (`#E2E2E2`) é estrutura, não grade.
 - `maintainAspectRatio:false` + `.chart-wrap` com `height:220px` fixa a altura.
 - **Barras NUNCA comprimem para caber (padrão obrigatório).** Mantêm a largura
   original (~46px) e o gráfico gera **rolagem lateral** para mostrar o restante —
