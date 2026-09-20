@@ -21,6 +21,8 @@ implementação: `compliance/kpis/rh/recrutamento.html`.
   até ~5 numa linha** e quebram sozinhos no mobile (igual à view de entrevistas do
   recrutamento, que usa `.anl-filters-line`). Nada de grid de colunas fixas.
 - **Gráficos = respiro lateral pequeno** (12px no mobile / 24px no desktop), não centralizados.
+- **Título de cada gráfico centralizado** (`.chart-title { text-align:center }`), igual ao
+  `.chart-title` do recrutamento — não alinhado à esquerda.
 - **Respiro no topo dos gráficos:** a 1ª seção de gráficos (`.hero`) tem `padding-top`
   (16px no mobile / 24px no desktop), separando-a da faixa de filtros — o 1º gráfico
   **não fica colado** na divisória (igual ao `padding-top` do `.content` no recrutamento).
