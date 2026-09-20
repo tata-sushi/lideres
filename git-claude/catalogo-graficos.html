@@ -65,8 +65,10 @@
   .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.7px; text-transform: uppercase; color: var(--carbon); font-weight: 700; }
   .chart-where { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 2px; }
   .chart-note { font-size: 11.5px; color: var(--mid); margin-top: 10px; }
-  .chart-wrap { position: relative; height: 210px; margin-top: 10px; min-height: 0; }
+  .chart-wrap { position: relative; height: 210px; margin-top: 10px; min-height: 0; overflow-x: auto; overflow-y: hidden; }
   .chart-wrap > canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+  /* barra vertical de série temporal: barras com largura fixa + rolagem lateral (não comprime) */
+  .chart-scroll { position: relative; height: 100%; }
   .chart-fallback { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; padding: 10px; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); }
   .chart-hint { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-align: center; margin-top: 8px; }
   code { font-family: 'DM Mono', monospace; font-size: 0.9em; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--carbon); }
@@ -108,11 +110,11 @@
   table.mini .nm { font-weight: 600; }
   table.mini .dt { font-family: 'DM Mono', monospace; color: var(--muted); font-size: 11px; }
   /* barra vertical em CSS */
-  .vbars { display: flex; align-items: flex-end; gap: 8px; height: 200px; margin-top: 10px; }
-  .vbars .vb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; }
+  .vbars { display: flex; align-items: flex-end; gap: 8px; height: 200px; margin-top: 10px; overflow-x: auto; }
+  .vbars .vb { flex: 0 0 42px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; }
   .vbars .vb-bar { width: 100%; background: var(--carbon); border-radius: 4px 4px 0 0; min-height: 2px; }
   .vbars .vb-val { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; color: var(--carbon); }
-  .vbars .vb-lbl { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); }
+  .vbars .vb-lbl { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); white-space: nowrap; }
   /* heatmap */
   .heat { margin-top: 10px; overflow-x: auto; }
   .heat-grid { display: grid; grid-template-columns: 34px repeat(7, minmax(22px,1fr)); gap: 3px; min-width: 300px; }
@@ -154,7 +156,7 @@
     </div>
     <div class="chart-card">
       <div class="chart-head"><div><span class="chart-title" id="heroTitle">Entrevistas por Mês</span></div></div>
-      <div class="chart-wrap"><canvas id="cHero"></canvas></div>
+      <div class="chart-wrap"><div class="chart-scroll" id="heroScroll"><canvas id="cHero"></canvas></div></div>
       <div class="chart-hint" id="heroHint">Toque numa barra para filtrar o status por mês</div>
     </div>
     <div class="chart-card">
@@ -279,7 +281,7 @@
   var GRID_OFF={ grid:{display:false}, border:{display:false} }, MONO={ family:'DM Mono', size:10 };
 
   // ── Dados fictícios do hero ────────────────────────────────────────────
-  var MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var MESES=['10/2025','11/2025','12/2025','01/2026','02/2026','03/2026','04/2026','05/2026','06/2026','07/2026','08/2026','09/2026'];
   var DADOS={
     entrevistas:{ titulo:'Entrevistas por Mês', statusTitulo:'Status das Entrevistas', counts:[34,41,28,52,39,61,45,58,37,66,49,33],
       status:[['Aprovado para teste','pill-pos',0.38],['Aguardando entrevista','pill-blue',0.24],['Aguardando devolutiva','pill-amber',0.16],['Não selecionado','pill-red',0.14],['Não compareceu','pill-red',0.08]] },
@@ -294,6 +296,8 @@
     var counts=DADOS[src].counts;
     var bg=counts.map(function(_,i){ return selMes!==-1?(i===selMes?'#35383F':'rgba(53,56,63,0.45)'):'#35383F'; });
     if(heroChart) heroChart.destroy();
+    // barras com largura fixa (46px/mês) → gera rolagem lateral, não comprime
+    var _hs=document.getElementById('heroScroll'); if(_hs) _hs.style.minWidth=(MESES.length*46)+'px';
     heroChart=new Chart(document.getElementById('cHero'), {
       type:'bar', data:{ labels:MESES, datasets:[{ data:counts, backgroundColor:bg, borderWidth:0, borderRadius:5, barPercentage:0.6 }]},
       plugins:[cfOutline, barValueLabels],
@@ -378,7 +382,7 @@
     var ANL={'pill-pos':'Aprovado','pill-blue':'Aguardando','pill-amber':'Em análise','pill-red':'Não selec.'};
     document.getElementById('analitico').innerHTML=AN.map(function(r){ return '<tr><td class="nm">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td><span class="status-badge '+r[3]+'">'+ANL[r[3]]+'</span></td><td class="dt">'+r[4]+'</td></tr>'; }).join('');
 
-    var vb=[['Jan',8],['Fev',12],['Mar',6],['Abr',15],['Mai',10],['Jun',18],['Jul',13],['Ago',9]], vbmax=18;
+    var vb=[['02/2026',8],['03/2026',12],['04/2026',6],['05/2026',15],['06/2026',10],['07/2026',18],['08/2026',13],['09/2026',9]], vbmax=18;
     document.getElementById('vbars').innerHTML=vb.map(function(d){ return '<div class="vb"><span class="vb-val">'+d[1]+'</span><div class="vb-bar" style="height:'+Math.round(d[1]/vbmax*150)+'px"></div><span class="vb-lbl">'+d[0]+'</span></div>'; }).join('');
 
     (function(){
