@@ -113,6 +113,7 @@ body:not([data-view="chamados"]) #view-chamados { display: none; }
 .mnt-lightbox .mnt-lb-prev { left: 16px; }
 .mnt-lightbox .mnt-lb-next { right: 16px; }
 .mnt-lightbox .mnt-lb-count { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); font-family: 'DM Mono', monospace; font-size: 11px; color: rgba(255,255,255,.75); letter-spacing: 0.5px; }
+.mnt-lightbox .mnt-lb-label { position: absolute; top: 20px; left: 20px; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--citric); padding: 4px 10px; background: rgba(53,56,63,.85); border-radius: 100px; }
 .ver-mais-wrap { text-align: center; padding: 10px 0 2px; }
 .btn-ver-mais { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; color: var(--carbon); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 7px 16px; cursor: pointer; }
 .btn-ver-mais:hover { background: var(--bg); }
@@ -526,7 +527,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
             <th>Solicitante</th>
             <th>Categoria</th>
             <th>Chamado</th>
-            <th style="text-align:center;width:56px">Fotos</th>
+            <th style="text-align:center;width:56px">Antes</th>
+            <th style="text-align:center;width:56px">Depois</th>
           </tr></thead>
           <tbody id="mnt-tb-anl"></tbody>
         </table>
@@ -1871,27 +1873,37 @@ function _mntRenderHeat(rows){
 var _MNT_ANL_ROWS = [], _MNT_ANL_PAGE = 20, _MNT_ANL_SHOW = 20;
 var _MNT_LB = { fotos: [], idx: 0 };
 
+function _mntFotosDepois(r){
+  var out = [];
+  var devs = (r && Array.isArray(r.devolutivas)) ? r.devolutivas : [];
+  devs.forEach(function(d){
+    _fotoLista(d).forEach(function(u){ if (u) out.push(u); });
+  });
+  return out;
+}
 function _mntRenderAnl(){
   var el = document.getElementById('mnt-tb-anl'); if (!el) return;
   if (!_MNT_ANL_ROWS.length){
-    el.innerHTML = '<tr><td colspan="5" class="mnt-state">Sem dados</td></tr>';
+    el.innerHTML = '<tr><td colspan="6" class="mnt-state">Sem dados</td></tr>';
   } else {
     var arr = _MNT_ANL_ROWS.slice(0, Math.min(_MNT_ANL_SHOW, _MNT_ANL_ROWS.length));
     el.innerHTML = arr.map(function(r, i){
-      var fotos = _fotoLista(r);
+      var antes  = _fotoLista(r);
+      var depois = _mntFotosDepois(r);
       var iconCam = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
-      var btn;
-      if (fotos.length){
-        btn = '<button class="tbl-fotos-btn" title="'+fotos.length+' foto'+(fotos.length>1?'s':'')+'" onclick="_mntOpenLightbox('+i+')">'+iconCam+(fotos.length>1?'<span class="tbl-fotos-count">'+fotos.length+'</span>':'')+'</button>';
-      } else {
-        btn = '<button class="tbl-fotos-btn" disabled title="Sem fotos">'+iconCam+'</button>';
+      function btn(list, tipo){
+        if (list.length){
+          return '<button class="tbl-fotos-btn" title="'+list.length+' foto'+(list.length>1?'s':'')+' — '+tipo+'" onclick="_mntOpenLightbox('+i+',\''+tipo+'\')">'+iconCam+(list.length>1?'<span class="tbl-fotos-count">'+list.length+'</span>':'')+'</button>';
+        }
+        return '<button class="tbl-fotos-btn" disabled title="Sem foto ('+tipo+')">'+iconCam+'</button>';
       }
       return '<tr>'+
         '<td class="tbl-data">'+_mntEsc(r.data_abertura || '—')+'</td>'+
         '<td class="tbl-nome">'+_mntEsc(r.solicitante || '—')+'</td>'+
         '<td class="tbl-cat">'+_mntEsc(r.categoria || '—')+'</td>'+
         '<td class="tbl-titulo">'+_mntEsc(r.titulo || '—')+'</td>'+
-        '<td class="tbl-fotos">'+btn+'</td>'+
+        '<td class="tbl-fotos">'+btn(antes,'antes')+'</td>'+
+        '<td class="tbl-fotos">'+btn(depois,'depois')+'</td>'+
       '</tr>';
     }).join('');
   }
@@ -1910,20 +1922,23 @@ function _mntRenderAnl(){
 function _mntVerMaisAnl(){ _MNT_ANL_SHOW += _MNT_ANL_PAGE; _mntRenderAnl(); }
 window._mntVerMaisAnl = _mntVerMaisAnl;
 
-function _mntOpenLightbox(rowIdx){
+function _mntOpenLightbox(rowIdx, tipo){
   var r = _MNT_ANL_ROWS[rowIdx]; if (!r) return;
-  var fotos = _fotoLista(r); if (!fotos.length) return;
-  _MNT_LB.fotos = fotos; _MNT_LB.idx = 0;
+  var fotos = (tipo === 'depois') ? _mntFotosDepois(r) : _fotoLista(r);
+  if (!fotos.length) return;
+  _MNT_LB.fotos = fotos; _MNT_LB.idx = 0; _MNT_LB.tipo = tipo || 'antes';
   _mntShowLightbox();
 }
 function _mntShowLightbox(){
   var lb = document.getElementById('mnt-lightbox'); if (!lb) return;
   var img = document.getElementById('mnt-lb-img');
   var cnt = document.getElementById('mnt-lb-count');
+  var lbl = document.getElementById('mnt-lb-label');
   var prev = document.getElementById('mnt-lb-prev');
   var next = document.getElementById('mnt-lb-next');
   var total = _MNT_LB.fotos.length;
   img.src = _MNT_LB.fotos[_MNT_LB.idx];
+  if (lbl) lbl.textContent = _MNT_LB.tipo ? _MNT_LB.tipo.charAt(0).toUpperCase() + _MNT_LB.tipo.slice(1) : '';
   if (cnt) cnt.textContent = total > 1 ? ((_MNT_LB.idx + 1) + ' / ' + total) : '';
   if (prev) prev.style.display = total > 1 ? '' : 'none';
   if (next) next.style.display = total > 1 ? '' : 'none';
@@ -1963,6 +1978,7 @@ carregarDados();
   <button class="mnt-lb-nav mnt-lb-next" id="mnt-lb-next" onclick="_mntLightboxNav(1)" title="Próxima (→)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
   </button>
+  <div class="mnt-lb-label" id="mnt-lb-label"></div>
   <div class="mnt-lb-count" id="mnt-lb-count"></div>
 </div>
 
