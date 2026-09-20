@@ -64,7 +64,7 @@ Fonte base **DM Mono** (salvo indicado); cor **carbon `#35383F`** (salvo indicad
 **Regras firmadas:**
 - **Datas no eixo X:** formato **`dd/mm`** ou **`mm/aa`** (2 dígitos no ano) — nunca `mm/aaaa`.
 - **Eixo de valor** (é o **Y** nas barras verticais/linhas e o **X** nas barras horizontais/empilhadas): **sem grade e sem escala numérica**. O valor vem do **rótulo de dados** — acima da barra (V), após a barra (H) e **em cada ponto** nas linhas — nunca do eixo. Só o **eixo de categoria** mostra texto (nomes, Mono 11px carbon). A **teia do radar** (`#E2E2E2`) é estrutura do gráfico, não grade de fundo.
-- **Barra empilhada:** mostra composição + **legenda**; a escala de valor fica oculta como nos demais. Rótulo por segmento é opcional (segmentos pequenos não comportam número).
+- **Barra empilhada:** mostra composição + **legenda** + **total ao fim da barra** (soma das séries, Mono 11px/600 carbon); a escala de valor fica oculta como nos demais.
 - **Cor:** tudo **carbon**. Única variação = **escurecimento das barras não-selecionadas** (carbon 45%) ao clicar/filtrar no Chart.js. Única exceção de **matiz** no catálogo = o **radar** (2ª série verde `#5AA469`).
 - **Pesos:** título 700 · valor na barra 600 · eixos/legenda/categoria 400.
 - Categoria e legenda **não são obrigatórias** — só aparecem em quem tem; quando aparecem, seguem os tamanhos acima.
