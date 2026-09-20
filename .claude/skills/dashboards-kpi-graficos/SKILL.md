@@ -240,7 +240,23 @@ Cada linha: nome (DM Sans) + contagem (DM Mono tabular). Vazio → `.status-empt
 ## 4. Painel e responsivo
 
 Estrutura do dashboard e espaçamentos por viewport (mobile-first; o mobile é o default,
-o desktop entra em `min-width:768px`):
+o desktop entra em `min-width:768px`).
+
+**Largura: página full-bleed, NÃO centralizada.** Nada de `max-width` + `margin:0 auto`
+numa coluna estreita — o dashboard ocupa a largura toda. Duas zonas com "limites"
+diferentes:
+
+- **KPIs e filtros = faixas full-bleed** (`.kpis-wrap`, `.filters-wrap`/`.dash-filters-wrap`):
+  vão **de margem a margem** (100% da largura), `padding: 14px 20px` interno e
+  `border-bottom` — **encostadas nas laterais**, sem margem externa. (Com cores
+  invertidas: faixa branca, card/campo cinza — ver §2.)
+- **Gráficos = cards com respiro lateral**, dentro do `.dashboard`: **não** encostam nas
+  bordas nem ficam centralizados numa coluna estreita — só uma margem lateral pequena
+  (`chart-card { margin: 0 12px }` no mobile; `.dashboard { padding: 0 24px }` no desktop).
+
+DOM (igual ao `recrutamento.html`): dentro da view, `.kpis-wrap` → `.dash-filters-wrap`
+→ `.dashboard` (com os `.chart-card`). As duas primeiras full-bleed; a `.dashboard` com
+respiro lateral.
 
 ```css
 .dashboard { padding-top: 14px; padding-bottom: 80px; }   /* 80px = espaço p/ FAB */
@@ -293,5 +309,7 @@ Status/estado usa pílula DM Mono `10px`, `border-radius:100px`, com paleta sem�
 - [ ] `chartInst.destroy()` antes de recriar + guarda `typeof Chart`.
 - [ ] Muitas categorias → `min-width` no `.chart-scroll` + scroll lateral (não encolher).
 - [ ] Status/distribuição = tabela (`.status-row`), nunca pizza.
-- [ ] Responsivo: mobile padding lateral 12, desktop 24; `.chart-card` com margem no mobile.
+- [ ] Layout **full-width, não centralizado**: KPIs e filtros = faixas **full-bleed**
+      (encostam nas laterais); gráficos = respiro lateral (12px mobile / 24px desktop).
+- [ ] KPIs/filtros com **cores invertidas** (faixa branca, card/campo cinza) — ver §2.
 - [ ] (Fora do escopo: header/rodapé e acesso por aba/botão — ver **Escopo** no topo.)
