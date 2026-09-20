@@ -55,7 +55,7 @@ Fonte base **DM Mono** (salvo indicado); cor **carbon `#35383F`** (salvo indicad
 | Título do card | DM Mono | 11px | 700 | carbon | centro (UPPERCASE) |
 | **Valores do eixo X** (datas, ratings, números) | DM Mono | **10px** | 400 | carbon | eixo |
 | **Categoria** (nomes no eixo — quando houver) | DM Mono | **11px** | 400 | carbon | eixo |
-| Escala de valor (eixo Y numérico — quando visível) | DM Mono | 10px | 400 | carbon | eixo |
+| Eixo Y — escala numérica | — | — | — | — | **oculto** (o valor vem do rótulo de dados, não do eixo) |
 | **Legenda** (quando houver) | DM Mono | **11px** | 400 | carbon | inferior · boxWidth 12 · padding 12 |
 | Rótulo de valor na barra (plugin) | DM Mono | 11px | **600** | carbon | acima (V) / após a barra (H) |
 | Vértices do radar (pointLabels) | DM Mono | 11px | 400 | carbon | ao redor |
@@ -63,6 +63,7 @@ Fonte base **DM Mono** (salvo indicado); cor **carbon `#35383F`** (salvo indicad
 
 **Regras firmadas:**
 - **Datas no eixo X:** formato **`dd/mm`** ou **`mm/aa`** (2 dígitos no ano) — nunca `mm/aaaa`.
+- **Eixo Y:** **sem grade e sem escala numérica** em todos os gráficos (inclusive linhas — mostram só a tendência). Só aparece **nome de categoria** quando houver (Mono 11px carbon); o valor vem do **rótulo de dados**, nunca do eixo. A **teia do radar** (`#E2E2E2`) é estrutura do gráfico, não grade de fundo.
 - **Cor:** tudo **carbon**. Única variação = **escurecimento das barras não-selecionadas** (carbon 45%) ao clicar/filtrar no Chart.js. Única exceção de **matiz** no catálogo = o **radar** (2ª série verde `#5AA469`).
 - **Pesos:** título 700 · valor na barra 600 · eixos/legenda/categoria 400.
 - Categoria e legenda **não são obrigatórias** — só aparecem em quem tem; quando aparecem, seguem os tamanhos acima.
