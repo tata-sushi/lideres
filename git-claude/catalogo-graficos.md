@@ -26,6 +26,13 @@ implementação: `compliance/kpis/rh/recrutamento.html`.
   **não fica colado** na divisória (igual ao `padding-top` do `.content` no recrutamento).
 - **Cores invertidas na zona de KPI/filtros:** faixa **branca** (`--surface`) com
   **card/campo cinza** (`--bg`) — o inverso dos chart-cards (card branco sobre fundo cinza).
+- **Cor dos gráficos = carbon (monocromático).** O **único** gráfico com cor (matiz)
+  diferente é o **radar** (2 séries: Geral × Liderança). Todos os outros — barras,
+  linha/área, pizza, doughnut, rating, heatmap, nuvem — usam **tons de carbon**
+  (variação por opacidade de `#35383F`), nunca hue própria. No portal real alguns
+  desvios aparecem coloridos (pizza semântica, rating vermelho→verde), mas o **padrão
+  da casa é carbon** — e é isso que o catálogo mostra. Pílulas/badges de status em
+  tabela continuam com cor semântica (não são gráfico).
 - Tokens, tipografia (DM Sans + DM Mono) e paleta: ver a skill `dashboards-kpi-graficos`.
 
 ## Mapeamento dos blocos (na ordem da página)
@@ -47,7 +54,7 @@ implementação: `compliance/kpis/rh/recrutamento.html`.
 | **Banco de Horas** | multi-linha (2 séries: + sólido / − tracejado) | performance, hc | hoje em **SVG à mão** |
 | **Absenteísmo por Mês** | barra vertical em CSS/div | performance | sem Chart.js |
 | **Picos de Abertura** | heatmap dia × hora (opacidade do carbon) | manutenção | sem Chart.js |
-| **Brainstorm de Líderes** | nuvem de palavras (tamanho por frequência, cor por categoria) | cei | sem Chart.js |
+| **Brainstorm de Líderes** | nuvem de palavras (tamanho por frequência, tons de carbon) | cei | sem Chart.js |
 | **Analítico — candidaturas** | tabela | páginas com aba Analítico | **padrão** |
 
 ## Padrão x desvio (resumo)
