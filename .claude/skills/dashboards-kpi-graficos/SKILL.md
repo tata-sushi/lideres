@@ -251,6 +251,12 @@ Regras dos gráficos:
   `800`** no Google Fonts (`family=DM+Sans:wght@...;800`), senão o browser cai pra 700. Legenda
   (quando houver): `boxWidth:12, padding:12`. **Nada de cinza** nos rótulos de eixo — tudo carbon
   (a única variação de cor é o escurecimento das barras não-selecionadas ao filtrar).
+- **Fonte antes de desenhar (evita flash no canvas).** O canvas do Chart.js **não** redesenha
+  quando a webfont chega, então desenhe os gráficos só depois da DM Sans pronta: no `<head>`,
+  `preconnect` para `fonts.googleapis.com` e `fonts.gstatic.com`; no boot, aguarde
+  `document.fonts.load('800 11px "DM Sans"')` (e `'400 12px "DM Sans"'`) antes do `new Chart(...)`,
+  com um `setTimeout` de ~2s como fallback. Sem isso, o rótulo aparece numa fonte errada no
+  carregamento e só corrige no próximo redraw.
 - **Botão "i" de informação (padrão).** Todo gráfico tem um `.chart-info-btn` no canto
   **superior direito** (cinza `#CFCFCF`, hover `--muted`, ícone "i" em círculo, SVG 15px,
   `position:absolute; top:10px; right:12px`) que abre o **modal padrão** do

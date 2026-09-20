@@ -101,6 +101,10 @@ Cor **carbon `#35383F`** em quase tudo (muted `#999` só em dica/subtítulo). To
   categoria/legenda/`pointLabels`, `SANS11={family:'DM Sans',size:11}` no eixo X, e os plugins
   de rótulo desenham em `'800 11px "DM Sans", sans-serif'`. **Peso 800 exige carregar a DM Sans
   com `800`** no Google Fonts (`family=DM+Sans:wght@...;800`), senão o browser cai pra 700.
+- **Fonte antes de desenhar (sem flash no canvas).** O canvas do Chart.js não redesenha quando
+  a fonte chega; então: `preconnect` para `fonts.googleapis.com`/`fonts.gstatic.com` no `<head>`
+  e desenhar os gráficos só depois de `document.fonts.load('800 11px "DM Sans"')` (com fallback
+  de ~2s). Sem isso, o rótulo do gráfico pisca numa fonte errada no carregamento.
 - **Datas no eixo X:** formato **`dd/mm`** ou **`mm/aa`** (2 dígitos no ano) — nunca `mm/aaaa`.
 - **Eixo de valor** (é o **Y** nas barras verticais/linhas e o **X** nas barras horizontais/empilhadas): **sem grade e sem escala numérica**. O valor vem do **rótulo de dados** — acima da barra (V), após a barra (H) e **em cada ponto** nas linhas — nunca do eixo. Só o **eixo de categoria** mostra texto (nomes, **DM Sans 12px** carbon). A **teia do radar** (`#E2E2E2`) é estrutura do gráfico, não grade de fundo.
 - **Barra empilhada:** mostra composição + **legenda** + **total ao fim da barra** (soma das séries, DM Sans 11px/800 carbon); a escala de valor fica oculta como nos demais.
