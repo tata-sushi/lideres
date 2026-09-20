@@ -96,14 +96,20 @@
   /* botão "i" de informação (padrão do portal) + modal */
   .chart-info-btn { position: absolute; top: 10px; right: 12px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; padding: 3px; color: #CFCFCF; cursor: pointer; line-height: 0; }
   .chart-info-btn:hover { color: var(--muted); }
-  .info-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 400; display: none; align-items: flex-end; justify-content: center; }
-  .info-overlay.open { display: flex; }
-  .info-box { background: var(--surface); border-radius: 16px 16px 0 0; width: 100%; max-width: 480px; max-height: 80vh; overflow-y: auto; padding: 16px 20px 22px; }
-  .info-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-  .info-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.7px; text-transform: uppercase; color: var(--carbon); font-weight: 700; }
-  .info-close { width: 28px; height: 28px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--carbon); flex-shrink: 0; }
-  .info-text { font-size: 13px; color: var(--mid); line-height: 1.55; }
-  @media (min-width: 600px) { .info-overlay { align-items: center; } .info-box { border-radius: 16px; } }
+  /* modal de info — mesmo padrão do recrutamento */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 400; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
+  .modal-overlay.active { opacity: 1; visibility: visible; }
+  .modal { background: var(--surface); border-radius: 12px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,0.2); }
+  .modal-header { display: flex; align-items: flex-start; justify-content: flex-end; padding: 14px 16px 0; }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; transition: color 0.15s; flex-shrink: 0; line-height: 0; }
+  .modal-close:hover { color: var(--carbon); }
+  .modal-body { padding: 4px 20px 20px; }
+  .info-note { font-size: 12.5px; color: var(--carbon); font-weight: 600; line-height: 1.5; margin-bottom: 12px; text-align: center; }
+  .info-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .info-table th, .info-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .info-table th { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--carbon); font-weight: 600; }
+  .info-table td { color: var(--carbon); font-weight: 600; }
+  .info-table td:first-child { color: var(--muted); font-weight: 500; width: 22px; }
   code { font-family: 'DM Mono', monospace; font-size: 0.9em; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--carbon); }
 
   .badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; flex-shrink: 0; }
@@ -310,10 +316,10 @@
   <div class="tbl-card"><div class="tbl-scroll"><table class="mini"><thead><tr><th>Candidato</th><th>Vaga</th><th>Unidade</th><th>Status</th><th>Data</th></tr></thead><tbody id="analitico"></tbody></table></div></div>
 </div>
 
-<div class="info-overlay" id="infoOverlay" onclick="if(event.target===this)closeInfo()">
-  <div class="info-box">
-    <div class="info-head"><span class="info-title" id="infoTitle"></span><button class="info-close" onclick="closeInfo()" aria-label="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-    <div class="info-text" id="infoText"></div>
+<div class="modal-overlay" id="info-overlay" onclick="if(event.target===this)closeInfoGrafico()">
+  <div class="modal">
+    <div class="modal-header"><button class="modal-close" onclick="closeInfoGrafico()" aria-label="Fechar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body" id="info-body"></div>
   </div>
 </div>
 
@@ -347,35 +353,47 @@
     ctx.restore(); } };
   var GRID_OFF={ grid:{display:false}, border:{display:false} }, MONO={ family:'DM Mono', size:10 }, MONO11={ family:'DM Mono', size:11 };
 
-  // ── Botão "i" de informação (padrão) + modal ──────────────────────────
-  var INFO = {
-    'Entrevistas por Mês':'Barra vertical (padrão da casa): quantidade por mês, carbon, largura fixa com rolagem lateral e rótulo de valor acima. Toque numa barra para filtrar o status.',
-    'Testes por Mês':'Barra vertical (padrão): testes por mês, carbon, com rolagem lateral. Toque numa barra para filtrar o status.',
-    'Status das Entrevistas':'Distribuição por status em tabela + pílulas (nunca pizza). Cada linha traz o status e a contagem.',
-    'Status dos Testes':'Distribuição por status em tabela + pílulas (nunca pizza).',
-    'Vagas por Unidade':'Barra horizontal: o valor aparece ao fim de cada barra; a unidade é a categoria no eixo. Sem escala e sem grade.',
-    'CLT × PJ por Unidade':'Barra empilhada (2 séries): composição CLT × PJ por unidade, com total ao fim da barra e legenda embaixo.',
-    'Status das Demandas':'Pizza (desvio; o padrão manda tabela). Fatias em tons de carbon.',
-    'Identificou-se?':'Doughnut (desvio). Duas fatias em tons de carbon, legenda embaixo.',
-    'Avaliação por Nota':'Barra vertical por nota (1→5) em rampa de carbon (claro→escuro), rótulo de valor acima.',
-    'Turnover Mensal':'Linha + área (carbon). Eixo Y oculto; o valor aparece em cada ponto.',
-    'Chamados por Categoria':'Barras em CSS/div (carbon), valor à direita. Sem Chart.js.',
-    'Funil de Recrutamento':'Funil em divs (carbon): cada etapa afunila do topo para a base.',
-    'Clima por Tema':'Radar de 2 séries (Geral × Liderança) — único gráfico com cor além do carbon.',
-    'Banco de Horas':'Multi-linha (2 séries): positiva sólida e negativa tracejada; rótulo em cada ponto.',
-    'Absenteísmo por Mês':'Barra vertical em CSS (carbon), largura fixa com rolagem lateral e rótulo de valor acima.',
-    'Picos de Abertura':'Heatmap dia × hora: intensidade pela opacidade do carbon.',
-    'Brainstorm de Líderes':'Nuvem de palavras: tamanho por frequência, tons de carbon.',
-    'Agenda do Mês':'Calendário mensal: grade 7×6 com pílulas de evento por categoria e o dia de hoje destacado.'
+  // ── Botão "i" de informação (mesmo padrão do recrutamento) ────────────
+  var _INFO_GRAFICOS = {
+    'Entrevistas por Mês':'<div class="info-note">Entrevistas realizadas por mês (últimos 12 meses). Toque numa barra para filtrar o status.</div>',
+    'Testes por Mês':'<div class="info-note">Testes realizados por mês (últimos 12 meses). Toque numa barra para filtrar o status.</div>',
+    'Status das Entrevistas':'<div class="info-note">Distribuição das entrevistas por status — tabela + pílulas (nunca pizza).</div>',
+    'Status dos Testes':'<div class="info-note">Distribuição dos testes por status — tabela + pílulas.</div>',
+    'Vagas por Unidade':'<div class="info-note">Total de vagas em aberto por unidade. Valor ao fim de cada barra.</div>',
+    'CLT × PJ por Unidade':'<div class="info-note">Composição de contratos <b>CLT × PJ</b> por unidade, com total ao fim da barra.</div>',
+    'Status das Demandas':'<div class="info-note">Distribuição das demandas por status.</div>',
+    'Identificou-se?':'<div class="info-note">Proporção de manifestações identificadas × anônimas.</div>',
+    'Avaliação por Nota':'<div class="info-note">Distribuição das avaliações por nota (1 a 5).</div>',
+    'Turnover Mensal':'<div class="info-note">Taxa de turnover mês a mês. Valor em cada ponto.</div>',
+    'Chamados por Categoria':'<div class="info-note">Volume de chamados por categoria.</div>',
+    'Funil de Recrutamento':
+      '<div class="info-note">Dados a partir de <b>01/2026</b></div>'+
+      '<table class="info-table"><thead><tr><th>#</th><th>Etapa</th><th>Medidas</th></tr></thead><tbody>'+
+      '<tr><td>1</td><td>Candidatos contatados</td><td>Todos candidatos contatados</td></tr>'+
+      '<tr><td>2</td><td>Candidatos que responderam</td><td>Candidatos que responderam, sendo selecionados ou não para entrevista</td></tr>'+
+      '<tr><td>3</td><td>Entrevistas agendadas</td><td>Candidatos que passaram no recrutamento e tiveram entrevista agendada</td></tr>'+
+      '<tr><td>4</td><td>Entrevistas realizadas</td><td>Candidatos que compareceram nas entrevistas, sendo selecionados ou não para a próxima fase</td></tr>'+
+      '<tr><td>5</td><td>Aprovados na entrevista</td><td>Candidatos que foram aprovados nas entrevistas pelos líderes</td></tr>'+
+      '<tr><td>6</td><td>Testes agendados</td><td>Candidatos que foram aprovados em entrevistas e não possuem restrições</td></tr>'+
+      '<tr><td>7</td><td>Testes realizados</td><td>Candidatos que compareceram ao teste, sendo selecionados ou não para contratação</td></tr>'+
+      '<tr><td>8</td><td>Referências aprovadas</td><td>Candidatos aprovados em testes e com boas referências</td></tr>'+
+      '<tr><td>9</td><td>Contratações</td><td>Candidatos que passaram no processo seletivo e foram contratados</td></tr>'+
+      '</tbody></table>',
+    'Clima por Tema':'<div class="info-note">Clima organizacional por tema — <b>Geral × Liderança</b> (radar).</div>',
+    'Banco de Horas':'<div class="info-note">Saldo do banco de horas por semana — positivo × negativo.</div>',
+    'Absenteísmo por Mês':'<div class="info-note">Faltas/ausências por mês.</div>',
+    'Picos de Abertura':'<div class="info-note">Concentração de chamados por dia da semana × hora (heatmap).</div>',
+    'Brainstorm de Líderes':'<div class="info-note">Temas mais citados pelos líderes — tamanho por frequência.</div>',
+    'Agenda do Mês':'<div class="info-note">Eventos do mês por categoria. O dia de hoje aparece destacado.</div>'
   };
-  function abrirInfo(key){ document.getElementById('infoTitle').textContent=key; document.getElementById('infoText').textContent=INFO[key]||'Informações do gráfico.'; document.getElementById('infoOverlay').classList.add('open'); document.body.style.overflow='hidden'; }
-  function closeInfo(){ document.getElementById('infoOverlay').classList.remove('open'); document.body.style.overflow=''; }
+  function abrirInfoGrafico(key){ document.getElementById('info-body').innerHTML = _INFO_GRAFICOS[key] || '<div class="info-note">Informações do gráfico.</div>'; document.getElementById('info-overlay').classList.add('active'); document.body.style.overflow='hidden'; }
+  function closeInfoGrafico(){ document.getElementById('info-overlay').classList.remove('active'); document.body.style.overflow=''; }
   (function(){
     var ICON='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
     Array.prototype.forEach.call(document.querySelectorAll('.chart-card, .cal-card'), function(card){
       var t=card.querySelector('.chart-title'); if(!t) return;
       var btn=document.createElement('button'); btn.className='chart-info-btn'; btn.title='Informações do gráfico'; btn.setAttribute('aria-label','Informações'); btn.innerHTML=ICON;
-      btn.addEventListener('click', function(){ abrirInfo(t.textContent.trim()); });
+      btn.addEventListener('click', function(){ abrirInfoGrafico(t.textContent.trim()); });
       card.insertBefore(btn, card.firstChild);
     });
   })();

@@ -243,9 +243,11 @@ Regras dos gráficos:
   variação de cor é o escurecimento das barras não-selecionadas ao filtrar).
 - **Botão "i" de informação (padrão).** Todo gráfico tem um `.chart-info-btn` no canto
   **superior direito** (cinza `#CFCFCF`, hover `--muted`, ícone "i" em círculo, SVG 15px,
-  `position:absolute; top:10px; right:12px`) que abre um **modal** explicando o gráfico
-  (copie de `recrutamento.html`: `abrirInfoGrafico`/`closeInfoGrafico` + overlay). O card
-  precisa de `position:relative`.
+  `position:absolute; top:10px; right:12px`) que abre o **modal padrão** do
+  `recrutamento.html` — `.modal-overlay`/`.modal` + `abrirInfoGrafico`/`closeInfoGrafico`
+  (toggle `.active`), com conteúdo em `.info-note` (frase-resumo) e, quando fizer sentido,
+  uma `.info-table` (`# / Etapa / Medidas`, ex.: etapas do funil). O card precisa de
+  `position:relative`.
 - Sempre `if (chartInst) chartInst.destroy()` antes de recriar, e guarde
   `if (typeof Chart === 'undefined') return;` (a lib pode não ter carregado).
 
