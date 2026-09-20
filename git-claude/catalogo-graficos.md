@@ -40,6 +40,13 @@ implementação: `compliance/kpis/rh/recrutamento.html`.
 - **Respiro no topo dos gráficos:** a 1ª seção de gráficos (`.hero`) tem `padding-top`
   (16px no mobile / 24px no desktop), separando-a da faixa de filtros — o 1º gráfico
   **não fica colado** na divisória (igual ao `padding-top` do `.content` no recrutamento).
+- **Espaçamento entre gráficos = 12px** em tudo: entre colunas, entre linhas e **entre
+  as seções** (hero → galeria → tabela; `gap:12px` + `margin-top:12px`). Nunca deixar 0
+  (seções coladas) — foi um bug real.
+- **Mesma linha = mesmo tipo ou, no mínimo, mesma altura.** Nunca pareie um gráfico curto
+  com um alto (ex.: barra + heatmap). Gráficos **altos ou de altura variável** (heatmap,
+  calendário, nuvem) ocupam a **linha inteira** (`.wide` = `grid-column:1/-1`, jogado pro
+  fim via `order`), pra não sobrar espaço vazio ao lado de um card curto.
 - **Cores invertidas na zona de KPI/filtros:** faixa **branca** (`--surface`) com
   **card/campo cinza** (`--bg`) — o inverso dos chart-cards (card branco sobre fundo cinza).
 - **Cor dos gráficos = carbon (monocromático).** O **único** gráfico com cor (matiz)
@@ -89,7 +96,7 @@ Fonte base **DM Mono** (salvo indicado); cor **carbon `#35383F`** (salvo indicad
 | **Identificou-se?** | doughnut | ouvidoria | **desvio** (legenda visível + plugin datalabels externo) |
 | **Avaliação por Nota** | barra multicolor (nota 1→5, vermelho→verde) | desligamentos (avaliações) | desvio de cor |
 | **Turnover Mensal** | linha + área | semanal, hc, hc2 | hoje em **SVG à mão** (não Chart.js) |
-| **Chamados por Categoria** | barras em CSS/div (`.bar-fill`) | medicina, demandas, absenteísmo, solicitações, manutenção | sem Chart.js |
+| **Chamados por Categoria** | **tabela simples** (nome + contagem, como "Status dos Testes") | páginas de chamados por categoria | volume por categoria (não usar barras em CSS) |
 | **Funil de Recrutamento** | funil em `<div>` | recrutamento, recrutamento-novo | sem Chart.js |
 | **Clima por Tema** | radar (2 séries: Geral × Liderança) | cei (Cultura & Clima) | hoje em **SVG à mão** |
 | **Banco de Horas** | multi-linha (2 séries: + sólido / − tracejado) | performance, hc | hoje em **SVG à mão** |
@@ -98,7 +105,7 @@ Fonte base **DM Mono** (salvo indicado); cor **carbon `#35383F`** (salvo indicad
 | **Brainstorm de Líderes** | nuvem de palavras (tamanho por frequência, tons de carbon) | cei | sem Chart.js |
 | **Agenda do Mês** | calendário mensal (grid 7×6, pílulas de evento por categoria, estados hoje/outro-mês) | agenda | tipo próprio (não é gráfico de métrica; pílulas de evento seguem cor de categoria, como as pílulas de status) |
 | **Analítico — candidaturas** | tabela (status em **pílula**) | páginas com aba Analítico | **padrão** |
-| **Pílulas de Status** (seção) | pílulas semânticas (carbon / azul / âmbar / vermelho) | só na tabela do Analítico | referência do design system |
+| **Pílulas de Status** (seção) | pílulas semânticas — carbon = positivo · azul = não iniciado · âmbar = iniciado com pendências · vermelho = negativo | só na tabela do Analítico | referência do design system |
 
 ## Padrão x desvio (resumo)
 
