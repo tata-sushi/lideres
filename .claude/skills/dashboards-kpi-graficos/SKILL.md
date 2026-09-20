@@ -251,6 +251,10 @@ Regras dos gráficos:
   (toggle `.active`), com conteúdo em `.info-note` (frase-resumo) e, quando fizer sentido,
   uma `.info-table` (`# / Etapa / Medidas`, ex.: etapas do funil). O card precisa de
   `position:relative`.
+- **Espaçamento e disposição.** 12px entre gráficos (colunas, linhas e **entre seções** —
+  `gap:12px` + `margin-top:12px`; nunca 0). **Mesma linha = mesmo tipo ou, no mínimo, mesma
+  altura** — nunca pareie um gráfico curto com um alto (ex.: barra + heatmap). Gráficos
+  altos/de altura variável (heatmap, calendário, nuvem) vão **full-width** (`grid-column:1/-1`).
 - Sempre `if (chartInst) chartInst.destroy()` antes de recriar, e guarde
   `if (typeof Chart === 'undefined') return;` (a lib pode não ter carregado).
 
@@ -319,12 +323,12 @@ Status/estado usa pílula DM Mono `10px`, `border-radius:100px`, com paleta sem�
 na **tabela completa do analítico** (e numa seção de referência), **não** nas tabelas
 compactas de status, que mostram só o nome + a contagem (`.status-name`):
 
-| Uso | bg | text |
+| Significado | bg | text |
 |---|---|---|
-| Positivo / aprovado | `#35383F` | `#CFFF00` |
-| Pendente / aguardando | `#E8F0FA` | `#1A3A5C` |
-| Atenção / em análise | `#FFF4DC` | `#7A4A00` |
-| Negativo / rejeitado | `#FDEAEA` | `#7A1A1A` |
+| **Positivo** (aprovado, concluído) | `#35383F` | `#CFFF00` |
+| **Não iniciado** (processo que ainda não começou) | `#E8F0FA` | `#1A3A5C` |
+| **Iniciado com pendências / ressalvas** | `#FFF4DC` | `#7A4A00` |
+| **Negativo** (situação negativa) | `#FDEAEA` | `#7A1A1A` |
 
 ```css
 .status-badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; flex-shrink: 0; }
