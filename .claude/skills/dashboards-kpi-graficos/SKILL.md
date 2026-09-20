@@ -218,10 +218,14 @@ Regras dos gráficos:
   `barValueLabelsPlugin` (copie de recrutamento; detalhes em `references/`).
 - **Sem gridlines** (x e y `grid.display:false`); eixo Y sem ticks; `beginAtZero`.
 - `maintainAspectRatio:false` + `.chart-wrap` com `height:220px` fixa a altura.
-- **Muitas categorias** → não encolha as barras: rode
+- **Barras NUNCA comprimem para caber (padrão obrigatório).** Mantêm a largura
+  original (~46px) e o gráfico gera **rolagem lateral** para mostrar o restante —
+  jamais encolher as barras para tudo caber na largura do card:
   `document.getElementById('chart-scroll').style.minWidth = (labels.length * 46) + 'px'`
-  e deixe o `.chart-wrap` rolar (já tem `overflow-x:auto`). As barras mantêm a
-  largura original (~46px) e o gráfico gera **rolagem lateral** — nunca comprimem.
+  e deixe o `.chart-wrap` rolar (já tem `overflow-x:auto`).
+  **Cuidado (grid/flex):** o card do gráfico precisa de `min-width:0` (e, se for grid,
+  colunas `minmax(0, 1fr)`), senão a barra larga empurra a largura da **página inteira**
+  em vez de rolar por dentro do card.
 - **Rótulo do eixo X sempre com data** em barra temporal: **dia/mês** (`09/03`) ou
   **mês/ano** (`09/2026`), nunca só o nome do mês. Ex. recrutamento:
   `String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear()`.

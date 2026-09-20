@@ -28,6 +28,8 @@ implementação: `compliance/kpis/rh/recrutamento.html`.
   horizontal** (assim como as barras horizontais mantêm altura fixa). Padrão Chart.js:
   `chart-scroll.style.minWidth = nº_barras * 46 + 'px'` dentro de `.chart-wrap`
   (`overflow-x:auto`); em barra CSS, a coluna é `flex: 0 0 42px` num container `overflow-x:auto`.
+  **Cuidado:** o `.chart-card` precisa de `min-width:0` (e o grid, colunas `minmax(0, 1fr)`),
+  senão a barra larga empurra a largura da **página inteira** em vez de rolar por dentro do card.
 - **Rótulo do eixo X sempre com data:** **dia/mês** (`09/03`) ou **mês/ano** (`09/2026`),
   nunca só o nome do mês. (Ver `getMonthDataRecrut` no recrutamento: `MM/AAAA`.)
 - **Respiro no topo dos gráficos:** a 1ª seção de gráficos (`.hero`) tem `padding-top`
