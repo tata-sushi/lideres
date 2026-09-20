@@ -95,6 +95,14 @@ body:not([data-view="chamados"]) #view-chamados { display: none; }
 
 .mnt-state { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px; font-family: 'DM Mono', monospace; letter-spacing: 0.06em; text-transform: uppercase; }
 
+/* Pizza (Categoria) */
+.mnt-pie-wrap { position: relative; height: 240px; display: flex; align-items: center; justify-content: center; }
+.mnt-pie-wrap canvas { max-width: 240px; max-height: 240px; }
+.mnt-pie-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 14px; margin-top: 12px; padding: 0 8px; }
+.mnt-pie-leg { display: inline-flex; align-items: center; gap: 6px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 400; color: var(--carbon); }
+.mnt-pie-leg i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.mnt-pie-leg b { font-weight: 800; font-variant-numeric: tabular-nums; }
+
 @media (min-width: 768px) { .kpis-charts { padding: 14px 32px 60px; } }
 
 /* KPI */
@@ -469,7 +477,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <i style="background:var(--bg)"></i><i style="background:rgba(53,56,63,.30)"></i><i style="background:rgba(53,56,63,.55)"></i><i style="background:rgba(53,56,63,.80)"></i><i style="background:rgba(53,56,63,1)"></i>
         <span>mais</span></div>
     </div>
-    <div class="chart-card"><div class="chart-title">Chamados por categoria</div><div class="chart-wrap"><div class="chart-scroll" id="mnt-scroll-cat"><canvas id="mnt-canvas-cat"></canvas></div></div></div>
+    <div class="chart-card"><div class="chart-title">Chamados por categoria</div><div class="mnt-pie-wrap"><canvas id="mnt-canvas-cat"></canvas></div><div class="mnt-pie-legend" id="mnt-pie-legend-cat"></div></div>
     <div class="chart-card"><div class="chart-title">Chamados por unidade</div><div class="chart-wrap"><div class="chart-scroll" id="mnt-scroll-uni"><canvas id="mnt-canvas-uni"></canvas></div></div></div>
     <div class="chart-card"><div class="chart-title">Chamados por departamento</div><div class="chart-wrap"><div class="chart-scroll" id="mnt-scroll-dep"><canvas id="mnt-canvas-dep"></canvas></div></div></div>
     <div class="chart-card">
@@ -1537,6 +1545,57 @@ function _mntChartBarH(canvasId, labels, values, scrollId){
   });
 }
 
+// Plugin: rótulo do valor no meio da fatia (>=6% pra não sobrepor)
+var _mntPieValueLabelsPlugin = {
+  id: '_mntPieValueLabels',
+  afterDatasetsDraw: function(chart){
+    var ctx = chart.ctx;
+    var meta = chart.getDatasetMeta(0);
+    if (!meta || !meta.data) return;
+    var total = chart.data.datasets[0].data.reduce(function(a,b){ return a + (b||0); }, 0);
+    if (!total) return;
+    ctx.save();
+    ctx.font = '800 12px "DM Sans", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    meta.data.forEach(function(el, i){
+      var v = chart.data.datasets[0].data[i];
+      if (v == null || v === 0) return;
+      if (v / total < 0.06) return;
+      var p = el.tooltipPosition();
+      var t = i / meta.data.length;
+      ctx.fillStyle = t < 0.5 ? '#FFFFFF' : '#35383F';
+      ctx.fillText(String(v).replace('.', ','), p.x, p.y);
+    });
+    ctx.restore();
+  }
+};
+
+// Paleta de cinzas para pizza — carbon indo pra claro (mantém identidade do portal)
+var _MNT_PIE_COLORS = ['#35383F','#4E5058','#666770','#7F808A','#9B9CA5','#B4B5BD','#CACBD1','#DDDDE1'];
+
+function _mntChartPie(canvasId, legendId, labels, values){
+  if (typeof Chart === 'undefined') return;
+  var cv = document.getElementById(canvasId); if (!cv) return;
+  if (_mntCharts[canvasId]) _mntCharts[canvasId].destroy();
+  var colors = labels.map(function(_, i){ return _MNT_PIE_COLORS[i % _MNT_PIE_COLORS.length]; });
+  _mntCharts[canvasId] = new Chart(cv, {
+    type: 'pie',
+    data: { labels: labels, datasets: [{ data: values, backgroundColor: colors, borderColor: '#FFFFFF', borderWidth: 2 }] },
+    plugins: [_mntPieValueLabelsPlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } }
+    }
+  });
+  var leg = document.getElementById(legendId);
+  if (leg){
+    leg.innerHTML = labels.map(function(l, i){
+      return '<span class="mnt-pie-leg"><i style="background:'+colors[i]+'"></i>'+_mntEsc(l)+' <b>'+values[i]+'</b></span>';
+    }).join('');
+  }
+}
+
 function _mntChartBarV(canvasId, labels, values, scrollId){
   if (typeof Chart === 'undefined') return;
   var cv = document.getElementById(canvasId); if (!cv) return;
@@ -1659,7 +1718,7 @@ function _mntDrawCharts() {
   var cat = _mntContagem('categoria');
   var uni = _mntContagem('unidade');
   var dep = _mntContagem('departamento');
-  _mntChartBarV('mnt-canvas-cat', cat.map(function(x){return x.label;}), cat.map(function(x){return x.n;}), 'mnt-scroll-cat');
+  _mntChartPie('mnt-canvas-cat', 'mnt-pie-legend-cat', cat.map(function(x){return x.label;}), cat.map(function(x){return x.n;}));
   _mntChartBarH('mnt-canvas-uni', uni.map(function(x){return x.label;}), uni.map(function(x){return x.n;}), 'mnt-scroll-uni');
   _mntChartBarH('mnt-canvas-dep', dep.map(function(x){return x.label;}), dep.map(function(x){return x.n;}), 'mnt-scroll-dep');
 
