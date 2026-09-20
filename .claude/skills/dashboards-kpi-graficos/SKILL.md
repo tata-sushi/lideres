@@ -53,10 +53,10 @@ paleta fixa dos status/pílulas, na §5).
 body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
 ```
 
-Fontes (no `<head>`): **DM Sans** (texto) + **DM Mono** (rótulos, números, pílulas).
+Fontes (no `<head>`): **DM Sans** (texto e **números** dos gráficos/tabelas — carregar até **800**) + **DM Mono** (só título do card, pílulas e chrome de KPI/filtro).
 
 ```html
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 ```
 
 Convenções de tipografia:
@@ -204,7 +204,7 @@ chartInst = new Chart(canvas, {
     layout: { padding: { top: 18 } },
     plugins: { legend: { display: false }, tooltip: { enabled: false } },
     scales: {
-      x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Mono', size: 10 } } },
+      x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Sans', size: 11 } } },
       y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
     }
   }
@@ -223,7 +223,7 @@ Regras dos gráficos:
   eixo de valor é o **Y** nas verticais/linhas e o **X** nas horizontais/empilhadas:
   `grid.display:false`, `ticks.display:false` no eixo de valor, `beginAtZero`. O valor
   vem do **rótulo de dados** — acima/depois da barra e **em cada ponto** das linhas
-  (plugin, Mono 11px/600 carbon) — nunca do eixo. Só o **eixo de categoria** mostra
+  (plugin, **DM Sans 11px/800** carbon) — nunca do eixo. Só o **eixo de categoria** mostra
   texto (nomes, em **DM Sans 12px** carbon — ver Tipografia). A **teia do radar**
   (`#E2E2E2`) é estrutura, não grade.
 - `maintainAspectRatio:false` + `.chart-wrap` com `height:220px` fixa a altura.
@@ -240,17 +240,17 @@ Regras dos gráficos:
 - **Rótulo do eixo X sempre com data** em série temporal: **`dd/mm`** (`09/03`) ou
   **`mm/aa`** (`09/26`) — 2 dígitos no ano, nunca `mm/aaaa` nem só o nome do mês.
   Ex.: `String(mes).padStart(2,'0') + '/' + String(ano).slice(-2)`.
-- **Tipografia (padrão): nome em DM Sans, número em DM Mono.** Cor **carbon** em tudo.
-  Texto que é **nome/palavra** — categoria no eixo Y das barras horizontais, vértices do
-  radar (`pointLabels`) e **todas as legendas** — usa **DM Sans 12px** (a mesma fonte da
-  tabela simples `.status-name`), porque nome próprio em monoespaçada fica ruim de ler.
-  Texto que é **número** — valores/datas do eixo X (**10px**), rótulo de valor na barra/ponto
-  (**11px/600**), notas, totais — continua em **DM Mono**. Título do card = DM Mono 11px/700;
-  demais pesos 400. No JS: `SANS12={family:'DM Sans',size:12}` em
-  `ticks.font`/`legend.labels.font`/`pointLabels.font`; `MONO={family:'DM Mono',size:10}`
-  nos eixos de valor/data e nos plugins de rótulo. Legenda (quando houver):
-  `boxWidth:12, padding:12`. **Nada de cinza** nos rótulos de eixo — tudo carbon (a única
-  variação de cor é o escurecimento das barras não-selecionadas ao filtrar).
+- **Tipografia (padrão): tudo DM Sans; o peso faz a hierarquia.** Cor **carbon** em tudo.
+  Na área de gráfico/tabela o texto é **DM Sans**, com **número/valor em peso 800** (rótulo de
+  valor na barra/ponto via plugin, total da empilhada, contagem `.status-count`) e
+  **nome/eixo/legenda/categoria em 400** (nomes no eixo, datas do eixo X em **11px**, vértices
+  do radar `pointLabels`, legendas, `.status-name`). **Únicas exceções em DM Mono:** título do
+  card (11px/700) e pílulas/badges (10px/500). No JS: `SANS12={family:'DM Sans',size:12}` em
+  categoria/legenda/`pointLabels`, `SANS11={family:'DM Sans',size:11}` no eixo X; os plugins de
+  rótulo desenham em `'800 11px "DM Sans", sans-serif'`. **Peso 800 exige carregar a DM Sans com
+  `800`** no Google Fonts (`family=DM+Sans:wght@...;800`), senão o browser cai pra 700. Legenda
+  (quando houver): `boxWidth:12, padding:12`. **Nada de cinza** nos rótulos de eixo — tudo carbon
+  (a única variação de cor é o escurecimento das barras não-selecionadas ao filtrar).
 - **Botão "i" de informação (padrão).** Todo gráfico tem um `.chart-info-btn` no canto
   **superior direito** (cinza `#CFCFCF`, hover `--muted`, ícone "i" em círculo, SVG 15px,
   `position:absolute; top:10px; right:12px`) que abre o **modal padrão** do
@@ -273,10 +273,10 @@ O portal **não usa gráfico de pizza**. Distribuição por status é uma **list
 ```css
 .status-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--border); }
 .status-name { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); }
-.status-count { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 600; color: var(--carbon); font-variant-numeric: tabular-nums; }
+.status-count { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 800; color: var(--carbon); font-variant-numeric: tabular-nums; }
 .status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
 ```
-Cada linha: nome (DM Sans) + contagem (DM Mono tabular). Vazio → `.status-empty` "Sem dados".
+Cada linha: nome (DM Sans 13px/400) + contagem (DM Sans 13px/**800** tabular). Vazio → `.status-empty` "Sem dados".
 
 ---
 

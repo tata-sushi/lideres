@@ -60,7 +60,9 @@ implementação: `compliance/kpis/rh/recrutamento.html`.
 
 ## Tipografia, cor e peso (padrão oficial)
 
-**Regra de ouro:** texto que é **nome/palavra → DM Sans**; texto que é **número → DM Mono**.
+**Regra de ouro:** na área de gráfico/tabela é **tudo DM Sans** e o **peso** faz a hierarquia:
+**número/valor → 800**; **nome, eixo, legenda, categoria → 400**. Únicas exceções que seguem
+**DM Mono**: o **título do card** (11px/700, é cabeçalho) e as **pílulas/badges** (10px/500).
 Cor **carbon `#35383F`** em quase tudo (muted `#999` só em dica/subtítulo). Tokens: carbon
 `#35383F`, muted `#999`, border/teia `#E2E2E2`.
 
@@ -68,38 +70,42 @@ Cor **carbon `#35383F`** em quase tudo (muted `#999` só em dica/subtítulo). To
 
 | Papel do texto | Fonte | Tam | Peso | Cor | Onde / alinhamento |
 |---|---|---|---|---|---|
-| Título do card (`.chart-title`) | DM Mono | 11px | **700** | carbon | centro, UPPERCASE, tracking 0.7px |
-| **Valores do eixo X** (datas `dd/mm`·`mm/aa`, notas, números) | DM Mono | **10px** | 400 | carbon | no eixo |
-| **Categoria / nomes no eixo Y** (barras horizontais) | **DM Sans** | **12px** | 400 | carbon | no eixo |
+| Título do card (`.chart-title`) | DM Mono | 11px | 700 | carbon | centro, UPPERCASE — **exceção mono** |
+| Valores do eixo X (datas `dd/mm`·`mm/aa`, notas) | **DM Sans** | **11px** | 400 | carbon | no eixo (`SANS11`) |
+| Categoria / nomes no eixo Y (barras horizontais) | DM Sans | 12px | 400 | carbon | no eixo (`SANS12`) |
 | Eixo de valor — escala numérica | — | — | — | — | **oculto** (o valor vem do rótulo, não do eixo) |
-| **Legenda** (CLT/PJ, pizza, doughnut, radar, banco) | **DM Sans** | **12px** | 400 | carbon | inferior · boxWidth 12 · padding 12 |
-| Rótulo de valor — barra e **ponto de linha** | DM Mono | 11px | **600** | carbon | acima (V/linha) · após a barra (H) |
-| Total ao fim da barra **empilhada** | DM Mono | 11px | **600** | carbon | após a barra |
-| Vértices do radar (`pointLabels`) | **DM Sans** | **12px** | 400 | carbon | ao redor |
+| Legenda (CLT/PJ, pizza, doughnut, radar, banco) | DM Sans | 12px | 400 | carbon | inferior · boxWidth 12 · padding 12 |
+| **Rótulo de valor** — barra e ponto de linha | **DM Sans** | 11px | **800** | carbon | acima (V/linha) · após a barra (H) |
+| **Total** ao fim da barra empilhada | **DM Sans** | 11px | **800** | carbon | após a barra |
+| Vértices do radar (`pointLabels`) | DM Sans | 12px | 400 | carbon | ao redor |
 | Dica / hint (`.chart-hint`) | DM Mono | 10px | 400 | muted `#999` | centro |
 
 **Na tabela simples de status e nas pílulas:**
 
 | Papel do texto | Fonte | Tam | Peso | Cor | Onde / alinhamento |
 |---|---|---|---|---|---|
-| Nome do status (`.status-name`) | **DM Sans** | **13px** | 400 | carbon | esquerda |
-| Contagem (`.status-count`) | DM Mono | 14px | **600** | carbon | direita (tabular-nums) |
-| Pílula / badge de status (`.status-badge`) | DM Mono | 10px | **500** | cor da paleta | radius 100px, tracking 0.3px |
+| Nome do status (`.status-name`) | DM Sans | 13px | 400 | carbon | esquerda |
+| **Contagem** (`.status-count`) | **DM Sans** | **13px** | **800** | carbon | direita (tabular-nums) |
+| Pílula / badge de status (`.status-badge`) | DM Mono | 10px | 500 | cor da paleta | radius 100px — **exceção mono** |
+
+> Rótulos numéricos de viz feitas em CSS seguem a mesma regra (DM Sans **800**): valor da barra
+> CSS do Absenteísmo (`.vb-val`, rótulo do mês `.vb-lbl` em 11px/400) e a contagem do Funil (`.fn-val`).
 
 **Regras firmadas:**
-- **Fonte: nome em DM Sans, número em DM Mono.** Todo texto que é **nome/palavra**
-  (categorias no eixo Y das barras horizontais, vértices do radar e **todas as legendas**)
-  usa **DM Sans 12px** — a mesma fonte legível da **tabela simples** (`.status-name`),
-  porque nome próprio em fonte monoespaçada fica ruim de ler. Todo texto que é **número**
-  (rótulo de valor na barra/ponto, datas do eixo X, notas, totais, `.status-count`)
-  continua em **DM Mono** — mono alinha dígito melhor. No Chart.js: constante
-  `SANS12={family:'DM Sans',size:12}` para `ticks.font`/`legend.labels.font`/`pointLabels.font`;
-  `MONO={family:'DM Mono',size:10}` segue nos eixos de valor/data e nos plugins de rótulo.
+- **Fonte: tudo DM Sans; o peso faz a hierarquia.** Na área de gráfico/tabela o texto é
+  **DM Sans**, com **número/valor em peso 800** (rótulo de valor na barra/ponto, total da
+  empilhada, contagem `.status-count`, valor das viz em CSS) e **nome/eixo/legenda/categoria
+  em 400** (nomes no eixo, datas do eixo X, vértices do radar, legendas, `.status-name`). As
+  **únicas exceções** que seguem **DM Mono** são o **título do card** (11px/700) e as
+  **pílulas/badges** (10px/500). No Chart.js: `SANS12={family:'DM Sans',size:12}` em
+  categoria/legenda/`pointLabels`, `SANS11={family:'DM Sans',size:11}` no eixo X, e os plugins
+  de rótulo desenham em `'800 11px "DM Sans", sans-serif'`. **Peso 800 exige carregar a DM Sans
+  com `800`** no Google Fonts (`family=DM+Sans:wght@...;800`), senão o browser cai pra 700.
 - **Datas no eixo X:** formato **`dd/mm`** ou **`mm/aa`** (2 dígitos no ano) — nunca `mm/aaaa`.
 - **Eixo de valor** (é o **Y** nas barras verticais/linhas e o **X** nas barras horizontais/empilhadas): **sem grade e sem escala numérica**. O valor vem do **rótulo de dados** — acima da barra (V), após a barra (H) e **em cada ponto** nas linhas — nunca do eixo. Só o **eixo de categoria** mostra texto (nomes, **DM Sans 12px** carbon). A **teia do radar** (`#E2E2E2`) é estrutura do gráfico, não grade de fundo.
-- **Barra empilhada:** mostra composição + **legenda** + **total ao fim da barra** (soma das séries, Mono 11px/600 carbon); a escala de valor fica oculta como nos demais.
+- **Barra empilhada:** mostra composição + **legenda** + **total ao fim da barra** (soma das séries, DM Sans 11px/800 carbon); a escala de valor fica oculta como nos demais.
 - **Cor:** tudo **carbon**. Única variação = **escurecimento das barras não-selecionadas** (carbon 45%) ao clicar/filtrar no Chart.js. Única exceção de **matiz** no catálogo = o **radar** (2ª série verde `#5AA469`).
-- **Pesos:** título 700 · valor na barra 600 · eixos/legenda/categoria 400.
+- **Pesos:** número/valor **800** (rótulo, total, contagem) · nome/eixo/legenda/categoria **400** · título do card **700** (DM Mono).
 - Categoria e legenda **não são obrigatórias** — só aparecem em quem tem; quando aparecem, seguem os tamanhos acima.
 - **Botão "i" de informação:** todo gráfico tem um `.chart-info-btn` no **canto superior direito** (cinza `#CFCFCF`, hover muted, ícone "i" em círculo — SVG 15px, `top:10px right:12px`), que abre o **modal padrão do recrutamento** (`.modal-overlay`/`.modal`, `abrirInfoGrafico`/`closeInfoGrafico`, toggle `.active`). Conteúdo em `.info-note` (frase-resumo, alinhada à esquerda) e, **sempre que ajudar a ler, uma `.info-table`** no mesmo padrão do recrutamento (`# / rótulo / descrição`) — ex.: as 9 etapas do **Funil** e a **legenda de cores das Pílulas de Status** (nº · pílula real · significado). Não descrever cores/etapas só em texto corrido quando cabem numa tabelinha.
 
