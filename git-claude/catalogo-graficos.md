@@ -66,14 +66,22 @@ Fonte base **DM Mono** (salvo indicado); cor **carbon `#35383F`** (salvo indicad
 |---|---|---|---|---|---|
 | Título do card | DM Mono | 11px | 700 | carbon | centro (UPPERCASE) |
 | **Valores do eixo X** (datas, ratings, números) | DM Mono | **10px** | 400 | carbon | eixo |
-| **Categoria** (nomes no eixo — quando houver) | DM Mono | **11px** | 400 | carbon | eixo |
+| **Categoria / nomes no eixo** (eixo Y das barras horizontais, quando houver) | **DM Sans** | **12px** | 400 | carbon | eixo |
 | Eixo Y — escala numérica | — | — | — | — | **oculto** (o valor vem do rótulo de dados, não do eixo) |
-| **Legenda** (quando houver) | DM Mono | **11px** | 400 | carbon | inferior · boxWidth 12 · padding 12 |
+| **Legenda** (quando houver) | **DM Sans** | **12px** | 400 | carbon | inferior · boxWidth 12 · padding 12 |
 | Rótulo de valor (barra e **ponto de linha**) | DM Mono | 11px | **600** | carbon | acima (V/linha) / após a barra (H) |
-| Vértices do radar (pointLabels) | DM Mono | 11px | 400 | carbon | ao redor |
+| Vértices do radar (pointLabels) | **DM Sans** | **12px** | 400 | carbon | ao redor |
 | Dica/hint | DM Mono | 10px | 400 | muted `#999` | centro |
 
 **Regras firmadas:**
+- **Fonte: nome em DM Sans, número em DM Mono.** Todo texto que é **nome/palavra**
+  (categorias no eixo Y das barras horizontais, vértices do radar e **todas as legendas**)
+  usa **DM Sans 12px** — a mesma fonte legível da **tabela simples** (`.status-name`),
+  porque nome próprio em fonte monoespaçada fica ruim de ler. Todo texto que é **número**
+  (rótulo de valor na barra/ponto, datas do eixo X, notas, totais, `.status-count`)
+  continua em **DM Mono** — mono alinha dígito melhor. No Chart.js: constante
+  `SANS12={family:'DM Sans',size:12}` para `ticks.font`/`legend.labels.font`/`pointLabels.font`;
+  `MONO={family:'DM Mono',size:10}` segue nos eixos de valor/data e nos plugins de rótulo.
 - **Datas no eixo X:** formato **`dd/mm`** ou **`mm/aa`** (2 dígitos no ano) — nunca `mm/aaaa`.
 - **Eixo de valor** (é o **Y** nas barras verticais/linhas e o **X** nas barras horizontais/empilhadas): **sem grade e sem escala numérica**. O valor vem do **rótulo de dados** — acima da barra (V), após a barra (H) e **em cada ponto** nas linhas — nunca do eixo. Só o **eixo de categoria** mostra texto (nomes, Mono 11px carbon). A **teia do radar** (`#E2E2E2`) é estrutura do gráfico, não grade de fundo.
 - **Barra empilhada:** mostra composição + **legenda** + **total ao fim da barra** (soma das séries, Mono 11px/600 carbon); a escala de valor fica oculta como nos demais.

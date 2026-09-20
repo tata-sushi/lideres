@@ -224,7 +224,8 @@ Regras dos gráficos:
   `grid.display:false`, `ticks.display:false` no eixo de valor, `beginAtZero`. O valor
   vem do **rótulo de dados** — acima/depois da barra e **em cada ponto** das linhas
   (plugin, Mono 11px/600 carbon) — nunca do eixo. Só o **eixo de categoria** mostra
-  texto (nomes, Mono 11px carbon). A **teia do radar** (`#E2E2E2`) é estrutura, não grade.
+  texto (nomes, em **DM Sans 12px** carbon — ver Tipografia). A **teia do radar**
+  (`#E2E2E2`) é estrutura, não grade.
 - `maintainAspectRatio:false` + `.chart-wrap` com `height:220px` fixa a altura.
 - **Barras NUNCA comprimem para caber (padrão obrigatório).** Mantêm a largura
   original (~46px) e o gráfico gera **rolagem lateral** para mostrar o restante —
@@ -239,9 +240,15 @@ Regras dos gráficos:
 - **Rótulo do eixo X sempre com data** em série temporal: **`dd/mm`** (`09/03`) ou
   **`mm/aa`** (`09/26`) — 2 dígitos no ano, nunca `mm/aaaa` nem só o nome do mês.
   Ex.: `String(mes).padStart(2,'0') + '/' + String(ano).slice(-2)`.
-- **Tipografia (padrão).** Tudo **DM Mono**, cor **carbon**. Valores do eixo X = **10px**;
-  categoria (nomes no eixo) e **legenda** = **11px**; título do card = 11px/700; rótulo de
-  valor na barra = 11px/600; eixos/legenda/categoria = peso 400. Legenda (quando houver):
+- **Tipografia (padrão): nome em DM Sans, número em DM Mono.** Cor **carbon** em tudo.
+  Texto que é **nome/palavra** — categoria no eixo Y das barras horizontais, vértices do
+  radar (`pointLabels`) e **todas as legendas** — usa **DM Sans 12px** (a mesma fonte da
+  tabela simples `.status-name`), porque nome próprio em monoespaçada fica ruim de ler.
+  Texto que é **número** — valores/datas do eixo X (**10px**), rótulo de valor na barra/ponto
+  (**11px/600**), notas, totais — continua em **DM Mono**. Título do card = DM Mono 11px/700;
+  demais pesos 400. No JS: `SANS12={family:'DM Sans',size:12}` em
+  `ticks.font`/`legend.labels.font`/`pointLabels.font`; `MONO={family:'DM Mono',size:10}`
+  nos eixos de valor/data e nos plugins de rótulo. Legenda (quando houver):
   `boxWidth:12, padding:12`. **Nada de cinza** nos rótulos de eixo — tudo carbon (a única
   variação de cor é o escurecimento das barras não-selecionadas ao filtrar).
 - **Botão "i" de informação (padrão).** Todo gráfico tem um `.chart-info-btn` no canto
