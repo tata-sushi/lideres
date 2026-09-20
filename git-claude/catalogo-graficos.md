@@ -14,7 +14,12 @@ implementação: `compliance/kpis/rh/recrutamento.html`.
 
 - **Full-width, sem centralizar.** Nada de `max-width`/coluna estreita centralizada.
 - **KPIs e filtros = faixas full-bleed:** encostam nas laterais (100% da largura,
-  `padding:14px 20px`, `border-bottom`), sem margem externa.
+  `padding:14px 20px`), sem margem externa.
+- **Divisória entre faixas = 1 linha só:** cada faixa usa **apenas `border-bottom`**
+  (nunca `border-top`), senão as bordas somam e viram uma linha grossa de 2px.
+- **Filtros em `flex-wrap`:** cada campo com `flex: 1 1 130px; min-width:0` — **cabem
+  até ~5 numa linha** e quebram sozinhos no mobile (igual à view de entrevistas do
+  recrutamento, que usa `.anl-filters-line`). Nada de grid de colunas fixas.
 - **Gráficos = respiro lateral pequeno** (12px no mobile / 24px no desktop), não centralizados.
 - **Cores invertidas na zona de KPI/filtros:** faixa **branca** (`--surface`) com
   **card/campo cinza** (`--bg`) — o inverso dos chart-cards (card branco sobre fundo cinza).
