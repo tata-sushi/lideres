@@ -55,6 +55,7 @@ implementação: `compliance/kpis/rh/recrutamento.html`.
 | **Entrevistas por Mês** (subtabs Entrevistas/Testes) | barra vertical (Chart.js), carbon, **largura fixa 46px + scroll lateral**, rótulo mês/ano, clique-filtra, cfOutline | recrutamento, feriados, solicitações, medicina, absenteísmo, benefícios, hc | **PADRÃO** (referência) |
 | **Status das Entrevistas / dos Testes** | status em tabela + pílulas | recrutamento, absenteísmo, cardápio | **padrão** |
 | **Vagas por Unidade** | barra horizontal (`indexAxis:'y'`) | reclamações, benefícios (TataPlus), desligamentos | desvio de tipo |
+| **CLT × PJ por Unidade** | barra empilhada (`stacked:true`, 2 séries, `indexAxis:'y'`, legenda) | hc, hc2, semanal | **desvio** (no portal: carbon + citric; no catálogo em tons de carbon) |
 | **Status das Demandas** | pizza (cores semânticas) | demandas2, desligamentos, recrutamento-novo | **desvio** (padrão manda tabela) |
 | **Identificou-se?** | doughnut | ouvidoria | **desvio** (legenda visível + plugin datalabels externo) |
 | **Avaliação por Nota** | barra multicolor (nota 1→5, vermelho→verde) | desligamentos (avaliações) | desvio de cor |
