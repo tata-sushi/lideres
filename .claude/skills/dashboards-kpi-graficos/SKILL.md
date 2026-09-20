@@ -226,9 +226,14 @@ Regras dos gráficos:
   **Cuidado (grid/flex):** o card do gráfico precisa de `min-width:0` (e, se for grid,
   colunas `minmax(0, 1fr)`), senão a barra larga empurra a largura da **página inteira**
   em vez de rolar por dentro do card.
-- **Rótulo do eixo X sempre com data** em barra temporal: **dia/mês** (`09/03`) ou
-  **mês/ano** (`09/2026`), nunca só o nome do mês. Ex. recrutamento:
-  `String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear()`.
+- **Rótulo do eixo X sempre com data** em série temporal: **`dd/mm`** (`09/03`) ou
+  **`mm/aa`** (`09/26`) — 2 dígitos no ano, nunca `mm/aaaa` nem só o nome do mês.
+  Ex.: `String(mes).padStart(2,'0') + '/' + String(ano).slice(-2)`.
+- **Tipografia (padrão).** Tudo **DM Mono**, cor **carbon**. Valores do eixo X = **10px**;
+  categoria (nomes no eixo) e **legenda** = **11px**; título do card = 11px/700; rótulo de
+  valor na barra = 11px/600; eixos/legenda/categoria = peso 400. Legenda (quando houver):
+  `boxWidth:12, padding:12`. **Nada de cinza** nos rótulos de eixo — tudo carbon (a única
+  variação de cor é o escurecimento das barras não-selecionadas ao filtrar).
 - Sempre `if (chartInst) chartInst.destroy()` antes de recriar, e guarde
   `if (typeof Chart === 'undefined') return;` (a lib pode não ter carregado).
 
