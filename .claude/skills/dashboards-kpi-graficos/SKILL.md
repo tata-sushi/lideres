@@ -401,6 +401,15 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
   `border-radius:6px`, `padding:7px 16px`, hover `background:var(--bg)`; centralizado em `.ver-mais-wrap`.
   Mostra N linhas e revela o resto ao clicar.
 - **Toda tabela tem título** (`.chart-head` + `.chart-title`), como os demais cards.
+- **Tabela larga NO MOBILE = rola na horizontal, NUNCA comprime/sobrepõe colunas.** O bug clássico:
+  `table { width:100% }` sem `min-width` dentro de um wrapper `overflow-x:auto` — a tabela encolhe até
+  caber na tela, o wrapper nunca rola e as colunas (com `white-space:nowrap`) se **sobrepõem**. Correção:
+  a tabela **precisa ser mais larga que a tela** pra o wrapper rolar. Duas formas:
+  (a) `table-layout:fixed` com largura px em **todas** as colunas (a soma vira a largura da tabela); ou
+  (b) **`min-width` na tabela** — obrigatório quando **nem toda** coluna tem px. Cuidado: `table-layout:fixed`
+  com `width:100%` e só algumas colunas com `width` **esmaga as sem largura** no mobile (foi o bug do Analítico
+  de Manutenção: `.tbl-mini.tbl-org` só tinha px em Data/Status/Antes/Depois → resolvido com `min-width:800px`).
+  **Sempre** dentro de um wrapper com `overflow-x:auto` (`.tbl-scroll` ou `<div style="overflow-x:auto">`).
 - **Tabela completa (Analítico) = organizador de colunas** (ref.: `compliance/kpis/rh/reclamacoes.html`):
   (1) **ordenar** por clique no cabeçalho — `th.th-sort` com `data-col`, seta `↕/↑/↓`, handler que
   ordena o array de dados e re-renderiza; (2) **dimensionar** a largura arrastando a borda — alça
