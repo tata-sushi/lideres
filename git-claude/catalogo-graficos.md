@@ -131,6 +131,9 @@ Tokens: carbon `#35383F`, muted `#999`, border/teia `#E2E2E2`.
   (média/nota) em **DM Sans 13px/800**; colaborador = avatar (inicial carbon/citric) + nome +
   `cargo · unidade`. **Toda tabela tem título** (`.chart-title`), e listas longas têm **botão
   "Ver mais"** (`.btn-ver-mais`, DM Sans 10px/500, borda + raio 6, mostra N e revela o resto).
+- **Tabela completa (Analítico) = organizador de colunas** (ref.: `reclamacoes.html`): **ordenar**
+  por clique no cabeçalho (`.th-sort` + seta `↕/↑/↓`) e **dimensionar** a largura arrastando a borda
+  (`.col-resizer`, `table-layout:fixed`, mín. 40px, salva em `localStorage`). Sem reordenar/ocultar coluna.
 - **Datas nas tabelas:** **`DD/MM/AAAA`**; com horário, **`DD/MM/AAAA · HHhMM`** (ex.:
   `11/09/2026 · 09H15`, bolinha `·` como separador). O **eixo X** dos gráficos segue curto (`dd/mm` / `mm/aa`).
 
@@ -158,7 +161,7 @@ Tokens: carbon `#35383F`, muted `#999`, border/teia `#E2E2E2`.
 | **Agenda do Mês** | calendário mensal (grid 7×6, pílulas de evento por categoria, estados hoje/outro-mês) | agenda | tipo próprio (não é gráfico de métrica; pílulas de evento seguem cor de categoria, como as pílulas de status) |
 | **Avaliação por Pergunta** | tabela pergunta (quebra linha) + média (DM Sans 800) | cei (Cultura & Clima) | **padrão** de tabela pergunta/média |
 | **Colaboradores** | lista: avatar (inicial carbon/citric) + nome + cargo·unidade + nota, com **Ver mais** | performance | **padrão** de lista de pessoas |
-| **Analítico — candidaturas** | tabela com **título**, status em **pílula**, data `DD/MM/AAAA · HHhMM`, botão **Ver mais** | páginas com aba Analítico | **padrão** |
+| **Analítico — candidaturas** | tabela com **título**, status em **pílula**, data `DD/MM/AAAA · HHhMM`, botão **Ver mais**, **organizador de colunas** (ordenar + dimensionar) | páginas com aba Analítico | **padrão** |
 | **Pílulas de Status** (seção) | pílulas semânticas — carbon = positivo · azul = não iniciado · âmbar = iniciado com pendências · vermelho = negativo | só na tabela do Analítico | referência do design system |
 
 ## Padrão x desvio (resumo)
