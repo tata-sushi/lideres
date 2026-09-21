@@ -139,7 +139,8 @@ Tokens: carbon `#35383F`, muted `#999`, border/teia `#E2E2E2`.
 - **Tabela larga no mobile = rola na horizontal, nunca comprime/sobrepõe colunas.** A tabela tem que ser
   **mais larga que a tela** dentro de um wrapper `overflow-x:auto` (`.tbl-scroll`): ou `table-layout:fixed`
   + larguras px por coluna (como o organizador), ou `min-width` na tabela. `width:100%` sem `min-width`
-  faz a tabela encolher, o wrapper não rola e as colunas se sobrepõem.
+  faz a tabela encolher, o wrapper não rola e as colunas se sobrepõem. No catálogo:
+  `table.mini.tbl-org { table-layout:fixed; min-width:600px }` (≥ soma das larguras das colunas).
 - **Datas nas tabelas:** **`DD/MM/AAAA`**; com horário, **`DD/MM/AAAA · HHhMM`** (ex.:
   `11/09/2026 · 09H15`, bolinha `·` como separador). O **eixo X** dos gráficos segue curto (`dd/mm` / `mm/aa`).
 
