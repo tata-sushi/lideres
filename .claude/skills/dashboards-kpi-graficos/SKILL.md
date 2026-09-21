@@ -406,7 +406,8 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
   ordena o array de dados e re-renderiza; (2) **dimensionar** a largura arrastando a borda — alça
   `.col-resizer` (8px, **`border-right:1px`** fina → `var(--carbon)` no hover/`.dragging`) injetada por JS
   em cada `th[data-col]`, `table-layout:fixed`, largura mínima **40px**, `body.col-resizing` trava o cursor,
-  e a largura é salva em **localStorage**. Cabeçalhos da tabela-organizadora **centralizados** (`.tbl-org thead th { text-align:center }`).
+  e a largura é salva em **localStorage**. Cabeçalhos da tabela-organizadora **centralizados** — use `table.mini.tbl-org thead th { text-align:center }`
+  (o seletor precisa de **2 classes** para vencer a especificidade de `table.mini thead th`, que tem `text-align:left`).
   **Não** existe reordenar nem mostrar/ocultar coluna no portal (só ordenar + dimensionar).
 
 ### Datas nas tabelas
