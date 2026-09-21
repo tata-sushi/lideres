@@ -4,16 +4,15 @@ description: >-
   Chrome padrão das páginas de dashboard do Portal Líderes (repo lideres,
   compliance/kpis/**): o HEADER como barra de ferramentas (logo + botões
   .header-plus: Início, Voltar, Atualizar/hardRefresh, Zoom−, Zoom+, Fixar,
-  Menu/drawer), o SELETOR DE ABAS (.tabs/.tab-btn com body[data-view] + setTab),
-  as SUB-ABAS (.dash-subtabs/.dash-subtab com setDashSrc) e o FOOTER fixo
-  (.footer com módulo + data). Inclui os scripts de zoom (#zoom-content),
+  Menu/drawer), o SELETOR DE ABAS (.tabs/.tab-btn com body[data-view] + setTab)
+  e o FOOTER fixo (.footer com módulo + data). Inclui os scripts de zoom (#zoom-content),
   hardRefresh e pin. Referência canônica: compliance/kpis/rh/recrutamento.html;
   catálogo visual: git-claude/catalogo-chrome.html. Use SEMPRE que for criar,
   editar ou padronizar o header/topo, a barra de ferramentas, o seletor de
-  abas (tabs), as sub-abas (subtabs), o rodapé/footer, o zoom, o botão
+  abas (tabs), o rodapé/footer, o zoom, o botão
   Atualizar/Voltar/Início ou o menu de uma página de dashboard; e quando o
   pedido falar em "header", "cabeçalho", "topo", "abas", "seletor de abas",
-  "tabs", "sub-abas", "rodapé", "footer", "zoom", "atualizar", "barra de
+  "tabs", "rodapé", "footer", "zoom", "atualizar", "barra de
   ferramentas". NÃO cobre os IDs de acesso das abas (skill
   controle-acesso-abas-botoes) nem os gráficos/cards internos (skill
   dashboards-kpi-graficos) — complementa as duas.
@@ -21,13 +20,13 @@ description: >-
 
 # Header, Seletor de Abas & Footer — Dashboards Portal Líderes
 
-Chrome padrão das páginas **dashboard** (`compliance/kpis/**`). **Referência canônica: `compliance/kpis/rh/recrutamento.html`** (e `compliance/kpis/manutencao/index.html`). **Catálogo visual: `git-claude/catalogo-chrome.html`** — abra pra ver o header, as abas, as sub-abas e o footer funcionando.
+Chrome padrão das páginas **dashboard** (`compliance/kpis/**`). **Referência canônica: `compliance/kpis/rh/recrutamento.html`** (e `compliance/kpis/manutencao/index.html`). **Catálogo visual: `git-claude/catalogo-chrome.html`** — abra pra ver o header, as abas e o footer funcionando.
 
 > ⚠️ Os readmes antigos `readmehefdash.md` / `CLAUDE.md §2` descrevem um header com **`.header-title` + chip de usuário** — esse padrão foi **superado**. O header atual das dashboards é a **barra de ferramentas** abaixo (sem título, sem chip). Siga o recrutamento.
 
 ## Relação com as outras skills
 - **`controle-acesso-abas-botoes`** — os `data-aba-id`/`data-botao-id` (quem vê cada aba/botão). Esta skill cuida do **visual/estrutura**; a outra, do **acesso**.
-- **`dashboards-kpi-graficos`** — o que vai **dentro** das abas (KPIs, gráficos, tabelas).
+- **`dashboards-kpi-graficos`** — o que vai **dentro** das abas (KPIs, gráficos, tabelas) **e as sub-abas `.dash-subtabs`** (não fazem parte desta skill).
 
 ---
 
@@ -130,22 +129,7 @@ Barra horizontal rolável (sem scrollbar visível). Ativa = fundo carbon + texto
 
 ---
 
-## 4. SUB-ABAS (.dash-subtabs / .dash-subtab)
-
-Pílulas centralizadas **dentro** de uma aba, pra trocar a *fonte* dos gráficos sem trocar de aba (ex.: KPIs de Entrevistas × Testes).
-
-```css
-.dash-subtabs { display: flex; justify-content: center; gap: 8px; padding: 14px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; }
-.dash-subtab { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; background: #FDEAEA; color: #7A1A1A; border: none; cursor: pointer; transition: opacity 0.18s; }
-.dash-subtab:hover { opacity: 0.8; }
-.dash-subtab.active { background: #35383F; color: #CFFF00; }
-```
-
-Inativa = bordô (`#FDEAEA`/`#7A1A1A`); ativa = carbon/citric (`#35383F`/`#CFFF00`). `setDashSrc(src)` alterna `.active` e re-renderiza. No mobile: `.dash-subtabs { margin: 14px 12px; }`.
-
----
-
-## 5. FOOTER
+## 4. FOOTER
 
 Fixo no rodapé, fundo carbon, duas linhas centralizadas (módulo em citric + data em branco 40%).
 
@@ -180,6 +164,5 @@ Como o footer é `fixed`, o conteúdo precisa de **padding-bottom** (ex.: `.cont
 - [ ] Logo base64 canônico copiado inteiro (sem truncar).
 - [ ] Tudo abaixo do header dentro de `#zoom-content`; scripts de zoom + hardRefresh presentes.
 - [ ] `.tabs` rolável, `.tab-btn` DM Mono 11px uppercase, ativa carbon/citric; cada aba com `id="tab-<slug>"` + `data-aba-id`.
-- [ ] Sub-abas (se houver) = `.dash-subtabs` pílulas bordô→carbon/citric.
 - [ ] `.footer` fixo carbon (módulo citric + `#footer-date`); conteúdo com `padding-bottom` folgado.
 - [ ] JS validado (sem erro de sintaxe).
