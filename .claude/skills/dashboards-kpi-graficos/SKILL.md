@@ -410,6 +410,17 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
   com `width:100%` e só algumas colunas com `width` **esmaga as sem largura** no mobile (foi o bug do Analítico
   de Manutenção: `.tbl-mini.tbl-org` só tinha px em Data/Status/Antes/Depois → resolvido com `min-width:800px`).
   **Sempre** dentro de um wrapper com `overflow-x:auto` (`.tbl-scroll` ou `<div style="overflow-x:auto">`).
+  Config concreta (copiar):
+
+  ```css
+  .tbl-scroll { overflow-x: auto; }
+  /* min-width >= soma das larguras das colunas (ex.: 600–800px) */
+  table.mini.tbl-org { table-layout: fixed; min-width: 800px; }
+  table.mini.tbl-org thead th { overflow: hidden; text-align: center; } /* clipa cabeçalho, evita vazar */
+  ```
+  ```html
+  <div class="tbl-scroll"><table class="mini tbl-org">…</table></div>
+  ```
 - **Tabela completa (Analítico) = organizador de colunas** (ref.: `compliance/kpis/rh/reclamacoes.html`):
   (1) **ordenar** por clique no cabeçalho — `th.th-sort` com `data-col`, seta `↕/↑/↓`, handler que
   ordena o array de dados e re-renderiza; (2) **dimensionar** a largura arrastando a borda — alça
