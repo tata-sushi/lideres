@@ -156,6 +156,15 @@
   table.mini tbody tr:hover { background: #FAFAFA; }
   table.mini .nm { font-weight: 600; }
   table.mini .dt { font-family: 'DM Sans', sans-serif; color: var(--carbon); font-size: 12px; }
+  /* organizador de colunas (tabela completa): ordenar por clique + redimensionar largura (ref.: reclamacoes.html) */
+  table.mini.tbl-org { table-layout: fixed; }
+  .tbl-org thead th { position: relative; overflow: hidden; cursor: pointer; user-select: none; }
+  .tbl-org thead th:hover { color: var(--carbon); }
+  .th-sort { white-space: nowrap; }
+  .sort-arrow { margin-left: 3px; color: var(--muted); }
+  .tbl-org thead th .col-resizer { position: absolute; top: 4px; bottom: 4px; right: 0; width: 8px; cursor: col-resize; user-select: none; border-right: 2px solid var(--border); transition: border-color 0.12s; }
+  .tbl-org thead th .col-resizer:hover, .tbl-org thead th .col-resizer.dragging { border-right-color: var(--carbon); }
+  body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none !important; }
   /* barra vertical em CSS */
   .vbars { display: flex; align-items: flex-end; justify-content: space-around; gap: 0; height: 200px; margin-top: 10px; overflow-x: auto; padding-bottom: 12px; }
   .vbars .vb { flex: 0 0 46px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; }
@@ -359,7 +368,7 @@
 
   </div>
 
-  <div class="tbl-card"><div class="chart-head" style="padding:8px 4px 10px"><span class="chart-title">Analítico</span></div><div class="tbl-scroll"><table class="mini"><thead><tr><th>Candidato</th><th>Vaga</th><th>Unidade</th><th>Status</th><th>Data</th></tr></thead><tbody id="analitico"></tbody></table></div><div class="ver-mais-wrap" id="verMaisAn"><button class="btn-ver-mais" onclick="verMaisAnalitico()">Ver mais</button></div></div>
+  <div class="tbl-card"><div class="chart-head" style="padding:8px 4px 10px"><span class="chart-title">Analítico</span></div><div class="tbl-scroll"><table class="mini tbl-org" id="tblAnalitico"><thead><tr><th data-col="cand" class="th-sort" onclick="sortAnalitico('cand')" style="width:140px">Candidato <span class="sort-arrow" data-sa="cand">↕</span></th><th data-col="vaga" class="th-sort" onclick="sortAnalitico('vaga')" style="width:95px">Vaga <span class="sort-arrow" data-sa="vaga">↕</span></th><th data-col="unid" class="th-sort" onclick="sortAnalitico('unid')" style="width:115px">Unidade <span class="sort-arrow" data-sa="unid">↕</span></th><th data-col="status" class="th-sort" onclick="sortAnalitico('status')" style="width:95px">Status <span class="sort-arrow" data-sa="status">↕</span></th><th data-col="data" class="th-sort" onclick="sortAnalitico('data')" style="width:155px">Data <span class="sort-arrow" data-sa="data">↕</span></th></tr></thead><tbody id="analitico"></tbody></table></div><div class="ver-mais-wrap" id="verMaisAn"><button class="btn-ver-mais" onclick="verMaisAnalitico()">Ver mais</button></div></div>
 </div>
 
 <div class="modal-overlay" id="info-overlay" onclick="if(event.target===this)closeInfoGrafico()">
@@ -564,10 +573,23 @@
 
     var AN=[['Mariana Alves','Atendente','Itaim Bibi','pill-pos','12/09/2026 · 14H30'],['Rafael Souza','Sushiman','Pinheiros','pill-blue','12/09/2026'],['Camila Ferreira','Caixa','Poke Pinheiros','pill-amber','11/09/2026 · 09H15'],['Bruno Lima','Cozinheiro','Tatá House','pill-red','10/09/2026'],['Juliana Rocha','Garçonete','Itaim Bibi','pill-pos','09/09/2026'],['Diego Martins','Motoboy','Pinheiros','pill-blue','08/09/2026'],['Fernanda Dias','Atendente','Tatá House','pill-pos','07/09/2026'],['Lucas Almeida','Sushiman','Itaim Bibi','pill-amber','06/09/2026 · 16H45'],['Patrícia Gomes','Caixa','Pinheiros','pill-blue','05/09/2026'],['Rodrigo Nunes','Cozinheiro','Poke Pinheiros','pill-red','04/09/2026'],['Beatriz Castro','Garçonete','Itaim Bibi','pill-pos','03/09/2026 · 11H00'],['Thiago Ramos','Motoboy','Tatá House','pill-blue','02/09/2026']];
     var ANL={'pill-pos':'Aprovado','pill-blue':'Aguardando','pill-amber':'Em análise','pill-red':'Não selec.'};
-    function renderAnalitico(all){ document.getElementById('analitico').innerHTML=(all?AN:AN.slice(0,6)).map(function(r){ return '<tr><td class="nm">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td><span class="status-badge '+r[3]+'">'+ANL[r[3]]+'</span></td><td class="dt">'+r[4]+'</td></tr>'; }).join(''); var w=document.getElementById('verMaisAn'); if(w) w.style.display=all?'none':'block'; }
-    var _bAn=document.querySelector('#verMaisAn .btn-ver-mais'); if(_bAn) _bAn.textContent='Ver mais ('+(AN.length-6)+')';
+    var _anAll=false, _anSortCol=null, _anSortDir=1;
+    function renderAnalitico(all){ _anAll=all; document.getElementById('analitico').innerHTML=(all?AN:AN.slice(0,6)).map(function(r){ return '<tr><td class="nm">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td><span class="status-badge '+r[3]+'">'+ANL[r[3]]+'</span></td><td class="dt">'+r[4]+'</td></tr>'; }).join(''); var w=document.getElementById('verMaisAn'); if(w) w.style.display=all?'none':'block'; }
+    // ORDENAR: clique no cabeçalho ordena asc/desc (seta ↑/↓), como no reclamacoes
+    window.sortAnalitico=function(col){ var idx={cand:0,vaga:1,unid:2,status:3,data:4}[col]; if(idx==null) return; if(_anSortCol===col){ _anSortDir=-_anSortDir; } else { _anSortCol=col; _anSortDir=1; } AN.sort(function(a,b){ var va=idx===3?ANL[a[3]]:String(a[idx]), vb=idx===3?ANL[b[3]]:String(b[idx]); return va.localeCompare(vb,'pt',{numeric:true})*_anSortDir; }); Array.prototype.forEach.call(document.querySelectorAll('#tblAnalitico .sort-arrow'),function(s){ s.textContent='↕'; }); var ar=document.querySelector('#tblAnalitico .sort-arrow[data-sa="'+col+'"]'); if(ar) ar.textContent=_anSortDir>0?'↑':'↓'; renderAnalitico(_anAll); };
     window.verMaisAnalitico=function(){ renderAnalitico(true); };
+    var _bAn=document.querySelector('#verMaisAn .btn-ver-mais'); if(_bAn) _bAn.textContent='Ver mais ('+(AN.length-6)+')';
+    // DIMENSIONAR: arrastar a borda da coluna redimensiona; largura salva em localStorage
+    var _COLW_KEY='catalogo_analitico_cols_v1', _colsW={}, _resSt=null;
+    function _loadColsW(){ try{ var r=localStorage.getItem(_COLW_KEY); if(r) _colsW=JSON.parse(r)||{}; }catch(e){ _colsW={}; } }
+    function _saveColsW(){ try{ localStorage.setItem(_COLW_KEY, JSON.stringify(_colsW)); }catch(e){} }
+    function _applyColsW(){ var t=document.getElementById('tblAnalitico'); if(!t) return; Object.keys(_colsW).forEach(function(k){ var w=_colsW[k]; if(!w) return; var th=t.querySelector('thead th[data-col="'+k+'"]'); if(th) th.style.width=w+'px'; }); }
+    function _onResMove(e){ if(!_resSt) return; var w=Math.max(40,_resSt.startW+(e.clientX-_resSt.startX)); _resSt.th.style.width=w+'px'; _colsW[_resSt.key]=w; }
+    function _onResUp(){ if(!_resSt) return; _resSt.handle.classList.remove('dragging'); document.body.classList.remove('col-resizing'); document.removeEventListener('mousemove',_onResMove); document.removeEventListener('mouseup',_onResUp); _resSt=null; _saveColsW(); }
+    function _onResDown(e){ e.preventDefault(); e.stopPropagation(); var h=e.currentTarget; _resSt={ key:h.getAttribute('data-col-resize'), th:h.parentNode, startX:e.clientX, startW:h.parentNode.offsetWidth, handle:h }; h.classList.add('dragging'); document.body.classList.add('col-resizing'); document.addEventListener('mousemove',_onResMove); document.addEventListener('mouseup',_onResUp); }
+    function _setupResizers(){ var t=document.getElementById('tblAnalitico'); if(!t) return; Array.prototype.forEach.call(t.querySelectorAll('thead th[data-col]'),function(th){ if(th.querySelector('.col-resizer')) return; var h=document.createElement('span'); h.className='col-resizer'; h.setAttribute('data-col-resize', th.getAttribute('data-col')); h.addEventListener('mousedown',_onResDown); h.addEventListener('click',function(e){ e.stopPropagation(); }); th.appendChild(h); }); }
     renderAnalitico(false);
+    _loadColsW(); _setupResizers(); _applyColsW();
 
     // tabela pergunta/média (padrão cultura e clima): pergunta (quebra linha) + média
     var PERG=[['O quanto a comunicação da sua liderança imediata é clara e próxima?',5.00],['O quanto você se sente respeitado(a) no ambiente de trabalho?',4.60],['O quanto está claro para você o que é esperado no trabalho?',4.40],['O quanto você se sente apoiado(a) pela sua liderança quando enfrenta dificuldades?',4.33],['O quanto o ambiente de trabalho está colaborativo?',4.00],['O quanto você considera equilibrada sua relação entre trabalho e vida pessoal?',3.67],['O quanto você se sente apoiado(a) pelos colegas quando precisa de ajuda?',3.17],['O quanto sua carga de trabalho tem sido adequada?',3.00]];

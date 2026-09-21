@@ -401,6 +401,12 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
   `border-radius:6px`, `padding:7px 16px`, hover `background:var(--bg)`; centralizado em `.ver-mais-wrap`.
   Mostra N linhas e revela o resto ao clicar.
 - **Toda tabela tem título** (`.chart-head` + `.chart-title`), como os demais cards.
+- **Tabela completa (Analítico) = organizador de colunas** (ref.: `compliance/kpis/rh/reclamacoes.html`):
+  (1) **ordenar** por clique no cabeçalho — `th.th-sort` com `data-col`, seta `↕/↑/↓`, handler que
+  ordena o array de dados e re-renderiza; (2) **dimensionar** a largura arrastando a borda — alça
+  `.col-resizer` (8px, `border-right:2px`) injetada por JS em cada `th[data-col]`, `table-layout:fixed`,
+  largura mínima **40px**, `body.col-resizing` trava o cursor, e a largura é salva em **localStorage**.
+  **Não** existe reordenar nem mostrar/ocultar coluna no portal (só ordenar + dimensionar).
 
 ### Datas nas tabelas
 - Data na tabela completa/analítica: **`DD/MM/AAAA`**; com horário, **`DD/MM/AAAA · HHhMM`**
