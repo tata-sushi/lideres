@@ -134,6 +134,8 @@ Tokens: carbon `#35383F`, muted `#999`, border/teia `#E2E2E2`.
 - **Tabela completa (Analítico) = organizador de colunas** (ref.: `reclamacoes.html`): **ordenar**
   por clique no cabeçalho (`.th-sort` + seta `↕/↑/↓`) e **dimensionar** a largura arrastando a borda
   (`.col-resizer`, `table-layout:fixed`, mín. 40px, salva em `localStorage`). Sem reordenar/ocultar coluna.
+  **Cabeçalhos centralizados** (`text-align:center`) e **linha de redimensionamento fina** (`border-right:1px`,
+  fica `var(--carbon)` no hover/arraste).
 - **Datas nas tabelas:** **`DD/MM/AAAA`**; com horário, **`DD/MM/AAAA · HHhMM`** (ex.:
   `11/09/2026 · 09H15`, bolinha `·` como separador). O **eixo X** dos gráficos segue curto (`dd/mm` / `mm/aa`).
 
