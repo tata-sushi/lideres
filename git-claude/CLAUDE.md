@@ -18,61 +18,43 @@ Essencial:
 
 ### 2.1 Páginas dashboard (filtros, gráficos, tabelas, formulários operacionais)
 
-Exemplos canônicos: `compliance/kpis/rh/ouvidoria.html`, `compliance/kpis/rh/recrutamento.html`, `compliance/kpis/rh/bancodehoras.html`.
+Exemplos canônicos: `compliance/kpis/rh/recrutamento.html`, `compliance/kpis/manutencao/index.html`.
 
-**CSS obrigatório** (copiar/cole, não inventar variações):
+> O header atual é uma **barra de ferramentas** (logo + botões), **sem `.header-title` e sem chip de usuário**. Detalhes completos (CSS, ordem dos botões, zoom/hardRefresh/pin, seletor de abas e footer) na skill **`header-abas-footer`** e no catálogo **`git-claude/catalogo-chrome.html`** (fonte: `recrutamento.html`).
+
+**CSS** (copiar de recrutamento, não inventar variações):
 
 ```css
-.header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 14px 20px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
+.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 100; }
 .logo-img { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
-.header-title { font-size: 20px; font-weight: 700; color: var(--carbon); letter-spacing: -0.3px; }
-.header-user {
-  font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500;
-  color: var(--carbon); background: var(--bg);
-  border: 1px solid var(--border); border-radius: 6px;
-  padding: 5px 10px; white-space: nowrap; margin-left: auto;
-}
+.header-plus { width: 28px; height: 28px; background: var(--carbon); border: none; border-radius: 4px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+.header-plus svg { width: 14px; height: 14px; stroke: var(--citric); fill: none; stroke-width: 2.5; stroke-linecap: round; }
 ```
 
-**HTML**:
+**HTML** — logo + botões `.header-plus` (1º com `margin-left:auto`), na ordem **Início · Voltar · Atualizar · Zoom− · Zoom+ · Fixar(oculto) · Menu**:
 
 ```html
 <header class="header">
-  <img class="logo-img" src="data:image/png;base64,..." alt="TATÁ"/>
-  <div>
-    <div class="header-title">TITULO_CURTO</div>
-  </div>
-  <span class="header-user" id="header-user">—</span>
+  <img class="logo-img" src="data:image/png;base64,..." alt="TATÁ">
+  <button class="header-plus" style="margin-left:auto" onclick="location.href='https://lideres.tatasushi.tech/compliance/menucompliance.html'" title="Início"><svg>…home…</svg></button>
+  <button class="header-plus" onclick="history.back()" title="Voltar"><svg>…seta…</svg></button>
+  <button class="header-plus" id="btn-hard-refresh" onclick="hardRefresh()" title="Atualizar"><svg>…refresh…</svg></button>
+  <button class="header-plus" id="btn-zoom-out" onclick="zoomOut()" title="Diminuir zoom"><svg>…lupa−…</svg></button>
+  <button class="header-plus" id="btn-zoom-in" onclick="zoomIn()" title="Aumentar zoom"><svg>…lupa+…</svg></button>
+  <button class="header-plus" id="btn-pin" onclick="pinNoApp()" title="Fixar no menu do app" style="display:none"><svg>…pin…</svg></button>
+  <button class="header-plus" onclick="openDrawer()" title="Menu"><svg>…menu…</svg></button>
 </header>
+<div id="zoom-content"><!-- .tabs + conteúdo (escalado pelo zoom) --></div>
 ```
 
 **Regras**:
 
-- **Logo**: usar o base64 canônico de `compliance/menucompliance.html` (~1807 chars até `...ElFTkSuQmCC`). Logo truncado quebra renderização — sempre copiar o tag `<img>` inteiro de uma dashboard funcionando.
-- **Título curto**: até ~12 chars visíveis, para caber em 1 linha no viewport mobile (~390px) sem wrap. Evitar separadores "·", "&", "/" e complementos ("de", "do", "Controle de…"). Exemplos aprovados: `BCH`, `Gorjeta`, `Recrutamento`, `Solicitações`, `Uniformes`, `Abastecimento`, `Caixa`, `Extras`, `Manutenção`, `Experiências`, `Ouvidoria`.
-- **Font-size do título uniforme em 20px** — nunca 14/16/18px, nunca override em media query.
-- **SEM subtítulo** (`<div class="header-sub">`): nunca adicionar "TATÁ Sushi", "Gente & Gestão", "TATÁ Sushi · <depto>". Header mostra só o título.
-- **`header-user` com id="header-user"**: nunca nome hardcoded. Script final preenche via `session.displayName`. **Não** aplicar `display:none` no mobile (senão o nome some).
-- **Sem media queries** que encolham `.header` (padding), `.logo-img` (width/height) ou `.header-title` (font-size). Proporção idêntica em todos os viewports.
-- **Sem `overflow:hidden` em `.header`** — não é necessário e corta o nome do líder em telas pequenas.
-
-**Botão "+" opcional** (dashboards que abrem formulário de registro):
-
-```html
-<button class="header-plus" onclick="openFab()"><svg>...</svg></button>
-```
-
-Posicionar depois do `#header-user`.
+- **Logo**: copiar a tag `<img class="logo-img">` inteira (base64) de uma dashboard funcionando (recrutamento/manutenção) — nunca truncar.
+- **Sem `.header-title` e sem chip de usuário** no header — padrão superado; a identidade fica na aba Sobre / no drawer.
+- Botões `.header-plus` **28×28**, `border-radius:4px` (hardcoded, não `var(--radius)`), fundo `--carbon`, ícone `--citric` stroke 2.5.
+- **Sem media query** que altere `.header` (padding/gap) ou `.logo-img` (tamanho).
+- Copiar junto os scripts de **zoom** (`#zoom-content`), **hardRefresh** e **pin** (ver skill `header-abas-footer`).
+- **Legado** (páginas antigas): header com `.header-title` + `#header-user` — não replicar em página nova.
 
 ### 2.2 Páginas de menu / institucionais (`compliance/menucompliance.html`, `compliance/areas/institucional/*`, etc.)
 

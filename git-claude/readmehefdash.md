@@ -2,6 +2,8 @@
 
 Especificações completas de layout para **headers, rodapés e seção de filtros** das páginas de dashboard do Portal Líderes TATÁ. Referência: `compliance/menucompliance.html` (altura padrão), `compliance/kpis/rh/recrutamento.html` e `compliance/kpis/rh/bancodehoras.html`.
 
+> ⚠️ **HEADER MUDOU — LEIA A SKILL `header-abas-footer`.** O header atual das dashboards é uma **barra de ferramentas** (logo + botões Início/Voltar/Atualizar/Zoom−/Zoom+/Fixar/Menu), **sem `.header-title` e sem chip de usuário**. As seções "HEADER", "TÍTULO", "HEADER-USER" e "HEADER-PLUS (+)" abaixo descrevem o **padrão antigo (legado)** e ficam só como histórico. Para header/abas/footer siga a skill `.claude/skills/header-abas-footer/SKILL.md` e o catálogo `git-claude/catalogo-chrome.html` (fonte: `recrutamento.html`). As seções de **FOOTER** e **FILTROS** deste doc continuam válidas.
+
 ## 📋 ESCOPO
 
 ⚠️ **Essas especificações aplicam-se APENAS a páginas classificadas como "Dashboard" no mapa de lideranças (coluna E, "tipo de página")**. Páginas de tipo diferente (Menu, Institucional, etc.) seguem padrões específicos documentados em `CLAUDE.md`.
@@ -183,20 +185,32 @@ Especificações completas de layout para **headers, rodapés e seção de filtr
 
 ## ESTRUTURA HTML PADRÃO
 
+> ⚠️ **ATUAL (barra de ferramentas)** — este é o padrão em vigor (fonte: `recrutamento.html`). O bloco legado (título + chip) fica logo abaixo, só como histórico. Detalhes e CSS na skill `header-abas-footer`.
+
+```html
+<header class="header">
+  <img class="logo-img" src="data:image/png;base64,..." alt="TATÁ">
+  <button class="header-plus" style="margin-left:auto" onclick="location.href='https://lideres.tatasushi.tech/compliance/menucompliance.html'" title="Início"><svg>…home…</svg></button>
+  <button class="header-plus" onclick="history.back()" title="Voltar"><svg>…seta…</svg></button>
+  <button class="header-plus" id="btn-hard-refresh" onclick="hardRefresh()" title="Atualizar"><svg>…refresh…</svg></button>
+  <button class="header-plus" id="btn-zoom-out" onclick="zoomOut()" title="Diminuir zoom"><svg>…lupa−…</svg></button>
+  <button class="header-plus" id="btn-zoom-in" onclick="zoomIn()" title="Aumentar zoom"><svg>…lupa+…</svg></button>
+  <button class="header-plus" id="btn-pin" onclick="pinNoApp()" title="Fixar no menu do app" style="display:none"><svg>…pin…</svg></button>
+  <button class="header-plus" onclick="openDrawer()" title="Menu"><svg>…menu…</svg></button>
+</header>
+<div id="zoom-content"><!-- tabs + conteúdo (escalado pelo zoom) --></div>
+```
+
+**Legado (não usar em página nova):**
+
 ```html
 <header class="header">
   <img class="logo-img" src="data:image/png;base64,..." alt="TATÁ"/>
-  <div>
-    <div class="header-title">TITULO_CURTO</div>
-  </div>
+  <div><div class="header-title">TITULO_CURTO</div></div>
   <span class="header-user" id="header-user">—</span>
-  <button class="header-plus" onclick="openFab()">
-    <svg>...</svg>
-  </button>
+  <button class="header-plus" onclick="openFab()"><svg>...</svg></button>
 </header>
 ```
-
-⚠️ **Botão `+` é obrigatório em TODA dashboard** — se ainda não há funcionalidade, usar `onclick="alert('Em desenvolvimento')"`.
 
 ---
 
