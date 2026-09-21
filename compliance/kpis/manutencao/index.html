@@ -535,6 +535,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-card"><div class="chart-title">Chamados por categoria</div><div class="mnt-pie-wrap"><canvas id="mnt-canvas-cat"></canvas></div><div class="mnt-pie-legend" id="mnt-pie-legend-cat"></div></div>
     <div class="chart-card"><div class="chart-title">Chamados por unidade</div><div class="chart-wrap"><div class="chart-scroll" id="mnt-scroll-uni"><canvas id="mnt-canvas-uni"></canvas></div></div></div>
     <div class="chart-card"><div class="chart-title">Chamados por departamento</div><div class="chart-wrap"><div class="chart-scroll" id="mnt-scroll-dep"><canvas id="mnt-canvas-dep"></canvas></div></div></div>
+    <div class="chart-card"><div class="chart-title">Custo por mês</div><div class="chart-wrap"><div class="chart-scroll" id="mnt-scroll-cst"><canvas id="mnt-canvas-cst"></canvas></div></div></div>
     <div class="chart-card">
       <div class="chart-title">Analítico</div>
       <div style="overflow-x:auto">
@@ -545,6 +546,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
             <th data-col="cat" class="th-sort" onclick="_mntAnlSort('cat')">Categoria <span class="th-sort-arrow" id="mnt-sa-cat">↕</span></th>
             <th data-col="titulo" class="th-sort" onclick="_mntAnlSort('titulo')">Chamado <span class="th-sort-arrow" id="mnt-sa-titulo">↕</span></th>
             <th data-col="status" class="th-sort" onclick="_mntAnlSort('status')" style="width:120px">Status <span class="th-sort-arrow" id="mnt-sa-status">↕</span></th>
+            <th data-col="custo" class="th-sort" onclick="_mntAnlSort('custo')" style="width:100px">Custo <span class="th-sort-arrow" id="mnt-sa-custo">↕</span></th>
             <th data-col="antes" style="width:64px">Antes</th>
             <th data-col="depois" style="width:64px">Depois</th>
           </tr></thead>
@@ -1736,6 +1738,51 @@ function _mntChartBarV(canvasId, labels, values, scrollId){
   });
 }
 
+// Barra vertical com rótulo em R$ K/M (usa _mntFmtCustoCurto no plugin).
+var _mntBarValueLabelsCurrencyPlugin = {
+  id: '_mntBarValueLabelsCurrency',
+  afterDatasetsDraw: function(chart){
+    var ctx = chart.ctx;
+    var meta = chart.getDatasetMeta(0);
+    if (!meta || !meta.data) return;
+    ctx.save();
+    ctx.font = '800 12px "DM Sans", sans-serif';
+    ctx.fillStyle = '#35383F';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    meta.data.forEach(function(el, i){
+      var v = chart.data.datasets[0].data[i];
+      if (v == null || v === 0) return;
+      ctx.fillText(_mntFmtCustoCurto(v), el.x, el.y - 4);
+    });
+    ctx.restore();
+  }
+};
+function _mntChartBarVCurrency(canvasId, labels, values, scrollId){
+  if (typeof Chart === 'undefined') return;
+  var cv = document.getElementById(canvasId); if (!cv) return;
+  if (_mntCharts[canvasId]) _mntCharts[canvasId].destroy();
+  if (scrollId) _mntScrollWidth(scrollId, labels.length);
+  _mntCharts[canvasId] = new Chart(cv, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{
+      data: values,
+      backgroundColor: '#35383F', borderWidth: 0, borderRadius: 5,
+      barPercentage: 0.6, categoryPercentage: 0.8, maxBarThickness: 22
+    }]},
+    plugins: [_mntBarValueLabelsCurrencyPlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { top: 22, bottom: 4 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Sans', size: 12, weight: '400' }, maxRotation: 0, autoSkip: false } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
+      }
+    }
+  });
+}
+
 function _mntChartLine(canvasId, labels, values, scrollId){
   if (typeof Chart === 'undefined') return;
   var cv = document.getElementById(canvasId); if (!cv) return;
@@ -1810,6 +1857,22 @@ function _mntDrawCharts() {
   var mesLabels = keys.map(function(k){ var p=k.split('-'); return p[1] + '/' + p[0].slice(-2); });
   var mesVals   = keys.map(function(k){ return porMes[k]; });
   _mntChartBarV('mnt-canvas-mes', mesLabels, mesVals, 'mnt-scroll-mes');
+
+  // Custo por mês — soma dos custos agrupada pelo mês da data_abertura
+  var porMesCusto = {};
+  rows.forEach(function(r){
+    var s = (r.data_abertura || '').trim();
+    var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) return;
+    var v = _mntCusto(r); if (!v) return;
+    var key = m[3] + '-' + m[2];
+    porMesCusto[key] = (porMesCusto[key] || 0) + v;
+  });
+  var cstKeys = Object.keys(porMesCusto).sort();
+  if (cstKeys.length > 12) cstKeys = cstKeys.slice(cstKeys.length - 12);
+  var cstLabels = cstKeys.map(function(k){ var p=k.split('-'); return p[1] + '/' + p[0].slice(-2); });
+  var cstVals   = cstKeys.map(function(k){ return Math.round(porMesCusto[k]); });
+  _mntChartBarVCurrency('mnt-canvas-cst', cstLabels, cstVals, 'mnt-scroll-cst');
 
   // Tempo médio de resolução (SLA em dias por mês) — line chart
   var slaBuckets = {};
@@ -1897,6 +1960,36 @@ function _mntFotosDepois(r){
   return out;
 }
 
+// Custo do chamado: soma das devolutivas com custo (fallback: r.custo).
+function _mntParseCusto(s){
+  if (s == null || s === '') return 0;
+  var raw = String(s).replace(/R\$\s*/i, '').trim();
+  // Remove separador de milhar (.) mantendo o decimal (,)
+  if (raw.indexOf(',') >= 0){ raw = raw.replace(/\./g, '').replace(',', '.'); }
+  var n = parseFloat(raw);
+  return isNaN(n) ? 0 : n;
+}
+function _mntCusto(r){
+  var devs = (r && Array.isArray(r.devolutivas)) ? r.devolutivas : [];
+  var somaDev = 0, tem = false;
+  devs.forEach(function(d){
+    var v = _mntParseCusto(d && d.custo);
+    if (v){ somaDev += v; tem = true; }
+  });
+  if (tem) return somaDev;
+  return _mntParseCusto(r && r.custo);
+}
+function _mntFmtCusto(v){
+  if (!v) return 'R$ 0';
+  return 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+function _mntFmtCustoCurto(v){
+  if (!v) return '';
+  if (v >= 1e6) return 'R$ ' + (v/1e6).toFixed(1).replace('.', ',') + 'M';
+  if (v >= 1e3) return 'R$ ' + Math.round(v/1e3) + 'k';
+  return 'R$ ' + Math.round(v);
+}
+
 function _mntStatusPillClass(s){
   var t = String(s || '').toLowerCase();
   if (t.indexOf('finaliz') >= 0) return 's-positivo';
@@ -1918,6 +2011,9 @@ function _mntAnlSorted(){
     if (col === 'data'){
       av = (function(){ var d=_mntParseDate(a.data_abertura); return d?d.getTime():0; })();
       bv = (function(){ var d=_mntParseDate(b.data_abertura); return d?d.getTime():0; })();
+    } else if (col === 'custo'){
+      av = _mntCusto(a);
+      bv = _mntCusto(b);
     } else {
       var map = { sol:'solicitante', cat:'categoria', titulo:'titulo', status:'status' };
       var k = map[col] || col;
@@ -1934,7 +2030,7 @@ function _mntRenderAnl(){
   var el = document.getElementById('mnt-tb-anl'); if (!el) return;
   var sorted = _mntAnlSorted();
   if (!sorted.length){
-    el.innerHTML = '<tr><td colspan="7" class="mnt-state">Sem dados</td></tr>';
+    el.innerHTML = '<tr><td colspan="8" class="mnt-state">Sem dados</td></tr>';
   } else {
     var arr = sorted.slice(0, Math.min(_MNT_ANL_SHOW, sorted.length));
     _MNT_ANL_SORTED_VISIBLE = arr;
@@ -1954,6 +2050,7 @@ function _mntRenderAnl(){
         '<td class="tbl-cat">'+_mntEsc(r.categoria || '—')+'</td>'+
         '<td class="tbl-titulo">'+_mntEsc(r.titulo || '—')+'</td>'+
         '<td style="text-align:center">'+_mntStatusPill(r.status)+'</td>'+
+        '<td class="tbl-nota">'+_mntFmtCusto(_mntCusto(r))+'</td>'+
         '<td class="tbl-fotos">'+btn(antes,'antes')+'</td>'+
         '<td class="tbl-fotos">'+btn(depois,'depois')+'</td>'+
       '</tr>';
@@ -1979,13 +2076,13 @@ window._mntVerMaisAnl = _mntVerMaisAnl;
 
 function _mntAnlSort(col){
   if (_MNT_ANL_SORT.col === col) _MNT_ANL_SORT.dir *= -1;
-  else { _MNT_ANL_SORT.col = col; _MNT_ANL_SORT.dir = (col === 'data') ? -1 : 1; }
+  else { _MNT_ANL_SORT.col = col; _MNT_ANL_SORT.dir = (col === 'data' || col === 'custo') ? -1 : 1; }
   _mntRenderAnl();
 }
 window._mntAnlSort = _mntAnlSort;
 
 function _mntAnlUpdateArrows(){
-  ['data','sol','cat','titulo','status'].forEach(function(c){
+  ['data','sol','cat','titulo','status','custo'].forEach(function(c){
     var el = document.getElementById('mnt-sa-'+c);
     if (!el) return;
     if (_MNT_ANL_SORT.col === c) el.textContent = _MNT_ANL_SORT.dir === 1 ? '↑' : '↓';
