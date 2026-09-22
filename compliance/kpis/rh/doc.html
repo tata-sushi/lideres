@@ -124,6 +124,9 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 
 .ev-check { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--carbon); cursor: pointer; line-height: 1.25; }
 .ev-check input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--carbon); flex: 0 0 auto; cursor: pointer; margin: 0; }
+.dg-ut-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
+.dg-ut-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.dg-ut-rm { align-self: flex-end; background: transparent; border: none; color: var(--mid); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0; }
 
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
 .modal-overlay.active { opacity: 1; visibility: visible; }
@@ -499,10 +502,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <span class="modal-section-title">Termos</span>
         <label class="ev-check"><input type="checkbox" id="dg-check-marcacao_ponto"><span>Termo de Resp. sobre a Marcação de Ponto</span></label>
         <label class="ev-check"><input type="checkbox" id="dg-check-japona_termica" onchange="_dgToggleCaJapona(this.checked)"><span>Termo de Resp. sobre Uso da Japona Térmica</span></label>
+        <label class="ev-check"><input type="checkbox" id="dg-check-utensilios" onchange="_dgToggleUtensilios(this.checked)"><span>Termo de Resp. de Utilização de Utensílios Profissionais</span></label>
       </div>
       <div class="ev-field" id="dg-ca-wrap" style="display:none;">
         <span class="modal-section-title">Número do CA (Japona Térmica)</span>
         <input type="text" class="modal-input" id="dg-ca" placeholder="Ex.: 12345">
+      </div>
+      <div class="ev-field" id="dg-utensilios-wrap" style="display:none;">
+        <span class="modal-section-title">Utensílios entregues</span>
+        <div id="dg-utensilios-list"></div>
+        <button type="button" class="modal-btn modal-btn-cancel" style="margin-top:2px;align-self:flex-start;padding:6px 14px;font-size:11px;" onclick="_dgUtensilioAddLinha()">+ Item</button>
+        <span class="modal-section-title" style="margin-top:10px;">Observações sobre o estado dos utensílios</span>
+        <textarea class="modal-input" id="dg-utensilios-obs" rows="2" placeholder="Opcional" style="resize:vertical;"></textarea>
       </div>
       <div class="field-value" id="dg-erro" style="display:none;color:#B93232;font-weight:400;font-size:12px;"></div>
     </div>
@@ -1497,6 +1508,12 @@ var DG_LOGO_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA
     '.rp-section-heading{font-size:10.5px;font-weight:700;color:#111;margin:8px 0 3px;text-transform:none;letter-spacing:0;}',
     '.rp-bullets{margin:3px 0 6px 14px;padding:0;list-style:disc;}',
     '.rp-bullet{font-size:10px;color:#222;line-height:1.55;margin-bottom:2px;}',
+    /* tabela (Termo de Utensílios) */
+    '.rp-table{width:100%;border-collapse:collapse;margin:4px 0 10px;}',
+    '.rp-table th{background:#F4F4F4;font-family:"DM Mono",monospace;font-size:7.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#555;text-align:left;padding:6px 7px;border:1px solid #ddd;}',
+    '.rp-table td{font-size:9px;color:#222;padding:6px 7px;border:1px solid #ddd;vertical-align:top;}',
+    '.rp-table td.num,.rp-table th.num{text-align:right;white-space:nowrap;}',
+    '.rp-table tfoot td{font-weight:700;background:#F9F9F9;}',
     /* city/date */
     '.rp-cidade-data{font-size:11px;text-align:right;margin:20px 0 24px;color:#222;}',
     /* signatures */
@@ -1520,7 +1537,8 @@ var DG_LOGO_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA
 
 var DG_DOCS = [
   { id: 'marcacao_ponto', nome: 'Termo de Resp. sobre a Marcação de Ponto', sectionLabel: 'Termo de Responsabilidade sobre a Marcação de Ponto', vias: 2 },
-  { id: 'japona_termica',  nome: 'Termo de Resp. sobre Uso da Japona Térmica', sectionLabel: 'Termo de Responsabilidade sobre Uso da Japona Térmica', vias: 2 }
+  { id: 'japona_termica',  nome: 'Termo de Resp. sobre Uso da Japona Térmica', sectionLabel: 'Termo de Responsabilidade sobre Uso da Japona Térmica', vias: 2 },
+  { id: 'utensilios', nome: 'Termo de Resp. de Utilização de Utensílios Profissionais', sectionLabel: 'Termo de Responsabilidade de Utilização de Utensílios Profissionais de Trabalho', vias: 2 }
 ];
 
 // Texto jurídico idêntico ao de admissao.html (ADM_DOCS_CONTENT) — não reescrito.
@@ -1580,6 +1598,10 @@ function _dgUuid() {
 
 // Monta a página HTML de UM termo (mesmo layout de admissao.html/_admBuildDocPageHtml).
 function _dgBuildDocPageHtml(doc, ctx) {
+  // Utensílios não vem de DG_DOCS_CONTENT — tem sua própria página, com a
+  // tabela de itens preenchida na hora (mesmo padrão de admissao.html
+  // especial-casando Vale Transporte com seu próprio builder).
+  if (doc.id === 'utensilios') return _dgBuildUtensiliosPage(doc, ctx);
   var rawContent = DG_DOCS_CONTENT[doc.id];
   if (typeof rawContent === 'function') rawContent = rawContent(ctx.colabNomeLimpo, ctx.caNumero);
   var paragraphs = typeof rawContent === 'string' ? rawContent : '';
@@ -1619,6 +1641,109 @@ function _dgBuildDocPageHtml(doc, ctx) {
         '<div class="rp-section-body">' + paragraphs + '</div>' +
       '</div>' +
       '<p class="rp-ass-declaro">Declaro que li, compreendi e estou de acordo com os termos deste documento, tendo recebido uma cópia.</p>' +
+      '<div class="rp-cidade-data">São Paulo, ' + escH(ctx.docDateFmt) + '</div>' +
+    '</div>'
+  );
+}
+
+// Termo de Utensílios: página com tabela de itens preenchida na hora (ctx.utensiliosItens).
+// Texto jurídico (parágrafos + 6 cláusulas) fornecido pelo usuário, copiado sem
+// reescrever. A declaração final já vem embutida na Cláusula 6, por isso não
+// repete o "<p class="rp-ass-declaro">" genérico que os outros termos usam.
+function _dgBuildUtensiliosPage(doc, ctx) {
+  var itens = ctx.utensiliosItens || [];
+  var totalGeral = 0;
+  var linhasHtml = itens.map(function (it) {
+    var qtd = Number(it.qtd) || 0;
+    var valorUnit = Number(it.valor) || 0;
+    var totalLinha = qtd * valorUnit;
+    totalGeral += totalLinha;
+    return '<tr>' +
+      '<td>' + escH(it.nome || '—') + '</td>' +
+      '<td>' + escH(it.marca || '—') + '</td>' +
+      '<td>' + escH(it.modelo || '—') + '</td>' +
+      '<td class="num">' + escH(qtd ? String(qtd) : '—') + '</td>' +
+      '<td class="num">' + _dgFmtMoeda(valorUnit) + '</td>' +
+      '<td class="num">' + _dgFmtMoeda(totalLinha) + '</td>' +
+    '</tr>';
+  }).join('');
+  var tabela = '<table class="rp-table">' +
+    '<thead><tr><th>Utensílio</th><th>Marca</th><th>Modelo</th><th class="num">Quantidade</th><th class="num">Valor Unitário</th><th class="num">Valor Total</th></tr></thead>' +
+    '<tbody>' + (linhasHtml || '<tr><td colspan="6" style="text-align:center;color:#999;">Nenhum item informado</td></tr>') + '</tbody>' +
+    '<tfoot><tr><td colspan="5" class="num">Total geral</td><td class="num">' + _dgFmtMoeda(totalGeral) + '</td></tr></tfoot>' +
+  '</table>';
+  var obsHtml = ctx.utensiliosObs
+    ? '<p class="rp-p">' + escH(ctx.utensiliosObs) + '</p>'
+    : '<p class="rp-p" style="color:#999;">Nenhuma observação registrada.</p>';
+
+  var corpo =
+    '<p class="rp-p">Por meio deste documento, declaro estar ciente de que os utensílios profissionais disponibilizados pelo Tatá são destinados à execução das minhas atividades de trabalho e ficam sob minha responsabilidade enquanto estiverem sob minha guarda.</p>' +
+    '<p class="rp-p">Ao receber os utensílios descritos neste termo, comprometo-me a utilizá-los corretamente, zelar por sua conservação e respeitar as condições estabelecidas abaixo.</p>' +
+    '<h3 class="rp-section-heading">Identificação dos Utensílios Entregues</h3>' +
+    tabela +
+    '<p class="rp-p">Declaro que recebi os utensílios acima relacionados em condições adequadas de uso e conservação, salvo observações registradas neste documento.</p>' +
+    '<h3 class="rp-section-heading">Observações sobre o estado dos utensílios no momento da entrega</h3>' +
+    obsHtml +
+    '<h3 class="rp-section-heading">Cláusula 1 — Da Utilização</h3>' +
+    '<p class="rp-p"><strong>a)</strong> O colaborador deverá utilizar os utensílios profissionais disponibilizados pelo Tatá exclusivamente para a execução das atividades relacionadas à sua função e de acordo com a finalidade de cada item.</p>' +
+    '<p class="rp-p"><strong>b)</strong> Os utensílios deverão ser utilizados de maneira adequada, respeitando as orientações de uso, higiene, segurança, conservação e armazenamento aplicáveis.</p>' +
+    '<p class="rp-p"><strong>c)</strong> O colaborador deverá observar os cuidados necessários durante o manuseio dos utensílios, especialmente daqueles que possam oferecer risco de corte, perfuração, queimadura ou outro acidente.</p>' +
+    '<p class="rp-p"><strong>d)</strong> Não é permitido retirar os utensílios das dependências do Tatá para uso particular ou qualquer finalidade não relacionada ao trabalho sem autorização prévia da liderança responsável.</p>' +
+    '<h3 class="rp-section-heading">Cláusula 2 — Da Guarda e Conservação</h3>' +
+    '<p class="rp-p"><strong>a)</strong> O colaborador assume a responsabilidade pela guarda, conservação e correta utilização dos utensílios relacionados neste termo enquanto estiverem sob sua responsabilidade.</p>' +
+    '<p class="rp-p"><strong>b)</strong> Após a utilização, os utensílios deverão ser higienizados, organizados e armazenados nos locais determinados pelo Tatá, conforme aplicável.</p>' +
+    '<p class="rp-p"><strong>c)</strong> O colaborador deverá comunicar imediatamente à liderança qualquer defeito, dano, quebra, perda, extravio ou outra ocorrência envolvendo os utensílios.</p>' +
+    '<p class="rp-p"><strong>d)</strong> O colaborador não deverá continuar utilizando utensílio que apresente condição inadequada ou que possa comprometer sua segurança ou a segurança de terceiros.</p>' +
+    '<h3 class="rp-section-heading">Cláusula 3 — Da Perda, Extravio, Dano e Responsabilidade</h3>' +
+    '<p class="rp-p"><strong>a)</strong> O colaborador reconhece que os utensílios descritos neste termo são patrimônio do Tatá e permanecerão sob sua responsabilidade durante o período em que lhe forem disponibilizados.</p>' +
+    '<p class="rp-p"><strong>b)</strong> Em caso de perda, extravio, quebra, dano ou inutilização do utensílio, a ocorrência deverá ser comunicada imediatamente à liderança para apuração das circunstâncias.</p>' +
+    '<p class="rp-p"><strong>c)</strong> Não será atribuída ao colaborador responsabilidade por desgaste natural decorrente do uso regular e adequado do utensílio ou por defeitos não relacionados à sua conduta.</p>' +
+    '<p class="rp-p"><strong>d)</strong> Quando ficar caracterizado que a perda, extravio, quebra ou dano ocorreu em razão de uso indevido, negligência, imprudência, imperícia, descumprimento das orientações de utilização ou ação intencional do colaborador, poderão ser adotadas as medidas administrativas cabíveis, observada a legislação aplicável.</p>' +
+    '<h3 class="rp-section-heading">Cláusula 4 — Do Ressarcimento e Desconto</h3>' +
+    '<p class="rp-p"><strong>a)</strong> O colaborador declara estar ciente e concorda expressamente com a possibilidade de ressarcimento dos prejuízos decorrentes de perda, extravio, quebra ou dano dos utensílios sob sua responsabilidade, quando ficar comprovada sua responsabilidade pela ocorrência, observados os requisitos da legislação trabalhista aplicável.</p>' +
+    '<p class="rp-p"><strong>b)</strong> Caracterizada a responsabilidade do colaborador, o Tatá poderá realizar o desconto correspondente ao prejuízo efetivamente apurado, inclusive em folha de pagamento ou nas verbas decorrentes do encerramento do contrato de trabalho, quando legalmente permitido, observando o artigo 462, §1º, da Consolidação das Leis do Trabalho (CLT).</p>' +
+    '<p class="rp-p"><strong>c)</strong> Para fins de apuração, poderá ser considerado o custo de reparação do utensílio ou, quando o reparo não for possível ou economicamente viável, o valor correspondente à sua reposição, observadas as características e condições do item.</p>' +
+    '<p class="rp-p"><strong>d)</strong> A assinatura deste termo representa a ciência e concordância do colaborador quanto à possibilidade de desconto nas hipóteses previstas nesta cláusula, respeitados os limites e requisitos previstos na legislação aplicável.</p>' +
+    '<h3 class="rp-section-heading">Cláusula 5 — Da Devolução</h3>' +
+    '<p class="rp-p"><strong>a)</strong> Os utensílios deverão ser devolvidos ao Tatá sempre que solicitado, quando houver substituição do item, alteração de função que dispense sua utilização ou encerramento do contrato de trabalho.</p>' +
+    '<p class="rp-p"><strong>b)</strong> No momento da devolução, poderá ser realizada a conferência dos utensílios entregues ao colaborador e de suas condições de conservação.</p>' +
+    '<p class="rp-p"><strong>c)</strong> Eventuais divergências, perdas ou danos identificados na devolução serão analisados conforme as disposições deste termo.</p>' +
+    '<h3 class="rp-section-heading">Cláusula 6 — Da Declaração</h3>' +
+    '<p class="rp-p">Declaro que recebi os utensílios profissionais relacionados neste documento, conferi suas características e condições e estou ciente de minha responsabilidade quanto à utilização, guarda e conservação.</p>' +
+    '<p class="rp-p">Declaro também que estou ciente das condições referentes à perda, extravio, dano, ressarcimento e eventual desconto estabelecidas neste termo.</p>' +
+    '<p class="rp-ass-declaro">Declaro que li, compreendi e estou de acordo com todas as condições deste documento, tendo recebido uma cópia.</p>';
+
+  return (
+    '<div class="page">' +
+      '<div class="rp-header">' +
+        '<img class="rp-logo" src="' + DG_LOGO_B64 + '" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' +
+        '<div class="rp-header-title">' + escH(doc.nome) + '</div>' +
+        '<div class="rp-header-right">Emitido em <strong>' + escH(ctx.dateStr) + '</strong></div>' +
+      '</div>' +
+      '<div class="rp-intro">' +
+        '<div class="rp-intro-field grow">' +
+          '<span class="rp-intro-label">Colaborador</span>' +
+          '<span class="rp-intro-value">' + escH(ctx.colabNomeLimpo) + '</span>' +
+        '</div>' +
+        (ctx.colabMatricula ? (
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Matrícula</span>' +
+            '<span class="rp-intro-value">' + escH(ctx.colabMatricula) + '</span>' +
+          '</div>'
+        ) : '') +
+        '<div class="rp-intro-field">' +
+          '<span class="rp-intro-label">Cargo</span>' +
+          '<span class="rp-intro-value">' + escH(ctx.colabCargo || '—') + '</span>' +
+        '</div>' +
+        '<div class="rp-intro-field">' +
+          '<span class="rp-intro-label">Unidade</span>' +
+          '<span class="rp-intro-value">' + escH(ctx.colabUnidade || '—') + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="rp-section">' +
+        '<div class="rp-section-label">' + (doc.sectionLabel || 'Declaração') + '</div>' +
+        '<div class="rp-section-body">' + corpo + '</div>' +
+      '</div>' +
       '<div class="rp-cidade-data">São Paulo, ' + escH(ctx.docDateFmt) + '</div>' +
     '</div>'
   );
@@ -1714,6 +1839,10 @@ function abrirDocGerar() {
   document.getElementById('dg-check-japona_termica').checked = false;
   document.getElementById('dg-ca-wrap').style.display = 'none';
   document.getElementById('dg-ca').value = '';
+  document.getElementById('dg-check-utensilios').checked = false;
+  document.getElementById('dg-utensilios-wrap').style.display = 'none';
+  document.getElementById('dg-utensilios-list').innerHTML = '';
+  document.getElementById('dg-utensilios-obs').value = '';
   document.getElementById('dg-erro').style.display = 'none';
   var btn = document.getElementById('dg-btn-assinar');
   btn.disabled = false; btn.textContent = 'Enviar p/ Assinatura';
@@ -1727,6 +1856,58 @@ function fecharDocGerar() {
 }
 function _dgToggleCaJapona(checked) {
   document.getElementById('dg-ca-wrap').style.display = checked ? '' : 'none';
+}
+
+// Utensílios: lista dinâmica de itens (mesmo padrão de admissao.html/_admVtAddRow —
+// insertAdjacentHTML pra cada linha, lida direto do DOM na hora de gerar/enviar).
+function _dgUtensilioRowHtml() {
+  return '<div class="dg-ut-row">' +
+    '<input type="text" class="modal-input dg-ut-nome" placeholder="Utensílio (ex.: Faca 8&quot;)">' +
+    '<div class="dg-ut-grid2">' +
+      '<input type="text" class="modal-input dg-ut-marca" placeholder="Marca">' +
+      '<input type="text" class="modal-input dg-ut-modelo" placeholder="Modelo">' +
+    '</div>' +
+    '<div class="dg-ut-grid2">' +
+      '<input type="number" min="1" class="modal-input dg-ut-qtd" placeholder="Quantidade">' +
+      '<input type="number" min="0" step="0.01" class="modal-input dg-ut-valor" placeholder="Valor unitário (R$)">' +
+    '</div>' +
+    '<button type="button" class="dg-ut-rm" onclick="_dgUtensilioRemoverLinha(this)">Remover</button>' +
+  '</div>';
+}
+function _dgUtensilioAddLinha() {
+  var c = document.getElementById('dg-utensilios-list');
+  if (c) c.insertAdjacentHTML('beforeend', _dgUtensilioRowHtml());
+}
+function _dgUtensilioRemoverLinha(btn) {
+  var row = btn.closest('.dg-ut-row');
+  if (row) row.remove();
+}
+function _dgToggleUtensilios(checked) {
+  document.getElementById('dg-utensilios-wrap').style.display = checked ? '' : 'none';
+  var lista = document.getElementById('dg-utensilios-list');
+  if (checked) {
+    if (lista && !lista.children.length) _dgUtensilioAddLinha();
+  } else {
+    lista.innerHTML = '';
+    document.getElementById('dg-utensilios-obs').value = '';
+  }
+}
+function _dgUtensilioLerLinhas() {
+  var c = document.getElementById('dg-utensilios-list');
+  if (!c) return [];
+  return Array.prototype.map.call(c.querySelectorAll('.dg-ut-row'), function (row) {
+    return {
+      nome: ((row.querySelector('.dg-ut-nome') || {}).value || '').trim(),
+      marca: ((row.querySelector('.dg-ut-marca') || {}).value || '').trim(),
+      modelo: ((row.querySelector('.dg-ut-modelo') || {}).value || '').trim(),
+      qtd: ((row.querySelector('.dg-ut-qtd') || {}).value || '').trim(),
+      valor: ((row.querySelector('.dg-ut-valor') || {}).value || '').trim()
+    };
+  }).filter(function (it) { return it.nome || it.marca || it.modelo || it.qtd || it.valor; });
+}
+function _dgFmtMoeda(n) {
+  n = Number(n) || 0;
+  return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function _dgSelecionados() {
@@ -1744,7 +1925,9 @@ function _dgMontarContexto(matricula) {
     colabMatricula: colab.matricula, colabNomeLimpo: colab.nome || matricula,
     colabUnidade: colab.unidade || '', colabCargo: colab.cargo || colab.departamento || '',
     dataAdmissao: _dgFmtData(colab.data_admissao), dataFmt: dataFmt, dateStr: dateStr,
-    docDateFmt: dataFmt, caNumero: (document.getElementById('dg-ca') || {}).value || ''
+    docDateFmt: dataFmt, caNumero: (document.getElementById('dg-ca') || {}).value || '',
+    utensiliosItens: _dgUtensilioLerLinhas(),
+    utensiliosObs: ((document.getElementById('dg-utensilios-obs') || {}).value || '').trim()
   };
 }
 
@@ -1754,6 +1937,15 @@ function _dgValidar(matricula, selecionados, errBox) {
   if (!selecionados.length) { errBox.style.display = 'block'; errBox.textContent = 'Selecione ao menos um termo.'; return false; }
   if (selecionados.some(function (d) { return d.id === 'japona_termica'; }) && !(document.getElementById('dg-ca') || {}).value.trim()) {
     errBox.style.display = 'block'; errBox.textContent = 'Informe o número do CA da Japona Térmica.'; return false;
+  }
+  if (selecionados.some(function (d) { return d.id === 'utensilios'; })) {
+    var itens = _dgUtensilioLerLinhas();
+    var incompleto = itens.some(function (it) { return !it.nome || !it.qtd || !it.valor; });
+    if (!itens.length || incompleto) {
+      errBox.style.display = 'block';
+      errBox.textContent = 'Preencha nome, quantidade e valor unitário de cada utensílio (marca e modelo são opcionais).';
+      return false;
+    }
   }
   return true;
 }
