@@ -732,4 +732,52 @@ que manda notificação real pro colaborador assinar), vale gerar um PDF
 de teste e comparar visualmente com o que `admissao.html` gera pro
 mesmo termo.
 
+**Feito (2026-09-22): Passo 2 — 3º termo em "Gerar Documento"
+(`doc.html`): Termo de Resp. de Utilização de Utensílios Profissionais.**
+Primeiro termo do mecanismo que não é texto fixo — tem uma tabela de
+itens preenchida na hora (Utensílio, Marca, Modelo, Quantidade, Valor
+Unitário, Valor Total calculado) mais um campo de observações livre.
+Diferente de `marcacao_ponto`/`japona_termica` (que vêm de
+`DG_DOCS_CONTENT`), esse termo tem sua própria função de montagem de
+página (`_dgBuildUtensiliosPage`), no mesmo espírito de como
+`admissao.html` trata o Vale Transporte à parte (`_admVtBuildPage`) —
+`_dgBuildDocPageHtml` já checa `doc.id === 'utensilios'` e desvia pra lá.
+
+**Modal:** novo checkbox abre uma lista de itens dinâmica (`+ Item`
+insere linha, `Remover` tira — mesmo padrão de
+`admissao.html`/`_admVtAddRow`: `insertAdjacentHTML` por linha, lida
+direto do DOM na hora de gerar/enviar, sem estado JS paralelo) + um
+campo de observações. Exige nome, quantidade e valor unitário de cada
+item (marca e modelo ficam opcionais, viram "—" na tabela se vazios) —
+sem isso o cálculo de ressarcimento do termo não faz sentido.
+
+**Texto jurídico:** as 6 cláusulas + os 3 parágrafos de abertura foram
+digitados a partir do texto que o usuário mandou (não veio de um
+arquivo pra extrair programaticamente, diferente dos outros 2 termos) —
+por isso, depois de escrito, rodei uma comparação automática (as 31
+linhas do texto original, uma a uma, normalizada e comparada contra o
+HTML gerado) confirmando que todas batem 100% antes de considerar
+pronto. A declaração final ("Declaro que li, compreendi...") já vem
+dentro da Cláusula 6 do texto original, então esse termo NÃO usa o
+`<p class="rp-ass-declaro">` genérico que os outros dois adicionam à
+parte — evita duplicar a frase.
+
+**Catálogo:** criado o `doc_tipo` novo via `doc_tipo_sandbox_criar`
+(categoria "Contratos e Termos", `periodicidade:'unico'`,
+`obrigatorio:true` — só esse é obrigatório, os outros dois entraram como
+já existentes no catálogo com `obrigatorio:true` também — `requer_assinatura:true`),
+já que esse termo não existia antes. Nome conferido bate exatamente com
+a `sectionLabel` usada no código.
+
+**CSS nova:** `.rp-table`/`.rp-table th`/`.rp-table td`/`.rp-table tfoot`
+adicionada em `DG_CSS` (só existe em `doc.html` — `admissao.html` não
+tem termo com tabela hoje, não precisou tocar lá).
+
+Testado com Playwright + mock: lista de itens abre/fecha certo, "+ Item"
+e "Remover" funcionam, valida item incompleto (bloqueia envio),
+cálculo de valor total por linha e total geral bate (2 × R$45,90 =
+R$91,80 confirmado no teste), observações aparecem no HTML gerado,
+payload das 3 RPCs resolve o `tipo_id` certo pelo nome. Confirmado no
+banco que o `doc_tipo` novo foi criado com o nome exato.
+
 _Última atualização: 2026-09-22._
