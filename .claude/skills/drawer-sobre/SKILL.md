@@ -28,7 +28,7 @@ Painel lateral deslizante (da direita) aberto pelo **botão Menu do header** (`o
 - **`controle-acesso-abas-botoes`** — o `data-botao-id`/`data-aba-id` dos botões de **Ações** (`.drawer-sam-btn`), que controla quem os vê.
 - **`modal-formulario`** — os modais/formulários que os botões de Ações abrem.
 
-Tokens: padrão do portal (`--surface #FFF`, `--carbon #35383F`, `--citric #CFFF00`, `--bg #F4F4F4`, `--border #E2E2E2`, `--muted #999`, `--mid #555`, `--radius 8px`). Fontes: **DM Sans** (textos/números) + **DM Mono** (rótulos, versão, botões).
+Tokens: padrão do portal (`--surface #FFF`, `--carbon #35383F`, `--citric #CFFF00`, `--bg #F4F4F4`, `--border #E2E2E2`, `--muted #999`, `--mid #555`, `--radius 8px`). Fontes: **DM Sans** na maior parte (título, rótulos de seção/footer, versão-valor, números, avatar, nome, cargo). **DM Mono** só em: rótulo "Portal" da versão, rótulo/sub dos cards de Números e botões de Ação.
 
 ---
 
@@ -49,11 +49,11 @@ Tokens: padrão do portal (`--surface #FFF`, `--carbon #35383F`, `--citric #CFFF
 
 ## 2. Header (52px)
 
-Título "Sobre" (DM Mono 10px/500 uppercase) + botão ✕ (28×28, `--bg` + borda).
+Título "Sobre" (DM Sans 10px/500 uppercase) + botão ✕ (28×28, `--bg` + borda).
 
 ```css
 .drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; height: 52px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.drawer-title { font-family: "DM Mono", monospace; font-size: 10px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text); }
+.drawer-title { font-family: "DM Sans", sans-serif; font-size: 10px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text); }
 .drawer-close { width: 28px; height: 28px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: border-color .15s; }
 .drawer-close:hover { border-color: var(--carbon); }
 .drawer-close svg { width: 13px; height: 13px; stroke: var(--mid); fill: none; stroke-width: 2; stroke-linecap: round; }
@@ -72,12 +72,12 @@ Título "Sobre" (DM Mono 10px/500 uppercase) + botão ✕ (28×28, `--bg` + bord
 
 ## 3. Body — seções
 
-Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-label` (DM Mono 9px uppercase muted, com linha `::after` que preenche o resto). Ordem **fixa**: Versão · O que é · Números · Ações.
+Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-label` (DM Sans 9px uppercase muted, com linha `::after` que preenche o resto). Ordem **fixa**: Versão · O que é · Números · Ações.
 
 ```css
 .drawer-body { flex: 1; overflow-y: auto; padding: 14px 16px 10px; }
 .drawer-section { margin-bottom: 18px; }
-.drawer-section-label { font-family: "DM Mono", monospace; font-size: 9px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.drawer-section-label { font-family: "DM Sans", sans-serif; font-size: 9px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
 .drawer-section-label::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 ```
 
@@ -85,7 +85,7 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
 ```css
 .drawer-version { background: var(--carbon); border-radius: var(--radius); padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; }
 .drawer-version-label { font-family: "DM Mono", monospace; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.4); }
-.drawer-version-val { font-family: "DM Mono", monospace; font-size: 20px; font-weight: 300; color: var(--citric); letter-spacing: .04em; }
+.drawer-version-val { font-family: "DM Sans", sans-serif; font-size: 20px; font-weight: 300; color: var(--citric); letter-spacing: .04em; }
 ```
 
 **O que é** — texto descritivo (DM Sans 13px, line-height 1.7, `--mid`):
@@ -127,12 +127,12 @@ Avatar circular citric (iniciais) + nome + cargo.
 
 ```css
 .drawer-footer { padding: 12px 16px 16px; flex-shrink: 0; background: var(--surface); }
-.drawer-footer-label { font-family: "DM Mono", monospace; font-size: 9px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.drawer-footer-label { font-family: "DM Sans", sans-serif; font-size: 9px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
 .drawer-footer-label::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 .drawer-footer-person { display: flex; align-items: center; gap: 10px; }
-.drawer-footer-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--carbon); display: flex; align-items: center; justify-content: center; font-family: "DM Mono", monospace; font-size: 10px; font-weight: 500; color: var(--citric); flex-shrink: 0; }
+.drawer-footer-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--carbon); display: flex; align-items: center; justify-content: center; font-family: "DM Sans", sans-serif; font-size: 10px; font-weight: 500; color: var(--citric); flex-shrink: 0; }
 .drawer-footer-name { font-size: 13px; font-weight: 600; color: var(--text); }
-.drawer-footer-role { font-family: "DM Mono", monospace; font-size: 9px; color: var(--muted); letter-spacing: .04em; margin-top: 1px; }
+.drawer-footer-role { font-family: "DM Sans", sans-serif; font-size: 9px; color: var(--muted); letter-spacing: .04em; margin-top: 1px; }
 ```
 
 ---
@@ -165,6 +165,6 @@ document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeD
 - [ ] 3 zonas: header 52px (título "Sobre" + ✕) · body rolável · footer fixo.
 - [ ] Seções na ordem **Versão · O que é · Números · Ações**; conteúdo fixo, **só Ações varia**.
 - [ ] Botões de Ações = `.drawer-sam-btn` (carbon/branco) com **`data-botao-id`** (acesso).
-- [ ] Footer = Responsável (avatar citric + nome DM Sans 13/600 + cargo DM Mono 9).
+- [ ] Footer = Responsável (avatar citric + nome DM Sans 13/600 + cargo DM Sans 9).
 - [ ] Abre pelo botão Menu do header (`openDrawer`); fecha no ✕, Esc **e** clique fora; trava scroll do fundo.
 - [ ] JS validado (sem erro de sintaxe).
