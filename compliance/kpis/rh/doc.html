@@ -206,6 +206,10 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 .pend-table td.ptd-colab .candidate-name { font-weight: 600; }
 .pend-table td.ptd-doc { white-space: normal; min-width: 220px; }
 .pend-table td.ptd-data { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+.pend-table td.ptd-acoes { text-align: right; }
+.ptd-excluir-btn { width: 26px; height: 26px; background: transparent; border: 0; cursor: pointer; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; transition: color .15s, background .15s; }
+.ptd-excluir-btn:hover { color: #B93232; background: #FDEAEA; }
+.ptd-excluir-btn:disabled { opacity: .4; cursor: default; }
 
 /* ── ANALÍTICO (tabela gigante, rolagem lateral) ── */
 .anl-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
@@ -2353,6 +2357,7 @@ function _pendItens() {
       else if (_docCompetenciaMesDoHolerite(d.competencia)) docNome += ' \u2014 ' + d.competencia;
     }
     return {
+      id: d.id,
       nome: c.nome || d.matricula,
       unidade: c.unidade || '',
       depto: c.departamento || '',
@@ -2395,7 +2400,7 @@ function _pendAplicar() {
   if (!filtrados.length) { c.innerHTML = emptyState(); return; }
 
   var head = '<thead><tr>' +
-    '<th>Colaborador</th><th>Documento</th><th>Gerado em</th><th>Status</th>' +
+    '<th>Colaborador</th><th>Documento</th><th>Gerado em</th><th>Status</th><th></th>' +
     '</tr></thead>';
   var body = '<tbody>' + filtrados.map(function (r) {
     var sub = escH(r.cargo || '') + (r.unidade ? ' \u00b7 ' + escH(r.unidade) : '');
@@ -2407,10 +2412,42 @@ function _pendAplicar() {
       '<td class="ptd-doc">' + escH(r.documento) + '</td>' +
       '<td class="ptd-data">' + escH(r.geradoEm ? _docFmtDataHora(r.geradoEm) : '\u2014') + '</td>' +
       '<td><span class="status-badge sel-red">Pendente</span></td>' +
+      '<td class="ptd-acoes">' +
+        '<button class="ptd-excluir-btn" title="Excluir documento n\u00e3o assinado" onclick="_pendExcluir(\'' + r.id + '\', this)">' +
+          '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>' +
+        '</button>' +
+      '</td>' +
     '</tr>';
   }).join('') + '</tbody>';
 
   c.innerHTML = '<div class="anl-box"><div class="pend-table-wrap"><table class="ent-table pend-table">' + head + body + '</table></div></div>';
+}
+
+// Exclui um documento AINDA NÃO assinado (status pendente_assinatura). A RPC
+// (colaborador_documento_pendente_sandbox_excluir) confere de novo no banco
+// que não existe nenhum tata_plus.assinatura_registros pra essa atribuição
+// antes de apagar — nunca confia só no status já carregado na tela, que pode
+// estar desatualizado. Também limpa a atribuição/documento do lado do app
+// (tata_plus), pra o colaborador não continuar vendo uma pendência de
+// assinatura de um documento que já não existe mais aqui.
+function _pendExcluir(id, btn) {
+  if (!id) return;
+  if (!window.confirm('Excluir esse documento pendente de assinatura? Essa ação não pode ser desfeita.')) return;
+  var SB = window.__lideresSupa;
+  if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
+  btn.disabled = true;
+  SB.rpc('colaborador_documento_pendente_sandbox_excluir', { p_id: id }).then(function (r) {
+    if (r.error) {
+      btn.disabled = false;
+      alert('Erro ao excluir: ' + r.error.message);
+      return;
+    }
+    colaboradorDocumentos = (colaboradorDocumentos || []).filter(function (d) { return d.id !== id; });
+    _pendAplicar();
+  }, function (err) {
+    btn.disabled = false;
+    alert('Erro de conexão: ' + ((err && err.message) || err));
+  });
 }
 
 function renderDocPendencias() {

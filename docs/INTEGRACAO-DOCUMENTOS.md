@@ -799,4 +799,39 @@ funcionando):
   a mesma configuração `margin:0` mas não foi tocado (fora do escopo
   desta cópia independente).
 
+**Ajuste (2026-09-22): botão de excluir na aba Pendências (`doc.html`).**
+Ícone de lixeira em cada linha, pra apagar um documento AINDA NÃO
+assinado (status `pendente_assinatura`) direto da lista.
+
+RPC nova `colaborador_documento_pendente_sandbox_excluir(p_id)` — nunca
+confia só no status já carregado na tela (pode estar desatualizado);
+antes de apagar, confere de novo no banco, nessa ordem:
+1. `dp_rh.colaborador_documentos.status = 'pendente_assinatura'` (senão
+   recusa: "só é possível excluir documentos com status
+   pendente_assinatura").
+2. Se tem `assinatura_atribuicao_id`, confere que
+   `tata_plus.assinatura_atribuicoes.status` ainda é `'pendente'`
+   (senão recusa: "a atribuição de assinatura não está mais pendente").
+3. Confere que não existe nenhum `tata_plus.assinatura_registros` pra
+   essa atribuição (senão recusa: "existe um registro de assinatura...
+   não é seguro excluir") — a checagem final, a que realmente importa.
+
+Só depois de passar pelas 3 apaga dos dois lados: o
+`assinatura_documentos`/`assinatura_atribuicoes` (lado do app, pra o
+colaborador não continuar vendo uma pendência de assinatura de um
+documento que já não existe mais aqui) e a linha em
+`dp_rh.colaborador_documentos` (lado do portal).
+
+Testado: Playwright + mock (botão abre confirmação, chama a RPC com o
+id certo, remove a linha da tela em caso de sucesso) e 3 cenários reais
+direto no banco — (1) linha `status='entregue'` recusada corretamente,
+(2) linha genuinamente pendente apagada com sucesso, conferido que
+sumiu dos dois lados (portal + app), (3) linha com atribuição já
+`status='assinado'` recusada corretamente, mesmo a linha do portal
+ainda dizendo `pendente_assinatura` (situação de dado desatualizado).
+Dados de teste limpos depois (o cenário 3 precisou do protocolo de
+exclusão segura — desabilitar `trg_assinatura_registros_imutavel`,
+apagar, reabilitar, conferir `tgenabled` — porque inclui um
+`assinatura_registros` de teste).
+
 _Última atualização: 2026-09-22._
