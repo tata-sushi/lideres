@@ -780,4 +780,23 @@ R$91,80 confirmado no teste), observações aparecem no HTML gerado,
 payload das 3 RPCs resolve o `tipo_id` certo pelo nome. Confirmado no
 banco que o `doc_tipo` novo foi criado com o nome exato.
 
+**Ajuste (2026-09-22), a partir de teste real do usuário em produção:**
+dois problemas visuais no termo de Utensílios, cada um corrigido e
+confirmado pelo usuário no app de verdade (a limitação de teste do
+html2pdf citada acima deixou de valer — geração real testada e
+funcionando):
+- Tabela saiu com grid completo (borda em toda célula) — trocada pelo
+  mesmo padrão visual de `estoqueadm.html` (cabeçalho escuro `#35383F`,
+  linhas zebradas, coluna `#` numerando os itens, sem grid completo).
+- Termo passa de uma folha (tabela + 6 cláusulas) e o conteúdo saía
+  colado na borda no corte entre páginas. Causa: `margin:0` na
+  configuração do `html2pdf` — o respiro só vinha do `padding` do
+  `.page`, que cobre o topo/fim do documento INTEIRO, não os cortes que
+  o próprio html2pdf faz ao fatiar o canvas em alturas de A4. Corrigido
+  com margem de 24pt em cima/embaixo direto no `html2pdf`
+  (`margin:[24,0,24,0]`) — vale pra qualquer termo que cresça além de
+  uma página, não só Utensílios. Só em `doc.html`; `admissao.html` tem
+  a mesma configuração `margin:0` mas não foi tocado (fora do escopo
+  desta cópia independente).
+
 _Última atualização: 2026-09-22._
