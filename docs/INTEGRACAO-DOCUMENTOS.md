@@ -673,4 +673,63 @@ pra incluir `pagamento`. Nenhuma RPC mudou (a de criar/listar já são
 genéricas por categoria) — só o array `CATEGORIAS`/`CAT_COLOR` do front e
 o dado já gravado.
 
-_Última atualização: 2026-09-18._
+**Feito (2026-09-22): botão "Gerar Documento" em `doc.html` — Passo 1 de
+"incluir mais um termo para assinatura digital".** Réplica independente
+(não compartilhada, por decisão explícita) do mecanismo de "Gerar
+Documentos de Admissão" (`admissao.html`): texto jurídico em HTML ->
+`html2pdf.js` rodando num iframe isolado -> PDF, com dois caminhos —
+"Gerar PDF" (abre aba nova e chama `window.print()`, sem tocar no fluxo
+de assinatura) e "Enviar p/ Assinatura" (upload pro bucket `assinaturas`
++ a mesma cadeia de 3 RPCs de sempre:
+`colaborador_documento_pendente_assinatura_sandbox_salvar` ->
+`tata_plus.docs_enviar_para_assinatura` ->
+`colaborador_documento_definir_atribuicao_sandbox`). `admissao.html` não
+foi tocado.
+
+Só 2 termos entraram (por escolha do usuário — os outros de
+`admissao.html`, tipo Vale Transporte/Lista de EPIs/Checklist, são
+específicos do momento de admissão e não fazem sentido aqui): **Termo de
+Resp. sobre a Marcação de Ponto** e **Termo de Resp. sobre Uso da Japona
+Térmica** (esse último pede o número do CA num campo que só aparece
+quando o termo é marcado). Os dois já existiam no catálogo
+(`dp_rh.doc_tipos`, `requer_assinatura=true`) — não precisou criar tipo
+novo, só reaproveitar o `id` pelo nome exato (`sectionLabel`), igual
+`admissao.html` já faz.
+
+**O texto jurídico dos dois termos foi copiado byte a byte** de
+`ADM_DOCS_CONTENT` (`admissao.html`) — nenhuma palavra reescrita.
+Conferido programaticamente (comparação de string) que bate 100% com o
+original antes de considerar pronto.
+
+Reaproveitado o que `doc.html` já tinha: `docColaboradores` (roster já
+carregado, com matrícula/nome/cargo/unidade/data de admissão — não
+precisou de RPC nova de listagem), `docTipos` (catálogo já em memória,
+usado pra achar o `tipo_id` sem chamada extra), `escH`/`_usuarioLogadoNome`/
+`_sandboxMatricula` (helpers já existentes), e o padrão de modal
+(`.modal-overlay`/`.modal`/`class="active"`) já usado pelos modais
+"Baixar Documentos"/"Cadastrar Documento".
+
+Testado com Playwright + mock: modal abre com o roster certo, campo do
+CA aparece/some só pra Japona Térmica, valida colaborador/termo/CA antes
+de enviar, o HTML de cada página gerada contém os dados certos
+(colaborador, CA, texto do termo), o payload de upload e das 3 RPCs bate
+exatamente com o formato usado por `admissao.html`, "Gerar PDF" duplica
+a página pra termos com `vias:2` (impressão em papel) enquanto "Enviar
+p/ Assinatura" nunca duplica (não faz sentido pro digital), e o modal só
+fecha depois que o lote todo é enviado com sucesso. Confirmado no banco
+que os dois `doc_tipos` existem com o nome exato usado no código.
+
+**Limitação de teste, importante:** a renderização de verdade do PDF
+(`_dgHtmlParaPdfBlob`, que carrega `html2pdf.js` via CDN
+`cdnjs.cloudflare.com` dentro do iframe) não pôde ser exercitada neste
+ambiente — o proxy de rede da sandbox bloqueia esse domínio. O código
+é cópia exata do mecanismo já em produção em `admissao.html`
+(mesma URL de CDN, mesma técnica de iframe, mesmas opções de
+`html2canvas`/`jsPDF`), então não há motivo pra esperar comportamento
+diferente — mas ninguém gerou um PDF de verdade com esse botão ainda.
+Antes de usar pra valer (principalmente o botão "Enviar p/ Assinatura",
+que manda notificação real pro colaborador assinar), vale gerar um PDF
+de teste e comparar visualmente com o que `admissao.html` gera pro
+mesmo termo.
+
+_Última atualização: 2026-09-22._
