@@ -116,9 +116,9 @@
   tbody tr.cf-selected td:first-child { padding-left: 14px; }
 
   /* BADGES */
-  .badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 600; padding: 2px 8px; border-radius: 100px; letter-spacing: 0.04em; }
+  .badge { display: inline-flex; align-items: center; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; padding: 3px 9px; border-radius: 100px; letter-spacing: 0.3px; white-space: nowrap; }
   .badge-hoje { background: var(--carbon); color: var(--citric); }
-  .badge-semana { background: rgba(53,56,63,0.1); color: var(--carbon); }
+  .badge-semana { background: #E8F0FA; color: #1A3A5C; }
 
   /* PROGRESS */
   .prog-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 90px; }
@@ -3282,11 +3282,18 @@ var _anlColsW = {};
 function _anlSaveColsW(){ try { localStorage.setItem(_ANL_COLS_KEY, JSON.stringify(_anlColsW)); } catch(e){} }
 function _anlApplyColsW(){
   var tbl = document.getElementById('tbl-anl'); if (!tbl) return;
-  Object.keys(_anlColsW).forEach(function(k){
-    var w = _anlColsW[k]; if (!w) return;
-    var th = tbl.querySelector('thead th[data-col="'+k+'"]');
-    if (th) th.style.width = w + 'px';
-  });
+  var ths = tbl.querySelectorAll('thead th[data-col]');
+  var anySaved = false, sum = 0, hasAllVisible = true;
+  for (var i = 0; i < ths.length; i++){
+    var th = ths[i];
+    if (th.offsetParent === null) continue; // coluna oculta (col-empresa fora da aba empresa)
+    var k = th.getAttribute('data-col');
+    if (_anlColsW[k]) { th.style.width = _anlColsW[k] + 'px'; anySaved = true; sum += _anlColsW[k]; }
+    else { hasAllVisible = false; }
+  }
+  // Se todas as colunas visíveis têm largura salva, fixa o total da tabela para
+  // não redistribuir (mesmo comportamento do arraste).
+  if (anySaved && hasAllVisible && sum > 0) tbl.style.width = sum + 'px';
 }
 function _anlSetupResizers(){
   var tbl = document.getElementById('tbl-anl'); if (!tbl) return;
@@ -3307,7 +3314,14 @@ var _anlResizeState = null;
 function _anlResizeStart(e){
   e.preventDefault(); e.stopPropagation();
   var handle = e.currentTarget, th = handle.parentNode;
-  _anlResizeState = { key: handle.getAttribute('data-col-resize'), th: th, startX: e.clientX, startW: th.offsetWidth, handle: handle };
+  var tbl = document.getElementById('tbl-anl');
+  // Congela a largura atual de todas as colunas e fixa o total da tabela, para
+  // que arrastar uma coluna não redistribua as outras proporcionalmente.
+  tbl.querySelectorAll('thead th[data-col]').forEach(function(t){
+    if (t.offsetParent !== null) t.style.width = t.offsetWidth + 'px';
+  });
+  tbl.style.width = tbl.offsetWidth + 'px';
+  _anlResizeState = { key: handle.getAttribute('data-col-resize'), th: th, startX: e.clientX, startW: th.offsetWidth, handle: handle, tbl: tbl, tblStartW: tbl.offsetWidth };
   handle.classList.add('dragging');
   document.body.classList.add('col-resizing');
   document.addEventListener('mousemove', _anlResizeMove);
@@ -3316,7 +3330,9 @@ function _anlResizeStart(e){
 function _anlResizeMove(e){
   if (!_anlResizeState) return;
   var w = Math.max(40, _anlResizeState.startW + (e.clientX - _anlResizeState.startX));
+  var applied = w - _anlResizeState.startW;
   _anlResizeState.th.style.width = w + 'px';
+  _anlResizeState.tbl.style.width = (_anlResizeState.tblStartW + applied) + 'px';
   _anlColsW[_anlResizeState.key] = w;
 }
 function _anlResizeEnd(){
@@ -3325,6 +3341,11 @@ function _anlResizeEnd(){
   document.body.classList.remove('col-resizing');
   document.removeEventListener('mousemove', _anlResizeMove);
   document.removeEventListener('mouseup', _anlResizeEnd);
+  // Persiste a largura de todas as colunas visíveis (não só a arrastada)
+  var tbl = _anlResizeState.tbl;
+  tbl.querySelectorAll('thead th[data-col]').forEach(function(t){
+    if (t.style.width) _anlColsW[t.getAttribute('data-col')] = parseInt(t.style.width, 10);
+  });
   _anlResizeState = null;
   _anlSaveColsW();
 }
