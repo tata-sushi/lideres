@@ -895,6 +895,7 @@ body.has-flow-fullscreen .page > * { transform:none !important; animation:none !
 /* Tabela simples de status (Unidade / Departamento / Ranking de advertidos) */
 .snc-status-scroll { max-height:360px; overflow-y:auto; margin-top:4px; }
 .snc-status-r1 { max-height:240px; }   /* linha 1: mesma altura do gráfico de pizza */
+.snc-wrap-r1 { height:240px; }          /* linha 1: barras de Unidade na mesma altura */
 .snc-status-list { display:flex; flex-direction:column; }
 .snc-status-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 4px; border-bottom:1px solid var(--border); }
 .snc-status-row.snc-clickable { cursor:pointer; padding-left:6px; }
@@ -1406,7 +1407,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </div>
       <div class="snc-card">
         <div class="snc-card-title">Unidade</div>
-        <div class="snc-status-scroll snc-status-r1"><div class="snc-status-list" id="snc-uni-list"></div></div>
+        <div class="snc-wrap snc-wrap-r1" id="snc-wrap-uni"><canvas id="snc-cv-uni"></canvas></div>
       </div>
       <div class="snc-card">
         <div class="snc-card-title">Departamento</div>
@@ -2873,13 +2874,13 @@ function _sncDraw(){
   var tk = Object.keys(porTipo).sort(function(a,b){return porTipo[b]-porTipo[a];});
   _sncPie('snc-cv-tipo', tk.map(function(k){return k+' · '+porTipo[k];}), tk.map(function(k){return porTipo[k];}));
 
-  // Unidade (tabela simples — nº de sanções por unidade, clicável para filtrar)
+  // Unidade (barras horizontais — padrão "Vagas por Unidade", clicável para filtrar)
   var porUni = {};
   rows.forEach(function(r){ var u=_sncTxt(r.unidade); porUni[u]=(porUni[u]||0)+1; });
   var uk = Object.keys(porUni).sort(function(a,b){return porUni[b]-porUni[a];});
-  _sncStatusList('snc-uni-list', uk.map(function(k){return {name:k, n:porUni[k], key:k};}), function(key){
-    _sncFiltro.unidade = (_sncFiltro.unidade === key) ? '' : key; _sncSync();
-  }, _sncFiltro.unidade);
+  _sncBarH('snc-cv-uni', uk, uk.map(function(k){return porUni[k];}), function(lbl){
+    _sncFiltro.unidade = (_sncFiltro.unidade === lbl) ? '' : lbl; _sncSync();
+  });
 
   // Departamento (tabela simples — nº de sanções por departamento, clicável para filtrar)
   var porDep = {};
@@ -3076,10 +3077,10 @@ function _sncBarV(canvasId, labels, values, scrollId, opts){
   var oc = opts.onClick;
   _SNC_CHARTS[canvasId] = new Chart(cv, {
     type:'bar',
-    data:{ labels:labels, datasets:[{ data:values, backgroundColor:'#35383F', borderWidth:0, borderRadius:5, barPercentage:0.6, categoryPercentage:0.8, maxBarThickness:22 }] },
+    data:{ labels:labels, datasets:[{ data:values, backgroundColor:'#35383F', borderWidth:0, borderRadius:5, barPercentage:0.6 }] },
     plugins:[_sncBarVLabels],
     options:{ responsive:true, maintainAspectRatio:false, animation:false,
-      layout:{ padding:{ top:18, bottom:4 } },
+      layout:{ padding:{ top:18, bottom:14 } },
       plugins:{ legend:{display:false}, tooltip:{enabled:false} },
       onClick: oc ? function(evt, els){ if(els && els.length){ oc(labels[els[0].index]); } } : undefined,
       onHover: oc ? function(evt, els){ evt.native && (evt.native.target.style.cursor = els.length ? 'pointer' : 'default'); } : undefined,
@@ -3094,22 +3095,21 @@ function _sncBarV(canvasId, labels, values, scrollId, opts){
 function _sncBarH(canvasId, labels, values, onClick){
   var cv=document.getElementById(canvasId); if(!cv) return;
   if(_SNC_CHARTS[canvasId]){ _SNC_CHARTS[canvasId].destroy(); delete _SNC_CHARTS[canvasId]; }
-  var wrap = cv.parentElement; // .snc-wrap
-  if(wrap) wrap.style.height = Math.max(140, labels.length*52 + 24) + 'px';
   _sncEmpty(cv, !labels.length);
   if(!labels.length) return;
+  // padrão "Vagas por Unidade": barras grossas (sem maxBarThickness), altura fixa do card
   _SNC_CHARTS[canvasId] = new Chart(cv, {
     type:'bar',
-    data:{ labels:labels, datasets:[{ data:values, backgroundColor:'#35383F', borderWidth:0, borderRadius:5, barPercentage:0.72, categoryPercentage:0.82, maxBarThickness:32 }] },
+    data:{ labels:labels, datasets:[{ data:values, backgroundColor:'#35383F', borderWidth:0, borderRadius:5 }] },
     plugins:[_sncBarHLabels],
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, animation:false,
-      layout:{ padding:{ right:34, top:4, bottom:4 } },
+      layout:{ padding:{ right:26 } },
       plugins:{ legend:{display:false}, tooltip:{enabled:false} },
       onClick: onClick ? function(evt, els){ if(els && els.length){ onClick(labels[els[0].index]); } } : undefined,
       onHover: onClick ? function(evt, els){ evt.native && (evt.native.target.style.cursor = els.length ? 'pointer' : 'default'); } : undefined,
       scales:{
         x:{ grid:{display:false}, border:{display:false}, ticks:{display:false}, beginAtZero:true },
-        y:{ grid:{display:false}, border:{display:false}, ticks:{ color:'#35383F', font:{family:'DM Sans', size:12, weight:'400'}, autoSkip:false } }
+        y:{ grid:{display:false}, border:{display:false}, ticks:{ color:'#35383F', font:{family:'DM Sans', size:12, weight:'400'}, autoSkip:false }, afterFit:function(s){ s.width = Math.max(s.width, 104); } }
       }
     }
   });
