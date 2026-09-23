@@ -69,10 +69,22 @@
   .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
   .chart-wrap { position: relative; height: 260px; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; }
   .chart-scroll { position: relative; height: 100%; }
-  .tp-charts { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .tp-charts { padding: 16px; display: grid; grid-template-columns: 1fr; gap: 14px; }
+  /* Funil (Ranking de Pontos) — padrão do catálogo */
+  .funnel { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; align-items: center; }
+  .funnel-row { background: var(--carbon); color: #fff; border-radius: 5px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; box-sizing: border-box; }
+  .funnel-row .fn-lbl { font-family: 'DM Sans', sans-serif; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .funnel-row .fn-val { font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  /* Status em tabela simples (Resgates por recompensa) — padrão do catálogo */
+  .status-list { display: flex; flex-direction: column; margin-top: 4px; }
+  .status-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+  .status-row:last-child { border-bottom: none; }
+  .status-name { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); }
+  .status-count { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 800; color: var(--carbon); font-variant-numeric: tabular-nums; }
+  .tp-pie-wrap { position: relative; height: 240px; }
   #view-tataplus .kpi-wrap { padding: 16px; }
   #tp-kpiRow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  @media (min-width: 768px) { .tp-charts { padding: 20px 24px; } #tp-kpiRow { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 768px) { .tp-charts { padding: 20px 24px; grid-template-columns: minmax(0,1fr) minmax(0,1fr); } #tp-kpiRow { grid-template-columns: repeat(2, 1fr); } }
 
   /* TABLE CARD (padrão bancodehoras) */
   .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); padding: 16px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
@@ -378,10 +390,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
   </div>
   <div class="tp-charts">
-    <div class="chart-card"><div class="chart-title">Ranking por pontuação (saldo)</div><div class="chart-wrap"><canvas id="tp-chart-rank"></canvas></div></div>
-    <div class="chart-card"><div class="chart-title">Resgates por recompensa</div><div class="chart-wrap"><canvas id="tp-chart-resg"></canvas></div></div>
-    <div class="chart-card"><div class="chart-title">Compras por produto</div><div class="chart-wrap"><canvas id="tp-chart-compra"></canvas></div></div>
-    <div class="chart-card"><div class="chart-title">Ranking de resgatantes (pontos utilizados)</div><div class="chart-wrap"><canvas id="tp-chart-resgatantes"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Ranking de Pontos</div><div class="funnel" id="tp-funnel"></div></div>
+    <div class="chart-card"><div class="chart-title">Resgates por recompensa</div><div class="status-list" id="tp-resg-list"></div></div>
+    <div class="chart-card"><div class="chart-title">Compras por produto</div><div class="tp-pie-wrap"><canvas id="tp-canvas-compra"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Ranking de resgatantes (pontos utilizados)</div><div class="chart-wrap"><div class="chart-scroll" id="tp-scroll-resgatantes"><canvas id="tp-canvas-resgatantes"></canvas></div></div></div>
   </div>
 </div>
 
@@ -3011,9 +3023,46 @@ function _tpCards(k){
   function card(lbl, val){ return '<div class="kpi-card"><span class="kpi-label">'+lbl+'</span><span class="kpi-value">'+val+'</span></div>'; }
   el.innerHTML = card('Usuários no Tata Plus', nf(k.usuarios)) + card('Saldo de pontos', nf(k.pontos));
 }
+// Pizza (Compras por produto) — carbon monocromático por opacidade + legenda inferior
+function _tpPieColors(n){
+  var out = [];
+  for (var i = 0; i < n; i++){ var op = 1 - (n > 1 ? (i/(n-1)) * 0.75 : 0); out.push('rgba(53,56,63,'+op.toFixed(2)+')'); }
+  return out;
+}
+function _tpPie(id, labels, data){
+  var cv = document.getElementById(id); if (!cv || typeof Chart === 'undefined') return;
+  if (!_bnfFontsReady){ _bnfChartReady(function(){ _tpPie(id, labels, data); }); return; }
+  if (_tpCharts[id]) _tpCharts[id].destroy();
+  _tpCharts[id] = new Chart(cv, {
+    type: 'pie',
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: _tpPieColors(labels.length), borderColor: '#fff', borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: true, position: 'bottom', labels: { font: { family: 'DM Sans', size: 12 }, color: '#35383F', boxWidth: 12, padding: 12 } }, tooltip: { enabled: true } } }
+  });
+}
+// Barra vertical (Ranking de resgatantes) — largura fixa 46px/barra + scroll, rótulo por plugin
+function _tpBarV(id, scrollId, labels, data){
+  var cv = document.getElementById(id); if (!cv || typeof Chart === 'undefined') return;
+  if (!_bnfFontsReady){ _bnfChartReady(function(){ _tpBarV(id, scrollId, labels, data); }); return; }
+  if (_tpCharts[id]) _tpCharts[id].destroy();
+  var host = document.getElementById(scrollId);
+  if (host) host.style.minWidth = Math.max(320, labels.length * 46) + 'px';
+  _tpCharts[id] = new Chart(cv, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: '#35383F', borderWidth: 0, borderRadius: 5, barPercentage: 0.6, categoryPercentage: 0.8, maxBarThickness: 22 }] },
+    plugins: [barValueLabelsPlugin],
+    options: { responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { top: 18, bottom: 4 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: 'DM Sans', size: 12, weight: '400' }, maxRotation: 0, autoSkip: false } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
+      } }
+  });
+}
 function renderTataPlus(){
   comSupa(function(supa){
     var T = supa.schema('tata_plus');
+    var nf = function(n){ return (Number(n)||0).toLocaleString('pt-BR'); };
     if (!_tpFiltrosLoaded) {
       T.rpc('tataplus_filtros').then(function(r){
         var d = (r && r.data) || {};
@@ -3025,17 +3074,31 @@ function renderTataPlus(){
     }
     var args = { p_unidade: tpUni, p_departamento: tpDepto };
     T.rpc('tataplus_kpis', args).then(function(r){ if (r && r.data) _tpCards(r.data); });
-    T.rpc('tataplus_ranking', { p_unidade: tpUni, p_departamento: tpDepto, p_limit: 10 }).then(function(r){
-      var a = (r && r.data) || []; _tpBar('tp-chart-rank', a.map(function(x){ return _tpFirst(x.nome); }), a.map(function(x){ return x.saldo; }), true);
+    // Ranking de Pontos → funil (descendente por saldo)
+    T.rpc('tataplus_ranking', { p_unidade: tpUni, p_departamento: tpDepto, p_limit: 8 }).then(function(r){
+      var a = (r && r.data) || [];
+      var max = a.length ? (a[0].saldo || 1) : 1;
+      var el = document.getElementById('tp-funnel'); if (!el) return;
+      el.innerHTML = a.map(function(x){
+        var w = Math.max(38, Math.round((x.saldo || 0) / max * 100));
+        return '<div class="funnel-row" style="width:'+w+'%"><span class="fn-lbl">'+_tpFirst(x.nome)+'</span><span class="fn-val">'+nf(x.saldo)+'</span></div>';
+      }).join('') || '<div class="status-row"><span class="status-count">Sem dados</span></div>';
     });
+    // Resgates por recompensa → tabela simples de status (nome + contagem)
     T.rpc('tataplus_resgates_por', args).then(function(r){
-      var a = ((r && r.data) || []).slice(0, 12); _tpBar('tp-chart-resg', a.map(function(x){ return x.rotulo; }), a.map(function(x){ return x.n; }), true);
+      var a = ((r && r.data) || []).slice(0, 12);
+      var el = document.getElementById('tp-resg-list'); if (!el) return;
+      el.innerHTML = a.map(function(x){ return '<div class="status-row"><span class="status-name">'+x.rotulo+'</span><span class="status-count">'+nf(x.n)+'</span></div>'; }).join('') || '<div class="status-row"><span class="status-count">Sem dados</span></div>';
     });
+    // Compras por produto → pizza
     T.rpc('tataplus_compras_por', args).then(function(r){
-      var a = ((r && r.data) || []).slice(0, 12); _tpBar('tp-chart-compra', a.map(function(x){ return x.rotulo; }), a.map(function(x){ return x.n; }), true);
+      var a = ((r && r.data) || []).slice(0, 8);
+      _tpPie('tp-canvas-compra', a.map(function(x){ return x.rotulo; }), a.map(function(x){ return x.n; }));
     });
+    // Ranking de resgatantes (pontos utilizados) → barra vertical
     T.rpc('tataplus_resgatantes', { p_unidade: tpUni, p_departamento: tpDepto, p_limit: 10 }).then(function(r){
-      var a = (r && r.data) || []; _tpBar('tp-chart-resgatantes', a.map(function(x){ return _tpFirst(x.nome); }), a.map(function(x){ return x.pts; }), true);
+      var a = (r && r.data) || [];
+      _tpBarV('tp-canvas-resgatantes', 'tp-scroll-resgatantes', a.map(function(x){ return _tpFirst(x.nome); }), a.map(function(x){ return x.pts; }));
     });
   });
 }
