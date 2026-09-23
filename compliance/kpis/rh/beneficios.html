@@ -90,8 +90,33 @@
     .tp-charts { padding: 20px 24px; }
     .tp-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
     .tp-row-b { grid-template-columns: minmax(0,360px) minmax(0,1fr); }
+    .tp-row-full { grid-template-columns: 1fr; }
     #tp-kpiRow { grid-template-columns: repeat(2, 1fr); }
   }
+  /* Filtro de data (mesmo padrão do .filter-select) */
+  .filter-date { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius, 8px); padding: 8px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); cursor: pointer; transition: border-color 0.15s; width: 100%; }
+  .filter-date:focus { outline: none; border-color: var(--carbon); }
+  /* Pílulas de status do resgate (padrão da skill) */
+  .tp-pill { display: inline-flex; align-items: center; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; padding: 3px 9px; border-radius: 100px; letter-spacing: 0.3px; white-space: nowrap; }
+  .tp-pill-ok { background: var(--carbon); color: var(--citric); }
+  .tp-pill-pend { background: #FFF4DC; color: #7A4A00; }
+  .tp-pill-neg { background: #FDEAEA; color: #7A1A1A; }
+  .tp-pill-neu { background: #E8F0FA; color: #1A3A5C; }
+  /* Tabela analítica de resgates (TataPlus) */
+  #tp-tableCard table { min-width: 820px; }
+  #tp-tableCard thead th { text-align: center; position: relative; }
+  #tp-tableCard tbody td { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--carbon); font-variant-numeric: tabular-nums; }
+  #tp-tableCard tbody td:first-child { text-align: left; }
+  #tp-tableCard td { overflow: hidden; text-overflow: ellipsis; }
+  #tp-tableCard th:nth-child(1), #tp-tableCard td:nth-child(1) { width: 200px; }
+  #tp-tableCard th:nth-child(2), #tp-tableCard td:nth-child(2) { width: 120px; }
+  #tp-tableCard th:nth-child(3), #tp-tableCard td:nth-child(3) { width: 130px; }
+  #tp-tableCard th:nth-child(4), #tp-tableCard td:nth-child(4) { width: 170px; }
+  #tp-tableCard th:nth-child(5), #tp-tableCard td:nth-child(5) { width: 82px; }
+  #tp-tableCard th:nth-child(6), #tp-tableCard td:nth-child(6) { width: 112px; }
+  #tp-tableCard th:nth-child(7), #tp-tableCard td:nth-child(7) { width: 92px; }
+  #tp-tableCard thead th .col-resizer { position: absolute; top: 4px; bottom: 4px; right: 0; width: 8px; cursor: col-resize; user-select: none; border-right: 1px solid var(--border); transition: border-color 0.12s; }
+  #tp-tableCard thead th .col-resizer:hover, #tp-tableCard thead th .col-resizer.dragging { border-right-color: var(--carbon); }
 
   /* TABLE CARD (padrão bancodehoras) */
   .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); padding: 16px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
@@ -402,6 +427,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <option value="Inativo">Desligados</option>
         </select>
       </div>
+      <div class="filter-group">
+        <label class="filter-label">Data inicial</label>
+        <input type="date" class="filter-date" id="tp-fIni" onchange="tpIni=this.value;renderTataPlus()">
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Data final</label>
+        <input type="date" class="filter-date" id="tp-fFim" onchange="tpFim=this.value;renderTataPlus()">
+      </div>
     </div>
   </div>
   <div class="tp-charts">
@@ -412,6 +445,27 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="tp-row tp-row-b">
       <div class="chart-card"><div class="chart-title">Lojinha</div><div class="tp-pie-wrap"><canvas id="tp-canvas-compra"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">Ranking de resgatantes (pontos utilizados)</div><div class="chart-wrap"><div class="chart-scroll" id="tp-scroll-resgatantes"><canvas id="tp-canvas-resgatantes"></canvas></div></div></div>
+    </div>
+    <div class="tp-row tp-row-full">
+      <div class="table-card" id="tp-tableCard">
+        <div class="chart-title">Analítico de resgates</div>
+        <div class="table-wrap">
+          <table id="tp-tbl-anl">
+            <thead>
+              <tr>
+                <th data-col="nome" onclick="tpAnlSort('nome')">Colaborador</th>
+                <th data-col="unidade" onclick="tpAnlSort('unidade')">Unidade</th>
+                <th data-col="departamento" onclick="tpAnlSort('departamento')">Departamento</th>
+                <th data-col="titulo" onclick="tpAnlSort('titulo')">Recompensa</th>
+                <th data-col="custo" onclick="tpAnlSort('custo')">Pontos</th>
+                <th data-col="status" onclick="tpAnlSort('status')">Status</th>
+                <th data-col="data" onclick="tpAnlSort('data')">Data</th>
+              </tr>
+            </thead>
+            <tbody id="tp-anl-body"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -3010,7 +3064,8 @@ function setActiveCfMes(v) {
 }
 
 // ── Aba TataPlus (KPIs do app) ──
-var tpUni = 'Todos', tpDepto = 'Todos', tpStatus = 'Todos', _tpCharts = {}, _tpFiltrosLoaded = false;
+var tpUni = 'Todos', tpDepto = 'Todos', tpStatus = 'Todos', tpIni = '', tpFim = '', _tpCharts = {}, _tpFiltrosLoaded = false;
+var _tpAnlRows = [], _tpAnlSortKey = 'data', _tpAnlSortDir = 'desc';
 function _tpFirst(n){ n = (n||'').trim(); return n.split(/\s+/).slice(0,2).join(' '); }
 function _tpBar(id, labels, data, horizontal){
   var cv = document.getElementById(id); if (!cv || typeof Chart === 'undefined') return;
@@ -3091,7 +3146,8 @@ function renderTataPlus(){
         _tpFiltrosLoaded = true;
       });
     }
-    var args = { p_unidade: tpUni, p_departamento: tpDepto, p_status: tpStatus };
+    var di = tpIni || null, df = tpFim || null;
+    var args = { p_unidade: tpUni, p_departamento: tpDepto, p_status: tpStatus, p_ini: di, p_fim: df };
     T.rpc('tataplus_kpis', { p_unidade: tpUni, p_departamento: tpDepto }).then(function(r){ if (r && r.data) _tpCards(r.data); });
     // Ranking de Pontos → funil (descendente por saldo)
     T.rpc('tataplus_ranking', { p_unidade: tpUni, p_departamento: tpDepto, p_limit: 8, p_status: tpStatus }).then(function(r){
@@ -3115,11 +3171,137 @@ function renderTataPlus(){
       _tpPie('tp-canvas-compra', a.map(function(x){ return x.rotulo + ' · ' + nf(x.n); }), a.map(function(x){ return x.n; }));
     });
     // Ranking de resgatantes (pontos utilizados) → barra vertical
-    T.rpc('tataplus_resgatantes', { p_unidade: tpUni, p_departamento: tpDepto, p_limit: 10, p_status: tpStatus }).then(function(r){
+    T.rpc('tataplus_resgatantes', { p_unidade: tpUni, p_departamento: tpDepto, p_limit: 10, p_status: tpStatus, p_ini: di, p_fim: df }).then(function(r){
       var a = (r && r.data) || [];
       _tpBarV('tp-canvas-resgatantes', 'tp-scroll-resgatantes', a.map(function(x){ return _tpFirst(x.nome); }), a.map(function(x){ return x.pts; }));
     });
+    // Analítico de resgates (quem resgatou o quê, unidade, depto, custo, status, data)
+    T.rpc('tataplus_resgates_analitico', args).then(function(r){
+      _tpAnlRows = (r && r.data) || [];
+      _tpAnlDraw();
+    });
   });
+}
+
+// ── Analítico de resgates: pílulas, ordenação e organizador de colunas ──
+function _tpStatusPill(s){
+  var t = String(s||'').toLowerCase(), cls = 'tp-pill-neu';
+  if (t === 'entregue') cls = 'tp-pill-ok';
+  else if (t === 'solicitado') cls = 'tp-pill-pend';
+  else if (t === 'cancelado') cls = 'tp-pill-neg';
+  var lbl = s ? (s.charAt(0).toUpperCase() + s.slice(1)) : '—';
+  return '<span class="tp-pill '+cls+'">'+lbl+'</span>';
+}
+function _tpFmtData(v){
+  if (!v) return '—';
+  var d = new Date(v); if (isNaN(d)) return '—';
+  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getFullYear()).slice(-2);
+}
+function tpAnlSort(k){
+  if (_tpAnlSortKey === k) _tpAnlSortDir = (_tpAnlSortDir === 'asc') ? 'desc' : 'asc';
+  else { _tpAnlSortKey = k; _tpAnlSortDir = (k === 'custo' || k === 'data') ? 'desc' : 'asc'; }
+  _tpAnlDraw();
+}
+function _tpAnlDraw(){
+  var body = document.getElementById('tp-anl-body'); if (!body) return;
+  var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var nf = function(n){ return (Number(n)||0).toLocaleString('pt-BR'); };
+  var k = _tpAnlSortKey, dir = _tpAnlSortDir;
+  var rows = _tpAnlRows.slice().sort(function(a,b){
+    var va = a[k], vb = b[k];
+    if (k === 'custo') { va = Number(va)||0; vb = Number(vb)||0; return dir==='asc' ? va-vb : vb-va; }
+    if (k === 'data') { va = new Date(va).getTime()||0; vb = new Date(vb).getTime()||0; return dir==='asc' ? va-vb : vb-va; }
+    va = String(va||'').toLowerCase(); vb = String(vb||'').toLowerCase();
+    return dir==='asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">Nenhum resgate encontrado</td></tr>';
+  } else {
+    body.innerHTML = rows.map(function(x){
+      return '<tr>'
+        + '<td title="'+esc(x.nome)+'">'+esc(x.nome)+'</td>'
+        + '<td title="'+esc(x.unidade)+'">'+esc(x.unidade)+'</td>'
+        + '<td title="'+esc(x.departamento)+'">'+esc(x.departamento)+'</td>'
+        + '<td title="'+esc(x.titulo)+'">'+esc(x.titulo)+'</td>'
+        + '<td>'+nf(x.custo)+'</td>'
+        + '<td>'+_tpStatusPill(x.status)+'</td>'
+        + '<td>'+_tpFmtData(x.data)+'</td>'
+        + '</tr>';
+    }).join('');
+  }
+  // marca a seta de ordenação no cabeçalho
+  var tbl = document.getElementById('tp-tbl-anl');
+  if (tbl) tbl.querySelectorAll('thead th[data-col]').forEach(function(th){
+    th.classList.remove('sa','sd');
+    if (th.getAttribute('data-col') === k) th.classList.add(dir==='asc' ? 'sa' : 'sd');
+  });
+  _tpAnlSetupResizers();
+}
+
+// Organizador de colunas do Analítico TataPlus: redimensionar largura (localStorage)
+var _TP_ANL_COLS_KEY = 'beneficios_tp_resgates_cols_v1';
+var _tpAnlColsW = {};
+(function(){ try { var raw = localStorage.getItem(_TP_ANL_COLS_KEY); if (raw) _tpAnlColsW = JSON.parse(raw) || {}; } catch(e){} })();
+function _tpAnlSaveColsW(){ try { localStorage.setItem(_TP_ANL_COLS_KEY, JSON.stringify(_tpAnlColsW)); } catch(e){} }
+function _tpAnlApplyColsW(){
+  var tbl = document.getElementById('tp-tbl-anl'); if (!tbl) return;
+  var ths = tbl.querySelectorAll('thead th[data-col]');
+  var anySaved = false, sum = 0, hasAll = true;
+  for (var i = 0; i < ths.length; i++){
+    var th = ths[i], key = th.getAttribute('data-col');
+    if (_tpAnlColsW[key]) { th.style.width = _tpAnlColsW[key] + 'px'; anySaved = true; sum += _tpAnlColsW[key]; }
+    else { hasAll = false; }
+  }
+  if (anySaved && hasAll && sum > 0) tbl.style.width = sum + 'px';
+}
+function _tpAnlSetupResizers(){
+  var tbl = document.getElementById('tp-tbl-anl'); if (!tbl) return;
+  _tpAnlApplyColsW();
+  var ths = tbl.querySelectorAll('thead th[data-col]');
+  for (var i = 0; i < ths.length; i++){
+    var th = ths[i];
+    if (th.querySelector('.col-resizer')) continue;
+    var handle = document.createElement('span');
+    handle.className = 'col-resizer';
+    handle.setAttribute('data-col-resize', th.getAttribute('data-col'));
+    handle.addEventListener('mousedown', _tpAnlResizeStart);
+    handle.addEventListener('click', function(e){ e.stopPropagation(); });
+    th.appendChild(handle);
+  }
+}
+var _tpAnlResizeState = null;
+function _tpAnlResizeStart(e){
+  e.preventDefault(); e.stopPropagation();
+  var handle = e.currentTarget, th = handle.parentNode;
+  var tbl = document.getElementById('tp-tbl-anl');
+  tbl.querySelectorAll('thead th[data-col]').forEach(function(t){ t.style.width = t.offsetWidth + 'px'; });
+  tbl.style.width = tbl.offsetWidth + 'px';
+  _tpAnlResizeState = { key: handle.getAttribute('data-col-resize'), th: th, startX: e.clientX, startW: th.offsetWidth, handle: handle, tbl: tbl, tblStartW: tbl.offsetWidth };
+  handle.classList.add('dragging');
+  document.body.classList.add('col-resizing');
+  document.addEventListener('mousemove', _tpAnlResizeMove);
+  document.addEventListener('mouseup', _tpAnlResizeEnd);
+}
+function _tpAnlResizeMove(e){
+  if (!_tpAnlResizeState) return;
+  var w = Math.max(40, _tpAnlResizeState.startW + (e.clientX - _tpAnlResizeState.startX));
+  var applied = w - _tpAnlResizeState.startW;
+  _tpAnlResizeState.th.style.width = w + 'px';
+  _tpAnlResizeState.tbl.style.width = (_tpAnlResizeState.tblStartW + applied) + 'px';
+  _tpAnlColsW[_tpAnlResizeState.key] = w;
+}
+function _tpAnlResizeEnd(){
+  if (!_tpAnlResizeState) return;
+  _tpAnlResizeState.handle.classList.remove('dragging');
+  document.body.classList.remove('col-resizing');
+  document.removeEventListener('mousemove', _tpAnlResizeMove);
+  document.removeEventListener('mouseup', _tpAnlResizeEnd);
+  var tbl = _tpAnlResizeState.tbl;
+  tbl.querySelectorAll('thead th[data-col]').forEach(function(t){
+    if (t.style.width) _tpAnlColsW[t.getAttribute('data-col')] = parseInt(t.style.width, 10);
+  });
+  _tpAnlResizeState = null;
+  _tpAnlSaveColsW();
 }
 
 function setTab(tab) {
