@@ -466,6 +466,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
             <tbody id="tp-anl-body"></tbody>
           </table>
         </div>
+        <button class="btn-more" id="tp-anl-more" hidden onclick="tpAnlMore()">Ver mais (—)</button>
       </div>
     </div>
   </div>
@@ -3067,6 +3068,7 @@ function setActiveCfMes(v) {
 // ── Aba TataPlus (KPIs do app) ──
 var tpUni = 'Todos', tpDepto = 'Todos', tpStatus = 'Todos', tpIni = '', tpFim = '', _tpCharts = {}, _tpFiltrosLoaded = false;
 var _tpAnlRows = [], _tpAnlSortKey = 'data', _tpAnlSortDir = 'desc';
+var _TP_ANL_PAGE = 12, _tpAnlShown = 12;
 function _tpFirst(n){ n = (n||'').trim(); return n.split(/\s+/).slice(0,2).join(' '); }
 function _tpBar(id, labels, data, horizontal){
   var cv = document.getElementById(id); if (!cv || typeof Chart === 'undefined') return;
@@ -3179,6 +3181,7 @@ function renderTataPlus(){
     // Analítico de resgates (quem resgatou o quê, unidade, depto, custo, status, data)
     T.rpc('tataplus_resgates_analitico', args).then(function(r){
       _tpAnlRows = (r && r.data) || [];
+      _tpAnlShown = _TP_ANL_PAGE;
       _tpAnlDraw();
     });
   });
@@ -3201,8 +3204,10 @@ function _tpFmtData(v){
 function tpAnlSort(k){
   if (_tpAnlSortKey === k) _tpAnlSortDir = (_tpAnlSortDir === 'asc') ? 'desc' : 'asc';
   else { _tpAnlSortKey = k; _tpAnlSortDir = (k === 'custo' || k === 'data') ? 'desc' : 'asc'; }
+  _tpAnlShown = _TP_ANL_PAGE;
   _tpAnlDraw();
 }
+function tpAnlMore(){ _tpAnlShown += _TP_ANL_PAGE; _tpAnlDraw(); }
 function _tpAnlDraw(){
   var body = document.getElementById('tp-anl-body'); if (!body) return;
   var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
@@ -3215,10 +3220,13 @@ function _tpAnlDraw(){
     va = String(va||'').toLowerCase(); vb = String(vb||'').toLowerCase();
     return dir==='asc' ? va.localeCompare(vb) : vb.localeCompare(va);
   });
+  var moreBtn = document.getElementById('tp-anl-more');
   if (!rows.length) {
     body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">Nenhum resgate encontrado</td></tr>';
+    if (moreBtn) moreBtn.hidden = true;
   } else {
-    body.innerHTML = rows.map(function(x){
+    if (_tpAnlShown > rows.length) _tpAnlShown = rows.length;
+    body.innerHTML = rows.slice(0, _tpAnlShown).map(function(x){
       return '<tr>'
         + '<td>'+_tpFmtData(x.data)+'</td>'
         + '<td title="'+esc(x.unidade)+'">'+esc(x.unidade)+'</td>'
@@ -3229,6 +3237,11 @@ function _tpAnlDraw(){
         + '<td>'+_tpStatusPill(x.status)+'</td>'
         + '</tr>';
     }).join('');
+    if (moreBtn) {
+      var rest = rows.length - _tpAnlShown;
+      moreBtn.hidden = rest <= 0;
+      moreBtn.textContent = 'Ver mais (' + rest + ')';
+    }
   }
   // marca a seta de ordenação no cabeçalho
   var tbl = document.getElementById('tp-tbl-anl');
