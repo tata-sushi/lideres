@@ -906,4 +906,45 @@ mais.", marca "Não" corretamente selecionada quando é essa a opção, 2
 páginas (vias:2), e nenhuma menção a CTPS. Payload das 3 RPCs da
 assinatura confirmado com `p_tipo_id` correto.
 
+**Feito (2026-09-24): novo termo "Termo de Responsabilidade — Salário-
+Família" (Portaria MPAS nº 3.040/82) — terceiro termo novo direto em
+`admissao.html`.** Mesmo padrão dos dois anteriores: 1 entrada normal
+em `ADM_DOCS` + dispatch especial em `_admBuildDocPageHtml`
+(`_admSalarioFamiliaBuildPage`).
+
+Campo próprio no modal: tabela dinâmica de filhos ("Nome do Filho" +
+"Data do Nascimento"), chave `hasFilhos`, com botão "+ filho"
+(`_admFilhoAddRow`/`_admFilhoReadRows`/`_admToggleFilhosRow`) — mesmo
+mecanismo de linhas dinâmicas já usado pelo Vale Transporte
+(`_admVtAddRow`), só que lido como tabela (`.rp-table`) na página do
+PDF em vez de linhas soltas, a pedido do usuário ("a Tabela pega
+referência em uniformes"). Essa é a primeira vez que `.rp-table` entra
+em `ADM_CSS` — CSS copiado do mesmo padrão já usado pro termo de
+Utensílios em `doc.html` (cabeçalho escuro `#35383F`, linhas
+zebradas), que por sua vez veio de `estoqueadm.html`.
+
+Campo de CTPS/Série/UF que aparecia no documento-modelo foi
+propositalmente deixado de fora, a pedido do usuário. Texto legal
+(fatos que cancelam o Salário-Família + penalidades do art. 171 do
+Código Penal / art. 482 da CLT) copiado sem reescrever, inclusive a
+caixa alta dos itens da lista. Sem `rp-ass-declaro` genérico — o texto
+já termina com a declaração de ciência sobre as penalidades, mesmo
+critério da Contribuição Sindical.
+
+doc_tipo novo criado no catálogo (`doc_tipo_sandbox_criar`, categoria
+"Contratos e Termos", `requer_assinatura=true`, nome batendo
+exatamente com o `sectionLabel` do termo).
+
+Testado com Playwright + mock: checkbox/linha aparecem certo, 1ª linha
+de filho é criada automaticamente ao marcar o termo, "+ filho"
+adiciona linhas extras, botão de remover funciona, validação bloqueia
+envio sem nenhum filho preenchido, PDF final contém a tabela com os
+filhos na ordem certa e a data já formatada (dd/mm/aaaa), nome do
+colaborador, razão social da empresa, referência à Portaria
+3.040/82, os 3 itens da lista e os dois artigos de lei — e nenhuma
+menção a CTPS. Conferência visual da página renderizada (screenshot)
+confirmando o layout e o estilo da tabela batendo com o padrão de
+uniformes. Payload das 3 RPCs da assinatura confirmado com
+`p_tipo_id` correto.
+
 _Última atualização: 2026-09-24._

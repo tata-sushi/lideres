@@ -3121,6 +3121,7 @@ window.toggleFta = toggleFta;
     { id: 'meios_eletronicos', nome: 'Termo de Resp. Meios Eletrônicos e Informática',    desc: 'Uso responsável de equipamentos e recursos de informática', sectionLabel: 'Termo de Responsabilidade de Utilização de Meios Eletrônicos e Recursos de Informática', singleSig: true },
     { id: 'dados_bancarios',   nome: 'Dados Bancários',                                    desc: 'Dados para crédito em conta corrente/salário',      sectionLabel: 'Dados para Crédito em Conta Corrente / Salário',                                                   singleSig: true, vias: 2 },
     { id: 'contribuicao_sindical', nome: 'Autorização de Desconto da Contribuição Sindical', desc: 'Autorização (ou não) do desconto da contribuição sindical em folha', sectionLabel: 'Autorização de Desconto da Contribuição Sindical',                                singleSig: true, vias: 2 },
+    { id: 'salario_familia',   nome: 'Termo de Responsabilidade — Salário-Família',         desc: 'Comunicação de fatos que determinam a perda do Salário-Família', sectionLabel: 'Termo de Responsabilidade (Concessão de Salário-Família — Portaria MPAS nº 3.040/82)', singleSig: true, vias: 2 },
   ];
 
   // CNPJ/endereço por unidade — mesma fonte de estoqueadm.html (EPC_UNIDADES),
@@ -3243,12 +3244,13 @@ window.toggleFta = toggleFta;
       var hasEpi      = doc.id === 'lista_epis';
       var hasBanco    = doc.id === 'dados_bancarios';
       var hasSindical = doc.id === 'contribuicao_sindical';
+      var hasFilhos   = doc.id === 'salario_familia';
       var caId   = doc.id === 'japona_termica' ? 'adm-ca' : 'adm-ca-luva';
       var rowId  = 'adm-ca-row-' + doc.id;
 
       var item = document.createElement('div');
       item.className = 'adm-doc-item';
-      if (hasCa || hasEpi || hasBanco || hasSindical) item.style.cssText = 'flex-direction:column;align-items:stretch;';
+      if (hasCa || hasEpi || hasBanco || hasSindical || hasFilhos) item.style.cssText = 'flex-direction:column;align-items:stretch;';
 
       var top = document.createElement('div');
       top.style.cssText = 'display:flex;align-items:flex-start;gap:10px;';
@@ -3257,7 +3259,8 @@ window.toggleFta = toggleFta;
         (hasCa       ? ' onchange="_admToggleCaInItem(\'' + rowId + '\',\'' + caId + '\',this.checked)"' : '') +
         (hasEpi      ? ' onchange="_admToggleEpiRow(this.checked)"' : '') +
         (hasBanco    ? ' onchange="_admToggleBancoRow(this.checked)"' : '') +
-        (hasSindical ? ' onchange="_admToggleSindicalRow(this.checked)"' : '') + '>' +
+        (hasSindical ? ' onchange="_admToggleSindicalRow(this.checked)"' : '') +
+        (hasFilhos   ? ' onchange="_admToggleFilhosRow(this.checked)"' : '') + '>' +
         '<label for="admdoc_' + doc.id + '" style="cursor:pointer;flex:1;">' +
           '<div class="adm-doc-name">' + doc.nome + (doc.vias === 2 ? ' <span style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--t3);font-weight:400;">(2 vias)</span>' : '') + '</div>' +
         '</label>';
@@ -3315,6 +3318,17 @@ window.toggleFta = toggleFta;
             '</select>' +
           '</div>';
         item.appendChild(sindicalRow);
+      }
+
+      if (hasFilhos) {
+        var filhosRow = document.createElement('div');
+        filhosRow.id = 'adm-filhos-row';
+        filhosRow.style.cssText = 'display:none;margin-top:8px;padding-top:10px;border-top:1px solid var(--border);';
+        filhosRow.innerHTML =
+          '<span class="adm-ca-label" style="display:block;margin-bottom:6px;">Filhos</span>' +
+          '<div id="adm-filhos-rows"></div>' +
+          '<button type="button" class="vt-addrow" onclick="event.stopPropagation();_admFilhoAddRow()">+ filho</button>';
+        item.appendChild(filhosRow);
       }
 
       list.appendChild(item);
@@ -3441,6 +3455,40 @@ window.toggleFta = toggleFta;
     if (!checked) {
       var unidade = document.getElementById('adm-sindical-unidade'); if (unidade) unidade.value = '';
       var opcao = document.getElementById('adm-sindical-opcao'); if (opcao) opcao.value = 'sim';
+    }
+  }
+
+  // Filhos (Termo de Salário-Família) — lista dinâmica de linhas, mesmo padrão
+  // do _admVtAddRow do Vale Transporte (insertAdjacentHTML, lida direto do DOM).
+  function _admFilhoRowHtml() {
+    return '<div class="filho-row-edit" style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">'+
+      '<input class="form-input filho-nome" type="text" placeholder="Nome do filho" style="flex:1.6;" onclick="event.stopPropagation()">'+
+      '<input class="form-input filho-nasc" type="date" style="flex:1;" onclick="event.stopPropagation()">'+
+      '<button type="button" title="Remover" onclick="event.stopPropagation();this.closest(\'.filho-row-edit\').remove()" style="border:none;background:none;cursor:pointer;font-size:18px;line-height:1;color:var(--muted);flex-shrink:0;">×</button>'+
+    '</div>';
+  }
+  function _admFilhoAddRow() {
+    var c = document.getElementById('adm-filhos-rows');
+    if (c) c.insertAdjacentHTML('beforeend', _admFilhoRowHtml());
+  }
+  function _admFilhoReadRows() {
+    var c = document.getElementById('adm-filhos-rows');
+    if (!c) return [];
+    return Array.prototype.map.call(c.querySelectorAll('.filho-row-edit'), function(r){
+      return {
+        nome: ((r.querySelector('.filho-nome')||{}).value||'').trim(),
+        nascimento: ((r.querySelector('.filho-nasc')||{}).value||'').trim()
+      };
+    }).filter(function(f){ return f.nome || f.nascimento; });
+  }
+  function _admToggleFilhosRow(checked) {
+    var row = document.getElementById('adm-filhos-row');
+    if (row) row.style.display = checked ? 'block' : 'none';
+    var c = document.getElementById('adm-filhos-rows');
+    if (checked) {
+      if (c && !c.children.length) _admFilhoAddRow();
+    } else {
+      if (c) c.innerHTML = '';
     }
   }
 
@@ -3716,6 +3764,15 @@ window.toggleFta = toggleFta;
     '.rp-section-heading{font-size:10.5px;font-weight:700;color:#111;margin:8px 0 3px;text-transform:none;letter-spacing:0;}',
     '.rp-bullets{margin:3px 0 6px 14px;padding:0;list-style:disc;}',
     '.rp-bullet{font-size:10px;color:#222;line-height:1.55;margin-bottom:2px;}',
+    /* tabela (Termo de Salário-Família) — mesmo padrão de estoqueadm.html (cabeçalho
+       escuro, linhas zebradas, sem grid completo), pra bater com o resto do app. */
+    '.rp-table{width:100%;border-collapse:collapse;margin:6px 0 10px;font-size:9px;}',
+    '.rp-table thead tr{background:#35383F;color:#fff;}',
+    '.rp-table th{padding:7px 8px;text-align:center;font-size:8px;text-transform:uppercase;letter-spacing:.4px;font-weight:600;color:#fff;}',
+    '.rp-table th:first-child{text-align:left;}',
+    '.rp-table td{padding:6px 8px;border-bottom:1px solid #eee;text-align:center;}',
+    '.rp-table tbody td:first-child{text-align:left;}',
+    '.rp-table tbody tr:nth-child(even){background:#f9f9f9;}',
     /* city/date */
     '.rp-cidade-data{font-size:11px;text-align:right;margin:20px 0 24px;color:#222;}',
     /* signatures */
@@ -3733,7 +3790,7 @@ window.toggleFta = toggleFta;
     'body{background:#fff;padding:0;}',
     '.page{box-shadow:none;width:100%;max-width:100%;padding:24px 36px 36px;',
     '-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
-    '.rp-intro-value,.rp-section-label{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
+    '.rp-intro-value,.rp-section-label,.rp-table thead tr,.rp-table tbody tr:nth-child(even){-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
     '}'
   ].join('');
 
@@ -3760,6 +3817,7 @@ window.toggleFta = toggleFta;
     // Transporte (_admVtBuildPage, especial-casado fora daqui).
     if (doc.id === 'dados_bancarios') return _admDadosBancariosBuildPage(doc, ctx);
     if (doc.id === 'contribuicao_sindical') return _admContribuicaoSindicalBuildPage(doc, ctx);
+    if (doc.id === 'salario_familia') return _admSalarioFamiliaBuildPage(doc, ctx);
     var rawContent = ADM_DOCS_CONTENT[doc.id];
     if (typeof rawContent === 'function') {
       rawContent = doc.id === 'japona_termica'
@@ -3919,6 +3977,68 @@ window.toggleFta = toggleFta;
             '<p style="font-size:11px;margin:0 0 10px 24px;">'+(opcao==='sim'?boxOn:boxOff)+' Sim</p>' +
             '<p style="font-size:11px;margin:0 0 22px 24px;">'+(opcao==='nao'?boxOn:boxOff)+' Não</p>' +
             '<p class="rp-p">Sem mais.</p>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="rp-cidade-data">São Paulo, '+esc(ctx.docDateFmt)+'</div>' +
+      '</div>'
+    );
+  }
+
+  // Termo de Responsabilidade (Salário-Família): tabela de filhos preenchida na
+  // hora (ctx.salFamFilhos), texto legal (Portaria MPAS nº 3.040/82) copiado sem
+  // reescrever. Sem rp-ass-declaro genérico — o texto já termina com a declaração
+  // de ciência sobre as penalidades, mesmo critério usado na Contribuição Sindical.
+  function _admSalarioFamiliaBuildPage(doc, ctx) {
+    var esc = _escHtml;
+    var filhos = ctx.salFamFilhos || [];
+    var linhasHtml = filhos.map(function(f) {
+      return '<tr>' +
+        '<td>'+esc(f.nome || '—')+'</td>' +
+        '<td>'+esc(f.nascimento ? _admFmtAdmissao(f.nascimento) : '—')+'</td>' +
+      '</tr>';
+    }).join('');
+    var tabela = '<table class="rp-table">' +
+      '<thead><tr><th>Nome do Filho</th><th>Data do Nascimento</th></tr></thead>' +
+      '<tbody>'+(linhasHtml || '<tr><td colspan="2" style="color:#999;">Nenhum filho informado</td></tr>')+'</tbody>' +
+    '</table>';
+    return (
+      '<div class="page">' +
+        '<div class="rp-header">' +
+          '<img class="rp-logo" src="'+ADM_LOGO_B64+'" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' +
+          '<div class="rp-header-title">TERMO DE RESPONSABILIDADE<div class="rp-header-sub">Concessão de Salário-Família — Portaria MPAS nº 3.040/82</div></div>' +
+          '<div class="rp-header-right">Emitido em <strong>'+esc(ctx.dateStr)+'</strong></div>' +
+        '</div>' +
+
+        '<div class="rp-intro">' +
+          '<div class="rp-intro-field grow">' +
+            '<span class="rp-intro-label">Empregado</span>' +
+            '<span class="rp-intro-value">'+esc(ctx.colabNomeLimpo)+'</span>' +
+          '</div>' +
+          (ctx.colabMatricula ? (
+            '<div class="rp-intro-field">' +
+              '<span class="rp-intro-label">Matrícula</span>' +
+              '<span class="rp-intro-value">'+esc(ctx.colabMatricula)+'</span>' +
+            '</div>'
+          ) : '') +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Empresa</span>' +
+            '<span class="rp-intro-value">'+esc(ADM_RAZAO_SOCIAL)+'</span>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="rp-section">' +
+          '<div class="rp-section-label">'+(doc.sectionLabel || 'Declaração')+'</div>' +
+          '<div class="rp-section-body">' +
+            '<h3 class="rp-section-heading">Filhos</h3>' +
+            tabela +
+            '<p class="rp-p" style="margin-top:14px;">Pelo presente TERMO DE RESPONSABILIDADE declaro estar ciente de que deverei comunicar de imediato a ocorrência dos seguintes fatos ou outras que determinem a perda do direito ao Salário-Família:</p>' +
+            '<ul class="rp-bullets">' +
+              '<li class="rp-bullet">ÓBITO DE FILHO;</li>' +
+              '<li class="rp-bullet">CESSAÇÃO DA INVALIDEZ DE FILHO INVÁLIDO;</li>' +
+              '<li class="rp-bullet">SENTENÇA JUDICIAL QUE DETERMINE O PAGAMENTO A OUTREM (casos de desquite ou separação, abandono de filho ou perda do pátrio poder).</li>' +
+            '</ul>' +
+            '<p class="rp-p" style="margin-top:10px;">Estou ciente, ainda, de que a falta de cumprimento do compromisso ora assumido, além de obrigar à devolução das importâncias recebidas indevidamente, sujeitar-me-á às penalidades previstas no art. 171 do Código Penal e à rescisão do contrato de trabalho, por justa causa, nos termos do art. 482 da Consolidação das Leis do Trabalho.</p>' +
           '</div>' +
         '</div>' +
 
@@ -4087,6 +4207,7 @@ window.toggleFta = toggleFta;
     var tipoConta  = (document.getElementById('adm-tipo-conta') || {}).value || 'Corrente';
     var sindicalUnidade = (document.getElementById('adm-sindical-unidade') || {}).value || '';
     var sindicalOpcao   = (document.getElementById('adm-sindical-opcao') || {}).value || 'sim';
+    var salFamFilhos = _admFilhoReadRows();
     _admShowError('');
     if (!colabVal) { _admShowError('Selecione um colaborador.'); return; }
 
@@ -4099,6 +4220,7 @@ window.toggleFta = toggleFta;
     if (termos.some(function(d){ return d.id === 'luva_termica'; }) && !caLuva.trim()) { _admShowError('Informe o número do CA da Luva Térmica.'); return; }
     if (termos.some(function(d){ return d.id === 'dados_bancarios'; }) && (!banco.trim() || !agencia.trim() || !conta.trim())) { _admShowError('Informe banco, agência e conta.'); return; }
     if (termos.some(function(d){ return d.id === 'contribuicao_sindical'; }) && !sindicalUnidade) { _admShowError('Selecione a unidade/CNPJ da autorização de desconto sindical.'); return; }
+    if (termos.some(function(d){ return d.id === 'salario_familia'; }) && !salFamFilhos.length) { _admShowError('Informe ao menos um filho (nome e data de nascimento).'); return; }
 
     var colabNome = sel.options[sel.selectedIndex].text;
     var colabData = _admColabMap[colabVal] || {};
@@ -4121,7 +4243,8 @@ window.toggleFta = toggleFta;
       colabCargo: colabCargo, dataAdmissao: dataAdmissao, dataFmt: dataFmt, dateStr: dateStr,
       docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva, usuarioLogado: usuarioLogado,
       banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta,
-      sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao
+      sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao,
+      salFamFilhos: salFamFilhos
     };
 
     _admSetLoadingSalvar(true, 'Enviando…');
@@ -4152,6 +4275,7 @@ window.toggleFta = toggleFta;
     var tipoConta = (document.getElementById('adm-tipo-conta') || {}).value || 'Corrente';
     var sindicalUnidade = (document.getElementById('adm-sindical-unidade') || {}).value || '';
     var sindicalOpcao   = (document.getElementById('adm-sindical-opcao') || {}).value || 'sim';
+    var salFamFilhos = _admFilhoReadRows();
     _admShowError('');
     if (!colabVal)       { _admShowError('Selecione um colaborador.'); return; }
     if (!checked.length) { _admShowError('Selecione ao menos um documento.'); return; }
@@ -4166,6 +4290,9 @@ window.toggleFta = toggleFta;
     }
     if (checked.some(function(cb){ return cb.value === 'contribuicao_sindical'; }) && !sindicalUnidade) {
       _admShowError('Selecione a unidade/CNPJ da autorização de desconto sindical.'); return;
+    }
+    if (checked.some(function(cb){ return cb.value === 'salario_familia'; }) && !salFamFilhos.length) {
+      _admShowError('Informe ao menos um filho (nome e data de nascimento).'); return;
     }
 
     _admSetLoading(true, 'Gerando…');
@@ -4336,7 +4463,8 @@ window.toggleFta = toggleFta;
         colabUnidade: colabUnidade, dataAdmissao: dataAdmissao, dataFmt: dataFmt, dateStr: dateStr,
         docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva,
         banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta,
-        sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao
+        sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao,
+        salFamFilhos: salFamFilhos
       });
       return doc.vias === 2 ? pageHtml + pageHtml : pageHtml;
     }).join('');
