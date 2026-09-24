@@ -947,4 +947,41 @@ confirmando o layout e o estilo da tabela batendo com o padrão de
 uniformes. Payload das 3 RPCs da assinatura confirmado com
 `p_tipo_id` correto.
 
+**Feito (2026-09-24): novo termo "Declaração de Dependentes (IR)" —
+quarto termo novo direto em `admissao.html`.** Mesmo padrão dos
+anteriores: 1 entrada normal em `ADM_DOCS` + dispatch especial em
+`_admBuildDocPageHtml` (`_admDependentesIrBuildPage`).
+
+Campos próprios no modal: select "Unidade / CNPJ" (reaproveita
+`ADM_UNIDADES_CNPJ`, mesmo mecanismo do termo de Contribuição
+Sindical) + tabela dinâmica de dependentes (Nome completo, Relação de
+Dependência, Data de Nascimento), chave `hasDependentes`, com botão
+"+ dependente" (`_admDepAddRow`/`_admDepReadRows`/
+`_admToggleDependentesRow`) — mesmo mecanismo de linhas dinâmicas do
+termo de Salário-Família, só que com um select a mais por linha
+(`ADM_DEP_RELACOES`: Filho(a), Cônjuge/Companheiro(a), Pai, Mãe — sem
+opção "Outro", a pedido). Tabela do PDF reaproveita a `.rp-table` já
+usada no Salário-Família.
+
+Campo de CTPS/Série/UF do documento-modelo deixado de fora, a pedido
+(mesmo padrão do Salário-Família). Texto legal (declaração de
+dependentes sob as penas da Lei, ciência da vedação de dedução do
+mesmo dependente por ambos os cônjuges) copiado sem reescrever.
+
+doc_tipo novo criado no catálogo (`doc_tipo_sandbox_criar`, categoria
+"Contratos e Termos", `requer_assinatura=true`, nome batendo
+exatamente com o `sectionLabel` do termo).
+
+Testado com Playwright + mock: checkbox/campos aparecem certo, select
+de Unidade/CNPJ com as opções corretas, select de relação sem a opção
+"Outro", 1ª linha de dependente criada automaticamente ao marcar o
+termo, "+ dependente" adiciona linhas, validação bloqueia envio sem
+unidade selecionada e sem nenhum dependente preenchido, PDF final
+contém a tabela com os dependentes na ordem certa (nome, relação por
+extenso, data formatada dd/mm/aaaa), CNPJ da unidade escolhida, nome
+do colaborador, texto da declaração legal — e nenhuma menção a CTPS.
+Conferência visual da página renderizada (screenshot) confirmando o
+layout. Payload das 3 RPCs da assinatura confirmado com `p_tipo_id`
+correto.
+
 _Última atualização: 2026-09-24._

@@ -3122,6 +3122,14 @@ window.toggleFta = toggleFta;
     { id: 'dados_bancarios',   nome: 'Dados Bancários',                                    desc: 'Dados para crédito em conta corrente/salário',      sectionLabel: 'Dados para Crédito em Conta Corrente / Salário',                                                   singleSig: true, vias: 2 },
     { id: 'contribuicao_sindical', nome: 'Autorização de Desconto da Contribuição Sindical', desc: 'Autorização (ou não) do desconto da contribuição sindical em folha', sectionLabel: 'Autorização de Desconto da Contribuição Sindical',                                singleSig: true, vias: 2 },
     { id: 'salario_familia',   nome: 'Termo de Responsabilidade — Salário-Família',         desc: 'Comunicação de fatos que determinam a perda do Salário-Família', sectionLabel: 'Termo de Responsabilidade (Concessão de Salário-Família — Portaria MPAS nº 3.040/82)', singleSig: true, vias: 2 },
+    { id: 'dependentes_ir',    nome: 'Declaração de Dependentes (IR)',                      desc: 'Dependentes para desconto do Imposto de Renda na Fonte', sectionLabel: 'Declaração de Dependentes para Fins de Desconto do Imposto de Renda na Fonte', singleSig: true, vias: 2 },
+  ];
+
+  var ADM_DEP_RELACOES = [
+    { v: 'filho',   l: 'Filho(a)' },
+    { v: 'conjuge', l: 'Cônjuge/Companheiro(a)' },
+    { v: 'pai',     l: 'Pai' },
+    { v: 'mae',     l: 'Mãe' }
   ];
 
   // CNPJ/endereço por unidade — mesma fonte de estoqueadm.html (EPC_UNIDADES),
@@ -3245,12 +3253,13 @@ window.toggleFta = toggleFta;
       var hasBanco    = doc.id === 'dados_bancarios';
       var hasSindical = doc.id === 'contribuicao_sindical';
       var hasFilhos   = doc.id === 'salario_familia';
+      var hasDependentes = doc.id === 'dependentes_ir';
       var caId   = doc.id === 'japona_termica' ? 'adm-ca' : 'adm-ca-luva';
       var rowId  = 'adm-ca-row-' + doc.id;
 
       var item = document.createElement('div');
       item.className = 'adm-doc-item';
-      if (hasCa || hasEpi || hasBanco || hasSindical || hasFilhos) item.style.cssText = 'flex-direction:column;align-items:stretch;';
+      if (hasCa || hasEpi || hasBanco || hasSindical || hasFilhos || hasDependentes) item.style.cssText = 'flex-direction:column;align-items:stretch;';
 
       var top = document.createElement('div');
       top.style.cssText = 'display:flex;align-items:flex-start;gap:10px;';
@@ -3260,7 +3269,8 @@ window.toggleFta = toggleFta;
         (hasEpi      ? ' onchange="_admToggleEpiRow(this.checked)"' : '') +
         (hasBanco    ? ' onchange="_admToggleBancoRow(this.checked)"' : '') +
         (hasSindical ? ' onchange="_admToggleSindicalRow(this.checked)"' : '') +
-        (hasFilhos   ? ' onchange="_admToggleFilhosRow(this.checked)"' : '') + '>' +
+        (hasFilhos   ? ' onchange="_admToggleFilhosRow(this.checked)"' : '') +
+        (hasDependentes ? ' onchange="_admToggleDependentesRow(this.checked)"' : '') + '>' +
         '<label for="admdoc_' + doc.id + '" style="cursor:pointer;flex:1;">' +
           '<div class="adm-doc-name">' + doc.nome + (doc.vias === 2 ? ' <span style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--t3);font-weight:400;">(2 vias)</span>' : '') + '</div>' +
         '</label>';
@@ -3329,6 +3339,25 @@ window.toggleFta = toggleFta;
           '<div id="adm-filhos-rows"></div>' +
           '<button type="button" class="vt-addrow" onclick="event.stopPropagation();_admFilhoAddRow()">+ filho</button>';
         item.appendChild(filhosRow);
+      }
+
+      if (hasDependentes) {
+        var depRow = document.createElement('div');
+        depRow.id = 'adm-dependentes-row';
+        depRow.style.cssText = 'display:none;margin-top:8px;padding-top:10px;border-top:1px solid var(--border);';
+        var depUnidadeOpts = Object.keys(ADM_UNIDADES_CNPJ).map(function(u){
+          return '<option value="'+_escHtml(u)+'">'+_escHtml(u)+' — CNPJ '+_escHtml(ADM_UNIDADES_CNPJ[u].cnpj)+'</option>';
+        }).join('');
+        depRow.innerHTML =
+          '<div class="form-row"><label class="form-label" for="adm-dep-unidade">Unidade / CNPJ</label>' +
+            '<select class="form-select" id="adm-dep-unidade" onclick="event.stopPropagation()" onchange="event.stopPropagation()">' +
+              '<option value="">— Selecione —</option>' + depUnidadeOpts +
+            '</select>' +
+          '</div>' +
+          '<span class="adm-ca-label" style="display:block;margin:10px 0 6px;">Dependentes</span>' +
+          '<div id="adm-dependentes-rows"></div>' +
+          '<button type="button" class="vt-addrow" onclick="event.stopPropagation();_admDepAddRow()">+ dependente</button>';
+        item.appendChild(depRow);
       }
 
       list.appendChild(item);
@@ -3489,6 +3518,44 @@ window.toggleFta = toggleFta;
       if (c && !c.children.length) _admFilhoAddRow();
     } else {
       if (c) c.innerHTML = '';
+    }
+  }
+
+  // Dependentes (Declaração de Dependentes p/ IR) — mesma lista dinâmica de
+  // linhas dos Filhos (Salário-Família), com um select extra de relação.
+  function _admDepRowHtml() {
+    var relOpts = ADM_DEP_RELACOES.map(function(r){ return '<option value="'+r.v+'">'+r.l+'</option>'; }).join('');
+    return '<div class="dep-row-edit" style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">'+
+      '<input class="form-input dep-nome" type="text" placeholder="Nome completo" style="flex:1.8;" onclick="event.stopPropagation()">'+
+      '<select class="form-select dep-relacao" style="flex:1.1;" onclick="event.stopPropagation()">'+relOpts+'</select>'+
+      '<input class="form-input dep-nasc" type="date" style="flex:1;" onclick="event.stopPropagation()">'+
+      '<button type="button" title="Remover" onclick="event.stopPropagation();this.closest(\'.dep-row-edit\').remove()" style="border:none;background:none;cursor:pointer;font-size:18px;line-height:1;color:var(--muted);flex-shrink:0;">×</button>'+
+    '</div>';
+  }
+  function _admDepAddRow() {
+    var c = document.getElementById('adm-dependentes-rows');
+    if (c) c.insertAdjacentHTML('beforeend', _admDepRowHtml());
+  }
+  function _admDepReadRows() {
+    var c = document.getElementById('adm-dependentes-rows');
+    if (!c) return [];
+    return Array.prototype.map.call(c.querySelectorAll('.dep-row-edit'), function(r){
+      return {
+        nome: ((r.querySelector('.dep-nome')||{}).value||'').trim(),
+        relacao: ((r.querySelector('.dep-relacao')||{}).value||'').trim(),
+        nascimento: ((r.querySelector('.dep-nasc')||{}).value||'').trim()
+      };
+    }).filter(function(d){ return d.nome || d.nascimento; });
+  }
+  function _admToggleDependentesRow(checked) {
+    var row = document.getElementById('adm-dependentes-row');
+    if (row) row.style.display = checked ? 'block' : 'none';
+    var c = document.getElementById('adm-dependentes-rows');
+    if (checked) {
+      if (c && !c.children.length) _admDepAddRow();
+    } else {
+      if (c) c.innerHTML = '';
+      var u = document.getElementById('adm-dep-unidade'); if (u) u.value = '';
     }
   }
 
@@ -3818,6 +3885,7 @@ window.toggleFta = toggleFta;
     if (doc.id === 'dados_bancarios') return _admDadosBancariosBuildPage(doc, ctx);
     if (doc.id === 'contribuicao_sindical') return _admContribuicaoSindicalBuildPage(doc, ctx);
     if (doc.id === 'salario_familia') return _admSalarioFamiliaBuildPage(doc, ctx);
+    if (doc.id === 'dependentes_ir') return _admDependentesIrBuildPage(doc, ctx);
     var rawContent = ADM_DOCS_CONTENT[doc.id];
     if (typeof rawContent === 'function') {
       rawContent = doc.id === 'japona_termica'
@@ -4047,6 +4115,66 @@ window.toggleFta = toggleFta;
     );
   }
 
+  // Declaração de Dependentes (IR): tabela de dependentes preenchida na hora
+  // (ctx.depDependentes), CNPJ resolvido pela unidade escolhida (ctx.depUnidade,
+  // mesma fonte ADM_UNIDADES_CNPJ da Contribuição Sindical). Texto legal copiado
+  // sem reescrever; CTPS do documento-modelo deixado de fora a pedido.
+  function _admDependentesIrBuildPage(doc, ctx) {
+    var esc = _escHtml;
+    var deps = ctx.depDependentes || [];
+    var unidadeInfo = ADM_UNIDADES_CNPJ[ctx.depUnidade] || {};
+    var relLabel = {};
+    ADM_DEP_RELACOES.forEach(function(r){ relLabel[r.v] = r.l; });
+    var linhasHtml = deps.map(function(d, i) {
+      return '<tr>' +
+        '<td>'+(i+1)+'.</td>' +
+        '<td>'+esc(d.nome || '—')+'</td>' +
+        '<td>'+esc(relLabel[d.relacao] || d.relacao || '—')+'</td>' +
+        '<td>'+esc(d.nascimento ? _admFmtAdmissao(d.nascimento) : '—')+'</td>' +
+      '</tr>';
+    }).join('');
+    var tabela = '<table class="rp-table">' +
+      '<thead><tr><th>Nº Ordem</th><th>Nome Completo dos Dependentes</th><th>Relação Dependência</th><th>Data de Nascimento</th></tr></thead>' +
+      '<tbody>'+(linhasHtml || '<tr><td colspan="4" style="color:#999;">Nenhum dependente informado</td></tr>')+'</tbody>' +
+    '</table>';
+    return (
+      '<div class="page">' +
+        '<div class="rp-header">' +
+          '<img class="rp-logo" src="'+ADM_LOGO_B64+'" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' +
+          '<div class="rp-header-title">DECLARAÇÃO DE DEPENDENTES PARA FINS DE DESCONTO<div class="rp-header-sub">Do Imposto de Renda na Fonte</div></div>' +
+          '<div class="rp-header-right">Emitido em <strong>'+esc(ctx.dateStr)+'</strong></div>' +
+        '</div>' +
+
+        '<div class="rp-intro">' +
+          '<div class="rp-intro-field grow">' +
+            '<span class="rp-intro-label">Nome</span>' +
+            '<span class="rp-intro-value">'+esc(ctx.colabNomeLimpo)+'</span>' +
+          '</div>' +
+          (ctx.colabMatricula ? (
+            '<div class="rp-intro-field">' +
+              '<span class="rp-intro-label">Matrícula</span>' +
+              '<span class="rp-intro-value">'+esc(ctx.colabMatricula)+'</span>' +
+            '</div>'
+          ) : '') +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Empresa (CNPJ)</span>' +
+            '<span class="rp-intro-value">'+esc(ADM_RAZAO_SOCIAL)+' — '+esc(unidadeInfo.cnpj || '—')+'</span>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="rp-section">' +
+          '<div class="rp-section-label">'+(doc.sectionLabel || 'Declaração')+'</div>' +
+          '<div class="rp-section-body">' +
+            tabela +
+            '<p class="rp-p" style="margin-top:14px;">Ciente da proibição da dedução de um mesmo dependente por ambos os cônjuges, declaro, sob as penas da Lei, que as pessoas acima relacionadas são meus dependentes e não recebem rendimentos tributáveis pelo Imposto de Renda, não cabendo a V.Sa. (Fonte Pagadora) nenhuma responsabilidade perante a fiscalização.</p>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="rp-cidade-data">São Paulo, '+esc(ctx.docDateFmt)+'</div>' +
+      '</div>'
+    );
+  }
+
   // ─── Salvar termo individualmente (gera PDF + upload + pendência de assinatura) ──
   function comSupaPromise() { return new Promise(function(resolve) { comSupa(resolve); }); }
 
@@ -4208,6 +4336,8 @@ window.toggleFta = toggleFta;
     var sindicalUnidade = (document.getElementById('adm-sindical-unidade') || {}).value || '';
     var sindicalOpcao   = (document.getElementById('adm-sindical-opcao') || {}).value || 'sim';
     var salFamFilhos = _admFilhoReadRows();
+    var depUnidade = (document.getElementById('adm-dep-unidade') || {}).value || '';
+    var depDependentes = _admDepReadRows();
     _admShowError('');
     if (!colabVal) { _admShowError('Selecione um colaborador.'); return; }
 
@@ -4221,6 +4351,8 @@ window.toggleFta = toggleFta;
     if (termos.some(function(d){ return d.id === 'dados_bancarios'; }) && (!banco.trim() || !agencia.trim() || !conta.trim())) { _admShowError('Informe banco, agência e conta.'); return; }
     if (termos.some(function(d){ return d.id === 'contribuicao_sindical'; }) && !sindicalUnidade) { _admShowError('Selecione a unidade/CNPJ da autorização de desconto sindical.'); return; }
     if (termos.some(function(d){ return d.id === 'salario_familia'; }) && !salFamFilhos.length) { _admShowError('Informe ao menos um filho (nome e data de nascimento).'); return; }
+    if (termos.some(function(d){ return d.id === 'dependentes_ir'; }) && !depUnidade) { _admShowError('Selecione a unidade/CNPJ da declaração de dependentes.'); return; }
+    if (termos.some(function(d){ return d.id === 'dependentes_ir'; }) && !depDependentes.length) { _admShowError('Informe ao menos um dependente (nome, relação e data de nascimento).'); return; }
 
     var colabNome = sel.options[sel.selectedIndex].text;
     var colabData = _admColabMap[colabVal] || {};
@@ -4244,7 +4376,8 @@ window.toggleFta = toggleFta;
       docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva, usuarioLogado: usuarioLogado,
       banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta,
       sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao,
-      salFamFilhos: salFamFilhos
+      salFamFilhos: salFamFilhos,
+      depUnidade: depUnidade, depDependentes: depDependentes
     };
 
     _admSetLoadingSalvar(true, 'Enviando…');
@@ -4276,6 +4409,8 @@ window.toggleFta = toggleFta;
     var sindicalUnidade = (document.getElementById('adm-sindical-unidade') || {}).value || '';
     var sindicalOpcao   = (document.getElementById('adm-sindical-opcao') || {}).value || 'sim';
     var salFamFilhos = _admFilhoReadRows();
+    var depUnidade = (document.getElementById('adm-dep-unidade') || {}).value || '';
+    var depDependentes = _admDepReadRows();
     _admShowError('');
     if (!colabVal)       { _admShowError('Selecione um colaborador.'); return; }
     if (!checked.length) { _admShowError('Selecione ao menos um documento.'); return; }
@@ -4293,6 +4428,12 @@ window.toggleFta = toggleFta;
     }
     if (checked.some(function(cb){ return cb.value === 'salario_familia'; }) && !salFamFilhos.length) {
       _admShowError('Informe ao menos um filho (nome e data de nascimento).'); return;
+    }
+    if (checked.some(function(cb){ return cb.value === 'dependentes_ir'; }) && !depUnidade) {
+      _admShowError('Selecione a unidade/CNPJ da declaração de dependentes.'); return;
+    }
+    if (checked.some(function(cb){ return cb.value === 'dependentes_ir'; }) && !depDependentes.length) {
+      _admShowError('Informe ao menos um dependente (nome, relação e data de nascimento).'); return;
     }
 
     _admSetLoading(true, 'Gerando…');
@@ -4464,7 +4605,8 @@ window.toggleFta = toggleFta;
         docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva,
         banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta,
         sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao,
-        salFamFilhos: salFamFilhos
+        salFamFilhos: salFamFilhos,
+        depUnidade: depUnidade, depDependentes: depDependentes
       });
       return doc.vias === 2 ? pageHtml + pageHtml : pageHtml;
     }).join('');
