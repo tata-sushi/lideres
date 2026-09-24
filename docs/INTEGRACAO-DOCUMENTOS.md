@@ -984,4 +984,92 @@ Conferência visual da página renderizada (screenshot) confirmando o
 layout. Payload das 3 RPCs da assinatura confirmado com `p_tipo_id`
 correto.
 
+**Feito (2026-09-24): novo termo "Contrato de Experiência" — quinto e
+mais complexo termo novo direto em `admissao.html`.** Primeiro dos
+novos termos que é um contrato de trabalho de verdade (13 cláusulas +
+bloco de assinatura CONTRATADO(A)/CONTRATANTE), não um termo
+administrativo — texto jurídico copiado sem reescrever de um
+contrato-modelo real (Lugarh/Clicksign) fornecido pelo usuário.
+
+Duas decisões de arquitetura tomadas com o usuário antes de
+implementar (`AskUserQuestion`):
+- **CTPS/série**: não existe NENHUMA coluna pra isso no banco (nem em
+  `tata_plus.profiles`, nem em qualquer outra tabela) — usuário disse
+  que vai criar esse dado depois ("deixa anotado, já vou criar").
+  Enquanto isso, ficou como 2 campos manuais no modal (`adm-ctr-ctps`,
+  `adm-ctr-serie`), a serem trocados por auto-preenchimento assim que
+  o campo existir no cadastro.
+- **Horário de trabalho**: usuário disse que a lista real de opções
+  vem depois ("criar fictícios") — implementado como `<select>` já
+  no formato final, só com uma lista de exemplos provisória
+  (`ADM_HORARIOS_OPCOES`, claramente comentada como fictícia/
+  provisória no código) fácil de trocar quando a lista real chegar.
+
+Dados que JÁ existiam e foram aproveitados (depois de investigar o
+banco antes de implementar):
+- **CPF**: existia em `tata_plus.profiles.cpf` mas a RPC
+  `tata_plus.colaboradores_listar()` não selecionava essa coluna.
+  Ampliada (com autorização do usuário, já que é uma RPC usada em
+  várias telas) pra trazer `cpf` e `cargo_id` também — mudança
+  aditiva, sem quebrar quem já usa. **Atenção**: o `DROP FUNCTION` +
+  `CREATE FUNCTION` (necessário pra mudar o tipo de retorno) resetou
+  os grants pro padrão do schema — que incluiu `PUBLIC` (mesmo
+  comportamento de "grant automático" já documentado antes pro schema
+  `public`, aqui pegou `tata_plus` também). Corrigido na hora com
+  `REVOKE EXECUTE ... FROM PUBLIC`, voltando ao estado original
+  (só `postgres` + `authenticated`). Lição: depois de qualquer
+  `DROP FUNCTION`/`CREATE FUNCTION` (não `CREATE OR REPLACE`) numa RPC
+  de `tata_plus`, sempre conferir `information_schema.routine_privileges`
+  antes de considerar terminado.
+- **Salário (cargo + unidade)**: já existe em `dp_rh.cargos` /
+  view `dp_rh.cargos_salarios`, consumido hoje só por `ces.html`
+  (Cargos e Salários) via `tata_plus.cargos_salarios_listar()`. Essa
+  RPC mascara os valores (`salario_fixo=null` etc.) pra quem não tem
+  `tata_plus.pode_ver_valores('cargos')` — por isso o campo de salário
+  no Contrato de Experiência é **auto-preenchido quando disponível,
+  mas sempre editável**: não bypassa a máscara de permissão (seria
+  regressão de segurança), só não bloqueia quem não tem a permissão —
+  essa pessoa digita o valor na mão. Usado `salario_fixo` (não
+  `bruto`, que inclui gorjeta/prêmio) por ser o valor mais próximo do
+  conceito de "remuneração bruta" contratual em CLT — gorjeta
+  legalmente não é salário (Art. 457 §3 CLT pós-reforma).
+- **Endereço/CNPJ/CEP da unidade**: reaproveita `ADM_UNIDADES_CNPJ`
+  (mesmo mecanismo dos termos anteriores), ampliado com campos
+  `logradouro`/`numero`/`bairro`/`cep` separados (sem mexer no campo
+  `endereco` já usado pelos outros termos) pra montar o formato
+  "Av. X, N. 120, Bairro, São Paulo – SP" do contrato.
+
+Prazo do contrato: radio "14 + 46 dias" (padrão) ou "Outros" (2 campos
+numéricos, até 3 dígitos). Cálculo de datas em `_admAddDiasISO`
+(aritmética em UTC): "n dias" conta o dia inicial, então término =
+início + (n-1) dias; o 2º período começa no dia seguinte ao fim do
+1º. Testado batendo exatamente com o contrato-modelo real (14 dias a
+partir de 25/09/2026 termina 08/10/2026; +46 dias termina 23/11/2026)
+— os mesmos números do documento fornecido pelo usuário.
+
+Valor por extenso: `_admExtensoInt`/`_admExtensoReais`, cópia
+independente do utilitário já existente em `beneficios.html`
+(mesma disciplina de duplicar em vez de importar entre arquivos).
+
+Endereço residencial do EMPREGADO deixado em branco (", - – CEP:
+-/") — não existe esse dado no cadastro, e é exatamente esse o
+mesmo padrão de campo vazio que já aparece no contrato-modelo real
+fornecido (não é uma lacuna introduzida aqui).
+
+Testado com Playwright + mock (incluindo mock de
+`tata_plus.cargos_salarios_listar`): salário auto-preenchido a partir
+do `cargo_id` do colaborador, campos de unidade/horário com as opções
+certas, alternância do prazo "Outros" funcionando, validação bloqueia
+envio com qualquer campo obrigatório faltando, PDF final contém as 13
+cláusulas, endereço/CNPJ corretos da unidade escolhida, CPF formatado,
+cargo em maiúsculas, salário formatado + por extenso, datas do prazo
+batendo com o cálculo (testado também com o cenário "Outros": 30+60
+dias a partir de 10/01/2026 → 08/02/2026 → 09/04/2026), e o bloco de
+fechamento CONTRATADO(A)/CONTRATANTE. Conferência visual da página
+renderizada (screenshot) confirmando o layout. Payload das 3 RPCs da
+assinatura confirmado com `p_tipo_id` correto.
+
+doc_tipo novo criado no catálogo (`doc_tipo_sandbox_criar`, categoria
+"Contratos e Termos", `requer_assinatura=true`).
+
 _Última atualização: 2026-09-24._
