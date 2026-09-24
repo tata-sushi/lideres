@@ -834,4 +834,36 @@ exclusão segura — desabilitar `trg_assinatura_registros_imutavel`,
 apagar, reabilitar, conferir `tgenabled` — porque inclui um
 `assinatura_registros` de teste).
 
-_Última atualização: 2026-09-22._
+**Feito (2026-09-24): novo termo "Dados Bancários" — dessa vez direto em
+`admissao.html`** (não em `doc.html` — usuário pediu explicitamente pra
+criar termos novos na tela de admissão). Primeira vez que
+`admissao.html` é editado nesta sequência de trabalho (`doc.html` até
+aqui era sempre cópia independente, sem tocar em admissao.html).
+
+Termo com formulário próprio (Banco — pré-preenchido "341", Agência,
+Conta, Tipo de conta — select Corrente/Salário), no mesmo mecanismo já
+usado pelo CA da Japona/Luva Térmica: `hasBanco` no loop de
+`_admBuildDocList`, chave nova `admdoc_dados_bancarios`, bloco de campos
+escondido/mostrado por `_admToggleBancoRow`. Ao contrário do Vale
+Transporte (que é um item especial FORA do catálogo `ADM_DOCS`), esse
+entrou como uma entrada NORMAL de `ADM_DOCS` — só a função que monta a
+página é especial-casada dentro de `_admBuildDocPageHtml`
+(`_admDadosBancariosBuildPage`), então não precisou duplicar a lógica
+de resolução de tipo/validação/fluxo de assinatura em vários lugares
+como o Vale Transporte precisou — só 1 ponto de dispatch.
+
+"Tipo de conta" vira parte do rótulo da linha no PDF (`'Conta ' +
+tipoConta`) — "Conta Corrente" ou "Conta Salário", conforme escolhido
+no select, exatamente como decidido antes de implementar.
+
+doc_tipo novo criado no catálogo (`doc_tipo_sandbox_criar`, categoria
+"Contratos e Termos", `requer_assinatura=true`) — passa pelo fluxo de
+assinatura digital igual aos outros termos.
+
+Testado com Playwright + mock: campos de banco aparecem/somem certo
+(banco pré-preenchido "341"), validação bloqueia envio sem
+agência/conta, "Gerar PDF" duplica a página (vias:2) com banco/agência/
+conta/tipo corretos no HTML, "Enviar para Assinatura Digital" resolve
+o tipo_id certo e manda o payload das 3 RPCs correto.
+
+_Última atualização: 2026-09-24._
