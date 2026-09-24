@@ -3091,8 +3091,8 @@ window.toggleFta = toggleFta;
             _colabsCache = res.data.map(function(c) {
               return {
                 id: c.matricula, matricula: c.matricula, nome: c.nome,
-                cargo: c.cargo, unidade: c.unidade, departamento: c.departamento,
-                admissao: c.data_admissao, email: c.email, status: c.status
+                cargo: c.cargo, cargoId: c.cargo_id, unidade: c.unidade, departamento: c.departamento,
+                admissao: c.data_admissao, email: c.email, status: c.status, cpf: c.cpf
               };
             });
             resolve(_colabsCache);
@@ -3123,6 +3123,7 @@ window.toggleFta = toggleFta;
     { id: 'contribuicao_sindical', nome: 'Autorização de Desconto da Contribuição Sindical', desc: 'Autorização (ou não) do desconto da contribuição sindical em folha', sectionLabel: 'Autorização de Desconto da Contribuição Sindical',                                singleSig: true, vias: 2 },
     { id: 'salario_familia',   nome: 'Termo de Responsabilidade — Salário-Família',         desc: 'Comunicação de fatos que determinam a perda do Salário-Família', sectionLabel: 'Termo de Responsabilidade (Concessão de Salário-Família — Portaria MPAS nº 3.040/82)', singleSig: true, vias: 2 },
     { id: 'dependentes_ir',    nome: 'Declaração de Dependentes (IR)',                      desc: 'Dependentes para desconto do Imposto de Renda na Fonte', sectionLabel: 'Declaração de Dependentes para Fins de Desconto do Imposto de Renda na Fonte', singleSig: true, vias: 2 },
+    { id: 'contrato_experiencia', nome: 'Contrato de Experiência',                          desc: 'Contrato individual de trabalho para fins de experiência', sectionLabel: 'Contrato de Experiência', singleSig: true, vias: 2 },
   ];
 
   var ADM_DEP_RELACOES = [
@@ -3132,13 +3133,28 @@ window.toggleFta = toggleFta;
     { v: 'mae',     l: 'Mãe' }
   ];
 
+  // Horário de trabalho — lista FICTÍCIA/provisória (o usuário disse que vai
+  // mandar a lista real depois). Só trocar os valores/labels aqui quando ela
+  // chegar; o resto do mecanismo (select simples) não muda.
+  var ADM_HORARIOS_OPCOES = [
+    '08:00 às 17:00 - 1h intervalo',
+    '10:00 às 19:00 - 1h intervalo',
+    '12:00 às 21:00 - 1h intervalo',
+    '12:00 às 23:20 - 4h intervalo',
+    '14:00 às 23:00 - 1h intervalo',
+    '18:00 às 00:00 (segunda a sexta)'
+  ];
+
   // CNPJ/endereço por unidade — mesma fonte de estoqueadm.html (EPC_UNIDADES),
   // copiada aqui pra não criar dependência entre os dois arquivos.
   var ADM_RAZAO_SOCIAL = 'TATÁ SUSHI COMÉRCIO DE ALIMENTOS LTDA';
+  // logradouro/numero/bairro/cep: campos separados usados pelo Contrato de
+  // Experiência (formato "Av. X, N. 120, Bairro, São Paulo – SP"), sem mexer
+  // em `endereco` (string já usada pelos termos anteriores).
   var ADM_UNIDADES_CNPJ = {
-    'Itaim Bibi':       { cnpj: '23.894.533/0001-60', endereco: 'Rua João Cachoeira, 278 · CEP 04535-000 · São Paulo/SP' },
-    'Pinheiros':        { cnpj: '23.894.533/0007-55', endereco: 'Av. Brigadeiro Faria Lima, 120 · CEP 05426-200 · São Paulo/SP' },
-    'Poke - Pinheiros': { cnpj: '23.894.533/0008-36', endereco: 'Rua Tucambira, 212 · CEP 05428-020 · São Paulo/SP' }
+    'Itaim Bibi':       { cnpj: '23.894.533/0001-60', endereco: 'Rua João Cachoeira, 278 · CEP 04535-000 · São Paulo/SP', logradouro: 'Rua João Cachoeira', numero: '278', bairro: 'Itaim Bibi', cep: '04535-000' },
+    'Pinheiros':        { cnpj: '23.894.533/0007-55', endereco: 'Av. Brigadeiro Faria Lima, 120 · CEP 05426-200 · São Paulo/SP', logradouro: 'Avenida Brigadeiro Faria Lima', numero: '120', bairro: 'Pinheiros', cep: '05426-200' },
+    'Poke - Pinheiros': { cnpj: '23.894.533/0008-36', endereco: 'Rua Tucambira, 212 · CEP 05428-020 · São Paulo/SP', logradouro: 'Rua Tucambira', numero: '212', bairro: 'Pinheiros', cep: '05428-020' }
   };
 
   var _ORG_URL = 'https://script.google.com/macros/s/AKfycbxUWUoOmv-Cn19-FjUJ18jYTu5G_embOGDaQDsgC4Jd8agVfgqs98Tbu3qlqa9e7tpu/exec';
@@ -3187,6 +3203,8 @@ window.toggleFta = toggleFta;
     if (!sel || !campo) return;
     var c = _admColabMap[sel.value];
     campo.value = c ? _admNormalizarData(c.admissao) : '';
+    var ctrCheck = document.getElementById('admdoc_contrato_experiencia');
+    if (ctrCheck && ctrCheck.checked) _admContratoSalarioAutoFill();
   }
 
   function openModalAdmissao() {
@@ -3254,12 +3272,13 @@ window.toggleFta = toggleFta;
       var hasSindical = doc.id === 'contribuicao_sindical';
       var hasFilhos   = doc.id === 'salario_familia';
       var hasDependentes = doc.id === 'dependentes_ir';
+      var hasContrato = doc.id === 'contrato_experiencia';
       var caId   = doc.id === 'japona_termica' ? 'adm-ca' : 'adm-ca-luva';
       var rowId  = 'adm-ca-row-' + doc.id;
 
       var item = document.createElement('div');
       item.className = 'adm-doc-item';
-      if (hasCa || hasEpi || hasBanco || hasSindical || hasFilhos || hasDependentes) item.style.cssText = 'flex-direction:column;align-items:stretch;';
+      if (hasCa || hasEpi || hasBanco || hasSindical || hasFilhos || hasDependentes || hasContrato) item.style.cssText = 'flex-direction:column;align-items:stretch;';
 
       var top = document.createElement('div');
       top.style.cssText = 'display:flex;align-items:flex-start;gap:10px;';
@@ -3270,7 +3289,8 @@ window.toggleFta = toggleFta;
         (hasBanco    ? ' onchange="_admToggleBancoRow(this.checked)"' : '') +
         (hasSindical ? ' onchange="_admToggleSindicalRow(this.checked)"' : '') +
         (hasFilhos   ? ' onchange="_admToggleFilhosRow(this.checked)"' : '') +
-        (hasDependentes ? ' onchange="_admToggleDependentesRow(this.checked)"' : '') + '>' +
+        (hasDependentes ? ' onchange="_admToggleDependentesRow(this.checked)"' : '') +
+        (hasContrato ? ' onchange="_admToggleContratoRow(this.checked)"' : '') + '>' +
         '<label for="admdoc_' + doc.id + '" style="cursor:pointer;flex:1;">' +
           '<div class="adm-doc-name">' + doc.nome + (doc.vias === 2 ? ' <span style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--t3);font-weight:400;">(2 vias)</span>' : '') + '</div>' +
         '</label>';
@@ -3358,6 +3378,46 @@ window.toggleFta = toggleFta;
           '<div id="adm-dependentes-rows"></div>' +
           '<button type="button" class="vt-addrow" onclick="event.stopPropagation();_admDepAddRow()">+ dependente</button>';
         item.appendChild(depRow);
+      }
+
+      if (hasContrato) {
+        var ctrRow = document.createElement('div');
+        ctrRow.id = 'adm-contrato-row';
+        ctrRow.style.cssText = 'display:none;margin-top:8px;padding-top:10px;border-top:1px solid var(--border);';
+        var ctrUnidadeOpts = Object.keys(ADM_UNIDADES_CNPJ).map(function(u){
+          return '<option value="'+_escHtml(u)+'">'+_escHtml(u)+' — CNPJ '+_escHtml(ADM_UNIDADES_CNPJ[u].cnpj)+'</option>';
+        }).join('');
+        var ctrHorarioOpts = ADM_HORARIOS_OPCOES.map(function(h){
+          return '<option value="'+_escHtml(h)+'">'+_escHtml(h)+'</option>';
+        }).join('');
+        ctrRow.innerHTML =
+          '<div class="form-row"><label class="form-label" for="adm-ctr-unidade">Unidade / CNPJ (local de trabalho)</label>' +
+            '<select class="form-select" id="adm-ctr-unidade" onclick="event.stopPropagation()" onchange="event.stopPropagation()">' +
+              '<option value="">— Selecione —</option>' + ctrUnidadeOpts +
+            '</select>' +
+          '</div>' +
+          '<div class="form-row"><label class="form-label" for="adm-ctr-ctps">CTPS n°</label><input class="form-input" type="text" id="adm-ctr-ctps" placeholder="Ex: 4386680" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-ctr-serie">Série / UF</label><input class="form-input" type="text" id="adm-ctr-serie" placeholder="Ex: 5861 - SP" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-ctr-salario">Salário bruto (R$)</label><input class="form-input" type="text" id="adm-ctr-salario" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-ctr-horario">Horário de trabalho</label>' +
+            '<select class="form-select" id="adm-ctr-horario" onclick="event.stopPropagation()">' +
+              '<option value="">— Selecione —</option>' + ctrHorarioOpts +
+            '</select>' +
+          '</div>' +
+          '<div class="form-divider">Prazo do contrato</div>' +
+          '<div class="form-row">' +
+            '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">' +
+              '<input type="radio" name="adm-ctr-prazo-tipo" value="padrao" checked onclick="event.stopPropagation()" onchange="_admToggleContratoPrazoOutros(false)"> 14 dias + prorrogação de 46 dias' +
+            '</label>' +
+            '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-top:6px;">' +
+              '<input type="radio" name="adm-ctr-prazo-tipo" value="outros" onclick="event.stopPropagation()" onchange="_admToggleContratoPrazoOutros(true)"> Outros' +
+            '</label>' +
+          '</div>' +
+          '<div id="adm-ctr-prazo-outros-row" style="display:none;">' +
+            '<div class="form-row"><label class="form-label" for="adm-ctr-dias1">1º período (dias)</label><input class="form-input" type="text" inputmode="numeric" maxlength="3" id="adm-ctr-dias1" placeholder="Ex: 30" onclick="event.stopPropagation()"></div>' +
+            '<div class="form-row"><label class="form-label" for="adm-ctr-dias2">2º período — prorrogação (dias)</label><input class="form-input" type="text" inputmode="numeric" maxlength="3" id="adm-ctr-dias2" placeholder="Ex: 60" onclick="event.stopPropagation()"></div>' +
+          '</div>';
+        item.appendChild(ctrRow);
       }
 
       list.appendChild(item);
@@ -3557,6 +3617,55 @@ window.toggleFta = toggleFta;
       if (c) c.innerHTML = '';
       var u = document.getElementById('adm-dep-unidade'); if (u) u.value = '';
     }
+  }
+
+  // Contrato de Experiência — salário sugerido a partir de dp_rh.cargos_salarios
+  // (via cargo_id do colaborador), mas o campo continua editável: quem não tem
+  // permissão de ver valores (tata_plus.pode_ver_valores) recebe salario_fixo=null
+  // da RPC e precisa digitar na mão — não é um bug, é a máscara de permissão já
+  // existente na página de Cargos e Salários (ces.html).
+  var _admCargosSalariosCache = null;
+  function _admCarregarCargosSalarios() {
+    if (_admCargosSalariosCache) return Promise.resolve(_admCargosSalariosCache);
+    return comSupaPromise().then(function(supa) {
+      return supa.schema('tata_plus').rpc('cargos_salarios_listar').then(function(r) {
+        if (r.error || !r.data) return {};
+        var mapa = {};
+        (r.data.cargos || []).forEach(function(c) { mapa[c.cargo_id] = c.salario_fixo; });
+        _admCargosSalariosCache = mapa;
+        return mapa;
+      });
+    }).catch(function(){ return {}; });
+  }
+  function _admContratoSalarioAutoFill() {
+    var sel = document.getElementById('adm-colab');
+    var salarioEl = document.getElementById('adm-ctr-salario');
+    if (!sel || !salarioEl || !sel.value) return;
+    var colabData = _admColabMap[sel.value] || {};
+    if (!colabData.cargoId) return;
+    _admCarregarCargosSalarios().then(function(mapa) {
+      var v = mapa[colabData.cargoId];
+      if (v === undefined || v === null || v === '') return;
+      var num = Number(v);
+      if (!isNaN(num)) salarioEl.value = num.toFixed(2).replace('.', ',');
+    });
+  }
+  function _admToggleContratoRow(checked) {
+    var row = document.getElementById('adm-contrato-row');
+    if (row) row.style.display = checked ? 'block' : 'none';
+    if (checked) {
+      _admContratoSalarioAutoFill();
+    } else {
+      ['adm-ctr-unidade','adm-ctr-ctps','adm-ctr-serie','adm-ctr-salario','adm-ctr-horario','adm-ctr-dias1','adm-ctr-dias2'].forEach(function(id){
+        var e = document.getElementById(id); if (e) e.value = '';
+      });
+      var r = document.querySelector('input[name="adm-ctr-prazo-tipo"][value="padrao"]'); if (r) r.checked = true;
+      _admToggleContratoPrazoOutros(false);
+    }
+  }
+  function _admToggleContratoPrazoOutros(on) {
+    var row = document.getElementById('adm-ctr-prazo-outros-row');
+    if (row) row.style.display = on ? 'block' : 'none';
   }
 
   var ADM_EPI_DEPTS = [
@@ -3871,6 +3980,82 @@ window.toggleFta = toggleFta;
     return s;
   }
 
+  function _admFmtCpf(cpf) {
+    var d = String(cpf || '').replace(/\D/g, '');
+    if (d.length !== 11) return cpf || '';
+    return d.slice(0,3)+'.'+d.slice(3,6)+'.'+d.slice(6,9)+'-'+d.slice(9,11);
+  }
+
+  // Soma dias corridos a uma data yyyy-mm-dd (aritmética em UTC pra não sofrer
+  // com horário de verão/timezone), devolve dd/mm/yyyy. Usado no prazo do
+  // Contrato de Experiência: "n dias" conta o dia inicial, então término =
+  // início + (n-1) dias (ex.: 14 dias a partir de 25/09 termina em 08/10).
+  function _admAddDiasISO(isoDate, dias) {
+    var p = String(isoDate || '').split('-');
+    if (p.length !== 3) return null;
+    var d = new Date(Date.UTC(Number(p[0]), Number(p[1])-1, Number(p[2])));
+    d.setUTCDate(d.getUTCDate() + dias);
+    return d.toISOString().slice(0,10);
+  }
+  function _admFmtIso(iso) {
+    if (!iso) return '';
+    var p = iso.split('-');
+    return p[2]+'/'+p[1]+'/'+p[0];
+  }
+
+  // Número inteiro (>=0) por extenso em pt-BR — cópia de beneficios.html
+  // (_extensoInt/_extensoReais), independente pra não criar dependência entre arquivos.
+  function _admExtensoInt(num){
+    num = Math.floor(Number(num)||0);
+    if (num === 0) return 'zero';
+    var U=['','um','dois','três','quatro','cinco','seis','sete','oito','nove','dez','onze','doze','treze','catorze','quinze','dezesseis','dezessete','dezoito','dezenove'];
+    var D=['','','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+    var C=['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
+    function c3(x){
+      if (x===0) return '';
+      if (x===100) return 'cem';
+      var out=[], c=Math.floor(x/100), r=x%100;
+      if (c) out.push(C[c]);
+      if (r){ if (r<20) out.push(U[r]); else { var d=Math.floor(r/10), u=r%10; out.push(u?D[d]+' e '+U[u]:D[d]); } }
+      return out.join(' e ');
+    }
+    var chunks=[], t=num;
+    while (t>0){ chunks.push(t%1000); t=Math.floor(t/1000); }
+    var eS=['','mil','milhão','bilhão','trilhão'], eP=['','mil','milhões','bilhões','trilhões'];
+    var parts=[];
+    for (var i=chunks.length-1;i>=0;i--){
+      var v=chunks[i]; if (v===0) continue;
+      var txt=c3(v);
+      if (i===1) txt=(v===1)?'mil':txt+' mil';
+      else if (i>=2) txt=txt+' '+(v===1?eS[i]:eP[i]);
+      parts.push({v:v, txt:txt});
+    }
+    var res='';
+    for (var k=0;k<parts.length;k++){
+      if (k===0){ res=parts[k].txt; continue; }
+      var cur=parts[k];
+      var sep = (k===parts.length-1 && (cur.v<100 || cur.v%100===0)) ? ' e ' : ', ';
+      res += sep + cur.txt;
+    }
+    return res;
+  }
+  function _admExtensoReais(valor){
+    var n = Math.round((Number(valor)||0)*100);
+    var reais = Math.floor(n/100), cent = n%100, out='';
+    if (reais>0){
+      var extR = _admExtensoInt(reais);
+      var moeda = reais===1 ? 'real' : 'reais';
+      if (/(milh(ão|ões)|bilh(ão|ões)|trilh(ão|ões))$/.test(extR)) moeda = 'de '+moeda;
+      out += extR+' '+moeda;
+    }
+    if (cent>0){ if (out) out+=' e '; out += _admExtensoInt(cent)+' '+(cent===1?'centavo':'centavos'); }
+    return out || 'zero real';
+  }
+  function _admFmtMoeda(n) {
+    n = Number(n) || 0;
+    return 'R$' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
   function _admSlug(s) {
     return String(s || '').toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -3886,6 +4071,7 @@ window.toggleFta = toggleFta;
     if (doc.id === 'contribuicao_sindical') return _admContribuicaoSindicalBuildPage(doc, ctx);
     if (doc.id === 'salario_familia') return _admSalarioFamiliaBuildPage(doc, ctx);
     if (doc.id === 'dependentes_ir') return _admDependentesIrBuildPage(doc, ctx);
+    if (doc.id === 'contrato_experiencia') return _admContratoExperienciaBuildPage(doc, ctx);
     var rawContent = ADM_DOCS_CONTENT[doc.id];
     if (typeof rawContent === 'function') {
       rawContent = doc.id === 'japona_termica'
@@ -4175,6 +4361,111 @@ window.toggleFta = toggleFta;
     );
   }
 
+  // Contrato de Experiência: texto jurídico (13 cláusulas) copiado sem
+  // reescrever do modelo em uso (Lugarh/Clicksign), só com os campos dinâmicos
+  // substituídos. O endereço residencial do EMPREGADO fica em branco (", - –
+  // CEP: -/") porque não existe esse dado no cadastro — mesmo vazio que já
+  // aparece no contrato-modelo real fornecido, não é uma lacuna introduzida
+  // aqui. Prazo (14+46 dias ou "Outros") calculado com _admAddDiasISO: "n
+  // dias" conta o dia inicial (fim = início + n-1 dias), 2º período começa no
+  // dia seguinte ao fim do 1º.
+  function _admContratoExperienciaBuildPage(doc, ctx) {
+    var esc = _escHtml;
+    var unidadeInfo = ADM_UNIDADES_CNPJ[ctx.ctrUnidade] || {};
+    var enderecoUnidade = unidadeInfo.logradouro
+      ? unidadeInfo.logradouro+', N. '+unidadeInfo.numero+', '+unidadeInfo.bairro+', São Paulo – SP'
+      : '—';
+
+    var salarioNum = parseFloat(String(ctx.ctrSalario||'').replace(/\./g,'').replace(',','.')) || 0;
+    var salarioFmt = 'R$'+salarioNum.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    var salarioExtensoRaw = _admExtensoReais(salarioNum);
+    var salarioExtenso = salarioExtensoRaw.charAt(0).toUpperCase()+salarioExtensoRaw.slice(1);
+
+    var outros = ctx.ctrPrazoTipo === 'outros';
+    var dias1 = outros ? (parseInt(ctx.ctrDias1,10)||0) : 14;
+    var dias2 = outros ? (parseInt(ctx.ctrDias2,10)||0) : 46;
+    var inicioIso = ctx.admissaoIso || '';
+    var fim1Iso   = inicioIso ? _admAddDiasISO(inicioIso, dias1-1) : '';
+    var inicio2Iso = inicioIso ? _admAddDiasISO(inicioIso, dias1) : '';
+    var fim2Iso   = inicio2Iso ? _admAddDiasISO(inicio2Iso, dias2-1) : '';
+    var inicioFmt = _admFmtIso(inicioIso) || '—';
+    var fim1Fmt   = _admFmtIso(fim1Iso) || '—';
+    var fim2Fmt   = _admFmtIso(fim2Iso) || '—';
+
+    var b = function(s){ return '<strong>'+esc(s)+'</strong>'; };
+
+    return (
+      '<div class="page">' +
+        '<div class="rp-header">' +
+          '<img class="rp-logo" src="'+ADM_LOGO_B64+'" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' +
+          '<div class="rp-header-title">CONTRATO DE EXPERIÊNCIA</div>' +
+          '<div class="rp-header-right">Emitido em <strong>'+esc(ctx.dateStr)+'</strong></div>' +
+        '</div>' +
+
+        '<div class="rp-intro">' +
+          '<div class="rp-intro-field grow">' +
+            '<span class="rp-intro-label">Empregado</span>' +
+            '<span class="rp-intro-value">'+esc(ctx.colabNomeLimpo)+'</span>' +
+          '</div>' +
+          (ctx.colabMatricula ? (
+            '<div class="rp-intro-field">' +
+              '<span class="rp-intro-label">Matrícula</span>' +
+              '<span class="rp-intro-value">'+esc(ctx.colabMatricula)+'</span>' +
+            '</div>'
+          ) : '') +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Unidade (CNPJ)</span>' +
+            '<span class="rp-intro-value">'+esc(ctx.ctrUnidade||'—')+' — '+esc(unidadeInfo.cnpj || '—')+'</span>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="rp-section">' +
+          '<div class="rp-section-label">Contrato de Experiência</div>' +
+          '<div class="rp-section-body">' +
+            '<p class="rp-p">Pelo presente instrumento particular de Contrato de Experiência, a empresa '+b(ADM_RAZAO_SOCIAL)+', estabelecida à '+b(enderecoUnidade)+', inscrita no CNPJ/CEI sob Nº '+b(unidadeInfo.cnpj||'—')+', denominada a seguir EMPREGADORA, e o(a) Sr(a) '+b(ctx.colabNomeLimpo)+', domiciliado à , - – CEP: -/, portador(a) da CTPS n.º '+b(ctx.ctrCtps||'—')+', série '+b(ctx.ctrSerie||'—')+', e CPF Nº '+b(_admFmtCpf(ctx.colabCpf)||'—')+', doravante denominado(a) EMPREGADO, celebram o presente Contrato Individual de Trabalho para fins de experiência, conforme legislação trabalhista em vigor, regido pelas cláusulas abaixo e demais disposições legais vigentes.</p>' +
+
+            '<p class="rp-p">1. Fica o EMPREGADO admitido no quadro de funcionários da EMPREGADORA para exercer a função de '+b((ctx.colabCargo||'—').toUpperCase())+' mediante a remuneração bruta de '+b(salarioFmt+' - ('+salarioExtenso+') por mês')+'. A circunstância, porém, de ser a função especificada não importa na intransferibilidade do EMPREGADO para outra função, na qual demonstre melhor capacidade de adaptação desde que compatível com sua condição pessoal.</p>' +
+
+            '<p class="rp-p">2. O local de trabalho situa-se à '+b(enderecoUnidade)+', podendo a EMPREGADORA, a qualquer tempo, transferir o EMPREGADO a título temporário ou definitivo, tanto no âmbito da unidade para a qual foi admitido, como para outras unidades ou empresas do mesmo grupo, em qualquer localidade deste Estado ou do País; será pago o '+b('adicional de transferência temporária, conforme artigo 469 DA CLT parágrafos 1º e 2.º')+'<br>'+b('Aos funcionários que por ventura realizarem deslocamentos da empresa para realização de serviços externos, serão pagas despesas como: alimentação e transporte.')+'</p>' +
+
+            '<p class="rp-p">3. O horário de trabalho será o seguinte: '+b((ctx.ctrHorario||'—')+'.')+'</p>' +
+
+            '<p class="rp-p">4. O prazo deste contrato é de '+b(String(dias1))+' dias, com início em '+b(inicioFmt)+' e término em '+b(fim1Fmt)+', ressalvando-se a possibilidade de prorrogação por mais 1 (um) período sucessivo de '+b(String(dias2))+' dias, '+b(fim2Fmt)+', desde que não ultrapasse o máximo legal, conforme artigo 445, parágrafo único da CLT.</p>' +
+
+            '<p class="rp-p">5. Além dos descontos previstos em Lei, reserva-se à EMPREGADORA o direito de descontar do EMPREGADO as importâncias correspondentes aos danos causados por ele nos termos do Artigo 462, CAPUT E § 1º da CLT.</p>' +
+
+            '<p class="rp-p">6. No Ato da assinatura deste contrato, o EMPREGADO declara que realizará os treinamentos e tomará parte das orientações do Regulamento Interno da Empresa cujas cláusulas fazem parte do Contrato de Trabalho e fica ciente de suas Disposições e Normas de Segurança que regulam suas atividades na EMPREGADORA e se compromete a cumpri-las e a usar os equipamentos de segurança fornecidos, sob pena de ser punido por falta grave, nos termos da Legislação vigente e demais disposições inerentes à segurança e medicina do trabalho.</p>' +
+
+            '<p class="rp-p">7. O EMPREGADO se compromete a trabalhar em regime de compensação e de prorrogação de horas, inclusive em período noturno, sempre que as necessidades assim o exigirem, observadas as formalidades legais do Art. 59 da CLT;</p>' +
+
+            '<p class="rp-p">8. Opera-se a rescisão do contrato de experiência por decorrência do prazo supra ou por vontade de uma das partes.</p>' +
+            '<p class="rp-p"><strong>a.</strong> Rescindindo-se por vontade da EMPREGADORA com justa causa, nenhuma indenização é devida ao EMPREGADO;</p>' +
+            '<p class="rp-p"><strong>b.</strong> Rescindindo-se antes do prazo, pela EMPREGADORA ou pelo EMPREGADO, fica obrigada a pagar, a parte que solicitar a rescisão antecipada, 50% dos salários devidos até o termo do contrato (metade do tempo combinado restante), nos termos do Art. 479 e 480 da CLT, sem prejuízo do disposto no Regulamento do FGTS;</p>' +
+            '<p class="rp-p"><strong>c.</strong> Ao final do contrato por prazo determinado, nenhum aviso prévio ou multa de 40% do FGTS são devidos pela rescisão do contrato.</p>' +
+
+            '<p class="rp-p">9. Permanecendo o EMPREGADO a serviço da EMPREGADORA após o término da experiência, continuarão a vigorar as cláusulas constantes deste contrato.<br>'+b('A EXTENSÃO ALÉM DO PRAZO MÁXIMO DE 90 DIAS, O TRANSFORMA, AUTOMATICAMENTE, EM CONTRATO POR PRAZO INDETERMINADO.')+'</p>' +
+
+            '<p class="rp-p">10. O EMPREGADO cede à EMPREGADORA o direito de uso de imagem/fotografia em peças promocionais, publicitárias e afins, sem quaisquer ônus presentes ou futuros para as partes, que serão veiculadas por tempo indeterminado e em locais e veículos a critério da EMPREGADORA, sempre que lhe convier.</p>' +
+
+            '<p class="rp-p">11. O EMPREGADO deve manter em sigilo todas as informações referente a estratégias, arquivos, registros, documentos, informações técnicas, equipamentos, serviços, processos, procedimentos, e quaisquer outras informações referentes tanto à EMPREGADORA, quanto aos seus Clientes e parceiros comerciais, devendo quaisquer atividades desenvolvidas em prol da EMPREGADORA serem tratadas como confidenciais, sendo, ainda, considerados segredos comerciais, que compõem o seu valor e que são usados como vantagens em face de seus competidores, sob pena de indenizar eventuais prejuízos causados, inclusive de cunho moral, inclusive após a rescisão do presente.</p>' +
+
+            '<p class="rp-p">12. A apresentação de Atestados Médicos deverá ocorrer no prazo máximo de 48 (quarenta e oito) horas, sob pena da aplicação da advertência cabível, conforme legislação vigente.</p>' +
+
+            '<p class="rp-p">13. As partes acordam que eventuais assinaturas eletrônicas ou assinaturas por meio de Certificado Digital, conforme regras internas de cada uma das Partes, serão consideradas válidas para todos os fins de direito.</p>' +
+
+            '<p class="rp-p" style="margin-top:12px;">Assim justos e contratados, firmam as partes o presente instrumento assinando de igual teor, para um só efeito, como EMPREGADORA e como EMPREGADO(A).</p>' +
+
+            '<p class="rp-p" style="margin-top:18px;"><strong>São Paulo, '+esc(ctx.docDateFmt)+'.</strong></p>' +
+
+            '<p class="rp-p" style="margin-top:18px;"><strong>CONTRATADO(A):</strong> '+esc(ctx.colabNomeLimpo)+'<br><strong>CPF:</strong> '+esc(_admFmtCpf(ctx.colabCpf)||'—')+'</p>' +
+
+            '<p class="rp-p" style="margin-top:12px;"><strong>CONTRATANTE:</strong> '+esc(ADM_RAZAO_SOCIAL)+'<br><strong>CNPJ:</strong> '+esc(unidadeInfo.cnpj||'—')+'</p>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
   // ─── Salvar termo individualmente (gera PDF + upload + pendência de assinatura) ──
   function comSupaPromise() { return new Promise(function(resolve) { comSupa(resolve); }); }
 
@@ -4338,6 +4629,14 @@ window.toggleFta = toggleFta;
     var salFamFilhos = _admFilhoReadRows();
     var depUnidade = (document.getElementById('adm-dep-unidade') || {}).value || '';
     var depDependentes = _admDepReadRows();
+    var ctrUnidade = (document.getElementById('adm-ctr-unidade') || {}).value || '';
+    var ctrCtps    = (document.getElementById('adm-ctr-ctps') || {}).value || '';
+    var ctrSerie   = (document.getElementById('adm-ctr-serie') || {}).value || '';
+    var ctrSalario = (document.getElementById('adm-ctr-salario') || {}).value || '';
+    var ctrHorario = (document.getElementById('adm-ctr-horario') || {}).value || '';
+    var ctrPrazoTipo = (document.querySelector('input[name="adm-ctr-prazo-tipo"]:checked') || {}).value || 'padrao';
+    var ctrDias1   = (document.getElementById('adm-ctr-dias1') || {}).value || '';
+    var ctrDias2   = (document.getElementById('adm-ctr-dias2') || {}).value || '';
     _admShowError('');
     if (!colabVal) { _admShowError('Selecione um colaborador.'); return; }
 
@@ -4353,6 +4652,13 @@ window.toggleFta = toggleFta;
     if (termos.some(function(d){ return d.id === 'salario_familia'; }) && !salFamFilhos.length) { _admShowError('Informe ao menos um filho (nome e data de nascimento).'); return; }
     if (termos.some(function(d){ return d.id === 'dependentes_ir'; }) && !depUnidade) { _admShowError('Selecione a unidade/CNPJ da declaração de dependentes.'); return; }
     if (termos.some(function(d){ return d.id === 'dependentes_ir'; }) && !depDependentes.length) { _admShowError('Informe ao menos um dependente (nome, relação e data de nascimento).'); return; }
+    if (termos.some(function(d){ return d.id === 'contrato_experiencia'; })) {
+      if (!ctrUnidade) { _admShowError('Selecione a unidade/CNPJ do local de trabalho (Contrato de Experiência).'); return; }
+      if (!ctrCtps.trim() || !ctrSerie.trim()) { _admShowError('Informe CTPS e série/UF (Contrato de Experiência).'); return; }
+      if (!ctrSalario.trim()) { _admShowError('Informe o salário bruto (Contrato de Experiência).'); return; }
+      if (!ctrHorario) { _admShowError('Selecione o horário de trabalho (Contrato de Experiência).'); return; }
+      if (ctrPrazoTipo === 'outros' && (!ctrDias1.trim() || !ctrDias2.trim())) { _admShowError('Informe os dois períodos do prazo (Contrato de Experiência).'); return; }
+    }
 
     var colabNome = sel.options[sel.selectedIndex].text;
     var colabData = _admColabMap[colabVal] || {};
@@ -4372,12 +4678,15 @@ window.toggleFta = toggleFta;
 
     var ctx = {
       colabMatricula: colabData.matricula, colabNomeLimpo: colabNomeLimpo, colabUnidade: colabUnidade,
-      colabCargo: colabCargo, dataAdmissao: dataAdmissao, dataFmt: dataFmt, dateStr: dateStr,
+      colabCargo: colabCargo, colabCpf: colabData.cpf, dataAdmissao: dataAdmissao, admissaoIso: colabData.admissao,
+      dataFmt: dataFmt, dateStr: dateStr,
       docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva, usuarioLogado: usuarioLogado,
       banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta,
       sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao,
       salFamFilhos: salFamFilhos,
-      depUnidade: depUnidade, depDependentes: depDependentes
+      depUnidade: depUnidade, depDependentes: depDependentes,
+      ctrUnidade: ctrUnidade, ctrCtps: ctrCtps, ctrSerie: ctrSerie, ctrSalario: ctrSalario,
+      ctrHorario: ctrHorario, ctrPrazoTipo: ctrPrazoTipo, ctrDias1: ctrDias1, ctrDias2: ctrDias2
     };
 
     _admSetLoadingSalvar(true, 'Enviando…');
@@ -4411,6 +4720,14 @@ window.toggleFta = toggleFta;
     var salFamFilhos = _admFilhoReadRows();
     var depUnidade = (document.getElementById('adm-dep-unidade') || {}).value || '';
     var depDependentes = _admDepReadRows();
+    var ctrUnidade = (document.getElementById('adm-ctr-unidade') || {}).value || '';
+    var ctrCtps    = (document.getElementById('adm-ctr-ctps') || {}).value || '';
+    var ctrSerie   = (document.getElementById('adm-ctr-serie') || {}).value || '';
+    var ctrSalario = (document.getElementById('adm-ctr-salario') || {}).value || '';
+    var ctrHorario = (document.getElementById('adm-ctr-horario') || {}).value || '';
+    var ctrPrazoTipo = (document.querySelector('input[name="adm-ctr-prazo-tipo"]:checked') || {}).value || 'padrao';
+    var ctrDias1   = (document.getElementById('adm-ctr-dias1') || {}).value || '';
+    var ctrDias2   = (document.getElementById('adm-ctr-dias2') || {}).value || '';
     _admShowError('');
     if (!colabVal)       { _admShowError('Selecione um colaborador.'); return; }
     if (!checked.length) { _admShowError('Selecione ao menos um documento.'); return; }
@@ -4434,6 +4751,13 @@ window.toggleFta = toggleFta;
     }
     if (checked.some(function(cb){ return cb.value === 'dependentes_ir'; }) && !depDependentes.length) {
       _admShowError('Informe ao menos um dependente (nome, relação e data de nascimento).'); return;
+    }
+    if (checked.some(function(cb){ return cb.value === 'contrato_experiencia'; })) {
+      if (!ctrUnidade) { _admShowError('Selecione a unidade/CNPJ do local de trabalho (Contrato de Experiência).'); return; }
+      if (!ctrCtps.trim() || !ctrSerie.trim()) { _admShowError('Informe CTPS e série/UF (Contrato de Experiência).'); return; }
+      if (!ctrSalario.trim()) { _admShowError('Informe o salário bruto (Contrato de Experiência).'); return; }
+      if (!ctrHorario) { _admShowError('Selecione o horário de trabalho (Contrato de Experiência).'); return; }
+      if (ctrPrazoTipo === 'outros' && (!ctrDias1.trim() || !ctrDias2.trim())) { _admShowError('Informe os dois períodos do prazo (Contrato de Experiência).'); return; }
     }
 
     _admSetLoading(true, 'Gerando…');
@@ -4601,12 +4925,15 @@ window.toggleFta = toggleFta;
       }
       var pageHtml = _admBuildDocPageHtml(doc, {
         colabNomeLimpo: colabNomeLimpo, colabMatricula: colabData.matricula, colabCargo: colabCargo,
+        colabCpf: colabData.cpf, admissaoIso: colabData.admissao,
         colabUnidade: colabUnidade, dataAdmissao: dataAdmissao, dataFmt: dataFmt, dateStr: dateStr,
         docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva,
         banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta,
         sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao,
         salFamFilhos: salFamFilhos,
-        depUnidade: depUnidade, depDependentes: depDependentes
+        depUnidade: depUnidade, depDependentes: depDependentes,
+        ctrUnidade: ctrUnidade, ctrCtps: ctrCtps, ctrSerie: ctrSerie, ctrSalario: ctrSalario,
+        ctrHorario: ctrHorario, ctrPrazoTipo: ctrPrazoTipo, ctrDias1: ctrDias1, ctrDias2: ctrDias2
       });
       return doc.vias === 2 ? pageHtml + pageHtml : pageHtml;
     }).join('');
