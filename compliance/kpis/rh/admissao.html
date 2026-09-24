@@ -3120,7 +3120,17 @@ window.toggleFta = toggleFta;
     { id: 'camara_fria_acesso',nome: 'Termo de Resp. sobre Acesso à Câmara Fria',         desc: 'Responsabilidades para colaboradores autorizados',  sectionLabel: 'Termo de Responsabilidade sobre Acesso à Câmara Fria',                                             singleSig: true, vias: 2 },
     { id: 'meios_eletronicos', nome: 'Termo de Resp. Meios Eletrônicos e Informática',    desc: 'Uso responsável de equipamentos e recursos de informática', sectionLabel: 'Termo de Responsabilidade de Utilização de Meios Eletrônicos e Recursos de Informática', singleSig: true },
     { id: 'dados_bancarios',   nome: 'Dados Bancários',                                    desc: 'Dados para crédito em conta corrente/salário',      sectionLabel: 'Dados para Crédito em Conta Corrente / Salário',                                                   singleSig: true, vias: 2 },
+    { id: 'contribuicao_sindical', nome: 'Autorização de Desconto da Contribuição Sindical', desc: 'Autorização (ou não) do desconto da contribuição sindical em folha', sectionLabel: 'Autorização de Desconto da Contribuição Sindical',                                singleSig: true, vias: 2 },
   ];
+
+  // CNPJ/endereço por unidade — mesma fonte de estoqueadm.html (EPC_UNIDADES),
+  // copiada aqui pra não criar dependência entre os dois arquivos.
+  var ADM_RAZAO_SOCIAL = 'TATÁ SUSHI COMÉRCIO DE ALIMENTOS LTDA';
+  var ADM_UNIDADES_CNPJ = {
+    'Itaim Bibi':       { cnpj: '23.894.533/0001-60', endereco: 'Rua João Cachoeira, 278 · CEP 04535-000 · São Paulo/SP' },
+    'Pinheiros':        { cnpj: '23.894.533/0007-55', endereco: 'Av. Brigadeiro Faria Lima, 1208 · CEP 05426-200 · São Paulo/SP' },
+    'Poke - Pinheiros': { cnpj: '23.894.533/0008-36', endereco: 'Rua Tucambira, 212 · CEP 05428-020 · São Paulo/SP' }
+  };
 
   var _ORG_URL = 'https://script.google.com/macros/s/AKfycbxUWUoOmv-Cn19-FjUJ18jYTu5G_embOGDaQDsgC4Jd8agVfgqs98Tbu3qlqa9e7tpu/exec';
   var _admColabLoaded = false;
@@ -3229,23 +3239,25 @@ window.toggleFta = toggleFta;
     list.appendChild(vtItem);
 
     ADM_DOCS.forEach(function(doc) {
-      var hasCa    = doc.id === 'japona_termica' || doc.id === 'luva_termica';
-      var hasEpi   = doc.id === 'lista_epis';
-      var hasBanco = doc.id === 'dados_bancarios';
+      var hasCa       = doc.id === 'japona_termica' || doc.id === 'luva_termica';
+      var hasEpi      = doc.id === 'lista_epis';
+      var hasBanco    = doc.id === 'dados_bancarios';
+      var hasSindical = doc.id === 'contribuicao_sindical';
       var caId   = doc.id === 'japona_termica' ? 'adm-ca' : 'adm-ca-luva';
       var rowId  = 'adm-ca-row-' + doc.id;
 
       var item = document.createElement('div');
       item.className = 'adm-doc-item';
-      if (hasCa || hasEpi || hasBanco) item.style.cssText = 'flex-direction:column;align-items:stretch;';
+      if (hasCa || hasEpi || hasBanco || hasSindical) item.style.cssText = 'flex-direction:column;align-items:stretch;';
 
       var top = document.createElement('div');
       top.style.cssText = 'display:flex;align-items:flex-start;gap:10px;';
       top.innerHTML =
         '<input type="checkbox" id="admdoc_' + doc.id + '" value="' + doc.id + '"' +
-        (hasCa    ? ' onchange="_admToggleCaInItem(\'' + rowId + '\',\'' + caId + '\',this.checked)"' : '') +
-        (hasEpi   ? ' onchange="_admToggleEpiRow(this.checked)"' : '') +
-        (hasBanco ? ' onchange="_admToggleBancoRow(this.checked)"' : '') + '>' +
+        (hasCa       ? ' onchange="_admToggleCaInItem(\'' + rowId + '\',\'' + caId + '\',this.checked)"' : '') +
+        (hasEpi      ? ' onchange="_admToggleEpiRow(this.checked)"' : '') +
+        (hasBanco    ? ' onchange="_admToggleBancoRow(this.checked)"' : '') +
+        (hasSindical ? ' onchange="_admToggleSindicalRow(this.checked)"' : '') + '>' +
         '<label for="admdoc_' + doc.id + '" style="cursor:pointer;flex:1;">' +
           '<div class="adm-doc-name">' + doc.nome + (doc.vias === 2 ? ' <span style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--t3);font-weight:400;">(2 vias)</span>' : '') + '</div>' +
         '</label>';
@@ -3282,6 +3294,27 @@ window.toggleFta = toggleFta;
           '<div class="form-row"><label class="form-label" for="adm-conta">Conta</label><input class="form-input" type="text" id="adm-conta" placeholder="Ex: 12345-6" onclick="event.stopPropagation()"></div>' +
           '<div class="form-row"><label class="form-label" for="adm-tipo-conta">Tipo de conta</label><select class="form-select" id="adm-tipo-conta" onclick="event.stopPropagation()"><option value="Corrente">Corrente</option><option value="Salário">Salário</option></select></div>';
         item.appendChild(bancoRow);
+      }
+
+      if (hasSindical) {
+        var sindicalRow = document.createElement('div');
+        sindicalRow.id = 'adm-sindical-row';
+        sindicalRow.style.cssText = 'display:none;margin-top:8px;padding-top:10px;border-top:1px solid var(--border);';
+        var unidadeOpts = Object.keys(ADM_UNIDADES_CNPJ).map(function(u){
+          return '<option value="'+_escHtml(u)+'">'+_escHtml(u)+' — CNPJ '+_escHtml(ADM_UNIDADES_CNPJ[u].cnpj)+'</option>';
+        }).join('');
+        sindicalRow.innerHTML =
+          '<div class="form-row"><label class="form-label" for="adm-sindical-unidade">Unidade / CNPJ</label>' +
+            '<select class="form-select" id="adm-sindical-unidade" onclick="event.stopPropagation()" onchange="event.stopPropagation()">' +
+              '<option value="">— Selecione —</option>' + unidadeOpts +
+            '</select>' +
+          '</div>' +
+          '<div class="form-row"><label class="form-label" for="adm-sindical-opcao">Autoriza o desconto?</label>' +
+            '<select class="form-select" id="adm-sindical-opcao" onclick="event.stopPropagation()">' +
+              '<option value="sim">SIM</option><option value="nao">NÃO</option>' +
+            '</select>' +
+          '</div>';
+        item.appendChild(sindicalRow);
       }
 
       list.appendChild(item);
@@ -3399,6 +3432,15 @@ window.toggleFta = toggleFta;
       var conta = document.getElementById('adm-conta'); if (conta) conta.value = '';
       var banco = document.getElementById('adm-banco'); if (banco) banco.value = '341';
       var tipo = document.getElementById('adm-tipo-conta'); if (tipo) tipo.value = 'Corrente';
+    }
+  }
+
+  function _admToggleSindicalRow(checked) {
+    var row = document.getElementById('adm-sindical-row');
+    if (row) row.style.display = checked ? 'block' : 'none';
+    if (!checked) {
+      var unidade = document.getElementById('adm-sindical-unidade'); if (unidade) unidade.value = '';
+      var opcao = document.getElementById('adm-sindical-opcao'); if (opcao) opcao.value = 'sim';
     }
   }
 
@@ -3717,6 +3759,7 @@ window.toggleFta = toggleFta;
     // próprio com os campos preenchidos na hora, mesmo padrão do Vale
     // Transporte (_admVtBuildPage, especial-casado fora daqui).
     if (doc.id === 'dados_bancarios') return _admDadosBancariosBuildPage(doc, ctx);
+    if (doc.id === 'contribuicao_sindical') return _admContribuicaoSindicalBuildPage(doc, ctx);
     var rawContent = ADM_DOCS_CONTENT[doc.id];
     if (typeof rawContent === 'function') {
       rawContent = doc.id === 'japona_termica'
@@ -3828,6 +3871,57 @@ window.toggleFta = toggleFta;
         '</div>' +
 
         '<p class="rp-ass-declaro">Declaro que os dados bancários acima informados são de minha titularidade e estão corretos, sendo de minha responsabilidade comunicar qualquer alteração.</p>' +
+        '<div class="rp-cidade-data">São Paulo, '+esc(ctx.docDateFmt)+'</div>' +
+      '</div>'
+    );
+  }
+
+  // Autorização de Desconto da Contribuição Sindical: mesmo header/intro
+  // genérico, corpo com o texto legal (CLT art. 579) + CNPJ/endereço da
+  // unidade escolhida (ADM_UNIDADES_CNPJ) + a opção Sim/Não marcada.
+  function _admContribuicaoSindicalBuildPage(doc, ctx) {
+    var esc = _escHtml;
+    var boxOn  = '<span style="display:inline-block;width:11px;height:11px;border:1.2px solid #333;text-align:center;line-height:10px;font-size:9px;vertical-align:middle;margin-right:5px;">✓</span>';
+    var boxOff = '<span style="display:inline-block;width:11px;height:11px;border:1.2px solid #333;vertical-align:middle;margin-right:5px;"></span>';
+    var opcao = ctx.sindicalOpcao || 'sim';
+    var unidadeInfo = ADM_UNIDADES_CNPJ[ctx.sindicalUnidade] || {};
+    return (
+      '<div class="page">' +
+        '<div class="rp-header">' +
+          '<img class="rp-logo" src="'+ADM_LOGO_B64+'" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' +
+          '<div class="rp-header-title">'+esc(doc.nome)+'</div>' +
+          '<div class="rp-header-right">Emitido em <strong>'+esc(ctx.dateStr)+'</strong></div>' +
+        '</div>' +
+
+        '<div class="rp-intro">' +
+          '<div class="rp-intro-field grow">' +
+            '<span class="rp-intro-label">Colaborador</span>' +
+            '<span class="rp-intro-value">'+esc(ctx.colabNomeLimpo)+'</span>' +
+          '</div>' +
+          (ctx.colabMatricula ? (
+            '<div class="rp-intro-field">' +
+              '<span class="rp-intro-label">Matrícula</span>' +
+              '<span class="rp-intro-value">'+esc(ctx.colabMatricula)+'</span>' +
+            '</div>'
+          ) : '') +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Unidade</span>' +
+            '<span class="rp-intro-value">'+esc(ctx.sindicalUnidade || '—')+'</span>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="rp-section">' +
+          '<div class="rp-section-label">'+(doc.sectionLabel || 'Declaração')+'</div>' +
+          '<div class="rp-section-body">' +
+            '<p class="rp-p">CLT, Art. 579 - O desconto da <strong>contribuição sindical</strong> está condicionado à autorização prévia e expressa dos que participarem de uma determinada categoria econômica ou profissional, ou de uma profissão liberal, em favor do sindicato representativo da mesma categoria ou profissão ou, inexistindo este, na conformidade do disposto no art. 591 da CLT (Consolidação das Leis do Trabalho). (<em>Redação dada pela Lei nº 13.467, de 2017</em>)</p>' +
+            '<p class="rp-p">A empresa <strong>'+esc(ADM_RAZAO_SOCIAL)+'</strong> inscrita no CNPJ <strong>'+esc(unidadeInfo.cnpj || '—')+'</strong>, com sede na <strong>'+esc(unidadeInfo.endereco || '—')+'</strong>, vem por meio desta solicitar ao colaborador <strong>'+esc(ctx.colabNomeLimpo)+'</strong>, que se expresse referente ao desconto em folha de pagamento da contribuição sindical, conforme condiciona o Art. 579 da CLT alterado pela Lei 13.467/2017.</p>' +
+            '<p class="rp-p" style="margin-top:14px;">O(a) Sr.(a) autoriza o desconto da contribuição sindical (01 dia de salário)?</p>' +
+            '<p style="font-size:11px;margin:10px 0 4px 24px;">'+(opcao==='sim'?boxOn:boxOff)+' Sim</p>' +
+            '<p style="font-size:11px;margin:4px 0 10px 24px;">'+(opcao==='nao'?boxOn:boxOff)+' Não</p>' +
+            '<p class="rp-p">Sem mais.</p>' +
+          '</div>' +
+        '</div>' +
+
         '<div class="rp-cidade-data">São Paulo, '+esc(ctx.docDateFmt)+'</div>' +
       '</div>'
     );
@@ -3991,6 +4085,8 @@ window.toggleFta = toggleFta;
     var agencia    = (document.getElementById('adm-agencia') || {}).value || '';
     var conta      = (document.getElementById('adm-conta') || {}).value || '';
     var tipoConta  = (document.getElementById('adm-tipo-conta') || {}).value || 'Corrente';
+    var sindicalUnidade = (document.getElementById('adm-sindical-unidade') || {}).value || '';
+    var sindicalOpcao   = (document.getElementById('adm-sindical-opcao') || {}).value || 'sim';
     _admShowError('');
     if (!colabVal) { _admShowError('Selecione um colaborador.'); return; }
 
@@ -4002,6 +4098,7 @@ window.toggleFta = toggleFta;
     if (termos.some(function(d){ return d.id === 'japona_termica'; }) && !caNumero.trim()) { _admShowError('Informe o número do CA da Japona Térmica.'); return; }
     if (termos.some(function(d){ return d.id === 'luva_termica'; }) && !caLuva.trim()) { _admShowError('Informe o número do CA da Luva Térmica.'); return; }
     if (termos.some(function(d){ return d.id === 'dados_bancarios'; }) && (!banco.trim() || !agencia.trim() || !conta.trim())) { _admShowError('Informe banco, agência e conta.'); return; }
+    if (termos.some(function(d){ return d.id === 'contribuicao_sindical'; }) && !sindicalUnidade) { _admShowError('Selecione a unidade/CNPJ da autorização de desconto sindical.'); return; }
 
     var colabNome = sel.options[sel.selectedIndex].text;
     var colabData = _admColabMap[colabVal] || {};
@@ -4023,7 +4120,8 @@ window.toggleFta = toggleFta;
       colabMatricula: colabData.matricula, colabNomeLimpo: colabNomeLimpo, colabUnidade: colabUnidade,
       colabCargo: colabCargo, dataAdmissao: dataAdmissao, dataFmt: dataFmt, dateStr: dateStr,
       docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva, usuarioLogado: usuarioLogado,
-      banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta
+      banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta,
+      sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao
     };
 
     _admSetLoadingSalvar(true, 'Enviando…');
@@ -4052,6 +4150,8 @@ window.toggleFta = toggleFta;
     var agencia   = (document.getElementById('adm-agencia') || {}).value || '';
     var conta     = (document.getElementById('adm-conta') || {}).value || '';
     var tipoConta = (document.getElementById('adm-tipo-conta') || {}).value || 'Corrente';
+    var sindicalUnidade = (document.getElementById('adm-sindical-unidade') || {}).value || '';
+    var sindicalOpcao   = (document.getElementById('adm-sindical-opcao') || {}).value || 'sim';
     _admShowError('');
     if (!colabVal)       { _admShowError('Selecione um colaborador.'); return; }
     if (!checked.length) { _admShowError('Selecione ao menos um documento.'); return; }
@@ -4063,6 +4163,9 @@ window.toggleFta = toggleFta;
     }
     if (checked.some(function(cb){ return cb.value === 'dados_bancarios'; }) && (!banco.trim() || !agencia.trim() || !conta.trim())) {
       _admShowError('Informe banco, agência e conta.'); return;
+    }
+    if (checked.some(function(cb){ return cb.value === 'contribuicao_sindical'; }) && !sindicalUnidade) {
+      _admShowError('Selecione a unidade/CNPJ da autorização de desconto sindical.'); return;
     }
 
     _admSetLoading(true, 'Gerando…');
@@ -4232,7 +4335,8 @@ window.toggleFta = toggleFta;
         colabNomeLimpo: colabNomeLimpo, colabMatricula: colabData.matricula, colabCargo: colabCargo,
         colabUnidade: colabUnidade, dataAdmissao: dataAdmissao, dataFmt: dataFmt, dateStr: dateStr,
         docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva,
-        banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta
+        banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta,
+        sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao
       });
       return doc.vias === 2 ? pageHtml + pageHtml : pageHtml;
     }).join('');

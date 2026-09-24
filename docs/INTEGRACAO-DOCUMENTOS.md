@@ -866,4 +866,44 @@ agência/conta, "Gerar PDF" duplica a página (vias:2) com banco/agência/
 conta/tipo corretos no HTML, "Enviar para Assinatura Digital" resolve
 o tipo_id certo e manda o payload das 3 RPCs correto.
 
+**Feito (2026-09-24): novo termo "Autorização de Desconto da
+Contribuição Sindical" — também direto em `admissao.html`.** Segundo
+termo novo da sequência (depois de Dados Bancários), mesmo padrão de
+1 entrada normal em `ADM_DOCS` + dispatch especial em
+`_admBuildDocPageHtml` (`_admContribuicaoSindicalBuildPage`).
+
+Formulário próprio com 2 campos: "Unidade / CNPJ" (select) e "Autoriza
+o desconto?" (Sim/Não) — chave `hasSindical`, linha escondida/mostrada
+por `_admToggleSindicalRow`. O pedido original falava em 3 campos
+("Seletor de CNPJ", "Unidade", "check Sim/Não"), mas CNPJ e Unidade
+estão numa relação 1:1 fixa nos dados da empresa — em vez de 2 selects
+redundantes, virou 1 select combinado ("<Unidade> — CNPJ <número>").
+Fica pendente de confirmação do usuário se preferem 2 campos separados.
+
+Reaproveitados os dados de CNPJ/endereço por unidade já existentes e
+testados em `estoqueadm.html` (`EPC_UNIDADES`), copiados (não
+importados) para `admissao.html` como `ADM_RAZAO_SOCIAL` /
+`ADM_UNIDADES_CNPJ` — mesma duplicação intencional já usada para evitar
+dependência entre arquivos, com CNPJ/endereço conferidos batendo com o
+documento-modelo enviado.
+
+Texto legal reproduzido com o parágrafo do Art. 579 da CLT (Lei
+13.467/2017) + parágrafo da empresa/CNPJ/endereço + pergunta Sim/Não
+renderizada com o mesmo estilo de checkbox (`boxOn`/`boxOff`) já usado
+no Vale Transporte. A parte sobre CTPS que aparecia no rascunho inicial
+foi removida a pedido do usuário antes de finalizar. Página termina com
+"Sem mais." (texto original), sem a declaração genérica padrão dos
+outros termos.
+
+doc_tipo novo criado no catálogo (`doc_tipo_sandbox_criar`, categoria
+"Contratos e Termos", `requer_assinatura=true`).
+
+Testado com Playwright + mock: options do select Unidade/CNPJ batendo
+com `ADM_UNIDADES_CNPJ`, linha escondida/mostrada certo, validação
+bloqueia envio sem unidade selecionada, PDF final contém CNPJ/endereço
+da unidade escolhida, nome do colaborador, texto do Art. 579, "Sem
+mais.", marca "Não" corretamente selecionada quando é essa a opção, 2
+páginas (vias:2), e nenhuma menção a CTPS. Payload das 3 RPCs da
+assinatura confirmado com `p_tipo_id` correto.
+
 _Última atualização: 2026-09-24._
