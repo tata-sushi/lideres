@@ -3127,6 +3127,7 @@ window.toggleFta = toggleFta;
     { id: 'salario_familia',   nome: 'Termo de Responsabilidade — Salário-Família',         desc: 'Comunicação de fatos que determinam a perda do Salário-Família', sectionLabel: 'Termo de Responsabilidade (Concessão de Salário-Família — Portaria MPAS nº 3.040/82)', singleSig: true, vias: 2 },
     { id: 'dependentes_ir',    nome: 'Declaração de Dependentes (IR)',                      desc: 'Dependentes para desconto do Imposto de Renda na Fonte', sectionLabel: 'Declaração de Dependentes para Fins de Desconto do Imposto de Renda na Fonte', singleSig: true, vias: 2 },
     { id: 'contrato_experiencia', nome: 'Contrato de Experiência',                          desc: 'Contrato individual de trabalho para fins de experiência', sectionLabel: 'Contrato de Experiência', singleSig: true, vias: 2 },
+    { id: 'ficha_registro',   nome: 'Ficha de Registro de Empregados',                     desc: 'Ficha de registro (dados pessoais, FGTS, PIS, cargo e dependentes)', sectionLabel: 'Registro de Empregados', singleSig: true },
   ];
 
   var ADM_DEP_RELACOES = [
@@ -3214,6 +3215,8 @@ window.toggleFta = toggleFta;
     if (filhosCheck && filhosCheck.checked) _admFilhosAutoFill();
     var depCheck = document.getElementById('admdoc_dependentes_ir');
     if (depCheck && depCheck.checked) _admDependentesAutoFill();
+    var fregCheck = document.getElementById('admdoc_ficha_registro');
+    if (fregCheck && fregCheck.checked) { _admFichaRegistroAutoFill(); _admFregDependentesAutoFill(); }
   }
 
   function openModalAdmissao() {
@@ -3282,12 +3285,13 @@ window.toggleFta = toggleFta;
       var hasFilhos   = doc.id === 'salario_familia';
       var hasDependentes = doc.id === 'dependentes_ir';
       var hasContrato = doc.id === 'contrato_experiencia';
+      var hasFichaRegistro = doc.id === 'ficha_registro';
       var caId   = doc.id === 'japona_termica' ? 'adm-ca' : 'adm-ca-luva';
       var rowId  = 'adm-ca-row-' + doc.id;
 
       var item = document.createElement('div');
       item.className = 'adm-doc-item';
-      if (hasCa || hasEpi || hasBanco || hasSindical || hasFilhos || hasDependentes || hasContrato) item.style.cssText = 'flex-direction:column;align-items:stretch;';
+      if (hasCa || hasEpi || hasBanco || hasSindical || hasFilhos || hasDependentes || hasContrato || hasFichaRegistro) item.style.cssText = 'flex-direction:column;align-items:stretch;';
 
       var top = document.createElement('div');
       top.style.cssText = 'display:flex;align-items:flex-start;gap:10px;';
@@ -3299,7 +3303,8 @@ window.toggleFta = toggleFta;
         (hasSindical ? ' onchange="_admToggleSindicalRow(this.checked)"' : '') +
         (hasFilhos   ? ' onchange="_admToggleFilhosRow(this.checked)"' : '') +
         (hasDependentes ? ' onchange="_admToggleDependentesRow(this.checked)"' : '') +
-        (hasContrato ? ' onchange="_admToggleContratoRow(this.checked)"' : '') + '>' +
+        (hasContrato ? ' onchange="_admToggleContratoRow(this.checked)"' : '') +
+        (hasFichaRegistro ? ' onchange="_admToggleFichaRegistroRow(this.checked)"' : '') + '>' +
         '<label for="admdoc_' + doc.id + '" style="cursor:pointer;flex:1;">' +
           '<div class="adm-doc-name">' + doc.nome + (doc.vias === 2 ? ' <span style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--t3);font-weight:400;">(2 vias)</span>' : '') + '</div>' +
         '</label>';
@@ -3426,6 +3431,78 @@ window.toggleFta = toggleFta;
             '<div class="form-row"><label class="form-label" for="adm-ctr-dias2">2º período — prorrogação (dias)</label><input class="form-input" type="text" inputmode="numeric" maxlength="3" id="adm-ctr-dias2" placeholder="Ex: 60" onclick="event.stopPropagation()"></div>' +
           '</div>';
         item.appendChild(ctrRow);
+      }
+
+      if (hasFichaRegistro) {
+        var fregRow = document.createElement('div');
+        fregRow.id = 'adm-freg-row';
+        fregRow.style.cssText = 'display:none;margin-top:8px;padding-top:10px;border-top:1px solid var(--border);';
+        var fregUnidadeOpts = Object.keys(ADM_UNIDADES_CNPJ).map(function(u){
+          return '<option value="'+_escHtml(u)+'">'+_escHtml(u)+' — CNPJ '+_escHtml(ADM_UNIDADES_CNPJ[u].cnpj)+'</option>';
+        }).join('');
+        var fregHorarioOpts = ADM_HORARIOS_OPCOES.map(function(h){
+          return '<option value="'+_escHtml(h)+'">'+_escHtml(h)+'</option>';
+        }).join('');
+        fregRow.innerHTML =
+          '<div class="form-row"><label class="form-label" for="adm-freg-unidade">Unidade / CNPJ contratante</label>' +
+            '<select class="form-select" id="adm-freg-unidade" onclick="event.stopPropagation()" onchange="event.stopPropagation()">' +
+              '<option value="">— Selecione —</option>' + fregUnidadeOpts +
+            '</select>' +
+          '</div>' +
+
+          '<div class="form-divider">Filiação</div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-pai">Pai</label><input class="form-input" type="text" id="adm-freg-pai" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-mae">Mãe</label><input class="form-input" type="text" id="adm-freg-mae" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+
+          '<div class="form-divider">Documentos</div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-rg">RG (Célula de Identidade)</label><input class="form-input" type="text" id="adm-freg-rg" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-ctps">Carteira de Trabalho (nº)</label><input class="form-input" type="text" id="adm-freg-ctps" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-ctps-serie">Série</label><input class="form-input" type="text" id="adm-freg-ctps-serie" placeholder="sem fonte — preencher manualmente" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-ctps-uf">UF da CTPS</label><input class="form-input" type="text" id="adm-freg-ctps-uf" placeholder="sem fonte — preencher manualmente" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-reservista">Carteira de Reservista</label><input class="form-input" type="text" id="adm-freg-reservista" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-categoria">Categoria (CTPS)</label><input class="form-input" type="text" id="adm-freg-categoria" placeholder="sem fonte — preencher manualmente" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-titulo-eleitor">Título de Eleitor (N° / Zona / Seção)</label><input class="form-input" type="text" id="adm-freg-titulo-eleitor" placeholder="sem fonte — preencher manualmente" onclick="event.stopPropagation()"></div>' +
+
+          '<div class="form-divider">Dados pessoais</div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-nascimento">Data de nascimento</label><input class="form-input" type="date" id="adm-freg-nascimento" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-pais-nascimento">País de nascimento</label><input class="form-input" type="text" id="adm-freg-pais-nascimento" value="Brasil" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-estado-civil">Estado civil</label><input class="form-input" type="text" id="adm-freg-estado-civil" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-local-nascimento">Local de nascimento (cidade)</label><input class="form-input" type="text" id="adm-freg-local-nascimento" placeholder="sem fonte — preencher manualmente" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-uf-nascimento">UF de nascimento</label><input class="form-input" type="text" id="adm-freg-uf-nascimento" placeholder="sem fonte — preencher manualmente" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-grau-instrucao">Grau de instrução</label><input class="form-input" type="text" id="adm-freg-grau-instrucao" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-pcd">PCD (Pessoa com Deficiência)?</label>' +
+            '<select class="form-select" id="adm-freg-pcd" onclick="event.stopPropagation()"><option value="Não">Não</option><option value="Sim">Sim</option></select>' +
+          '</div>' +
+
+          '<div class="form-divider">Endereço</div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-endereco">Endereço</label><input class="form-input" type="text" id="adm-freg-endereco" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-bairro">Bairro</label><input class="form-input" type="text" id="adm-freg-bairro" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-cep">CEP</label><input class="form-input" type="text" id="adm-freg-cep" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-cidade-uf">Cidade/UF</label><input class="form-input" type="text" id="adm-freg-cidade-uf" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-telefone">Telefone</label><input class="form-input" type="text" id="adm-freg-telefone" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+
+          '<div class="form-divider">FGTS e PIS</div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-fgts-banco">Banco depositário do FGTS</label><input class="form-input" type="text" id="adm-freg-fgts-banco" value="Caixa Econômica Federal" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-pis-data">PIS — cadastrado em</label><input class="form-input" type="date" id="adm-freg-pis-data" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-pis-numero">PIS — sob N°</label><input class="form-input" type="text" id="adm-freg-pis-numero" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-pis-banco">PIS — banco</label><input class="form-input" type="text" id="adm-freg-pis-banco" placeholder="sem fonte — preencher manualmente" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-pis-agencia">PIS — agência N°</label><input class="form-input" type="text" id="adm-freg-pis-agencia" placeholder="sem fonte — preencher manualmente" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-pis-endereco">PIS — endereço</label><input class="form-input" type="text" id="adm-freg-pis-endereco" placeholder="sem fonte — preencher manualmente" onclick="event.stopPropagation()"></div>' +
+
+          '<div class="form-divider">Cargo</div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-cbo">CBO</label><input class="form-input" type="text" id="adm-freg-cbo" placeholder="sem fonte — preencher manualmente" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-salario">Salário (R$)</label><input class="form-input" type="text" id="adm-freg-salario" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-forma-pagamento">Forma de pagamento</label><input class="form-input" type="text" id="adm-freg-forma-pagamento" value="Mensal" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-freg-horario">Horário de trabalho</label>' +
+            '<select class="form-select" id="adm-freg-horario" onclick="event.stopPropagation()">' +
+              '<option value="">— Selecione —</option>' + fregHorarioOpts +
+            '</select>' +
+          '</div>' +
+
+          '<div class="form-divider">Dependentes</div>' +
+          '<div id="adm-freg-dependentes-rows"></div>' +
+          '<button type="button" class="vt-addrow" onclick="event.stopPropagation();_admFregDepAddRow()">+ dependente</button>';
+        item.appendChild(fregRow);
       }
 
       list.appendChild(item);
@@ -3838,6 +3915,171 @@ window.toggleFta = toggleFta;
   function _admToggleContratoPrazoOutros(on) {
     var row = document.getElementById('adm-ctr-prazo-outros-row');
     if (row) row.style.display = on ? 'block' : 'none';
+  }
+
+  // Ficha de Registro de Empregados — salário segue o mesmo mecanismo do
+  // Contrato de Experiência (cargos_salarios primeiro, fallback pro texto
+  // livre da proposta da ficha).
+  function _admFregSalarioAutoFill() {
+    var sel = document.getElementById('adm-colab');
+    var salarioEl = document.getElementById('adm-freg-salario');
+    if (!sel || !salarioEl || !sel.value) return;
+    var colabData = _admColabMap[sel.value] || {};
+    var porCargo = colabData.cargoId ? _admCarregarCargosSalarios().then(function(mapa) {
+      var v = mapa[String(colabData.cargoId).toLowerCase()];
+      if (v === undefined || v === null || v === '') return null;
+      var num = Number(v);
+      return isNaN(num) ? null : num;
+    }) : Promise.resolve(null);
+    porCargo.then(function(num) {
+      if (num !== null) { salarioEl.value = num.toFixed(2).replace('.', ','); return; }
+      if (!colabData.cpf) return;
+      _admCarregarAdmissaoRespostas(colabData.cpf).then(function(respostas) {
+        var proposta = _admAdmissaoValor(respostas, 'trabalho', 'proposta');
+        var numProposta = _admExtrairSalarioFixoProposta(proposta);
+        if (numProposta !== null) salarioEl.value = numProposta.toFixed(2).replace('.', ',');
+      });
+    });
+  }
+
+  // Dependentes da Ficha de Registro — mesmo padrão de linhas editáveis do
+  // _admDepRowHtml (Declaração de Dependentes/IR), mas com ids próprios
+  // (adm-freg-*) pra não colidir se os dois termos forem marcados juntos.
+  // Só Nome/Relação/Nascimento (a ficha não pede CPF do dependente aqui).
+  function _admFregDepRowHtml() {
+    var relOpts = ADM_DEP_RELACOES.map(function(r){ return '<option value="'+r.v+'">'+r.l+'</option>'; }).join('');
+    return '<div class="freg-dep-row-edit" style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">'+
+      '<input class="form-input freg-dep-nome" type="text" placeholder="Nome completo" style="flex:1.8;" onclick="event.stopPropagation()">'+
+      '<select class="form-select freg-dep-relacao" style="flex:1.1;" onclick="event.stopPropagation()">'+relOpts+'</select>'+
+      '<input class="form-input freg-dep-nasc" type="date" style="flex:1;" onclick="event.stopPropagation()">'+
+      '<button type="button" title="Remover" onclick="event.stopPropagation();this.closest(\'.freg-dep-row-edit\').remove()" style="border:none;background:none;cursor:pointer;font-size:18px;line-height:1;color:var(--muted);flex-shrink:0;">×</button>'+
+    '</div>';
+  }
+  function _admFregDepAddRow() {
+    var c = document.getElementById('adm-freg-dependentes-rows');
+    if (c) c.insertAdjacentHTML('beforeend', _admFregDepRowHtml());
+  }
+  function _admFregDepReadRows() {
+    var c = document.getElementById('adm-freg-dependentes-rows');
+    if (!c) return [];
+    return Array.prototype.map.call(c.querySelectorAll('.freg-dep-row-edit'), function(r){
+      return {
+        nome: ((r.querySelector('.freg-dep-nome')||{}).value||'').trim(),
+        relacao: ((r.querySelector('.freg-dep-relacao')||{}).value||'').trim(),
+        nascimento: ((r.querySelector('.freg-dep-nasc')||{}).value||'').trim()
+      };
+    }).filter(function(d){ return d.nome || d.nascimento; });
+  }
+  // Lê todos os campos de texto/data/select da Ficha de Registro de uma vez
+  // só (evita repetir 20+ linhas de getElementById nas duas funções que
+  // geram o documento — salvarTermosParaAssinatura/gerarAdmissaoPDF).
+  function _admFregLerCampos() {
+    var v = function(id) { return (document.getElementById(id) || {}).value || ''; };
+    return {
+      fregPai: v('adm-freg-pai'), fregMae: v('adm-freg-mae'),
+      fregRg: v('adm-freg-rg'), fregCtps: v('adm-freg-ctps'), fregCtpsSerie: v('adm-freg-ctps-serie'),
+      fregCtpsUf: v('adm-freg-ctps-uf'), fregReservista: v('adm-freg-reservista'), fregCategoria: v('adm-freg-categoria'),
+      fregTituloEleitor: v('adm-freg-titulo-eleitor'), fregNascimento: v('adm-freg-nascimento'),
+      fregPaisNascimento: v('adm-freg-pais-nascimento'), fregEstadoCivil: v('adm-freg-estado-civil'),
+      fregLocalNascimento: v('adm-freg-local-nascimento'), fregUfNascimento: v('adm-freg-uf-nascimento'),
+      fregGrauInstrucao: v('adm-freg-grau-instrucao'), fregPcd: v('adm-freg-pcd'),
+      fregEndereco: v('adm-freg-endereco'), fregBairro: v('adm-freg-bairro'), fregCep: v('adm-freg-cep'),
+      fregCidadeUf: v('adm-freg-cidade-uf'), fregTelefone: v('adm-freg-telefone'),
+      fregFgtsBanco: v('adm-freg-fgts-banco'), fregPisData: v('adm-freg-pis-data'), fregPisNumero: v('adm-freg-pis-numero'),
+      fregPisBanco: v('adm-freg-pis-banco'), fregPisAgencia: v('adm-freg-pis-agencia'), fregPisEndereco: v('adm-freg-pis-endereco'),
+      fregCbo: v('adm-freg-cbo'), fregSalario: v('adm-freg-salario'), fregFormaPagamento: v('adm-freg-forma-pagamento'),
+      fregHorario: v('adm-freg-horario')
+    };
+  }
+
+  function _admFregDependentesAutoFill() {
+    var sel = document.getElementById('adm-colab');
+    if (!sel || !sel.value) return;
+    var colabData = _admColabMap[sel.value] || {};
+    if (!colabData.cpf) return;
+    _admCarregarAdmissaoRespostas(colabData.cpf).then(function(respostas) {
+      var deps = _admDependentesAgrupar(respostas);
+      if (!deps.length) return;
+      var c = document.getElementById('adm-freg-dependentes-rows');
+      if (!c) return;
+      c.innerHTML = '';
+      deps.forEach(function(d) {
+        _admFregDepAddRow();
+        var rows = c.querySelectorAll('.freg-dep-row-edit');
+        var last = rows[rows.length - 1];
+        var relacao = _admDepParentescoParaRelacao(d.parentesco);
+        if (relacao) last.querySelector('.freg-dep-relacao').value = relacao;
+        last.querySelector('.freg-dep-nome').value = d.nome || '';
+        last.querySelector('.freg-dep-nasc').value = _admParaISO(d.nascimento) || '';
+      });
+    });
+  }
+
+  // Preenche o máximo de campos possível a partir do cadastro do colaborador
+  // (tata_plus.profiles) + ficha de admissão via CPF (dp_rh.admissao_respostas).
+  // Campos sem fonte hoje (Série/UF da CTPS, Categoria, Título de Eleitor,
+  // Local/País de nascimento, CBO, PIS banco/agência/endereço) ficam em
+  // branco pra preenchimento manual — ver docs/INTEGRACAO-DOCUMENTOS.md.
+  function _admFichaRegistroAutoFill() {
+    var sel = document.getElementById('adm-colab');
+    if (!sel || !sel.value) return;
+    var colabData = _admColabMap[sel.value] || {};
+    _admFregSalarioAutoFill();
+    if (!colabData.cpf) return;
+    _admCarregarAdmissaoRespostas(colabData.cpf).then(function(respostas) {
+      if (!respostas.length) return;
+      var set = function(id, valor) {
+        var el = document.getElementById(id);
+        if (el && valor) el.value = valor;
+      };
+      set('adm-freg-pai', _admAdmissaoValor(respostas, 'pessoais', 'nome_pai'));
+      set('adm-freg-mae', _admAdmissaoValor(respostas, 'pessoais', 'nome_mae'));
+      set('adm-freg-rg', _admAdmissaoValor(respostas, 'pessoais', 'rg_numero'));
+      set('adm-freg-ctps', _admAdmissaoValor(respostas, 'pessoais', 'ctps_numero'));
+      var reservistaTipo = _admAdmissaoValor(respostas, 'pessoais', 'reservista_tipo');
+      var reservistaRa = _admAdmissaoValor(respostas, 'pessoais', 'reservista_ra');
+      var reservistaUf = _admAdmissaoValor(respostas, 'pessoais', 'reservista_uf');
+      var reservistaExp = _admAdmissaoValor(respostas, 'pessoais', 'reservista_expedicao');
+      var reservista = [reservistaTipo, reservistaRa, reservistaUf, reservistaExp].filter(Boolean).join(' ');
+      set('adm-freg-reservista', reservista);
+      var nascimento = _admAdmissaoValor(respostas, 'pessoais', 'nascimento');
+      if (nascimento) { var nascEl = document.getElementById('adm-freg-nascimento'); if (nascEl) nascEl.value = _admParaISO(nascimento); }
+      set('adm-freg-estado-civil', _admAdmissaoValor(respostas, 'pessoais', 'estado_civil'));
+      set('adm-freg-grau-instrucao', _admAdmissaoValor(respostas, 'pessoais', 'escolaridade'));
+      var deficiencia = _admAdmissaoValor(respostas, 'pessoais', 'deficiencia');
+      if (deficiencia) { var pcdEl = document.getElementById('adm-freg-pcd'); if (pcdEl) pcdEl.value = /sim|true/i.test(deficiencia) ? 'Sim' : 'Não'; }
+      set('adm-freg-endereco', _admAdmissaoValor(respostas, 'endereco', 'endereco'));
+      set('adm-freg-bairro', _admAdmissaoValor(respostas, 'endereco', 'bairro'));
+      set('adm-freg-cep', _admAdmissaoValor(respostas, 'endereco', 'cep'));
+      set('adm-freg-cidade-uf', _admAdmissaoValor(respostas, 'endereco', 'cidade_estado'));
+      set('adm-freg-telefone', _admAdmissaoValor(respostas, 'pessoais', 'telefone'));
+      set('adm-freg-pis-numero', _admAdmissaoValor(respostas, 'pessoais', 'pis_numero'));
+    });
+  }
+
+  function _admToggleFichaRegistroRow(checked) {
+    var row = document.getElementById('adm-freg-row');
+    if (row) row.style.display = checked ? 'block' : 'none';
+    var depRows = document.getElementById('adm-freg-dependentes-rows');
+    if (checked) {
+      _admFichaRegistroAutoFill();
+      if (depRows && !depRows.children.length) _admFregDepAddRow();
+      _admFregDependentesAutoFill();
+    } else {
+      if (depRows) depRows.innerHTML = '';
+      ['adm-freg-unidade','adm-freg-pai','adm-freg-mae','adm-freg-rg','adm-freg-ctps','adm-freg-ctps-serie',
+       'adm-freg-ctps-uf','adm-freg-reservista','adm-freg-categoria','adm-freg-titulo-eleitor','adm-freg-nascimento',
+       'adm-freg-estado-civil','adm-freg-local-nascimento','adm-freg-uf-nascimento','adm-freg-grau-instrucao',
+       'adm-freg-endereco','adm-freg-bairro','adm-freg-cep','adm-freg-cidade-uf','adm-freg-telefone',
+       'adm-freg-pis-data','adm-freg-pis-numero','adm-freg-pis-banco','adm-freg-pis-agencia','adm-freg-pis-endereco',
+       'adm-freg-cbo','adm-freg-salario','adm-freg-horario'].forEach(function(id){
+        var e = document.getElementById(id); if (e) e.value = '';
+      });
+      var paisEl = document.getElementById('adm-freg-pais-nascimento'); if (paisEl) paisEl.value = 'Brasil';
+      var pcdEl = document.getElementById('adm-freg-pcd'); if (pcdEl) pcdEl.value = 'Não';
+      var fgtsEl = document.getElementById('adm-freg-fgts-banco'); if (fgtsEl) fgtsEl.value = 'Caixa Econômica Federal';
+      var formaEl = document.getElementById('adm-freg-forma-pagamento'); if (formaEl) formaEl.value = 'Mensal';
+    }
   }
 
   var ADM_EPI_DEPTS = [
@@ -4257,6 +4499,7 @@ window.toggleFta = toggleFta;
     if (doc.id === 'salario_familia') return _admSalarioFamiliaBuildPage(doc, ctx);
     if (doc.id === 'dependentes_ir') return _admDependentesIrBuildPage(doc, ctx);
     if (doc.id === 'contrato_experiencia') return _admContratoExperienciaBuildPage(doc, ctx);
+    if (doc.id === 'ficha_registro') return _admFichaRegistroBuildPage(doc, ctx);
     var rawContent = ADM_DOCS_CONTENT[doc.id];
     if (typeof rawContent === 'function') {
       rawContent = doc.id === 'japona_termica'
@@ -4666,6 +4909,131 @@ window.toggleFta = toggleFta;
     );
   }
 
+  // Ficha de Registro de Empregados — layout em "caixas" (reaproveita o mesmo
+  // componente .rp-intro/.rp-intro-field já usado no cabeçalho de todos os
+  // termos), repetido em várias linhas/seções pra reproduzir o formulário
+  // oficial (Empresa/CNPJ/Endereço, Filiação, Documentos, Dados Pessoais,
+  // Endereço, FGTS, PIS, Cargo, Dependentes). Sem "Declaro que li..."/rodapé
+  // de assinatura física — é um registro cadastral, não um termo de ciência,
+  // e a assinatura já é só digital (rubrica+selfie) em todo o portal. A
+  // seção de rescisão do modelo original (preenchida só na saída do
+  // colaborador, anos depois) foi deixada de fora: não faz sentido nesse PDF
+  // gerado na admissão, que fica pronto e assinado digitalmente na hora.
+  function _admFichaRegistroBuildPage(doc, ctx) {
+    var esc = _escHtml;
+    var unidadeInfo = ADM_UNIDADES_CNPJ[ctx.fregUnidade] || {};
+
+    function box(label, valor, grow) {
+      return '<div class="rp-intro-field'+(grow?' grow':'')+'">' +
+        '<span class="rp-intro-label">'+esc(label)+'</span>' +
+        '<span class="rp-intro-value">'+esc(valor || '—')+'</span>' +
+      '</div>';
+    }
+    function row(boxesHtml) { return '<div class="rp-intro">'+boxesHtml+'</div>'; }
+    function section(label, bodyHtml) {
+      return '<div class="rp-section">' +
+        '<div class="rp-section-label">'+esc(label)+'</div>' +
+        bodyHtml +
+      '</div>';
+    }
+
+    var dependentes = ctx.fregDependentes || [];
+    var depLinhas = dependentes.map(function(d) {
+      return '<tr>' +
+        '<td>'+esc(d.nome || '—')+'</td>' +
+        '<td>'+esc(d.nascimento ? _admFmtIso(d.nascimento) : '—')+'</td>' +
+        '<td>'+esc((ADM_DEP_RELACOES.find(function(r){ return r.v === d.relacao; }) || {}).l || '—')+'</td>' +
+      '</tr>';
+    }).join('');
+    var depTabela = '<table class="rp-table">' +
+      '<thead><tr><th>Nome</th><th>Data de Nascimento</th><th>Parentesco</th></tr></thead>' +
+      '<tbody>' + (depLinhas || '<tr><td colspan="3" style="color:#999;">Nenhum dependente informado</td></tr>') + '</tbody>' +
+    '</table>';
+
+    var salarioNum = parseFloat(String(ctx.fregSalario||'').replace(/\./g,'').replace(',','.')) || 0;
+    var salarioFmt = ctx.fregSalario ? _admFmtMoeda(salarioNum) : '';
+
+    return (
+      '<div class="page">' +
+        '<div class="rp-header">' +
+          '<img class="rp-logo" src="'+ADM_LOGO_B64+'" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' +
+          '<div class="rp-header-title">REGISTRO DE EMPREGADOS</div>' +
+          '<div class="rp-header-right">Emitido em <strong>'+esc(ctx.dateStr)+'</strong></div>' +
+        '</div>' +
+
+        row(box('Empresa', ADM_RAZAO_SOCIAL, true) + box('CNPJ', unidadeInfo.cnpj)) +
+        row(box('Endereço', unidadeInfo.endereco, true)) +
+        row(box('Matrícula', ctx.colabMatricula) + box('Nome', ctx.colabNomeLimpo, true)) +
+
+        section('Filiação', row(
+          box('Pai', ctx.fregPai, true) + box('Mãe', ctx.fregMae, true)
+        )) +
+
+        section('Documentos',
+          row(
+            box('Carteira de Trabalho', ctx.fregCtps) +
+            box('Série', ctx.fregCtpsSerie) +
+            box('UF', ctx.fregCtpsUf) +
+            box('Carteira de Reservista', ctx.fregReservista) +
+            box('Categoria', ctx.fregCategoria)
+          ) +
+          row(
+            box('Título de Eleitor (N° / Zona / Seção)', ctx.fregTituloEleitor, true) +
+            box('Célula de Identidade', ctx.fregRg) +
+            box('C.P.F.', _admFmtCpf(ctx.fregCpf))
+          )
+        ) +
+
+        section('Dados Pessoais', row(
+          box('Data de Nascimento', ctx.fregNascimento ? _admFmtIso(ctx.fregNascimento) : '') +
+          box('País de Nascimento', ctx.fregPaisNascimento) +
+          box('Estado Civil', ctx.fregEstadoCivil) +
+          box('Local de Nascimento', ctx.fregLocalNascimento) +
+          box('UF', ctx.fregUfNascimento) +
+          box('Grau de Instrução', ctx.fregGrauInstrucao, true) +
+          box('PCD?', ctx.fregPcd)
+        )) +
+
+        section('Endereço', row(
+          box('Endereço', ctx.fregEndereco, true) +
+          box('Bairro', ctx.fregBairro) +
+          box('CEP', ctx.fregCep) +
+          box('Cidade/UF', ctx.fregCidadeUf) +
+          box('Telefone', ctx.fregTelefone)
+        )) +
+
+        section('Fundo de Garantia por Tempo de Serviço', row(
+          box('Data de Admissão', ctx.dataAdmissao) +
+          box('Banco Depositário', ctx.fregFgtsBanco, true)
+        )) +
+
+        section('Programa de Integração Social (PIS)', row(
+          box('Cadastrado em', ctx.fregPisData ? _admFmtIso(ctx.fregPisData) : '') +
+          box('Sob N°', ctx.fregPisNumero) +
+          box('Banco', ctx.fregPisBanco) +
+          box('Agência N°', ctx.fregPisAgencia) +
+          box('Endereço', ctx.fregPisEndereco, true)
+        )) +
+
+        section('Dados do Cargo',
+          row(
+            box('Data da Admissão', ctx.dataAdmissao) +
+            box('Natureza do Cargo', ctx.colabCargo) +
+            box('CBO', ctx.fregCbo) +
+            box('Departamento / Seção', ctx.colabDepartamento) +
+            box('Salário', salarioFmt) +
+            box('Forma de Pagamento', ctx.fregFormaPagamento)
+          ) +
+          row(box('Horário de Trabalho', ctx.fregHorario, true))
+        ) +
+
+        section('Dependentes', depTabela) +
+
+        '<div class="rp-cidade-data">São Paulo, '+esc(ctx.docDateFmt)+'.</div>' +
+      '</div>'
+    );
+  }
+
   // ─── Salvar termo individualmente (gera PDF + upload + pendência de assinatura) ──
   function comSupaPromise() { return new Promise(function(resolve) { comSupa(resolve); }); }
 
@@ -4836,6 +5204,9 @@ window.toggleFta = toggleFta;
     var ctrPrazoTipo = (document.querySelector('input[name="adm-ctr-prazo-tipo"]:checked') || {}).value || 'padrao';
     var ctrDias1   = (document.getElementById('adm-ctr-dias1') || {}).value || '';
     var ctrDias2   = (document.getElementById('adm-ctr-dias2') || {}).value || '';
+    var fregUnidade = (document.getElementById('adm-freg-unidade') || {}).value || '';
+    var fregCampos = _admFregLerCampos();
+    var fregDependentes = _admFregDepReadRows();
     _admShowError('');
     if (!colabVal) { _admShowError('Selecione um colaborador.'); return; }
 
@@ -4858,6 +5229,9 @@ window.toggleFta = toggleFta;
       if (!ctrHorario) { _admShowError('Selecione o horário de trabalho (Contrato de Experiência).'); return; }
       if (ctrPrazoTipo === 'outros' && (!ctrDias1.trim() || !ctrDias2.trim())) { _admShowError('Informe os dois períodos do prazo (Contrato de Experiência).'); return; }
     }
+    if (termos.some(function(d){ return d.id === 'ficha_registro'; }) && !fregUnidade) {
+      _admShowError('Selecione a unidade/CNPJ da Ficha de Registro de Empregados.'); return;
+    }
 
     var colabNome = sel.options[sel.selectedIndex].text;
     var colabData = _admColabMap[colabVal] || {};
@@ -4865,6 +5239,7 @@ window.toggleFta = toggleFta;
     var colabNomeLimpo = colabData.nome || colabNome.split(' — ')[0];
     var colabUnidade   = colabData.unidade || '';
     var colabCargo     = colabData.cargo || colabData.departamento || '';
+    var colabDepartamento = colabData.departamento || '';
     var dataAdmissao   = _admFmtAdmissao(colabData.admissao);
     var _sess = window.__lideresSession || (function(){ try { return JSON.parse(localStorage.getItem('lideres_session')); } catch(e){ return null; } })();
     var usuarioLogado = (_sess && _sess.displayName) ? _sess.displayName : '';
@@ -4875,9 +5250,9 @@ window.toggleFta = toggleFta;
     var _docDateRaw = (document.getElementById('adm-data-doc') || {}).value || '';
     var docDateFmt = _docDateRaw ? _admFmtAdmissao(_docDateRaw) : dataFmt;
 
-    var ctx = {
+    var ctx = Object.assign({
       colabMatricula: colabData.matricula, colabNomeLimpo: colabNomeLimpo, colabUnidade: colabUnidade,
-      colabCargo: colabCargo, colabCpf: colabData.cpf, dataAdmissao: dataAdmissao, admissaoIso: colabData.admissao,
+      colabCargo: colabCargo, colabDepartamento: colabDepartamento, colabCpf: colabData.cpf, dataAdmissao: dataAdmissao, admissaoIso: colabData.admissao,
       dataFmt: dataFmt, dateStr: dateStr,
       docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva, usuarioLogado: usuarioLogado,
       banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta,
@@ -4885,8 +5260,9 @@ window.toggleFta = toggleFta;
       salFamFilhos: salFamFilhos,
       depUnidade: depUnidade, depDependentes: depDependentes,
       ctrUnidade: ctrUnidade, ctrCtps: ctrCtps, ctrSalario: ctrSalario,
-      ctrHorario: ctrHorario, ctrPrazoTipo: ctrPrazoTipo, ctrDias1: ctrDias1, ctrDias2: ctrDias2
-    };
+      ctrHorario: ctrHorario, ctrPrazoTipo: ctrPrazoTipo, ctrDias1: ctrDias1, ctrDias2: ctrDias2,
+      fregUnidade: fregUnidade, fregCpf: colabData.cpf, fregDependentes: fregDependentes
+    }, fregCampos);
 
     _admSetLoadingSalvar(true, 'Enviando…');
     _admCarregarDocTipos().then(function(mapaTipoId) {
@@ -4926,6 +5302,9 @@ window.toggleFta = toggleFta;
     var ctrPrazoTipo = (document.querySelector('input[name="adm-ctr-prazo-tipo"]:checked') || {}).value || 'padrao';
     var ctrDias1   = (document.getElementById('adm-ctr-dias1') || {}).value || '';
     var ctrDias2   = (document.getElementById('adm-ctr-dias2') || {}).value || '';
+    var fregUnidade = (document.getElementById('adm-freg-unidade') || {}).value || '';
+    var fregCampos = _admFregLerCampos();
+    var fregDependentes = _admFregDepReadRows();
     _admShowError('');
     if (!colabVal)       { _admShowError('Selecione um colaborador.'); return; }
     if (!checked.length) { _admShowError('Selecione ao menos um documento.'); return; }
@@ -4957,6 +5336,9 @@ window.toggleFta = toggleFta;
       if (!ctrHorario) { _admShowError('Selecione o horário de trabalho (Contrato de Experiência).'); return; }
       if (ctrPrazoTipo === 'outros' && (!ctrDias1.trim() || !ctrDias2.trim())) { _admShowError('Informe os dois períodos do prazo (Contrato de Experiência).'); return; }
     }
+    if (checked.some(function(cb){ return cb.value === 'ficha_registro'; }) && !fregUnidade) {
+      _admShowError('Selecione a unidade/CNPJ da Ficha de Registro de Empregados.'); return;
+    }
 
     _admSetLoading(true, 'Gerando…');
 
@@ -4975,6 +5357,7 @@ window.toggleFta = toggleFta;
     var colabNomeLimpo = colabData.nome || colabNome.split(' — ')[0].split(' — ')[0];
     var colabUnidade  = colabData.unidade || '';
     var colabCargo    = colabData.cargo || colabData.departamento || '';
+    var colabDepartamento = colabData.departamento || '';
 
     var _admFmtAdmissao = function(s) {
       if (!s) return '';
@@ -5121,9 +5504,9 @@ window.toggleFta = toggleFta;
           colabUnidade: colabUnidade, dateStr: dateStr, docDateFmt: docDateFmt
         });
       }
-      var pageHtml = _admBuildDocPageHtml(doc, {
+      var pageHtml = _admBuildDocPageHtml(doc, Object.assign({
         colabNomeLimpo: colabNomeLimpo, colabMatricula: colabData.matricula, colabCargo: colabCargo,
-        colabCpf: colabData.cpf, admissaoIso: colabData.admissao,
+        colabDepartamento: colabDepartamento, colabCpf: colabData.cpf, admissaoIso: colabData.admissao,
         colabUnidade: colabUnidade, dataAdmissao: dataAdmissao, dataFmt: dataFmt, dateStr: dateStr,
         docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva,
         banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta,
@@ -5131,8 +5514,9 @@ window.toggleFta = toggleFta;
         salFamFilhos: salFamFilhos,
         depUnidade: depUnidade, depDependentes: depDependentes,
         ctrUnidade: ctrUnidade, ctrCtps: ctrCtps, ctrSalario: ctrSalario,
-        ctrHorario: ctrHorario, ctrPrazoTipo: ctrPrazoTipo, ctrDias1: ctrDias1, ctrDias2: ctrDias2
-      });
+        ctrHorario: ctrHorario, ctrPrazoTipo: ctrPrazoTipo, ctrDias1: ctrDias1, ctrDias2: ctrDias2,
+        fregUnidade: fregUnidade, fregCpf: colabData.cpf, fregDependentes: fregDependentes
+      }, fregCampos));
       return doc.vias === 2 ? pageHtml + pageHtml : pageHtml;
     }).join('');
 
