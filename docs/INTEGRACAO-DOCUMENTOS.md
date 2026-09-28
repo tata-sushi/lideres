@@ -1396,4 +1396,69 @@ texto **não** menciona RG/documento de identidade em nenhum ponto,
 espaçamento do rodapé (`rp-cidade-data`) correto. Conferência visual
 da página renderizada (screenshot com dados de teste).
 
+**Feito (2026-09-28): mais 3 termos novos em `doc.html`, enviados em
+sequência pelo usuário — "Termo de Compromisso de Utilização de
+Chaves", "Termo de Responsabilidade de Uso de Imagens de Segurança"
+e "Termo de Entrega, Uso e Responsabilidade de Equipamento".**
+
+1. **Chaves.** Igual ao Fundo Fixo, o texto original pedia RG **e**
+   CPF na cláusula de identificação — mas dessa vez, diferente da
+   decisão anterior (onde o usuário optou por tirar o RG por falta de
+   fonte), mantive os dois campos, com o RG como **campo manual**
+   (mesmo padrão "sugestão editável, nunca trava" dos outros campos
+   sem fonte, ex.: valor do Fundo Fixo) e o CPF auto-preenchido via
+   `tata_plus.colaboradores_listar()` (mesma infra já existente). Não
+   perguntei de novo ao usuário porque a estrutura de "campo manual
+   quando não há fonte" já está estabelecida — a diferença aqui é que
+   o texto original desse termo trata RG como parte central da
+   identificação (não dá pra simplesmente cortar como no Fundo Fixo).
+   Corrigido também um typo do texto original ("cópias não autorizada"
+   → "não autorizadas", concordância).
+
+2. **Imagens de Segurança.** Termo mais simples — só precisa do CPF
+   (a versão que o usuário colou já vinha sem RG). Reaproveitei o
+   `_dgCpfAutoFillPara()` genérico (extraído do que antes era
+   `_dgFundoFixoCpfAutoFill` específico — refatorado pra aceitar
+   qualquer `id` de campo, já usado agora por Fundo Fixo/Chaves/
+   Imagens/Equipamento). Texto jurídico (4 cláusulas numeradas)
+   copiado do que o usuário mandou, sem reescrever.
+
+3. **Equipamento — o mais complexo dos quatro termos de `doc.html`
+   até agora.** Precisa nomear as duas partes do contrato:
+   EMPREGADOR (razão social + CNPJ + endereço da unidade) e
+   EMPREGADO(A) (nome + RG + CPF + CTPS + série), mais uma tabela
+   dinâmica de itens entregues. Pra resolver o CNPJ/endereço,
+   **reaproveitei a mesma fonte `ADM_UNIDADES_CNPJ` de
+   `admissao.html`** (Contrato de Experiência/Contribuição Sindical),
+   copiada pra `doc.html` como `DG_UNIDADES_CNPJ` — mesmo padrão de
+   duplicar utilitário entre os dois arquivos independentes. Como no
+   Contrato de Experiência, o usuário escolhe a unidade/CNPJ num
+   select no modal (não dá pra inferir com segurança a partir do
+   campo livre `unidade` do colaborador, que pode não bater
+   exatamente com as chaves do mapa). RG, CTPS e série são campos
+   manuais (sem fonte); CPF auto-preenchido. Lista de equipamentos é
+   dinâmica (`+ Item`), mesmo padrão de `_dgBuildUtensiliosPage`, só
+   que sem coluna de valor (Quantidade + Descrição). O texto original
+   tinha um bloco de assinatura física no fim ("_____________" +
+   nome) — **removido**, seguindo o mesmo padrão já aplicado em todos
+   os outros termos do portal: a assinatura é só a digital, capturada
+   no app via rubrica+selfie, quando o termo é enviado por esse fluxo.
+
+Os 3 `doc_tipo` correspondentes foram criados no catálogo (categoria
+"Contratos e Termos", `requer_assinatura=true`), com o `nome` batendo
+exatamente com o `sectionLabel` de cada termo em `DG_DOCS` (é assim
+que `_dgValidar`/`_dgSalvarUmTermo` casam o termo gerado com o tipo do
+catálogo).
+
+Testado com Playwright + mock completo (mesmas 8 RPCs de
+`loadAllData` + `colaboradores_listar`): os 3 checkboxes aparecem, os
+campos corretos aparecem/desaparecem ao marcar/desmarcar cada um, CPF
+auto-preenchido em todos, validação bloqueia cada termo com campo
+obrigatório vazio (RG+CPF em Chaves, CPF em Imagens, unidade+RG+CPF+
+CTPS+item em Equipamento), HTML gerado de cada termo conferido
+(título, cabeçalho padrão, texto legal completo, CNPJ/endereço da
+unidade escolhida no caso do Equipamento, ausência de linha de
+assinatura física, `rp-cidade-data` presente). Conferência visual dos
+3 PDFs renderizados lado a lado (screenshot).
+
 _Última atualização: 2026-09-28._
