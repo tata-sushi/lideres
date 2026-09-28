@@ -3212,6 +3212,8 @@ window.toggleFta = toggleFta;
     if (bancoCheck && bancoCheck.checked) _admBancoAutoFill();
     var filhosCheck = document.getElementById('admdoc_salario_familia');
     if (filhosCheck && filhosCheck.checked) _admFilhosAutoFill();
+    var depCheck = document.getElementById('admdoc_dependentes_ir');
+    if (depCheck && depCheck.checked) _admDependentesAutoFill();
   }
 
   function openModalAdmissao() {
@@ -3614,6 +3616,7 @@ window.toggleFta = toggleFta;
   function _admFilhoRowHtml() {
     return '<div class="filho-row-edit" style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">'+
       '<input class="form-input filho-nome" type="text" placeholder="Nome do filho" style="flex:1.6;" onclick="event.stopPropagation()">'+
+      '<input class="form-input filho-cpf" type="text" placeholder="CPF" style="flex:1;" onclick="event.stopPropagation()">'+
       '<input class="form-input filho-nasc" type="date" style="flex:1;" onclick="event.stopPropagation()">'+
       '<button type="button" title="Remover" onclick="event.stopPropagation();this.closest(\'.filho-row-edit\').remove()" style="border:none;background:none;cursor:pointer;font-size:18px;line-height:1;color:var(--muted);flex-shrink:0;">×</button>'+
     '</div>';
@@ -3628,9 +3631,10 @@ window.toggleFta = toggleFta;
     return Array.prototype.map.call(c.querySelectorAll('.filho-row-edit'), function(r){
       return {
         nome: ((r.querySelector('.filho-nome')||{}).value||'').trim(),
+        cpf: ((r.querySelector('.filho-cpf')||{}).value||'').trim(),
         nascimento: ((r.querySelector('.filho-nasc')||{}).value||'').trim()
       };
-    }).filter(function(f){ return f.nome || f.nascimento; });
+    }).filter(function(f){ return f.nome || f.cpf || f.nascimento; });
   }
   // Salário-Família: filhos declarados na ficha de admissão (grupo=dependente,
   // filtrando parentesco="filho" — os demais parentescos ficam de fora, esse
@@ -3654,6 +3658,7 @@ window.toggleFta = toggleFta;
         var rows = c.querySelectorAll('.filho-row-edit');
         var last = rows[rows.length - 1];
         last.querySelector('.filho-nome').value = f.nome || '';
+        last.querySelector('.filho-cpf').value = f.cpf || '';
         last.querySelector('.filho-nasc').value = _admParaISO(f.nascimento) || '';
       });
     });
@@ -3677,6 +3682,7 @@ window.toggleFta = toggleFta;
     var relOpts = ADM_DEP_RELACOES.map(function(r){ return '<option value="'+r.v+'">'+r.l+'</option>'; }).join('');
     return '<div class="dep-row-edit" style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">'+
       '<input class="form-input dep-nome" type="text" placeholder="Nome completo" style="flex:1.8;" onclick="event.stopPropagation()">'+
+      '<input class="form-input dep-cpf" type="text" placeholder="CPF" style="flex:1;" onclick="event.stopPropagation()">'+
       '<select class="form-select dep-relacao" style="flex:1.1;" onclick="event.stopPropagation()">'+relOpts+'</select>'+
       '<input class="form-input dep-nasc" type="date" style="flex:1;" onclick="event.stopPropagation()">'+
       '<button type="button" title="Remover" onclick="event.stopPropagation();this.closest(\'.dep-row-edit\').remove()" style="border:none;background:none;cursor:pointer;font-size:18px;line-height:1;color:var(--muted);flex-shrink:0;">×</button>'+
@@ -3692,10 +3698,44 @@ window.toggleFta = toggleFta;
     return Array.prototype.map.call(c.querySelectorAll('.dep-row-edit'), function(r){
       return {
         nome: ((r.querySelector('.dep-nome')||{}).value||'').trim(),
+        cpf: ((r.querySelector('.dep-cpf')||{}).value||'').trim(),
         relacao: ((r.querySelector('.dep-relacao')||{}).value||'').trim(),
         nascimento: ((r.querySelector('.dep-nasc')||{}).value||'').trim()
       };
-    }).filter(function(d){ return d.nome || d.nascimento; });
+    }).filter(function(d){ return d.nome || d.cpf || d.nascimento; });
+  }
+  // Declaração de Dependentes (IR): TODOS os dependentes da ficha (sem filtro
+  // de parentesco — ao contrário do Salário-Família, que é só sobre filhos).
+  // "parentesco" da ficha (filho/conjuge/pai/mae, sem acento) já bate direto
+  // com os values de ADM_DEP_RELACOES; normaliza por garantia.
+  function _admDepParentescoParaRelacao(parentesco) {
+    var norm = String(parentesco || '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '');
+    var achou = ADM_DEP_RELACOES.find(function(r){ return r.v === norm; });
+    return achou ? achou.v : '';
+  }
+  function _admDependentesAutoFill() {
+    var sel = document.getElementById('adm-colab');
+    if (!sel || !sel.value) return;
+    var colabData = _admColabMap[sel.value] || {};
+    if (!colabData.cpf) return;
+    _admCarregarAdmissaoRespostas(colabData.cpf).then(function(respostas) {
+      var deps = _admDependentesAgrupar(respostas);
+      if (!deps.length) return;
+      var c = document.getElementById('adm-dependentes-rows');
+      if (!c) return;
+      c.innerHTML = '';
+      deps.forEach(function(d) {
+        _admDepAddRow();
+        var rows = c.querySelectorAll('.dep-row-edit');
+        var last = rows[rows.length - 1];
+        last.querySelector('.dep-nome').value = d.nome || '';
+        last.querySelector('.dep-cpf').value = d.cpf || '';
+        var relacao = _admDepParentescoParaRelacao(d.parentesco);
+        if (relacao) last.querySelector('.dep-relacao').value = relacao;
+        last.querySelector('.dep-nasc').value = _admParaISO(d.nascimento) || '';
+      });
+    });
   }
   function _admToggleDependentesRow(checked) {
     var row = document.getElementById('adm-dependentes-row');
@@ -3703,6 +3743,7 @@ window.toggleFta = toggleFta;
     var c = document.getElementById('adm-dependentes-rows');
     if (checked) {
       if (c && !c.children.length) _admDepAddRow();
+      _admDependentesAutoFill();
     } else {
       if (c) c.innerHTML = '';
       var u = document.getElementById('adm-dep-unidade'); if (u) u.value = '';
@@ -4352,12 +4393,13 @@ window.toggleFta = toggleFta;
     var linhasHtml = filhos.map(function(f) {
       return '<tr>' +
         '<td>'+esc(f.nome || '—')+'</td>' +
+        '<td>'+esc(f.cpf || '—')+'</td>' +
         '<td>'+esc(f.nascimento ? _admFmtAdmissao(f.nascimento) : '—')+'</td>' +
       '</tr>';
     }).join('');
     var tabela = '<table class="rp-table">' +
-      '<thead><tr><th>Nome do Filho</th><th>Data do Nascimento</th></tr></thead>' +
-      '<tbody>'+(linhasHtml || '<tr><td colspan="2" style="color:#999;">Nenhum filho informado</td></tr>')+'</tbody>' +
+      '<thead><tr><th>Nome do Filho</th><th>CPF</th><th>Data do Nascimento</th></tr></thead>' +
+      '<tbody>'+(linhasHtml || '<tr><td colspan="3" style="color:#999;">Nenhum filho informado</td></tr>')+'</tbody>' +
     '</table>';
     return (
       '<div class="page">' +
@@ -4418,13 +4460,14 @@ window.toggleFta = toggleFta;
       return '<tr>' +
         '<td>'+(i+1)+'.</td>' +
         '<td>'+esc(d.nome || '—')+'</td>' +
+        '<td>'+esc(d.cpf || '—')+'</td>' +
         '<td>'+esc(relLabel[d.relacao] || d.relacao || '—')+'</td>' +
         '<td>'+esc(d.nascimento ? _admFmtAdmissao(d.nascimento) : '—')+'</td>' +
       '</tr>';
     }).join('');
     var tabela = '<table class="rp-table">' +
-      '<thead><tr><th>Nº Ordem</th><th>Nome Completo dos Dependentes</th><th>Relação Dependência</th><th>Data de Nascimento</th></tr></thead>' +
-      '<tbody>'+(linhasHtml || '<tr><td colspan="4" style="color:#999;">Nenhum dependente informado</td></tr>')+'</tbody>' +
+      '<thead><tr><th>Nº Ordem</th><th>Nome Completo dos Dependentes</th><th>CPF</th><th>Relação Dependência</th><th>Data de Nascimento</th></tr></thead>' +
+      '<tbody>'+(linhasHtml || '<tr><td colspan="5" style="color:#999;">Nenhum dependente informado</td></tr>')+'</tbody>' +
     '</table>';
     return (
       '<div class="page">' +
