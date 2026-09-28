@@ -1072,4 +1072,44 @@ assinatura confirmado com `p_tipo_id` correto.
 doc_tipo novo criado no catálogo (`doc_tipo_sandbox_criar`, categoria
 "Contratos e Termos", `requer_assinatura=true`).
 
-_Última atualização: 2026-09-24._
+**Feito (2026-09-28): 1º passo da vinculação com a ficha de admissão
+(Sara) — Dados Bancários auto-preenchidos.** Outro agente (frente de
+migração) criou `dp_rh.admissao_respostas` (EAV, 1 linha por campo,
+`grupo`/`campo`/`valor`, ver `git-claude/migracao.md`) alimentada pelo
+formulário que o candidato preenche com a Sara antes da admissão. A
+chave de vínculo é o **CPF** (não matrícula — matrícula só existe
+depois que a pessoa vira `profile`), o que já tínhamos disponível em
+`colabData.cpf` desde a ampliação da RPC `colaboradores_listar` pro
+Contrato de Experiência.
+
+Nova RPC `tata_plus.admissao_respostas_por_cpf(p_cpf text)`
+(`SECURITY DEFINER`, grant só `authenticated`): resolve o CPF pro
+`token` mais recente em `dp_rh.admissoes` e devolve todas as
+respostas daquele token (todos os grupos, não só bancário — dá pra
+reaproveitar pros próximos termos sem RPC nova). Front: cache por CPF
+(`_admAdmissaoRespostasCache`) + helper `_admAdmissaoValor(respostas,
+grupo, campo)`.
+
+Dados Bancários: `_admBancoAutoFill()` busca `grupo=bancario`
+(agência, conta, tipo_conta) e preenche os campos ao marcar o termo
+— **sempre editável**, é sugestão, não trava nada. Banco continua
+fixo em 341 (confirmado com o usuário: o formulário sempre resulta em
+conta Itaú, o campo `conta_itau` do formulário foi propositalmente
+ignorado). Também refaz a busca se o RH trocar de colaborador com o
+termo já marcado (mesmo padrão do salário do Contrato de Experiência).
+Colaborador sem ficha de admissão (CPF sem match) simplesmente não
+preenche nada — sem erro, sem travar o fluxo.
+
+Testado com Playwright + mock: agência/conta/tipo de conta
+preenchidos certo, banco continua 341, reset ao desmarcar o termo,
+reaproveitamento do cache (mesma CPF não dispara 2ª chamada), troca de
+colaborador com termo marcado refaz a busca, colaborador sem ficha não
+quebra nem preenche nada.
+
+Próximos candidatos a vincular pela mesma RPC (ainda não feitos):
+Declaração de Dependentes (`grupo=dependente` bate quase 1:1),
+Salário-Família (mesmo grupo, filtrando `parentesco=filho`), CTPS do
+Contrato de Experiência (`grupo=pessoais.ctps_numero`) e endereço do
+empregado no mesmo contrato (`grupo=endereco`).
+
+_Última atualização: 2026-09-28._

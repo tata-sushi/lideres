@@ -3208,6 +3208,8 @@ window.toggleFta = toggleFta;
     campo.value = c ? _admNormalizarData(c.admissao) : '';
     var ctrCheck = document.getElementById('admdoc_contrato_experiencia');
     if (ctrCheck && ctrCheck.checked) _admContratoSalarioAutoFill();
+    var bancoCheck = document.getElementById('admdoc_dados_bancarios');
+    if (bancoCheck && bancoCheck.checked) _admBancoAutoFill();
   }
 
   function openModalAdmissao() {
@@ -3530,10 +3532,53 @@ window.toggleFta = toggleFta;
     if (!checked) { var inp = document.getElementById(inputId); if (inp) inp.value = ''; }
   }
 
+  // Ficha de admissão (Sara) por CPF — cache client-side, reaproveitável por
+  // qualquer termo que precise puxar dado já respondido no formulário
+  // (bancário, endereço, dependentes, CTPS...). Vínculo é sempre por CPF:
+  // matrícula só existe depois que a pessoa vira profile.
+  var _admAdmissaoRespostasCache = {};
+  function _admCarregarAdmissaoRespostas(cpf) {
+    cpf = String(cpf || '').replace(/\D/g, '');
+    if (!cpf) return Promise.resolve([]);
+    if (_admAdmissaoRespostasCache[cpf]) return Promise.resolve(_admAdmissaoRespostasCache[cpf]);
+    return comSupaPromise().then(function(supa) {
+      return supa.schema('tata_plus').rpc('admissao_respostas_por_cpf', { p_cpf: cpf }).then(function(r) {
+        var arr = (!r.error && Array.isArray(r.data)) ? r.data : [];
+        _admAdmissaoRespostasCache[cpf] = arr;
+        return arr;
+      });
+    }).catch(function(){ return []; });
+  }
+  function _admAdmissaoValor(respostas, grupo, campo) {
+    var row = respostas.find(function(r){ return r.grupo === grupo && r.campo === campo; });
+    return row ? row.valor : '';
+  }
+
+  // Dados Bancários — sempre banco 341 (Itaú); campo "conta_itau" do
+  // formulário é ignorado (confirmado com o usuário: só existe conta Itaú).
+  function _admBancoAutoFill() {
+    var sel = document.getElementById('adm-colab');
+    if (!sel || !sel.value) return;
+    var colabData = _admColabMap[sel.value] || {};
+    if (!colabData.cpf) return;
+    _admCarregarAdmissaoRespostas(colabData.cpf).then(function(respostas) {
+      if (!respostas.length) return;
+      var agencia = _admAdmissaoValor(respostas, 'bancario', 'agencia');
+      var conta = _admAdmissaoValor(respostas, 'bancario', 'conta');
+      var tipoConta = _admAdmissaoValor(respostas, 'bancario', 'tipo_conta');
+      var agEl = document.getElementById('adm-agencia'); if (agEl && agencia) agEl.value = agencia;
+      var ctEl = document.getElementById('adm-conta'); if (ctEl && conta) ctEl.value = conta;
+      var tcEl = document.getElementById('adm-tipo-conta');
+      if (tcEl && tipoConta) tcEl.value = /salario/i.test(tipoConta) ? 'Salário' : 'Corrente';
+    });
+  }
+
   function _admToggleBancoRow(checked) {
     var row = document.getElementById('adm-banco-row');
     if (row) row.style.display = checked ? 'block' : 'none';
-    if (!checked) {
+    if (checked) {
+      _admBancoAutoFill();
+    } else {
       var agencia = document.getElementById('adm-agencia'); if (agencia) agencia.value = '';
       var conta = document.getElementById('adm-conta'); if (conta) conta.value = '';
       var banco = document.getElementById('adm-banco'); if (banco) banco.value = '341';
