@@ -3405,8 +3405,7 @@ window.toggleFta = toggleFta;
               '<option value="">— Selecione —</option>' + ctrUnidadeOpts +
             '</select>' +
           '</div>' +
-          '<div class="form-row"><label class="form-label" for="adm-ctr-ctps">CTPS n°</label><input class="form-input" type="text" id="adm-ctr-ctps" placeholder="Ex: 4386680" onclick="event.stopPropagation()"></div>' +
-          '<div class="form-row"><label class="form-label" for="adm-ctr-serie">Série / UF</label><input class="form-input" type="text" id="adm-ctr-serie" placeholder="Ex: 5861 - SP" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="adm-ctr-ctps">CTPS</label><input class="form-input" type="text" id="adm-ctr-ctps" placeholder="Ex: 4386680" onclick="event.stopPropagation()"></div>' +
           '<div class="form-row"><label class="form-label" for="adm-ctr-salario">Salário bruto (R$)</label><input class="form-input" type="text" id="adm-ctr-salario" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
           '<div class="form-row"><label class="form-label" for="adm-ctr-horario">Horário de trabalho</label>' +
             '<select class="form-select" id="adm-ctr-horario" onclick="event.stopPropagation()">' +
@@ -3755,6 +3754,10 @@ window.toggleFta = toggleFta;
   // permissão de ver valores (tata_plus.pode_ver_valores) recebe salario_fixo=null
   // da RPC e precisa digitar na mão — não é um bug, é a máscara de permissão já
   // existente na página de Cargos e Salários (ces.html).
+  // IMPORTANTE: cargo_id não bate byte-a-byte entre tata_plus.profiles e
+  // dp_rh.cargos_salarios (ex.: "Garçom Pl-..." vs "Garçom PL-...", nível em
+  // caixa diferente — só 10 de 136 colaboradores ativos batiam exato). Chave
+  // do mapa/lookup em minúsculo pra não depender dessa inconsistência.
   var _admCargosSalariosCache = null;
   function _admCarregarCargosSalarios() {
     if (_admCargosSalariosCache) return Promise.resolve(_admCargosSalariosCache);
@@ -3762,7 +3765,7 @@ window.toggleFta = toggleFta;
       return supa.schema('tata_plus').rpc('cargos_salarios_listar').then(function(r) {
         if (r.error || !r.data) return {};
         var mapa = {};
-        (r.data.cargos || []).forEach(function(c) { mapa[c.cargo_id] = c.salario_fixo; });
+        (r.data.cargos || []).forEach(function(c) { mapa[String(c.cargo_id||'').toLowerCase()] = c.salario_fixo; });
         _admCargosSalariosCache = mapa;
         return mapa;
       });
@@ -3775,7 +3778,7 @@ window.toggleFta = toggleFta;
     var colabData = _admColabMap[sel.value] || {};
     if (!colabData.cargoId) return;
     _admCarregarCargosSalarios().then(function(mapa) {
-      var v = mapa[colabData.cargoId];
+      var v = mapa[String(colabData.cargoId).toLowerCase()];
       if (v === undefined || v === null || v === '') return;
       var num = Number(v);
       if (!isNaN(num)) salarioEl.value = num.toFixed(2).replace('.', ',');
@@ -3802,7 +3805,7 @@ window.toggleFta = toggleFta;
       _admContratoSalarioAutoFill();
       _admContratoCtpsAutoFill();
     } else {
-      ['adm-ctr-unidade','adm-ctr-ctps','adm-ctr-serie','adm-ctr-salario','adm-ctr-horario','adm-ctr-dias1','adm-ctr-dias2'].forEach(function(id){
+      ['adm-ctr-unidade','adm-ctr-ctps','adm-ctr-salario','adm-ctr-horario','adm-ctr-dias1','adm-ctr-dias2'].forEach(function(id){
         var e = document.getElementById(id); if (e) e.value = '';
       });
       var r = document.querySelector('input[name="adm-ctr-prazo-tipo"][value="padrao"]'); if (r) r.checked = true;
@@ -4596,7 +4599,7 @@ window.toggleFta = toggleFta;
         '<div class="rp-section">' +
           '<div class="rp-section-label">Contrato de Experiência</div>' +
           '<div class="rp-section-body">' +
-            '<p class="rp-p">Pelo presente instrumento particular de Contrato de Experiência, a empresa '+b(ADM_RAZAO_SOCIAL)+', estabelecida à '+b(enderecoUnidade)+', inscrita no CNPJ/CEI sob Nº '+b(unidadeInfo.cnpj||'—')+', denominada a seguir EMPREGADORA, e o(a) Sr(a) '+b(ctx.colabNomeLimpo)+', domiciliado à , - – CEP: -/, portador(a) da CTPS n.º '+b(ctx.ctrCtps||'—')+', série '+b(ctx.ctrSerie||'—')+', e CPF Nº '+b(_admFmtCpf(ctx.colabCpf)||'—')+', doravante denominado(a) EMPREGADO, celebram o presente Contrato Individual de Trabalho para fins de experiência, conforme legislação trabalhista em vigor, regido pelas cláusulas abaixo e demais disposições legais vigentes.</p>' +
+            '<p class="rp-p">Pelo presente instrumento particular de Contrato de Experiência, a empresa '+b(ADM_RAZAO_SOCIAL)+', estabelecida à '+b(enderecoUnidade)+', inscrita no CNPJ/CEI sob Nº '+b(unidadeInfo.cnpj||'—')+', denominada a seguir EMPREGADORA, e o(a) Sr(a) '+b(ctx.colabNomeLimpo)+', domiciliado à , - – CEP: -/, portador(a) da CTPS n.º '+b(ctx.ctrCtps||'—')+', e CPF Nº '+b(_admFmtCpf(ctx.colabCpf)||'—')+', doravante denominado(a) EMPREGADO, celebram o presente Contrato Individual de Trabalho para fins de experiência, conforme legislação trabalhista em vigor, regido pelas cláusulas abaixo e demais disposições legais vigentes.</p>' +
 
             '<p class="rp-p">1. Fica o EMPREGADO admitido no quadro de funcionários da EMPREGADORA para exercer a função de '+b((ctx.colabCargo||'—').toUpperCase())+' mediante a remuneração bruta de '+b(salarioFmt+' - ('+salarioExtenso+') por mês')+'. A circunstância, porém, de ser a função especificada não importa na intransferibilidade do EMPREGADO para outra função, na qual demonstre melhor capacidade de adaptação desde que compatível com sua condição pessoal.</p>' +
 
@@ -4805,7 +4808,6 @@ window.toggleFta = toggleFta;
     var depDependentes = _admDepReadRows();
     var ctrUnidade = (document.getElementById('adm-ctr-unidade') || {}).value || '';
     var ctrCtps    = (document.getElementById('adm-ctr-ctps') || {}).value || '';
-    var ctrSerie   = (document.getElementById('adm-ctr-serie') || {}).value || '';
     var ctrSalario = (document.getElementById('adm-ctr-salario') || {}).value || '';
     var ctrHorario = (document.getElementById('adm-ctr-horario') || {}).value || '';
     var ctrPrazoTipo = (document.querySelector('input[name="adm-ctr-prazo-tipo"]:checked') || {}).value || 'padrao';
@@ -4828,7 +4830,7 @@ window.toggleFta = toggleFta;
     if (termos.some(function(d){ return d.id === 'dependentes_ir'; }) && !depDependentes.length) { _admShowError('Informe ao menos um dependente (nome, relação e data de nascimento).'); return; }
     if (termos.some(function(d){ return d.id === 'contrato_experiencia'; })) {
       if (!ctrUnidade) { _admShowError('Selecione a unidade/CNPJ do local de trabalho (Contrato de Experiência).'); return; }
-      if (!ctrCtps.trim() || !ctrSerie.trim()) { _admShowError('Informe CTPS e série/UF (Contrato de Experiência).'); return; }
+      if (!ctrCtps.trim()) { _admShowError('Informe a CTPS (Contrato de Experiência).'); return; }
       if (!ctrSalario.trim()) { _admShowError('Informe o salário bruto (Contrato de Experiência).'); return; }
       if (!ctrHorario) { _admShowError('Selecione o horário de trabalho (Contrato de Experiência).'); return; }
       if (ctrPrazoTipo === 'outros' && (!ctrDias1.trim() || !ctrDias2.trim())) { _admShowError('Informe os dois períodos do prazo (Contrato de Experiência).'); return; }
@@ -4859,7 +4861,7 @@ window.toggleFta = toggleFta;
       sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao,
       salFamFilhos: salFamFilhos,
       depUnidade: depUnidade, depDependentes: depDependentes,
-      ctrUnidade: ctrUnidade, ctrCtps: ctrCtps, ctrSerie: ctrSerie, ctrSalario: ctrSalario,
+      ctrUnidade: ctrUnidade, ctrCtps: ctrCtps, ctrSalario: ctrSalario,
       ctrHorario: ctrHorario, ctrPrazoTipo: ctrPrazoTipo, ctrDias1: ctrDias1, ctrDias2: ctrDias2
     };
 
@@ -4896,7 +4898,6 @@ window.toggleFta = toggleFta;
     var depDependentes = _admDepReadRows();
     var ctrUnidade = (document.getElementById('adm-ctr-unidade') || {}).value || '';
     var ctrCtps    = (document.getElementById('adm-ctr-ctps') || {}).value || '';
-    var ctrSerie   = (document.getElementById('adm-ctr-serie') || {}).value || '';
     var ctrSalario = (document.getElementById('adm-ctr-salario') || {}).value || '';
     var ctrHorario = (document.getElementById('adm-ctr-horario') || {}).value || '';
     var ctrPrazoTipo = (document.querySelector('input[name="adm-ctr-prazo-tipo"]:checked') || {}).value || 'padrao';
@@ -4928,7 +4929,7 @@ window.toggleFta = toggleFta;
     }
     if (checked.some(function(cb){ return cb.value === 'contrato_experiencia'; })) {
       if (!ctrUnidade) { _admShowError('Selecione a unidade/CNPJ do local de trabalho (Contrato de Experiência).'); return; }
-      if (!ctrCtps.trim() || !ctrSerie.trim()) { _admShowError('Informe CTPS e série/UF (Contrato de Experiência).'); return; }
+      if (!ctrCtps.trim()) { _admShowError('Informe a CTPS (Contrato de Experiência).'); return; }
       if (!ctrSalario.trim()) { _admShowError('Informe o salário bruto (Contrato de Experiência).'); return; }
       if (!ctrHorario) { _admShowError('Selecione o horário de trabalho (Contrato de Experiência).'); return; }
       if (ctrPrazoTipo === 'outros' && (!ctrDias1.trim() || !ctrDias2.trim())) { _admShowError('Informe os dois períodos do prazo (Contrato de Experiência).'); return; }
@@ -5106,7 +5107,7 @@ window.toggleFta = toggleFta;
         sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao,
         salFamFilhos: salFamFilhos,
         depUnidade: depUnidade, depDependentes: depDependentes,
-        ctrUnidade: ctrUnidade, ctrCtps: ctrCtps, ctrSerie: ctrSerie, ctrSalario: ctrSalario,
+        ctrUnidade: ctrUnidade, ctrCtps: ctrCtps, ctrSalario: ctrSalario,
         ctrHorario: ctrHorario, ctrPrazoTipo: ctrPrazoTipo, ctrDias1: ctrDias1, ctrDias2: ctrDias2
       });
       return doc.vias === 2 ? pageHtml + pageHtml : pageHtml;
