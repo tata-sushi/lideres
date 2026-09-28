@@ -1541,4 +1541,43 @@ preenchido, sem label visível no wrap), validação com a mensagem de
 "CPF não encontrado no cadastro". Conferência visual do PDF
 renderizado.
 
+**Feito (2026-09-28): texto do Termo de Compromisso de Chaves
+substituído pela versão final do usuário + novo termo "Termo de
+Responsabilidade pelo Recebimento de Chave de Acesso".**
+
+1. **Chaves — texto trocado por completo.** O usuário mandou a versão
+   final e oficial do termo ("TERMO DE COMPROMISSO DE RECEBIMENTO E
+   UTILIZAÇÃO DE CHAVE DO CLAVICULÁRIO"), com 5 parágrafos, mais
+   específica que a anterior: deixa claro que a chave dá acesso ao
+   **claviculário onde ficam as chaves reserva dos armários dos
+   colaboradores** (não mais "chave do prédio" genérica). Trocado o
+   corpo inteiro de `DG_DOCS_CONTENT.chaves` e o `sectionLabel` em
+   `DG_DOCS` pro título oficial novo; catálogo (`doc_tipo`)
+   atualizado via `UPDATE` direto pra manter o casamento
+   `nome === sectionLabel`. Identificação continua só por CPF (mesmo
+   padrão já estabelecido — oculto no modal, embutido no PDF).
+
+2. **Novo termo: "Termo de Responsabilidade pelo Recebimento de
+   Chave de Acesso"** — sobre a chave do **restaurante em si**
+   (abertura/fechamento da unidade), diferente do Termo de Chaves
+   acima (chave do claviculário/armários). Texto original tinha
+   placeholders em branco (`___`) pra Nome/CPF/Unidade — preenchidos
+   via `ctx.colabNomeLimpo`/CPF auto-preenchido (mesmo padrão
+   `_dgCpfAutoFillPara`, oculto no modal desde o início, sem repetir
+   o problema do RG visível)/`ctx.colabUnidade` (já disponível no
+   cabeçalho padrão, reaproveitado no corpo do texto também). Lista
+   de 6 compromissos do texto original (marcadores "*") convertida
+   pro padrão lettered `a)`-`f)` já usado em Utensílios/Equipamento —
+   o CSS do portal não tem estilo pra `<ul>`/`<li>`, então manter o
+   padrão de parágrafos com letra em negrito evita introduzir uma
+   lista sem o espaçamento/indentação corretos. Novo `doc_tipo`
+   criado no catálogo.
+
+Testado com Playwright: texto novo do Chaves confirmado (menção às
+"chaves reservas dos armários", ausência do texto antigo), novo termo
+Chave de Acesso com CPF auto-preenchido e oculto, unidade citada
+corretamente no corpo, as 6 cláusulas a-f presentes, validação com a
+mensagem de CPF não encontrado no cadastro. Conferência visual dos 2
+PDFs renderizados lado a lado (screenshot).
+
 _Última atualização: 2026-09-28._
