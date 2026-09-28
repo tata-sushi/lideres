@@ -1199,4 +1199,18 @@ Família), texto do Dependentes IR com empresa+CNPJ em negrito e sem
 menção a "Fonte Pagadora". Conferência visual das duas páginas
 renderizadas (screenshot).
 
+**Feito (2026-09-28): mesmo cabeçalho padronizado na Contribuição
+Sindical.** Faltava o campo "Cargo" nesse termo (só tinha Colaborador/
+Matrícula/Unidade). Adicionado `ctx.colabCargo` como 3º campo, e
+"Unidade" trocou de mostrar `ctx.sindicalUnidade` (a unidade/CNPJ
+selecionada pro termo) pra `ctx.colabUnidade` (a unidade registrada do
+colaborador) — mesmo critério já usado no Dependentes IR: o CNPJ/
+endereço da unidade selecionada continuam no corpo do texto (parágrafo
+"A empresa... inscrita no CNPJ..."), então não há perda de informação,
+só padronização do cabeçalho de identificação com os outros termos.
+
+Testado com Playwright + mock e conferência visual: cabeçalho agora
+com Colaborador/Matrícula/Cargo/Unidade, CNPJ da unidade selecionada
+continua aparecendo certo no corpo do texto.
+
 _Última atualização: 2026-09-28._
