@@ -298,6 +298,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <div class="tabs">
   <button class="tab-btn active" id="tab-sobre" data-aba-id="governanca-kpis-rh-admissao::sobre" onclick="setTab('sobre')">Sobre</button>
+  <button class="tab-btn" id="tab-pendente" data-aba-id="governanca-kpis-rh-admissao::pendente" onclick="setTab('pendente')">Pendente</button>
   <button class="tab-btn" id="tab-kpis" data-aba-id="governanca-kpis-rh-admissao::kpis" onclick="setTab('kpis')">KPIs</button>
 </div>
 
@@ -306,6 +307,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <main class="content">
   <div class="page active" id="page-minimo"></div>
+  <div class="page" id="page-pendente"></div>
   <div class="page" id="page-kpis"></div>
 </main>
 </div><!-- /view-dashboard -->
@@ -1827,6 +1829,7 @@ async function renderPaginaAtiva() {
   var tab = abaAtiva();
   if (tab === 'sobre') { var _lo=document.getElementById('loading-overlay'); if(_lo) _lo.classList.remove('show'); return; }
   var wrap = document.getElementById('est-filters');
+  if (tab === 'pendente') { if (wrap) wrap.style.display = 'none'; renderPendentesPage(); return; }
   if (tab === 'kpis') { if (wrap) wrap.style.display = 'none'; renderKPIsPage(); return; }
 
   var container = document.getElementById('page-minimo');
@@ -4992,6 +4995,254 @@ window.toggleFta = toggleFta;
   window.zoomIn=function(){ z=clamp(z+STEP); apply(); };
   window.zoomOut=function(){ z=clamp(z-STEP); apply(); };
   apply();
+})();
+</script>
+
+<!-- ══ PAINEL PENDENTE — Admissões em andamento + validação ══ -->
+<style>
+#page-pendente { padding: 4px 0 24px; }
+.adm-empty { text-align:center; padding:40px 16px; color:#888; font-family:'DM Mono',monospace; font-size:12px; letter-spacing:.4px; text-transform:uppercase; }
+.adm-list-head { font-family:'DM Mono',monospace; font-size:11px; font-weight:600; letter-spacing:.8px; text-transform:uppercase; color:#35383F; padding:14px 4px 10px; }
+.adm-list-head span { color:#999; font-weight:500; }
+.adm-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; }
+.adm-card { background:#fff; border:1px solid #E2E2E2; border-radius:8px; padding:14px; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+.adm-card:hover { border-color:#35383F; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+.adm-card-top { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
+.adm-card-nome { font-family:'DM Sans',sans-serif; font-size:15px; font-weight:700; color:#111; }
+.adm-card-sub { font-size:12.5px; color:#555; margin-bottom:8px; }
+.adm-card-meta { display:flex; flex-wrap:wrap; gap:10px; font-family:'DM Mono',monospace; font-size:10px; color:#888; letter-spacing:.3px; }
+.adm-badge { font-family:'DM Mono',monospace; font-size:9px; font-weight:600; letter-spacing:.4px; text-transform:uppercase; padding:3px 8px; border-radius:100px; white-space:nowrap; }
+.adm-badge.b-neutro { background:#EEE; color:#666; }
+.adm-badge.b-and { background:#FFF4DC; color:#7A4A00; }
+.adm-badge.b-env { background:#35383F; color:#CFFF00; }
+/* overlay ficha */
+.adm-ov { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:400; display:none; align-items:flex-end; justify-content:center; }
+.adm-ov.show { display:flex; }
+.adm-modal { background:#F4F4F4; width:100%; max-width:640px; max-height:92vh; border-radius:14px 14px 0 0; display:flex; flex-direction:column; overflow:hidden; }
+@media(min-width:700px){ .adm-ov{align-items:center;} .adm-modal{border-radius:14px; max-height:88vh;} }
+.adm-mh { background:#fff; padding:14px 16px; border-bottom:1px solid #E2E2E2; display:flex; align-items:flex-start; gap:10px; flex-shrink:0; }
+.adm-mh-info { flex:1; min-width:0; }
+.adm-mh-nome { font-size:16px; font-weight:700; color:#111; }
+.adm-mh-sub { font-size:12px; color:#666; margin-top:2px; }
+.adm-mh-prog { font-family:'DM Mono',monospace; font-size:10px; color:#35383F; margin-top:6px; font-weight:600; letter-spacing:.3px; }
+.adm-mh-x { width:30px; height:30px; border-radius:6px; border:1px solid #E2E2E2; background:#F4F4F4; cursor:pointer; font-size:16px; line-height:1; color:#555; flex-shrink:0; }
+.adm-mb { overflow-y:auto; padding:14px 16px 20px; }
+.adm-sec { margin-bottom:16px; }
+.adm-sec-h { display:flex; align-items:center; justify-content:space-between; font-family:'DM Mono',monospace; font-size:10px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:#35383F; margin:0 0 8px; }
+.adm-add { font-family:'DM Mono',monospace; font-size:9px; font-weight:600; letter-spacing:.4px; text-transform:uppercase; color:#35383F; background:#fff; border:1px solid #E2E2E2; border-radius:100px; padding:4px 10px; cursor:pointer; }
+.adm-add:hover { border-color:#35383F; }
+.adm-item { background:#fff; border:1px solid #E2E2E2; border-radius:8px; padding:9px 10px; margin-bottom:6px; display:flex; align-items:flex-start; gap:8px; }
+.adm-item.ok { border-color:#1A5C2A33; background:#F4FAF5; }
+.adm-chk { width:20px; height:20px; flex-shrink:0; margin-top:1px; cursor:pointer; accent-color:#1A5C2A; }
+.adm-item-body { flex:1; min-width:0; }
+.adm-item-rot { font-family:'DM Mono',monospace; font-size:9px; letter-spacing:.4px; text-transform:uppercase; color:#999; }
+.adm-item-val { font-size:14px; color:#111; word-break:break-word; white-space:pre-wrap; }
+.adm-item-obs { font-size:11px; color:#8B1A1A; margin-top:2px; }
+.adm-item-acts { display:flex; gap:4px; flex-shrink:0; }
+.adm-ib { width:26px; height:26px; border-radius:6px; border:1px solid #E2E2E2; background:#F4F4F4; cursor:pointer; font-size:12px; line-height:1; color:#555; }
+.adm-ib:hover { border-color:#35383F; color:#111; }
+.adm-ib.del:hover { border-color:#8B1A1A; color:#8B1A1A; background:#FDECEA; }
+.adm-edit { display:flex; gap:6px; margin-top:6px; }
+.adm-edit input, .adm-edit textarea, .adm-inc input, .adm-inc select { flex:1; font-family:'DM Sans',sans-serif; font-size:13px; padding:6px 8px; border:1px solid #E2E2E2; border-radius:6px; }
+.adm-bsave { background:#35383F; color:#CFFF00; border:none; border-radius:6px; padding:6px 12px; font-family:'DM Mono',monospace; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; cursor:pointer; }
+.adm-bcancel { background:#EEE; color:#555; border:none; border-radius:6px; padding:6px 10px; font-family:'DM Mono',monospace; font-size:10px; cursor:pointer; }
+.adm-inc { background:#fff; border:1px dashed #C9C9C9; border-radius:8px; padding:10px; margin-bottom:6px; display:none; flex-wrap:wrap; gap:6px; align-items:center; }
+.adm-inc.show { display:flex; }
+.adm-doc { background:#fff; border:1px solid #E2E2E2; border-radius:8px; padding:9px 10px; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+.adm-doc-nome { flex:1; min-width:0; font-size:13px; color:#111; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.adm-doc-slug { font-family:'DM Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:.4px; color:#999; }
+.adm-doc a { color:#1A3A5C; font-size:12px; text-decoration:underline; text-underline-offset:2px; white-space:nowrap; }
+</style>
+
+<div class="adm-ov" id="adm-ficha-ov" onclick="if(event.target===this)_admFecharFicha()">
+  <div class="adm-modal">
+    <div class="adm-mh">
+      <div class="adm-mh-info">
+        <div class="adm-mh-nome" id="adm-mh-nome">—</div>
+        <div class="adm-mh-sub" id="adm-mh-sub"></div>
+        <div class="adm-mh-prog" id="adm-mh-prog"></div>
+      </div>
+      <button class="adm-mh-x" onclick="_admFecharFicha()">✕</button>
+    </div>
+    <div class="adm-mb" id="adm-mb"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  function supaP(){ return new Promise(function(res){ if(window.__lideresSupa) res(window.__lideresSupa); else window.addEventListener('lideres:supa',function(){res(window.__lideresSupa);},{once:true}); }); }
+  function TP(cb){ return supaP().then(function(s){ return cb(s.schema('tata_plus')); }); }
+  function E(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  var GRUPO_LABEL = { pessoais:'Dados pessoais', endereco:'Endereço', trabalho:'Trabalho e uniforme', bancario:'Dados bancários', dependente:'Dependentes', conducao:'Conduções (VT)' };
+  var GRUPO_ORDEM = ['pessoais','endereco','trabalho','bancario','dependente','conducao'];
+  var CAMPO_LABEL = { nome:'Nome completo', usa_nome_social:'Usa nome social', nome_social:'Nome social', cpf:'CPF', rg_numero:'RG', ctps_numero:'CTPS', nascimento:'Nascimento', telefone:'WhatsApp', email:'E-mail', estado_civil:'Estado civil', tem_dependentes:'Tem dependentes', qtd_dependentes:'Qtd. dependentes', escolaridade:'Escolaridade', restricao_saude:'Restrição de saúde', restricao_detalhe:'Detalhe da restrição', cep:'CEP', endereco:'Endereço', bairro:'Bairro', cidade_estado:'Cidade/UF', proposta:'Proposta', proposta_aceite:'Aceite da proposta', tam_camiseta:'Camiseta', tam_calca:'Calça', calcado:'Calçado', bibico:'Bibico', conta_itau:'Conta Itaú', tipo_conta:'Tipo de conta', agencia:'Agência', conta:'Conta', aceite:'Aceite do termo', vale_transporte:'Vale-transporte', qtd_conducoes:'Qtd. conduções', volta_conducoes:'Volta = ida?', qtd_conducoes_volta:'Qtd. conduções volta', parentesco:'Parentesco', operadora:'Operadora', linha:'Linha', valor:'Valor' };
+  function rot(c){ return CAMPO_LABEL[c] || c; }
+
+  var _rows = [], _token = null, _ficha = null;
+
+  window.renderPendentesPage = function(){
+    var c = document.getElementById('page-pendente'); if(!c) return;
+    c.innerHTML = '<div class="adm-empty">Carregando admissões…</div>';
+    TP(function(t){ return t.rpc('admissao_pendentes_listar'); }).then(function(r){
+      var lo=document.getElementById('loading-overlay'); if(lo) lo.classList.remove('show');
+      if(r.error){ c.innerHTML='<div class="adm-empty">Erro: '+E(r.error.message)+'</div>'; return; }
+      _rows = Array.isArray(r.data)? r.data : []; _renderLista();
+    }).catch(function(e){ c.innerHTML='<div class="adm-empty">Erro: '+E(e&&e.message||e)+'</div>'; });
+  };
+
+  function badge(st){ var m={liberado:['Aguardando preenchimento','b-neutro'],em_andamento:['Preenchendo','b-and'],enviado:['Enviado — validar','b-env']}; var v=m[st]||[st,'b-neutro']; return '<span class="adm-badge '+v[1]+'">'+E(v[0])+'</span>'; }
+  function dh(s){ if(!s) return '—'; var d=new Date(s); if(isNaN(d.getTime())) return '—'; var p=function(n){return n<10?'0'+n:n;}; return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+  function cpfMask(s){ s=(s||'').replace(/\D/g,''); return s.length>=11 ? s.slice(0,3)+'•••••'+s.slice(-3) : (s||'—'); }
+
+  function _renderLista(){
+    var c = document.getElementById('page-pendente'); if(!c) return;
+    if(!_rows.length){ c.innerHTML='<div class="adm-empty">Nenhuma admissão em andamento.</div>'; return; }
+    var html='<div class="adm-list-head">Admissões em andamento <span>('+_rows.length+')</span></div><div class="adm-cards">';
+    _rows.forEach(function(a){
+      var prog=(a.n_itens>0)?(a.n_validados+'/'+a.n_itens+' validados'):'sem dados';
+      html+='<div class="adm-card" onclick="_admAbrirFicha(\''+E(a.token)+'\')">'+
+        '<div class="adm-card-top"><span class="adm-card-nome">'+E(a.nome||'—')+'</span>'+badge(a.status)+'</div>'+
+        '<div class="adm-card-sub">'+E(a.cargo||'—')+' · '+E(a.unidade||'—')+'</div>'+
+        '<div class="adm-card-meta"><span>CPF '+cpfMask(a.cpf)+'</span><span>✓ '+prog+'</span><span>📎 '+(a.n_docs||0)+'</span>'+
+          (a.enviado_em?'<span>Enviado '+dh(a.enviado_em)+'</span>':'')+'</div>'+
+      '</div>';
+    });
+    c.innerHTML = html+'</div>';
+  }
+
+  window._admAbrirFicha = function(token){
+    _token = token;
+    document.getElementById('adm-mb').innerHTML='<div class="adm-empty">Carregando ficha…</div>';
+    document.getElementById('adm-ficha-ov').classList.add('show');
+    document.body.style.overflow='hidden';
+    _carregarFicha();
+  };
+  window._admFecharFicha = function(){ document.getElementById('adm-ficha-ov').classList.remove('show'); document.body.style.overflow=''; _ficha=null; renderPendentesPage(); };
+
+  function _carregarFicha(){
+    TP(function(t){ return t.rpc('admissao_ficha_get',{p_token:_token}); }).then(function(r){
+      if(r.error){ document.getElementById('adm-mb').innerHTML='<div class="adm-empty">Erro: '+E(r.error.message)+'</div>'; return; }
+      _ficha = r.data || {}; _renderFicha();
+    });
+  }
+
+  function _renderFicha(){
+    var a=_ficha.admissao||{}, resp=_ficha.respostas||[], docs=_ficha.documentos||[];
+    document.getElementById('adm-mh-nome').textContent = a.nome||'—';
+    document.getElementById('adm-mh-sub').textContent = (a.cargo||'—')+' · '+(a.unidade||'—')+' · CPF '+cpfMask(a.cpf);
+    var nv=resp.filter(function(x){return x.validado;}).length;
+    document.getElementById('adm-mh-prog').textContent = 'Validados: '+nv+'/'+resp.length+(docs.length?(' · '+docs.length+' anexo(s)'):'');
+    // agrupa
+    var byG={}; resp.forEach(function(x){ (byG[x.grupo]=byG[x.grupo]||[]).push(x); });
+    var grupos = GRUPO_ORDEM.filter(function(g){return byG[g];}).concat(Object.keys(byG).filter(function(g){return GRUPO_ORDEM.indexOf(g)<0;}));
+    var html='';
+    grupos.forEach(function(g){
+      html+='<div class="adm-sec"><div class="adm-sec-h"><span>'+E(GRUPO_LABEL[g]||g)+'</span>'+
+        '<button class="adm-add" onclick="_admToggleInc(\''+E(g)+'\')">+ incluir</button></div>';
+      html+='<div class="adm-inc" id="adm-inc-'+E(g)+'">'+
+        '<input id="adm-inc-campo-'+E(g)+'" placeholder="campo (ex.: rg_numero)" style="max-width:150px">'+
+        '<input id="adm-inc-valor-'+E(g)+'" placeholder="valor">'+
+        '<button class="adm-bsave" onclick="_admIncluir(\''+E(g)+'\')">Salvar</button></div>';
+      byG[g].forEach(function(it){ html+=_itemHtml(it); });
+      html+='</div>';
+    });
+    // documentos
+    html+='<div class="adm-sec"><div class="adm-sec-h"><span>Documentos / Anexos</span>'+
+      '<label class="adm-add" style="cursor:pointer">+ anexar<input type="file" id="adm-doc-file" style="display:none" onchange="_admUpload(this)"></label></div>';
+    if(!docs.length) html+='<div class="adm-empty" style="padding:14px">Nenhum anexo.</div>';
+    docs.forEach(function(d){
+      html+='<div class="adm-doc"><span class="adm-doc-slug">'+E(d.slug||'')+'</span>'+
+        '<span class="adm-doc-nome">'+E(d.nome||'arquivo')+'</span>'+
+        '<a href="#" onclick="_admVerDoc(\''+E(d.bucket)+'\',\''+E(d.path)+'\');return false;">ver</a>'+
+        '<button class="adm-ib del" title="Excluir" onclick="_admExcluirDoc(\''+E(d.id)+'\')">🗑</button></div>';
+    });
+    html+='</div>';
+    document.getElementById('adm-mb').innerHTML = html;
+  }
+
+  function _itemHtml(it){
+    var lbl = rot(it.campo) + (it.ordem?(' '+it.ordem):'') + (it.sentido?(' ('+it.sentido+')'):'');
+    return '<div class="adm-item'+(it.validado?' ok':'')+'" id="adm-it-'+E(it.id)+'">'+
+      '<input type="checkbox" class="adm-chk"'+(it.validado?' checked':'')+' onchange="_admValidar(\''+E(it.id)+'\',this.checked)">'+
+      '<div class="adm-item-body">'+
+        '<div class="adm-item-rot">'+E(lbl)+'</div>'+
+        '<div class="adm-item-val" id="adm-val-'+E(it.id)+'">'+E(it.valor||'—')+'</div>'+
+        (it.validacao_obs?'<div class="adm-item-obs">⚠ '+E(it.validacao_obs)+'</div>':'')+
+      '</div>'+
+      '<div class="adm-item-acts">'+
+        '<button class="adm-ib" title="Editar" onclick="_admEditar(\''+E(it.id)+'\')">✎</button>'+
+        '<button class="adm-ib del" title="Excluir" onclick="_admExcluirItem(\''+E(it.id)+'\')">🗑</button>'+
+      '</div></div>';
+  }
+
+  window._admValidar = function(id, val){
+    TP(function(t){ return t.rpc('admissao_item_validar',{p_id:id,p_validado:val,p_obs:null}); }).then(function(r){
+      if(r.error){ alert('Erro: '+r.error.message); return; }
+      var el=document.getElementById('adm-it-'+id); if(el) el.classList.toggle('ok', !!val);
+      var it=(_ficha.respostas||[]).filter(function(x){return String(x.id)===String(id);})[0]; if(it) it.validado=val;
+      var nv=(_ficha.respostas||[]).filter(function(x){return x.validado;}).length;
+      document.getElementById('adm-mh-prog').textContent='Validados: '+nv+'/'+(_ficha.respostas||[]).length+((_ficha.documentos||[]).length?(' · '+_ficha.documentos.length+' anexo(s)'):'');
+    });
+  };
+
+  window._admEditar = function(id){
+    var it=(_ficha.respostas||[]).filter(function(x){return String(x.id)===String(id);})[0]; if(!it) return;
+    var box=document.getElementById('adm-val-'+id); if(!box) return;
+    box.innerHTML='<div class="adm-edit"><textarea rows="2" id="adm-ed-'+id+'">'+E(it.valor||'')+'</textarea>'+
+      '<button class="adm-bsave" onclick="_admSalvarEdit(\''+E(id)+'\')">Salvar</button>'+
+      '<button class="adm-bcancel" onclick="_carregarFicha()">✕</button></div>';
+    var ta=document.getElementById('adm-ed-'+id); if(ta){ ta.focus(); }
+  };
+  window._admSalvarEdit = function(id){
+    var ta=document.getElementById('adm-ed-'+id); if(!ta) return; var v=ta.value;
+    TP(function(t){ return t.rpc('admissao_item_salvar',{p_id:id,p_token:_token,p_grupo:null,p_campo:null,p_valor:v,p_ordem:null,p_sentido:null}); }).then(function(r){
+      if(r.error){ alert('Erro: '+r.error.message); return; } _carregarFicha();
+    });
+  };
+
+  window._admToggleInc = function(g){ var el=document.getElementById('adm-inc-'+g); if(el) el.classList.toggle('show'); };
+  window._admIncluir = function(g){
+    var campo=(document.getElementById('adm-inc-campo-'+g)||{}).value||''; var valor=(document.getElementById('adm-inc-valor-'+g)||{}).value||'';
+    campo=campo.trim(); if(!campo){ alert('Informe o campo.'); return; }
+    TP(function(t){ return t.rpc('admissao_item_salvar',{p_id:null,p_token:_token,p_grupo:g,p_campo:campo,p_valor:valor,p_ordem:null,p_sentido:null}); }).then(function(r){
+      if(r.error){ alert('Erro: '+r.error.message); return; } _carregarFicha();
+    });
+  };
+
+  window._admExcluirItem = function(id){
+    if(!confirm('Excluir esta informação?')) return;
+    TP(function(t){ return t.rpc('admissao_item_excluir',{p_id:id}); }).then(function(r){
+      if(r.error){ alert('Erro: '+r.error.message); return; } _carregarFicha();
+    });
+  };
+
+  window._admVerDoc = function(bucket, path){
+    supaP().then(function(s){ return s.storage.from(bucket||'admissao-docs').createSignedUrl(path, 3600); }).then(function(r){
+      if(r.error || !r.data){ alert('Não foi possível abrir o anexo.'); return; }
+      window.open(r.data.signedUrl, '_blank');
+    }).catch(function(){ alert('Não foi possível abrir o anexo.'); });
+  };
+  window._admExcluirDoc = function(id){
+    if(!confirm('Excluir este anexo?')) return;
+    TP(function(t){ return t.rpc('admissao_doc_excluir',{p_id:id}); }).then(function(r){
+      if(r.error){ alert('Erro: '+r.error.message); return; } _carregarFicha();
+    });
+  };
+  window._admUpload = function(input){
+    var f=input.files&&input.files[0]; if(!f) return;
+    var slug = prompt('Tipo do documento (ex.: identidade, cpf_doc, residencia):','anexo'); if(slug===null){ input.value=''; return; }
+    var path = _token+'/'+(slug||'anexo')+'/'+Date.now()+'-'+f.name.replace(/[^\w.\-]/g,'_');
+    supaP().then(function(s){
+      return s.storage.from('admissao-docs').upload(path, f, {upsert:false}).then(function(up){
+        if(up.error){ throw up.error; }
+        return s.schema('tata_plus').rpc('admissao_doc_add',{p_token:_token,p_slug:slug||'anexo',p_nome:f.name,p_mime:f.type,p_tamanho:f.size,p_path:path,p_bucket:'admissao-docs'});
+      });
+    }).then(function(r){ input.value=''; if(r&&r.error){ alert('Erro ao registrar: '+r.error.message); return; } _carregarFicha(); })
+      .catch(function(e){ input.value=''; alert('Falha no upload: '+(e&&e.message||e)); });
+  };
+
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape' && document.getElementById('adm-ficha-ov').classList.contains('show')) _admFecharFicha(); });
 })();
 </script>
 </body>
