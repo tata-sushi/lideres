@@ -1593,4 +1593,98 @@ PDF. Catálogo (`doc_tipo`) já estava certo, não precisou de update.
 Testado com Playwright: label do checkbox e `rp-header-title` do PDF
 confirmados batendo com o título oficial.
 
+**Feito (2026-09-28): novo termo em `admissao.html` — Ficha de Registro de
+Empregados. De longe o mais complexo até agora: replica um formulário
+oficial em "caixas" (RG, filiação, CTPS, título de eleitor, FGTS, PIS,
+cargo, dependentes) a partir de um PDF de referência que o usuário
+enviou.**
+
+**Investigação prévia (antes de escrever qualquer código):** mapeei os
+~30 campos do formulário contra as duas fontes disponíveis
+(`tata_plus.profiles`/`colaboradores_listar` e
+`dp_rh.admissao_respostas` via CPF) fazendo uma query `group by grupo,
+campo` na tabela de respostas real. Resultado:
+
+- **Com fonte automática:** Filiação (nome_pai/nome_mae), RG
+  (rg_numero — "Célula de Identidade" no formulário), CTPS número
+  (ctps_numero), Carteira de Reservista (reservista_tipo/ra/uf/
+  expedicao, combinados num campo só), Data de Nascimento, Estado
+  Civil, Grau de Instrução, Telefone, Endereço completo, PIS número,
+  PCD, e claro Matrícula/Nome/Cargo/Departamento/Data de Admissão/
+  Salário (mesmo mecanismo de cargos_salarios + fallback de proposta
+  já usado no Contrato de Experiência).
+- **Sem fonte em lugar nenhum hoje** (nem cadastro, nem ficha da
+  Sara): Série/UF da CTPS, Categoria (CTPS), Título de Eleitor,
+  Local/País de Nascimento, CBO, PIS (banco/agência/endereço/data de
+  cadastro). Viram campos manuais no modal, com placeholder "sem
+  fonte — preencher manualmente" (diferente do placeholder "preenchido
+  automaticamente — confira" dos campos com fonte, pra deixar claro
+  pro usuário RH qual é qual). Horário de Trabalho reaproveitou uma
+  lista pronta que já existia no código (`ADM_HORARIOS_OPCOES`,
+  criada antes pro Contrato de Experiência) — não é mais um campo sem
+  fonte, é um select com opções pré-definidas.
+
+Reportei esse mapeamento pro usuário antes de escrever código (RG/CPF
+tem fonte, mas ~9 campos não têm) — resposta foi "faz o PDF enquanto
+vejo os dados faltantes": implementação seguiu com os campos sem
+fonte como manuais, prontos pra virar auto-fill assim que uma fonte
+aparecer.
+
+**Layout novo, não reaproveitado dos outros termos.** Os termos
+existentes usam prosa jurídica (`.rp-section-body` com parágrafos);
+essa ficha é um formulário denso de campo único. Em vez de inventar
+CSS novo, reaproveitei o componente `.rp-intro`/`.rp-intro-field`
+que já existe (é o mesmo bloco cinza "Colaborador/Matrícula/Cargo/
+Unidade" do cabeçalho de todos os outros termos) — só repetido várias
+vezes, agrupado em seções (`.rp-section`) com o mesmo `.rp-section-
+label` de sempre: Filiação, Documentos, Dados Pessoais, Endereço,
+FGTS, PIS, Dados do Cargo, Dependentes (tabela `.rp-table`, mesmo
+padrão dos outros termos). Zero CSS novo precisou ser escrito.
+
+**Decisões de escopo, registradas aqui pra reversão fácil se o
+usuário discordar:**
+1. **Seção "Rescisão do contrato de trabalho" do formulário original
+   foi omitida.** No modelo em papel, essa seção só é preenchida
+   anos depois, na saída do colaborador — não faz sentido num PDF
+   gerado (e assinado digitalmente) no momento da admissão.
+2. **Bloco de assinatura física do colaborador também foi omitido**
+   — mesmo padrão de todos os outros termos (assinatura só digital,
+   rubrica+selfie no app).
+3. **Foto do colaborador não foi incluída nessa primeira versão.** A
+   ficha da Sara guarda uma selfie em storage (bucket
+   `admissao-docs`) só pra quem passou pela ficha nova — a maioria
+   dos colaboradores ativos hoje não tem. Perguntei ao usuário se
+   valia a pena buscar quando existir; sem resposta ainda, fica pra
+   uma iteração futura.
+4. **Dependentes: lista editável (mesmo padrão de linhas do
+   Salário-Família/Dependentes IR), não só leitura direta da ficha.**
+   Auto-preenche a partir de `_admDependentesAgrupar` quando a ficha
+   existe, mas o RH pode corrigir/adicionar/remover antes de gerar —
+   evita que uma ficha desatualizada vire um registro formal errado.
+
+**Vinculação:** `salário`/CTPS/RG/etc. usam CPF do colaborador
+selecionado pra buscar `dp_rh.admissao_respostas` (mesma infra já
+existente — `_admCarregarAdmissaoRespostas`). Unidade/CNPJ contratante
+é um select manual (mesmo padrão do Contrato de Experiência/
+Contribuição Sindical) — não dá pra inferir com segurança a partir do
+campo livre `unidade` do colaborador. Novo `doc_tipo` "Registro de
+Empregados" criado no catálogo (categoria "Contratos e Termos",
+requer assinatura).
+
+Testado com Playwright + mock completo (RPCs `colaboradores_listar`,
+`admissao_respostas_por_cpf`, `cargos_salarios_listar`,
+`doc_tipos_sandbox_listar`): todos os campos com fonte confirmados
+auto-preenchidos corretamente (pai/mãe/RG/CTPS/reservista/nascimento/
+estado civil/grau de instrução/endereço completo/telefone/PIS),
+dependente da ficha auto-populado na lista editável, validação
+bloqueando sem unidade selecionada, PDF final conferido (título,
+CNPJ da unidade escolhida, todos os dados pessoais, CPF formatado,
+dependente na tabela, cabeçalho com matrícula/nome, sem linha de
+assinatura física). Conferência visual do PDF renderizado — achado e
+corrigido um bug de layout real nessa primeira rodada: o campo
+"Horário de Trabalho" (texto longo) dividindo a mesma linha com mais
+6 campos ficava espremido numa coluna estreita, quebrando o texto
+palavra por palavra verticalmente; corrigido movendo esse campo pra
+sua própria linha inteira dentro da seção "Dados do Cargo".
+
 _Última atualização: 2026-09-28._
