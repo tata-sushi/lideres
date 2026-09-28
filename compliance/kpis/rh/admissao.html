@@ -5964,17 +5964,29 @@ window.toggleFta = toggleFta;
   function _outlookCompose(assunto, corpo){
     return 'https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(EMAIL_DP)+'&subject='+encodeURIComponent(assunto)+'&body='+encodeURIComponent(corpo);
   }
-  window._admEnviarEmail = function(){
-    if(!_ficha) return;
-    var resp=_ficha.respostas||[]; var faltam=resp.filter(function(x){return !x.validado;}).length;
-    if(faltam>0 && !confirm('Faltam '+faltam+' item(ns) sem validar. Enviar para o DP mesmo assim?')) return;
-    // corpo completo (com links dos documentos); se a URL ficar grande demais, usa a versão só com nomes
+  function _enviarViaOutlook(){
     _corpoComDocs(function(assunto, corpo){
       var url=_outlookCompose(assunto, corpo);
       if(url.length>8000){ var m=_corpoNomes(); url=_outlookCompose(m.assunto, m.corpo); }
       var w=window.open(url, '_blank');
       if(!w){ alert('Não consegui abrir o Outlook (pop-up bloqueado?). Use "Copiar corpo" e cole no e-mail (destinatário: '+EMAIL_DP+').'); }
     });
+  }
+  window._admEnviarEmail = function(){
+    if(!_ficha) return;
+    var resp=_ficha.respostas||[]; var faltam=resp.filter(function(x){return !x.validado;}).length;
+    if(faltam>0 && !confirm('Faltam '+faltam+' item(ns) sem validar. Enviar para o DP mesmo assim?')) return;
+    var tok=(_ficha.admissao||{}).token || _token;
+    var btn=document.querySelector('.adm-mf-send'); var old = btn?btn.textContent:'';
+    if(btn){ btn.disabled=true; btn.textContent='Enviando…'; }
+    function done(){ if(btn){ btn.disabled=false; btn.textContent=old||'📧 Enviar para o DP'; } }
+    // 1) tenta envio automático com ANEXOS (Resend via Edge); 2) se não configurado/erro, abre o Outlook web
+    supaP().then(function(s){ return s.functions.invoke('admissao-email', { body:{ token: tok } }); }).then(function(r){
+      done();
+      var d = r && r.data;
+      if (d && d.ok){ alert('E-mail enviado ao DP ('+(d.para||'DP')+') com '+(d.anexos||0)+' anexo(s). ✅'); return; }
+      _enviarViaOutlook();   // sem_config / falha → fallback Outlook web
+    }).catch(function(){ done(); _enviarViaOutlook(); });
   };
   window._admCopiarCorpo = function(){
     if(!_ficha) return;
