@@ -5684,6 +5684,11 @@ window.toggleFta = toggleFta;
 .adm-doc-nome { flex:1; min-width:0; font-size:13px; color:#111; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .adm-doc-slug { font-family:'DM Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:.4px; color:#999; }
 .adm-doc a { color:#1A3A5C; font-size:12px; text-decoration:underline; text-underline-offset:2px; white-space:nowrap; }
+.adm-mf { background:#fff; border-top:1px solid #E2E2E2; padding:12px 16px; display:flex; gap:8px; justify-content:flex-end; align-items:center; flex-shrink:0; }
+.adm-mf-send { background:#35383F; color:#CFFF00; border:none; border-radius:8px; padding:10px 16px; font-family:'DM Mono',monospace; font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; cursor:pointer; }
+.adm-mf-send:hover { opacity:.9; }
+.adm-mf-copy { background:#F4F4F4; color:#555; border:1px solid #E2E2E2; border-radius:8px; padding:10px 14px; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.4px; text-transform:uppercase; cursor:pointer; }
+.adm-mf-copy:hover { border-color:#35383F; color:#111; }
 </style>
 
 <div class="adm-ov" id="adm-ficha-ov" onclick="if(event.target===this)_admFecharFicha()">
@@ -5697,11 +5702,16 @@ window.toggleFta = toggleFta;
       <button class="adm-mh-x" onclick="_admFecharFicha()">✕</button>
     </div>
     <div class="adm-mb" id="adm-mb"></div>
+    <div class="adm-mf">
+      <button class="adm-mf-copy" onclick="_admCopiarCorpo()">Copiar corpo</button>
+      <button class="adm-mf-send" onclick="_admEnviarEmail()">📧 Enviar para o DP</button>
+    </div>
   </div>
 </div>
 
 <script>
 (function(){
+  var EMAIL_DP = 'equipe5.dp@cadis.com.br';
   function supaP(){ return new Promise(function(res){ if(window.__lideresSupa) res(window.__lideresSupa); else window.addEventListener('lideres:supa',function(){res(window.__lideresSupa);},{once:true}); }); }
   function TP(cb){ return supaP().then(function(s){ return cb(s.schema('tata_plus')); }); }
   function E(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
@@ -5899,6 +5909,62 @@ window.toggleFta = toggleFta;
       });
     }).then(function(r){ input.value=''; if(r&&r.error){ alert('Erro ao registrar: '+r.error.message); return; } _carregarFicha(); })
       .catch(function(e){ input.value=''; alert('Falha no upload: '+(e&&e.message||e)); });
+  };
+
+  // ── E-mail para o DP (mailto pré-preenchido) ──
+  function _montarCorpo(){
+    var a=_ficha.admissao||{}, resp=(_ficha.respostas||[]).slice();
+    var proposta=resp.filter(function(x){return x.grupo==='trabalho'&&x.campo==='proposta';}).map(function(x){return x.valor;})[0]||'';
+    var L=[];
+    L.push('ADMISSÃO — '+(a.nome||'—'));
+    if(a.protocolo) L.push('Protocolo: '+a.protocolo);
+    L.push('Cargo: '+(a.cargo||'—')+'  |  Unidade: '+(a.unidade||'—'));
+    L.push('CPF: '+(a.cpf||'—'));
+    L.push('');
+    var byG={}; resp.forEach(function(x){ if(x.grupo==='trabalho'&&x.campo==='proposta') return; (byG[x.grupo]=byG[x.grupo]||[]).push(x); });
+    var ordem=GRUPO_ORDEM.filter(function(g){return byG[g];}).concat(Object.keys(byG).filter(function(g){return GRUPO_ORDEM.indexOf(g)<0;}));
+    ordem.forEach(function(g){
+      L.push('— '+(GRUPO_LABEL[g]||g).toUpperCase()+' —');
+      byG[g].forEach(function(it){ var lbl=rot(it.campo)+(it.ordem?(' '+it.ordem):'')+(it.sentido?(' ('+it.sentido+')'):''); L.push(lbl+': '+(it.valor||'—')); });
+      L.push('');
+    });
+    if(proposta){ L.push('— PROPOSTA —'); L.push(proposta); L.push(''); }
+    var assunto='Admissão — '+(a.nome||'')+' · '+(a.cargo||'')+' · '+(a.unidade||'')+(a.protocolo?(' ('+a.protocolo+')'):'');
+    return { assunto:assunto, base:L.join('\n'), docs:(_ficha.documentos||[]) };
+  }
+  function _corpoComDocs(cb){
+    var m=_montarCorpo(), docs=m.docs||[];
+    if(!docs.length){ cb(m.assunto, m.base+'— DOCUMENTOS —\n(nenhum anexo)\n'); return; }
+    supaP().then(function(s){
+      return Promise.all(docs.map(function(d){
+        if(!d.path) return Promise.resolve(null);
+        return s.storage.from(d.bucket||'admissao-docs').createSignedUrl(d.path, 604800)
+          .then(function(r){ return { slug:d.slug, nome:d.nome||'arquivo', url:(r&&r.data&&r.data.signedUrl)||'' }; })
+          .catch(function(){ return { slug:d.slug, nome:d.nome||'arquivo', url:'' }; });
+      }));
+    }).then(function(list){
+      var t='— DOCUMENTOS (links válidos por 7 dias) —\n';
+      list.filter(Boolean).forEach(function(x){ t+=(x.slug?(x.slug+': '):'')+x.nome+'\n'+(x.url||'(link indisponível)')+'\n'; });
+      cb(m.assunto, m.base+t);
+    }).catch(function(){ cb(m.assunto, m.base+'— DOCUMENTOS —\n(links indisponíveis)\n'); });
+  }
+  function _fallbackCopy(txt){ try{ var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); alert('Conteúdo do e-mail copiado — cole no seu e-mail.'); }catch(e){ alert('Não foi possível copiar.'); } }
+  function _copiar(txt){ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){ alert('Conteúdo do e-mail copiado — cole no seu e-mail.'); }, function(){ _fallbackCopy(txt); }); } else _fallbackCopy(txt); }
+  function _abrirMailto(href){ var a=document.createElement('a'); a.href=href; a.target='_top'; a.style.display='none'; document.body.appendChild(a); a.click(); setTimeout(function(){ try{document.body.removeChild(a);}catch(e){} },200); }
+
+  window._admEnviarEmail = function(){
+    if(!_ficha) return;
+    var resp=_ficha.respostas||[]; var faltam=resp.filter(function(x){return !x.validado;}).length;
+    if(faltam>0 && !confirm('Faltam '+faltam+' item(ns) sem validar. Enviar para o DP mesmo assim?')) return;
+    _corpoComDocs(function(assunto, corpo){
+      var href='mailto:'+EMAIL_DP+'?subject='+encodeURIComponent(assunto)+'&body='+encodeURIComponent(corpo);
+      if(href.length>1900){ alert('O e-mail ficou grande para abrir automaticamente. Copiei o conteúdo — é só colar no seu e-mail (destinatário: '+EMAIL_DP+').'); _copiar('Para: '+EMAIL_DP+'\nAssunto: '+assunto+'\n\n'+corpo); return; }
+      _abrirMailto(href);
+    });
+  };
+  window._admCopiarCorpo = function(){
+    if(!_ficha) return;
+    _corpoComDocs(function(assunto, corpo){ _copiar('Para: '+EMAIL_DP+'\nAssunto: '+assunto+'\n\n'+corpo); });
   };
 
   document.addEventListener('keydown', function(e){ if(e.key==='Escape' && document.getElementById('adm-ficha-ov').classList.contains('show')) _admFecharFicha(); });
