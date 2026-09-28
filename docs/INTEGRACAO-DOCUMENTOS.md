@@ -1213,4 +1213,38 @@ Testado com Playwright + mock e conferência visual: cabeçalho agora
 com Colaborador/Matrícula/Cargo/Unidade, CNPJ da unidade selecionada
 continua aparecendo certo no corpo do texto.
 
+**Feito (2026-09-28): 4º passo — Contrato de Experiência, CTPS
+auto-preenchido.** Usuário pediu pra puxar 4 campos desse termo:
+CTPS número, série, salário fixo e data de admissão. Levantamento:
+
+- **CTPS número**: existe na ficha (`grupo=pessoais.ctps_numero`) —
+  agora auto-preenchido (`_admContratoCtpsAutoFill()`, mesmo padrão
+  dos outros: busca por CPF, preenche `#adm-ctr-ctps`, editável, não
+  quebra sem ficha correspondente).
+- **CTPS série**: **não existe em lugar nenhum da ficha** — só o
+  número foi capturado pela Sara até agora (confirmado varrendo todas
+  as chaves de `admissao_respostas`/`admissoes.dados`). Continua
+  campo manual, igual já era.
+- **Salário fixo**: já estava auto-preenchido desde a criação do
+  termo (`_admContratoSalarioAutoFill()`), mas **não vem da ficha** —
+  vem de `dp_rh.cargos_salarios` pelo `cargo_id` do colaborador. Não
+  existe um campo de salário limpo na ficha (só um texto livre
+  `trabalho/proposta` com a proposta inteira formatada em Markdown,
+  sem estrutura pra extrair valor de forma confiável) — a fonte
+  `cargos_salarios` continua sendo a correta/mais confiável pra esse
+  campo.
+- **Data de admissão**: já estava preenchida desde a criação do
+  termo (`ctx.admissaoIso = colabData.admissao`) — vem de
+  `tata_plus.profiles.data_admissao` (o cadastro oficial do
+  colaborador), não da ficha (que também não tem esse campo — é a
+  data em que a pessoa vira profile, não algo que ela preenche).
+
+Ou seja: dos 4 campos pedidos, só o CTPS número precisava de trabalho
+novo; os outros 3 já estavam cobertos (2 por fontes mais adequadas que
+a ficha, 1 [série] segue indisponível em qualquer fonte por enquanto).
+
+Testado com Playwright + mock: CTPS preenchido certo a partir do CPF,
+salário continua vindo de cargos_salarios, série continua manual,
+colaborador sem ficha não quebra.
+
 _Última atualização: 2026-09-28._
