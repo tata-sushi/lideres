@@ -1320,4 +1320,22 @@ R$ 21.000,00"): salário preenchido certo via fallback (10.000,00, não
 bloco final removido, documento termina em "São Paulo, DATA.".
 Conferência visual da página renderizada (screenshot).
 
+**Feito (2026-09-28): margem do rodapé corrigida ("São Paulo, DATA."
+colado na borda da página).** Depois de remover o bloco
+CONTRATADO(A)/CONTRATANTE (item anterior), a linha "São Paulo, DATA."
+virou o último parágrafo dentro de `.rp-section-body` — e a regra
+`.rp-p:last-child{margin-bottom:0;}` (usada em todos os termos pra
+não sobrar espaço extra no fim do texto corrido) zerava a margem
+inferior dela, deixando a linha raspando no rodapé da página.
+
+Todos os OUTROS termos já colocam essa linha numa div separada
+(`.rp-cidade-data`, com `margin:20px 0 24px` própria, FORA de
+`.rp-section`) — só o Contrato de Experiência tinha ficado diferente
+porque foi escrito com um `<p class="rp-p">` a mais no lugar.
+Corrigido pra usar o mesmo padrão `<div class="rp-cidade-data">` dos
+demais, restaurando a margem de baixo.
+
+Conferência visual da página renderizada confirmando o espaço
+correto antes da borda inferior.
+
 _Última atualização: 2026-09-28._
