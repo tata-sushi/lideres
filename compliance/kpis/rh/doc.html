@@ -500,13 +500,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="modal-body">
       <div class="ev-field">
         <span class="modal-section-title">Colaborador</span>
-        <select class="modal-select" id="dg-colab-select"></select>
+        <select class="modal-select" id="dg-colab-select" onchange="_dgColabSelectChanged()"></select>
       </div>
       <div class="ev-field">
         <span class="modal-section-title">Termos</span>
         <label class="ev-check"><input type="checkbox" id="dg-check-marcacao_ponto"><span>Termo de Resp. sobre a Marcação de Ponto</span></label>
         <label class="ev-check"><input type="checkbox" id="dg-check-japona_termica" onchange="_dgToggleCaJapona(this.checked)"><span>Termo de Resp. sobre Uso da Japona Térmica</span></label>
         <label class="ev-check"><input type="checkbox" id="dg-check-utensilios" onchange="_dgToggleUtensilios(this.checked)"><span>Termo de Resp. de Utilização de Utensílios Profissionais</span></label>
+        <label class="ev-check"><input type="checkbox" id="dg-check-fundo_fixo" onchange="_dgToggleFundoFixo(this.checked)"><span>Termo de Resp. de Fundo Fixo</span></label>
       </div>
       <div class="ev-field" id="dg-ca-wrap" style="display:none;">
         <span class="modal-section-title">Número do CA (Japona Térmica)</span>
@@ -518,6 +519,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <button type="button" class="modal-btn modal-btn-cancel" style="margin-top:2px;align-self:flex-start;padding:6px 14px;font-size:11px;" onclick="_dgUtensilioAddLinha()">+ Item</button>
         <span class="modal-section-title" style="margin-top:10px;">Observações sobre o estado dos utensílios</span>
         <textarea class="modal-input" id="dg-utensilios-obs" rows="2" placeholder="Opcional" style="resize:vertical;"></textarea>
+      </div>
+      <div class="ev-field" id="dg-fundo-fixo-wrap" style="display:none;">
+        <span class="modal-section-title">Valor do Fundo Fixo (R$)</span>
+        <input type="text" class="modal-input" id="dg-fundo-fixo-valor" placeholder="Ex.: 500,00">
+        <span class="modal-section-title" style="margin-top:10px;">CPF</span>
+        <input type="text" class="modal-input" id="dg-fundo-fixo-cpf" placeholder="preenchido automaticamente — confira">
       </div>
       <div class="field-value" id="dg-erro" style="display:none;color:#B93232;font-weight:400;font-size:12px;"></div>
     </div>
@@ -1547,7 +1554,8 @@ var DG_LOGO_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA
 var DG_DOCS = [
   { id: 'marcacao_ponto', nome: 'Termo de Resp. sobre a Marcação de Ponto', sectionLabel: 'Termo de Responsabilidade sobre a Marcação de Ponto', vias: 2 },
   { id: 'japona_termica',  nome: 'Termo de Resp. sobre Uso da Japona Térmica', sectionLabel: 'Termo de Responsabilidade sobre Uso da Japona Térmica', vias: 2 },
-  { id: 'utensilios', nome: 'Termo de Resp. de Utilização de Utensílios Profissionais', sectionLabel: 'Termo de Responsabilidade de Utilização de Utensílios Profissionais de Trabalho', vias: 2 }
+  { id: 'utensilios', nome: 'Termo de Resp. de Utilização de Utensílios Profissionais', sectionLabel: 'Termo de Responsabilidade de Utilização de Utensílios Profissionais de Trabalho', vias: 2 },
+  { id: 'fundo_fixo', nome: 'Termo de Resp. de Fundo Fixo', sectionLabel: 'Termo de Responsabilidade de Fundo Fixo', vias: 2 }
 ];
 
 // Texto jurídico idêntico ao de admissao.html (ADM_DOCS_CONTENT) — não reescrito.
@@ -1611,6 +1619,7 @@ function _dgBuildDocPageHtml(doc, ctx) {
   // tabela de itens preenchida na hora (mesmo padrão de admissao.html
   // especial-casando Vale Transporte com seu próprio builder).
   if (doc.id === 'utensilios') return _dgBuildUtensiliosPage(doc, ctx);
+  if (doc.id === 'fundo_fixo') return _dgBuildFundoFixoPage(doc, ctx);
   var rawContent = DG_DOCS_CONTENT[doc.id];
   if (typeof rawContent === 'function') rawContent = rawContent(ctx.colabNomeLimpo, ctx.caNumero);
   var paragraphs = typeof rawContent === 'string' ? rawContent : '';
@@ -1761,6 +1770,114 @@ function _dgBuildUtensiliosPage(doc, ctx) {
   );
 }
 
+function _dgFmtCpf(cpf) {
+  var d = String(cpf || '').replace(/\D/g, '');
+  if (d.length !== 11) return cpf || '';
+  return d.slice(0,3)+'.'+d.slice(3,6)+'.'+d.slice(6,9)+'-'+d.slice(9,11);
+}
+
+// Número inteiro (>=0) por extenso em pt-BR — cópia de admissao.html/beneficios.html
+// (_admExtensoInt/_extensoInt), independente pra não criar dependência entre arquivos.
+function _dgExtensoInt(num) {
+  num = Math.floor(Number(num) || 0);
+  if (num === 0) return 'zero';
+  var U = ['','um','dois','três','quatro','cinco','seis','sete','oito','nove','dez','onze','doze','treze','catorze','quinze','dezesseis','dezessete','dezoito','dezenove'];
+  var D = ['','','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+  var C = ['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
+  function c3(x) {
+    if (x === 0) return '';
+    if (x === 100) return 'cem';
+    var out = [], c = Math.floor(x/100), r = x%100;
+    if (c) out.push(C[c]);
+    if (r) { if (r < 20) out.push(U[r]); else { var d = Math.floor(r/10), u = r%10; out.push(u ? D[d]+' e '+U[u] : D[d]); } }
+    return out.join(' e ');
+  }
+  var chunks = [], t = num;
+  while (t > 0) { chunks.push(t%1000); t = Math.floor(t/1000); }
+  var eS = ['','mil','milhão','bilhão','trilhão'], eP = ['','mil','milhões','bilhões','trilhões'];
+  var parts = [];
+  for (var i = chunks.length-1; i >= 0; i--) {
+    var v = chunks[i]; if (v === 0) continue;
+    var txt = c3(v);
+    if (i === 1) txt = (v === 1) ? 'mil' : txt+' mil';
+    else if (i >= 2) txt = txt+' '+(v === 1 ? eS[i] : eP[i]);
+    parts.push({ v: v, txt: txt });
+  }
+  var res = '';
+  for (var k = 0; k < parts.length; k++) {
+    if (k === 0) { res = parts[k].txt; continue; }
+    var cur = parts[k];
+    var sep = (k === parts.length-1 && (cur.v < 100 || cur.v%100 === 0)) ? ' e ' : ', ';
+    res += sep + cur.txt;
+  }
+  return res;
+}
+function _dgExtensoReais(valor) {
+  var n = Math.round((Number(valor) || 0)*100);
+  var reais = Math.floor(n/100), cent = n%100, out = '';
+  if (reais > 0) {
+    var extR = _dgExtensoInt(reais);
+    var moeda = reais === 1 ? 'real' : 'reais';
+    if (/(milh(ão|ões)|bilh(ão|ões)|trilh(ão|ões))$/.test(extR)) moeda = 'de '+moeda;
+    out += extR+' '+moeda;
+  }
+  if (cent > 0) { if (out) out += ' e '; out += _dgExtensoInt(cent)+' '+(cent === 1 ? 'centavo' : 'centavos'); }
+  return out || 'zero real';
+}
+
+// Termo de Fundo Fixo: valor (R$) digitado pelo RH, extenso calculado na hora.
+// CPF puxado automático (matrícula -> tata_plus.colaboradores_listar) mas
+// editável, mesmo padrão de admissao.html. Texto jurídico copiado sem
+// reescrever — só o CPF identifica o colaborador (RG não existe em nenhuma
+// tabela de cadastro, trocado por CPF a pedido do usuário).
+function _dgBuildFundoFixoPage(doc, ctx) {
+  var valorNum = parseFloat(String(ctx.fundoFixoValor || '').replace(/\./g,'').replace(',','.')) || 0;
+  var valorFmt = 'R$ ' + valorNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var valorExtensoRaw = _dgExtensoReais(valorNum);
+  var valorExtenso = valorExtensoRaw.charAt(0).toUpperCase() + valorExtensoRaw.slice(1);
+  var corpo =
+    '<p class="rp-p">Eu, ' + escH(ctx.colabNomeLimpo) + ', portador do CPF nº ' + escH(_dgFmtCpf(ctx.fundoFixoCpf) || '—') + ', declaro ter recebido da empresa Tata Sushi, o valor de ' + valorFmt + ' (' + valorExtenso + ') para constituição do Fundo Fixo.</p>' +
+    '<p class="rp-p">Assumo o compromisso de armazenar o valor acima no cofre trancado com chave, a qual ficará sob a guarda e responsabilidade do gerente do restaurante.</p>' +
+    '<p class="rp-p">Comprometo-me a controlar rigorosamente os recursos financeiros sob minha responsabilidade, assim como, obedecer aos limites definidos, arquivar em local seguro todos os comprovantes dos pagamentos efetuados, para que possam ser conferidos e fiscalizados juntamente com o saldo em meu poder, sempre que necessário, por auditorias ou por quem for autorizado.</p>' +
+    '<p class="rp-p">Declaro ter conhecimento e estar de acordo com as regras para utilização e prestação de contas do Fundo Fixo descritas na Política de Utilização de Fundo Fixo, assim como, estou ciente que é vedado ao responsável pelo Fundo Fixo autorizar a movimentação de valores a título de pagamentos, recebimentos, gratificações etc., sem autorização prévia da gerência ou direção e que é proibido utilizar recursos do Fundo Fixo para prometer, oferecer ou dar, direta ou indiretamente, vantagem indevida a agente público ou a terceiros e utilizar os recursos do Fundo Fixo para realizar quaisquer ações ou omissões que constituam prática ilegal ou de corrupção, com base na Lei n° 12.846/2013, Decreto n° 8.420/2015.</p>' +
+    '<p class="rp-p">Concordo que sou responsável pelo valor recebido e mantido sob minha responsabilidade, devendo devolvê-lo em espécie e/ou prestação de contas à empresa quando solicitado, ou reembolsá-la pela diferença ou faltas que forem encontradas, além de estar sujeito às penalidades legais cabíveis, por qualquer irregularidade constatada.</p>';
+
+  return (
+    '<div class="page">' +
+      '<div class="rp-header">' +
+        '<img class="rp-logo" src="' + DG_LOGO_B64 + '" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' +
+        '<div class="rp-header-title">TERMO DE RESPONSABILIDADE DE FUNDO FIXO</div>' +
+        '<div class="rp-header-right">Emitido em <strong>' + escH(ctx.dateStr) + '</strong></div>' +
+      '</div>' +
+      '<div class="rp-intro">' +
+        '<div class="rp-intro-field grow">' +
+          '<span class="rp-intro-label">Colaborador</span>' +
+          '<span class="rp-intro-value">' + escH(ctx.colabNomeLimpo) + '</span>' +
+        '</div>' +
+        (ctx.colabMatricula ? (
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Matrícula</span>' +
+            '<span class="rp-intro-value">' + escH(ctx.colabMatricula) + '</span>' +
+          '</div>'
+        ) : '') +
+        '<div class="rp-intro-field">' +
+          '<span class="rp-intro-label">Cargo</span>' +
+          '<span class="rp-intro-value">' + escH(ctx.colabCargo || '—') + '</span>' +
+        '</div>' +
+        '<div class="rp-intro-field">' +
+          '<span class="rp-intro-label">Unidade</span>' +
+          '<span class="rp-intro-value">' + escH(ctx.colabUnidade || '—') + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="rp-section">' +
+        '<div class="rp-section-label">' + (doc.sectionLabel || 'Declaração') + '</div>' +
+        '<div class="rp-section-body">' + corpo + '</div>' +
+      '</div>' +
+      '<div class="rp-cidade-data">São Paulo, ' + escH(ctx.docDateFmt) + '</div>' +
+    '</div>'
+  );
+}
+
 // Renderiza a página de UM termo num iframe isolado e converte pra Blob PDF —
 // mesma técnica de admissao.html/_admHtmlParaPdfBlob (comentário completo lá).
 // html2pdf roda DENTRO do iframe (não no documento pai) porque html2canvas
@@ -1864,6 +1981,10 @@ function abrirDocGerar() {
   document.getElementById('dg-utensilios-wrap').style.display = 'none';
   document.getElementById('dg-utensilios-list').innerHTML = '';
   document.getElementById('dg-utensilios-obs').value = '';
+  document.getElementById('dg-check-fundo_fixo').checked = false;
+  document.getElementById('dg-fundo-fixo-wrap').style.display = 'none';
+  document.getElementById('dg-fundo-fixo-valor').value = '';
+  document.getElementById('dg-fundo-fixo-cpf').value = '';
   document.getElementById('dg-erro').style.display = 'none';
   var btn = document.getElementById('dg-btn-assinar');
   btn.disabled = false; btn.textContent = 'Enviar p/ Assinatura';
@@ -1913,6 +2034,46 @@ function _dgToggleUtensilios(checked) {
     document.getElementById('dg-utensilios-obs').value = '';
   }
 }
+
+// CPF por matrícula — RPC própria (tata_plus.colaboradores_listar, authenticated
+// only), NÃO a doc_colaboradores_sandbox_listar (essa é public+anon, não dá
+// pra colocar CPF nela sem vazar dado sensível pra sessão anônima). Cache
+// client-side, mesmo padrão dos outros lookups desse arquivo.
+var _dgColaboradoresCpfCache = null;
+function _dgCarregarColaboradoresCpf() {
+  if (_dgColaboradoresCpfCache) return Promise.resolve(_dgColaboradoresCpfCache);
+  var SB = window.__lideresSupa;
+  if (!SB) return Promise.resolve({});
+  return SB.schema('tata_plus').rpc('colaboradores_listar').then(function (r) {
+    if (r.error || !r.data) return {};
+    var mapa = {};
+    r.data.forEach(function (c) { mapa[c.matricula] = c.cpf; });
+    _dgColaboradoresCpfCache = mapa;
+    return mapa;
+  }).catch(function () { return {}; });
+}
+function _dgFundoFixoCpfAutoFill() {
+  var matricula = (document.getElementById('dg-colab-select') || {}).value || '';
+  var cpfEl = document.getElementById('dg-fundo-fixo-cpf');
+  if (!matricula || !cpfEl) return;
+  _dgCarregarColaboradoresCpf().then(function (mapa) {
+    var cpf = mapa[matricula];
+    if (cpf) cpfEl.value = cpf;
+  });
+}
+function _dgToggleFundoFixo(checked) {
+  document.getElementById('dg-fundo-fixo-wrap').style.display = checked ? '' : 'none';
+  if (checked) {
+    _dgFundoFixoCpfAutoFill();
+  } else {
+    document.getElementById('dg-fundo-fixo-valor').value = '';
+    document.getElementById('dg-fundo-fixo-cpf').value = '';
+  }
+}
+function _dgColabSelectChanged() {
+  var check = document.getElementById('dg-check-fundo_fixo');
+  if (check && check.checked) _dgFundoFixoCpfAutoFill();
+}
 function _dgUtensilioLerLinhas() {
   var c = document.getElementById('dg-utensilios-list');
   if (!c) return [];
@@ -1948,7 +2109,9 @@ function _dgMontarContexto(matricula) {
     dataAdmissao: _dgFmtData(colab.data_admissao), dataFmt: dataFmt, dateStr: dateStr,
     docDateFmt: dataFmt, caNumero: (document.getElementById('dg-ca') || {}).value || '',
     utensiliosItens: _dgUtensilioLerLinhas(),
-    utensiliosObs: ((document.getElementById('dg-utensilios-obs') || {}).value || '').trim()
+    utensiliosObs: ((document.getElementById('dg-utensilios-obs') || {}).value || '').trim(),
+    fundoFixoValor: (document.getElementById('dg-fundo-fixo-valor') || {}).value || '',
+    fundoFixoCpf: (document.getElementById('dg-fundo-fixo-cpf') || {}).value || ''
   };
 }
 
@@ -1965,6 +2128,15 @@ function _dgValidar(matricula, selecionados, errBox) {
     if (!itens.length || incompleto) {
       errBox.style.display = 'block';
       errBox.textContent = 'Preencha nome, quantidade e valor unitário de cada utensílio (marca e modelo são opcionais).';
+      return false;
+    }
+  }
+  if (selecionados.some(function (d) { return d.id === 'fundo_fixo'; })) {
+    var valor = (document.getElementById('dg-fundo-fixo-valor') || {}).value || '';
+    var cpf = (document.getElementById('dg-fundo-fixo-cpf') || {}).value || '';
+    if (!valor.trim() || !cpf.trim()) {
+      errBox.style.display = 'block';
+      errBox.textContent = 'Informe o valor do Fundo Fixo e o CPF do colaborador.';
       return false;
     }
   }

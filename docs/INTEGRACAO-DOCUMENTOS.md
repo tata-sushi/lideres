@@ -1338,4 +1338,62 @@ demais, restaurando a margem de baixo.
 Conferência visual da página renderizada confirmando o espaço
 correto antes da borda inferior.
 
+**Feito (2026-09-28): novo termo "Termo de Responsabilidade de Fundo
+Fixo" — primeiro termo criado direto no `doc.html`, não no
+`admissao.html`.** Diferença de escopo importante: `doc.html` é o
+fluxo "Gerar Documento" pra colaboradores **já ativos** (não passa
+pela ficha de admissão da Sara), então esse termo não usa a
+vinculação por CPF explorada nos itens anteriores — os dados vêm do
+cadastro atual do colaborador + de 2 campos preenchidos na hora
+(valor do Fundo Fixo, CPF).
+
+Texto fornecido pelo usuário tinha um campo "documento de identidade
+nº [RG]" além do CPF — like nos outros termos, `doc.html` não tem RG
+cadastrado em nenhuma fonte disponível hoje. Perguntei, resposta do
+usuário foi objetiva: **tirar o RG, manter só CPF** na cláusula de
+identificação. Texto final: "Eu, NOME, portador do CPF nº CPF,
+declaro ter recebido da empresa Tata Sushi, o valor de R$ X (VALOR
+POR EXTENSO)...".
+
+**CPF: achado de segurança, não estendi a RPC errada.** O modal
+"Gerar Documento" já carrega a lista de colaboradores via
+`public.doc_colaboradores_sandbox_listar()` (`docColaboradores`
+global). Conferi as grants dessa RPC no Supabase antes de mexer:
+**PUBLIC + anon + authenticated + service_role** — ela é
+deliberadamente aberta (é o padrão "sandbox" desse fluxo, mesma
+lógica de outras RPCs `_sandbox_` já documentadas nesse arquivo).
+Adicionar CPF nela vazaria CPF de todos os colaboradores pra sessão
+anônima. Em vez disso, o CPF do Fundo Fixo é buscado numa chamada
+separada pra `tata_plus.colaboradores_listar()` (grants
+postgres+authenticated só — já confirmadas certas em item anterior),
+cacheada em `_dgColaboradoresCpfCache` por matrícula. Campo vem
+pré-preenchido mas editável (mesmo padrão "sugestão, nunca trava" dos
+outros termos) — se a busca falhar ou o colaborador não tiver CPF
+cadastrado, o campo fica em branco e o usuário preenche na mão; a
+validação só exige que o campo não esteja vazio.
+
+Infra nova, tudo isolada dentro de `doc.html` (arquivo não compartilha
+utilitários com `admissao.html`, seguindo o padrão já estabelecido de
+duplicar em vez de importar entre páginas): `_dgFmtCpf`,
+`_dgExtensoInt`, `_dgExtensoReais` (formatação de CPF e valor por
+extenso), `_dgCarregarColaboradoresCpf()` /
+`_dgFundoFixoCpfAutoFill()` (busca + cache do CPF),
+`_dgBuildFundoFixoPage()` (monta a página do PDF, cabeçalho no mesmo
+padrão Colaborador/Matrícula/Cargo/Unidade dos outros termos). Novo
+`doc_tipo` criado no catálogo (`categoria` "Contratos e Termos",
+`requer_assinatura=true`). Checkbox some por padrão no modal; ao
+marcar, aparecem os 2 campos (valor + CPF) e o CPF tenta
+auto-preencher.
+
+Testado com Playwright + mock completo (8 RPCs de `loadAllData` +
+`colaboradores_listar` + `docs_enviar_para_assinatura` +
+`colaborador_documento_pendente_assinatura_sandbox_salvar`): checkbox
+aparece, campos aparecem ao marcar, CPF auto-preenchido a partir da
+matrícula selecionada, validação bloqueia sem valor/CPF preenchidos,
+título/cabeçalho/CPF formatado/valor formatado/valor por extenso/nome
+"Tata Sushi"/menção à Lei 12.846/2013 todos presentes no HTML gerado,
+texto **não** menciona RG/documento de identidade em nenhum ponto,
+espaçamento do rodapé (`rp-cidade-data`) correto. Conferência visual
+da página renderizada (screenshot com dados de teste).
+
 _Última atualização: 2026-09-28._
