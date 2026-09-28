@@ -1107,9 +1107,33 @@ colaborador com termo marcado refaz a busca, colaborador sem ficha não
 quebra nem preenche nada.
 
 Próximos candidatos a vincular pela mesma RPC (ainda não feitos):
-Declaração de Dependentes (`grupo=dependente` bate quase 1:1),
-Salário-Família (mesmo grupo, filtrando `parentesco=filho`), CTPS do
+Declaração de Dependentes (`grupo=dependente` bate quase 1:1), CTPS do
 Contrato de Experiência (`grupo=pessoais.ctps_numero`) e endereço do
 empregado no mesmo contrato (`grupo=endereco`).
+
+**Feito (2026-09-28): 2º passo — Salário-Família auto-preenchido.**
+Mesma RPC `admissao_respostas_por_cpf` (já criada no passo anterior),
+mesmo cache client-side. Novidade: `grupo=dependente` vem em linhas
+soltas (1 linha por campo: nome/nascimento/parentesco/cpf, agrupadas
+pelo `ordem` 1..5 que já vem da ficha) — `_admDependentesAgrupar()`
+junta essas linhas em 1 objeto por dependente. `_admFilhosAutoFill()`
+filtra só `parentesco="filho"` (case-insensitive) — o termo é
+especificamente sobre filhos, não sobre dependentes em geral (isso é
+o próximo passo, no termo "Declaração de Dependentes"). Datas vêm em
+dd/mm/yyyy (formato da ficha); novo helper `_admParaISO()` (inverso
+de `_admFmtAdmissao`) converte pra yyyy-mm-dd, que é o que o
+`<input type="date">` das linhas de filho entende.
+
+Mesmo comportamento do Dados Bancários: some a linha vazia inicial se
+achar filhos na ficha, fica editável, e se o colaborador não tiver
+ficha correspondente simplesmente não mexe em nada (sem erro, sem
+travar). Refaz a busca ao trocar de colaborador com o termo já
+marcado.
+
+Testado com Playwright + mock (3 dependentes fictícios: 2 filhos +
+1 cônjuge): só os 2 filhos entram na tabela, cônjuge fica de fora,
+datas convertidas certo pro formato do `<input type="date">`, cache
+reaproveitado ao desmarcar/remarcar, colaborador sem ficha não quebra
+(mantém o que já estava preenchido).
 
 _Última atualização: 2026-09-28._
