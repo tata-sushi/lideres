@@ -3210,6 +3210,8 @@ window.toggleFta = toggleFta;
     if (ctrCheck && ctrCheck.checked) _admContratoSalarioAutoFill();
     var bancoCheck = document.getElementById('admdoc_dados_bancarios');
     if (bancoCheck && bancoCheck.checked) _admBancoAutoFill();
+    var filhosCheck = document.getElementById('admdoc_salario_familia');
+    if (filhosCheck && filhosCheck.checked) _admFilhosAutoFill();
   }
 
   function openModalAdmissao() {
@@ -3586,6 +3588,18 @@ window.toggleFta = toggleFta;
     }
   }
 
+  // Agrupa as linhas soltas de grupo=dependente (uma linha por campo) em 1
+  // objeto por dependente, usando o "ordem" (1..5) que já vem da ficha.
+  function _admDependentesAgrupar(respostas) {
+    var porOrdem = {};
+    respostas.filter(function(r){ return r.grupo === 'dependente'; }).forEach(function(r) {
+      var k = r.ordem || 0;
+      if (!porOrdem[k]) porOrdem[k] = {};
+      porOrdem[k][r.campo] = r.valor;
+    });
+    return Object.keys(porOrdem).sort(function(a,b){ return a-b; }).map(function(k){ return porOrdem[k]; });
+  }
+
   function _admToggleSindicalRow(checked) {
     var row = document.getElementById('adm-sindical-row');
     if (row) row.style.display = checked ? 'block' : 'none';
@@ -3618,12 +3632,40 @@ window.toggleFta = toggleFta;
       };
     }).filter(function(f){ return f.nome || f.nascimento; });
   }
+  // Salário-Família: filhos declarados na ficha de admissão (grupo=dependente,
+  // filtrando parentesco="filho" — os demais parentescos ficam de fora, esse
+  // termo é só sobre filhos). Sugestão editável: some a linha vazia inicial
+  // se achar dependentes; se não achar nada, fica a linha vazia pra digitar.
+  function _admFilhosAutoFill() {
+    var sel = document.getElementById('adm-colab');
+    if (!sel || !sel.value) return;
+    var colabData = _admColabMap[sel.value] || {};
+    if (!colabData.cpf) return;
+    _admCarregarAdmissaoRespostas(colabData.cpf).then(function(respostas) {
+      var filhos = _admDependentesAgrupar(respostas).filter(function(d){
+        return String(d.parentesco || '').toLowerCase() === 'filho';
+      });
+      if (!filhos.length) return;
+      var c = document.getElementById('adm-filhos-rows');
+      if (!c) return;
+      c.innerHTML = '';
+      filhos.forEach(function(f) {
+        _admFilhoAddRow();
+        var rows = c.querySelectorAll('.filho-row-edit');
+        var last = rows[rows.length - 1];
+        last.querySelector('.filho-nome').value = f.nome || '';
+        last.querySelector('.filho-nasc').value = _admParaISO(f.nascimento) || '';
+      });
+    });
+  }
+
   function _admToggleFilhosRow(checked) {
     var row = document.getElementById('adm-filhos-row');
     if (row) row.style.display = checked ? 'block' : 'none';
     var c = document.getElementById('adm-filhos-rows');
     if (checked) {
       if (c && !c.children.length) _admFilhoAddRow();
+      _admFilhosAutoFill();
     } else {
       if (c) c.innerHTML = '';
     }
@@ -4024,6 +4066,19 @@ window.toggleFta = toggleFta;
     if (s.indexOf('-') !== -1) {
       var p = s.split('-');
       if (p.length === 3) return p[2].padStart(2,'0') + '/' + p[1].padStart(2,'0') + '/' + p[0];
+    }
+    return s;
+  }
+
+  // Inverso de _admFmtAdmissao: dd/mm/yyyy -> yyyy-mm-dd (formato que os
+  // <input type="date"> entendem). Usado ao auto-preencher datas que vêm da
+  // ficha de admissão (Sara), já em dd/mm/yyyy.
+  function _admParaISO(s) {
+    if (!s) return '';
+    s = String(s).trim();
+    if (s.indexOf('/') !== -1) {
+      var p = s.split('/');
+      if (p.length === 3) return p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
     }
     return s;
   }
