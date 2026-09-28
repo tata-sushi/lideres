@@ -1461,4 +1461,59 @@ unidade escolhida no caso do Equipamento, ausência de linha de
 assinatura física, `rp-cidade-data` presente). Conferência visual dos
 3 PDFs renderizados lado a lado (screenshot).
 
+**Feito (2026-09-28): 2 rodadas de ajustes nos termos novos de
+`doc.html`, achados em teste real pelo usuário.**
+
+1. **Cabeçalho padrão da template genérica de `doc.html` estava fora
+   do padrão do resto do portal.** `_dgBuildDocPageHtml` (usada por
+   Termo de Marcação de Ponto, Japona Térmica, Chaves e Imagens de
+   Segurança) tinha um 5º campo "Admissão" no cabeçalho de
+   identificação, junto de Colaborador/Matrícula/Cargo/Unidade — os
+   outros termos do portal (Salário-Família, Dependentes IR,
+   Contribuição Sindical, Contrato de Experiência, Fundo Fixo,
+   Equipamento) já usam só os 4 campos. Removido o campo "Admissão"
+   do cabeçalho genérico, unificando o padrão em todos os termos dos
+   dois arquivos (`admissao.html`/`doc.html`). Como o Termo de Uso de
+   Imagens de Segurança citava a data de admissão de forma relevante
+   pro texto, a informação não foi simplesmente descartada: movida
+   pra dentro da própria frase de identificação — "...inscrito(a) no
+   CPF sob o nº X, admitido(a) em DD/MM/AAAA, declaro...".
+
+2. **CPF não precisa mais aparecer como campo editável no modal —
+   só no PDF final.** Diferente do RG/CTPS (sem fonte de dados,
+   genuinamente precisam de entrada manual) ou do valor do Fundo
+   Fixo (dado que só existe na hora), o CPF já vem 100% confiável do
+   cadastro (`tata_plus.colaboradores_listar`), então expor um campo
+   de texto editável pra ele no modal era redundante e só adicionava
+   ruído visual. Trocado `<input type="text">` por
+   `<input type="hidden">` nos 4 termos que usam CPF (Fundo Fixo,
+   Chaves, Imagens de Segurança, Equipamento) — o auto-preenchimento
+   client-side continua rodando exatamente igual (mesmo
+   `_dgCpfAutoFillPara`), só não aparece mais na tela; o valor segue
+   embutido no PDF gerado normalmente. Mensagens de validação também
+   foram ajustadas: antes pediam pra "informar o CPF" (não fazia mais
+   sentido sem campo visível), agora avisam que o **CPF não foi
+   encontrado no cadastro** — sinal de um problema de dado real
+   (colaborador sem CPF cadastrado), não de um campo esquecido.
+
+3. **Termo de Equipamento simplificado: RG e CTPS/série removidos
+   por completo** (campo do modal, leitura, validação e cláusula de
+   identificação no texto) — ficou só CNPJ/unidade (selecionada) +
+   CPF (auto, oculto) + lista de equipamentos. Nome do termo também
+   ajustado: "Termo de Entrega, Uso e Responsabilidade de
+   Equipamento" → **"Termo de Entrega e Responsabilidade de
+   Equipamento"** (tirado o "Uso,"), tanto no `sectionLabel` de
+   `DG_DOCS` quanto no `doc_tipo` correspondente no catálogo
+   (`UPDATE` direto, já que é só metadado do catálogo, sem RPC
+   dedicada de rename).
+
+Testado com Playwright + mock: cabeçalho sem campo Admissão em todos
+os termos que usam a template genérica, frase de Imagens de Segurança
+com a data de admissão embutida, CPF confirmado como `<input
+type="hidden">` (não visível, mas com valor auto-preenchido) nos 4
+termos, validações com as mensagens novas, campos RG/CTPS/série
+confirmados removidos do modal e do texto do Termo de Equipamento,
+título do PDF batendo com o nome novo. Conferência visual dos PDFs
+renderizados (screenshot).
+
 _Última atualização: 2026-09-28._
