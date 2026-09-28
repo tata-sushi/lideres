@@ -1580,4 +1580,17 @@ corretamente no corpo, as 6 cláusulas a-f presentes, validação com a
 mensagem de CPF não encontrado no cadastro. Conferência visual dos 2
 PDFs renderizados lado a lado (screenshot).
 
+**Feito (2026-09-28): título do Termo de Chaves igualado em todo
+lugar.** `DG_DOCS.nome` (usado no checkbox do modal e no título do
+cabeçalho do PDF, `rp-header-title`) ainda estava com o rótulo curto
+antigo "Termo de Compromisso de Chaves", enquanto `sectionLabel`
+(rótulo da seção dentro do corpo) já tinha o título oficial completo
+desde a troca de texto do item anterior. Igualados os dois campos
+pro mesmo texto — "Termo de Compromisso de Recebimento e Utilização
+de Chave do Claviculário" — tanto no checkbox quanto no cabeçalho do
+PDF. Catálogo (`doc_tipo`) já estava certo, não precisou de update.
+
+Testado com Playwright: label do checkbox e `rp-header-title` do PDF
+confirmados batendo com o título oficial.
+
 _Última atualização: 2026-09-28._
