@@ -3771,17 +3771,40 @@ window.toggleFta = toggleFta;
       });
     }).catch(function(){ return {}; });
   }
+  // "Salário fixo de R$ 10.000,00 + prêmio e/ou gorjeta, com remuneração
+  // bruta aproximada de R$ 21.000,00" (texto livre em grupo=trabalho.proposta
+  // da ficha) — extrai só o valor do FIXO (não o bruto aproximado, que já
+  // inclui prêmio/gorjeta variáveis). Usado como fallback quando cargo_id do
+  // colaborador não casa com nenhuma linha de dp_rh.cargos_salarios (cargos
+  // administrativos às vezes usam um nome abreviado no cadastro, ex.: "Gerente
+  // De Rh" vs "Gerente de Recursos Humanos" no catálogo — não é só diferença
+  // de caixa, é um nome diferente mesmo, não dá pra normalizar por código).
+  function _admExtrairSalarioFixoProposta(texto) {
+    var m = String(texto || '').match(/Sal[aá]rio fixo de R\$\s*([\d.,]+)/i);
+    if (!m) return null;
+    var num = parseFloat(m[1].replace(/\./g,'').replace(',','.'));
+    return isNaN(num) ? null : num;
+  }
   function _admContratoSalarioAutoFill() {
     var sel = document.getElementById('adm-colab');
     var salarioEl = document.getElementById('adm-ctr-salario');
     if (!sel || !salarioEl || !sel.value) return;
     var colabData = _admColabMap[sel.value] || {};
-    if (!colabData.cargoId) return;
-    _admCarregarCargosSalarios().then(function(mapa) {
+    var porCargo = colabData.cargoId ? _admCarregarCargosSalarios().then(function(mapa) {
       var v = mapa[String(colabData.cargoId).toLowerCase()];
-      if (v === undefined || v === null || v === '') return;
+      if (v === undefined || v === null || v === '') return null;
       var num = Number(v);
-      if (!isNaN(num)) salarioEl.value = num.toFixed(2).replace('.', ',');
+      return isNaN(num) ? null : num;
+    }) : Promise.resolve(null);
+
+    porCargo.then(function(num) {
+      if (num !== null) { salarioEl.value = num.toFixed(2).replace('.', ','); return; }
+      if (!colabData.cpf) return;
+      _admCarregarAdmissaoRespostas(colabData.cpf).then(function(respostas) {
+        var proposta = _admAdmissaoValor(respostas, 'trabalho', 'proposta');
+        var numProposta = _admExtrairSalarioFixoProposta(proposta);
+        if (numProposta !== null) salarioEl.value = numProposta.toFixed(2).replace('.', ',');
+      });
     });
   }
   // CTPS nº — vem da ficha de admissão (grupo=pessoais.ctps_numero). A
@@ -4581,7 +4604,7 @@ window.toggleFta = toggleFta;
 
         '<div class="rp-intro">' +
           '<div class="rp-intro-field grow">' +
-            '<span class="rp-intro-label">Empregado</span>' +
+            '<span class="rp-intro-label">Colaborador</span>' +
             '<span class="rp-intro-value">'+esc(ctx.colabNomeLimpo)+'</span>' +
           '</div>' +
           (ctx.colabMatricula ? (
@@ -4591,8 +4614,12 @@ window.toggleFta = toggleFta;
             '</div>'
           ) : '') +
           '<div class="rp-intro-field">' +
-            '<span class="rp-intro-label">Unidade (CNPJ)</span>' +
-            '<span class="rp-intro-value">'+esc(ctx.ctrUnidade||'—')+' — '+esc(unidadeInfo.cnpj || '—')+'</span>' +
+            '<span class="rp-intro-label">Cargo</span>' +
+            '<span class="rp-intro-value">'+esc(ctx.colabCargo||'—')+'</span>' +
+          '</div>' +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Unidade</span>' +
+            '<span class="rp-intro-value">'+esc(ctx.colabUnidade||'—')+'</span>' +
           '</div>' +
         '</div>' +
 
@@ -4601,7 +4628,7 @@ window.toggleFta = toggleFta;
           '<div class="rp-section-body">' +
             '<p class="rp-p">Pelo presente instrumento particular de Contrato de Experiência, a empresa '+b(ADM_RAZAO_SOCIAL)+', estabelecida à '+b(enderecoUnidade)+', inscrita no CNPJ/CEI sob Nº '+b(unidadeInfo.cnpj||'—')+', denominada a seguir EMPREGADORA, e o(a) Sr(a) '+b(ctx.colabNomeLimpo)+', domiciliado à , - – CEP: -/, portador(a) da CTPS n.º '+b(ctx.ctrCtps||'—')+', e CPF Nº '+b(_admFmtCpf(ctx.colabCpf)||'—')+', doravante denominado(a) EMPREGADO, celebram o presente Contrato Individual de Trabalho para fins de experiência, conforme legislação trabalhista em vigor, regido pelas cláusulas abaixo e demais disposições legais vigentes.</p>' +
 
-            '<p class="rp-p">1. Fica o EMPREGADO admitido no quadro de funcionários da EMPREGADORA para exercer a função de '+b((ctx.colabCargo||'—').toUpperCase())+' mediante a remuneração bruta de '+b(salarioFmt+' - ('+salarioExtenso+') por mês')+'. A circunstância, porém, de ser a função especificada não importa na intransferibilidade do EMPREGADO para outra função, na qual demonstre melhor capacidade de adaptação desde que compatível com sua condição pessoal.</p>' +
+            '<p class="rp-p">1. Fica o EMPREGADO admitido no quadro de funcionários da EMPREGADORA para exercer a função de '+b((ctx.colabCargo||'—').toUpperCase())+' mediante a salário de registro de '+b(salarioFmt+' - ('+salarioExtenso+') por mês')+'. A circunstância, porém, de ser a função especificada não importa na intransferibilidade do EMPREGADO para outra função, na qual demonstre melhor capacidade de adaptação desde que compatível com sua condição pessoal.</p>' +
 
             '<p class="rp-p">2. O local de trabalho situa-se à '+b(enderecoUnidade)+', podendo a EMPREGADORA, a qualquer tempo, transferir o EMPREGADO a título temporário ou definitivo, tanto no âmbito da unidade para a qual foi admitido, como para outras unidades ou empresas do mesmo grupo, em qualquer localidade deste Estado ou do País; será pago o '+b('adicional de transferência temporária, conforme artigo 469 DA CLT parágrafos 1º e 2.º')+'<br>'+b('Aos funcionários que por ventura realizarem deslocamentos da empresa para realização de serviços externos, serão pagas despesas como: alimentação e transporte.')+'</p>' +
 
@@ -4633,10 +4660,6 @@ window.toggleFta = toggleFta;
             '<p class="rp-p" style="margin-top:12px;">Assim justos e contratados, firmam as partes o presente instrumento assinando de igual teor, para um só efeito, como EMPREGADORA e como EMPREGADO(A).</p>' +
 
             '<p class="rp-p" style="margin-top:18px;"><strong>São Paulo, '+esc(ctx.docDateFmt)+'.</strong></p>' +
-
-            '<p class="rp-p" style="margin-top:18px;"><strong>CONTRATADO(A):</strong> '+esc(ctx.colabNomeLimpo)+'<br><strong>CPF:</strong> '+esc(_admFmtCpf(ctx.colabCpf)||'—')+'</p>' +
-
-            '<p class="rp-p" style="margin-top:12px;"><strong>CONTRATANTE:</strong> '+esc(ADM_RAZAO_SOCIAL)+'<br><strong>CNPJ:</strong> '+esc(unidadeInfo.cnpj||'—')+'</p>' +
           '</div>' +
         '</div>' +
       '</div>'

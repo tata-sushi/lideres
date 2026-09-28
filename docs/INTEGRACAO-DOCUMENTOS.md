@@ -1279,4 +1279,45 @@ colaborador em "Pl", da tabela de cargos em "PL"): salário agora bate
 mesmo com a diferença de caixa; campo série confirmado removido do
 modal; PDF final sem menção solta a "série".
 
+**Feito (2026-09-28): mais 4 ajustes no Contrato de Experiência, de
+teste real.**
+
+1. **Cabeçalho padronizado** — igual aos outros termos ajustados
+   (Colaborador/Matrícula/Cargo/Unidade), no lugar do bloco anterior
+   (Empregado/Matrícula/Unidade (CNPJ)). CNPJ da unidade selecionada
+   continua na cláusula 1 do texto, sem perda de informação.
+2. **Texto da cláusula 1**: "mediante a remuneração bruta de" virou
+   "mediante a salário de registro de" (mesmo valor/extenso,
+   só o texto antes mudou).
+3. **Bloco final removido**: as linhas "CONTRATADO(A): ... CPF: ..." /
+   "CONTRATANTE: ... CNPJ: ..." saíram do documento — o texto agora
+   termina em "São Paulo, DATA." (o resto era redundante com o que já
+   aparece no início do contrato e no fluxo de assinatura digital).
+4. **Bug de verdade encontrado: cargo administrativo com nome
+   abreviado no cadastro não batia com o catálogo, mesmo depois do
+   fix de capitalização do PR anterior.** Ex.: `profiles.cargo_id` =
+   "Gerente **De Rh**-RH-Administrativo", mas
+   `dp_rh.cargos_salarios.cargo_id` só tem "Gerente **de Recursos
+   Humanos**-RH-Administrativo" — não é diferença de caixa, é um nome
+   diferente mesmo (abreviação "RH" vs nome completo), não dá pra
+   normalizar por código com segurança. Solução: **fallback pro texto
+   livre da proposta** (`grupo=trabalho.proposta`, que a Sara já monta
+   casando corretamente cargo+unidade — ver item "Proposta → salário
+   via casamento de cargo" no `git-claude/migracao.md`). Nova função
+   `_admExtrairSalarioFixoProposta()` extrai só o valor do **fixo**
+   via regex ("Salário fixo de R\$ X") — deliberadamente não usa a
+   "remuneração bruta aproximada" que aparece na mesma frase, porque
+   esse valor já inclui prêmio/gorjeta variável, e o correto pro
+   contrato é o fixo. `_admContratoSalarioAutoFill()` agora tenta
+   `cargos_salarios` primeiro e só cai nesse fallback se não achar
+   nada — sem regressão pros casos que já funcionavam.
+
+Testado com Playwright + mock reproduzindo o caso real (cargo_id
+abreviado sem match no catálogo, proposta com "Salário fixo de R$
+10.000,00 + prêmio e/ou gorjeta, com remuneração bruta aproximada de
+R$ 21.000,00"): salário preenchido certo via fallback (10.000,00, não
+21.000,00), cabeçalho no padrão novo, texto da cláusula 1 atualizado,
+bloco final removido, documento termina em "São Paulo, DATA.".
+Conferência visual da página renderizada (screenshot).
+
 _Última atualização: 2026-09-28._
