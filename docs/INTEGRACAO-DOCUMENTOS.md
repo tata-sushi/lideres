@@ -1106,11 +1106,6 @@ reaproveitamento do cache (mesma CPF não dispara 2ª chamada), troca de
 colaborador com termo marcado refaz a busca, colaborador sem ficha não
 quebra nem preenche nada.
 
-Próximos candidatos a vincular pela mesma RPC (ainda não feitos):
-Declaração de Dependentes (`grupo=dependente` bate quase 1:1), CTPS do
-Contrato de Experiência (`grupo=pessoais.ctps_numero`) e endereço do
-empregado no mesmo contrato (`grupo=endereco`).
-
 **Feito (2026-09-28): 2º passo — Salário-Família auto-preenchido.**
 Mesma RPC `admissao_respostas_por_cpf` (já criada no passo anterior),
 mesmo cache client-side. Novidade: `grupo=dependente` vem em linhas
@@ -1135,5 +1130,36 @@ Testado com Playwright + mock (3 dependentes fictícios: 2 filhos +
 datas convertidas certo pro formato do `<input type="date">`, cache
 reaproveitado ao desmarcar/remarcar, colaborador sem ficha não quebra
 (mantém o que já estava preenchido).
+
+**Feito (2026-09-28): 3º passo — CPF do dependente + Declaração de
+Dependentes (IR) auto-preenchida.** Usuário pediu pra trazer também o
+CPF do dependente (nem o modelo do Salário-Família nem o de
+Dependentes IR tinham coluna de CPF originalmente — confirmado com o
+usuário: adicionar mesmo assim, é comum em declaração de dependentes
+de IR na prática) e aproveitar que a Declaração de Dependentes tem a
+mesma estrutura de dados.
+
+- **CPF na tabela de filhos (Salário-Família):** campo novo
+  `.filho-cpf` na linha editável, lido em `_admFilhoReadRows()`,
+  preenchido em `_admFilhosAutoFill()`, e nova coluna "CPF" na tabela
+  do PDF (`_admSalarioFamiliaBuildPage`).
+- **Declaração de Dependentes (IR) — auto-preenchida pela 1ª vez:**
+  mesmo mecanismo dos outros dois termos (RPC `admissao_respostas_por_cpf`
+  + `_admDependentesAgrupar`), mas **sem filtro de parentesco** — ao
+  contrário do Salário-Família, que é só sobre filhos, esse termo é
+  sobre TODOS os dependentes (filho, cônjuge, pai, mãe). Nova função
+  `_admDependentesAutoFill()` + `_admDepParentescoParaRelacao()`
+  (normaliza acento/caixa e casa o `parentesco` da ficha com o value
+  do select `ADM_DEP_RELACOES` — os dois já usam a mesma codificação
+  sem acento: filho/conjuge/pai/mae). Campo `.dep-cpf` novo na linha,
+  nova coluna "CPF" na tabela do PDF
+  (`_admDependentesIrBuildPage`). Refaz a busca ao trocar de
+  colaborador com o termo marcado, mesmo padrão dos outros.
+
+Testado com Playwright + mock: Salário-Família só traz o filho (com
+CPF), Dependentes IR traz os dois (filho + cônjuge) com CPF e relação
+mapeada certa em cada um. Conferência visual das duas tabelas
+renderizadas (screenshot) confirmando a coluna CPF integrada ao
+padrão visual já usado.
 
 _Última atualização: 2026-09-28._
