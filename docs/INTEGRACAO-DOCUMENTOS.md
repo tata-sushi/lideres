@@ -1247,4 +1247,36 @@ Testado com Playwright + mock: CTPS preenchido certo a partir do CPF,
 salário continua vindo de cargos_salarios, série continua manual,
 colaborador sem ficha não quebra.
 
+**Feito (2026-09-28): 2 correções no Contrato de Experiência, achadas
+em teste real pelo usuário.**
+
+1. **Campo "Série / UF" removido.** Na prática o que a ficha captura
+   em `ctps_numero` já vem tudo junto (número + série, como o
+   candidato digitou pra Sara) — ter um campo separado no modal só
+   duplicava informação. Campo, leitura, validação e ctx (`ctrSerie`)
+   removidos por completo; o modal agora só tem "CTPS" (rótulo
+   simplificado). O texto do contrato também mudou: a frase "portador
+   da CTPS n.º X, série Y" virou só "portador da CTPS n.º X" — o valor
+   único do campo entra ali inteiro, sem repetir a palavra "série".
+
+2. **Bug real encontrado: salário fixo nunca aparecia auto-preenchido
+   pra quase ninguém.** Causa: `tata_plus.profiles.cargo_id` e
+   `dp_rh.cargos_salarios.cargo_id` têm **capitalização diferente no
+   nível do cargo** (ex.: profiles tem "Garçom **Pl**-Salão-Pinheiros",
+   cargos_salarios tem "Garçom **PL**-Salão-Pinheiros"). O lookup
+   exato (`mapa[cargoId]`) batia certo só pra **10 dos 136**
+   colaboradores ativos — os outros 126 ficavam sempre com o campo em
+   branco, mesmo tendo permissão de ver valores. Corrigido no front
+   (`_admCarregarCargosSalarios`/`_admContratoSalarioAutoFill`):
+   chave do mapa e da busca normalizadas pra minúsculo
+   (`.toLowerCase()`) — não precisou mexer no banco. Confirmado com
+   uma query direta no banco que 125/136 batem case-insensitive (os
+   11 restantes provavelmente têm cargo sem entrada em
+   `dp_rh.cargos`, não é problema de capitalização).
+
+Testado com Playwright + mock reproduzindo o bug real (cargo_id do
+colaborador em "Pl", da tabela de cargos em "PL"): salário agora bate
+mesmo com a diferença de caixa; campo série confirmado removido do
+modal; PDF final sem menção solta a "série".
+
 _Última atualização: 2026-09-28._
