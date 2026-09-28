@@ -1687,4 +1687,45 @@ corrigido um bug de layout real nessa primeira rodada: o campo
 palavra por palavra verticalmente; corrigido movendo esse campo pra
 sua própria linha inteira dentro da seção "Dados do Cargo".
 
+**Feito (2026-09-28): 2 ajustes na Ficha de Registro, achados em teste
+real — tabela de Dependentes compactada e foto do colaborador
+adicionada.**
+
+1. **Tabela de Dependentes destoava do resto da ficha.** O `.rp-table`
+   padrão (mesmo usado em Salário-Família/Utensílios/Equipamento) tem
+   texto sem negrito nas células — contrastando com as caixas
+   `.rp-intro-value` do resto dessa ficha em particular, que são
+   todas em negrito e mais compactas. Criada uma variante
+   `.rp-table-compact` (mesma paleta/zebra, só com padding menor e
+   texto em negrito/cor escura igual às caixas) e trocada só na
+   tabela de Dependentes desse termo — as tabelas dos outros termos
+   continuam com `.rp-table` original, sem mudança.
+
+2. **Foto do colaborador.** Confirmado pelo usuário: buscar da selfie
+   que a ficha da Sara já captura. Criada RPC nova
+   `tata_plus.admissao_foto_por_cpf(p_cpf)` (mesmo padrão de
+   segurança das outras — SECURITY DEFINER, grants só
+   postgres+authenticated, REVOKE FROM PUBLIC aplicado e conferido)
+   que resolve CPF → admissão mais recente → path do documento
+   `observacao='foto'` em `dp_rh.admissao_documentos` (tabela
+   normalizada — diferente do jsonb legado em `admissoes.documentos`
+   que eu tinha visto antes; achei essa tabela nova investigando a
+   RPC `admissao_ficha_get` já existente). Bucket `admissao-docs` é
+   privado; confirmei que a policy de SELECT já libera qualquer
+   sessão `authenticated` (sem precisar de mudança de RLS), então o
+   front gera uma signed URL (`storage.from('admissao-docs').
+   createSignedUrl(path, 3600)`) direto no client. Foto aparece como
+   uma miniatura ao lado da caixa Matrícula/Nome; quando não existe
+   (maioria dos colaboradores ativos hoje, que não passaram pela
+   ficha nova), o espaço simplesmente não aparece — sem placeholder
+   quebrado, mesmo padrão "sugestão, nunca trava".
+
+Testado com Playwright + mock (incluindo mock de `storage.from(...).
+createSignedUrl`): RPC chamada com o CPF certo, `createSignedUrl`
+chamada com bucket/path corretos, URL assinada cai no campo oculto e
+aparece na tag `<img>` do PDF gerado, tabela de Dependentes usando a
+classe compacta nova (com 2 dependentes de teste), caso sem foto
+confirmado não gerando `<img>` quebrada. Conferência visual do PDF
+renderizado com foto de teste.
+
 _Última atualização: 2026-09-28._

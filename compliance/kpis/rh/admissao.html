@@ -3449,6 +3449,7 @@ window.toggleFta = toggleFta;
               '<option value="">— Selecione —</option>' + fregUnidadeOpts +
             '</select>' +
           '</div>' +
+          '<input type="hidden" id="adm-freg-foto-url">' +
 
           '<div class="form-divider">Filiação</div>' +
           '<div class="form-row"><label class="form-label" for="adm-freg-pai">Pai</label><input class="form-input" type="text" id="adm-freg-pai" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
@@ -3988,7 +3989,7 @@ window.toggleFta = toggleFta;
       fregFgtsBanco: v('adm-freg-fgts-banco'), fregPisData: v('adm-freg-pis-data'), fregPisNumero: v('adm-freg-pis-numero'),
       fregPisBanco: v('adm-freg-pis-banco'), fregPisAgencia: v('adm-freg-pis-agencia'), fregPisEndereco: v('adm-freg-pis-endereco'),
       fregCbo: v('adm-freg-cbo'), fregSalario: v('adm-freg-salario'), fregFormaPagamento: v('adm-freg-forma-pagamento'),
-      fregHorario: v('adm-freg-horario')
+      fregHorario: v('adm-freg-horario'), fregFotoUrl: v('adm-freg-foto-url')
     };
   }
 
@@ -4020,11 +4021,35 @@ window.toggleFta = toggleFta;
   // Campos sem fonte hoje (Série/UF da CTPS, Categoria, Título de Eleitor,
   // Local/País de nascimento, CBO, PIS banco/agência/endereço) ficam em
   // branco pra preenchimento manual — ver docs/INTEGRACAO-DOCUMENTOS.md.
+  // Foto do colaborador — vem da selfie enviada na ficha de admissão (Sara),
+  // guardada em storage privado (bucket admissao-docs, RLS só authenticated).
+  // Só existe pra quem passou pela ficha nova; a maioria dos colaboradores
+  // ativos hoje não tem — nesse caso o campo fica vazio e a ficha sai sem
+  // foto (mesmo padrão "sugestão, nunca trava" dos outros campos).
+  function _admFregFotoAutoFill() {
+    var sel = document.getElementById('adm-colab');
+    if (!sel || !sel.value) return;
+    var colabData = _admColabMap[sel.value] || {};
+    if (!colabData.cpf) return;
+    comSupaPromise().then(function(supa) {
+      return supa.schema('tata_plus').rpc('admissao_foto_por_cpf', { p_cpf: colabData.cpf }).then(function(r) {
+        var path = (!r.error && r.data) ? r.data : null;
+        if (!path) return;
+        return supa.storage.from('admissao-docs').createSignedUrl(path, 3600).then(function(rs) {
+          var url = rs && rs.data && rs.data.signedUrl;
+          var el = document.getElementById('adm-freg-foto-url');
+          if (el && url) el.value = url;
+        });
+      });
+    }).catch(function(){});
+  }
+
   function _admFichaRegistroAutoFill() {
     var sel = document.getElementById('adm-colab');
     if (!sel || !sel.value) return;
     var colabData = _admColabMap[sel.value] || {};
     _admFregSalarioAutoFill();
+    _admFregFotoAutoFill();
     if (!colabData.cpf) return;
     _admCarregarAdmissaoRespostas(colabData.cpf).then(function(respostas) {
       if (!respostas.length) return;
@@ -4067,7 +4092,7 @@ window.toggleFta = toggleFta;
       _admFregDependentesAutoFill();
     } else {
       if (depRows) depRows.innerHTML = '';
-      ['adm-freg-unidade','adm-freg-pai','adm-freg-mae','adm-freg-rg','adm-freg-ctps','adm-freg-ctps-serie',
+      ['adm-freg-unidade','adm-freg-foto-url','adm-freg-pai','adm-freg-mae','adm-freg-rg','adm-freg-ctps','adm-freg-ctps-serie',
        'adm-freg-ctps-uf','adm-freg-reservista','adm-freg-categoria','adm-freg-titulo-eleitor','adm-freg-nascimento',
        'adm-freg-estado-civil','adm-freg-local-nascimento','adm-freg-uf-nascimento','adm-freg-grau-instrucao',
        'adm-freg-endereco','adm-freg-bairro','adm-freg-cep','adm-freg-cidade-uf','adm-freg-telefone',
@@ -4363,6 +4388,18 @@ window.toggleFta = toggleFta;
     '.rp-table td{padding:6px 8px;border-bottom:1px solid #eee;text-align:center;}',
     '.rp-table tbody td:first-child{text-align:left;}',
     '.rp-table tbody tr:nth-child(even){background:#f9f9f9;}',
+    /* tabela compacta (Ficha de Registro/Dependentes) — mesma paleta do
+       .rp-table normal, só com fonte/padding menores pra bater com a
+       densidade das caixas .rp-intro-value do resto da ficha. */
+    '.rp-table-compact{width:100%;border-collapse:collapse;margin:4px 0 6px;font-size:9px;}',
+    '.rp-table-compact thead tr{background:#35383F;color:#fff;}',
+    '.rp-table-compact th{padding:4px 8px;text-align:center;font-size:8px;text-transform:uppercase;letter-spacing:.4px;font-weight:600;color:#fff;}',
+    '.rp-table-compact th:first-child{text-align:left;}',
+    '.rp-table-compact td{padding:4px 8px;border-bottom:1px solid #eee;text-align:center;font-weight:700;color:#111;}',
+    '.rp-table-compact tbody td:first-child{text-align:left;}',
+    '.rp-table-compact tbody tr:nth-child(even){background:#f9f9f9;}',
+    /* foto (Ficha de Registro) — só a selfie da ficha de admissão, quando existe */
+    '.rp-foto-box{width:56px;height:56px;object-fit:cover;border-radius:4px;border:1px solid #ddd;flex-shrink:0;}',
     /* city/date */
     '.rp-cidade-data{font-size:11px;text-align:right;margin:20px 0 24px;color:#222;}',
     /* signatures */
@@ -4380,7 +4417,7 @@ window.toggleFta = toggleFta;
     'body{background:#fff;padding:0;}',
     '.page{box-shadow:none;width:100%;max-width:100%;padding:24px 36px 36px;',
     '-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
-    '.rp-intro-value,.rp-section-label,.rp-table thead tr,.rp-table tbody tr:nth-child(even){-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
+    '.rp-intro-value,.rp-section-label,.rp-table thead tr,.rp-table tbody tr:nth-child(even),.rp-table-compact thead tr,.rp-table-compact tbody tr:nth-child(even){-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
     '}'
   ].join('');
 
@@ -4945,9 +4982,9 @@ window.toggleFta = toggleFta;
         '<td>'+esc((ADM_DEP_RELACOES.find(function(r){ return r.v === d.relacao; }) || {}).l || '—')+'</td>' +
       '</tr>';
     }).join('');
-    var depTabela = '<table class="rp-table">' +
+    var depTabela = '<table class="rp-table-compact">' +
       '<thead><tr><th>Nome</th><th>Data de Nascimento</th><th>Parentesco</th></tr></thead>' +
-      '<tbody>' + (depLinhas || '<tr><td colspan="3" style="color:#999;">Nenhum dependente informado</td></tr>') + '</tbody>' +
+      '<tbody>' + (depLinhas || '<tr><td colspan="3" style="color:#999;font-weight:400;">Nenhum dependente informado</td></tr>') + '</tbody>' +
     '</table>';
 
     var salarioNum = parseFloat(String(ctx.fregSalario||'').replace(/\./g,'').replace(',','.')) || 0;
@@ -4963,7 +5000,10 @@ window.toggleFta = toggleFta;
 
         row(box('Empresa', ADM_RAZAO_SOCIAL, true) + box('CNPJ', unidadeInfo.cnpj)) +
         row(box('Endereço', unidadeInfo.endereco, true)) +
-        row(box('Matrícula', ctx.colabMatricula) + box('Nome', ctx.colabNomeLimpo, true)) +
+        row(
+          (ctx.fregFotoUrl ? '<img class="rp-foto-box" src="'+esc(ctx.fregFotoUrl)+'" alt="Foto">' : '') +
+          box('Matrícula', ctx.colabMatricula) + box('Nome', ctx.colabNomeLimpo, true)
+        ) +
 
         section('Filiação', row(
           box('Pai', ctx.fregPai, true) + box('Mãe', ctx.fregMae, true)
