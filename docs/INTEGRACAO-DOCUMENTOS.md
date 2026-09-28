@@ -1728,4 +1728,15 @@ classe compacta nova (com 2 dependentes de teste), caso sem foto
 confirmado não gerando `<img>` quebrada. Conferência visual do PDF
 renderizado com foto de teste.
 
+**Feito (2026-09-28): correção na tabela de Dependentes — peso da
+fonte errado.** O ajuste anterior tinha ido na direção oposta ao
+pedido: o usuário queria a fonte **mais fina** (mais leve), não mais
+grossa — "Era pra pegar o padrão da fonte da segunda tabela... a mais
+fina!". `.rp-table-compact td` estava com `font-weight:700` (igual às
+caixas `.rp-intro-value`, que são propositalmente em negrito); trocado
+pra `font-weight:400` (peso normal, sem negrito) com cor um pouco mais
+suave (`#333`), mantendo o padding/margem compactos do ajuste
+anterior — que esses sim estavam certos. Conferência visual da tabela
+renderizada isolada confirmando o texto mais fino.
+
 _Última atualização: 2026-09-28._
