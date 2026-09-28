@@ -1162,4 +1162,41 @@ mapeada certa em cada um. Conferência visual das duas tabelas
 renderizadas (screenshot) confirmando a coluna CPF integrada ao
 padrão visual já usado.
 
+**Feito (2026-09-28): ajustes de layout no Salário-Família e
+Dependentes (IR), a pedido do usuário via print.**
+
+- **Removido o subtítulo do cabeçalho** dos dois termos ("Concessão
+  de Salário-Família — Portaria MPAS nº 3.040/82" e "Do Imposto de
+  Renda na Fonte") — o texto completo já aparece no `rp-section-label`
+  logo abaixo, o subtítulo era redundante.
+- **Título do Salário-Família** trocado de "TERMO DE
+  RESPONSABILIDADE" pra "TERMO DE RESPONSABILIDADE SALÁRIO-FAMÍLIA".
+- **Cabeçalho de identificação padronizado** nos dois termos pro
+  mesmo padrão usado no resto do app (Colaborador/Matrícula/Cargo/
+  Unidade — o mesmo bloco que `_admBuildDocPageHtml` já usa pros
+  termos genéricos), no lugar do bloco customizado que cada um tinha
+  antes (Empregado+Empresa no Salário-Família; Nome+Empresa(CNPJ) no
+  Dependentes). O CNPJ, que saiu do cabeçalho do Dependentes, foi pro
+  corpo do texto (ver próximo item) — sem perda de informação.
+- **Dependentes IR:** trocado "não cabendo a V.Sa. (Fonte Pagadora)"
+  por "não cabendo à empresa **TATÁ SUSHI COMÉRCIO DE ALIMENTOS
+  LTDA** (CNPJ **&lt;número da unidade selecionada&gt;**)" — usa
+  `ADM_RAZAO_SOCIAL` + `unidadeInfo.cnpj` (já resolvidos por
+  `ctx.depUnidade`), mesmo padrão de negrito nos valores preenchidos
+  usado no resto do documento.
+- **Coluna "Grau de Parentesco" nova nos dois PDFs** — nenhum dos
+  dois modelos originais tinha essa coluna. No Salário-Família (que é
+  só sobre filhos) o valor é fixo "Filho(a)" em toda linha, já que
+  não existe seletor de parentesco nesse termo. No Dependentes IR é a
+  mesma coluna que já existia (antes rotulada "Relação Dependência"),
+  só renomeada pro termo pedido.
+
+Testado com Playwright + mock: cabeçalho com os 4 campos certos
+(Colaborador/Matrícula/Cargo/Unidade) nos dois termos, ausência do
+subtítulo antigo, novo título do Salário-Família, coluna "Grau de
+Parentesco" presente nos dois PDFs (fixa "Filho(a)" no Salário-
+Família), texto do Dependentes IR com empresa+CNPJ em negrito e sem
+menção a "Fonte Pagadora". Conferência visual das duas páginas
+renderizadas (screenshot).
+
 _Última atualização: 2026-09-28._
