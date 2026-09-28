@@ -5002,19 +5002,32 @@ window.toggleFta = toggleFta;
 <style>
 #page-pendente { padding: 4px 0 24px; }
 .adm-empty { text-align:center; padding:40px 16px; color:#888; font-family:'DM Mono',monospace; font-size:12px; letter-spacing:.4px; text-transform:uppercase; }
-.adm-list-head { font-family:'DM Mono',monospace; font-size:11px; font-weight:600; letter-spacing:.8px; text-transform:uppercase; color:#35383F; padding:14px 4px 10px; }
-.adm-list-head span { color:#999; font-weight:500; }
-.adm-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; }
-.adm-card { background:#fff; border:1px solid #E2E2E2; border-radius:8px; padding:14px; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
-.adm-card:hover { border-color:#35383F; box-shadow:0 2px 8px rgba(0,0,0,.06); }
-.adm-card-top { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
-.adm-card-nome { font-family:'DM Sans',sans-serif; font-size:15px; font-weight:700; color:#111; }
-.adm-card-sub { font-size:12.5px; color:#555; margin-bottom:8px; }
-.adm-card-meta { display:flex; flex-wrap:wrap; gap:10px; font-family:'DM Mono',monospace; font-size:10px; color:#888; letter-spacing:.3px; }
-.adm-badge { font-family:'DM Mono',monospace; font-size:9px; font-weight:600; letter-spacing:.4px; text-transform:uppercase; padding:3px 8px; border-radius:100px; white-space:nowrap; }
-.adm-badge.b-neutro { background:#EEE; color:#666; }
+/* card do dashboard (envolve a tabela) */
+.adm-card-wrap { background:#fff; border:1px solid #E2E2E2; border-radius:8px; padding:14px 20px 16px; margin:0 12px; }
+@media(min-width:768px){ #page-pendente { padding-left:24px; padding-right:24px; } .adm-card-wrap{ margin:0; } }
+.adm-card-title { font-family:'DM Mono',monospace; font-size:11px; letter-spacing:.8px; text-transform:uppercase; color:#35383F; font-weight:700; text-align:center; margin-bottom:14px; }
+.adm-card-title span { color:#999; font-weight:500; }
+/* tabela padrão portal */
+.adm-tbl-scroll { overflow-x:auto; }
+.adm-tbl { width:100%; border-collapse:collapse; min-width:720px; }
+.adm-tbl thead th { font-family:'DM Mono',monospace; font-size:10px; font-weight:500; letter-spacing:.8px; text-transform:uppercase; color:#999; padding:8px 8px; text-align:left; border-bottom:2px solid #35383F; white-space:nowrap; cursor:pointer; user-select:none; }
+.adm-tbl thead th:hover { color:#35383F; }
+.adm-tbl thead th.num { text-align:center; }
+.adm-tbl thead th .sa { color:#35383F; margin-left:3px; }
+.adm-tbl tbody tr { border-bottom:1px solid #E2E2E2; cursor:pointer; transition:background .12s; }
+.adm-tbl tbody tr:last-child { border-bottom:none; }
+.adm-tbl tbody tr:hover { background:#FAFAFA; }
+.adm-tbl tbody td { padding:9px 8px; font-family:'DM Sans',sans-serif; font-size:13px; color:#111; vertical-align:middle; white-space:nowrap; }
+.adm-tbl td.nome { font-weight:600; }
+.adm-tbl td.num { text-align:center; font-variant-numeric:tabular-nums; }
+.adm-tbl td.muted { color:#555; }
+.adm-badge { display:inline-flex; align-items:center; font-family:'DM Sans',sans-serif; font-size:10px; font-weight:500; letter-spacing:.3px; padding:3px 9px; border-radius:100px; white-space:nowrap; }
+.adm-badge.b-neutro { background:#E8F0FA; color:#1A3A5C; }
 .adm-badge.b-and { background:#FFF4DC; color:#7A4A00; }
 .adm-badge.b-env { background:#35383F; color:#CFFF00; }
+.adm-prog { display:inline-block; min-width:64px; }
+.adm-prog-bar { height:5px; background:#EEE; border-radius:100px; overflow:hidden; margin-top:3px; }
+.adm-prog-fill { height:100%; background:#35383F; border-radius:100px; }
 /* overlay ficha */
 .adm-ov { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:400; display:none; align-items:flex-end; justify-content:center; }
 .adm-ov.show { display:flex; }
@@ -5095,20 +5108,47 @@ window.toggleFta = toggleFta;
   function dh(s){ if(!s) return '—'; var d=new Date(s); if(isNaN(d.getTime())) return '—'; var p=function(n){return n<10?'0'+n:n;}; return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes()); }
   function cpfMask(s){ s=(s||'').replace(/\D/g,''); return s.length>=11 ? s.slice(0,3)+'•••••'+s.slice(-3) : (s||'—'); }
 
+  var _sort = { col:'enviado_em', dir:-1 };
+  var _COLS = [
+    { k:'nome', lbl:'Colaborador', cls:'' },
+    { k:'cargo', lbl:'Cargo', cls:'' },
+    { k:'unidade', lbl:'Unidade', cls:'' },
+    { k:'status', lbl:'Status', cls:'' },
+    { k:'validados', lbl:'Validados', cls:'num' },
+    { k:'n_docs', lbl:'Anexos', cls:'num' },
+    { k:'enviado_em', lbl:'Enviado', cls:'' }
+  ];
+  function _val(a, col){
+    if(col==='validados') return (a.n_itens>0)?(a.n_validados/a.n_itens):-1;
+    if(col==='n_docs') return a.n_docs||0;
+    if(col==='enviado_em') return a.enviado_em||'';
+    return (a[col]==null?'':String(a[col])).toLowerCase();
+  }
+  window._admSort = function(col){
+    if(_sort.col===col) _sort.dir=-_sort.dir; else { _sort.col=col; _sort.dir=(col==='enviado_em'||col==='validados'||col==='n_docs')?-1:1; }
+    _renderLista();
+  };
   function _renderLista(){
     var c = document.getElementById('page-pendente'); if(!c) return;
-    if(!_rows.length){ c.innerHTML='<div class="adm-empty">Nenhuma admissão em andamento.</div>'; return; }
-    var html='<div class="adm-list-head">Admissões em andamento <span>('+_rows.length+')</span></div><div class="adm-cards">';
-    _rows.forEach(function(a){
-      var prog=(a.n_itens>0)?(a.n_validados+'/'+a.n_itens+' validados'):'sem dados';
-      html+='<div class="adm-card" onclick="_admAbrirFicha(\''+E(a.token)+'\')">'+
-        '<div class="adm-card-top"><span class="adm-card-nome">'+E(a.nome||'—')+'</span>'+badge(a.status)+'</div>'+
-        '<div class="adm-card-sub">'+E(a.cargo||'—')+' · '+E(a.unidade||'—')+'</div>'+
-        '<div class="adm-card-meta"><span>CPF '+cpfMask(a.cpf)+'</span><span>✓ '+prog+'</span><span>📎 '+(a.n_docs||0)+'</span>'+
-          (a.enviado_em?'<span>Enviado '+dh(a.enviado_em)+'</span>':'')+'</div>'+
-      '</div>';
-    });
-    c.innerHTML = html+'</div>';
+    if(!_rows.length){ c.innerHTML='<div class="adm-card-wrap"><div class="adm-card-title">Admissões em andamento</div><div class="adm-empty">Nenhuma admissão em andamento.</div></div>'; return; }
+    var col=_sort.col, dir=_sort.dir;
+    var rows=_rows.slice().sort(function(a,b){ var va=_val(a,col), vb=_val(b,col); if(va<vb) return -1*dir; if(va>vb) return 1*dir; return 0; });
+    var ths=_COLS.map(function(cc){ var arw=(cc.k===col)?(dir>0?'↑':'↓'):'↕'; return '<th class="'+cc.cls+'" onclick="_admSort(\''+cc.k+'\')">'+E(cc.lbl)+'<span class="sa">'+arw+'</span></th>'; }).join('');
+    var body=rows.map(function(a){
+      var prog=(a.n_itens>0)?(a.n_validados+'/'+a.n_itens):'—';
+      var pct=(a.n_itens>0)?Math.round(100*a.n_validados/a.n_itens):0;
+      return '<tr onclick="_admAbrirFicha(\''+E(a.token)+'\')">'+
+        '<td class="nome">'+E(a.nome||'—')+'</td>'+
+        '<td class="muted">'+E(a.cargo||'—')+'</td>'+
+        '<td>'+E(a.unidade||'—')+'</td>'+
+        '<td>'+badge(a.status)+'</td>'+
+        '<td class="num"><span class="adm-prog">'+prog+(a.n_itens>0?'<span class="adm-prog-bar"><span class="adm-prog-fill" style="width:'+pct+'%"></span></span>':'')+'</span></td>'+
+        '<td class="num">'+(a.n_docs||0)+'</td>'+
+        '<td class="muted">'+(a.enviado_em?dh(a.enviado_em):'—')+'</td>'+
+      '</tr>';
+    }).join('');
+    c.innerHTML='<div class="adm-card-wrap"><div class="adm-card-title">Admissões em andamento <span>('+_rows.length+')</span></div>'+
+      '<div class="adm-tbl-scroll"><table class="adm-tbl"><thead><tr>'+ths+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
   window._admAbrirFicha = function(token){
