@@ -1516,4 +1516,29 @@ confirmados removidos do modal e do texto do Termo de Equipamento,
 título do PDF batendo com o nome novo. Conferência visual dos PDFs
 renderizados (screenshot).
 
+**Feito (2026-09-28): RG removido do Termo de Compromisso de Chaves —
+achado de teste real pelo usuário.** Mesma decisão já tomada no Fundo
+Fixo (RG sem fonte de dados no fluxo de `doc.html`, campo manual
+descartado a pedido do usuário), agora aplicada também em Chaves —
+identificação passa a ser só por CPF (auto-preenchido, oculto). Campo
+RG, leitura, validação e cláusula "portador dos documentos RG: X e
+CPF: Y" removidos; texto agora abre com "Eu, NOME, portador do CPF nº
+X, declaro que nesta data, recebi uma cópia da chave...". Com essa
+mudança, `doc.html` já não tem nenhum campo de RG manual sobrevivendo
+em termo algum (Fundo Fixo, Chaves e Equipamento já passaram por essa
+mesma simplificação).
+
+O usuário também reportou que o CPF ainda aparecia como campo visível
+no modal do Chaves — mas isso já tinha sido corrigido no PR anterior
+(`input type="hidden"`); o screenshot mostrado era de uma versão
+antiga em cache do navegador, não código desatualizado. Confirmado
+lendo o `doc.html` atual antes de mexer em qualquer coisa — nenhuma
+mudança de código foi necessária pra esse ponto.
+
+Testado com Playwright: campo RG confirmado ausente do modal e do
+texto gerado, CPF confirmado como `input type="hidden"` (auto-
+preenchido, sem label visível no wrap), validação com a mensagem de
+"CPF não encontrado no cadastro". Conferência visual do PDF
+renderizado.
+
 _Última atualização: 2026-09-28._
