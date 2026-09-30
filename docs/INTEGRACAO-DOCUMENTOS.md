@@ -21,8 +21,8 @@ pela admissão / Gerente de RH.
 
 **Pendência resolvida:** `doc.html` também foi convertido de sandbox pra
 autenticação real (`gate.js` + sessão real), então o botão "Ver" de um documento
-com `link_bucket='assinaturas'` já deve funcionar a partir dele — ainda não
-re-testado ponta a ponta depois da conversão.
+com `link_bucket='assinaturas'` funciona a partir dele — testado e confirmado
+funcionando pelo usuário (2026-09-30).
 
 - **Portal de Governança** (este repo, schema `dp_rh`) — gestão de documentos:
   catálogo (`doc_tipos`), instância por colaborador (`colaborador_documentos`),
@@ -1739,4 +1739,23 @@ suave (`#333`), mantendo o padding/margem compactos do ajuste
 anterior — que esses sim estavam certos. Conferência visual da tabela
 renderizada isolada confirmando o texto mais fino.
 
-_Última atualização: 2026-09-28._
+**Feito (2026-09-30): revisão de backlog — 3 pontas soltas fechadas.**
+
+1. **CBO na Ficha de Registro (marcado como "sem fonte" por engano no
+   levantamento original) — descartado, não será ligado.** Achei
+   depois que `dp_rh.cargos_salarios.cbo` existe e já vem de graça na
+   mesma RPC (`cargos_salarios_listar`) usada pro salário — seria um
+   fix rápido. Perguntei ao usuário se valia a pena corrigir; resposta
+   foi "dar como concluído e descartar". Campo continua manual no
+   modal, decisão final, não é mais um backlog em aberto.
+2. **Horário de Trabalho (`ADM_HORARIOS_OPCOES`) — lista aprovada
+   como definitiva.** Vinha marcada como fictícia/provisória desde o
+   Contrato de Experiência, esperando uma lista real do usuário;
+   confirmado que os valores atuais ficam como estão. Comentário no
+   código atualizado (removida a nota de "provisório").
+3. **Botão "Ver" de documento assinado em `doc.html`** (pendência
+   aberta desde a conversão sandbox→autenticação real de 22/08) —
+   usuário testou e confirmou que funciona. Nota atualizada no topo
+   deste documento.
+
+_Última atualização: 2026-09-30._
