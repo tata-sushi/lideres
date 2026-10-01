@@ -2081,4 +2081,60 @@ mão) — confirmado visualmente: "São Paulo, DATA." aparece logo após o
 último parágrafo, e o espaço em branco fica só depois dela, na borda
 inferior da página.
 
+**Feito (2026-10-01): quem pode enviar documento pra assinatura
+digital — achado que `profiles.lider` NÃO é a flag certa pra abrir
+isso caso a caso.** Usuário pediu pra liberar o envio (hoje só
+admin consegue, na prática) pros dois Assistentes de RH (Igor Victor
+Santos Pereira, matrícula 24540, e Sabrina Oliveira Nunes, matrícula
+24685 — `tata_plus.profiles.perfil = 'analista-rh'`).
+
+Quem bloqueia o envio é a própria RPC `tata_plus.
+docs_enviar_para_assinatura` (chamada por `admissao.html`,
+`estoqueadm.html`, `armarios.html` — mesmo esquema nos três):
+
+```sql
+if not (tata_plus.docs_pode_gerir() or tata_plus.eh_servico()) then
+  return jsonb_build_object('ok', false, 'erro', 'sem_permissao');
+end if;
+```
+
+`docs_pode_gerir()` original: admin (`profiles.perfil='admin'`) OU
+`profiles.lider = true`. **`lider` não é uma chave estreita** — é a
+flag geral de "é líder" usada em ~40 RPCs do Tatá Plus (avaliação de
+desempenho, sanções, reconhecimento, confirmar escala, HC programado,
+ranking, vagas...). Marcar `lider=true` nos dois assistentes abriria
+todas essas telas de líder, não só o envio de documento — usuário
+confirmou que não queria esse escopo.
+
+Corrigido ajustando só `tata_plus.docs_pode_gerir()` pra também
+aceitar `perfil = 'analista-rh'` (hoje = exatamente Igor e Sabrina,
+ninguém mais):
+
+```sql
+create or replace function tata_plus.docs_pode_gerir()
+returns boolean language sql stable security definer
+set search_path to 'tata_plus', 'public' as $function$
+  select tata_plus.escala_sou_admin()
+      or coalesce((select lider from tata_plus.profiles where matricula = tata_plus.minha_matricula()), false)
+      or coalesce((select perfil from tata_plus.profiles where matricula = tata_plus.minha_matricula()) = 'analista-rh', false);
+$function$;
+```
+
+`docs_pode_gerir()` só é usada pela família `docs_*` (`docs_auditoria`,
+`docs_carimbo_token`, `docs_comprovante`, `docs_enviar_para_assinatura`,
+`docs_registrar_carimbo`, `docs_status_por_referencia`) — não afeta
+nada fora do fluxo de documento/assinatura.
+
+Mudança só no banco (`tata_plus`, projeto `aoqsbusfrffapjglpqjk`),
+sem alteração de HTML/JS no repo `lideres` — a primeira tentativa
+(gating por `data-aba-id` no botão) foi descartada a pedido do
+usuário, porque ela só esconde/mostra o botão na tela; não altera a
+permissão real da RPC, que é quem de fato bloqueava.
+
+Lição pra próxima vez que pedirem pra liberar uma ação de
+documento/assinatura pra alguém: checar primeiro `docs_pode_gerir()`
+(admin, `lider`, ou agora também `analista-rh`) antes de pensar em
+mexer em `data-aba-id`/catálogo de governança — o controle real desse
+fluxo específico está no banco, não na página.
+
 _Última atualização: 2026-10-01._
