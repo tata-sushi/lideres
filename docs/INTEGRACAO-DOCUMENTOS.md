@@ -31,6 +31,20 @@ funcionando pelo usuário (2026-09-30).
 - **App Tatá Plus** (repo `tata-sushi/plus`, schema `tata_plus`) — assinatura do
   colaborador (rubrica + selfie → PDF carimbado). Já pronto (Fase 1).
 
+**Padrão a seguir em todo termo novo/existente — espaço reservado pro carimbo
+de assinatura na última página.** O app de assinatura carimba rubrica +
+identificação + "Comprovante de Assinatura Eletrônica" + IP/timestamp/hash
+logo depois do fim do texto do PDF que a gente manda (não é posição
+absoluta fixa na página). Se o conteúdo do termo preenche a última página
+até perto da borda, esse carimbo sobrepõe o texto — já aconteceu em
+produção no Contrato de Experiência (2026-10-01, achado via print de
+contrato real assinado). Sempre que um termo (novo ou numa futura edição de
+um existente) tiver texto correndo perto do fim da última página, reservar
+um bloco vazio (`<div style="height:150px;"></div>`, ajustável) logo depois
+do último parágrafo de conteúdo e antes da linha `.rp-cidade-data`. Termos
+mais curtos, com sobra natural de espaço no fim da página, não precisam
+disso.
+
 ## Estado atual deste lado (`dp_rh`)
 
 `colaborador_documentos` (tabela que guarda cada documento anexado/gerado por
