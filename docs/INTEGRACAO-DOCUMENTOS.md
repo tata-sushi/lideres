@@ -1955,4 +1955,52 @@ Testado com Playwright: confirmado que não sobra nenhuma caixa
 rotulada "Série" ou "UF" na página, caixa "CTPS" com o valor
 combinado "4327254 3805 SP". Conferência visual da página completa.
 
+**Feito (2026-10-01): bug real — UF de nascimento parou de
+auto-preencher porque um campo novo apareceu na ficha depois do
+levantamento original.** Usuário reportou "local de nascimento não
+está puxando (local_nascimento)". Conferi de novo `dp_rh.
+admissao_respostas` e achei `grupo=pessoais campo=local_nascimento`
+— **não existia na primeira investigação** (na época só tinha
+nascimento/estado_civil/escolaridade etc.; esse campo foi adicionado
+depois pela sessão que mantém a ficha da Sara, sem eu saber). Olhei o
+valor real de alguns registros: são siglas de UF ("SP", "AL") ou
+"Exterior" — ou seja, é a **UF de nascimento**, não a cidade, apesar
+do nome do campo sugerir "local". Cidade continua sem fonte (nenhum
+campo equivalente existe pra ela).
+
+Corrigido: `_admFichaRegistroAutoFill()` agora também preenche
+`adm-freg-uf-nascimento` a partir desse campo; placeholder do campo
+no modal trocado de "sem fonte — preencher manualmente" pra
+"preenchido automaticamente — confira" (campo de cidade continua com
+o placeholder antigo, esse não mudou). A caixa combinada "Local de
+Nascimento" do PDF (que já junta cidade+UF desde a reorganização
+anterior) passa a mostrar a UF sozinha quando só ela vem preenchida
+(ex.: "SP"), sem cidade.
+
+Lição: campos "sem fonte" documentados aqui não são permanentes — a
+ficha da Sara é mantida por outra sessão/repo e pode ganhar campos
+novos a qualquer momento sem aviso. Reconferi `dp_rh.
+admissao_respostas` por completo (`select distinct grupo, campo`) pra
+ver se mais algum campo "sem fonte" tinha surgido — e tinha: **3 a
+mais**, todos ligados agora na mesma rodada:
+
+- `pessoais.ctps_uf` — UF da CTPS (antes manual).
+- `pessoais.nacionalidade` — "Brasileira"/"Estrangeira" direto da
+  ficha (antes só um valor padrão fixo "Brasileira", sem checar a
+  ficha).
+- `pessoais.titulo_numero` + `titulo_zona` + `titulo_secao` — Título
+  de Eleitor completo (antes totalmente manual; combinados no mesmo
+  campo "N° / Zona / Seção" do modal, juntados com " / ").
+
+**Categoria (CTPS)** e **PIS banco/agência/endereço/data de
+cadastro** seguem genuinamente sem fonte — não achei campo
+equivalente pra nenhum deles na ficha. Esses continuam manuais.
+
+Testado com Playwright: os 4 campos (UF de nascimento, UF da CTPS,
+Nacionalidade, Título de Eleitor) confirmados auto-preenchendo a
+partir de uma ficha mockada com todos os campos novos, valores
+batendo exatamente com o formato esperado em cada um. Campo de
+cidade (local de nascimento) e Categoria confirmados continuando
+vazios/manuais.
+
 _Última atualização: 2026-10-01._
