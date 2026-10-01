@@ -2003,4 +2003,32 @@ batendo exatamente com o formato esperado em cada um. Campo de
 cidade (local de nascimento) e Categoria confirmados continuando
 vazios/manuais.
 
+**Feito (2026-10-01): Categoria (CTPS) removida + Horário puxado da
+proposta da ficha.** Dois pedidos do usuário, via print real de uma
+ficha de admissão:
+
+1. **Campo "Categoria" removido por completo** (modal, leitura e
+   exibição) — nunca teve fonte de dados e o usuário pediu pra tirar.
+   Linha 6 da "Informações Gerais" fica só com CTPS / Carteira de
+   Reservista.
+2. **Horário de Trabalho auto-preenchido a partir da proposta.** O
+   print mostrava a ficha com uma linha "Horário: 12:00 às 23:20
+   (intervalo de 4 horas)" dentro do texto livre de
+   `grupo=trabalho.proposta` (mesmo campo já usado pro fallback de
+   salário) — perguntado se dava pra puxar, e dava. Como o campo
+   "Horário" da Ficha de Registro é um `<select>` com opções fixas
+   (`ADM_HORARIOS_OPCOES`, já "lista definitiva" desde o fechamento
+   de backlog de 30/09), não dá pra simplesmente jogar o texto da
+   proposta no campo — regex extrai só início/fim
+   (`_admExtrairHorarioProposta`) e casa contra as opções da lista
+   (`_admHorarioParaOpcao`, por substring de início+fim) pra
+   selecionar a opção certa. Se não achar correspondência na lista,
+   fica em branco pro usuário selecionar manualmente (mesmo padrão
+   "sugestão, nunca trava").
+
+Testado com Playwright: campo Categoria confirmado ausente do modal e
+do PDF, select de Horário confirmado auto-selecionando "12:00 às
+23:20 - 4h intervalo" a partir de uma proposta de teste com "Horário:
+12:00 às 23:20 (intervalo de 4 horas)".
+
 _Última atualização: 2026-10-01._

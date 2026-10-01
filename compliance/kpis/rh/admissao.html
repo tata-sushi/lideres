@@ -3459,7 +3459,6 @@ window.toggleFta = toggleFta;
           '<div class="form-row"><label class="form-label" for="adm-freg-ctps-serie">Série</label><input class="form-input" type="text" id="adm-freg-ctps-serie" placeholder="sem fonte — preencher manualmente" onclick="event.stopPropagation()"></div>' +
           '<div class="form-row"><label class="form-label" for="adm-freg-ctps-uf">UF da CTPS</label><input class="form-input" type="text" id="adm-freg-ctps-uf" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
           '<div class="form-row"><label class="form-label" for="adm-freg-reservista">Carteira de Reservista</label><input class="form-input" type="text" id="adm-freg-reservista" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
-          '<div class="form-row"><label class="form-label" for="adm-freg-categoria">Categoria (CTPS)</label><input class="form-input" type="text" id="adm-freg-categoria" placeholder="sem fonte — preencher manualmente" onclick="event.stopPropagation()"></div>' +
           '<div class="form-row"><label class="form-label" for="adm-freg-titulo-eleitor">Título de Eleitor (N° / Zona / Seção)</label><input class="form-input" type="text" id="adm-freg-titulo-eleitor" placeholder="preenchido automaticamente — confira" onclick="event.stopPropagation()"></div>' +
 
           '<div class="form-divider">Dados pessoais</div>' +
@@ -3860,6 +3859,20 @@ window.toggleFta = toggleFta;
     var num = parseFloat(m[1].replace(/\./g,'').replace(',','.'));
     return isNaN(num) ? null : num;
   }
+  // "Horário: 12:00 às 23:20 (intervalo de 4 horas)" — mesmo texto livre da
+  // proposta (grupo=trabalho.proposta). Extrai só início/fim e casa contra
+  // ADM_HORARIOS_OPCOES (não dá pra usar o texto puro: a lista é um select
+  // com opções fixas, formatadas diferente — "12:00 às 23:20 - 4h intervalo").
+  function _admExtrairHorarioProposta(texto) {
+    var m = String(texto || '').match(/Hor[aá]rio:\s*(\d{1,2}:\d{2})\s*às\s*(\d{1,2}:\d{2})/i);
+    if (!m) return null;
+    return { inicio: m[1], fim: m[2] };
+  }
+  function _admHorarioParaOpcao(inicio, fim) {
+    return ADM_HORARIOS_OPCOES.find(function(op) {
+      return op.indexOf(inicio) !== -1 && op.indexOf(fim) !== -1;
+    }) || null;
+  }
   function _admContratoSalarioAutoFill() {
     var sel = document.getElementById('adm-colab');
     var salarioEl = document.getElementById('adm-ctr-salario');
@@ -3976,7 +3989,7 @@ window.toggleFta = toggleFta;
     return {
       fregPai: v('adm-freg-pai'), fregMae: v('adm-freg-mae'),
       fregRg: v('adm-freg-rg'), fregCtps: v('adm-freg-ctps'), fregCtpsSerie: v('adm-freg-ctps-serie'),
-      fregCtpsUf: v('adm-freg-ctps-uf'), fregReservista: v('adm-freg-reservista'), fregCategoria: v('adm-freg-categoria'),
+      fregCtpsUf: v('adm-freg-ctps-uf'), fregReservista: v('adm-freg-reservista'),
       fregTituloEleitor: v('adm-freg-titulo-eleitor'), fregNascimento: v('adm-freg-nascimento'),
       fregPaisNascimento: v('adm-freg-pais-nascimento'), fregEstadoCivil: v('adm-freg-estado-civil'),
       fregLocalNascimento: v('adm-freg-local-nascimento'), fregUfNascimento: v('adm-freg-uf-nascimento'),
@@ -4086,6 +4099,12 @@ window.toggleFta = toggleFta;
       set('adm-freg-cidade-uf', _admAdmissaoValor(respostas, 'endereco', 'cidade_estado'));
       set('adm-freg-telefone', _admAdmissaoValor(respostas, 'pessoais', 'telefone'));
       set('adm-freg-pis-numero', _admAdmissaoValor(respostas, 'pessoais', 'pis_numero'));
+      var proposta = _admAdmissaoValor(respostas, 'trabalho', 'proposta');
+      var horarioInfo = _admExtrairHorarioProposta(proposta);
+      if (horarioInfo) {
+        var opcaoHorario = _admHorarioParaOpcao(horarioInfo.inicio, horarioInfo.fim);
+        if (opcaoHorario) { var horEl = document.getElementById('adm-freg-horario'); if (horEl) horEl.value = opcaoHorario; }
+      }
     });
   }
 
@@ -4100,7 +4119,7 @@ window.toggleFta = toggleFta;
     } else {
       if (depRows) depRows.innerHTML = '';
       ['adm-freg-unidade','adm-freg-foto-url','adm-freg-pai','adm-freg-mae','adm-freg-rg','adm-freg-ctps','adm-freg-ctps-serie',
-       'adm-freg-ctps-uf','adm-freg-reservista','adm-freg-categoria','adm-freg-titulo-eleitor','adm-freg-nascimento',
+       'adm-freg-ctps-uf','adm-freg-reservista','adm-freg-titulo-eleitor','adm-freg-nascimento',
        'adm-freg-estado-civil','adm-freg-local-nascimento','adm-freg-uf-nascimento','adm-freg-grau-instrucao',
        'adm-freg-endereco','adm-freg-bairro','adm-freg-cep','adm-freg-cidade-uf','adm-freg-telefone',
        'adm-freg-pis-data','adm-freg-pis-numero','adm-freg-pis-banco','adm-freg-pis-agencia','adm-freg-pis-endereco',
@@ -5053,7 +5072,6 @@ window.toggleFta = toggleFta;
           ) +
           row(
             box('CTPS', [ctx.fregCtps, ctx.fregCtpsSerie, ctx.fregCtpsUf].filter(Boolean).join(' '), true) +
-            box('Categoria', ctx.fregCategoria) +
             box('Carteira de Reservista', ctx.fregReservista, true)
           ) +
           row(
