@@ -40,10 +40,12 @@ até perto da borda, esse carimbo sobrepõe o texto — já aconteceu em
 produção no Contrato de Experiência (2026-10-01, achado via print de
 contrato real assinado). Sempre que um termo (novo ou numa futura edição de
 um existente) tiver texto correndo perto do fim da última página, reservar
-um bloco vazio (`<div style="height:150px;"></div>`, ajustável) logo depois
-do último parágrafo de conteúdo e antes da linha `.rp-cidade-data`. Termos
-mais curtos, com sobra natural de espaço no fim da página, não precisam
-disso.
+um bloco vazio (`<div style="height:150px;"></div>`, ajustável) logo
+**depois** da linha `.rp-cidade-data` (a linha "São Paulo, DATA."), nunca
+antes dela — colocar antes empurra a data pro meio do espaço reservado em
+vez de deixá-la no fim do texto corrido (erro cometido na primeira versão
+desse fix e corrigido no mesmo dia, via feedback do usuário). Termos mais
+curtos, com sobra natural de espaço no fim da página, não precisam disso.
 
 ## Estado atual deste lado (`dp_rh`)
 
@@ -2057,16 +2059,26 @@ depois do fim do texto do PDF que a gente manda, e como o contrato
 preenche a página quase até a borda, não sobrava espaço em branco
 pro carimbo.
 
-Corrigido com um bloco vazio de 150px logo após essa última frase
-(antes de "São Paulo, DATA."), só no Contrato de Experiência — não é
-um problema dos outros termos, que têm bem menos texto e já sobra
-espaço natural no fim da página. Não temos acesso ao app de
+Corrigido com um bloco vazio de 150px, só no Contrato de Experiência —
+não é um problema dos outros termos, que têm bem menos texto e já
+sobra espaço natural no fim da página. Não temos acesso ao app de
 assinatura pra saber a posição exata onde ele carimba, então 150px é
 uma estimativa generosa baseada no que o print mostrou; se ainda
 cortar ou sobrar espaço demais, é só ajustar esse valor.
 
+**Correção (2026-10-01, mesmo dia):** a primeira versão colocou o
+bloco vazio ANTES de "São Paulo, DATA.", o que empurrava a data pro
+meio do espaço reservado em vez de deixá-la no fim do texto — usuário
+reportou com print ("só que tem que deixar o espaço depois da
+data...senão fixa no meio e não no final"). Bloco movido pra DEPOIS
+da linha `.rp-cidade-data`, assim o texto (incluindo a data) flui
+normal até o fim, e só depois sobra o espaço em branco pro carimbo.
+
 Testado com `node -e` (sintaxe) e conferência visual da página
-renderizada — espaço em branco visível entre o fim do texto
-contratual e "São Paulo, DATA.".
+renderizada (extraindo o script real do arquivo pra um preview
+Playwright, usando o `ADM_CSS` de verdade — não um CSS reconstruído à
+mão) — confirmado visualmente: "São Paulo, DATA." aparece logo após o
+último parágrafo, e o espaço em branco fica só depois dela, na borda
+inferior da página.
 
 _Última atualização: 2026-10-01._
