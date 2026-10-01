@@ -1758,4 +1758,65 @@ renderizada isolada confirmando o texto mais fino.
    usuário testou e confirmou que funciona. Nota atualizada no topo
    deste documento.
 
-_Última atualização: 2026-09-30._
+**Feito (2026-10-01): "Enviar Documento em Lote" em `doc.html` — mesmo
+mecanismo do "Enviar Cartão de Ponto" de `escalas.html`, generalizado
+pra qualquer tipo de documento.**
+
+**Contexto:** o usuário pediu pra "copiar" o modal de Cartão de Ponto
+de `escalas.html`, mas com uma diferença central: lá o tipo é fixo
+("Cartão de Ponto"); em `doc.html` o usuário escolhe o tipo no modal
+(exemplo dado: Recibo de Férias). É o mesmo padrão de "documento
+externo, já pronto" — ao contrário de todos os termos anteriores
+(admissao.html/doc.html), aqui **não se gera PDF nenhum**: o arquivo
+já vem pronto (da folha, de um sistema externo etc.), só é subido tal
+como está e mandado pro mesmo pipeline de assinatura digital real.
+
+**O que foi copiado de `escalas.html` (mesmo comportamento):**
+- Casamento automático de cada arquivo com um colaborador pela
+  **matrícula no início do nome do arquivo** (regex `^\d+`, tolera
+  separador variável: `"7_NOME_id.pdf"` ou `"24416 – NOME.pdf"`).
+- Lista de arquivos reconhecidos (✓ matrícula+nome) vs. não
+  reconhecidos (✗ com motivo — matrícula não encontrada ou
+  colaborador inativo), com resumo "X reconhecido(s) · Y não
+  reconhecido(s)".
+- Campo de **competência/período** (data início/fim, sugerido como
+  mês fechado anterior, editável) — usado como chave de
+  versionamento (reenviar o mesmo período vira v2, v3...).
+- Envio sequencial em fila com progresso ("Enviando 2/15…"), falhas
+  parciais não travam o lote (reporta quantos deram certo + lista de
+  matrículas que falharam).
+- Mesmo pipeline final: upload pro bucket `assinaturas` → `colaborador_
+  documento_pendente_assinatura_sandbox_salvar` → `docs_enviar_para_
+  assinatura` (exige rubrica + selfie) → `colaborador_documento_
+  definir_atribuicao_sandbox`.
+
+**O que mudou pra generalizar:**
+- **Tipo de documento vira um `<select>`** no modal, populado a
+  partir de `docTipos` (já carregado por `loadAllData()`, sem RPC
+  extra) — filtrado pra só mostrar tipos com `requer_assinatura=true`
+  (o pipeline sempre força rubrica+selfie, então não faz sentido
+  listar tipos como "Holerite", que no catálogo estão marcados como
+  não precisando de assinatura).
+- Reaproveita `docColaboradores` (já carregado, cobre Ativo+Inativo)
+  em vez de uma RPC nova (`hc_colaboradores_listar`, usada em
+  escalas.html) — doc.html já tinha o que precisava.
+- Drag-and-drop de verdade implementado (`ondragover`/`ondrop` na
+  zona de arrastar) — a versão original em escalas.html tem o texto
+  "clique ou arraste" e até o CSS `.dragover`, mas nunca ligou os
+  eventos de arrastar; copiei o texto/CSS mas corrigi o comportamento
+  nessa cópia nova.
+- Novo doc_tipo "Recibo de Férias" criado no catálogo (categoria
+  "Férias", `requer_assinatura=true`) — exemplo citado pelo usuário,
+  não existia ainda.
+
+Testado com Playwright + mock completo (incluindo `storage.from(...).
+upload`): seletor de tipo mostra só os que exigem assinatura (Cartão
+de Ponto, Recibo de Férias — Holerite corretamente de fora), 3
+arquivos de teste (1 matrícula ativa reconhecida, 1 matrícula
+inexistente, 1 colaborador inativo) classificados corretamente,
+validação bloqueando sem tipo/período selecionado, upload confirmado
+no bucket `assinaturas` com o path certo, só o arquivo válido gerou
+as 2 chamadas de RPC do pipeline (pendente + definir atribuição).
+Conferência visual do modal renderizado.
+
+_Última atualização: 2026-10-01._

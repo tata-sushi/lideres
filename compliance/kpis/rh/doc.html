@@ -128,6 +128,28 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 .dg-ut-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .dg-ut-rm { align-self: flex-end; background: transparent; border: none; color: var(--mid); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0; }
 
+/* Enviar Documento em Lote — mesmos componentes do "Enviar Cartão de Ponto"
+   de escalas.html (upload de arquivo pronto + casamento por matrícula). */
+.dl-periodo-row { display: flex; align-items: center; flex-wrap: nowrap; gap: 8px; }
+.dl-periodo-row .modal-input { flex: 1 1 0; min-width: 0; }
+.dl-periodo-arrow { color: var(--muted); flex-shrink: 0; }
+.cp-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px 12px; border: 1.5px dashed var(--border); border-radius: var(--radius); background: var(--bg); cursor: pointer; text-align: center; transition: all .15s; }
+.cp-drop.dragover { border-color: var(--carbon); background: var(--surface); }
+.cp-drop-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--mid); }
+.cp-drop-sub { font-size: 11px; color: var(--muted); }
+.cp-file-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.cp-file-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; }
+.cp-file-row.cp-ok { background: var(--bg); }
+.cp-file-row.cp-bad { background: #FDEAEA; border-color: #FECACA; }
+.cp-file-icon { width: 16px; height: 16px; flex-shrink: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; }
+.cp-ok .cp-file-icon { background: #2E7D32; }
+.cp-bad .cp-file-icon { background: #B93232; }
+.cp-file-info { flex: 1; min-width: 0; }
+.cp-file-nome { display: block; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-file-meta { display: block; font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.cp-summary { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.4px; color: var(--muted); text-transform: uppercase; }
+.cp-progress { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-align: center; }
+
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
 .modal-overlay.active { opacity: 1; visibility: visible; }
 .modal { background: var(--surface); border-radius: 12px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,0.2); }
@@ -554,6 +576,50 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
   </div>
 </div>
+
+<!-- Modal Enviar Documento em Lote — mesmo mecanismo do "Enviar Cartão de
+     Ponto" de escalas.html: o arquivo já vem pronto (não gera PDF aqui), só
+     sobe tal como está e manda pra assinatura digital, um por colaborador,
+     casado pela matrícula no início do nome do arquivo. Diferença: aqui o
+     tipo de documento é escolhido no modal (qualquer um do catálogo que
+     exija assinatura), não fixo em "Cartão de Ponto". -->
+<div class="modal-overlay" id="dl-overlay">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="candidate-name">Enviar Documento em Lote</div>
+      <button class="modal-close" onclick="fecharDocLote()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="ev-field">
+        <span class="modal-section-title">Tipo de documento</span>
+        <select class="modal-select" id="dl-tipo"></select>
+      </div>
+      <div class="ev-field">
+        <span class="modal-section-title">Competência / Período</span>
+        <div class="dl-periodo-row">
+          <input type="date" class="modal-input" id="dl-periodo-ini">
+          <span class="dl-periodo-arrow">&rarr;</span>
+          <input type="date" class="modal-input" id="dl-periodo-fim">
+        </div>
+      </div>
+      <div class="ev-field">
+        <span class="modal-section-title">Arquivos (PDF, um por colaborador)</span>
+        <div class="cp-drop" id="dl-drop" onclick="document.getElementById('dl-files').click()" ondragover="_dlDragOver(event)" ondragleave="_dlDragLeave(event)" ondrop="_dlDrop(event)">
+          <div class="cp-drop-label">Clique ou arraste os PDFs aqui</div>
+          <div class="cp-drop-sub">Nome do arquivo precisa começar com a matrícula (ex.: 7_NOME_id.pdf ou 24416 – NOME.pdf)</div>
+        </div>
+        <input type="file" id="dl-files" accept="application/pdf" multiple style="display:none;" onchange="_dlOnFilesSelected(this.files)">
+      </div>
+      <div class="cp-summary" id="dl-summary" style="display:none;"></div>
+      <div class="cp-file-list" id="dl-file-list"></div>
+      <div class="cp-progress" id="dl-progress" style="display:none;"></div>
+      <div class="field-value" id="dl-erro" style="display:none;color:#B93232;font-weight:400;font-size:12px;"></div>
+    </div>
+    <div class="modal-footer" style="gap:10px">
+      <button class="modal-btn modal-btn-save" id="dl-btn" onclick="enviarLoteDocumentos()" style="flex:1">Enviar para Assinatura Digital</button>
+    </div>
+  </div>
+</div>
 <!-- LOADING -->
 <div class="loading-overlay" id="loading-overlay">
   <div class="spinner"></div>
@@ -611,6 +677,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <button class="drawer-sam-btn" style="margin-top:8px" onclick="abrirDocTipoNovo()">Cadastrar Documento</button>
       <button class="drawer-sam-btn" style="margin-top:8px" onclick="abrirDocDownload()">Baixar Documentos do Colaborador</button>
       <button class="drawer-sam-btn" style="margin-top:8px" onclick="abrirDocGerar()">Gerar Documento</button>
+      <button class="drawer-sam-btn" style="margin-top:8px" onclick="abrirDocLote()">Enviar Documento em Lote</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -2539,6 +2606,228 @@ function enviarDocumentoAssinatura() {
     btn.disabled = false; btn.textContent = 'Enviar p/ Assinatura';
     errBox.style.display = 'block';
     errBox.textContent = 'Erro ao salvar: ' + ((err && err.message) || String(err));
+  });
+}
+
+// ── Enviar Documento em Lote — mesmo mecanismo do "Enviar Cartão de Ponto"
+// de escalas.html (upload de arquivo já pronto, casado por matrícula no nome
+// do arquivo, enviado direto pra assinatura digital), só que genérico: o
+// tipo de documento é escolhido no modal em vez de fixo. Reaproveita
+// docColaboradores/docTipos já carregados por loadAllData() — sem RPC extra.
+var _dlArquivos = [];
+var _dlEnviando = false;
+
+function _dlUuid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+function _dlFmtDataBR(iso) {
+  var p = String(iso || '').split('-');
+  return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : '';
+}
+
+function abrirDocLote() {
+  closeDrawer();
+  _dlArquivos = [];
+  _dlEnviando = false;
+  document.getElementById('dl-files').value = '';
+  document.getElementById('dl-file-list').innerHTML = '';
+  document.getElementById('dl-summary').style.display = 'none';
+  document.getElementById('dl-progress').style.display = 'none';
+  document.getElementById('dl-erro').style.display = 'none';
+  var btn = document.getElementById('dl-btn');
+  btn.disabled = false; btn.textContent = 'Enviar para Assinatura Digital';
+
+  var tipoSel = document.getElementById('dl-tipo');
+  var tipos = (docTipos || []).filter(function (t) { return t.requer_assinatura; })
+    .slice().sort(function (a, b) { return (a.nome || '').localeCompare(b.nome || ''); });
+  tipoSel.innerHTML = '<option value="">Selecione</option>' +
+    tipos.map(function (t) { return '<option value="' + escH(t.id) + '">' + escH(t.nome) + '</option>'; }).join('');
+
+  var ini = document.getElementById('dl-periodo-ini');
+  var fim = document.getElementById('dl-periodo-fim');
+  if (!ini.value && !fim.value) {
+    // Sugestão: mês fechado anterior (mesmo critério do Cartão de Ponto em
+    // escalas.html) — os dois campos ficam abertos pra edição, é só ponto de partida.
+    var h = new Date();
+    var iniSug = new Date(h.getFullYear(), h.getMonth() - 1, 1);
+    var fimSug = new Date(h.getFullYear(), h.getMonth(), 0);
+    var pad2 = function (n) { return String(n).padStart(2, '0'); };
+    var isoLocal = function (d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
+    ini.value = isoLocal(iniSug);
+    fim.value = isoLocal(fimSug);
+  }
+  document.getElementById('dl-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function fecharDocLote() {
+  if (_dlEnviando) return; // não deixa fechar no meio do envio em lote
+  document.getElementById('dl-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function _dlColabPorMatricula() {
+  var mapa = {};
+  (docColaboradores || []).forEach(function (c) {
+    if (c.matricula != null) mapa[String(c.matricula)] = { nome: c.nome || '', status: c.status || '' };
+  });
+  return mapa;
+}
+
+function _dlOnFilesSelected(fileList) {
+  var files = Array.prototype.slice.call(fileList || []);
+  if (!files.length) return;
+  var mapaColab = _dlColabPorMatricula();
+  files.forEach(function (file) {
+    // Matrícula é a sequência de dígitos no início do nome — o separador
+    // depois dela varia (ex.: "7_NOME_id.pdf" e "24416 – NOME.pdf").
+    var matricula = (file.name.match(/^\d+/) || [''])[0];
+    var colab = mapaColab[matricula];
+    var inativo = !!colab && colab.status !== 'Ativo';
+    var motivo = !colab ? ('Matrícula "' + escH(matricula) + '" não encontrada')
+      : (inativo ? 'Colaborador inativo — não recebe documento por aqui' : '');
+    _dlArquivos.push({
+      file: file, matricula: matricula,
+      nome: colab ? colab.nome : '',
+      status: (colab && !inativo) ? 'ok' : 'bad',
+      motivo: motivo
+    });
+  });
+  _dlRenderFileList();
+}
+
+function _dlRenderFileList() {
+  var box = document.getElementById('dl-file-list');
+  box.innerHTML = _dlArquivos.map(function (item, i) {
+    var cls = item.status === 'ok' ? 'cp-ok' : 'cp-bad';
+    var meta = item.status === 'ok'
+      ? (escH(item.matricula) + ' · ' + escH(item.nome))
+      : escH(item.motivo);
+    var icone = item.status === 'ok'
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    return '<div class="cp-file-row ' + cls + '">' +
+      '<span class="cp-file-icon">' + icone + '</span>' +
+      '<span class="cp-file-info">' +
+        '<span class="cp-file-nome">' + escH(item.file.name) + '</span>' +
+        '<span class="cp-file-meta">' + meta + '</span>' +
+      '</span>' +
+      '<button onclick="_dlRemoverArquivo(' + i + ')" title="Remover" style="width:22px;height:22px;background:transparent;border:0;cursor:pointer;color:var(--muted);flex-shrink:0;display:flex;align-items:center;justify-content:center;">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+      '</button>' +
+    '</div>';
+  }).join('');
+  var ok = _dlArquivos.filter(function (i) { return i.status === 'ok'; }).length;
+  var bad = _dlArquivos.length - ok;
+  var summary = document.getElementById('dl-summary');
+  if (_dlArquivos.length) {
+    summary.style.display = 'block';
+    summary.textContent = ok + ' arquivo(s) reconhecido(s)' + (bad ? ' · ' + bad + ' não reconhecido(s)' : '');
+  } else {
+    summary.style.display = 'none';
+  }
+}
+function _dlRemoverArquivo(i) { _dlArquivos.splice(i, 1); _dlRenderFileList(); }
+
+function _dlDragOver(e) { e.preventDefault(); document.getElementById('dl-drop').classList.add('dragover'); }
+function _dlDragLeave(e) { document.getElementById('dl-drop').classList.remove('dragover'); }
+function _dlDrop(e) {
+  e.preventDefault();
+  document.getElementById('dl-drop').classList.remove('dragover');
+  var files = (e.dataTransfer && e.dataTransfer.files) || [];
+  _dlOnFilesSelected(files);
+}
+
+// Núcleo compartilhado por arquivo: sobe o PDF já pronto (sem gerar nada
+// aqui) e roda o mesmo pipeline de pendência + envio pra assinatura real de
+// escalas.html/admissao.html (ver docs/INTEGRACAO-DOCUMENTOS.md).
+function _dlEnviarUmArquivo(item, tipoId, tipoNome, competencia, periodoLabel, emitidoPor) {
+  return new Promise(function (resolve, reject) {
+    var SB = window.__lideresSupa;
+    if (!SB) { reject(new Error('Sem conexão com o Supabase.')); return; }
+    var arquivoPath = 'docs/' + _dlUuid() + '.pdf';
+    SB.storage.from('assinaturas').upload(arquivoPath, item.file, { upsert: true, contentType: 'application/pdf' }).then(function (rUp) {
+      if (rUp.error) throw rUp.error;
+      return SB.rpc('colaborador_documento_pendente_assinatura_sandbox_salvar', {
+        p_matricula: item.matricula, p_tipo_id: tipoId, p_nome_arquivo: item.file.name, p_link: arquivoPath,
+        p_mime: 'application/pdf', p_tamanho: item.file.size, p_enviado_por: emitidoPor,
+        p_link_bucket: 'assinaturas', p_competencia: competencia
+      });
+    }).then(function (rRow) {
+      if (rRow.error) throw rRow.error;
+      var linha = rRow.data;
+      var tituloVersionado = tipoNome + ' — ' + periodoLabel + (linha.versao > 1 ? ' (v' + linha.versao + ')' : '');
+      return SB.schema('tata_plus').rpc('docs_enviar_para_assinatura', {
+        p_matricula: item.matricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
+        p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
+        p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true,
+        p_atribuido_por: emitidoPor
+      }).then(function (rEnvio) {
+        if (rEnvio.error) throw rEnvio.error;
+        var envio = rEnvio.data;
+        if (!envio || !envio.ok) throw new Error((envio && envio.erro) || 'Falha ao enviar pra assinatura.');
+        return SB.rpc('colaborador_documento_definir_atribuicao_sandbox', {
+          p_id: linha.id, p_assinatura_atribuicao_id: envio.atribuicao_id
+        });
+      });
+    }).then(function (rLink) {
+      if (rLink && rLink.error) throw rLink.error;
+      resolve();
+    }).catch(reject);
+  });
+}
+
+function enviarLoteDocumentos() {
+  if (_dlEnviando) return;
+  var errBox = document.getElementById('dl-erro');
+  errBox.style.display = 'none';
+  var tipoSel = document.getElementById('dl-tipo');
+  var tipoId = tipoSel.value || '';
+  var tipoNome = tipoId && tipoSel.selectedOptions.length ? tipoSel.selectedOptions[0].textContent : '';
+  var periodoIni = (document.getElementById('dl-periodo-ini') || {}).value || '';
+  var periodoFim = (document.getElementById('dl-periodo-fim') || {}).value || '';
+  if (!tipoId) { errBox.style.display = 'block'; errBox.textContent = 'Selecione o tipo de documento.'; return; }
+  if (!periodoIni || !periodoFim) { errBox.style.display = 'block'; errBox.textContent = 'Informe o período inicial e final.'; return; }
+  if (periodoFim < periodoIni) { errBox.style.display = 'block'; errBox.textContent = 'O período final não pode ser antes do inicial.'; return; }
+  var competencia = periodoIni + '_' + periodoFim; // chave de versionamento — período exato
+  var periodoLabel = _dlFmtDataBR(periodoIni) + ' a ' + _dlFmtDataBR(periodoFim);
+  var validos = _dlArquivos.filter(function (i) { return i.status === 'ok'; });
+  if (!validos.length) { errBox.style.display = 'block'; errBox.textContent = 'Anexe ao menos um arquivo reconhecido.'; return; }
+
+  var emitidoPor = _usuarioLogadoNome() || _sandboxMatricula() || '—';
+
+  _dlEnviando = true;
+  var btn = document.getElementById('dl-btn');
+  btn.disabled = true;
+  var progresso = document.getElementById('dl-progress');
+  progresso.style.display = 'block';
+
+  var falhas = [];
+  var total = validos.length;
+  validos.reduce(function (promise, item, idx) {
+    return promise.then(function () {
+      progresso.textContent = 'Enviando ' + (idx + 1) + '/' + total + '… (' + item.matricula + ' — ' + item.nome + ')';
+      return _dlEnviarUmArquivo(item, tipoId, tipoNome, competencia, periodoLabel, emitidoPor).catch(function (err) {
+        falhas.push({ item: item, erro: (err && err.message) || String(err) });
+      });
+    });
+  }, Promise.resolve()).then(function () {
+    _dlEnviando = false;
+    btn.disabled = false;
+    btn.textContent = 'Enviar para Assinatura Digital';
+    progresso.style.display = 'none';
+    var okCount = total - falhas.length;
+    if (!falhas.length) {
+      alert(okCount + ' documento(s) enviado(s) para assinatura digital!');
+      fecharDocLote();
+    } else {
+      errBox.style.display = 'block';
+      errBox.innerHTML = okCount + ' de ' + total + ' enviado(s). Falharam: ' +
+        falhas.map(function (f) { return escH(f.item.matricula) + ' (' + escH(f.erro) + ')'; }).join(', ');
+    }
   });
 }
 
