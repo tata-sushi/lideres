@@ -2031,4 +2031,28 @@ do PDF, select de Horário confirmado auto-selecionando "12:00 às
 23:20 - 4h intervalo" a partir de uma proposta de teste com "Horário:
 12:00 às 23:20 (intervalo de 4 horas)".
 
+**Feito (2026-10-01): espaço reservado pra assinatura digital no
+Contrato de Experiência — achado em produção, via print de um
+contrato já assinado.** O print mostrou o carimbo de assinatura
+eletrônica (rubrica + nome/matrícula + "Comprovante de Assinatura
+Eletrônica" + IP/timestamp/hash) **sobrepondo** a última frase do
+contrato ("...firmam as partes o presente instrumento assinando de
+igual teor, para um só efeito, como EMPREGADORA e como
+EMPREGADO(A).") — o app de assinatura carimba essas informações logo
+depois do fim do texto do PDF que a gente manda, e como o contrato
+preenche a página quase até a borda, não sobrava espaço em branco
+pro carimbo.
+
+Corrigido com um bloco vazio de 150px logo após essa última frase
+(antes de "São Paulo, DATA."), só no Contrato de Experiência — não é
+um problema dos outros termos, que têm bem menos texto e já sobra
+espaço natural no fim da página. Não temos acesso ao app de
+assinatura pra saber a posição exata onde ele carimba, então 150px é
+uma estimativa generosa baseada no que o print mostrou; se ainda
+cortar ou sobrar espaço demais, é só ajustar esse valor.
+
+Testado com `node -e` (sintaxe) e conferência visual da página
+renderizada — espaço em branco visível entre o fim do texto
+contratual e "São Paulo, DATA.".
+
 _Última atualização: 2026-10-01._
