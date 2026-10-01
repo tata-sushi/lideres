@@ -1819,4 +1819,25 @@ no bucket `assinaturas` com o path certo, só o arquivo válido gerou
 as 2 chamadas de RPC do pipeline (pendente + definir atribuição).
 Conferência visual do modal renderizado.
 
+**Feito (2026-10-01): ajuste fino de densidade na Ficha de Registro
+— fonte das caixas 1px menor e ~20% mais leve.** Pedido pontual ("diminui
+1px da fonte e tira 20% do pesso") sobre as caixas `.rp-intro-value`
+(o mesmo componente reaproveitado em todos os termos pro cabeçalho
+Colaborador/Matrícula/Cargo/Unidade). Como essa ficha empilha muitas
+mais caixas por página que qualquer outro termo, o ajuste foi
+**escrito só pra essa página** — nova classe `.rp-freg-compact` no
+`<div class="page">` do `_admFichaRegistroBuildPage`, com
+`.rp-freg-compact .rp-intro-value{font-size:9.5px;font-weight:600;}`
+sobrescrevendo só ali (10.5px/700 → 9.5px/600; 20% de 700 ≈ 560, mas
+a DM Sans carregada aqui só tem os degraus 400/500/600/700, então 600
+é o mais próximo). Os outros termos continuam com `.rp-intro-value`
+original (10.5px/700), sem nenhuma mudança — mesmo cuidado de escopo
+já usado antes pra não afetar `.rp-table` global ao compactar a
+tabela de Dependentes.
+
+Testado com Playwright: `getComputedStyle` confirmando 9.5px/600 nas
+caixas da Ficha de Registro e 10.5px/700 inalterado num outro termo
+renderizado ao lado (Contribuição Sindical). Conferência visual lado
+a lado.
+
 _Última atualização: 2026-10-01._
