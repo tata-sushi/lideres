@@ -1922,4 +1922,23 @@ compacto entre todas as linhas da seção, foto grande e alinhada à
 esquerda cobrindo as duas primeiras linhas, resto do layout
 inalterado.
 
+**Feito (2026-10-01): seção renomeada + Filiação incorporada como
+linha, sem seção própria.** Dois ajustes:
+
+1. **"Dados da Empresa e Colaborador" → "Informações Gerais"** (só o
+   título da seção).
+2. **Pai/Mãe saem da seção "Filiação" própria e viram uma linha a
+   mais dentro de "Informações Gerais"**, logo depois da linha 3
+   (Data de Nascimento/Nacionalidade/Local de Nascimento/Estado
+   Civil) — sem nenhum divisor de seção entre elas. Labels das
+   caixas trocadas de "Pai"/"Mãe" pra **"Filiação: Pai"/"Filiação:
+   Mãe"**, já que o nome da seção que dava esse contexto deixou de
+   existir ali.
+
+Testado com `node -e` (sintaxe) + Playwright: lista de seções da
+página confirmando que só sobrou "Informações Gerais" (sem
+"Filiação" separada) seguida de FGTS/PIS/Dependentes, e os labels
+"Filiação: Pai"/"Filiação: Mãe" presentes na posição certa (logo após
+a linha de nascimento). Conferência visual da página completa.
+
 _Última atualização: 2026-10-01._
