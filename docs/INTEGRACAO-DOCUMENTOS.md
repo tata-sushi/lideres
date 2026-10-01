@@ -1840,4 +1840,61 @@ caixas da Ficha de Registro e 10.5px/700 inalterado num outro termo
 renderizado ao lado (Contribuição Sindical). Conferência visual lado
 a lado.
 
+**Feito (2026-10-01): reorganização das linhas da Ficha de Registro
+— 1ª rodada (usuário vai mandar o resto por partes).** O usuário
+especificou a ordem exata das linhas por seção, numerada manualmente
+(com `( )` sinalizando anotações, não nomes literais de campo).
+Implementado exatamente o que foi pedido pra seção 1 e 2:
+
+**Seção "Dados da Empresa e Colaborador"** — as 4 seções antigas que
+cobriam esses dados (cabeçalho Empresa/CNPJ/Endereço/Matrícula/Nome,
+"Documentos", "Dados Pessoais", "Endereço", "Dados do Cargo") foram
+**unificadas numa seção só**, com 7 linhas na ordem pedida:
+1. CNPJ / Empresa / Endereço
+2. MT / Nome / Data de Admissão
+3. Data de Nascimento / Nacionalidade / Local de Nascimento / Estado Civil
+4. RG / CPF / Grau de Instrução / Título de Eleitor / PCD?
+5. Endereço / Bairro / CEP / Cidade/UF / Telefone
+6. CTPS (número/série/UF/categoria) / Carteira de Reservista
+7. Departamento / Cargo / Horário / Salário Fixo / Pagamento
+
+**Seção "Filiação"** — mantida como já estava (Pai/Mãe), só virou
+seção independente logo depois da unificada (antes vinha antes de
+"Documentos"; ordem não importa pro resultado, mas ficou mais perto
+de como o usuário desenhou).
+
+Pontos que precisaram de decisão/ajuste no meio do caminho:
+- **CTPS sumiu da lista original do usuário** (só "Reservista"
+  aparecia na linha 6, sozinho). Perguntei antes de mexer — resposta:
+  "junto com Reservista na linha 6". Implementado como 5 caixas numa
+  linha só (CTPS/Série/UF/Categoria/Reservista).
+- **"País de Nascimento" virou "Nacionalidade"** — mesmo campo
+  (`adm-freg-pais-nascimento`), só relabel + valor padrão trocado de
+  "Brasil" pra "Brasileira" (gramaticalmente mais correto pro
+  rótulo novo).
+- **Local de Nascimento + UF (nascimento), antes 2 caixas
+  separadas, viraram 1 caixa combinada** ("São Paulo/SP") — o
+  usuário listou só "Local de Nascimento" na linha 3, sem mencionar
+  UF separado; mantive os 2 campos manuais no modal (sem perder
+  granularidade), só a exibição no PDF combina os dois.
+- **CBO removido por completo** (campo do modal, leitura e exibição)
+  — já tinha sido descartado no fechamento de backlog de 30/09 ("dar
+  como concluído e descartar"), e a nova linha 7 do usuário não
+  menciona CBO, confirmando a remoção definitiva. Campo órfão no
+  modal (que não aparecia mais em lugar nenhum do PDF) foi limpo.
+
+**O que ficou de fora dessa rodada, sem mudança:** seções de FGTS,
+PIS e Dependentes continuam exatamente como estavam, na mesma ordem,
+logo após Filiação — o usuário disse que vai passar a reorganização
+delas "depois" (seção 3 em diante da numeração dele, ainda não
+especificada).
+
+Testado com Playwright: modal sem campo CBO, label/valor padrão
+"Nacionalidade"/"Brasileira" confirmados, auto-preenchimento (ficha
+via CPF) continuando a funcionar normalmente após a reestruturação,
+PDF final com seção única "Dados da Empresa e Colaborador" (sem mais
+"Dados do Cargo"/"Documentos" separados), CBO ausente do PDF, dados
+batendo nas posições certas. Conferência visual da página completa
+renderizada.
+
 _Última atualização: 2026-10-01._
