@@ -1897,4 +1897,29 @@ PDF final com seção única "Dados da Empresa e Colaborador" (sem mais
 batendo nas posições certas. Conferência visual da página completa
 renderizada.
 
+**Feito (2026-10-01): espaçamento entre linhas reduzido + foto
+dobrada de tamanho, reposicionada à frente/esquerda das linhas 1 e
+2.** Dois ajustes pontuais na Ficha de Registro:
+
+1. **Espaçamento entre linhas.** `.rp-intro` (cada linha de caixas)
+   tem `margin-bottom:18px` global — e como essa ficha empilha muito
+   mais linhas que qualquer outro termo, reduzido pra `8px` **só
+   nessa página** (`.rp-freg-compact .rp-intro`), mesmo escopo já
+   usado nos ajustes anteriores de densidade.
+2. **Foto 100% maior, posicionada à frente/esquerda das linhas 1 e 2**
+   (CNPJ/Empresa/Endereço e MT/Nome/Data de Admissão) em vez de
+   dentro da linha 2 como antes. 56px → 112px
+   (`.rp-foto-box` → `.rp-foto-box-lg`, classe antiga removida por
+   não ter mais uso). Estruturalmente, as linhas 1 e 2 agora ficam
+   dentro de um `<div class="rp-freg-header-rows">` (coluna, sem
+   espaçamento entre si) ao lado da foto, dentro de um
+   `<div class="rp-freg-header-wrap">` (linha, `align-items:stretch`)
+   — a foto estica pra cobrir a altura combinada das duas linhas.
+
+Testado com `node -e` (sintaxe) e conferência visual da página
+completa renderizada com foto de teste: espaçamento visivelmente mais
+compacto entre todas as linhas da seção, foto grande e alinhada à
+esquerda cobrindo as duas primeiras linhas, resto do layout
+inalterado.
+
 _Última atualização: 2026-10-01._
