@@ -1941,4 +1941,18 @@ página confirmando que só sobrou "Informações Gerais" (sem
 "Filiação: Pai"/"Filiação: Mãe" presentes na posição certa (logo após
 a linha de nascimento). Conferência visual da página completa.
 
+**Feito (2026-10-01): CTPS/Série/UF combinados numa caixa só.**
+Linha 6 da "Informações Gerais" tinha 5 caixas (CTPS/Série/UF/
+Categoria/Carteira de Reservista); removidas "Série" e "UF" como
+caixas separadas — o valor combinado (`número série UF`, ex.:
+"4327254 3805 SP") passa a aparecer todo dentro da caixa "CTPS".
+Mesmo padrão já usado em "Local de Nascimento" (campos do modal
+continuam separados — `adm-freg-ctps`/`adm-freg-ctps-serie`/
+`adm-freg-ctps-uf` —, só a exibição no PDF combina os três). Linha 6
+fica com 3 caixas: CTPS / Categoria / Carteira de Reservista.
+
+Testado com Playwright: confirmado que não sobra nenhuma caixa
+rotulada "Série" ou "UF" na página, caixa "CTPS" com o valor
+combinado "4327254 3805 SP". Conferência visual da página completa.
+
 _Última atualização: 2026-10-01._
