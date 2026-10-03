@@ -94,7 +94,7 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
 .drawer-about { font-size: 13px; line-height: 1.7; color: var(--mid); }
 ```
 
-**Números** — grid 2 colunas, **sempre os mesmos 2 cards do portal** (nunca números próprios da página): **Seções** (`#drawer-kpi-secoes` — número **fixo no HTML, igual em todas as páginas — hoje 5**, as seções do menu principal; ao mudar, trocar em todas; sub `#drawer-kpi-pags` pág / `#drawer-kpi-dash` dash, contados no repositório pelo `loadDrawerMeta` — regra em **Contagem pág / dash** abaixo) e **Unidades** (`#drawer-kpi-unidades`, sub `#drawer-kpi-deptos` depto / `#drawer-kpi-colabs` colab, vindos do Supabase pelo `loadDrawerKPIs`). Número DM Sans 28px/700, rótulo e sub em DM Mono:
+**Números** — grid 2 colunas, **sempre os mesmos 2 cards do portal** (nunca números próprios da página): **Seções** (`#drawer-kpi-secoes` — número **fixo no HTML, igual em todas as páginas — hoje 5**, as seções do menu principal; ao mudar, trocar em todas; sub `#drawer-kpi-pags` pág / `#drawer-kpi-dash` dash, contados no repositório pelo `loadDrawerMeta` — regra em **Contagem pág / dash** abaixo) e **Unidades** (`#drawer-kpi-unidades`, sub `#drawer-kpi-deptos` depto / `#drawer-kpi-colabs` colab, vindos do Supabase pelo `loadDrawerKPIs` — colaboradores ativos de `tata_plus.colaboradores_publicos` **menos 3, os sócios, que ficam fora da conta de propósito**; vale em todas as páginas, inclusive as que leem de outra fonte, como `areas/rh/admissao.html`). Número DM Sans 28px/700, rótulo e sub em DM Mono:
 ```css
 .drawer-kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .drawer-kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 10px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -234,6 +234,7 @@ function loadDrawerKPIs() {
       var ds = new Set(r.data.map(function (c) { return c.departamento; }).filter(Boolean));
       document.getElementById('drawer-kpi-unidades').textContent = us.size;
       document.getElementById('drawer-kpi-deptos').textContent = ds.size;
+      // −3 = os 3 sócios, que ficam fora da conta de colaboradores — é proposital, não remover
       document.getElementById('drawer-kpi-colabs').textContent = (r.data.length - 3);
       _drawerKpisLoaded = true;
     });
