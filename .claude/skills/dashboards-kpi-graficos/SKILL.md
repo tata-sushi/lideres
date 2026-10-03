@@ -66,7 +66,8 @@ rótulo/sub do KPI, cabeçalho de tabela, dia da semana do calendário e hints).
 
 Convenções de tipografia (padrão do catálogo):
 - **Na área de gráfico/tabela é tudo `'DM Sans'`; o peso faz a hierarquia:**
-  **número/valor → 800**, **nome/eixo/legenda/categoria/pílula → 400** (labels ~500).
+  **número/valor → 800**, **nome/eixo/legenda/categoria/pílula → 400** (labels ~500; **dentro do
+  gráfico/canvas os nomes vão em 500** — ver Nitidez na §3).
 - **`'DM Mono'` só em:** título do card (11px/700), rótulo e sub do KPI, cabeçalho de
   tabela (`thead th`), dia da semana do calendário e hints. `uppercase`, `letter-spacing` ~`0.8px`.
 - **Números** → sempre `font-variant-numeric: tabular-nums`.
@@ -260,7 +261,8 @@ Regras dos gráficos:
   categoria/legenda/radar = 12px; nome/contagem do status = 13px; título do card = 11px/700.
   **Únicas exceções em DM Mono:** título do card, rótulo/sub do KPI, cabeçalho de tabela, dia da
   semana do calendário e hints (pílulas, filtros, abas e botões são **DM Sans**). No JS:
-  `SANS12={family:'DM Sans',size:12}` em **eixo X, categoria, legenda e `pointLabels`**; os plugins
+  `SANS12={family:"'DM Sans', sans-serif",size:12,weight:'500'}` em **eixo X, categoria, legenda e
+  `pointLabels`** (no canvas o nome vai em **500**: o 400 fica apagado/"embaçado" ao lado do título); os plugins
   de rótulo desenham em `'800 12px "DM Sans", sans-serif'`. **Peso 800 exige carregar a DM Sans com
   `800`** no Google Fonts (`family=DM+Sans:wght@...;800`), senão o browser cai pra 700. Legenda
   (quando houver): DM Sans 12px carbon, `boxWidth:12, padding:12`. **Nada de cinza** nos rótulos de
@@ -268,9 +270,16 @@ Regras dos gráficos:
 - **Fonte antes de desenhar (evita flash no canvas).** O canvas do Chart.js **não** redesenha
   quando a webfont chega, então desenhe os gráficos só depois da DM Sans pronta: no `<head>`,
   `preconnect` para `fonts.googleapis.com` e `fonts.gstatic.com`; no boot, aguarde
-  `document.fonts.load('800 12px "DM Sans"')` (e `'400 12px "DM Sans"'`) antes do `new Chart(...)`,
+  `document.fonts.load` de **todos os pesos usados no canvas** (`'800 12px "DM Sans"'`, `'500 12px "DM Sans"'`,
+  `'400 12px "DM Sans"'`) antes do `new Chart(...)` — peso que não carregou é medido com outra
+  fonte e o nome sai cortado (ex.: "'im de experiência"),
   com um `setTimeout` de ~2s como fallback. Sem isso, o rótulo aparece numa fonte errada no
   carregamento e só corrige no próximo redraw.
+- **Nitidez do canvas (obrigatório).** Todo `new Chart` leva
+  `devicePixelRatio: Math.max(2, window.devicePixelRatio || 1)` nas `options`. O canvas é uma imagem:
+  no PC (devicePixelRatio 1) e com o zoom da página (`#zoom-content`, 70–160%) ela é esticada e o texto
+  do gráfico borra, enquanto o título (HTML) fica nítido. Desenhar em 2x resolve. Junto com os nomes em
+  **500**, o texto do gráfico fica tão firme quanto o resto da página.
 - **Botão "i" de informação (padrão).** Todo gráfico tem um `.chart-info-btn` no canto
   **superior direito** (cinza `#CFCFCF`, hover `--muted`, ícone "i" em círculo, SVG 15px,
   `position:absolute; top:10px; right:12px`) que abre o **modal padrão** do
@@ -284,6 +293,19 @@ Regras dos gráficos:
   `gap:12px` + `margin-top:12px`; nunca 0). **Mesma linha = mesmo tipo ou, no mínimo, mesma
   altura** — nunca pareie um gráfico curto com um alto (ex.: barra + heatmap). Gráficos
   altos/de altura variável (heatmap, calendário, nuvem) vão **full-width** (`grid-column:1/-1`).
+  **Nunca sobra espaço em branco num card por causa do vizinho:**
+  - **Barra horizontal com muitas categorias** (ex.: "Saídas" da Desligamentos) **não aumenta a
+    altura do card**: fica nos mesmos 220px e **rola na vertical** por dentro —
+    `<div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas></canvas></div></div>`
+    com `.chart-wrap-y { overflow-x:hidden; overflow-y:auto }` e `.chart-scroll-y { position:relative;
+    height:100% }`; no JS, `scroll.style.height = Math.max(220, n * 30 + 10) + 'px'` (o mesmo
+    princípio do scroll lateral das barras verticais).
+  - **Tabela simples / card curto não divide linha com gráfico** (alturas diferentes): fica em
+    **linha própria** (full-width). Ex.: "Percepção do processo" abaixo de "Motivo Informado".
+  - **Nomes longos na barra horizontal:** o Chart.js dá no máximo metade da largura para os nomes;
+    corte com "…" pelo espaço disponível no `ticks.callback`
+    (`truncate(this.getLabelForValue(v), Math.min(26, Math.max(8, Math.floor((this.chart.width / 2 - 16) / 7.5))))`),
+    nunca com um número fixo — senão corta a primeira letra no celular.
 - Sempre `if (chartInst) chartInst.destroy()` antes de recriar, e guarde
   `if (typeof Chart === 'undefined') return;` (a lib pode não ter carregado).
 
@@ -468,10 +490,14 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
 - [ ] Status/distribuição = tabela (`.status-row`) ou pizza/rosca em tons de carbon, sem tooltip nativo.
 - [ ] Nenhum **card de número solto** (número + frase): número em destaque = card de KPI; grupo de
       percentuais = tabela simples (`.status-row`) num chart-card com título.
-- [ ] Tipografia: **tudo DM Sans**; número/valor **800**, nome/eixo/legenda **400**; DM Mono só
+- [ ] Tipografia: **tudo DM Sans**; número/valor **800**, nome/eixo/legenda **400** (**500** no canvas); DM Mono só
       título do card, rótulo/sub do KPI, cabeçalho de tabela, dia da semana e hints.
 - [ ] Carregar DM Sans até **800** + `preconnect`; desenhar o gráfico só após
-      `document.fonts.load('800 12px "DM Sans"')` (evita flash de fonte no canvas).
+      `document.fonts.load` de 400/500/800 (evita flash e nome cortado no canvas).
+- [ ] `devicePixelRatio: Math.max(2, window.devicePixelRatio || 1)` em todo `new Chart`; nomes no
+      canvas em **500** (nitidez).
+- [ ] Nenhum card com espaço em branco por causa do vizinho: barra horizontal longa = 220px +
+      rolagem vertical; tabela/card curto em linha própria.
 - [ ] Barras **raio 5**; 2ª série = **`CARBON2`** (`rgba(53,56,63,0.45)`); empilhada sem "degrau"
       (cantos arredondados por segmento) + rótulo slash `28/6`.
 - [ ] Heatmap em **bandas** (height 26px, raio 4); nuvem colorida **por categoria** (cores das
