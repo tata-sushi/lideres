@@ -168,7 +168,8 @@ Barra horizontal **rolável** (sem scrollbar visível). Cada aba ocupa o mínimo
 
 ### ⭐ Ordem das abas (regra fixa)
 - **`Sobre` é SEMPRE a primeira** (extrema esquerda) e começa com `.active`.
-- **`KPI's` é SEMPRE a última** (extrema direita).
+- **`KPIs` é SEMPRE a última** (extrema direita). Rótulo escrito **`KPIs`** (sem apóstrofo); o slug continua `dashboard`/o que já existe no catálogo.
+- Página sem conteúdo de Sobre ainda: a aba Sobre entra mesmo assim, com o placeholder **"Em construção."** (padrão de `compliance/kpis/manutencao/index.html`: `<div id="view-sobre"><div class="sobre-wrap" style="text-align:center;color:var(--mid);padding-top:60px;">Em construção.</div></div>`).
 - As abas do **meio** variam por página (ex.: Agenda, Vagas, Entrevistas, Testes, Analítico…), na ordem que fizer sentido pra página.
 
 ```html
@@ -177,8 +178,8 @@ Barra horizontal **rolável** (sem scrollbar visível). Cada aba ocupa o mínimo
   <!-- abas do meio, específicas da página: -->
   <button class="tab-btn"        id="tab-vagas"     data-aba-id="<GOV_PAGE_ID>::vagas"     onclick="setTab('vagas')">Vagas</button>
   <button class="tab-btn"        id="tab-analitico" data-aba-id="<GOV_PAGE_ID>::analitico" onclick="setTab('analitico')">Analítico</button>
-  <!-- KPI's sempre por último: -->
-  <button class="tab-btn"        id="tab-dashboard" data-aba-id="<GOV_PAGE_ID>::dashboard" onclick="setTab('dashboard')">KPI's</button>
+  <!-- KPIs sempre por último: -->
+  <button class="tab-btn"        id="tab-dashboard" data-aba-id="<GOV_PAGE_ID>::dashboard" onclick="setTab('dashboard')">KPIs</button>
 </div>
 ```
 
@@ -236,6 +237,6 @@ Como o footer é `fixed`, o conteúdo precisa de **padding-bottom folgado** (ex.
 - [ ] Logo base64 canônico da TATÁ copiado inteiro (sem truncar); nunca o hexágono do compliance.
 - [ ] Tudo abaixo do header dentro de `#zoom-content`; scripts de zoom + hardRefresh presentes.
 - [ ] `.tabs` rolável (≈45px), `.tab-btn` DM Mono 11px/500 uppercase `letter-spacing:1.5px`, ativa carbon/citric; cada aba com `id="tab-<slug>"` + `data-aba-id`.
-- [ ] **`Sobre` é a 1ª aba (com `.active`) e `KPI's` é a última.**
+- [ ] **`Sobre` é a 1ª aba (com `.active`) e `KPIs` é a última** (rótulo `KPIs`, sem apóstrofo).
 - [ ] `.footer` fixo carbon (≈50px), módulo `--citric` 10px + `#footer-date` branco 40%; conteúdo com `padding-bottom` folgado.
 - [ ] JS validado (sem erro de sintaxe).
