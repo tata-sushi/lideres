@@ -52,7 +52,7 @@ O Drawer "Sobre" é um painel lateral deslizante que apresenta informações con
 | `compliance/kpis/rh/recrutamento.html` | — |
 | `compliance/kpis/rh/solicitacoes.html` | Nova Solicitação |
 
-**Todas as 31 páginas de compliance possuem drawer.**
+**Hoje 79 páginas de compliance têm drawer** (a tabela acima é parcial). Ficam sem: as 2 de Papéis (`areas/rh/papeis.html`, `areas/tatahouse/papeis.html`) e as 2 que não abrem no app (`areas/organograma2.html`, `areas/rh/ouvidoria-qrcode.html`).
 
 ---
 
@@ -265,7 +265,7 @@ Todo bloco do body segue a mesma estrutura:
     <div class="drawer-kpi-card">
       <span class="drawer-kpi-card-label">Seções</span>
       <span class="drawer-kpi-card-number">5</span>
-      <span class="drawer-kpi-card-sub"><strong>31</strong> pág / <strong>13</strong> dash</span>
+      <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-pags">44</strong> pág / <strong id="drawer-kpi-dash">37</strong> dash</span>
     </div>
     <!-- segundo card -->
   </div>
@@ -296,7 +296,7 @@ Todo bloco do body segue a mesma estrutura:
 - `<strong>` quebra para DM Sans pra forçar bold real (DM Mono não tem 700)
 
 **Cards atuais:**
-1. **Seções: 5** — sub: 31 pág / 13 dash *(fixo)*
+1. **Seções: 5** *(fixo)* — sub: **44 pág / 37 dash** (hoje), contados pelo `loadDrawerMeta`: dash = dashboards (`compliance/kpis/` menos os menus `index.html`, + `ps.html` e `auditoria/docsrh.html`); pág = demais páginas de `compliance/` que abrem no app. O número escrito no HTML é o que aparece antes de carregar ou se a API do GitHub falhar — manter igual à conta atual (regra completa na skill `drawer-sobre`).
 2. **Unidades: —** — sub: — depto / — colab *(dinâmico via API — ver seção 15)*
 
 ---

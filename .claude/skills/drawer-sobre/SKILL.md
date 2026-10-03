@@ -94,7 +94,7 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
 .drawer-about { font-size: 13px; line-height: 1.7; color: var(--mid); }
 ```
 
-**Números** — grid 2 colunas, **sempre os mesmos 2 cards do portal** (nunca números próprios da página): **Seções** (`#drawer-kpi-secoes` — número **fixo no HTML, igual em todas as páginas — hoje 5**, as seções do menu principal; ao mudar, trocar em todas; sub `#drawer-kpi-pags` pág / `#drawer-kpi-dash` dash, contados no repositório pelo `loadDrawerMeta`) e **Unidades** (`#drawer-kpi-unidades`, sub `#drawer-kpi-deptos` depto / `#drawer-kpi-colabs` colab, vindos do Supabase pelo `loadDrawerKPIs`). Número DM Sans 28px/700, rótulo e sub em DM Mono:
+**Números** — grid 2 colunas, **sempre os mesmos 2 cards do portal** (nunca números próprios da página): **Seções** (`#drawer-kpi-secoes` — número **fixo no HTML, igual em todas as páginas — hoje 5**, as seções do menu principal; ao mudar, trocar em todas; sub `#drawer-kpi-pags` pág / `#drawer-kpi-dash` dash, contados no repositório pelo `loadDrawerMeta` — regra em **Contagem pág / dash** abaixo) e **Unidades** (`#drawer-kpi-unidades`, sub `#drawer-kpi-deptos` depto / `#drawer-kpi-colabs` colab, vindos do Supabase pelo `loadDrawerKPIs`). Número DM Sans 28px/700, rótulo e sub em DM Mono:
 ```css
 .drawer-kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .drawer-kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 10px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -103,6 +103,25 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
 .drawer-kpi-card-sub { font-family: "DM Mono", monospace; font-size: 10px; color: var(--muted); }
 .drawer-kpi-card-sub strong { font-family: "DM Sans", sans-serif; font-weight: 700; color: var(--text); }
 ```
+
+**Contagem pág / dash** (sub do card Seções — hoje **44 pág / 37 dash**):
+- **dash** = dashboards: todo `.html` em `compliance/kpis/`, **menos os menus** (`index.html` de pasta que tem outras páginas: `kpis/index.html`, `kpis/{estoque,limpeza,rh,tatahouse}/index.html`) — `kpis/caixa/index.html` e `kpis/manutencao/index.html` são dashboards (pasta com uma página só) — **mais** os dashboards fora de `kpis/` (`DRAWER_DASH_EXTRA`: `compliance/ps.html`, `compliance/auditoria/docsrh.html`).
+- **pág** = as demais páginas de `compliance/` que abrem no app (menus, áreas, conceitos, Papéis…). Ficam fora da conta as que não abrem no app (sem `GOV_PAGE_ID`, lista `DRAWER_FORA_APP`: `areas/organograma2.html`, `areas/rh/ouvidoria-qrcode.html`).
+- O `loadDrawerMeta` conta na árvore do repositório (API do GitHub) e guarda o resultado **12h no `localStorage`** (`lideres-drawer-meta`), porque a API sem login aceita só 60 consultas/hora por IP. O número **escrito no HTML** é o que aparece antes de carregar ou se a API falhar — mantenha-o **igual à conta atual** em todas as páginas.
+- **Ao criar/apagar página:** atualize o número do HTML em todas (`grep -rl 'id="drawer-kpi-pags"' compliance`). Dashboard novo **fora** de `kpis/` ou página que **não abre no app** → acrescente nas listas `DRAWER_DASH_EXTRA`/`DRAWER_FORA_APP` de **todas** as páginas. Confira a conta (na raiz do repo; tem que dar o número do HTML):
+  ```bash
+  python3 - <<'PY'
+  import glob, os
+  FORA = {'compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'}  # DRAWER_FORA_APP
+  EXTRA = {'compliance/ps.html', 'compliance/auditoria/docsrh.html'}                       # DRAWER_DASH_EXTRA
+  h = [p for p in glob.glob('compliance/**/*.html', recursive=True) if p not in FORA]
+  def dash(p):
+      if not p.startswith('compliance/kpis/'): return p in EXTRA
+      pasta = os.path.dirname(p) + '/'
+      return not (p.endswith('/index.html') and any(q != p and q.startswith(pasta) for q in h))
+  n = sum(map(dash, h)); print(len(h) - n, 'pág /', n, 'dash')
+  PY
+  ```
 
 **Ações (OPCIONAL — a única parte que varia por página)** — botões `.drawer-sam-btn` full-width; cada botão fecha o drawer e abre um modal/ação. Variante `.secondary` (clara).
 - **Só `.drawer-sam-btn`** — nada de `.drawer-cta-btn` ou outras classes.
@@ -175,7 +194,7 @@ Fica no fim do `<body>`, **fora** do `#zoom-content`. Só a seção **Ações** 
         <div class="drawer-kpi-card">
           <span class="drawer-kpi-card-label">Seções</span>
           <span class="drawer-kpi-card-number" id="drawer-kpi-secoes">5</span>
-          <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-pags">31</strong> pág / <strong id="drawer-kpi-dash">13</strong> dash</span>
+          <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-pags">44</strong> pág / <strong id="drawer-kpi-dash">37</strong> dash</span>
         </div>
         <div class="drawer-kpi-card">
           <span class="drawer-kpi-card-label">Unidades</span>
@@ -223,24 +242,48 @@ function loadDrawerKPIs() {
   else window.addEventListener('lideres:supa', function () { trySupa(window.__lideresSupa); }, { once: true });
 }
 
-// Números: páginas / dashboards (contados na árvore do repositório, 1x por página)
+// Números: páginas / dashboards, contados na árvore do repositório.
+// dash = dashboards: tudo em compliance/kpis/, menos os menus (index.html de pasta que tem outras
+//        páginas), + os dashboards que ficam fora de kpis/ (DRAWER_DASH_EXTRA).
+// pág  = as demais páginas de compliance/ que abrem no app (DRAWER_FORA_APP fica fora da conta).
+// Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
+var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html'];
+var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
+function _pintarDrawerMeta(m) {
+  var el = function(id) { return document.getElementById(id); };
+  if (el('drawer-kpi-pags')) el('drawer-kpi-pags').textContent = m.pags;
+  if (el('drawer-kpi-dash')) el('drawer-kpi-dash').textContent = m.dash;
+}
 function loadDrawerMeta() {
   if (_drawerMetaLoaded) return;
-  fetch(GITHUB_TREE_URL).then(function (r) { return r.json(); }).then(function (data) {
-    if (!data.tree) return;
-    var pages = 0, dashboards = 0;
-    data.tree.forEach(function (f) {
-      if (f.type !== 'blob' || !f.path.endsWith('.html')) return;
-      if (f.path.startsWith('compliance/kpis/')) dashboards++;
-      else if (f.path.startsWith('compliance/')) pages++;
-    });
-    var el = function (id) { return document.getElementById(id); };
-    if (el('drawer-kpi-pags')) el('drawer-kpi-pags').textContent = pages;
-    if (el('drawer-kpi-dash')) el('drawer-kpi-dash').textContent = dashboards;
-    _drawerMetaLoaded = true;
-  }).catch(function () {});
+  _drawerMetaLoaded = true;
+  try {
+    var c = JSON.parse(localStorage.getItem('lideres-drawer-meta') || 'null');
+    if (c && c.pags && c.dash) { _pintarDrawerMeta(c); if (Date.now() - c.t < 12 * 3600e3) return; }
+  } catch (e) {}
+  fetch(GITHUB_TREE_URL)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.tree) { _drawerMetaLoaded = false; return; }
+      var html = data.tree.filter(function(f) {
+        return f.type === 'blob' && /^compliance\/.+\.html$/.test(f.path) && DRAWER_FORA_APP.indexOf(f.path) < 0;
+      }).map(function(f) { return f.path; });
+      var m = { pags: 0, dash: 0, t: Date.now() };
+      html.forEach(function(p) {
+        var dash = DRAWER_DASH_EXTRA.indexOf(p) >= 0;
+        if (p.indexOf('compliance/kpis/') === 0) {
+          var pasta = p.slice(0, p.lastIndexOf('/') + 1);
+          var menu = /\/index\.html$/.test(p) && html.some(function(q) { return q !== p && q.indexOf(pasta) === 0; });
+          dash = !menu;
+        }
+        if (dash) m.dash++; else m.pags++;
+      });
+      _pintarDrawerMeta(m);
+      try { localStorage.setItem('lideres-drawer-meta', JSON.stringify(m)); } catch (e) {}
+    })
+    .catch(function() { _drawerMetaLoaded = false; });
 }
 
 function openDrawer() {
@@ -266,6 +309,7 @@ document.addEventListener('keydown', function (e) { if (e.key === 'Escape') clos
 - **Fechar o `</div>` do `#drawer`.** Sem ele, tudo que vem depois no HTML fica dentro do drawer — e como o drawer usa `transform`, um modal `position:fixed` lá dentro fica posicionado em relação ao drawer (fora da tela).
 - **Tokens no `:root`.** O CSS usa `--surface --carbon --citric --bg --border --muted --mid --text --radius`; se faltar algum, o estilo some sem erro. Página com tom próprio em `--muted`/`--mid` deixa o drawer com cinza diferente (tokens → skill `dashboards-kpi-graficos`).
 - **Fonte do `body` = DM Sans.** Nome do responsável e texto "O que é" herdam do `body`; página com `body` em DM Mono deixa o drawer errado.
+- **Contagem pág / dash.** A regra antiga (`kpis/` = dash, resto = pág) contava os 5 menus de `kpis/` como dashboards e `ps.html`/`docsrh.html` como páginas, e o número fixo do HTML ficou parado em 31/13 (ou "—"). Use o `loadDrawerMeta` do §5 e mantenha o número do HTML atualizado.
 - **Inserir JS no fim REAL da página.** Não procure "o primeiro `</body>`" do arquivo: os geradores de PDF/impressão têm `</body></html>` dentro de strings JS — script colado ali vira texto do documento e nunca roda (foi o caso do botão Fixar em 6 páginas).
 
 ---
@@ -277,6 +321,7 @@ document.addEventListener('keydown', function (e) { if (e.key === 'Escape') clos
 - [ ] ✕ = **só o X de 16px** (sem fundo, sem borda), área 28×28, hover escurece.
 - [ ] Seções na ordem **Versão atual · O que é · Números · Ações**; conteúdo fixo copiado do §4b, **só Ações varia**; versão **v4.3**.
 - [ ] Números = cards Seções/Unidades com os ids padrão + `loadDrawerMeta`/`loadDrawerKPIs` chamados no `openDrawer`.
+- [ ] `loadDrawerMeta` = o do §5 (regra pág/dash + cache); número do HTML = conta atual (**44 pág / 37 dash**), igual em todas as páginas.
 - [ ] Ações só com `.drawer-sam-btn` + `data-aba-id`/`data-botao-id`; sem ações → sem a seção.
 - [ ] Footer = Responsável (avatar citric + nome DM Sans 13/600 + cargo DM Sans 9).
 - [ ] Abre pelo botão Menu do header (`openDrawer`); fecha no ✕, Esc **e** clique fora; trava scroll do fundo; listener do Esc no topo (não dentro do `closeDrawer`).
