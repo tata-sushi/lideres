@@ -145,14 +145,14 @@ Tudo **abaixo do header** fica dentro de `<div id="zoom-content">` — o zoom es
 
 **Atualizar** (`hardRefresh`): marca `.is-loading` no botão (ícone gira), limpa `caches`/service workers e recarrega com `location.replace(location.pathname + '?r=' + Date.now() + location.hash)` (busca sem cache e **volta pra mesma aba**).
 
-**Aba na URL** (obrigatório em página com abas): a aba aberta fica no `#hash` (`#<slug>`, slug do `data-aba-id`), então **Atualizar e F5 voltam na mesma aba**. Script no fim do `<body>` (aceita também `#aba=<slug>`, formato do deep-link do app):
+**Aba na URL** (obrigatório em página com abas): a aba aberta fica no `#hash` (`#<slug>`, slug do `data-aba-id`), então **Atualizar e F5 voltam na mesma aba**. Abrindo pelo app (URL sem `#`), a página entra **sempre na Sobre** — não há deep-link de aba. Script no fim do `<body>`:
 
 ```javascript
 /* ══ ABA NA URL ══ */
 (function () {
   var bar = document.querySelector('.tabs'); if (!bar) return;
   function chave(b) { var s = (b.getAttribute('data-aba-id') || '').split('::')[1]; return s || (b.id || '').replace(/^tab-/, '') || b.getAttribute('data-tab') || ''; }
-  function abaDoHash() { var h = (location.hash || '').replace(/^#/, ''); var m = /(?:^|[?&])aba=([\w-]+)/i.exec(h); return (m ? m[1] : (/^[\w-]+$/.test(h) ? h : '')).toLowerCase(); }
+  function abaDoHash() { var h = (location.hash || '').replace(/^#/, ''); return (/^[\w-]+$/.test(h) ? h : '').toLowerCase(); }
   bar.addEventListener('click', function (ev) {
     var b = ev.target.closest('.tab-btn'); if (!b || !bar.contains(b)) return;
     var k = chave(b); if (k) try { history.replaceState(null, '', location.pathname + location.search + '#' + k); } catch (e) {}
