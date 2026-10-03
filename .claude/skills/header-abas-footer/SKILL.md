@@ -160,7 +160,7 @@ Tudo **abaixo do header** fica dentro de `<div id="zoom-content">` — o zoom es
   function restaurar() {
     var k = abaDoHash(); if (!k) return;
     var alvo = [].slice.call(bar.querySelectorAll('.tab-btn')).filter(function (b) { return chave(b) === k; })[0];
-    if (alvo && alvo.offsetParent !== null && !alvo.classList.contains('active')) alvo.click();
+    if (alvo && getComputedStyle(alvo).display !== 'none' && !alvo.classList.contains('active')) alvo.click();
   }
   if (document.readyState === 'complete') restaurar(); else window.addEventListener('load', restaurar);
 })();
