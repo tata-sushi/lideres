@@ -264,7 +264,7 @@ Todo bloco do body segue a mesma estrutura:
   <div class="drawer-kpi-grid">
     <div class="drawer-kpi-card">
       <span class="drawer-kpi-card-label">Seções</span>
-      <span class="drawer-kpi-card-number">7</span>
+      <span class="drawer-kpi-card-number">5</span>
       <span class="drawer-kpi-card-sub"><strong>31</strong> pág / <strong>13</strong> dash</span>
     </div>
     <!-- segundo card -->
@@ -296,7 +296,7 @@ Todo bloco do body segue a mesma estrutura:
 - `<strong>` quebra para DM Sans pra forçar bold real (DM Mono não tem 700)
 
 **Cards atuais:**
-1. **Seções: 7** — sub: 31 pág / 13 dash *(fixo)*
+1. **Seções: 5** — sub: 31 pág / 13 dash *(fixo)*
 2. **Unidades: —** — sub: — depto / — colab *(dinâmico via API — ver seção 15)*
 
 ---

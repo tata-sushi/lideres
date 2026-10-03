@@ -109,6 +109,24 @@ Logo à esquerda; botões `.header-plus` empurrados à direita (o **1º botão**
 
 ---
 
+### 1b. Header das páginas de MENU / institucionais
+
+Menus (`compliance/menucompliance.html`, `areas/**`, `conceitos/**`, os `index.html` de `kpis/**`, `auditoria/index.html`, `ferramentas/`, `fornecedores/`) **mantêm o padrão de menu** — logo do compliance (`.header-logo`, 40px) em `.header-left` + botões em `.header-right` —, mas com as mesmas medidas da barra das dashboards:
+- **Altura fixa 61px** em todos os viewports (sem `height` diferente em media query; no desktop só o padding lateral vira 40px).
+- **Os 7 botões** na mesma ordem (Início · Voltar · Atualizar · Zoom− · Zoom+ · Fixar · Menu "+"), `gap:5px` em `.header-right`, com `#zoom-content` e os scripts de zoom/atualizar/fixar.
+- **Exceções: `menucompliance.html` e `areas/organograma.html` ficam só com o "+"** (sem os outros botões nem os scripts deles). Organograma mantém o header escuro.
+- As páginas Papéis (`areas/rh/papeis.html`, `areas/tatahouse/papeis.html`) e a tela de entrada `compliance/index.html` **não têm header** (decisão: não mexer).
+
+```css
+.header { position:sticky; top:0; z-index:200; background:var(--white); border-bottom:1px solid var(--border); padding:0 16px; height:61px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.header-left { display:flex; align-items:center; gap:10px; }
+.header-logo { height:40px; flex-shrink:0; display:block; }
+.header-right { display:flex; align-items:center; gap:5px; flex-shrink:0; }
+@media (min-width: 768px) { .header { padding:0 40px; } }
+```
+
+---
+
 ## 2. Zoom, Atualizar e Fixar (scripts do header)
 
 Tudo **abaixo do header** fica dentro de `<div id="zoom-content">` — o zoom escala esse wrapper (o header não). Estrutura:
@@ -166,7 +184,7 @@ Tudo **abaixo do header** fica dentro de `<div id="zoom-content">` — o zoom es
 })();
 ```
 
-**Fixar** (`pinNoApp`): `postMessage` pro app pai (`gov-pin-toggle`); o botão fica `display:none` fora do app e o app o revela quando fixável.
+**Fixar** (`pinNoApp`): `postMessage` pro app pai (`gov-pin-toggle`); o botão fica `display:none` fora do app e o app o revela quando fixável. ⚠️ O script do Fixar (e qualquer script do header) vai no **fim real da página**: não procure "o primeiro `</body>`" do arquivo — geradores de PDF/impressão têm `</body></html>` dentro de strings JS, e um script colado ali vira texto do documento e nunca roda (o Fixar sumiu assim em 6 páginas). Para conferir, abra a página **dentro de um iframe**: o botão Fixar tem que aparecer e `typeof pinNoApp` tem que ser `function`.
 
 ---
 
