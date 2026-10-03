@@ -297,7 +297,7 @@ Todo bloco do body segue a mesma estrutura:
 
 **Cards atuais:**
 1. **Seções: 5** *(fixo)* — sub: **44 pág / 37 dash** (hoje), contados pelo `loadDrawerMeta`: dash = dashboards (`compliance/kpis/` menos os menus `index.html`, + `ps.html` e `auditoria/docsrh.html`); pág = demais páginas de `compliance/` que abrem no app. O número escrito no HTML é o que aparece antes de carregar ou se a API do GitHub falhar — manter igual à conta atual (regra completa na skill `drawer-sobre`).
-2. **Unidades: —** — sub: — depto / — colab *(dinâmico via API — ver seção 15)*
+2. **Unidades: —** — sub: — depto / — colab *(dinâmico — ver seção 15)*. Colab = ativos no Supabase **menos 3 (os sócios, fora da conta de propósito)**.
 
 ---
 
