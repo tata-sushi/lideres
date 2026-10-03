@@ -325,12 +325,12 @@ Todo bloco do body segue a mesma estrutura:
 
 **Para múltiplos botões:** adicionar `<button class="drawer-sam-btn">` um abaixo do outro com `margin-top: 8px` ou gap via flex no pai.
 
-**Botão de link `.drawer-link-card`** (para links de navegação, ex: KPI's):
+**Botão de link `.drawer-link-card`** (para links de navegação, ex: KPIs):
 
 ```html
 <a href="/caminho/para/kpis.html" class="drawer-link-card">
   <svg class="drawer-link-card-bg" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-  <span class="drawer-link-card-label">KPI's</span>
+  <span class="drawer-link-card-label">KPIs</span>
 </a>
 ```
 

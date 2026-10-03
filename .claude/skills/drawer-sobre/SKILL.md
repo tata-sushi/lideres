@@ -81,7 +81,7 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
 .drawer-section-label::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 ```
 
-**Versão** — card carbon com "Portal / Governança de Processos" + versão em citric (`v4.0`):
+**Versão** — card carbon com "Portal / Governança de Processos" + versão em citric (`v4.3`):
 ```css
 .drawer-version { background: var(--carbon); border-radius: var(--radius); padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; }
 .drawer-version-label { font-family: "DM Mono", monospace; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.4); }
