@@ -25,10 +25,10 @@ Exemplos canônicos: `compliance/kpis/rh/recrutamento.html`, `compliance/kpis/ma
 **CSS** (copiar de recrutamento, não inventar variações):
 
 ```css
-.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 100; }
+.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 5px; position: sticky; top: 0; z-index: 100; }
 .logo-img { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
 .header-plus { width: 28px; height: 28px; background: var(--carbon); border: none; border-radius: 4px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
-.header-plus svg { width: 14px; height: 14px; stroke: var(--citric); fill: none; stroke-width: 2.5; stroke-linecap: round; }
+.header-plus svg { width: 14px; height: 14px; stroke: var(--citric); fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 ```
 
 **HTML** — logo + botões `.header-plus` (1º com `margin-left:auto`), na ordem **Início · Voltar · Atualizar · Zoom− · Zoom+ · Fixar(oculto) · Menu**:
