@@ -49,14 +49,14 @@ Tokens: padrão do portal (`--surface #FFF`, `--carbon #35383F`, `--citric #CFFF
 
 ## 2. Header (52px)
 
-Título "Sobre" (DM Sans 10px/500 uppercase) + botão ✕ (28×28, `--bg` + borda).
+Título "Sobre" (DM Sans 10px/500 uppercase) + botão ✕ (área 28×28, **só o X — sem quadrado**: sem fundo nem borda; no hover o X escurece).
 
 ```css
 .drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; height: 52px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .drawer-title { font-family: "DM Sans", sans-serif; font-size: 10px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text); }
-.drawer-close { width: 28px; height: 28px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: border-color .15s; }
-.drawer-close:hover { border-color: var(--carbon); }
-.drawer-close svg { width: 13px; height: 13px; stroke: var(--mid); fill: none; stroke-width: 2; stroke-linecap: round; }
+.drawer-close { width: 28px; height: 28px; background: none; border: none; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.drawer-close svg { width: 13px; height: 13px; stroke: var(--mid); fill: none; stroke-width: 2; stroke-linecap: round; transition: stroke .15s; }
+.drawer-close:hover svg { stroke: var(--carbon); }
 ```
 
 ```html
