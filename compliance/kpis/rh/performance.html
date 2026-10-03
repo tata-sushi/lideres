@@ -975,7 +975,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="drawer-kpi-card">
           <span class="drawer-kpi-card-label">Seções</span>
           <span class="drawer-kpi-card-number" id="drawer-kpi-secoes">5</span>
-          <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-pags">—</strong> pág / <strong id="drawer-kpi-dash">—</strong> dash</span>
+          <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-pags">44</strong> pág / <strong id="drawer-kpi-dash">37</strong> dash</span>
         </div>
         <div class="drawer-kpi-card">
           <span class="drawer-kpi-card-label">Unidades</span>
@@ -2098,26 +2098,48 @@ function loadDrawerKPIs() {
   })();
 }
 
+// Números: páginas / dashboards, contados na árvore do repositório.
+// dash = dashboards: tudo em compliance/kpis/, menos os menus (index.html de pasta que tem outras
+//        páginas), + os dashboards que ficam fora de kpis/ (DRAWER_DASH_EXTRA).
+// pág  = as demais páginas de compliance/ que abrem no app (DRAWER_FORA_APP fica fora da conta).
+// Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
+var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html'];
+var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
+function _pintarDrawerMeta(m) {
+  var el = function(id) { return document.getElementById(id); };
+  if (el('drawer-kpi-pags')) el('drawer-kpi-pags').textContent = m.pags;
+  if (el('drawer-kpi-dash')) el('drawer-kpi-dash').textContent = m.dash;
+}
 function loadDrawerMeta() {
   if (_drawerMetaLoaded) return;
+  _drawerMetaLoaded = true;
+  try {
+    var c = JSON.parse(localStorage.getItem('lideres-drawer-meta') || 'null');
+    if (c && c.pags && c.dash) { _pintarDrawerMeta(c); if (Date.now() - c.t < 12 * 3600e3) return; }
+  } catch (e) {}
   fetch(GITHUB_TREE_URL)
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (!data.tree) return;
-      var pages = 0, dashboards = 0;
-      data.tree.forEach(function(f) {
-        if (f.type !== 'blob' || !f.path.endsWith('.html')) return;
-        if (f.path.startsWith('compliance/kpis/')) { dashboards++; }
-        else if (f.path.startsWith('compliance/')) { pages++; }
+      if (!data.tree) { _drawerMetaLoaded = false; return; }
+      var html = data.tree.filter(function(f) {
+        return f.type === 'blob' && /^compliance\/.+\.html$/.test(f.path) && DRAWER_FORA_APP.indexOf(f.path) < 0;
+      }).map(function(f) { return f.path; });
+      var m = { pags: 0, dash: 0, t: Date.now() };
+      html.forEach(function(p) {
+        var dash = DRAWER_DASH_EXTRA.indexOf(p) >= 0;
+        if (p.indexOf('compliance/kpis/') === 0) {
+          var pasta = p.slice(0, p.lastIndexOf('/') + 1);
+          var menu = /\/index\.html$/.test(p) && html.some(function(q) { return q !== p && q.indexOf(pasta) === 0; });
+          dash = !menu;
+        }
+        if (dash) m.dash++; else m.pags++;
       });
-      var el = function(id) { return document.getElementById(id); };
-      if (el('drawer-kpi-pags')) el('drawer-kpi-pags').textContent = pages;
-      if (el('drawer-kpi-dash')) el('drawer-kpi-dash').textContent = dashboards;
-      _drawerMetaLoaded = true;
+      _pintarDrawerMeta(m);
+      try { localStorage.setItem('lideres-drawer-meta', JSON.stringify(m)); } catch (e) {}
     })
-    .catch(function() {});
+    .catch(function() { _drawerMetaLoaded = false; });
 }
 
 function openDrawer() {
