@@ -181,7 +181,7 @@ Sistema de duas famílias, ambas via Google Fonts:
 - Padding horizontal: 16px
 - Border-bottom: 1px solid `--border`
 - Título "SOBRE" em DM Mono 10px peso 500 uppercase, letter-spacing `.14em`
-- Botão close: 28×28px, fundo `--bg`, borda `--border`, radius 8px
+- Botão close: área 28×28px, **só o X** (sem fundo e sem borda); ícone 13px `--mid`, no hover vira `--carbon`
   - SVG do X: 13×13px, stroke `--mid`, stroke-width 2
   - Hover: borda escurece para `--carbon`
 
@@ -325,12 +325,12 @@ Todo bloco do body segue a mesma estrutura:
 
 **Para múltiplos botões:** adicionar `<button class="drawer-sam-btn">` um abaixo do outro com `margin-top: 8px` ou gap via flex no pai.
 
-**Botão de link `.drawer-link-card`** (para links de navegação, ex: KPI's):
+**Botão de link `.drawer-link-card`** (para links de navegação, ex: KPIs):
 
 ```html
 <a href="/caminho/para/kpis.html" class="drawer-link-card">
   <svg class="drawer-link-card-bg" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-  <span class="drawer-link-card-label">KPI's</span>
+  <span class="drawer-link-card-label">KPIs</span>
 </a>
 ```
 

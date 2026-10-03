@@ -49,14 +49,14 @@ Tokens: padrão do portal (`--surface #FFF`, `--carbon #35383F`, `--citric #CFFF
 
 ## 2. Header (52px)
 
-Título "Sobre" (DM Sans 10px/500 uppercase) + botão ✕ (28×28, `--bg` + borda).
+Título "Sobre" (DM Sans 10px/500 uppercase) + botão ✕ (área 28×28, **só o X — sem quadrado**: sem fundo nem borda; no hover o X escurece).
 
 ```css
 .drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; height: 52px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .drawer-title { font-family: "DM Sans", sans-serif; font-size: 10px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text); }
-.drawer-close { width: 28px; height: 28px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: border-color .15s; }
-.drawer-close:hover { border-color: var(--carbon); }
-.drawer-close svg { width: 13px; height: 13px; stroke: var(--mid); fill: none; stroke-width: 2; stroke-linecap: round; }
+.drawer-close { width: 28px; height: 28px; background: none; border: none; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.drawer-close svg { width: 13px; height: 13px; stroke: var(--mid); fill: none; stroke-width: 2; stroke-linecap: round; transition: stroke .15s; }
+.drawer-close:hover svg { stroke: var(--carbon); }
 ```
 
 ```html
@@ -81,7 +81,7 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
 .drawer-section-label::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 ```
 
-**Versão** — card carbon com "Portal / Governança de Processos" + versão em citric (`v4.0`):
+**Versão** — card carbon com "Portal / Governança de Processos" + versão em citric (`v4.3`):
 ```css
 .drawer-version { background: var(--carbon); border-radius: var(--radius); padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; }
 .drawer-version-label { font-family: "DM Mono", monospace; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.4); }
