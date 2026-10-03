@@ -87,6 +87,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .badge.respondida{background:#EAF4ED;color:#1A5C2A;}
 .badge.expirada{background:#f1f1f1;color:#888;}
 .badge.cancelada{background:#fdecec;color:#c0392b;}
+.badge.nenhum{background:#eef0f3;color:#6b7280;}
+.badge.emitido{background:#FFF3D6;color:#8a6d00;}
+.badge.enviado{background:#E3F0FB;color:#1E5A8A;}
+.badge.respondido{background:#EAF4ED;color:#1A5C2A;}
+.badge.expirado{background:#f1f1f1;color:#888;}
+.badge.cancelado{background:#fdecec;color:#c0392b;}
+.badge.auto{background:#F3E8FF;color:#6B21A8;}
 .faixa-badge{display:inline-block;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;padding:2px 9px;border-radius:100px;}
 .act-btn{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;border:1px solid var(--border);background:var(--surface);color:var(--carbon);border-radius:6px;padding:6px 10px;cursor:pointer;margin-left:6px;}
 .act-btn:hover{border-color:var(--carbon);}
@@ -262,6 +269,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="tabs">
   <button class="tab-btn active" id="tab-sobre" data-aba-id="governanca-kpis-rh-desligamentos::sobre" onclick="setTab('sobre')">Sobre</button>
   <button class="tab-btn" id="tab-analitico" data-aba-id="governanca-kpis-rh-desligamentos::analitico" onclick="setTab('analitico')">Analítico</button>
+  <button class="tab-btn" id="tab-relacao" data-aba-id="governanca-kpis-rh-desligamentos::relacao" onclick="setTab('relacao')">A enviar</button>
   <button class="tab-btn" id="tab-dashboard" data-aba-id="governanca-kpis-rh-desligamentos::dashboard" onclick="setTab('dashboard')">KPIs</button>
 </div>
 
@@ -413,6 +421,30 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<div id="view-relacao" style="display:none">
+  <div class="anl-bar">
+    <div class="anl-count" id="rel-count">—</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <select class="filter-select" id="rel-unidade" onchange="renderRelacao()"><option value="">Todas unidades</option></select>
+      <select class="filter-select" id="rel-status" onchange="renderRelacao()">
+        <option value="">Todos status</option>
+        <option value="nenhum">Não enviado</option>
+        <option value="enviado">Enviado</option>
+        <option value="respondido">Respondido</option>
+        <option value="pendentes">Pendentes de resposta</option>
+      </select>
+    </div>
+  </div>
+  <div class="anl-tablewrap">
+    <table class="anl-tbl">
+      <thead><tr>
+        <th>Colaborador</th><th>Unidade</th><th>Demissão</th><th>Status</th><th>Telefone</th><th class="anl-acoes">Ações</th>
+      </tr></thead>
+      <tbody id="rel-tbody"><tr><td colspan="6" class="anl-empty">Carregando…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
 <!-- Modal de homologação (gerar link da entrevista de saída) -->
 <div class="hm-overlay" id="hm-overlay" onclick="closeHomolog()">
   <div class="hm-card" onclick="event.stopPropagation()">
@@ -434,6 +466,24 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="hm-linkbox"><input class="hm-input" id="hm-link" readonly><button class="hm-copy" onclick="hmCopy()">Copiar</button></div>
       <a class="hm-wa" id="hm-wa" target="_blank" rel="noopener">Enviar no WhatsApp</a>
       <button class="hm-novo" onclick="hmReset()">Homologar outro</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de disparo imediato (WhatsApp via uazapi) -->
+<div class="hm-overlay" id="dp-overlay" onclick="closeDisparo()">
+  <div class="hm-card" onclick="event.stopPropagation()">
+    <div class="hm-head"><span>Disparar entrevista · WhatsApp</span><button class="hm-x" onclick="closeDisparo()">&times;</button></div>
+    <div class="hm-body">
+      <div class="hm-who" id="dp-who"></div>
+      <label class="hm-label">Tipo de saída</label>
+      <div class="hm-tipos">
+        <button class="hm-tipo dp-tipo" data-tipo="desligado" onclick="dpPickTipo(this)">Foi desligado(a)</button>
+        <button class="hm-tipo dp-tipo" data-tipo="demissao" onclick="dpPickTipo(this)">Pediu demissão</button>
+      </div>
+      <div class="hm-err" id="dp-err"></div>
+      <div class="hm-ok" id="dp-msg" style="margin-top:6px"></div>
+      <button class="hm-gerar" id="dp-go" onclick="submitDisparo()">📲 Disparar agora</button>
     </div>
   </div>
 </div>
@@ -1590,12 +1640,13 @@ var _pageTab = 'sobre';
 var _analiticoLoaded = false;
 function setTab(tab){
   _pageTab = tab;
-  ['sobre','dashboard','analitico'].forEach(function(t){
+  ['sobre','dashboard','analitico','relacao'].forEach(function(t){
     var b=document.getElementById('tab-'+t); if(b) b.classList.toggle('active', t===tab);
     var v=document.getElementById('view-'+t); if(v) v.style.display = (t===tab)?'':'none';
   });
   if (tab==='dashboard' && typeof _charts!=='undefined') { Object.keys(_charts).forEach(function(k){ var c=_charts[k]; if(c && c.resize) c.resize(); }); }
   if (tab==='analitico' && !_analiticoLoaded) { _analiticoLoaded=true; loadAnalitico(); }
+  if (tab==='relacao' && !_relacaoLoaded) { _relacaoLoaded=true; loadRelacao(); }
 }
 function hideLoading(){ var el = document.getElementById('loading-overlay'); if (el) el.classList.remove('show'); }
 
@@ -1985,6 +2036,101 @@ function submitHomolog(){
 }
 function hmCopy(){ _copy(document.getElementById('hm-link').value); toast('Link copiado'); }
 function hmReset(){ openHomolog(''); }
+
+// === Relação (A enviar) + disparo imediato ==================================
+var REL_ROWS=[]; var _relacaoLoaded=false;
+function loadRelacao(){
+  function go(supa){
+    supa.schema('tata_plus').rpc('av_desligamento_relacao',{ p_dias:90 }).then(function(res){
+      if(res && res.error) console.error('Erro RPC av_desligamento_relacao:', res.error);
+      REL_ROWS = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
+      _fillRelFiltros(); renderRelacao();
+    }).catch(function(e){ console.error('Erro RPC av_desligamento_relacao:', e); REL_ROWS=[]; renderRelacao(); });
+  }
+  if (window.__lideresSupa) go(window.__lideresSupa);
+  else window.addEventListener('lideres:supa', function(){ go(window.__lideresSupa); }, { once:true });
+}
+function _fillRelFiltros(){
+  var sel=document.getElementById('rel-unidade'); if(!sel) return;
+  var uni={}; REL_ROWS.forEach(function(r){ if(r.unidade) uni[r.unidade]=1; });
+  var cur=sel.value;
+  sel.innerHTML='<option value="">Todas unidades</option>'+Object.keys(uni).sort().map(function(u){ return '<option>'+escH(u)+'</option>'; }).join('');
+  if(cur) sel.value=cur;
+}
+function _relStatusLabel(s){ return ({nenhum:'Não enviado',emitido:'Emitido',enviado:'Enviado',respondido:'Respondido',expirado:'Expirado',cancelado:'Cancelado'})[s]||s; }
+function renderRelacao(){
+  var tb=document.getElementById('rel-tbody'); if(!tb) return;
+  var fu=(document.getElementById('rel-unidade')||{}).value||'';
+  var fs=(document.getElementById('rel-status')||{}).value||'';
+  var rows=REL_ROWS.filter(function(r){
+    if(fu && r.unidade!==fu) return false;
+    if(fs==='pendentes') return r.envio_status!=='respondido';
+    if(fs && r.envio_status!==fs) return false;
+    return true;
+  });
+  var cnt=document.getElementById('rel-count'); if(cnt) cnt.innerHTML='<b>'+rows.length+'</b> colaborador(es)';
+  if(!rows.length){ tb.innerHTML='<tr><td colspan="6" class="anl-empty">Nenhum desligado no período.</td></tr>'; return; }
+  tb.innerHTML=rows.map(function(r){
+    var dias=(r.dias_desde!=null)?(r.dias_desde+'d'):'';
+    var demissao=_fmtData(r.data_demissao)+(dias?(' <span style="color:var(--muted);font-size:10px">('+dias+')</span>'):'');
+    var statusPill='<span class="badge '+escH(r.envio_status)+'">'+escH(_relStatusLabel(r.envio_status))+'</span>';
+    if(r.elegivel_auto) statusPill+=' <span class="badge auto" title="Sairá automaticamente aos 30 dias se não houver homologação">auto 30d</span>';
+    var tel=r.telefone_ok?'<span style="color:#1A5C2A">✓</span>':'<span style="color:var(--muted);font-size:11px">sem nº</span>';
+    var acoes;
+    if(r.envio_status==='respondido'){
+      var m=(r.media!=null)?(' · média '+Number(r.media).toFixed(2)):'';
+      acoes='<span style="color:var(--muted);font-size:11px">respondida'+m+'</span>';
+    } else if(!r.telefone_ok){
+      acoes='<button class="act-btn" onclick="openHomolog(\''+escAttr(r.matricula)+'\')">Gerar link</button>';
+    } else {
+      acoes='<button class="act-btn primary" onclick="openDisparo(\''+escAttr(r.matricula)+'\',\''+escAttr(r.nome||'')+'\')">Disparar agora</button>'+
+            '<button class="act-btn" onclick="openHomolog(\''+escAttr(r.matricula)+'\')">Link</button>';
+    }
+    return '<tr>'+
+      '<td>'+escH(r.nome||'—')+'</td>'+
+      '<td>'+escH(r.unidade||'—')+'</td>'+
+      '<td>'+demissao+'</td>'+
+      '<td>'+statusPill+'</td>'+
+      '<td>'+tel+'</td>'+
+      '<td class="anl-acoes">'+acoes+'</td>'+
+    '</tr>';
+  }).join('');
+}
+var _dpMat=null,_dpTipo=null;
+function openDisparo(mat,nome){
+  _dpMat=mat; _dpTipo=null;
+  document.getElementById('dp-overlay').classList.add('open');
+  document.getElementById('dp-who').textContent=nome||('Matrícula '+mat);
+  document.getElementById('dp-err').textContent='';
+  document.getElementById('dp-msg').textContent='';
+  Array.prototype.forEach.call(document.querySelectorAll('.dp-tipo'), function(b){ b.classList.remove('sel'); });
+  var g=document.getElementById('dp-go'); g.disabled=false; g.textContent='📲 Disparar agora';
+}
+function closeDisparo(){ document.getElementById('dp-overlay').classList.remove('open'); }
+function dpPickTipo(btn){ _dpTipo=btn.getAttribute('data-tipo'); Array.prototype.forEach.call(document.querySelectorAll('.dp-tipo'), function(b){ b.classList.toggle('sel', b===btn); }); }
+function submitDisparo(){
+  var err=document.getElementById('dp-err');
+  if(!_dpTipo){ err.textContent='Escolha o tipo de saída.'; return; }
+  err.textContent='';
+  var g=document.getElementById('dp-go'); g.disabled=true; g.textContent='Enviando…';
+  function go(supa){
+    supa.functions.invoke('desligamento-disparar',{ body:{ matricula:_dpMat, tipo:_dpTipo } }).then(function(res){
+      var d=res&&res.data; var e=res&&res.error;
+      if(e || !d || !d.ok){
+        g.disabled=false; g.textContent='📲 Disparar agora';
+        var det=(d&&d.erro)?d.erro:((e&&e.message)?e.message:'falhou');
+        err.textContent='Não foi possível enviar ('+det+').';
+        return;
+      }
+      g.textContent='Enviado ✓';
+      document.getElementById('dp-msg').textContent='WhatsApp enviado'+(d.telefone?(' para '+d.telefone):'')+'.';
+      loadRelacao(); if(_analiticoLoaded) loadAnalitico();
+      setTimeout(closeDisparo, 1500);
+    }).catch(function(){ g.disabled=false; g.textContent='📲 Disparar agora'; err.textContent='Erro de conexão. Tente de novo.'; });
+  }
+  if (window.__lideresSupa) go(window.__lideresSupa);
+  else { err.textContent='Sessão ainda carregando — tente de novo.'; g.disabled=false; g.textContent='📲 Disparar agora'; }
+}
 
 // === Init ===================================================================
 document.addEventListener('DOMContentLoaded', function(){
