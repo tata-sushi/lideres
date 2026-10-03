@@ -94,7 +94,7 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
 .drawer-about { font-size: 13px; line-height: 1.7; color: var(--mid); }
 ```
 
-**Números** — grid 2 colunas, **sempre os mesmos 2 cards do portal** (nunca números próprios da página): **Seções** (`#drawer-kpi-secoes` — número **fixo no HTML, igual em todas as páginas**; ao mudar, trocar em todas; sub `#drawer-kpi-pags` pág / `#drawer-kpi-dash` dash, contados no repositório pelo `loadDrawerMeta`) e **Unidades** (`#drawer-kpi-unidades`, sub `#drawer-kpi-deptos` depto / `#drawer-kpi-colabs` colab, vindos do Supabase pelo `loadDrawerKPIs`). Número DM Sans 28px/700, rótulo e sub em DM Mono:
+**Números** — grid 2 colunas, **sempre os mesmos 2 cards do portal** (nunca números próprios da página): **Seções** (`#drawer-kpi-secoes` — número **fixo no HTML, igual em todas as páginas — hoje 5**, as seções do menu principal; ao mudar, trocar em todas; sub `#drawer-kpi-pags` pág / `#drawer-kpi-dash` dash, contados no repositório pelo `loadDrawerMeta`) e **Unidades** (`#drawer-kpi-unidades`, sub `#drawer-kpi-deptos` depto / `#drawer-kpi-colabs` colab, vindos do Supabase pelo `loadDrawerKPIs`). Número DM Sans 28px/700, rótulo e sub em DM Mono:
 ```css
 .drawer-kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .drawer-kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 10px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -174,7 +174,7 @@ Fica no fim do `<body>`, **fora** do `#zoom-content`. Só a seção **Ações** 
       <div class="drawer-kpi-grid">
         <div class="drawer-kpi-card">
           <span class="drawer-kpi-card-label">Seções</span>
-          <span class="drawer-kpi-card-number" id="drawer-kpi-secoes">7</span>
+          <span class="drawer-kpi-card-number" id="drawer-kpi-secoes">5</span>
           <span class="drawer-kpi-card-sub"><strong id="drawer-kpi-pags">31</strong> pág / <strong id="drawer-kpi-dash">13</strong> dash</span>
         </div>
         <div class="drawer-kpi-card">
