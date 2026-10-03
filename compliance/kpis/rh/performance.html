@@ -2129,7 +2129,7 @@ function closeDrawer() {
 function hardRefresh() {
   var btn = document.getElementById('btn-hard-refresh');
   if (btn) btn.classList.add('is-loading');
-  function reload() { location.replace(location.pathname + '?r=' + Date.now()); }
+  function reload() { location.replace(location.pathname + '?r=' + Date.now() + location.hash); }
   if (window.caches && caches.keys) {
     caches.keys().then(function(ks) {
       return Promise.all(ks.map(function(k) { return caches.delete(k); }));
@@ -2176,15 +2176,13 @@ function setTab(t){
   window.scrollTo(0,0);
 }
 
-/* Deep-link de aba: o app Tatá Plus abre a página com #aba=<slug> (ex.: #aba=pendentes).
-   Abre a aba pedida no load e de novo quando a sessão do portal fica pronta
-   (lideres:supa), pra o loadPendentes já ter o cliente Supabase. Inerte sem hash. */
+/* Aba do #hash (#<slug>, gravado pelo Atualizar/F5): reabre no load e de novo quando a
+   sessão do portal fica pronta (lideres:supa), pra o loadPendentes já ter o cliente
+   Supabase. Abrindo pelo app (sem #) a página entra sempre na Sobre. */
 (function(){
   function abaAlvo(){
     var h=(location.hash||'').replace(/^#/,'');
-    var m=/(?:^|[?&])aba=([\w-]+)/i.exec(h);
-    var slug=m?m[1]:(/^[\w-]+$/.test(h)?h:'');
-    return (slug||'').toLowerCase();
+    return (/^[\w-]+$/.test(h)?h:'').toLowerCase();
   }
   function aplicar(){
     var a=abaAlvo();
@@ -2694,6 +2692,36 @@ function setTab(t){
     return setTabPagina.apply(this, arguments);
   };
   if (document.body.hasAttribute('data-sobre')) marcarSobre();
+})();
+</script>
+<script>
+/* ══ ABA NA URL ══ a aba aberta fica no #hash (#<slug>); Atualizar e F5 voltam nela.
+   Abrindo pelo app (sem #) a página entra sempre na Sobre. A chave é o slug do data-aba-id. */
+(function () {
+  var bar = document.querySelector('.tabs');
+  if (!bar) return;
+  function chave(b) {
+    var s = (b.getAttribute('data-aba-id') || '').split('::')[1];
+    return s || (b.id || '').replace(/^tab-/, '') || b.getAttribute('data-tab') || '';
+  }
+  function abaDoHash() {
+    var h = (location.hash || '').replace(/^#/, '');
+    return (/^[\w-]+$/.test(h) ? h : '').toLowerCase();
+  }
+  bar.addEventListener('click', function (ev) {
+    var b = ev.target.closest('.tab-btn');
+    if (!b || !bar.contains(b)) return;
+    var k = chave(b);
+    if (k) try { history.replaceState(null, '', location.pathname + location.search + '#' + k); } catch (e) {}
+  });
+  function restaurar() {
+    var k = abaDoHash();
+    if (!k) return;
+    var alvo = [].slice.call(bar.querySelectorAll('.tab-btn')).filter(function (b) { return chave(b) === k; })[0];
+    if (alvo && getComputedStyle(alvo).display !== 'none' && !alvo.classList.contains('active')) alvo.click();
+  }
+  if (document.readyState === 'complete') restaurar();
+  else window.addEventListener('load', restaurar);
 })();
 </script>
 </body>
