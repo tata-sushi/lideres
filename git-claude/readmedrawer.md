@@ -181,7 +181,7 @@ Sistema de duas famílias, ambas via Google Fonts:
 - Padding horizontal: 16px
 - Border-bottom: 1px solid `--border`
 - Título "SOBRE" em DM Mono 10px peso 500 uppercase, letter-spacing `.14em`
-- Botão close: área 28×28px, **só o X** (sem fundo e sem borda); ícone 13px `--mid`, no hover vira `--carbon`
+- Botão close: área 28×28px, **só o X** (sem fundo e sem borda); ícone 16px `--mid`, no hover vira `--carbon`
   - SVG do X: 13×13px, stroke `--mid`, stroke-width 2
   - Hover: borda escurece para `--carbon`
 
