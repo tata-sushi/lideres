@@ -42,7 +42,7 @@ Padronize as abas comuns nestes slugs (são os mais espalhados hoje):
 | Filtro "todos" | `todos` | `all` |
 
 > **KPIs → `dashboard`.** Hoje 14 páginas usam `dashboard` e 7 ainda usam `kpis` (mais
-> `geral`, `indicadores` avulsos). O rótulo visível pode continuar "KPI's"; o **slug** é
+> `geral`, `indicadores` avulsos). O rótulo visível é "KPIs"; o **slug** é
 > que padroniza em `dashboard`.
 
 ## 4. Vocabulário canônico de ações (botões)
