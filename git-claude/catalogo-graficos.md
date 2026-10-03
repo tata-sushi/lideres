@@ -154,8 +154,8 @@ Tokens: carbon `#35383F`, muted `#999`, border/teia `#E2E2E2`.
 | **Status das Entrevistas / dos Testes** | status em **tabela simples** (nome + contagem, sem pílula) | recrutamento, absenteísmo, cardápio | **padrão** |
 | **Vagas por Unidade** | barra horizontal (`indexAxis:'y'`) | reclamações, benefícios (TataPlus), desligamentos | desvio de tipo |
 | **CLT × PJ por Unidade** | barra empilhada (`stacked:true`, 2 séries, `indexAxis:'y'`, legenda, rótulo slash `28/6`, PJ = `CARBON2`, cantos por segmento) | hc, hc2, semanal | **desvio** (no portal: carbon + citric; no catálogo carbon + carbon claro) |
-| **Status das Demandas** | pizza (cores semânticas) | demandas2, desligamentos, recrutamento-novo | **desvio** (padrão manda tabela) |
-| **Identificou-se?** | doughnut | ouvidoria | **desvio** (legenda visível + plugin datalabels externo) |
+| **Status das Demandas** | pizza (cores semânticas) | demandas2, desligamentos, recrutamento-novo | **permitido** (desvio só nas cores semânticas — padrão é tons de carbon) |
+| **Identificou-se?** | doughnut | ouvidoria | **permitido** (desvio só no plugin datalabels externo) |
 | **Avaliação por Nota** | barra multicolor (nota 1→5, vermelho→verde) | desligamentos (avaliações) | desvio de cor |
 | **Turnover Mensal** | linha + área | semanal, hc, hc2 | hoje em **SVG à mão** (não Chart.js) |
 | **Chamados por Categoria** | **tabela simples** (nome + contagem, como "Status dos Testes") | páginas de chamados por categoria | volume por categoria (não usar barras em CSS) |
@@ -174,8 +174,8 @@ Tokens: carbon `#35383F`, muted `#999`, border/teia `#E2E2E2`.
 ## Padrão x desvio (resumo)
 
 - **Padrão** = barra vertical carbon (Chart.js), sem legenda/tooltip/grid, rótulo por
-  plugin, clique-filtra; status em **tabela** (nunca pizza); KPIs/filtros full-bleed invertidos.
-- **Desvios** recorrentes no portal: pizza/doughnut para status, barra horizontal,
+  plugin, clique-filtra; status em **tabela** ou pizza/rosca em tons de carbon; KPIs/filtros full-bleed invertidos.
+- **Desvios** recorrentes no portal: pizza/doughnut com cores próprias (fora dos tons de carbon), barra horizontal,
   tooltip nativo/legenda ligados, cores fora do carbon, e várias viz feitas em **SVG à mão**
   ou **barras CSS** em vez de Chart.js. O inventário completo (18 páginas, 34 gráficos) e as
   recomendações de padronização estão na skill `dashboards-kpi-graficos`.
