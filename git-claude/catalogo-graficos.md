@@ -175,6 +175,8 @@ Tokens: carbon `#35383F`, muted `#999`, border/teia `#E2E2E2`.
 
 - **Padrão** = barra vertical carbon (Chart.js), sem legenda/tooltip/grid, rótulo por
   plugin, clique-filtra; status em **tabela** ou pizza/rosca em tons de carbon; KPIs/filtros full-bleed invertidos.
+- **Proibido:** card de número solto (número grande + frase, empilhados) — vira card de KPI
+  ou tabela simples (nome + valor) num chart-card com título.
 - **Desvios** recorrentes no portal: pizza/doughnut com cores próprias (fora dos tons de carbon), barra horizontal,
   tooltip nativo/legenda ligados, cores fora do carbon, e várias viz feitas em **SVG à mão**
   ou **barras CSS** em vez de Chart.js. O inventário completo (18 páginas, 34 gráficos) e as

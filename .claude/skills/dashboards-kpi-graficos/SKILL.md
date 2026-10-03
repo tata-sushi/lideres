@@ -106,6 +106,11 @@ Regras:
 - **Label** em DM Mono uppercase; **sub** opcional (recorte "hoje / mês" etc.).
 - Precisa de destaque de cor por card? Use uma classe modificadora que só troca
   cor/acento (ex.: `.kpi-card-vagas`), mantendo a estrutura.
+- 🚫 **Proibido: card de número solto** — número grande com uma frase embaixo, em cards
+  empilhados pela página (ex.: "76% · foram informados previamente do motivo"). Não é um tipo
+  de gráfico do portal. Número em destaque vai num **card de KPI** (faixa do topo); um grupo de
+  percentuais/valores de uma seção vai numa **tabela simples** (`.status-row`: nome + valor,
+  §3) dentro de um `.chart-card` com título e botão "i".
 
 > ⚠️ **Cores invertidas na zona de KPI/filtros.** Aqui a **faixa é branca**
 > (`--surface`) e o **card/campo é cinza** (`--bg`) — o **inverso** dos chart-cards
@@ -285,7 +290,8 @@ Regras dos gráficos:
 ### Status/categorias com poucos itens → tabela ou pizza/rosca
 
 Distribuição por status/categoria pode ser **lista** (ex.: "Status das Entrevistas" do
-Recrutamento) ou **pizza/rosca** (ver abaixo). Lista:
+Recrutamento) ou **pizza/rosca** (ver abaixo). A mesma lista serve para **percentuais de uma
+seção** (ex.: "Percepção do processo" na Desligamentos: pergunta + `76%`). Lista:
 ```css
 .status-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--border); }
 .status-name { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); }
@@ -460,6 +466,8 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
 - [ ] `chartInst.destroy()` antes de recriar + guarda `typeof Chart`.
 - [ ] Muitas categorias → `min-width` no `.chart-scroll` + scroll lateral (não encolher).
 - [ ] Status/distribuição = tabela (`.status-row`) ou pizza/rosca em tons de carbon, sem tooltip nativo.
+- [ ] Nenhum **card de número solto** (número + frase): número em destaque = card de KPI; grupo de
+      percentuais = tabela simples (`.status-row`) num chart-card com título.
 - [ ] Tipografia: **tudo DM Sans**; número/valor **800**, nome/eixo/legenda **400**; DM Mono só
       título do card, rótulo/sub do KPI, cabeçalho de tabela, dia da semana e hints.
 - [ ] Carregar DM Sans até **800** + `preconnect`; desenhar o gráfico só após
