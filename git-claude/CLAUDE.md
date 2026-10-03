@@ -58,7 +58,7 @@ Exemplos canônicos: `compliance/kpis/rh/recrutamento.html`, `compliance/kpis/ma
 
 ### 2.2 Páginas de menu / institucionais (`compliance/menucompliance.html`, `compliance/areas/institucional/*`, etc.)
 
-Headers de menu têm padrão visual diferente e **não usam `.header-title`** — só logo à esquerda + `#header-user` + botão `+` à direita. CSS já padronizado nos arquivos existentes, não criar variações.
+Headers de menu mantêm o padrão de menu (logo do compliance em `.header-left` + botões em `.header-right`, **sem `.header-title`**), com **altura fixa 61px** e os **7 botões** das dashboards (Início · Voltar · Atualizar · Zoom− · Zoom+ · Fixar · Menu "+"). Exceções: `menucompliance.html` e `areas/organograma.html` só com o "+". Detalhes e CSS na skill **`header-abas-footer`** (§1b).
 
 ## 3. Cards de menu (ex.: `compliance/menucompliance.html`)
 
