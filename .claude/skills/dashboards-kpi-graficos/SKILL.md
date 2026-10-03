@@ -5,7 +5,7 @@ description: >-
   compliance/**): tokens de cor/tipografia em :root, cards de KPI
   (.kpis-wrap/.kpi-card/.kpi-number), chart-cards e gráficos em Chart.js 4
   (barras carbon, sem legenda/tooltip, rótulos custom, scroll lateral),
-  status como tabela (não pizza), subtabs e responsivo. Referência canônica:
+  status em tabela ou pizza/rosca, subtabs e responsivo. Referência canônica:
   compliance/kpis/rh/recrutamento.html. Use SEMPRE que for criar ou editar um
   dashboard, painel, card de KPI, indicador, número em destaque, gráfico
   (bar/line/chart), .chart-card, .kpi-card, .kpis-wrap, .dash-subtabs, ou
@@ -282,9 +282,10 @@ Regras dos gráficos:
 - Sempre `if (chartInst) chartInst.destroy()` antes de recriar, e guarde
   `if (typeof Chart === 'undefined') return;` (a lib pode não ter carregado).
 
-### Status/categorias com poucos itens → tabela, não pizza
+### Status/categorias com poucos itens → tabela ou pizza/rosca
 
-O portal **não usa gráfico de pizza**. Distribuição por status é uma **lista**:
+Distribuição por status/categoria pode ser **lista** (ex.: "Status das Entrevistas" do
+Recrutamento) ou **pizza/rosca** (ver abaixo). Lista:
 ```css
 .status-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--border); }
 .status-name { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); }
@@ -292,6 +293,15 @@ O portal **não usa gráfico de pizza**. Distribuição por status é uma **list
 .status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
 ```
 Cada linha: nome (DM Sans 13px/400) + contagem (DM Sans 13px/**800** tabular). Vazio → `.status-empty` "Sem dados".
+
+**Pizza / rosca (permitidas).** Ex.: "por recrutador" no Recrutamento (pizza com rótulos
+externos), "Identificou-se?" na Ouvidoria (rosca). Mesmo padrão dos outros gráficos:
+- **Tons de carbon** por opacidade (`#35383F`, `rgba(53,56,63,0.7)`, `0.45`, `0.25`…), nunca
+  hue própria; fatia com `borderColor:'#fff'`, `borderWidth:2`. Rosca: `cutout:'60%'`.
+- **Sem tooltip nativo.** Nome e valor ficam visíveis: na **legenda inferior** (DM Sans 12px
+  carbon, `boxWidth:12, padding:12`) ou em **rótulos externos** com linha-guia (plugin, como o
+  `outsideLabelsPlugin` do Recrutamento — reserve `layout.padding` para não cortar).
+- Ao filtrar, as fatias não selecionadas ficam mais claras (mesma ideia das barras).
 
 ---
 
@@ -429,6 +439,9 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
   e a largura é salva em **localStorage**. Cabeçalhos da tabela-organizadora **centralizados** — use `table.mini.tbl-org thead th { text-align:center }`
   (o seletor precisa de **2 classes** para vencer a especificidade de `table.mini thead th`, que tem `text-align:left`).
   **Não** existe reordenar nem mostrar/ocultar coluna no portal (só ordenar + dimensionar).
+- ⚠️ **Pendente:** as **tabelas grandes** de Recrutamento (`kpis/rh/recrutamento.html`),
+  Performance (`kpis/rh/performance.html`) e Documentos (`kpis/rh/doc.html`) ainda **não têm
+  padrão nesta skill** — vão ser configuradas depois. Até lá, não padronize essas tabelas.
 
 ### Datas nas tabelas
 - Data na tabela completa/analítica: **`DD/MM/AAAA`**; com horário, **`DD/MM/AAAA · HHhMM`**
@@ -446,7 +459,7 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
 - [ ] Gráfico = Chart.js 4 barras carbon, sem legenda/tooltip/grid, rótulo via plugin.
 - [ ] `chartInst.destroy()` antes de recriar + guarda `typeof Chart`.
 - [ ] Muitas categorias → `min-width` no `.chart-scroll` + scroll lateral (não encolher).
-- [ ] Status/distribuição = tabela (`.status-row`), nunca pizza.
+- [ ] Status/distribuição = tabela (`.status-row`) ou pizza/rosca em tons de carbon, sem tooltip nativo.
 - [ ] Tipografia: **tudo DM Sans**; número/valor **800**, nome/eixo/legenda **400**; DM Mono só
       título do card, rótulo/sub do KPI, cabeçalho de tabela, dia da semana e hints.
 - [ ] Carregar DM Sans até **800** + `preconnect`; desenhar o gráfico só após
