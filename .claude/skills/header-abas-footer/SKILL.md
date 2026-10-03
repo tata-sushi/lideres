@@ -143,7 +143,30 @@ Tudo **abaixo do header** fica dentro de `<div id="zoom-content">` — o zoom es
 })();
 ```
 
-**Atualizar** (`hardRefresh`): marca `.is-loading` no botão (ícone gira), limpa `caches`/service workers e recarrega com `location.replace(pathname + '?r=' + Date.now() + '#' + aba)` (busca sem cache e volta pra mesma aba). **Fixar** (`pinNoApp`): `postMessage` pro app pai (`gov-pin-toggle`); o botão fica `display:none` fora do app e o app o revela quando fixável.
+**Atualizar** (`hardRefresh`): marca `.is-loading` no botão (ícone gira), limpa `caches`/service workers e recarrega com `location.replace(location.pathname + '?r=' + Date.now() + location.hash)` (busca sem cache e **volta pra mesma aba**).
+
+**Aba na URL** (obrigatório em página com abas): a aba aberta fica no `#hash` (`#<slug>`, slug do `data-aba-id`), então **Atualizar e F5 voltam na mesma aba**. Script no fim do `<body>` (aceita também `#aba=<slug>`, formato do deep-link do app):
+
+```javascript
+/* ══ ABA NA URL ══ */
+(function () {
+  var bar = document.querySelector('.tabs'); if (!bar) return;
+  function chave(b) { var s = (b.getAttribute('data-aba-id') || '').split('::')[1]; return s || (b.id || '').replace(/^tab-/, '') || b.getAttribute('data-tab') || ''; }
+  function abaDoHash() { var h = (location.hash || '').replace(/^#/, ''); var m = /(?:^|[?&])aba=([\w-]+)/i.exec(h); return (m ? m[1] : (/^[\w-]+$/.test(h) ? h : '')).toLowerCase(); }
+  bar.addEventListener('click', function (ev) {
+    var b = ev.target.closest('.tab-btn'); if (!b || !bar.contains(b)) return;
+    var k = chave(b); if (k) try { history.replaceState(null, '', location.pathname + location.search + '#' + k); } catch (e) {}
+  });
+  function restaurar() {
+    var k = abaDoHash(); if (!k) return;
+    var alvo = [].slice.call(bar.querySelectorAll('.tab-btn')).filter(function (b) { return chave(b) === k; })[0];
+    if (alvo && alvo.offsetParent !== null && !alvo.classList.contains('active')) alvo.click();
+  }
+  if (document.readyState === 'complete') restaurar(); else window.addEventListener('load', restaurar);
+})();
+```
+
+**Fixar** (`pinNoApp`): `postMessage` pro app pai (`gov-pin-toggle`); o botão fica `display:none` fora do app e o app o revela quando fixável.
 
 ---
 
@@ -236,6 +259,7 @@ Como o footer é `fixed`, o conteúdo precisa de **padding-bottom folgado** (ex.
 - [ ] `.header-plus` **28×28**, `border-radius:4px`, fundo `--carbon`, ícone SVG 14px `--citric` stroke 2.5.
 - [ ] Logo base64 canônico da TATÁ copiado inteiro (sem truncar); nunca o hexágono do compliance.
 - [ ] Tudo abaixo do header dentro de `#zoom-content`; scripts de zoom + hardRefresh presentes.
+- [ ] Script **Aba na URL** presente e `hardRefresh` recarregando com `location.hash` (Atualizar/F5 voltam na mesma aba).
 - [ ] `.tabs` rolável (≈45px), `.tab-btn` DM Mono 11px/500 uppercase `letter-spacing:1.5px`, ativa carbon/citric; cada aba com `id="tab-<slug>"` + `data-aba-id`.
 - [ ] **`Sobre` é a 1ª aba (com `.active`) e `KPIs` é a última** (rótulo `KPIs`, sem apóstrofo).
 - [ ] `.footer` fixo carbon (≈50px), módulo `--citric` 10px + `#footer-date` branco 40%; conteúdo com `padding-bottom` folgado.
