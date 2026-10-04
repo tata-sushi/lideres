@@ -12,12 +12,16 @@ description: >-
   desktop×mobile (botão é OU texto OU ícone, nunca os dois: mobile=texto,
   desktop≥768px=ícone .btn-icon) e um MAPA DE MIGRAÇÃO das ~40 classes
   antigas (btn-gerar, btn-primary, modal-btn-save, btn-cancel, btn-excluir,
-  btn-clear…) → novas. Catálogo visual: git-claude/catalogo-botoes.html. Use
+  btn-clear…) → novas. REGRA DE CLIQUE: só botão padrão é clicável — nada de
+  onclick/cursor:pointer/role=button em texto, linha de tabela (<tr>) ou card
+  (exceções: gráficos Chart.js, botões de componente, cards de menu). Catálogo
+  visual: git-claude/catalogo-botoes.html. Use
   SEMPRE que for criar, editar ou padronizar um botão (primário/destrutivo/
   só-ícone/link/toggle), o estado de carregando/disabled de um botão, ou migrar
   classes de botão antigas pro padrão; e quando o pedido falar em "botão",
   "button", "btn", "salvar", "ação", "primário", "excluir", "loading",
-  "disabled", "cancelar", "toggle", "switch". Pílulas (raio 100px) ainda NÃO
+  "disabled", "cancelar", "toggle", "switch", "clicável", "clique", "onclick",
+  "card clicável", "linha clicável". Pílulas (raio 100px) ainda NÃO
   fazem parte desta skill (a definir depois). NÃO cobre: .header-plus (skill
   header-abas-footer), .tab-btn/.dash-subtab (header-abas-footer/
   dashboards-kpi-graficos) nem .drawer-sam-btn (drawer-sobre) — botões de
@@ -27,6 +31,12 @@ description: >-
 # Botões — Portal Líderes
 
 Conjunto canônico de botões (base `.btn` + modificadores). **Catálogo visual: `git-claude/catalogo-botoes.html`**. Baseado na varredura do portal (recrutamento/manutenção/papelaria + readmes). **Raio = 8px · altura única = 40px.**
+
+## 0. Regra de clique (governa toda página de conteúdo)
+
+**O único elemento clicável é um botão padrão** desta skill — `.btn` (+ modificadores), `.btn-icon`, `.btn-link` ou `.toggle`. **NÃO** colocar `onclick`, `cursor:pointer` nem `role="button"` em **texto simples, linha de tabela (`<tr>`) ou card**. Se algo precisa de ação, **coloque um botão padrão dentro** dele (ex.: um `.btn-icon` de visualizar/editar na linha da tabela; um `.btn--sm`/`.btn-link` no rodapé do card) — nunca torne a linha/card/texto inteiro clicável.
+
+**Exceções (já têm padrão próprio — não reescrever):** interações de **gráfico** (Chart.js — skill `dashboards-kpi-graficos`); os botões de componente `.header-plus` / `.tab-btn` / `.dash-subtab` / `.drawer-sam-btn`; e os **cards do menu** (`menucompliance.html` e similares), onde o card inteiro é o navegador por design.
 
 ## Relação com as outras skills
 - **`header-abas-footer`** — `.header-plus` (toolbar) e `.tab-btn` (abas) são botões de componente; ficam lá (raio 4px, mantêm).
@@ -173,6 +183,7 @@ Hoje o mesmo visual tem ~40 nomes. Ao mexer numa página, troque pela classe can
 ---
 
 ## Checklist
+- [ ] **Clique só em botão padrão**: nenhum `onclick`/`cursor:pointer`/`role="button"` em texto, `<tr>` ou card (exceções: gráfico, botões de componente, cards de menu).
 - [ ] Usa `.btn` + modificador (`--primary`/`--danger`), raio **8px**, **altura única 40px** (nenhum diferente), DM Mono 10px/600 uppercase.
 - [ ] Primário = carbon/citric (inclui as antigas ações secundárias); destrutivo = `--red`.
 - [ ] Ação de modal/form full-width = `.btn--block`; de tabela = `.btn--sm`.
