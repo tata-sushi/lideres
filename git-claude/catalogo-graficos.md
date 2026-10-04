@@ -177,6 +177,10 @@ Tokens: carbon `#35383F`, muted `#999`, border/teia `#E2E2E2`.
   plugin, clique-filtra; status em **tabela** ou pizza/rosca em tons de carbon; KPIs/filtros full-bleed invertidos.
 - **Proibido:** card de número solto (número grande + frase, empilhados) — vira card de KPI
   ou tabela simples (nome + valor) num chart-card com título.
+- **Proibido:** texto solto fora dos cards (título de seção/legenda no fundo cinza) — vai no
+  título do card ou no "i".
+- **Questionário (várias perguntas na mesma escala)** = um mapa de calor pergunta × nota, não um
+  gráfico por pergunta.
 - **Desvios** recorrentes no portal: pizza/doughnut com cores próprias (fora dos tons de carbon), barra horizontal,
   tooltip nativo/legenda ligados, cores fora do carbon, e várias viz feitas em **SVG à mão**
   ou **barras CSS** em vez de Chart.js. O inventário completo (18 páginas, 34 gráficos) e as
