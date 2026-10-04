@@ -182,7 +182,7 @@ function cartao(c){
   Decisões do dono para essa grade (04/10/2026), que valem para grades parecidas:
   - **Sem cartão branco em nenhuma largura**: a caixa da grade fica direto no fundo cinza e **ocupa a largura toda**
     (`table { width: 100% }`; 1ª coluna fixa em 260px, 212px no celular — a sobra vai para as colunas dos colaboradores,
-    nunca para a dos nomes). Sem título e sem legenda em cima.
+    nunca para a dos nomes). Sem título e sem legenda em cima. Cabeçalho da 1ª coluna ("Página") centralizado.
   - **Linhas verticais entre as colunas** (`border-left: 1px solid var(--border)` nas células e no cabeçalho de cada
     colaborador), contínuas também nas linhas de seção: nelas vão células vazias, uma por coluna — nunca `colspan`.
   - **"i" dentro do cabeçalho da última coluna** ("Editar"), acima da palavra, no canto superior direito
