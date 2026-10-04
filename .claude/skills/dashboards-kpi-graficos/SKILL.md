@@ -601,7 +601,9 @@ mexa** em consultas ao Supabase, ids de acesso (`data-aba-id`/`data-botao-id`) n
 4. **Arranjo das linhas e tabelas** (decisão do dono, página por página): o que vai lado a lado,
    analítico com organizador de colunas, KPIs que sobem para a faixa.
 
-**Como validar antes do merge** (o site só publica o `main`; o teste não tem login):
+**Como validar antes do merge** (o site só publica o `main`; o teste não tem login). Scripts prontos em
+`git-claude/testes/` (`smoke.js` antes × depois, `jscheck.js`, `oncheck.js`); ajustes finos página por página e o
+que falta decidir: `git-claude/ajustes-finos.md`.
 - Playwright com **dados falsos**: `addInitScript` define `window.__lideresSupa` com `schema().rpc()`
   e `from().select()` devolvendo linhas inventadas no formato da RPC da página (consulte o
   `RETURNS TABLE` da função no Supabase — só a estrutura, sem dados pessoais); `gate.js` respondido
