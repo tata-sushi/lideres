@@ -531,25 +531,20 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
   `border-radius:6px`, `padding:7px 16px`, hover `background:var(--bg)`; centralizado em `.ver-mais-wrap`.
   Mostra N linhas e revela o resto ao clicar.
 - **Toda tabela tem título** (`.chart-head` + `.chart-title`), como os demais cards.
-- **Tabela larga NO MOBILE = rola na horizontal, NUNCA comprime/sobrepõe colunas.** O bug clássico:
-  `table { width:100% }` sem `min-width` dentro de um wrapper `overflow-x:auto` — a tabela encolhe até
-  caber na tela, o wrapper nunca rola e as colunas (com `white-space:nowrap`) se **sobrepõem**. Correção:
-  a tabela **precisa ser mais larga que a tela** pra o wrapper rolar. Duas formas:
-  (a) `table-layout:fixed` com largura px em **todas** as colunas (a soma vira a largura da tabela); ou
-  (b) **`min-width` na tabela** — obrigatório quando **nem toda** coluna tem px. Cuidado: `table-layout:fixed`
-  com `width:100%` e só algumas colunas com `width` **esmaga as sem largura** no mobile (foi o bug do Analítico
-  de Manutenção: `.tbl-mini.tbl-org` só tinha px em Data/Status/Antes/Depois → resolvido com `min-width:800px`).
-  **Sempre** dentro de um wrapper com `overflow-x:auto` (`.tbl-scroll` ou `<div style="overflow-x:auto">`).
-  Config concreta (copiar):
-
+- **No celular (<768px) a tabela vira CARTÕES** (decisão do dono, 04/10/2026): um cartão cinza (`--bg`) por linha,
+  dentro do card branco — topo com o nome (DM Sans 13px/600) e o status (pílula) à direita; campos em 2 colunas
+  (rótulo DM Mono 10px uppercase muted + valor DM Sans 12px); texto longo em faixa própria; botões no rodapé do
+  cartão. Mesma ordem e mesmo "Ver mais" da tabela. No desktop fica a tabela. Código pronto em
+  `references/tabelas.md` (`cartao()` + opção `cartao` do organizador). **Nunca** esconder colunas no celular.
+- **Corpo da tabela = DM Sans 12px** (decisão do dono); nome/nota em destaque conforme abaixo.
+- **Desktop: tabela larga rola na horizontal, nunca comprime/sobrepõe colunas.** A tabela precisa ser mais larga que o
+  card para o wrapper rolar: `table-layout:fixed` com largura px em **todas** as colunas e `min-width` = soma (ex.: bug do
+  Analítico de Manutenção, `.tbl-mini.tbl-org` só com px em algumas colunas → `min-width:800px`). Sempre dentro de
+  `.tbl-scroll { overflow-x:auto }`.
   ```css
   .tbl-scroll { overflow-x: auto; }
-  /* min-width >= soma das larguras das colunas (ex.: 600–800px) */
   table.mini.tbl-org { table-layout: fixed; min-width: 800px; }
-  table.mini.tbl-org thead th { overflow: hidden; text-align: center; } /* clipa cabeçalho, evita vazar */
-  ```
-  ```html
-  <div class="tbl-scroll"><table class="mini tbl-org">…</table></div>
+  table.mini.tbl-org thead th { overflow: hidden; text-align: center; }
   ```
 - **Tabela completa (Analítico) = organizador de colunas** (ref.: `compliance/kpis/rh/reclamacoes.html`):
   (1) **ordenar** por clique no cabeçalho — `th.th-sort` com `data-col`, seta `↕/↑/↓`, handler que

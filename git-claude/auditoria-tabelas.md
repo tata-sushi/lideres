@@ -77,9 +77,9 @@ paleta · 6 datas DD/MM/AAAA (· HHhMM) · 7 "Ver mais" padrão · 8 largura che
 
 ## C) Decisões de design pendentes (do dono)
 
-- **Celular: rolar de lado ou virar cartões?** A skill manda rolar; várias tabelas viram cartões (docsrh e ouvidoria
-  até 580px; todas as `.desk-table`/`.ent-table` abaixo de 768px) e a reclamações esconde 5 colunas.
-- **Corpo da tabela 12px ou 13px?** O catálogo usa 12px; o Analítico da Manutenção (referência antiga) usa 13px.
+- ✅ **Decidido (04/10): no celular a tabela vira cartões** (modelo único na skill, `references/tabelas.md` §4). A
+  reclamações (que esconde 5 colunas) e as que rolam de lado passam para cartões ao serem padronizadas.
+- ✅ **Decidido (04/10): corpo da tabela em 12px.**
 - **Matrizes de "Analítico"** (recrutamento, performance, doc): colunas agrupadas/recolhíveis, coluna fixa, rolagem
   interna — padrão ainda pendente.
 - **Tabelas operacionais largas com botões por linha:** recrutamento Vagas/Entrevistas/Testes (10–12 colunas),
