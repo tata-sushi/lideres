@@ -15,7 +15,7 @@ tabela de **Comentários** da aba KPIs (as três usam o mesmo organizador abaixo
     <div class="tbl-scroll"><table class="mini tbl-org" id="tbl-anl" style="min-width:1110px"><thead><tr>
       <th data-col="nome" class="th-sort" onclick="TAB_ANL.ordenar('nome')" style="width:210px">Colaborador <span class="sort-arrow" data-sa="nome">↕</span></th>
       …
-      <th style="width:230px">Ações</th>                                   <!-- coluna de ações: sem ordenar/redimensionar -->
+      <th style="width:110px">Ações</th>                                   <!-- coluna de ações (ícones 30px): sem ordenar/redimensionar -->
     </tr></thead><tbody id="anl-tbody"></tbody></table></div>
     <div class="ver-mais-wrap" id="anl-mais" style="display:none"><button class="btn btn--primary" onclick="TAB_ANL.verMais()">Ver mais</button></div>
   </div>
@@ -42,7 +42,10 @@ table.mini .td-acoes { text-align: right; }
 table.mini .td-muted { color: var(--muted); font-size: 11px; }   /* complemento: "(12d)", "sem nº", "respondida" */
 .status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
 ```
-Botões de ação dentro da linha: **DM Sans** (nunca DM Mono).
+Ações da linha: no **desktop** são **ícones** `.btn-icon` 30×30 com `title` (avião = enviar/disparar, corrente = link,
+duas folhas = copiar, seta circular = reemitir…); no **cartão do celular** a mesma ação é texto `.btn.btn--primary.btn--sm`.
+Gere os dois da mesma lista de ações (modelo `_acao()` na skill `botoes` §4). Coluna "Ações" estreita: ~40px por ícone
+(110px para 2 ícones). Ao mudar larguras, troque a `chave` do `TabelaOrg` (`…_v2`) para não herdar larguras salvas.
 
 ## 3. JS — organizador (ordenar + redimensionar + "Ver mais"), uma instância por tabela
 
