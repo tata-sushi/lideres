@@ -293,6 +293,9 @@ Regras dos gráficos:
   `gap:12px` + `margin-top:12px`; nunca 0). **Mesma linha = mesmo tipo ou, no mínimo, mesma
   altura** — nunca pareie um gráfico curto com um alto (ex.: barra + heatmap). Gráficos
   altos/de altura variável (heatmap, calendário, nuvem) vão **full-width** (`grid-column:1/-1`).
+  🚫 **Proibido texto solto fora dos cards** — título de seção, legenda ou subtítulo no fundo
+  cinza entre os gráficos (ex.: "PROCESSO DE DESLIGAMENTO · quem foi desligado"). Todo texto vai
+  **dentro do card**: no título (`.chart-title`) ou no botão "i" (para quem, de onde vem, como ler).
   **Nunca sobra espaço em branco num card por causa do vizinho:**
   - **Barra horizontal com muitas categorias** (ex.: "Saídas" da Desligamentos) **não aumenta a
     altura do card**: fica nos mesmos 220px e **rola na vertical** por dentro —
@@ -422,6 +425,20 @@ Padrões consolidados no catálogo visual (`git-claude/catalogo-graficos.html`).
 ```
 Cor por opacidade do carbon (`rgba(53,56,63,a)`, `a` de ~0.15 a 1); texto branco quando `a>0.5`.
 
+**Mapa de calor pergunta × escala (padrão para questionário).** Várias perguntas com a **mesma
+escala** (ex.: notas 1–5 da entrevista de saída da Desligamentos) viram **um** mapa de calor, nunca
+um gráfico por pergunta: **pergunta na 1ª coluna** (nome curto, alinhado à esquerda, pode quebrar
+linha) e **a escala nas colunas seguintes** (cabeçalho = valores da escala). Célula = quantas
+pessoas deram aquela nota (vazia e `var(--bg)` quando 0); a intensidade é relativa à **maior célula
+do mapa**. Card full-width, título (ex.: "Avaliação por pergunta") e "i" com a escala + uma
+`.info-table` `# / Tema / Pergunta` com o texto completo de cada pergunta.
+```css
+.heat { overflow-x: auto; }
+.heat-grid { display: grid; grid-template-columns: minmax(110px, 220px) repeat(5, minmax(34px, 1fr)); gap: 3px; min-width: 300px; }
+.heat-hh, .heat-day { font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--carbon); display: flex; align-items: center; justify-content: center; }
+.heat-day { justify-content: flex-start; padding-right: 8px; line-height: 1.25; }
+```
+
 ### Nuvem de palavras — cor por categoria (paleta das pílulas)
 Palavra colorida pela **categoria**, com as cores das pílulas, + legenda:
 ```js
@@ -496,6 +513,10 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
       `document.fonts.load` de 400/500/800 (evita flash e nome cortado no canvas).
 - [ ] `devicePixelRatio: Math.max(2, window.devicePixelRatio || 1)` em todo `new Chart`; nomes no
       canvas em **500** (nitidez).
+- [ ] Nenhum texto solto fora dos cards (título de seção/legenda no fundo): tudo no título do card
+      ou no "i".
+- [ ] Várias perguntas com a mesma escala = **um** mapa de calor pergunta × nota (não um gráfico
+      por pergunta).
 - [ ] Nenhum card com espaço em branco por causa do vizinho: barra horizontal longa = 220px +
       rolagem vertical; tabela/card curto em linha própria.
 - [ ] Barras **raio 5**; 2ª série = **`CARBON2`** (`rgba(53,56,63,0.45)`); empilhada sem "degrau"
