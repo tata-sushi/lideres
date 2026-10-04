@@ -64,7 +64,8 @@ Referências (leia conforme a tarefa):
   Fluxo completo em `references/backend-supabase.md` §"Tabela de acessos".
 - **`compliance/auditoria/paginas.html` (Auditoria de páginas, menu Compliance do app)** — a mesma grade
   páginas × colaboradores, **ao vivo no portal e só para admin**: linha da página (quem abre) + uma linha por
-  aba / botão / valor (quem vê), pílula do tipo à direita do nome, lápis na **última coluna (fixa à direita)**
+  aba / botão / valor (quem vê) em cascata (seção › subseção › página › item, só pelo recuo), pílula do tipo à direita
+  do nome (aba azul · botão âmbar · valor carbon), lápis na **última coluna (fixa à direita)**
   que abre a lista de colaboradores com chaves; "Salvar" grava só o que mudou. Lê `gov_auditoria_acessos` e
   grava `gov_auditoria_salvar` (backend §"Página Auditoria de páginas"). Não tem lista própria de ids: página,
   aba ou botão novo aparece nela assim que entra no catálogo (`ativo`).
