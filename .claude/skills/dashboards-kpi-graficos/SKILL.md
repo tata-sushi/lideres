@@ -563,6 +563,10 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
   Performance (`kpis/rh/performance.html`) e Documentos (`kpis/rh/doc.html`) ainda **não têm
   padrão nesta skill** — vão ser configuradas depois. Até lá, não padronize essas tabelas.
 
+- **Padrão completo de tabela de tela** (organizador pronto em JS, pílulas de status, filtros e ações da página no
+  drawer, nada solto fora do card): **`references/tabelas.md`** — implementado na Desligamentos (Analítico, A enviar e
+  Comentários). Auditoria das tabelas dos 37 dashboards: `git-claude/auditoria-tabelas.md`.
+
 ### Datas nas tabelas
 - Data na tabela completa/analítica: **`DD/MM/AAAA`**; com horário, **`DD/MM/AAAA · HHhMM`**
   (ex.: `11/09/2026 · 09H15`) — separador `·` (bolinha), o mesmo do `cargo · unidade`.
