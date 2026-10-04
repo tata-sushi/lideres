@@ -7,6 +7,28 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+/* Padrão dos gráficos (skill dashboards-kpi-graficos): canvas em 2x (texto nítido no PC e com o zoom da
+   página), DM Sans 500 nos nomes, sem balão (tooltip) por padrão e redesenho quando a fonte termina de carregar. */
+(function () {
+  function padrao() {
+    if (!window.Chart || Chart.__padraoLideres) return;
+    Chart.__padraoLideres = true;
+    Chart.defaults.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
+    Chart.defaults.font.family = "'DM Sans', sans-serif";
+    Chart.defaults.font.weight = 500;
+    Chart.defaults.plugins.tooltip.enabled = false;
+    if (document.fonts && document.fonts.load) {
+      Promise.all(['400', '500', '800'].map(function (w) { return document.fonts.load(w + ' 12px "DM Sans"'); })).then(function () {
+        Object.keys(Chart.instances || {}).forEach(function (k) { try { Chart.instances[k].update('none'); } catch (e) {} });
+      }, function () {});
+    }
+  }
+  padrao();
+  if (!window.Chart) document.addEventListener('DOMContentLoaded', padrao);
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,7 +67,7 @@ body[data-sobre] #kpis-wrap, body[data-sobre] #filters-wrap, body[data-sobre] #z
 .tab-btn.disabled { opacity: 0.32; cursor: not-allowed; pointer-events: none; }
 
 /* ── CONTENT ── */
-.content { padding: 16px 20px 100px; }
+.content { padding: 14px 12px 100px; }
 .page { display: none; flex-direction: column; gap: 12px; }
 .page.active { display: flex; }
 .cols-unidade { display: flex; gap: 20px; align-items: flex-start; }
@@ -77,17 +99,19 @@ body[data-sobre] #kpis-wrap, body[data-sobre] #filters-wrap, body[data-sobre] #z
 .btn-ver svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.5; }
 
 /* ── BADGES ── */
-.badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; flex-shrink: 0; }
-.b-rascunho  { background: #FDEAEA; color: #7A1A1A; }
-.b-enviado   { background: #FFF4DC; color: #7A4A00; }
-.b-proc      { background: #FFF4DC; color: #7A4A00; }
-.b-aguardando{ background: #E8F0FA; color: #1A3A5C; }
-.b-concluido        { background: var(--carbon); color: var(--citric); }
-.b-parcial          { background: #FFF4DC; color: #7A4A00; }
-.b-parcial-entrega  { background: #FFF4DC; color: #7A4A00; }
-.b-conferido        { background: var(--carbon); color: var(--citric); }
-.b-nao-realizado    { background: #FFF4DC; color: #7A4A00; }
-.b-nao-recebido     { background: #FFF4DC; color: #7A4A00; }
+.badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; flex-shrink: 0; }
+/* paleta fixa (skill §5) — de quem é a próxima ação? Compras (área dona) → azul · fornecedor → âmbar ·
+   terminou bem → escuro · terminou mal → vermelho */
+.b-rascunho  { background: #FDEAEA; color: #7A1A1A; }          /* Cancelado: terminou mal */
+.b-enviado   { background: #E8F0FA; color: #1A3A5C; }          /* Aguardando compra: vez de Compras */
+.b-proc      { background: #E8F0FA; color: #1A3A5C; }          /* em processamento: vez de Compras */
+.b-aguardando{ background: #FFF4DC; color: #7A4A00; }          /* Aguardando recebimento: espera o fornecedor entregar */
+.b-concluido        { background: #E8F0FA; color: #1A3A5C; }   /* Recebido: falta a conferência */
+.b-parcial          { background: #FFF4DC; color: #7A4A00; }   /* espera o fornecedor */
+.b-parcial-entrega  { background: #FFF4DC; color: #7A4A00; }   /* Recebimento parcial: espera o resto do fornecedor */
+.b-conferido        { background: #35383F; color: #CFFF00; }   /* Conferido: terminou bem */
+.b-nao-realizado    { background: #FDEAEA; color: #7A1A1A; }   /* Pedido não realizado: terminou mal */
+.b-nao-recebido     { background: #E8F0FA; color: #1A3A5C; }   /* Não recebido: volta para Compras reprocessar */
 .nf-foto-thumb { width: 34px; height: 34px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border); cursor: zoom-in; flex-shrink: 0; transition: transform .12s; }
 .nf-foto-thumb:hover { transform: scale(1.05); }
 .foto-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 99999; display: none; align-items: center; justify-content: center; cursor: zoom-out; padding: 20px; }
@@ -99,7 +123,8 @@ body[data-sobre] #kpis-wrap, body[data-sobre] #filters-wrap, body[data-sobre] #z
 /* ── KPI GRID ── */
 .kpis-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
-.kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
+.kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); }
+@media (max-width: 767px) { .kpis-wrap .kpi-card:last-child:nth-child(odd) { grid-column: 1 / -1; } }
 .kpi-number { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
 .kpi-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
 .kpi-sub strong { color: var(--carbon); font-weight: 600; }
@@ -245,15 +270,15 @@ body[data-sobre] #kpis-wrap, body[data-sobre] #filters-wrap, body[data-sobre] #z
 .filters-row-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .filter-group { display: flex; flex-direction: column; gap: 4px; }
 .filter-date-group { display: flex; flex-direction: column; gap: 4px; }
-.filter-date-input { border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 10px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text); background: var(--bg); transition: border-color 0.15s; width: 100%; }
+.filter-date-input { border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); background: var(--bg); transition: border-color 0.15s; width: 100%; }
 .filter-date-input:focus { outline: none; border-color: var(--carbon); background: #fff; }
-.filter-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mid); }
-.filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); cursor: pointer; transition: border-color 0.15s; width: 100%; }
+.filter-label { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); }
+.filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); cursor: pointer; transition: border-color 0.15s; width: 100%; }
 .filter-select:focus { outline: none; border-color: var(--carbon); }
 .filters-actions { display: flex; align-items: center; justify-content: space-between; padding-top: 2px; }
-.btn-clear { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px 0; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
+.btn-clear { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px 0; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
 .btn-clear:hover { color: var(--carbon); }
-.results-count { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+.results-count { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; color: var(--muted); }
 .results-count span { color: var(--carbon); font-weight: 500; }
 
 /* ── FORM ── */
@@ -472,6 +497,65 @@ tr.row-editing td { background:#FAFFF0; }
 .kpi-bar-track { height:14px; background:var(--bg); border-radius:3px; overflow:hidden; }
 .kpi-bar-fill  { height:100%; background:var(--carbon); border-radius:3px; transition:width 0.4s ease; }
 .kpi-bar-val   { font-family:'DM Mono',monospace; font-size:11px; color:var(--carbon); text-align:right; font-weight:600; }
+/* ── ABA KPIs no padrão (skill dashboards-kpi-graficos §3/§6 + references/tabelas.md) ── */
+.dash-row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 768px) { .dash-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px 16px; display: flex; flex-direction: column; position: relative; min-width: 0; }
+.chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; padding: 0 18px; }
+.chart-info-btn { position: absolute; top: 10px; right: 12px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; padding: 3px; color: #CFCFCF; cursor: pointer; line-height: 0; }
+.chart-info-btn:hover { color: var(--muted); }
+.chart-wrap { position: relative; height: 220px; overflow-x: auto; overflow-y: hidden; }
+.chart-scroll { position: relative; height: 100%; }
+/* barras horizontais com muitas categorias: o card fica em 220px e o gráfico rola na vertical */
+.chart-wrap-y { overflow-x: hidden; overflow-y: auto; }
+.chart-scroll-y { position: relative; height: 100%; }
+.info-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.info-table th, .info-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.info-table th { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--carbon); font-weight: 600; }
+.info-table td { color: var(--carbon); font-weight: 600; }
+.info-table td:first-child { color: var(--muted); font-weight: 500; width: 22px; }
+.info-note { font-size: 12.5px; color: var(--carbon); font-weight: 600; line-height: 1.5; margin-bottom: 12px; text-align: center; }
+.tbl-scroll { overflow-x: auto; }
+table.mini { width: 100%; min-width: 520px; border-collapse: collapse; }
+table.mini thead th { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.6px; text-transform: uppercase; color: var(--muted); text-align: left; padding: 9px 10px; border-bottom: 2px solid var(--carbon); white-space: nowrap; }
+table.mini tbody td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--carbon); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.mini tbody tr:last-child td { border-bottom: none; }
+table.mini tbody tr:hover { background: #FAFAFA; }
+table.mini.tbl-org { table-layout: fixed; min-width: 600px; }
+table.mini.tbl-org thead th { position: relative; overflow: hidden; cursor: pointer; user-select: none; text-align: center; }
+.tbl-org thead th:hover { color: var(--carbon); }
+.th-sort { white-space: nowrap; }
+.sort-arrow { margin-left: 3px; color: var(--muted); }
+.tbl-org thead th .col-resizer { position: absolute; top: 4px; bottom: 4px; right: 0; width: 8px; cursor: col-resize; user-select: none; border-right: 1px solid var(--border); transition: border-color 0.12s; }
+.tbl-org thead th .col-resizer:hover, .tbl-org thead th .col-resizer.dragging { border-right-color: var(--carbon); }
+body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none !important; }
+table.mini td.nm { font-weight: 600; }
+table.mini td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.var-up { color: var(--red); font-weight: 600; }      /* último preço acima da média */
+.var-down { color: var(--green); font-weight: 600; }  /* último preço abaixo da média */
+.var-eq { color: var(--muted); }
+.tcards { display: flex; flex-direction: column; gap: 12px; }
+.tcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.tcard-top { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.tcard-tl { min-width: 0; }
+.tcard-title { font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 700; color: var(--carbon); letter-spacing: -0.1px; line-height: 1.3; text-transform: uppercase; }
+.tcard-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); margin-top: 3px; }
+.tcard-tr { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.tcard-fields { padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.tcard-field { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tcard-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
+.tcard-value { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--carbon); }
+@media (max-width: 767px) {
+  .tbl-scroll.tem-cartoes { display: none; }
+  /* no celular o card da tabela some (sem fundo branco, sem "i" e sem título): os cartões ficam no fundo cinza */
+  .card-tabela { background: none; border: none; box-shadow: none; padding: 0; }
+  .card-tabela > .chart-info-btn, .card-tabela > .chart-title { display: none; }
+}
+@media (min-width: 768px) { .tcards { display: none; } }
+.status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.ver-mais-wrap { text-align: center; padding: 12px 0 2px; }
+.btn-ver-mais { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; color: var(--carbon); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 7px 16px; cursor: pointer; transition: background 0.15s; }
+.btn-ver-mais:hover { background: var(--bg); }
 /* ── Desktop table ──────────────────────────────────────────────────────── */
 .mobile-cards { display: flex; flex-direction: column; gap: 20px; align-items: stretch; }
 .mobile-cards .col-unidade { flex: none; width: 100%; min-width: 0; }
@@ -481,22 +565,22 @@ tr.row-editing td { background:#FAFFF0; }
   .desk-table-wrap { display: block; }
 }
 .desk-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 860px; }
-.desk-table thead th { font-family:'DM Mono',monospace; font-size:9px; font-weight:500; text-transform:uppercase; letter-spacing:0.8px; color:var(--muted); padding:8px 6px; text-align:center; background:var(--surface); border-bottom:2px solid var(--carbon); cursor:pointer; user-select:none; white-space:nowrap; }
+.desk-table thead th { font-family:'DM Mono',monospace; font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:0.8px; color:var(--muted); padding:8px 6px; text-align:center; background:var(--surface); border-bottom:2px solid var(--carbon); cursor:pointer; user-select:none; white-space:nowrap; }
 .desk-table thead th:hover { color: var(--carbon); }
 .desk-table thead th:first-child { padding-left:14px; }
 .desk-table thead th:last-child { width:44px; cursor:default; padding-right:14px; }
-.desk-table tbody td { padding:8px 6px; border-bottom:1px solid var(--border); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; }
+.desk-table tbody td { padding:8px 6px; border-bottom:1px solid var(--border); font-family:'DM Sans',sans-serif; font-size:12px; color:var(--carbon); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; }
 .desk-table tbody td:first-child { text-align:left; padding-left:14px; }
 .desk-table tbody td:last-child  { padding-right:14px; }
 .desk-table tbody tr { cursor: pointer; transition: background 0.1s; }
 .desk-table tbody tr:last-child td { border-bottom:none; }
 .desk-table tbody tr:hover td { background:#FAFAFA; }
-.dt-num { font-size:13px; font-weight:600; color:var(--carbon); }
-.dt-sub { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); margin-top:2px; }
-.dt-unit { font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text); }
-.dt-date { font-family:'DM Mono',monospace; font-size:11px; color:var(--text); }
-.dt-forn { font-size:12px; color:var(--text); }
-.dt-qty  { font-family:'DM Mono',monospace; font-size:12px; font-weight:600; color:var(--carbon); }
+.dt-num { font-size:12px; font-weight:600; color:var(--carbon); }
+.dt-sub { font-family:'DM Sans',sans-serif; font-size:11px; color:var(--muted); margin-top:2px; }
+.dt-unit { font-family:'DM Sans',sans-serif; font-size:12px; color:var(--carbon); }
+.dt-date { font-family:'DM Sans',sans-serif; font-size:12px; color:var(--carbon); font-variant-numeric:tabular-nums; }
+.dt-forn { font-size:12px; color:var(--carbon); }
+.dt-qty  { font-family:'DM Sans',sans-serif; font-size:12px; font-weight:600; color:var(--carbon); font-variant-numeric:tabular-nums; }
 .desk-table thead th.sort-asc::after  { content:' ↑'; color:var(--carbon); }
 .desk-table thead th.sort-desc::after { content:' ↓'; color:var(--carbon); }
 .filters-wrap.kpi-mode .filters-row-dates { display:none; }
@@ -593,10 +677,10 @@ tr.row-editing td { background:#FAFFF0; }
 @media (min-width: 768px) { .toast { bottom: 28px; left: auto; right: 28px; transform: translateY(20px); } .toast.show { transform: translateY(0); } }
 @keyframes toastIn { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-@media (min-width: 640px) {
-  .content { padding: 24px 32px 100px; }
-  .filters-row { grid-template-columns: repeat(5, 1fr); }
-  .filters-row-dates { grid-template-columns: repeat(6, 1fr); }
+/* filtros: 2 colunas no celular → 3 no desktop (skill §2); conteúdo com respiro de 24px no desktop (§4) */
+@media (min-width: 768px) {
+  .content { padding: 14px 24px 100px; }
+  .filters-row, .filters-row-dates { grid-template-columns: 1fr 1fr 1fr; }
 }
 @media (min-width: 768px) {
   .modal-overlay { align-items: center; }
@@ -700,12 +784,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="kpi-card">
     <span class="kpi-label">Pedidos realizados</span>
     <span class="kpi-number" id="kpi-pedidos-total">—</span>
-    <span class="kpi-sub"><strong id="kpi-pedidos-semana">0</strong> na semana / <strong id="kpi-pedidos-mes">0</strong> no mês</span>
+    <span class="kpi-sub"><strong id="kpi-pedidos-semana">—</strong> na semana / <strong id="kpi-pedidos-mes">—</strong> no mês</span>
   </div>
   <div class="kpi-card">
     <span class="kpi-label">Recebidos</span>
     <span class="kpi-number" id="kpi-recebidos-total">—</span>
-    <span class="kpi-sub"><strong id="kpi-aguard-compra">0</strong> aguard. compra / <strong id="kpi-aguard-receb">0</strong> aguard. receb.</span>
+    <span class="kpi-sub"><strong id="kpi-aguard-compra">—</strong> aguard. compra / <strong id="kpi-aguard-receb">—</strong> aguard. receb.</span>
   </div>
 </div>
 
@@ -718,6 +802,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="page" id="page-conferencia"></div>
   <div class="page" id="page-kpis"></div>
 </main>
+
+<!-- INFO DOS GRÁFICOS (botão "i") -->
+<div class="modal-overlay" id="info-overlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header" style="justify-content:flex-end;border-bottom:none;padding-bottom:0">
+      <button class="modal-close" onclick="closeInfoGrafico()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="info-body" style="padding-top:0"></div>
+  </div>
+</div>
 
 <!-- LOADING -->
 <div class="loading-overlay show" id="loading-overlay">
@@ -1777,6 +1871,7 @@ function renderKPIsPage() {
   if (!container) return;
   var orders = ORDERS;
   if (!orders || !orders.length) {
+    if (typeof _abDestroyCharts === 'function') _abDestroyCharts();
     container.innerHTML = '<div class="empty"><p>Nenhum dado disponível.</p></div>';
     return;
   }
@@ -1831,7 +1926,7 @@ function renderKPIsPage() {
   });
   var monthData = Object.keys(byMonth).sort().slice(-6).map(function(k){
     var p=k.split('-');
-    return {label:mNames[parseInt(p[1],10)-1]+'/'+p[0].slice(2), val:byMonth[k]};
+    return {label:p[1]+'/'+p[0].slice(2), val:byMonth[k]};   // eixo X de série temporal: MM/AA (skill §3)
   });
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -1845,18 +1940,6 @@ function renderKPIsPage() {
       '</div>'+
       (sub?'<div class="kpi-mc-sub">'+sub+'</div>':'')+
     '</div>';
-  }
-
-  function hBars(data) {
-    if (!data.length) return '<div class="kpi-empty-chart">Sem dados</div>';
-    var mx=data[0].val||1;
-    return data.map(function(d){
-      return '<div class="kpi-bar-row">'+
-        '<div class="kpi-bar-name">'+d.nome+'</div>'+
-        '<div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:'+Math.round(d.val/mx*100)+'%"></div></div>'+
-        '<div class="kpi-bar-val">'+d.val+'</div>'+
-      '</div>';
-    }).join('');
   }
 
   // ── Montar HTML ───────────────────────────────────────────────────────────
@@ -1894,114 +1977,255 @@ function renderKPIsPage() {
   var itemData = Object.keys(byItem).map(function(k){ return byItem[k]; })
     .sort(function(a,b){ return b.qtd - a.qtd; });
 
-  function itemsTable(data) {
-    if (!data.length) return '<div class="kpi-empty-chart">Sem dados de itens</div>';
-    var rows = data.map(function(d) {
-      var vlMedio = d.qtd > 0 ? (d.vlTotal / d.qtd) : 0;
-      var vlStr = vlMedio > 0 ? 'R$ '+vlMedio.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
-      var varStr = '—';
-      var varStyle = 'color:var(--muted);';
-      if (vlMedio > 0 && d.lastVl > 0) {
-        var pct = ((d.lastVl - vlMedio) / vlMedio) * 100;
-        if (Math.abs(pct) < 0.5) {
-          varStr = '≈ 0%';
-        } else if (pct > 0) {
-          varStr = '▲ '+pct.toFixed(1).replace('.',',')+'%';
-          varStyle = 'color:#E53935;font-weight:600;';
-        } else {
-          varStr = '▼ '+Math.abs(pct).toFixed(1).replace('.',',')+'%';
-          varStyle = 'color:#2E7D32;font-weight:600;';
-        }
-      }
-      return '<tr>'+
-        '<td>'+d.nome+'</td>'+
-        '<td class="cat">'+d.cat+'</td>'+
-        '<td>'+d.forn+'</td>'+
-        '<td class="r">'+d.qtd+'</td>'+
-        '<td class="r">'+d.nPedidos+'</td>'+
-        '<td class="r">'+vlStr+'</td>'+
-        '<td class="r" style="'+varStyle+'">'+varStr+'</td>'+
-      '</tr>';
-    }).join('');
-    return '<div class="kpi-items-scroll">'+
-      '<table class="kpi-items-table">'+
-        '<thead><tr>'+
-          '<th>Item</th>'+
-          '<th>Categoria</th>'+
-          '<th>Fornecedor</th>'+
-          '<th class="r">Qtd</th>'+
-          '<th class="r">Pedidos</th>'+
-          '<th class="r">Vlr Médio</th>'+
-          '<th class="r">Variação</th>'+
-        '</tr></thead>'+
-        '<tbody>'+rows+'</tbody>'+
-      '</table>'+
-    '</div>';
+  // ── Montagem no padrão: 4 gráficos em chart-cards (2 por linha no desktop) + Analítico com organizador ──
+  var I_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+  function card(key, titulo, corpo){
+    return '<div class="chart-card"><button class="chart-info-btn" onclick="abrirInfoGrafico(\'' + key + '\')" title="Informações do gráfico" aria-label="Informações">' + I_SVG + '</button>' +
+      '<div class="chart-title">' + titulo + '</div>' + corpo + '</div>';
   }
-
+  function vazio(data, corpo){ return data.length ? corpo : '<div class="status-empty">Sem dados</div>'; }
   var html =
-    '<div class="kpi-charts-row">'+
-      '<div class="kpi-chart-block"><div class="kpi-chart-title">Pedidos por Categoria</div>'+hBars(catData)+'</div>'+
-      '<div class="kpi-chart-block"><div class="kpi-chart-title">Top Fornecedores</div>'+hBars(fornData)+'</div>'+
-    '</div>'+
-    '<div class="kpi-charts-row">'+
-      '<div class="kpi-chart-block"><div class="kpi-chart-title">Pedidos por Unidade</div>'+
-        '<svg id="kpi-unit-svg" viewBox="0 0 600 180" preserveAspectRatio="none" style="width:100%;height:180px;display:block;"></svg>'+
-      '</div>'+
-      '<div class="kpi-chart-block"><div class="kpi-chart-title">Evolução Mensal</div>'+
-        '<svg id="kpi-evol-svg" viewBox="0 0 600 180" preserveAspectRatio="none" style="width:100%;height:180px;display:block;"></svg>'+
-      '</div>'+
-    '</div>'+
-    '<div class="kpi-chart-block">'+
-      '<div class="kpi-chart-title">Analítico <span style="color:var(--muted);font-size:10px;margin-left:8px;font-weight:500;letter-spacing:0.4px;">— '+itemData.length+' resultado'+(itemData.length!==1?'s':'')+'</span></div>'+
-      itemsTable(itemData)+
+    '<div class="dash-row">' +
+      card('categoria', 'Pedidos por categoria', vazio(catData, '<div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="ab-chart-cat"></canvas></div></div>')) +
+      card('fornecedor', 'Top fornecedores', vazio(fornData, '<div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="ab-chart-forn"></canvas></div></div>')) +
+      card('unidade', 'Pedidos por unidade', vazio(unitData, '<div class="chart-wrap"><div class="chart-scroll" id="ab-scroll-unid"><canvas id="ab-chart-unid"></canvas></div></div>')) +
+      card('evolucao', 'Evolução mensal', vazio(monthData, '<div class="chart-wrap"><div class="chart-scroll" id="ab-scroll-evol"><canvas id="ab-chart-evol"></canvas></div></div>')) +
+    '</div>' +
+    '<div class="chart-card card-tabela">' +
+      '<button class="chart-info-btn" onclick="abrirInfoGrafico(\'analitico\')" title="Informações da tabela" aria-label="Informações">' + I_SVG + '</button>' +
+      '<div class="chart-title">Analítico (' + itemData.length + ')</div>' +
+      '<div class="tcards" id="ab-itens-cards"></div>' +
+      '<div class="tbl-scroll tem-cartoes"><table class="mini tbl-org" id="tbl-ab-itens" style="min-width:' + _AB_ITENS_MINW + 'px"><thead><tr>' +
+        _AB_ITENS_COLS.map(function(c){
+          var arw = (TAB_AB_ITENS.col === c.k) ? (TAB_AB_ITENS.dir > 0 ? '↑' : '↓') : '↕';
+          return '<th data-col="' + c.k + '" class="th-sort" onclick="TAB_AB_ITENS.ordenar(\'' + c.k + '\')" style="width:' + c.w + 'px">' + c.lbl + ' <span class="sort-arrow" data-sa="' + c.k + '">' + arw + '</span></th>';
+        }).join('') +
+      '</tr></thead><tbody id="ab-itens-tbody"></tbody></table></div>' +
+      '<div class="ver-mais-wrap" id="ab-itens-mais" style="display:none"><button class="btn-ver-mais" onclick="TAB_AB_ITENS.verMais()">Ver mais</button></div>' +
     '</div>';
 
+  _abDestroyCharts();
   container.innerHTML = html;
-  _drawKpiUnitBars('kpi-unit-svg', unitData);
-  _drawKpiEvolLine('kpi-evol-svg', monthData);
+  _abBarH('ab-chart-cat', catData);
+  _abBarH('ab-chart-forn', fornData);
+  _abBarV('ab-chart-unid', 'ab-scroll-unid', unitData);
+  _abLinha('ab-chart-evol', 'ab-scroll-evol', monthData);
+
+  // linhas do Analítico: valor médio e variação (último preço × média) — mesma conta de antes, agora por linha
+  var linhas = itemData.map(function(d){
+    var vlMedio = d.qtd > 0 ? (d.vlTotal / d.qtd) : 0;
+    var pct = (vlMedio > 0 && d.lastVl > 0) ? ((d.lastVl - vlMedio) / vlMedio) * 100 : null;
+    return { nome: d.nome || '', cat: d.cat, forn: d.forn, qtd: d.qtd, nPedidos: d.nPedidos, vlMedio: vlMedio, pct: pct };
+  });
+  TAB_AB_ITENS.colW = null;   // a tabela foi recriada: reaplica larguras salvas e alças de redimensionar
+  TAB_AB_ITENS.dados(linhas);
 }
 
-function _drawKpiUnitBars(svgId, data) {
-  var svg = document.getElementById(svgId); if (!svg||!data.length) return;
-  var W=600,H=180,PB=36,PT=20,PLR=16;
-  var mx=Math.max.apply(null,data.map(function(d){return d.val;}));
-  var n=data.length, tw=W-PLR*2, bw=Math.min(64,Math.floor(tw/n)-6), ph=H-PB-PT;
-  var c='';
-  data.forEach(function(d,i){
-    var x=PLR+(tw/n)*i+(tw/n-bw)/2;
-    var bh=mx>0?Math.round(d.val/mx*ph):0, y=PT+(ph-bh);
-    var isMax=d.val===mx;
-    c+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="3" fill="'+(isMax?'#35383F':'#C8C9CC')+'"/>';
-    c+='<text x="'+(x+bw/2)+'" y="'+(y-5)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="'+(isMax?'#35383F':'#999')+'" font-weight="'+(isMax?'600':'400')+'">'+d.val+'</text>';
-    var lbl=d.nome.length>9?d.nome.slice(0,8)+'…':d.nome;
-    c+='<text x="'+(x+bw/2)+'" y="'+(H-6)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#555">'+lbl+'</text>';
+// ── Gráficos da aba KPIs (Chart.js 4, padrão do portal) ───────────────────────
+var _abCharts = {};
+function _abDestroyCharts(){ Object.keys(_abCharts).forEach(function(k){ try { _abCharts[k].destroy(); } catch (e) {} delete _abCharts[k]; }); }
+function _abTrunc(t, n){ t = String(t == null ? '' : t); return t.length <= n ? t : t.slice(0, n - 1) + '…'; }
+function _abQuebra(t, maxc){   // quebra o nome em até 2 linhas de maxc letras (array = várias linhas no Chart.js)
+  var linhas = [], cur = '';
+  String(t == null ? '' : t).split(/\s+/).forEach(function(p){
+    if (!p) return;
+    if (!cur) cur = p; else if ((cur + ' ' + p).length <= maxc) cur += ' ' + p; else { linhas.push(cur); cur = p; }
   });
-  svg.innerHTML=c;
+  if (cur) linhas.push(cur);
+  if (linhas.length > 2) linhas = [linhas[0], linhas.slice(1).join(' ')];
+  return linhas.map(function(l){ return _abTrunc(l, maxc); });
+}
+// rótulo do valor na ponta da barra (DM Sans 12px/800), vertical ou horizontal
+var _abBarLabels = {
+  id: '_abBarLabels',
+  afterDatasetsDraw: function(chart){
+    var ctx = chart.ctx, horiz = chart.options && chart.options.indexAxis === 'y';
+    var meta = chart.getDatasetMeta(0); if (!meta || !meta.data) return;
+    ctx.save(); ctx.fillStyle = '#35383F'; ctx.font = '800 12px "DM Sans", sans-serif';
+    meta.data.forEach(function(el, i){
+      var v = chart.data.datasets[0].data[i]; if (v == null || v === 0) return;
+      if (horiz) { ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), el.x + 5, el.y); }
+      else { ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(String(v), el.x, el.y - 4); }
+    });
+    ctx.restore();
+  }
+};
+// rótulo do valor em cada ponto da linha
+var _abPointLabels = {
+  id: '_abPointLabels',
+  afterDatasetsDraw: function(chart){
+    var ctx = chart.ctx, meta = chart.getDatasetMeta(0); if (!meta || !meta.data) return;
+    ctx.save(); ctx.fillStyle = '#35383F'; ctx.font = '800 12px "DM Sans", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    meta.data.forEach(function(el, i){ var v = chart.data.datasets[0].data[i]; if (v != null) ctx.fillText(String(v), el.x, el.y - 6); });
+    ctx.restore();
+  }
+};
+var _AB_SANS12 = { family: "'DM Sans', sans-serif", size: 12, weight: '500' };
+function _abBarH(id, data){
+  var cv = document.getElementById(id); if (!cv || typeof Chart === 'undefined' || !data.length) return;
+  // o card não cresce: o .chart-scroll-y ganha a altura das barras e o .chart-wrap (220px) rola
+  if (cv.parentElement) cv.parentElement.style.height = Math.max(220, data.length * 30 + 10) + 'px';
+  _abCharts[id] = new Chart(cv, {
+    type: 'bar',
+    data: { labels: data.map(function(d){ return d.nome; }), datasets: [{ data: data.map(function(d){ return d.val; }), backgroundColor: '#35383F', borderWidth: 0, borderRadius: 5, barPercentage: 0.6, maxBarThickness: 22 }] },
+    plugins: [_abBarLabels],
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false, devicePixelRatio: Math.max(2, window.devicePixelRatio || 1),
+      layout: { padding: { right: 32 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true },
+        // o Chart.js dá no máximo metade da largura para os nomes: corta com "…" conforme o espaço
+        y: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: _AB_SANS12,
+          callback: function(v){ return _abTrunc(this.getLabelForValue(v), Math.min(26, Math.max(8, Math.floor((this.chart.width / 2 - 16) / 7.5)))); } } }
+      } }
+  });
+}
+function _abBarV(id, scrollId, data){
+  var cv = document.getElementById(id); if (!cv || typeof Chart === 'undefined' || !data.length) return;
+  var sc = document.getElementById(scrollId); if (sc) sc.style.minWidth = (data.length * 46) + 'px';   // barras não comprimem: rola de lado
+  _abCharts[id] = new Chart(cv, {
+    type: 'bar',
+    data: { labels: data.map(function(d){ return d.nome; }), datasets: [{ data: data.map(function(d){ return d.val; }), backgroundColor: '#35383F', borderWidth: 0, borderRadius: 5, barPercentage: 0.6, maxBarThickness: 22 }] },
+    plugins: [_abBarLabels],
+    options: { responsive: true, maintainAspectRatio: false, animation: false, devicePixelRatio: Math.max(2, window.devicePixelRatio || 1),
+      layout: { padding: { top: 18, bottom: 6 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        // nome da unidade em até 2 linhas, cortado com "…" pelo espaço de cada barra (não sobrepõe no celular)
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: _AB_SANS12, maxRotation: 0, autoSkip: false,
+          callback: function(v){ var n = this.chart.data.labels.length || 1; return _abQuebra(this.getLabelForValue(v), Math.max(6, Math.floor((this.chart.width / n - 8) / 7))); } } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
+      } }
+  });
+}
+function _abLinha(id, scrollId, data){
+  var cv = document.getElementById(id); if (!cv || typeof Chart === 'undefined' || !data.length) return;
+  var sc = document.getElementById(scrollId); if (sc) sc.style.minWidth = (data.length * 46) + 'px';
+  _abCharts[id] = new Chart(cv, {
+    type: 'line',
+    data: { labels: data.map(function(d){ return d.label; }), datasets: [{ data: data.map(function(d){ return d.val; }),
+      borderColor: '#35383F', borderWidth: 2, backgroundColor: 'rgba(53,56,63,0.08)', fill: true,
+      pointBackgroundColor: '#35383F', pointBorderWidth: 0, pointRadius: 3, tension: 0 }] },
+    plugins: [_abPointLabels],
+    options: { responsive: true, maintainAspectRatio: false, animation: false, devicePixelRatio: Math.max(2, window.devicePixelRatio || 1),
+      layout: { padding: { top: 22, left: 14, right: 14, bottom: 6 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: _AB_SANS12, maxRotation: 0, autoSkip: false } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
+      } }
+  });
 }
 
-function _drawKpiEvolLine(svgId, data) {
-  var svg = document.getElementById(svgId); if (!svg) return;
-  if (data.length < 2) { svg.innerHTML='<text x="300" y="90" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#999">Dados insuficientes</text>'; return; }
-  var W=600,H=180,PB=28,PT=24,PLR=32;
-  var mx=Math.max.apply(null,data.map(function(d){return d.val;}));
-  var n=data.length, pw=W-PLR*2, ph=H-PB-PT;
-  function px(i){return PLR+(i/(n-1))*pw;}
-  function py(v){return PT+(1-v/(mx||1))*ph;}
-  var area='M '+px(0)+','+(PT+ph);
-  data.forEach(function(d,i){area+=' L '+px(i)+','+py(d.val);});
-  area+=' L '+px(n-1)+','+(PT+ph)+' Z';
-  var line=data.map(function(d,i){return(i===0?'M':'L')+' '+px(i)+','+py(d.val);}).join(' ');
-  var c='';
-  c+='<path d="'+area+'" fill="#35383F" opacity="0.08"/>';
-  c+='<path d="'+line+'" fill="none" stroke="#35383F" stroke-width="2"/>';
-  data.forEach(function(d,i){
-    c+='<circle cx="'+px(i)+'" cy="'+py(d.val)+'" r="3" fill="#35383F"/>';
-    c+='<text x="'+px(i)+'" y="'+(py(d.val)-7)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" font-weight="600">'+d.val+'</text>';
-    c+='<text x="'+px(i)+'" y="'+(H-4)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="#555">'+d.label+'</text>';
+// ── Analítico da aba KPIs: organizador (ordenar + redimensionar + "Ver mais") e cartões no celular ──
+// Cópia do organizador da Desligamentos (references/tabelas.md §3).
+function TabelaOrg(o){ this.o = o; this.rows = []; this.todos = false; this.col = null; this.dir = 1; this.colW = null; }
+TabelaOrg.prototype.dados = function(rows){ this.rows = rows.slice(); if (this.col) this._ordena(); this._larguras(); this.pinta(); };
+TabelaOrg.prototype._ordena = function(){
+  var k = this.col, d = this.dir, val = (this.o.valor && this.o.valor[k]) || function(r){ return r[k]; };
+  this.rows.sort(function(a, b){
+    var va = val(a), vb = val(b); va = va == null ? '' : va; vb = vb == null ? '' : vb;
+    return (typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), 'pt', { numeric: true })) * d;
   });
-  svg.innerHTML=c;
+};
+TabelaOrg.prototype.ordenar = function(col){
+  if (this.col === col) this.dir = -this.dir; else { this.col = col; this.dir = 1; }
+  this._ordena();
+  var self = this;
+  Array.prototype.forEach.call(document.querySelectorAll('#' + this.o.tabela + ' .sort-arrow'), function(sp){
+    sp.textContent = sp.getAttribute('data-sa') === col ? (self.dir > 0 ? '↑' : '↓') : '↕';
+  });
+  this.pinta();
+};
+TabelaOrg.prototype.verMais = function(){ this.todos = true; this.pinta(); };
+TabelaOrg.prototype.pinta = function(){
+  var o = this.o, tb = document.getElementById(o.corpo); if (!tb) return;
+  var lista = this.todos ? this.rows : this.rows.slice(0, o.n);
+  tb.innerHTML = lista.length ? lista.map(o.linha).join('') : '<tr><td colspan="' + o.colspan + '"><div class="status-empty">' + o.vazio + '</div></td></tr>';
+  var cc = o.cartoes && document.getElementById(o.cartoes);   // celular: mesma lista, em cartões
+  if (cc) cc.innerHTML = lista.length ? lista.map(o.cartao).join('') : '<div class="status-empty">' + o.vazio + '</div>';
+  var w = document.getElementById(o.mais), resto = this.rows.length - o.n;
+  if (w) { w.style.display = (!this.todos && resto > 0) ? 'block' : 'none'; var b = w.querySelector('.btn-ver-mais'); if (b) b.textContent = 'Ver mais (' + resto + ')'; }
+};
+TabelaOrg.prototype._larguras = function(){
+  var t = document.getElementById(this.o.tabela); if (!t || this.colW) return;
+  var self = this;
+  try { this.colW = JSON.parse(localStorage.getItem(this.o.chave) || '{}') || {}; } catch (e) { this.colW = {}; }
+  Array.prototype.forEach.call(t.querySelectorAll('thead th[data-col]'), function(th){
+    var k = th.getAttribute('data-col');
+    if (self.colW[k]) th.style.width = self.colW[k] + 'px';
+    var h = document.createElement('span'); h.className = 'col-resizer';
+    h.addEventListener('mousedown', function(e){ self._arrasta(e, th, k, h); });
+    h.addEventListener('click', function(e){ e.stopPropagation(); });
+    th.appendChild(h);
+  });
+};
+TabelaOrg.prototype._arrasta = function(e, th, k, h){
+  e.preventDefault(); e.stopPropagation();
+  var self = this, x = e.clientX, w0 = th.offsetWidth;
+  h.classList.add('dragging'); document.body.classList.add('col-resizing');
+  function move(ev){ var w = Math.max(40, w0 + (ev.clientX - x)); th.style.width = w + 'px'; self.colW[k] = w; }
+  function up(){
+    h.classList.remove('dragging'); document.body.classList.remove('col-resizing');
+    document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+    try { localStorage.setItem(self.o.chave, JSON.stringify(self.colW)); } catch (err) {}
+  }
+  document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+};
+// cartão do celular (modelo do Recrutamento): { titulo, sub, direita, campos: [[rótulo, valor]], acoes } — valores já escapados
+function cartao(c){
+  var h = '<div class="tcard"><div class="tcard-top"><div class="tcard-tl"><div class="tcard-title">' + c.titulo + '</div>' +
+          (c.sub ? '<div class="tcard-sub">' + c.sub + '</div>' : '') + '</div>' + (c.direita ? '<div class="tcard-tr">' + c.direita + '</div>' : '') + '</div>';
+  if (c.campos && c.campos.length) h += '<div class="tcard-fields">' + c.campos.map(function(f){ return '<div class="tcard-field"><span class="tcard-label">' + f[0] + '</span><span class="tcard-value">' + f[1] + '</span></div>'; }).join('') + '</div>';
+  if (c.acoes) h += '<div class="tcard-actions">' + c.acoes + '</div>';
+  return h + '</div>';
 }
+function _abEsc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function _abBRL(v){ return v > 0 ? 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; }
+function _abVar(p){
+  if (p == null) return '<span class="var-eq">—</span>';
+  if (Math.abs(p) < 0.5) return '<span class="var-eq">≈ 0%</span>';
+  return p > 0 ? '<span class="var-up">▲ ' + p.toFixed(1).replace('.', ',') + '%</span>' : '<span class="var-down">▼ ' + Math.abs(p).toFixed(1).replace('.', ',') + '%</span>';
+}
+var _AB_ITENS_COLS = [
+  { k:'nome', lbl:'Item', w:200 }, { k:'cat', lbl:'Categoria', w:140 }, { k:'forn', lbl:'Fornecedor', w:160 },
+  { k:'qtd', lbl:'Qtd', w:80 }, { k:'nPedidos', lbl:'Pedidos', w:90 }, { k:'vlMedio', lbl:'Vlr médio', w:120 }, { k:'pct', lbl:'Variação', w:110 }
+];
+var _AB_ITENS_MINW = _AB_ITENS_COLS.reduce(function(t, c){ return t + c.w; }, 0);
+var TAB_AB_ITENS = new TabelaOrg({ tabela: 'tbl-ab-itens', corpo: 'ab-itens-tbody', mais: 'ab-itens-mais', chave: 'abast_itens_cols_v1',
+  n: 10, colspan: _AB_ITENS_COLS.length, vazio: 'Sem dados de itens',
+  valor: { nome: function(r){ return String(r.nome).toLowerCase(); }, pct: function(r){ return r.pct == null ? -1e9 : r.pct; } },
+  linha: function(r){
+    return '<tr><td class="nm">' + _abEsc(r.nome) + '</td><td>' + _abEsc(r.cat) + '</td><td>' + _abEsc(r.forn) + '</td>' +
+      '<td class="num">' + _abEsc(r.qtd) + '</td><td class="num">' + r.nPedidos + '</td><td class="num">' + _abBRL(r.vlMedio) + '</td><td class="num">' + _abVar(r.pct) + '</td></tr>';
+  },
+  cartoes: 'ab-itens-cards',
+  cartao: function(r){
+    return cartao({ titulo: _abEsc(r.nome), sub: _abEsc(r.cat),
+      campos: [['Fornecedor', _abEsc(r.forn)], ['Qtd', _abEsc(r.qtd)], ['Pedidos', String(r.nPedidos)], ['Vlr médio', _abBRL(r.vlMedio)], ['Variação', _abVar(r.pct)]] });
+  } });
+
+// ── Info dos gráficos (botão "i") ─────────────────────────────────────────────
+var _AB_INFO = {
+  categoria: '<div class="info-note">Quantos pedidos têm itens de cada categoria (as 8 mais pedidas). Um pedido com itens de duas categorias conta nas duas.</div>',
+  fornecedor: '<div class="info-note">Fornecedores que aparecem em mais pedidos (os 8 primeiros). Um pedido comprado de dois fornecedores conta nos dois.</div>',
+  unidade: '<div class="info-note">Quantos pedidos cada unidade fez.</div>',
+  evolucao: '<div class="info-note">Pedidos por mês da solicitação, nos últimos 6 meses com pedido. Eixo: mês/ano (MM/AA).</div>',
+  analitico: '<div class="info-note">Cada item pedido, somando todos os pedidos: quantidade comprada (ou pedida, se ainda não comprou), em quantos pedidos aparece e o valor médio pago. Clique no cabeçalho para ordenar e arraste a borda da coluna para mudar a largura.</div>'
+    + '<table class="info-table"><thead><tr><th>#</th><th>Variação</th><th>Significado</th></tr></thead><tbody>'
+    + '<tr><td>1</td><td><span class="var-up">▲</span></td><td>O último preço pago está acima do valor médio</td></tr>'
+    + '<tr><td>2</td><td><span class="var-down">▼</span></td><td>O último preço pago está abaixo do valor médio</td></tr>'
+    + '<tr><td>3</td><td><span class="var-eq">≈ 0%</span></td><td>Último preço praticamente igual à média</td></tr>'
+    + '</tbody></table>'
+};
+function abrirInfoGrafico(key){
+  var html = _AB_INFO[key]; if (!html) return;
+  document.getElementById('info-body').innerHTML = html;
+  document.getElementById('info-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function closeInfoGrafico(){ document.getElementById('info-overlay').classList.remove('active'); document.body.style.overflow = ''; }
+document.addEventListener('keydown', function(e){ var ov = document.getElementById('info-overlay'); if (e.key === 'Escape' && ov && ov.classList.contains('active')) closeInfoGrafico(); });
 
 // ── DRAWER ────────────────────────────────────────────────────────────────────
 var _drawerKpisLoaded = false;
@@ -2928,7 +3152,7 @@ function renderFilters() {
   function sel(label, key, opts, curVal, isObj) {
     var h = '<div class="filter-group"><label class="filter-label">' + label + '</label>' +
             '<select class="filter-select" onchange="setFilter(\'' + key + '\',this.value)">' +
-            '<option value="Todos"' + (curVal === 'Todos' ? ' selected' : '') + '>Todos</option>';
+            '<option value="Todos"' + (curVal === 'Todos' ? ' selected' : '') + '>' + ((key === 'unidade' || key === 'categoria') ? 'Todas' : 'Todos') + '</option>';
     opts.forEach(function(o) {
       var v = isObj ? o.value : o;
       var l = isObj ? o.label : o;
@@ -3124,17 +3348,18 @@ function sortDeskLista(lista) {
   });
 }
 
+// larguras revistas com o cabeçalho em 10px e a pílula em DM Sans (nada corta nem encosta)
 var DESK_COLS = [
   { key:'id',         label:'Pedido',          w:'160px' },
   { key:'unidade',    label:'Unidade / Depto', w:'140px' },
   { key:'fornecedor', label:'Fornecedor',       w:'140px' },
-  { key:'data',       label:'Data da Solicitação', w:'120px' },
+  { key:'data',       label:'Data da Solicitação', w:'150px' },
   { key:'dataCompra', label:'Data da Compra',      w:'110px' },
-  { key:'dataEntrega',label:'Data de Entrega',     w:'110px' },
-  { key:'dataReceb',  label:'Data de Recebimento', w:'128px' },
+  { key:'dataEntrega',label:'Data de Entrega',     w:'120px' },
+  { key:'dataReceb',  label:'Data de Recebimento', w:'150px' },
   { key:'itens',      label:'Itens',            w:'48px'  },
-  { key:'status',     label:'Status',           w:'110px' },
-  { key:null,         label:'',                 w:'44px'  }
+  { key:'status',     label:'Status',           w:'150px' },
+  { key:null,         label:'',                 w:'52px'  }
 ];
 
 function buildDeskHead() {

@@ -7,6 +7,28 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+/* Padrão dos gráficos (skill dashboards-kpi-graficos): canvas em 2x (texto nítido no PC e com o zoom da
+   página), DM Sans 500 nos nomes, sem balão (tooltip) por padrão e redesenho quando a fonte termina de carregar. */
+(function () {
+  function padrao() {
+    if (!window.Chart || Chart.__padraoLideres) return;
+    Chart.__padraoLideres = true;
+    Chart.defaults.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
+    Chart.defaults.font.family = "'DM Sans', sans-serif";
+    Chart.defaults.font.weight = 500;
+    Chart.defaults.plugins.tooltip.enabled = false;
+    if (document.fonts && document.fonts.load) {
+      Promise.all(['400', '500', '800'].map(function (w) { return document.fonts.load(w + ' 12px "DM Sans"'); })).then(function () {
+        Object.keys(Chart.instances || {}).forEach(function (k) { try { Chart.instances[k].update('none'); } catch (e) {} });
+      }, function () {});
+    }
+  }
+  padrao();
+  if (!window.Chart) document.addEventListener('DOMContentLoaded', padrao);
+})();
+</script>
 <style>
   :root {
     --carbon: #35383F;
@@ -97,25 +119,98 @@
   .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
   .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
   .stack-cards { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
-  /* KPI cards (padrão recrutamento) */
-  .filters-wrap { background: var(--white); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+  /* KPIs — faixa branca full-bleed, card cinza (skill dashboards-kpi-graficos §2) */
+  .kpis-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
+  .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); }
+  .kpi-number { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+  .kpi-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+  .kpi-sub strong { color: var(--carbon); font-weight: 600; }
+  /* 3 cards: no celular 2 colunas (o último ocupa a linha), no desktop 3 */
+  @media (max-width: 767px) { .kpis-wrap .kpi-card:last-child:nth-child(odd) { grid-column: 1 / -1; } }
+  @media (min-width: 768px) { .kpis-wrap { grid-template-columns: repeat(3, 1fr); } }
+  /* FILTROS — faixa branca full-bleed, campo cinza; 2 colunas no celular → 3 no desktop */
+  .filters-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
   .filters-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (min-width: 768px) { .filters-row { grid-template-columns: 1fr 1fr 1fr; } }
   .filter-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .filter-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--t2); }
-  .filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--r); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--t1); cursor: pointer; width: 100%; }
+  .filter-label { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); }
+  .filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); cursor: pointer; width: 100%; }
   .filter-select:focus { outline: none; border-color: var(--carbon); }
   .filters-actions { display: flex; align-items: center; justify-content: space-between; padding-top: 2px; }
-  .btn-clear { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; color: var(--t3); background: none; border: none; cursor: pointer; padding: 4px 0; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
+  .btn-clear { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px 0; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
   .btn-clear:hover { color: var(--carbon); }
-  .kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--t2); }
-  .kpi-number { font-size: 24px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
-  .kpi-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--t3); }
-  .kpi-sub strong { color: var(--carbon); font-weight: 600; }
-  /* Faixa de cards KPI (padrão recrutamento: faixa branca full-width + cards cinza) */
-  .kpis-wrap { background: var(--white); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-  .kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
-  .kpi-card .kpi-number { font-size: 28px; }
-  .kpi-num-max { font-size: 14px; color: var(--t3); font-weight: 400; }
+  .results-count { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; color: var(--muted); }
+  .results-count span { color: var(--carbon); font-weight: 500; }
+  /* o modal de impressão usa .filter-label/.filter-select: fica como estava (modais fora desta passada) */
+  .modal .filter-label { font-family: 'DM Mono', monospace; color: var(--t2); }
+  .modal .filter-select { border-radius: var(--r); color: var(--t1); }
+
+  /* GRÁFICOS — cards com respiro lateral (12px celular / 24px desktop), 12px entre eles (skill §3/§4) */
+  .dashboard { padding: 14px 12px 80px; }
+  .dash-row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .dash-stack { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
+  @media (min-width: 768px) {
+    .dashboard { padding-left: 24px; padding-right: 24px; }
+    .dash-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px 16px; display: flex; flex-direction: column; position: relative; min-width: 0; }
+  .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; padding: 0 18px; }
+  .chart-info-btn { position: absolute; top: 10px; right: 12px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; padding: 3px; color: #CFCFCF; cursor: pointer; line-height: 0; }
+  .chart-info-btn:hover { color: var(--muted); }
+  .chart-wrap { position: relative; height: 220px; overflow-x: auto; overflow-y: hidden; }
+  .chart-scroll { position: relative; height: 100%; }
+  /* barras horizontais com muitas categorias: o card fica em 220px e o gráfico rola na vertical */
+  .chart-wrap-y { overflow-x: hidden; overflow-y: auto; }
+  .chart-scroll-y { position: relative; height: 100%; }
+  .chart-vazio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+  /* Info do gráfico (botão "i") */
+  .info-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .info-table th, .info-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .info-table th { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--carbon); font-weight: 600; }
+  .info-table td { color: var(--carbon); font-weight: 600; }
+  .info-table td:first-child { color: var(--muted); font-weight: 500; width: 22px; }
+  .info-note { font-size: 12.5px; color: var(--carbon); font-weight: 600; line-height: 1.5; margin-bottom: 12px; text-align: center; }
+  /* Tabelas de tela (skill §6 + references/tabelas.md): table.mini + organizador (ordenar + dimensionar) */
+  .tbl-scroll { overflow-x: auto; }
+  table.mini { width: 100%; min-width: 520px; border-collapse: collapse; }
+  table.mini thead th { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.6px; text-transform: uppercase; color: var(--muted); text-align: left; padding: 9px 10px; border-bottom: 2px solid var(--carbon); white-space: nowrap; }
+  table.mini tbody td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--carbon); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+  table.mini tbody tr:last-child td { border-bottom: none; }
+  table.mini tbody tr:hover { background: #FAFAFA; }
+  table.mini.tbl-org { table-layout: fixed; min-width: 600px; }
+  table.mini.tbl-org thead th { position: relative; overflow: hidden; cursor: pointer; user-select: none; text-align: center; }
+  .tbl-org thead th:hover { color: var(--carbon); }
+  .th-sort { white-space: nowrap; }
+  .sort-arrow { margin-left: 3px; color: var(--muted); }
+  .tbl-org thead th .col-resizer { position: absolute; top: 4px; bottom: 4px; right: 0; width: 8px; cursor: col-resize; user-select: none; border-right: 1px solid var(--border); transition: border-color 0.12s; }
+  .tbl-org thead th .col-resizer:hover, .tbl-org thead th .col-resizer.dragging { border-right-color: var(--carbon); }
+  body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none !important; }
+  table.mini td.tbl-nota { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 800; color: var(--carbon); font-variant-numeric: tabular-nums; text-align: right; }
+  table.mini td.td-muted { color: var(--muted); font-weight: 400; }
+  table.mini td.nm { font-weight: 600; }
+  table.mini td.td-c { text-align: center; }
+  .status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; line-height: 1.6; white-space: normal; }
+  /* celular: a tabela vira cartões no modelo do Recrutamento (decisão do dono); no desktop fica a tabela */
+  .tcards { display: flex; flex-direction: column; gap: 12px; }
+  .tcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+  .tcard-top { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .tcard-tl { min-width: 0; }
+  .tcard-title { font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 700; color: var(--carbon); letter-spacing: -0.1px; line-height: 1.3; text-transform: uppercase; }
+  .tcard-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); margin-top: 3px; }
+  .tcard-tr { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+  .tcard-fields { padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+  .tcard-field { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .tcard-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
+  .tcard-value { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--carbon); }
+  .tcard-actions { border-top: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; background: #FAFAFA; }
+  @media (max-width: 767px) {
+    .tbl-scroll.tem-cartoes { display: none; }
+    /* no celular o card da tabela some (sem fundo branco, sem "i" e sem título): os cartões ficam no fundo cinza */
+    .card-tabela { background: none; border: none; box-shadow: none; padding: 0; }
+    .card-tabela > .chart-info-btn, .card-tabela > .chart-title { display: none; }
+  }
+  @media (min-width: 768px) { .tcards { display: none; } }
   /* Linha 1: Tipo de Avaliação + Avaliação por Tema */
   .grid-aval { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 
@@ -192,8 +287,6 @@
   .perf-vbar-val { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; color: var(--carbon); margin-bottom: 3px; }
   .perf-vbar-track { width: 60%; max-width: 54px; min-width: 22px; background: var(--carbon); border-radius: 3px 3px 0 0; transition: height .4s ease; }
   .perf-vbar-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--carbon); margin-top: 6px; text-align: center; line-height: 1.15; word-break: break-word; }
-  .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .chart-scroll svg { min-width: 900px; }
 
   /* ABSENTEÍSMO */
   .abs-months { display: flex; gap: 6px; align-items: flex-end; min-height: 96px; margin-bottom: 4px; }
@@ -250,7 +343,7 @@
   .exam-status-table { padding: 4px 0; }
   .exam-status-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--border); }
   .exam-status-row:last-child { border-bottom: none; }
-  .exam-status-name { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--t1); display: flex; align-items: center; gap: 8px; }
+  .exam-status-name { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); display: flex; align-items: center; gap: 8px; }
   .exam-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .exam-status-dot.valido   { background: var(--green); }
   .exam-status-dot.a-vencer { background: var(--amber); }
@@ -258,7 +351,7 @@
   .exam-status-dot.pendente { background: var(--t3); }
   .exam-status-dot.aberta   { background: var(--red); }
   .exam-status-dot.encerrada { background: var(--green); }
-  .exam-status-count { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 600; color: var(--t1); font-variant-numeric: tabular-nums; }
+  .exam-status-count { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 800; color: var(--carbon); font-variant-numeric: tabular-nums; }
   .exam-status-empty { padding: 20px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.8px; }
 
   /* STATUS LIST (padrão recrutamento) */
@@ -271,13 +364,13 @@
 
   /* COLABORADORES */
   .colab-avatar {
-    width: 36px; height: 36px; border-radius: 50%;
+    width: 34px; height: 34px; border-radius: 50%;
     background: var(--carbon); display: inline-flex; align-items: center; justify-content: center;
     font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 600;
     color: var(--citric); flex-shrink: 0;
   }
   .colab-cell { display: flex; align-items: center; gap: 10px; }
-  .colab-name { font-size: 13px; font-weight: 600; color: var(--t1); }
+  .colab-name { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; color: var(--carbon); }
   .colab-role { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.06em; }
   .table-wrap { overflow-x: auto; }
   .table-wrap table { width: 100%; border-collapse: collapse; }
@@ -286,9 +379,9 @@
   .table-wrap tbody tr:hover { background: #FAFAFA; }
   .table-wrap tbody tr:last-child { border-bottom: none; }
   .table-wrap tbody td { padding: 8px 6px; font-size: 13px; font-weight: 400; color: var(--carbon); vertical-align: middle; }
-  .ver-mais-wrap { text-align: center; padding: 10px 0 2px; }
-  .btn-ver-mais { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--carbon); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 14px; cursor: pointer; text-decoration: none; }
-  .btn-ver-mais:hover { background: #FAFAFA; }
+  .ver-mais-wrap { text-align: center; padding: 12px 0 2px; }
+  .btn-ver-mais { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; color: var(--carbon); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 7px 16px; cursor: pointer; transition: background 0.15s; }
+  .btn-ver-mais:hover { background: var(--bg); }
 
   /* FOOTER */
 .footer { background: var(--carbon); padding: 12px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; }
@@ -351,7 +444,6 @@
 
   /* RESPONSIVO — deve vir por último para vencer a cascata (mesma especificidade) */
   @media (max-width: 767px) {
-    .main { padding: 16px 12px 100px; }
     .metrics-row { grid-template-columns: 1fr 1fr; }
     .grid-2, .grid-3, .grid-4, .grid-aval { grid-template-columns: 1fr; }
     .kpis-wrap { grid-template-columns: 1fr 1fr; }
@@ -387,15 +479,11 @@ body[data-sobre] #view-geral, body[data-sobre] #view-analitico, body[data-sobre]
 .anl-table-pad { padding:16px 20px; }
 #view-analitico .filters-wrap { border-bottom:none; }
 #view-analitico .filters-actions { justify-content:space-between; align-items:center; }
-.btn-clear { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.5px; color:var(--t3); background:none; border:none; cursor:pointer; padding:4px 0; text-transform:uppercase; text-decoration:underline; text-underline-offset:2px; }
-.btn-clear:hover { color:var(--carbon); }
-.results-count { font-family:'DM Mono',monospace; font-size:11px; color:var(--t2); }
-.results-count span { color:var(--carbon); font-weight:500; }
 .anl-busca-bar { margin:4px -20px -14px; padding:14px 20px; background:var(--bg); border-top:1px solid var(--border); }
 .anl-wrap { overflow:auto; max-height:64vh; -webkit-overflow-scrolling:touch; }
-.anl-table { border-collapse:separate; border-spacing:0; white-space:nowrap; font-size:12.5px; }
+.anl-table { border-collapse:separate; border-spacing:0; white-space:nowrap; font-family:'DM Sans',sans-serif; font-size:12px; }
 .anl-table th, .anl-table td { padding:8px 12px; border-bottom:1px solid var(--border); border-right:1px solid var(--border); text-align:center; vertical-align:middle; color:var(--carbon); }
-.anl-table thead th { position:sticky; top:0; z-index:2; background:var(--white); font-family:'DM Mono',monospace; font-size:9px; letter-spacing:.05em; text-transform:uppercase; color:var(--t3); border-bottom:2px solid var(--carbon); }
+.anl-table thead th { position:sticky; top:0; z-index:2; background:var(--white); font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--t3); border-bottom:2px solid var(--carbon); }
 .anl-table thead tr.anl-grp th { top:0; height:32px; box-sizing:border-box; }
 .anl-table thead tr.anl-crow th { top:32px; }
 .anl-sticky { position:sticky; left:0; z-index:3; background:var(--white); box-shadow:1px 0 0 var(--carbon); text-align:left; font-weight:600; }
@@ -403,7 +491,7 @@ body[data-sobre] #view-geral, body[data-sobre] #view-analitico, body[data-sobre]
 .anl-table thead th.anl-sticky[rowspan] { top:0; vertical-align:middle; z-index:7; font-size:12.6px; }
 .anl-nome-cell { display:flex; flex-direction:column; gap:2px; min-width:230px; text-align:left; }
 .anl-nome-txt { font-weight:600; color:var(--t1); }
-.anl-msub { font-family:'DM Mono',monospace; font-size:9.5px; color:var(--t3); font-weight:400; }
+.anl-msub { font-family:'DM Mono',monospace; font-size:9px; color:var(--t3); font-weight:400; text-transform:uppercase; }
 .anl-table tbody tr:hover td { background:#FAFAFA; }
 .anl-table tbody tr:hover td.anl-sticky { background:#F4F5F2; }
 .anl-gsep { border-left:2px solid var(--carbon) !important; }
@@ -414,13 +502,14 @@ body[data-sobre] #view-geral, body[data-sobre] #view-analitico, body[data-sobre]
 .anl-ccol { min-width:36px; width:36px; text-align:center; color:var(--t3); }
 .anl-cinicial { font-weight:700; color:var(--carbon); font-size:11px; cursor:pointer; }
 .anl-ph { color:var(--t3); }
-.anl-pill { display:inline-block; padding:2px 9px; border-radius:100px; font-family:'DM Mono',monospace; font-size:10px; font-weight:600; }
-.anl-pill.ok { background:#EAF4ED; color:#2f7a43; }
-.anl-pill.warn { background:#FFF7E6; color:#9a6b00; }
-.anl-pill.bad { background:#FDEAEA; color:#c0392b; }
+.anl-pill { display:inline-block; padding:3px 9px; border-radius:100px; font-family:'DM Sans',sans-serif; font-size:10px; font-weight:500; letter-spacing:.3px; }
+.anl-pill.ok { background:#35383F; color:#CFFF00; }
+.anl-pill.warn { background:#FFF4DC; color:#7A4A00; }
+.anl-pill.bad { background:#FDEAEA; color:#7A1A1A; }
 .anl-more { display:flex; align-items:center; justify-content:center; padding:12px; border-top:1px solid var(--border); }
 .anl-more:empty { display:none; }
-.anl-more button { font-family:'DM Mono',monospace; font-size:11px; color:var(--carbon); background:none; border:1px solid var(--border); border-radius:6px; padding:8px 18px; cursor:pointer; }
+.anl-more button { font-family:'DM Sans',sans-serif; font-size:10px; font-weight:500; color:var(--carbon); background:none; border:1px solid var(--border); border-radius:6px; padding:7px 16px; cursor:pointer; }
+.anl-more button:hover { background:var(--bg); }
 </style>
 <style id="pend-style">
 /* ══ PENDENTES · Avaliação de Desempenho (líder → efetivo) — padrão recrutamento ══ */
@@ -431,7 +520,8 @@ body[data-sobre] #view-geral, body[data-sobre] #view-analitico, body[data-sobre]
 .pend-kpi { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 14px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:4px; }
 .pend-kpi-label { font-family:'DM Mono',monospace; font-size:10px; font-weight:500; letter-spacing:.8px; text-transform:uppercase; color:var(--t2); display:block; }
 .pend-kpi-num { font-size:28px; font-weight:700; color:var(--carbon); line-height:1; font-variant-numeric:tabular-nums; }
-#pend-grid { padding:16px 20px; }
+#pend-grid { padding:14px 12px 0; }
+@media (min-width:768px){ #pend-grid { padding:14px 24px 0; } }
 .pend-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
 .pend-empty { text-align:center; padding:48px 20px; color:var(--t3); font-size:14px; line-height:1.6; }
 .pend-empty strong { color:var(--carbon); }
@@ -447,9 +537,9 @@ body[data-sobre] #view-geral, body[data-sobre] #view-analitico, body[data-sobre]
 .pend-table tbody tr:hover { background:#FAFAFA; }
 .pend-table .ptt-nome { font-weight:600; text-transform:uppercase; letter-spacing:-.1px; }
 .pend-table .ptt-acoes button { margin:0 3px; vertical-align:middle; }
-.pend-table .btn-editar { width:30px; height:30px; padding:0; display:inline-flex; align-items:center; justify-content:center; background:var(--carbon); color:var(--citric); border:none; border-radius:6px; cursor:pointer; transition:opacity .15s; }
-.pend-table .btn-editar:hover { opacity:.85; }
-.pend-table .btn-editar svg { width:13px; height:13px; }
+.btn-editar { width:30px; height:30px; padding:0; display:inline-flex; align-items:center; justify-content:center; background:var(--carbon); color:var(--citric); border:none; border-radius:6px; cursor:pointer; transition:opacity .15s; }
+.btn-editar:hover { opacity:.85; }
+.btn-editar svg { width:13px; height:13px; }
 
 @media (min-width:768px){
   .pend-cards { display:none; }
@@ -462,9 +552,10 @@ body[data-sobre] #view-geral, body[data-sobre] #view-analitico, body[data-sobre]
 .card-header > div:first-child { flex:1; min-width:0; }
 .candidate-name { font-size:14px; font-weight:700; color:var(--carbon); letter-spacing:-.1px; line-height:1.3; text-transform:uppercase; }
 .candidate-contact { font-family:'DM Mono',monospace; font-size:11px; color:var(--t2); margin-top:3px; }
-.status-badge { display:inline-flex; align-items:center; flex-shrink:0; padding:3px 9px; border-radius:100px; font-family:'DM Mono',monospace; font-size:10px; font-weight:500; letter-spacing:.3px; white-space:nowrap; }
-.status-badge.s-pendente { background:#FFF7E6; color:#9a6b00; }
-.status-badge.s-atrasada { background:#FDEAEA; color:#c0392b; }
+/* pílulas (skill §5, paleta fixa): azul = avaliação liberada, a fazer · vermelho = passou da data prevista */
+.status-badge { display:inline-flex; align-items:center; flex-shrink:0; padding:3px 9px; border-radius:100px; font-family:'DM Sans',sans-serif; font-size:10px; font-weight:500; letter-spacing:.3px; white-space:nowrap; }
+.status-badge.s-pendente { background:#E8F0FA; color:#1A3A5C; }
+.status-badge.s-atrasada { background:#FDEAEA; color:#7A1A1A; }
 .card-body { padding:12px 16px; display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; }
 .card-field { display:flex; flex-direction:column; gap:1px; }
 .field-label { font-family:'DM Mono',monospace; font-size:9px; letter-spacing:.8px; text-transform:uppercase; color:var(--t3); }
@@ -711,134 +802,76 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 
-<!-- MAIN -->
-<div class="main">
-
-  <div class="stack-cards">
-
-    <!-- NOTAS DOS LÍDERES: por Unidade + por Departamento -->
-    <div class="grid-aval">
-      <div class="chart-block">
-        <div class="chart-title-row">
-          <span class="chart-title-text">Performance por Unidade</span>
-        </div>
-        <div class="bar-list" id="lid-uni-list" style="max-height:230px;overflow-y:auto;">
-          <div class="chart-sub" style="margin:0;">Carregando…</div>
-        </div>
-      </div>
-      <div class="chart-block">
-        <div class="chart-title-row">
-          <span class="chart-title-text">Performance por Departamento</span>
-        </div>
-        <div class="bar-list" id="lid-dep-list" style="max-height:230px;overflow-y:auto;">
-          <div class="chart-sub" style="margin:0;">Carregando…</div>
-        </div>
-      </div>
+<!-- GRÁFICOS (skill dashboards-kpi-graficos) -->
+<div class="dashboard">
+  <div class="dash-row">
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('uni')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Performance por Unidade</div>
+      <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y" id="lid-uni-list"><canvas id="cv-lid-uni"></canvas><div class="chart-vazio">Carregando…</div></div></div>
     </div>
-
-    <!-- LINHA 1: TIPO DE AVALIAÇÃO + AVALIAÇÃO POR TEMA -->
-    <div class="grid-aval">
-      <div class="chart-block">
-        <div class="chart-title-row">
-          <span class="chart-title-text">Tipo de Avaliação</span>
-        </div>
-        <div class="bar-list" id="av-tipos-list" style="max-height:230px;overflow-y:auto;">
-          <div class="chart-sub" style="margin:0;">Carregando…</div>
-        </div>
-      </div>
-
-      <div class="chart-block">
-        <div class="chart-title-row">
-          <span class="chart-title-text">Avaliação por Tema</span>
-        </div>
-        <div class="bar-list" id="av-temas-list" style="max-height:230px;overflow-y:auto;">
-          <div class="chart-sub" style="margin:0;">Carregando…</div>
-        </div>
-      </div>
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('dep')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Performance por Departamento</div>
+      <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y" id="lid-dep-list"><canvas id="cv-lid-dep"></canvas><div class="chart-vazio">Carregando…</div></div></div>
     </div>
-
-    <!-- LINHA 2: TURNOVER -->
-    <div class="chart-block">
-      <div class="chart-title-row">
-        <span class="chart-title-text">Turnover Demissional</span>
-      </div>
-      <div class="chart-scroll">
-        <svg id="turnover-line-svg" style="height:240px;display:block;"></svg>
-      </div>
+  </div>
+  <div class="dash-row" style="margin-top:12px">
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('tipos')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Tipo de Avaliação</div>
+      <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y" id="av-tipos-list"><canvas id="cv-av-tipos"></canvas><div class="chart-vazio">Carregando…</div></div></div>
     </div>
-
-    <!-- LINHA 3: ABSENTEÍSMO -->
-    <div class="chart-block">
-      <div class="chart-title-row">
-        <span class="chart-title-text">Absenteísmo</span>
-      </div>
-      <div class="chart-scroll">
-        <div class="abs-months" id="abs-months-bars" style="margin-bottom:8px;"></div>
-      </div>
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('temas')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Avaliação por Tema</div>
+      <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y" id="av-temas-list"><canvas id="cv-av-temas"></canvas><div class="chart-vazio">Carregando…</div></div></div>
     </div>
-
-    <!-- LINHA 4: BANCO DE HORAS -->
-    <div class="chart-block">
-      <div class="chart-title-row">
-        <span class="chart-title-text">Banco de Horas — Positivos vs Negativos</span>
-      </div>
-      <div class="chart-scroll">
-        <svg id="bh-pn-svg" style="height:240px;display:block;"></svg>
-      </div>
+  </div>
+  <div class="dash-stack">
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('turnover')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Turnover Demissional</div>
+      <div class="chart-wrap"><div class="chart-scroll" id="turnover-scroll"><canvas id="cv-turnover"></canvas><div class="chart-vazio">Carregando…</div></div></div>
     </div>
-
-    <!-- LINHA 5: EXAMES OCUPACIONAIS / RECLAMAÇÕES TRABALHISTAS -->
-    <div class="grid-2">
-      <div class="chart-block">
-        <div class="chart-title-row">
-          <span class="chart-title-text">Exames Ocupacionais</span>
-        </div>
-        <div class="exam-status-table" id="exames-status-list">
-          <div class="exam-status-empty">Carregando...</div>
-        </div>
-      </div>
-
-      <div class="chart-block">
-        <div class="chart-title-row">
-          <span class="chart-title-text">Reclamações Trabalhistas</span>
-        </div>
-        <div class="exam-status-table" id="reclam-status-list">
-          <div class="exam-status-empty">Carregando...</div>
-        </div>
-      </div>
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('abs')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Absenteísmo</div>
+      <div class="chart-wrap"><div class="chart-scroll" id="abs-months-bars"><canvas id="cv-abs"></canvas><div class="chart-vazio">Carregando…</div></div></div>
     </div>
-
-    <!-- LINHA 6: PRODUTIVIDADE -->
-    <div class="chart-block">
-      <div class="chart-title-row">
-        <span class="chart-title-text">Produtividade</span>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:center;height:180px;font-family:'DM Mono',monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:var(--t3);">Em construção</div>
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('bh')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Banco de Horas — Positivos vs Negativos</div>
+      <div class="chart-wrap"><div class="chart-scroll" id="bh-scroll"><canvas id="cv-bh"></canvas><div class="chart-vazio">Carregando…</div></div></div>
     </div>
-
-    <!-- LINHA 7: COLABORADORES -->
-    <div class="chart-block" style="margin-bottom: 32px;">
-      <div class="chart-title-row">
-        <span class="chart-title-text">Colaboradores <span id="colab-count-label" style="color:var(--t3);font-size:10px;font-weight:500;letter-spacing:0.6px;text-transform:uppercase;"></span></span>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Colaborador</th>
-              <th style="text-align:right">Nota</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-colabs"></tbody>
-        </table>
-      </div>
-      <div class="ver-mais-wrap" id="ver-mais-wrap-colabs" style="display:none;">
-        <button class="btn-ver-mais" id="btn-ver-mais-colabs" onclick="expandColabs()">Ver mais</button>
-      </div>
+    <div class="dash-row">
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('exames')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Exames Ocupacionais</div>
+      <div class="exam-status-table" id="exames-status-list"><div class="exam-status-empty">Carregando...</div></div>
     </div>
-
-  </div><!-- /stack-cards -->
-
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('reclam')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Reclamações Trabalhistas</div>
+      <div class="exam-status-table" id="reclam-status-list"><div class="exam-status-empty">Carregando...</div></div>
+    </div>
+    </div>
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('prod')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Produtividade</div>
+      <div class="status-empty" style="padding:70px 0">Em construção</div>
+    </div>
+    <div class="chart-card card-tabela">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('colabs')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title" id="colab-count-label">Colaboradores</div>
+      <div class="tcards" id="colabs-cards"></div>
+      <div class="tbl-scroll tem-cartoes"><table class="mini tbl-org" id="tbl-colabs" style="min-width:520px"><thead><tr>
+        <th data-col="nome" class="th-sort" onclick="TAB_COLABS.ordenar('nome')" style="width:420px">Colaborador <span class="sort-arrow" data-sa="nome">↕</span></th>
+        <th data-col="nota" class="th-sort" onclick="TAB_COLABS.ordenar('nota')" style="width:100px">Nota <span class="sort-arrow" data-sa="nota">↕</span></th>
+      </tr></thead><tbody id="tbody-colabs"></tbody></table></div>
+      <div class="ver-mais-wrap" id="ver-mais-wrap-colabs" style="display:none;"><button class="btn-ver-mais" id="btn-ver-mais-colabs" onclick="expandColabs()">Ver mais</button></div>
+    </div>
+  </div>
 </div>
 
 </div><!-- /view-geral -->
@@ -846,8 +879,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div id="view-analitico" class="dash-view">
   <div class="filters-wrap">
     <div class="filters-row">
-      <div class="filter-group"><label class="filter-label">Unidade</label><select class="filter-select" id="anl-f-unidade" data-all="Todas as unidades" onchange="anlRender()"><option value="">Todas as unidades</option></select></div>
-      <div class="filter-group"><label class="filter-label">Departamento</label><select class="filter-select" id="anl-f-depto" data-all="Todos os departamentos" onchange="anlRender()"><option value="">Todos os departamentos</option></select></div>
+      <div class="filter-group"><label class="filter-label">Unidade</label><select class="filter-select" id="anl-f-unidade" data-all="Todas" onchange="anlRender()"><option value="">Todas</option></select></div>
+      <div class="filter-group"><label class="filter-label">Departamento</label><select class="filter-select" id="anl-f-depto" data-all="Todos" onchange="anlRender()"><option value="">Todos</option></select></div>
     </div>
     <div class="filters-actions"><button class="btn-clear" onclick="anlClear()">Limpar filtros</button><span class="results-count"><span id="anl-count-n">—</span> resultado(s)</span></div>
     <div class="anl-busca-bar"><input class="anl-busca" id="anl-f-busca" type="text" placeholder="Buscar por nome ou matrícula…" oninput="anlRender()"></div>
@@ -856,16 +889,20 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div><!-- /view-analitico -->
 
 <div id="view-pendentes" class="dash-view">
-  <div class="pend-kpis" id="pend-kpis"></div>
+  <div class="kpis-wrap" id="pend-kpis">
+    <div class="kpi-card"><span class="kpi-label">Pendentes agora</span><span class="kpi-number">—</span></div>
+    <div class="kpi-card"><span class="kpi-label">Efetivos</span><span class="kpi-number">—</span></div>
+    <div class="kpi-card"><span class="kpi-label">Já avaliados</span><span class="kpi-number">—</span></div>
+  </div>
   <div class="filters-wrap">
     <div class="filters-row">
       <div class="filter-group">
         <label class="filter-label">Unidade</label>
-        <select class="filter-select" id="pend-f-unidade" onchange="pendRender()"><option value="">Todas as unidades</option></select>
+        <select class="filter-select" id="pend-f-unidade" onchange="pendRender()"><option value="">Todas</option></select>
       </div>
       <div class="filter-group">
         <label class="filter-label">Departamento</label>
-        <select class="filter-select" id="pend-f-depto" onchange="pendRender()"><option value="">Todos os departamentos</option></select>
+        <select class="filter-select" id="pend-f-depto" onchange="pendRender()"><option value="">Todos</option></select>
       </div>
     </div>
     <div class="filters-actions">
@@ -875,6 +912,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
   <div id="pend-grid"><div class="pend-empty">Carregando…</div></div>
 </div><!-- /view-pendentes -->
+
+<!-- INFO GRÁFICO (botão "i") -->
+<div class="modal-overlay" id="info-overlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header" style="justify-content:flex-end;border-bottom:none;padding-bottom:0">
+      <button class="modal-close" onclick="closeInfoGrafico()" aria-label="Fechar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="info-body" style="padding-top:0"></div>
+  </div>
+</div>
 
 <!-- MODAL · Avaliação de Desempenho (padrão recrutamento) -->
 <div class="modal-overlay" id="pend-modal-overlay" onclick="pendOverlay(event)">
@@ -1022,6 +1069,192 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   else populate();
 })();
 
+// ─── Gráficos (skill dashboards-kpi-graficos §3): Chart.js, barras carbon raio 5, rótulo DM Sans 12/800,
+//     nomes em 500, sem grade/escala/tooltip; barra horizontal = 220px + rolagem vertical; vertical/linha rola na lateral
+var _perfCharts = {};
+var PERF_SANS12 = { family: "'DM Sans', sans-serif", size: 12, weight: '500' };
+function perfTrunc(t, n){ t = String(t == null ? '' : t); return t.length > n ? t.slice(0, n - 1) + '…' : t; }
+function perfNum1(v){ var n = parseFloat(v); return (v == null || v === '' || isNaN(n)) ? null : n; }
+function perfFmt1(n){ return n == null ? '—' : n.toFixed(1).replace('.', ','); }
+function perfEscH(x){ return String(x == null ? '' : x).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+// rótulo de valor (texto pronto em dataset.rotulos): depois da barra horizontal, acima da barra/ponto, ou abaixo do ponto (rotuloAbaixo)
+var perfRotulosPlugin = {
+  id: 'perfRotulos',
+  afterDatasetsDraw: function(chart){
+    var ctx = chart.ctx, horiz = chart.options.indexAxis === 'y';
+    ctx.save(); ctx.fillStyle = '#35383F'; ctx.font = '800 12px "DM Sans", sans-serif';
+    chart.data.datasets.forEach(function(ds, di){
+      if (!ds.rotulos) return;
+      var meta = chart.getDatasetMeta(di); if (!meta || meta.hidden || !meta.data) return;
+      meta.data.forEach(function(el, i){
+        var t = ds.rotulos[i]; if (t == null || t === '') return;
+        if (horiz) { ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, el.x + 6, el.y); }
+        else if (ds.rotuloAbaixo) { ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(t, el.x, el.y + 7); }
+        else { ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(t, el.x, el.y - 6); }
+      });
+    });
+    ctx.restore();
+  }
+};
+function perfVazio(scrollId, msg){
+  var sc = document.getElementById(scrollId); if (!sc) return;
+  var v = sc.querySelector('.chart-vazio');
+  if (msg) { if (!v) { v = document.createElement('div'); v.className = 'chart-vazio'; sc.appendChild(v); } v.textContent = msg; v.style.display = 'flex'; }
+  else if (v) v.style.display = 'none';
+}
+function perfLimpa(canvasId){
+  if (_perfCharts[canvasId]) { _perfCharts[canvasId].destroy(); _perfCharts[canvasId] = null; }
+  var cv = document.getElementById(canvasId); if (cv) cv.style.display = 'none';
+}
+function perfNovoChart(canvasId, cfg){
+  if (_perfCharts[canvasId]) { _perfCharts[canvasId].destroy(); _perfCharts[canvasId] = null; }
+  if (typeof Chart === 'undefined') return null;
+  var cv = document.getElementById(canvasId); if (!cv) return null;
+  cv.style.display = '';
+  cfg.plugins = [perfRotulosPlugin];
+  cfg.options.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
+  return (_perfCharts[canvasId] = new Chart(cv, cfg));
+}
+// barra horizontal: itens [{ nome, valor (número ou null) }]; max = teto da escala (ex.: 5) quando nenhum valor passa dele
+function perfBarH(canvasId, scrollId, itens, max){
+  var sc = document.getElementById(scrollId); if (!sc) return;
+  if (!itens || !itens.length) { perfLimpa(canvasId); sc.style.height = ''; perfVazio(scrollId, 'Sem dados'); return; }
+  perfVazio(scrollId, null);
+  sc.style.height = Math.max(220, itens.length * 30 + 10) + 'px';
+  var vals = itens.map(function(i){ return i.valor == null ? 0 : i.valor; });
+  if (max != null && Math.max.apply(null, vals) > max) max = undefined;
+  perfNovoChart(canvasId, { type: 'bar',
+    data: { labels: itens.map(function(i){ return i.nome; }), datasets: [{ data: vals, rotulos: itens.map(function(i){ return perfFmt1(i.valor); }),
+      backgroundColor: '#35383F', borderWidth: 0, borderRadius: 5, barPercentage: 0.6, categoryPercentage: 0.8, maxBarThickness: 22 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { right: 40, top: 4, bottom: 4 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { x: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true, max: max },
+                y: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: PERF_SANS12, autoSkip: false,
+                     callback: function(v){ return perfTrunc(this.getLabelForValue(v), Math.min(26, Math.max(8, Math.floor((this.chart.width / 2 - 16) / 7.5)))); } } } } } });
+}
+// barra vertical: 46px por barra (não comprime: rola na lateral)
+function perfBarV(canvasId, scrollId, labels, vals){
+  var sc = document.getElementById(scrollId); if (!sc) return;
+  if (!labels.length) { perfLimpa(canvasId); sc.style.minWidth = ''; perfVazio(scrollId, 'Sem dados'); return; }
+  perfVazio(scrollId, null);
+  sc.style.minWidth = (labels.length * 46) + 'px';
+  perfNovoChart(canvasId, { type: 'bar',
+    data: { labels: labels, datasets: [{ data: vals, rotulos: vals.map(String), backgroundColor: '#35383F', borderWidth: 0, borderRadius: 5, barPercentage: 0.6, categoryPercentage: 0.8, maxBarThickness: 22 }] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { top: 18, bottom: 4 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: PERF_SANS12, maxRotation: 0, autoSkip: false } },
+                y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true } } } });
+}
+// linhas: series [{ data, rotulos, cor, area, tracejado, abaixo, pontos (cor por ponto), bordas }]; 46px por ponto
+function perfLinhas(canvasId, scrollId, labels, series, yOpts){
+  var sc = document.getElementById(scrollId); if (!sc) return;
+  if (labels.length < 2) { perfLimpa(canvasId); sc.style.minWidth = ''; perfVazio(scrollId, 'Sem dados'); return; }
+  perfVazio(scrollId, null);
+  sc.style.minWidth = (labels.length * 46) + 'px';
+  var y = { grid: { display: false }, border: { display: false }, ticks: { display: false } };
+  Object.keys(yOpts || {}).forEach(function(k){ y[k] = yOpts[k]; });
+  perfNovoChart(canvasId, { type: 'line',
+    data: { labels: labels, datasets: series.map(function(sr){ return { data: sr.data, rotulos: sr.rotulos, rotuloAbaixo: !!sr.abaixo,
+      borderColor: sr.cor, borderWidth: sr.tracejado ? 1.5 : 2, borderDash: sr.tracejado ? [4, 2] : [], backgroundColor: sr.area, fill: 'origin',
+      pointRadius: 3, pointBackgroundColor: sr.pontos || sr.cor, pointBorderColor: '#35383F', pointBorderWidth: sr.bordas || 0, tension: 0 }; }) },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { top: 22, bottom: 4, left: 14, right: 14 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: PERF_SANS12, maxRotation: 0, autoSkip: false } }, y: y } } });
+}
+
+// Organizador de tabela (skill §6): ordenar pelo cabeçalho (↕/↑/↓), largura das colunas ajustável e salva
+// no localStorage, e "Ver mais" (mostra n linhas e revela o resto). Uma instância por tabela.
+function TabelaOrg(o){ this.o = o; this.rows = []; this.todos = false; this.col = null; this.dir = 1; this.colW = null; }
+TabelaOrg.prototype.dados = function(rows){ this.rows = rows.slice(); if (this.col) this._ordena(); this._larguras(); this.pinta(); };
+TabelaOrg.prototype._ordena = function(){
+  var k = this.col, d = this.dir, val = (this.o.valor && this.o.valor[k]) || function(r){ return r[k]; };
+  this.rows.sort(function(a, b){
+    var va = val(a), vb = val(b); va = va == null ? '' : va; vb = vb == null ? '' : vb;
+    return (typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), 'pt', { numeric: true })) * d;
+  });
+};
+TabelaOrg.prototype.ordenar = function(col){
+  if (this.col === col) this.dir = -this.dir; else { this.col = col; this.dir = 1; }
+  this._ordena();
+  var self = this;
+  Array.prototype.forEach.call(document.querySelectorAll('#' + this.o.tabela + ' .sort-arrow'), function(sp){
+    sp.textContent = sp.getAttribute('data-sa') === col ? (self.dir > 0 ? '↑' : '↓') : '↕';
+  });
+  this.pinta();
+};
+TabelaOrg.prototype.verMais = function(){ this.todos = true; this.pinta(); };
+TabelaOrg.prototype.pinta = function(){
+  var o = this.o, tb = document.getElementById(o.corpo); if (!tb) return;
+  var lista = this.todos ? this.rows : this.rows.slice(0, o.n);
+  tb.innerHTML = lista.length ? lista.map(o.linha).join('') : '<tr><td colspan="' + o.colspan + '"><div class="status-empty">' + o.vazio + '</div></td></tr>';
+  var cc = o.cartoes && document.getElementById(o.cartoes);   // celular: mesma lista, em cartões
+  if (cc) cc.innerHTML = lista.length ? lista.map(o.cartao).join('') : '<div class="status-empty">' + o.vazio + '</div>';
+  var w = document.getElementById(o.mais), resto = this.rows.length - o.n;
+  if (w) { w.style.display = (!this.todos && resto > 0) ? 'block' : 'none'; var b = w.querySelector('.btn-ver-mais'); if (b) b.textContent = 'Ver mais (' + resto + ')'; }
+};
+TabelaOrg.prototype._larguras = function(){
+  var t = document.getElementById(this.o.tabela); if (!t || this.colW) return;
+  var self = this;
+  try { this.colW = JSON.parse(localStorage.getItem(this.o.chave) || '{}') || {}; } catch (e) { this.colW = {}; }
+  Array.prototype.forEach.call(t.querySelectorAll('thead th[data-col]'), function(th){
+    var k = th.getAttribute('data-col');
+    if (self.colW[k]) th.style.width = self.colW[k] + 'px';
+    var h = document.createElement('span'); h.className = 'col-resizer';
+    h.addEventListener('mousedown', function(e){ self._arrasta(e, th, k, h); });
+    h.addEventListener('click', function(e){ e.stopPropagation(); });
+    th.appendChild(h);
+  });
+};
+TabelaOrg.prototype._arrasta = function(e, th, k, h){
+  e.preventDefault(); e.stopPropagation();
+  var self = this, x = e.clientX, w0 = th.offsetWidth;
+  h.classList.add('dragging'); document.body.classList.add('col-resizing');
+  function move(ev){ var w = Math.max(40, w0 + (ev.clientX - x)); th.style.width = w + 'px'; self.colW[k] = w; }
+  function up(){
+    h.classList.remove('dragging'); document.body.classList.remove('col-resizing');
+    document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+    try { localStorage.setItem(self.o.chave, JSON.stringify(self.colW)); } catch (err) {}
+  }
+  document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+};
+// cartão do celular (modelo do Recrutamento): { titulo, sub, direita, campos: [[rótulo, valor]], texto, acoes } — valores já escapados
+function cartao(c){
+  var h = '<div class="tcard"><div class="tcard-top"><div class="tcard-tl"><div class="tcard-title">' + c.titulo + '</div>' +
+          (c.sub ? '<div class="tcard-sub">' + c.sub + '</div>' : '') + '</div>' + (c.direita ? '<div class="tcard-tr">' + c.direita + '</div>' : '') + '</div>';
+  if (c.campos && c.campos.length) h += '<div class="tcard-fields">' + c.campos.map(function(f){ return '<div class="tcard-field"><span class="tcard-label">' + f[0] + '</span><span class="tcard-value">' + f[1] + '</span></div>'; }).join('') + '</div>';
+  if (c.texto) h += '<div class="tcard-text">' + c.texto + '</div>';
+  if (c.acoes) h += '<div class="tcard-actions">' + c.acoes + '</div>';
+  return h + '</div>';
+}
+
+// ─── Info dos gráficos (botão "i") ───────────────────────────────────────────
+var _INFO_GRAFICOS = {
+  uni: '<div class="info-note">Nota média (de 0 a 5) de cada unidade, considerando as avaliações e o score RH dos líderes. Respeita os filtros de unidade e departamento.</div>',
+  dep: '<div class="info-note">Nota média (de 0 a 5) de cada departamento, considerando as avaliações e o score RH dos líderes. Respeita os filtros de unidade e departamento.</div>',
+  tipos: '<div class="info-note">Média (de 0 a 5) de cada modelo de avaliação aplicado e, na última barra, o Score RH dos líderes (indicadores DP/RH do último mês). “Av.” = Avaliação, “Exp.” = Experiência, “Colab.” = Colaborador.</div>',
+  temas: '<div class="info-note">Média (de 0 a 5) de cada tema, somando todas as avaliações. A última barra, Recomendação, é um indicador à parte (índice de recomendação).</div>',
+  turnover: '<div class="info-note">Turnover demissional de cada mês, nos últimos 24 meses: desligamentos no mês ÷ colaboradores ativos no início do mês, em %.</div>',
+  abs: '<div class="info-note">Quantidade de ausências por mês (faltas, atestados, suspensões, licenças), nos últimos 24 meses com registro. Folgas, banco de horas e férias não entram.</div>',
+  bh: '<div class="info-note">Soma, em horas, dos saldos positivos (linha cheia) e negativos (linha tracejada; o rótulo mostra o valor sem o sinal) do banco de horas em cada semana. Pagamentos e perdas de horas não entram. Ponto verde-limão = semana com feriado.</div>',
+  exames: '<div class="info-note">Situação dos exames ocupacionais de quem está ativo e realiza exame: válidos, a vencer (nos próximos 30 dias), vencidos e pendentes (sem data do próximo exame).</div>',
+  reclam: '<div class="info-note">Reclamações trabalhistas por resultado ou situação do processo.</div>',
+  prod: '<div class="info-note">Indicador de produtividade em construção.</div>',
+  colabs: '<div class="info-note">Colaboradores no filtro com a nota média das avaliações (— = ainda sem nota). Clique no cabeçalho para ordenar e arraste a borda da coluna para mudar a largura.</div>',
+  pendentes: '<div class="info-note">Avaliações de desempenho já liberadas para os colaboradores efetivos. O lápis abre o formulário da avaliação. Clique no cabeçalho para ordenar e arraste a borda da coluna para mudar a largura.</div>'
+    + '<table class="info-table"><thead><tr><th>#</th><th>Status</th><th>Significado</th></tr></thead><tbody>'
+    + '<tr><td>1</td><td><span class="status-badge s-pendente">Pendente</span></td><td>Avaliação liberada, falta fazer</td></tr>'
+    + '<tr><td>2</td><td><span class="status-badge s-atrasada">Atrasada</span></td><td>Passou da data prevista e ainda não foi feita</td></tr>'
+    + '</tbody></table>'
+};
+function abrirInfoGrafico(key){
+  var html = _INFO_GRAFICOS[key]; if (!html) return;
+  document.getElementById('info-body').innerHTML = html;
+  document.getElementById('info-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeInfoGrafico(){ document.getElementById('info-overlay').classList.remove('open'); document.body.style.overflow = ''; }
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') { var o = document.getElementById('info-overlay'); if (o && o.classList.contains('open')) closeInfoGrafico(); } });
+
 // ─── Estado global de filtros ────────────────────────────────────────────────
 window.perfState     = { unidade: 'Todos', depto: 'Todos' };
 window.perfRenderers = [];
@@ -1129,19 +1362,15 @@ window.perfSupa = window.perfSupa || function(cb) {
     }
     function setList(id, html){ var el=document.getElementById(id); if(el) el.innerHTML = html || '<div class="chart-sub" style="margin:0;">Sem dados</div>'; }
 
-    // TIPO DE AVALIAÇÃO: modelos + linha de reconhecimento (contagem)
+    // TIPO DE AVALIAÇÃO: modelos + Score RH (score de líderes — indicadores DP/RH, último mês)
     supa.schema('tata_plus').rpc('avaliacao_temas', args).then(function(r){
       var rows=(r&&!r.error&&Array.isArray(r.data))?r.data:[];
       var modelos=rows.filter(function(t){return t.tipo==='modelo';});
-      setList('av-tipos-list', modelos.map(function(t){ return barRow(curto(t.tema), t.media, t.n, t.tema); }).join(''));
-      // Linha "Score RH" (score de líderes — indicadores DP/RH, último mês)
+      var base=modelos.map(function(t){ return { nome: curto(t.tema), valor: perfNum1(t.media) }; });
+      perfBarH('cv-av-tipos', 'av-tipos-list', base, 5);
       supa.schema('tata_plus').rpc('score_rh_media', args).then(function(rs){
         var row=(rs&&!rs.error&&rs.data&&rs.data[0])?rs.data[0]:null;
-        var el=document.getElementById('av-tipos-list'); if(!el) return;
-        var ph=el.querySelector('.chart-sub'); if(ph) ph.remove();
-        var old=el.querySelector('[data-scorerh]'); if(old) old.remove();
-        var html=barRow('Score RH', row?row.media:null, row?row.n:0, 'Score RH — indicadores DP/RH (último mês)');
-        el.insertAdjacentHTML('beforeend', html.replace('class="bar-row"', 'class="bar-row" data-scorerh="1"'));
+        perfBarH('cv-av-tipos', 'av-tipos-list', base.concat([{ nome: 'Score RH', valor: row ? perfNum1(row.media) : null }]), 5);
       }, function(){});
     }, function(){});
 
@@ -1150,9 +1379,9 @@ window.perfSupa = window.perfSupa || function(cb) {
       var rows=(r&&!r.error&&Array.isArray(r.data))?r.data:[];
       var cats=rows.filter(function(c){return c.ordem<=9;});
       var rec=rows.filter(function(c){return c.ordem===10;})[0];
-      var html=cats.map(function(c){ return barRow(c.categoria, c.media, c.n, c.categoria); }).join('');
-      if(rec){ html+='<div class="chart-sub" style="margin:8px 0 2px;">Indicador</div>'+barRow('Recomendação', rec.media, rec.n, 'Recomendação (índice)'); }
-      setList('av-temas-list', html);
+      var itens=cats.map(function(c){ return { nome: c.categoria, valor: perfNum1(c.media) }; });
+      if(rec) itens.push({ nome: 'Recomendação', valor: perfNum1(rec.media) });
+      perfBarH('cv-av-temas', 'av-temas-list', itens, 5);
     }, function(){});
   }
   window.registerPerfRenderer(render);
@@ -1222,7 +1451,6 @@ window.perfSupa = window.perfSupa || function(cb) {
     el.innerHTML = items.map(function(it) {
       return '<div class="exam-status-row">' +
         '<span class="exam-status-name">' +
-          '<span class="exam-status-dot ' + reclCor(it.label) + '"></span>' +
           reclEsc(it.label) +
         '</span>' +
         '<span class="exam-status-count">' + it.n + '</span>' +
@@ -1295,10 +1523,10 @@ window.perfSupa = window.perfSupa || function(cb) {
     return s;
   }
 
+  // rótulo do eixo X da série semanal: dd/mm (skill §3)
   function semKeyToLabel(k) {
-    var M = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
     var p = k.split('-');
-    return p.length === 3 ? p[2] + '/' + (M[+p[1]-1] || p[1]) : k;
+    return p.length === 3 ? p[2] + '/' + p[1] : k;
   }
 
   function isTipoPag(t)  { return t.indexOf('pag')  !== -1; }
@@ -1354,57 +1582,15 @@ window.perfSupa = window.perfSupa || function(cb) {
     return { semKey: semKey, label: semKeyToLabel(semKey), pos: pos, neg: neg };
   }
 
+  // Positivos (carbon, linha cheia) × negativos (carbon 45%, tracejada); ponto verde-limão = semana com feriado
   function drawTwoLineChart(svgId, pontos) {
-    var svg = document.getElementById(svgId);
-    if (!svg) return;
-    var n = pontos.length;
-    var W = Math.max(900, n * 50), H = 240, H_PLOT = 200, pad = 24;
-    svg.setAttribute('width', W);
-    svg.setAttribute('height', H);
-    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-    if (n < 2) { svg.innerHTML = ''; return; }
-    var allV = [];
-    pontos.forEach(function(p) { allV.push(p.pos); allV.push(p.neg); });
-    var minV = Math.min.apply(null, allV), maxV = Math.max.apply(null, allV);
-    if (minV > 0) minV = 0;
-    if (maxV < 0) maxV = 0;
-    if (minV === maxV) maxV = minV + 1;
-    var pad18 = (maxV - minV) * 0.18;
-    minV -= pad18; maxV += pad18;
-    var range = maxV - minV;
-    function sx(i) { return pad + i * ((W - pad*2) / (n-1)); }
-    function sy(v) { return pad + (1 - (v - minV) / range) * (H_PLOT - pad); }
-    var hasZero = (minV <= 0 && maxV >= 0);
-    var baseY = hasZero ? sy(0) : H_PLOT;
-    var c = '';
-    if (hasZero) c += '<line x1="' + pad + '" y1="' + baseY.toFixed(1) + '" x2="' + (W-pad) + '" y2="' + baseY.toFixed(1) + '" stroke="#CCCCCC" stroke-width="1"/>';
-    // Linha positivos (carbon)
-    var area1 = 'M ' + sx(0).toFixed(1) + ' ' + baseY.toFixed(1);
-    pontos.forEach(function(p,i) { area1 += ' L ' + sx(i).toFixed(1) + ' ' + sy(p.pos).toFixed(1); });
-    area1 += ' L ' + sx(n-1).toFixed(1) + ' ' + baseY.toFixed(1) + ' Z';
-    c += '<path d="' + area1 + '" fill="#35383F" opacity="0.08"/>';
-    c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ')+sx(i).toFixed(1)+' '+sy(p.pos).toFixed(1); }).join(' ') + '" fill="none" stroke="#35383F" stroke-width="2"/>';
-    pontos.forEach(function(p,i) {
-      var hol = bhHasHoliday(p.semKey);
-      c += '<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(p.pos).toFixed(1)+'" r="3" fill="'+(hol?'#CFFF00':'#35383F')+'" stroke="#35383F" stroke-width="'+(hol?'1.5':'0')+'"/>';
-      c += '<text x="'+sx(i).toFixed(1)+'" y="'+(sy(p.pos)-8).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="'+(hol?'#CFFF00':'#35383F')+'" stroke="'+(hol?'#35383F':'none')+'" stroke-width="'+(hol?'0.4':'0')+'" paint-order="stroke" font-weight="600">'+Math.round(p.pos)+'</text>';
-    });
-    // Linha negativos (cinza tracejado)
-    var area2 = 'M ' + sx(0).toFixed(1) + ' ' + baseY.toFixed(1);
-    pontos.forEach(function(p,i) { area2 += ' L ' + sx(i).toFixed(1) + ' ' + sy(p.neg).toFixed(1); });
-    area2 += ' L ' + sx(n-1).toFixed(1) + ' ' + baseY.toFixed(1) + ' Z';
-    c += '<path d="' + area2 + '" fill="#35383F" opacity="0.06"/>';
-    c += '<path d="' + pontos.map(function(p,i) { return (i===0?'M ':'L ')+sx(i).toFixed(1)+' '+sy(p.neg).toFixed(1); }).join(' ') + '" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="4,2"/>';
-    pontos.forEach(function(p,i) {
-      var hol = bhHasHoliday(p.semKey);
-      c += '<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(p.neg).toFixed(1)+'" r="3" fill="'+(hol?'#CFFF00':'#999')+'" stroke="#35383F" stroke-width="'+(hol?'1.5':'0')+'"/>';
-      c += '<text x="'+sx(i).toFixed(1)+'" y="'+(sy(p.neg)+15).toFixed(1)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="'+(hol?'#CFFF00':'#35383F')+'" stroke="'+(hol?'#35383F':'none')+'" stroke-width="'+(hol?'0.4':'0')+'" paint-order="stroke" font-weight="600">'+Math.round(Math.abs(p.neg))+'</text>';
-    });
-    // Labels X (uniformes — mesmo padrão do turnover)
-    pontos.forEach(function(p,i) {
-      c += '<text x="'+sx(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" font-weight="400">'+p.label+'</text>';
-    });
-    svg.innerHTML = c;
+    var hol = pontos.map(function(p) { return bhHasHoliday(p.semKey); });
+    perfLinhas('cv-bh', 'bh-scroll', pontos.map(function(p) { return p.label; }), [
+      { data: pontos.map(function(p) { return p.pos; }), rotulos: pontos.map(function(p) { return String(Math.round(p.pos)); }),
+        cor: '#35383F', area: 'rgba(53,56,63,0.08)', pontos: hol.map(function(h) { return h ? '#CFFF00' : '#35383F'; }), bordas: hol.map(function(h) { return h ? 1.5 : 0; }) },
+      { data: pontos.map(function(p) { return p.neg; }), rotulos: pontos.map(function(p) { return String(Math.round(Math.abs(p.neg))); }), abaixo: true, tracejado: true,
+        cor: 'rgba(53,56,63,0.45)', area: 'rgba(53,56,63,0.06)', pontos: hol.map(function(h) { return h ? '#CFFF00' : 'rgba(53,56,63,0.45)'; }), bordas: hol.map(function(h) { return h ? 1.5 : 0; }) }
+    ], { grace: '18%' });
   }
 
   var BH_RAW = [];
@@ -1501,25 +1687,8 @@ window.perfSupa = window.perfSupa || function(cb) {
       var pa = a.split('/'), pb = b.split('/');
       return (pa[1] + pa[0]).localeCompare(pb[1] + pb[0]);
     }).slice(-24);
-    var vals = labels.map(function(l) { return counts[l]; });
-    var maxN = Math.max.apply(null, vals) || 1;
-    var minN = Math.min.apply(null, vals);
-    var BAR_MAX = 68; // px
-    var MESES_ABS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-    var html = labels.map(function(l) {
-      var n = counts[l];
-      var pm = l.split('/'); var lbl = (MESES_ABS[+pm[0]-1] || pm[0]) + '/' + pm[1];
-      // normaliza: menor barra = 20% do max, maior = 100%
-      var ratio = maxN === minN ? 1 : (n - minN) / (maxN - minN);
-      var px = Math.round(BAR_MAX * (0.20 + ratio * 0.80));
-      return '<div class="abs-bar-wrap">' +
-        '<span class="abs-bar-val">' + n + '</span>' +
-        '<div class="abs-bar-track" style="height:' + px + 'px;background:var(--carbon);border-radius:2px 2px 0 0;"></div>' +
-        '<span class="abs-bar-label">' + lbl + '</span>' +
-      '</div>';
-    }).join('');
-    var el = document.getElementById('abs-months-bars');
-    if (el) el.innerHTML = html || '<span style="font-size:12px;color:var(--t3)">Sem dados</span>';
+    // eixo X em mm/aa (skill §3); a altura da barra é o número de ausências do mês
+    perfBarV('cv-abs', 'abs-months-bars', labels, labels.map(function(l) { return counts[l]; }));
   }
 
   function renderAbsTipos(rows) {
@@ -1666,7 +1835,6 @@ window.perfSupa = window.perfSupa || function(cb) {
       var n = counts[item.slug] || 0;
       return '<div class="exam-status-row">' +
         '<span class="exam-status-name">' +
-          '<span class="exam-status-dot ' + item.slug + '"></span>' +
           item.label +
         '</span>' +
         '<span class="exam-status-count">' + n + '</span>' +
@@ -1730,7 +1898,7 @@ window.perfSupa = window.perfSupa || function(cb) {
     for (var i = n - 1; i >= 0; i--) {
       var d = new Date(ref.getFullYear(), ref.getMonth() - i, 1);
       out.push({
-        label: MES_PT[d.getMonth()] + '/' + String(d.getFullYear()).slice(-2),
+        label: String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getFullYear()).slice(-2),   // mm/aa (skill §3)
         start: new Date(d.getFullYear(), d.getMonth(), 1),
         end:   new Date(d.getFullYear(), d.getMonth()+1, 1)
       });
@@ -1738,50 +1906,11 @@ window.perfSupa = window.perfSupa || function(cb) {
     return out;
   }
 
-  var TV_LAST = null, TV_RO = null;
   function drawTurnoverLine(pontos) {
-    var svg = document.getElementById('turnover-line-svg');
-    if (!svg) return;
-    TV_LAST = pontos;
-    var host = svg.parentElement;
-    // Redesenha ao mudar a largura do container (preenche exato, sem distorcer)
-    if (host && !TV_RO && window.ResizeObserver) {
-      TV_RO = new ResizeObserver(function() { if (TV_LAST) drawTurnoverLine(TV_LAST); });
-      TV_RO.observe(host);
-    }
-    var n = pontos.length;
-    var cw = host ? host.clientWidth : 0;
-    var W = Math.max(cw || 900, n * 64), H = 240, H_PLOT = 200, pad = 24;
-    svg.setAttribute('width', W);
-    svg.setAttribute('height', H);
-    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-    if (n < 2) { svg.innerHTML = ''; return; }
-    var vals = pontos.map(function(p) { return p.val; });
-    var minV = 0;
-    var maxV = Math.max.apply(null, vals);
-    if (maxV === 0) maxV = 1;
-    maxV = maxV * 1.20;
-    var range = maxV - minV;
-    function sx(i) { return pad + i * ((W - pad*2) / (n-1)); }
-    function sy(v) { return pad + (1 - (v - minV) / range) * (H_PLOT - pad); }
-    var c = '';
-    // Área preenchida
-    var area = 'M ' + sx(0).toFixed(1) + ' ' + sy(0).toFixed(1);
-    pontos.forEach(function(p, i) { area += ' L ' + sx(i).toFixed(1) + ' ' + sy(p.val).toFixed(1); });
-    area += ' L ' + sx(n-1).toFixed(1) + ' ' + sy(0).toFixed(1) + ' Z';
-    c += '<path d="' + area + '" fill="#35383F" opacity="0.08"/>';
-    // Linha
-    c += '<path d="' + pontos.map(function(p, i) { return (i===0?'M ':'L ') + sx(i).toFixed(1) + ' ' + sy(p.val).toFixed(1); }).join(' ') + '" fill="none" stroke="#35383F" stroke-width="2"/>';
-    // Pontos e valores
-    pontos.forEach(function(p, i) {
-      c += '<circle cx="' + sx(i).toFixed(1) + '" cy="' + sy(p.val).toFixed(1) + '" r="3" fill="#35383F"/>';
-      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (sy(p.val) - 8).toFixed(1) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" stroke="none" paint-order="stroke" font-weight="600">' + p.val.toFixed(1).replace('.', ',') + '%</text>';
-    });
-    // Labels X
-    pontos.forEach(function(p, i) {
-      c += '<text x="' + sx(i).toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="#35383F" stroke="#35383F" stroke-width="0" paint-order="stroke">' + p.label + '</text>';
-    });
-    svg.innerHTML = c;
+    perfLinhas('cv-turnover', 'turnover-scroll', pontos.map(function(p) { return p.label; }), [
+      { data: pontos.map(function(p) { return p.val; }), rotulos: pontos.map(function(p) { return p.val.toFixed(1).replace('.', ',') + '%'; }),
+        cor: '#35383F', area: 'rgba(53,56,63,0.08)' }
+    ], { beginAtZero: true, grace: '20%' });
   }
 
   var TV_RAW = [];
@@ -1911,29 +2040,33 @@ function _flattenArvore(node, acc) {
   return acc;
 }
 
+function _colabNota(c) {
+  var _nt = (window._notaColab && window._notaColab[String(c.matricula || c.id)]);
+  if (_nt == null || _nt === '') return null;
+  var n = parseFloat(_nt); return isNaN(n) ? null : n;
+}
+function _colabRole(c) { return [c.cargo, c.unidade].filter(Boolean).join(' · '); }
 function _renderColabRow(c) {
   var ini  = c.iniciais || _colabIniciais(c.nome);
-  var role = [c.cargo, c.unidade].filter(Boolean).join(' · ');
   var safeIni = ini.replace(/'/g, '');
   var avatar = c.foto
     ? '<div class="colab-avatar" style="overflow:hidden;padding:0;"><img src="' + c.foto + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.innerHTML=\'' + safeIni + '\'"/></div>'
     : '<div class="colab-avatar">' + ini + '</div>';
-  var _nt = (window._notaColab && window._notaColab[String(c.matricula || c.id)]);
-  var notaTxt = (_nt == null || _nt === '') ? '—' : parseFloat(_nt).toFixed(1).replace('.', ',');
-  var notaCor = (notaTxt === '—') ? 'var(--t3)' : 'var(--t1)';
-  return '<tr><td><div class="colab-cell">' + avatar + '<div><div class="colab-name">' + c.nome + '</div><div class="colab-role">' + role + '</div></div></div></td><td style="text-align:right;font-family:\'DM Mono\',monospace;font-weight:700;color:' + notaCor + ';">' + notaTxt + '</td></tr>';
+  var n = _colabNota(c);
+  return '<tr><td><div class="colab-cell">' + avatar + '<div style="min-width:0"><div class="colab-name">' + perfEscH(c.nome) + '</div><div class="colab-role">' + perfEscH(_colabRole(c)) + '</div></div></div></td>' +
+    '<td class="tbl-nota' + (n == null ? ' td-muted' : '') + '">' + perfFmt1(n) + '</td></tr>';
 }
+var TAB_COLABS = new TabelaOrg({ tabela: 'tbl-colabs', corpo: 'tbody-colabs', mais: 'ver-mais-wrap-colabs', chave: 'performance_colabs_cols_v1',
+  n: 10, colspan: 2, vazio: 'Nenhum colaborador',
+  valor: { nome: function(c){ return c.nome || ''; }, nota: function(c){ var n = _colabNota(c); return n == null ? -1 : n; } },
+  linha: _renderColabRow, cartoes: 'colabs-cards',
+  cartao: function(c){ return cartao({ titulo: perfEscH(c.nome), sub: perfEscH(_colabRole(c)), campos: [['Nota', perfFmt1(_colabNota(c))]] }); } });
 
-function _renderColabsTable(limit) {
-  var tbody = document.getElementById('tbody-colabs');
-  if (!tbody) return;
-  tbody.innerHTML = _allColabs.slice(0, limit).map(_renderColabRow).join('');
-}
+function _renderColabsTable(limit) { TAB_COLABS.pinta(); }
 
 function expandColabs() {
   _colabsShowing = _allColabs.length;
-  _renderColabsTable(_colabsShowing);
-  document.getElementById('ver-mais-wrap-colabs').style.display = 'none';
+  TAB_COLABS.verMais();
 }
 
 function _applyColabs(rawColabs) {
@@ -1963,17 +2096,10 @@ function colabsRender(state) {
   var kpi = document.getElementById('kpi-total-colabs');
   if (kpi) kpi.textContent = total;
   var lbl = document.getElementById('colab-count-label');
-  if (lbl) lbl.textContent = '— ' + total + ' RESULTADOS';
+  if (lbl) lbl.textContent = 'Colaboradores (' + total + ')';
   var cnt = document.getElementById('kpi-count-n'); if (cnt) cnt.textContent = total;
-  _renderColabsTable(_colabsShowing);
-  var wrap = document.getElementById('ver-mais-wrap-colabs');
-  var btn  = document.getElementById('btn-ver-mais-colabs');
-  if (_allColabs.length > _colabsShowing) {
-    if (wrap) wrap.style.display = 'block';
-    if (btn)  btn.textContent = 'Ver mais (' + (_allColabs.length - _colabsShowing) + ')';
-  } else {
-    if (wrap) wrap.style.display = 'none';
-  }
+  TAB_COLABS.todos = false;
+  TAB_COLABS.dados(_allColabs);
   // Custo Total = soma de (salario_fixo × 1,7) por colaborador filtrado
   var custoEl = document.getElementById('kpi-custo-total');
   if (custoEl) {
@@ -2011,31 +2137,9 @@ window._notaColab = window._notaColab || {};
 (function() {
   function esc(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function fmt(v){ if(v==null||v==='') return '—'; var n=parseFloat(v); return isNaN(n)?'—':n.toFixed(1).replace('.',','); }
-  function barRow(r){
-    var m=parseFloat(r.media), pct=isNaN(m)?0:Math.max(0,Math.min(100,(m/5)*100));
-    var tip=esc(r.rotulo)+(r.aval!=null?(' · aval. '+fmt(r.aval)):'')+(r.rh!=null?(' · RH '+fmt(r.rh)):'')+(r.n?(' · '+r.n+' aval.'):'');
-    return '<div class="bar-row" title="'+tip+'">'+
-      '<div class="bar-name">'+esc(r.rotulo)+'</div>'+
-      '<div class="bar-track"><div class="bar-fill" style="width:'+pct.toFixed(0)+'%"></div></div>'+
-      '<div class="bar-val">'+fmt(r.media)+'</div></div>';
-  }
+  var _CANVAS = { 'lid-uni-list': 'cv-lid-uni', 'lid-dep-list': 'cv-lid-dep' };
   function fill(id, rows){
-    var el=document.getElementById(id); if(!el) return;
-    el.innerHTML = (rows&&rows.length) ? rows.map(barRow).join('')
-                                       : '<div class="chart-sub" style="margin:0;">Sem dados</div>';
-  }
-  function fillVert(id, rows){
-    var el=document.getElementById(id); if(!el) return;
-    if(!rows||!rows.length){ el.innerHTML='<div class="chart-sub" style="margin:0;">Sem dados</div>'; return; }
-    var BAR_MAX=120;
-    el.innerHTML='<div class="perf-vbars">'+rows.map(function(r){
-      var m=parseFloat(r.media); var px=isNaN(m)?0:Math.round(BAR_MAX*Math.max(0.06,Math.min(1,m/5)));
-      var tip=esc(r.rotulo)+(r.aval!=null?(' · aval. '+fmt(r.aval)):'')+(r.rh!=null?(' · RH '+fmt(r.rh)):'')+(r.n?(' · '+r.n+' aval.'):'');
-      return '<div class="perf-vbar-wrap" title="'+tip+'">'+
-        '<span class="perf-vbar-val">'+fmt(r.media)+'</span>'+
-        '<div class="perf-vbar-track" style="height:'+px+'px;"></div>'+
-        '<span class="perf-vbar-label">'+esc(r.rotulo)+'</span></div>';
-    }).join('')+'</div>';
+    perfBarH(_CANVAS[id], id, (rows || []).map(function(r){ return { nome: r.rotulo, valor: perfNum1(r.media) }; }), 5);
   }
   function render(state){
     var supa=window.__lideresSupa; if(!supa) return;
@@ -2412,8 +2516,8 @@ function setTab(t){
     var us={}, ds={};
     ROWS.forEach(function(r){ if(r.due){ if(r.unidade) us[r.unidade]=1; if(r.departamento) ds[r.departamento]=1; } });
     var uSel=document.getElementById('pend-f-unidade'), dSel=document.getElementById('pend-f-depto');
-    uSel.innerHTML='<option value="">Todas as unidades</option>'+Object.keys(us).sort().map(function(u){return '<option>'+esc(u)+'</option>';}).join('');
-    dSel.innerHTML='<option value="">Todos os departamentos</option>'+Object.keys(ds).sort().map(function(d){return '<option>'+esc(d)+'</option>';}).join('');
+    uSel.innerHTML='<option value="">Todas</option>'+Object.keys(us).sort().map(function(u){return '<option>'+esc(u)+'</option>';}).join('');
+    dSel.innerHTML='<option value="">Todos</option>'+Object.keys(ds).sort().map(function(d){return '<option>'+esc(d)+'</option>';}).join('');
   }
 
   window.pendClear=function(){
@@ -2429,75 +2533,78 @@ function setTab(t){
     document.getElementById('pend-kpis').innerHTML=kpi('Pendentes agora',due.length)+kpi('Efetivos',ROWS.length)+kpi('Já avaliados',avaliados);
     document.getElementById('pend-count').textContent=list.length;
     var g=document.getElementById('pend-grid');
+    // card padrão (skill references/tabelas.md): monta uma vez; se a área foi trocada (ex.: erro), monta de novo
+    if(!document.getElementById('tbl-perf-pend')){ g.innerHTML=PEND_HTML; TAB_PEND.colW=null; }
+    var tt=document.getElementById('pend-titulo'); if(tt) tt.textContent='Pendentes ('+list.length+')';
+    var vazio='Nenhuma avaliação pendente com esses filtros.';
     if(!list.length){
       var futuras=ROWS.filter(function(r){return !r.due && r.proxima_prevista;}).map(function(r){return String(r.proxima_prevista).slice(0,10);}).sort();
-      var msg=(due.length===0 && futuras.length)
-        ? 'Nenhuma avaliação pendente no momento.<br><span style="font-size:12.5px">As primeiras entram a partir de <strong>'+fmtDate(futuras[0])+'</strong>.</span>'
-        : 'Nenhuma avaliação pendente com esses filtros.';
-      g.innerHTML='<div class="pend-empty">'+msg+'</div>'; return;
+      if(due.length===0 && futuras.length) vazio='Nenhuma avaliação pendente no momento.<br>As primeiras entram a partir de '+fmtDate(futuras[0])+'.';
     }
-    var mobileHTML = '<div class="pend-cards">'+list.map(card).join('')+'</div>';
-    var thead = '<thead><tr>'+
-      '<th>Nome</th><th>Matrícula</th><th>Rodada</th><th>Unidade</th>'+
-      '<th>Departamento</th><th>Cargo</th><th>Média anterior</th>'+
-      '<th>Status</th><th>Ação</th>'+
-    '</tr></thead>';
-    var tbody='<tbody>'+list.map(tableRow).join('')+'</tbody>';
-    var deskHTML='<div class="pend-table-wrap"><table class="pend-table">'+thead+tbody+'</table></div>';
-    g.innerHTML=mobileHTML+deskHTML;
+    TAB_PEND.o.vazio=vazio;
+    TAB_PEND.todos=false;
+    TAB_PEND.dados(list);
   };
 
+  function _pendAtrasada(r){ return !!(r.proxima_prevista && String(r.proxima_prevista).slice(0,10) < todayISO()); }
+  function _pendPill(r){ var o=_pendAtrasada(r); return '<span class="status-badge '+(o?'s-atrasada':'s-pendente')+'">'+(o?'Atrasada':'Pendente')+'</span>'; }
+  var _ICON_LAPIS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  var PEND_HTML='<div class="chart-card card-tabela">'+
+    '<button class="chart-info-btn" onclick="abrirInfoGrafico(\'pendentes\')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>'+
+    '<div class="chart-title" id="pend-titulo">Pendentes</div>'+
+    '<div class="tcards" id="pend-cards"></div>'+
+    '<div class="tbl-scroll tem-cartoes"><table class="mini tbl-org" id="tbl-perf-pend" style="min-width:1120px"><thead><tr>'+
+      '<th data-col="nome" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'nome\')" style="width:220px">Nome <span class="sort-arrow" data-sa="nome">↕</span></th>'+
+      '<th data-col="matricula" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'matricula\')" style="width:100px">Matrícula <span class="sort-arrow" data-sa="matricula">↕</span></th>'+
+      '<th data-col="rodada" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'rodada\')" style="width:80px">Rodada <span class="sort-arrow" data-sa="rodada">↕</span></th>'+
+      '<th data-col="unidade" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'unidade\')" style="width:130px">Unidade <span class="sort-arrow" data-sa="unidade">↕</span></th>'+
+      '<th data-col="departamento" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'departamento\')" style="width:140px">Departamento <span class="sort-arrow" data-sa="departamento">↕</span></th>'+
+      '<th data-col="cargo" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'cargo\')" style="width:160px">Cargo <span class="sort-arrow" data-sa="cargo">↕</span></th>'+
+      '<th data-col="media" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'media\')" style="width:110px">Média anterior <span class="sort-arrow" data-sa="media">↕</span></th>'+
+      '<th data-col="status" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'status\')" style="width:110px">Status <span class="sort-arrow" data-sa="status">↕</span></th>'+
+      '<th style="width:70px">Ação</th>'+
+    '</tr></thead><tbody id="pend-tbody"></tbody></table></div>'+
+    '<div class="ver-mais-wrap" id="pend-mais" style="display:none"><button class="btn-ver-mais" onclick="TAB_PERF_PEND.verMais()">Ver mais</button></div>'+
+  '</div>';
+
   function tableRow(r){
-    var overdue = r.proxima_prevista && String(r.proxima_prevista).slice(0,10) < todayISO();
-    var badgeCls = overdue ? 's-atrasada' : 's-pendente';
-    var badgeLbl = overdue ? 'Atrasada' : 'Pendente';
     var i = ROWS.indexOf(r);
     var media = (r.ultima_media!=null) ? fmtNum(r.ultima_media) : '—';
     return '<tr>'+
-      '<td class="ptt-nome">'+esc(r.nome||'—')+'</td>'+
-      '<td>'+esc(r.matricula||'—')+'</td>'+
-      '<td>'+ord(r.proxima_rodada)+'</td>'+
+      '<td class="nm">'+esc(r.nome||'—')+'</td>'+
+      '<td class="td-c">'+esc(r.matricula||'—')+'</td>'+
+      '<td class="td-c">'+ord(r.proxima_rodada)+'</td>'+
       '<td>'+esc(r.unidade||'—')+'</td>'+
       '<td>'+esc(r.departamento||'—')+'</td>'+
       '<td>'+esc(r.cargo||'—')+'</td>'+
-      '<td>'+media+'</td>'+
-      '<td><span class="status-badge '+badgeCls+'">'+badgeLbl+'</span></td>'+
-      '<td class="ptt-acoes"><button class="btn-editar" title="Avaliar" onclick="pendAbrir('+i+')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></td>'+
+      '<td class="td-c">'+media+'</td>'+
+      '<td class="td-c">'+_pendPill(r)+'</td>'+
+      '<td class="td-c"><button class="btn-editar" title="Avaliar" onclick="pendAbrir('+i+')">'+_ICON_LAPIS+'</button></td>'+
     '</tr>';
   }
 
-  function kpi(lbl,n){ return '<div class="pend-kpi"><span class="pend-kpi-label">'+lbl+'</span><span class="pend-kpi-num">'+n+'</span></div>'; }
+  // KPIs da aba (faixa padrão da skill §2)
+  function kpi(lbl,n){ return '<div class="kpi-card"><span class="kpi-label">'+lbl+'</span><span class="kpi-number">'+n+'</span></div>'; }
 
+  // cartão do celular (cartao() da skill): mesmos dados e o mesmo botão Avaliar
   function card(r){
-    var overdue = r.proxima_prevista && String(r.proxima_prevista).slice(0,10) < todayISO();
-    var badgeCls = overdue ? 's-atrasada' : 's-pendente';
-    var badgeLbl = overdue ? 'Atrasada' : 'Pendente';
-    var prev = (r.ultima_media!=null)
-      ? '<div class="card-field"><span class="field-label">Média anterior</span><span class="field-value">'+fmtNum(r.ultima_media)+'</span></div>'
-      : '';
     var i = ROWS.indexOf(r);
-    return '<div class="card">'+
-      '<div class="card-header">'+
-        '<div>'+
-          '<div class="candidate-name">'+esc(r.nome||'—')+'</div>'+
-          '<div class="candidate-contact">Matrícula '+esc(r.matricula||'—')+'</div>'+
-        '</div>'+
-        '<span class="status-badge '+badgeCls+'">'+badgeLbl+'</span>'+
-      '</div>'+
-      '<div class="card-body">'+
-        '<div class="card-field"><span class="field-label">Rodada</span><span class="field-value">'+ord(r.proxima_rodada)+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+esc(r.unidade||'—')+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Departamento</span><span class="field-value">'+esc(r.departamento||'—')+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Cargo</span><span class="field-value">'+esc(r.cargo||'—')+'</span></div>'+
-        prev+
-      '</div>'+
-      '<div class="card-footer">'+
-        '<button class="btn-avaliar" onclick="pendAbrir('+i+')">'+
-          '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Avaliar'+
-        '</button>'+
-      '</div>'+
-    '</div>';
+    var campos = [['Rodada', ord(r.proxima_rodada)], ['Unidade', esc(r.unidade||'—')], ['Departamento', esc(r.departamento||'—')], ['Cargo', esc(r.cargo||'—')]];
+    if (r.ultima_media!=null) campos.push(['Média anterior', fmtNum(r.ultima_media)]);
+    return cartao({ titulo: esc(r.nome||'—'), sub: 'Matrícula '+esc(r.matricula||'—'), direita: _pendPill(r), campos: campos,
+      acoes: '<button class="btn-avaliar" onclick="pendAbrir('+i+')">'+
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Avaliar'+
+      '</button>' });
   }
+
+  var TAB_PEND = window.TAB_PERF_PEND = new TabelaOrg({ tabela: 'tbl-perf-pend', corpo: 'pend-tbody', mais: 'pend-mais', chave: 'performance_pendentes_cols_v1',
+    n: 10, colspan: 9, vazio: 'Nenhuma avaliação pendente com esses filtros.',
+    valor: { nome: function(r){ return r.nome||''; }, matricula: function(r){ return String(r.matricula||''); },
+             rodada: function(r){ return Number(r.proxima_rodada)||1; }, unidade: function(r){ return r.unidade||''; },
+             departamento: function(r){ return r.departamento||''; }, cargo: function(r){ return r.cargo||''; },
+             media: function(r){ var n=parseFloat(r.ultima_media); return isNaN(n)?-1:n; },
+             status: function(r){ return _pendAtrasada(r)?'Atrasada':'Pendente'; } },
+    linha: tableRow, cartoes: 'pend-cards', cartao: card });
 
   window.pendAbrir=function(i){
     var r=ROWS[i]; if(!r) return; cur=r; resp={};
