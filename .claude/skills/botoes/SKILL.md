@@ -7,7 +7,7 @@ description: >-
   cor = .btn-icon--danger p/ lixeira), o link/texto (.btn-link), o toggle/switch
   (.toggle, ligado = carbon + botão citric) e o estado de LOADING canônico
   (spinner .btn-spin + keyframes btnRot + setBtnLoading, texto em gerúndio,
-  disabled). Raio 6px, altura ÚNICA 40px (nenhum botão com altura diferente),
+  disabled). Raio 8px, altura ÚNICA 40px (nenhum botão com altura diferente),
   DM Mono 10px uppercase, :hover opacity .85, :disabled opacity .4. Inclui
   desktop×mobile (botão é OU texto OU ícone, nunca os dois: mobile=texto,
   desktop≥768px=ícone .btn-icon) e um MAPA DE MIGRAÇÃO das ~40 classes
@@ -26,7 +26,7 @@ description: >-
 
 # Botões — Portal Líderes
 
-Conjunto canônico de botões (base `.btn` + modificadores). **Catálogo visual: `git-claude/catalogo-botoes.html`**. Baseado na varredura do portal (recrutamento/manutenção/papelaria + readmes). **Raio = 6px · altura única = 40px.**
+Conjunto canônico de botões (base `.btn` + modificadores). **Catálogo visual: `git-claude/catalogo-botoes.html`**. Baseado na varredura do portal (recrutamento/manutenção/papelaria + readmes). **Raio = 8px · altura única = 40px.**
 
 ## Relação com as outras skills
 - **`header-abas-footer`** — `.header-plus` (toolbar) e `.tab-btn` (abas) são botões de componente; ficam lá (raio 4px, mantêm).
@@ -44,7 +44,7 @@ Tokens: padrão do portal (`--carbon #35383F`, `--citric #CFFF00`, `--surface #F
 ```css
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  height: 40px; padding: 0 18px; border: 1px solid transparent; border-radius: 6px;  /* --btn-r · altura ÚNICA p/ todos */
+  height: 40px; padding: 0 18px; border: 1px solid transparent; border-radius: 8px;  /* --btn-r · altura ÚNICA p/ todos */
   font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600;
   letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
   transition: opacity .15s, border-color .15s, background .15s; white-space: nowrap;
@@ -68,7 +68,7 @@ Tokens: padrão do portal (`--carbon #35383F`, `--citric #CFFF00`, `--surface #F
 | `.btn--danger` | destrutivo (excluir) | `--red` | `#fff` | — |
 | `.btn--danger-ghost` | destrutivo discreto | `--red-bg` | `--red` | 1px `#FECACA` |
 
-Medidas: **altura ÚNICA = 40px** para TODOS os botões (texto, destrutivo e ícone — nenhum com altura diferente), raio **6px**, fonte **DM Mono 10px/600 uppercase** `letter-spacing:.08em`. `.btn--sm` = **mesma altura**, só mais estreito (tabela). `.btn--block` = largura total (footer de modal).
+Medidas: **altura ÚNICA = 40px** para TODOS os botões (texto, destrutivo e ícone — nenhum com altura diferente), raio **8px**, fonte **DM Mono 10px/600 uppercase** `letter-spacing:.08em`. `.btn--sm` = **mesma altura**, só mais estreito (tabela). `.btn--block` = largura total (footer de modal).
 
 ---
 
@@ -106,7 +106,7 @@ function setBtnLoading(on, label){
 
 **Só-ícone (40×40 — mesma altura dos demais):** **tudo igual ao primário** (carbon/citric) — editar, enviar, visualizar, foto, copiar. A **única exceção de cor** é a **lixeira** (destrutivo, `--danger`).
 ```css
-.btn-icon { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 6px; cursor: pointer; flex-shrink: 0; background: var(--carbon); color: var(--citric); transition: opacity .15s, background .15s; }  /* padrão = primário (editar, enviar, visualizar, foto, copiar) */
+.btn-icon { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 8px; cursor: pointer; flex-shrink: 0; background: var(--carbon); color: var(--citric); transition: opacity .15s, background .15s; }  /* padrão = primário (editar, enviar, visualizar, foto, copiar) */
 .btn-icon:hover { opacity: .85; }
 .btn-icon svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .btn-icon--danger { background: var(--red); color: #fff; }   /* lixeira — única exceção de cor */
@@ -173,7 +173,7 @@ Hoje o mesmo visual tem ~40 nomes. Ao mexer numa página, troque pela classe can
 ---
 
 ## Checklist
-- [ ] Usa `.btn` + modificador (`--primary`/`--danger`), raio **6px**, **altura única 40px** (nenhum diferente), DM Mono 10px/600 uppercase.
+- [ ] Usa `.btn` + modificador (`--primary`/`--danger`), raio **8px**, **altura única 40px** (nenhum diferente), DM Mono 10px/600 uppercase.
 - [ ] Primário = carbon/citric (inclui as antigas ações secundárias); destrutivo = `--red`.
 - [ ] Ação de modal/form full-width = `.btn--block`; de tabela = `.btn--sm`.
 - [ ] Loading = `disabled` + `.btn-spin` (`btnRot`) + texto em **gerúndio** via `setBtnLoading`.

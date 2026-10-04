@@ -14,7 +14,7 @@ Trocar as ~40 classes antigas de botão pelas canônicas, página por página (o
 - `modal-btn-del`/`btn-excluir`/`tool-delete-btn` → `.btn--danger` (texto) ou `.btn-icon--danger` (lixeira).
 - `btn-clear` → `.btn-link`. `btn-ver-mais` → `.btn--primary`. (⚠️ **pílulas** — `gate-btn`/`hflow-lock-btn` — ainda **não** fazem parte desta skill; deixar como estão até definir.)
 - Ícones (editar, enviar, visualizar, foto, **copiar**, chart-info) → `.btn-icon` (tudo igual ao primário, 40×40); **só a lixeira** (`tool-delete-btn`/`btn-excluir`) → `.btn-icon--danger`.
-- **Raio 6px · altura ÚNICA 40px** (nenhum botão com altura diferente — nem destrutivo nem ícone), DM Mono 10px uppercase, loading com `.btn-spin`/`btnRot`/`setBtnLoading` + gerúndio.
+- **Raio 8px · altura ÚNICA 40px** (nenhum botão com altura diferente — nem destrutivo nem ícone), DM Mono 10px uppercase, loading com `.btn-spin`/`btnRot`/`setBtnLoading` + gerúndio.
 - **Toggle/switch** (componente novo da skill): `.toggle` — ligado = trilho carbon + botão citric.
 - **Desktop × Mobile:** um botão é **ou texto ou ícone, nunca os dois juntos**. Mobile = **texto** (`.btn.btn--primary`); desktop (`@media min-width:768px`) = **ícone** (`.btn-icon` 40×40). Implementa com dois elementos de mesma ação alternados por `.btn-resp-text`/`.btn-resp-icon` (ver §4 da skill). Onde hoje a página usa `.btn-text` sumindo em `max-width:480px` (ex.: `.btn-nova` do manutenção), migre pro novo padrão.
 
@@ -29,7 +29,7 @@ Trocar as ~40 classes antigas de botão pelas canônicas, página por página (o
 8. **Mostre o antes/depois pro usuário** e **só faça squash-merge com "merge" explícito** dele. Rodapé de atribuição do Claude Code nos commits/PR.
 
 ## Decisões já travadas (não reabrir)
-- Raio **6px**. Padrão **novo + migração** (sem reinventar classes). O `.btn-help` âmbar (`#E8A020`) é a única cor fora da paleta — trate caso a caso, pergunte ao usuário.
+- Raio **8px**. Padrão **novo + migração** (sem reinventar classes). O `.btn-help` âmbar (`#E8A020`) é a única cor fora da paleta — trate caso a caso, pergunte ao usuário.
 
 ## Referências (ler, não reescrever)
 `compliance/kpis/rh/recrutamento.html`, `compliance/kpis/manutencao/index.html`, `compliance/areas/institucional/papelaria.html`, `git-claude/readmemodal.md`, `git-claude/readmehefdash.md`, `git-claude/readmeload.md`, e a skill `.claude/skills/botoes/SKILL.md` (+ catálogo `git-claude/catalogo-botoes.html`).
