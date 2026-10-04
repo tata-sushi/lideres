@@ -4,7 +4,7 @@ Esse documento descreve o padrão que DEVE ser aplicado em toda página nova e e
 
 ## 1. Autenticação em páginas novas
 
-Toda página protegida deve conter, no topo do `<body>`, o **auth gate** copiado de uma página já funcionando (ex.: `compliance/areas/rh/sancoes.html` ou `compliance/areas/institucional/index.html`).
+Toda página protegida deve conter, no topo do `<body>`, o **auth gate** copiado de uma página já funcionando (ex.: `compliance/kpis/rh/sancoes.html` ou `compliance/areas/institucional/index.html`).
 
 Essencial:
 - `PORTAL_URL = 'https://lideres.tatasushi.tech/'`

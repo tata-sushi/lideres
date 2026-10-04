@@ -193,8 +193,9 @@ montados por JS a partir dos mesmos dados, gere os dois a partir de uma lista de
 `data-aba-id`. Modelo (página-piloto `compliance/kpis/rh/desligamentos.html`):
 ```javascript
 var ICO = { enviar: '<line …/>', link: '<path …/>' /* desenhos da tabela de ícones acima */ };
-function _acao(abaId, onclick, rotulo, icone){
-  var a = ' data-aba-id="<GOV_PAGE_ID>::' + abaId + '" onclick="' + onclick + '"';
+// passe a CHAVE COMPLETA ('<GOV_PAGE_ID>::<slug>') — escrita por inteiro, a auditoria da skill de acesso a encontra
+function _acao(chave, onclick, rotulo, icone){
+  var a = ' data-aba-id="' + chave + '" onclick="' + onclick + '"';
   return { txt: '<button class="btn btn--primary btn--sm"' + a + '>' + rotulo + '</button>',
            ico: '<button class="btn-icon"' + a + ' title="' + rotulo + '" aria-label="' + rotulo + '"><svg viewBox="0 0 24 24">' + ICO[icone] + '</svg></button>' };
 }

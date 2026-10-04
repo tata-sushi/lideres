@@ -25,6 +25,8 @@ from collections import Counter, defaultdict
 
 RE_PAGE_ID = re.compile(r"""GOV_PAGE_ID\s*=\s*['"]([^'"]+)['"]""")
 RE_KEY = re.compile(r'data-(aba|botao)-id="([^"]*)"')
+# Chave escrita como texto no JS (ex.: GOV_BOTOES, ou _acao('<pagina>::<slug>', …) que monta o atributo depois).
+RE_KEY_JS = re.compile(r"""['"](governanca-[a-z0-9-]+::[a-z0-9-]+)['"]""")
 RE_KEBAB = re.compile(r'^[a-z0-9]+(?:-[a-z0-9]+)*$')
 
 # Sinônimos conhecidos → forma canônica sugerida. A ideia é convergir o mesmo
@@ -62,7 +64,9 @@ def auditar(raiz):
             txt = open(f, encoding='utf-8', errors='replace').read()
         except OSError:
             continue
-        chaves = RE_KEY.findall(txt)
+        chaves = [(t, k) for t, k in RE_KEY.findall(txt) if "'" not in k and '+' not in k]  # ignora atributo montado por JS
+        vistos_attr = {k for _, k in chaves}
+        chaves += [('aba', k) for k in sorted(set(RE_KEY_JS.findall(txt))) if k not in vistos_attr]
         if not chaves:
             continue
         m = RE_PAGE_ID.search(txt)

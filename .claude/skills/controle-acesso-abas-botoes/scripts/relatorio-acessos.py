@@ -70,6 +70,7 @@ RE_PAGE_ID = re.compile(r"""GOV_PAGE_ID\s*=\s*['"]([^'"]+)['"]""")
 RE_TAG = re.compile(r'<(button|a|div|span|li|label)\b([^>]*?)\bdata-(aba|botao)-id="([^"]+)"([^>]*)>', re.S)
 RE_CLASS = re.compile(r'class="([^"]*)"')
 RE_TITLE = re.compile(r'title="([^"]*)"')
+RE_KEY_JS = re.compile(r"""['"](governanca-[a-z0-9-]+::[a-z0-9-]+)['"]""")  # chave escrita no JS (GOV_BOTOES, _acao(...))
 # Nomes antigos substituídos no #2991 (apagar do banco na fase 2).
 ANTIGOS = {
     'governanca-kpis-compras-abastecimento::kpis', 'governanca-kpis-rh-admissao::kpis', 'governanca-app-escala::kpis',
@@ -143,6 +144,10 @@ def varrer_html(raiz):
                     d['menu'] = True
                 if not d['label'] and label:
                     d['label'] = label
+            # chaves da própria página que só aparecem como texto no JS (atributo montado depois)
+            for chave in RE_KEY_JS.findall(src):
+                if chave.startswith(pid + '::') and chave not in pg['ids']:
+                    pg['ids'][chave] = {'tipo': 'botao', 'label': '', 'n': 1, 'attr': 'aba', 'menu': False}
     return paginas
 
 
