@@ -150,7 +150,7 @@ Cada clique grava um documento na coleção `mudancas` da página — nada vai p
 
 ## Página Auditoria de páginas (o dono edita direto no portal)
 
-`compliance/auditoria/paginas.html` — abas Sobre e Auditoria; ids `governanca-auditoria-paginas::{sobre,auditoria,editar-acessos}`.
+`compliance/auditoria/paginas.html` — abas Sobre e Analítico; ids `governanca-auditoria-paginas::{sobre,analitico,editar-acessos}`.
 Mostra a grade páginas × colaboradores lida de `gov_auditoria_acessos` e grava pelo lápis de cada linha com
 `gov_auditoria_salvar`, que faz o mesmo mapeamento da tabela de acessos:
 

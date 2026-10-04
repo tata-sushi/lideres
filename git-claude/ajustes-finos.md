@@ -101,6 +101,9 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 
 | Data | Página | Ajuste | Skill atualizada? |
 |---|---|---|---|
+| 04/10 | Auditoria de páginas | Total passa a contar os admins (= soma das ● da linha); aba "Auditoria" vira "Analítico" (slug `::analitico`, catálogo atualizado no banco) | `dashboards-kpi-graficos` (`tabelas.md` §4) + `controle-acesso-abas-botoes` (backend) |
+| 04/10 | Banco | Apagada a página `governanca-kpis-brainstorm` (sem arquivo) e os 3 acessos dela; a do app (`governanca-app-brainstorm`) fica | — |
+| 04/10 | Organograma 2 | Fica aberto, sem `GOV_PAGE_ID`/gate, por decisão do dono | `controle-acesso-abas-botoes` (exceção + `estado-acessos.py`) |
 | 04/10 | Auditoria de páginas | Bolinha dos admins (e de quem vê valores de todas as áreas) em carbon, igual às demais — sem cinza; "i" e Sobre sem a linha do ● cinza | `dashboards-kpi-graficos` (`tabelas.md` §4) + `controle-acesso-abas-botoes` |
 | 04/10 | Auditoria de páginas | Sai o aviso verde "Salvo…" em cima da tabela; a confirmação de salvar vira o alerta do navegador (padrão do portal) | `modal-formulario` (regra "Salvou") |
 | 04/10 | Auditoria de páginas | Seletor do colaborador só com o nome (sem cargo, unidade, contagem e grupos), em ordem alfabética | `dashboards-kpi-graficos` (`tabelas.md` §4) + `controle-acesso-abas-botoes` |
