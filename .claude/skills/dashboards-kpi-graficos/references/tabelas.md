@@ -42,10 +42,10 @@ table.mini .td-acoes { text-align: right; }
 table.mini .td-muted { color: var(--muted); font-size: 11px; }   /* complemento: "(12d)", "sem nº", "respondida" */
 .status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
 ```
-Ações da linha: no **desktop** são **ícones** `.btn-icon` 30×30 com `title` (avião = enviar/disparar, corrente = link,
+Ações da linha: no **desktop** são **ícones** `.btn-icon` 28×28 com `title` (avião = enviar/disparar, corrente = link,
 duas folhas = copiar, seta circular = reemitir…); no **cartão do celular** a mesma ação é texto `.btn.btn--primary.btn--sm`.
 Gere os dois da mesma lista de ações (modelo `_acao()` na skill `botoes` §4). Coluna "Ações" estreita: ~40px por ícone
-(110px para 2 ícones). Ao mudar larguras, troque a `chave` do `TabelaOrg` (`…_v2`) para não herdar larguras salvas.
+(110px para 2 ícones). "Ver mais" no desktop = 24px de altura (skill `botoes` §1). Ao mudar larguras, troque a `chave` do `TabelaOrg` (`…_v2`) para não herdar larguras salvas.
 
 ## 3. JS — organizador (ordenar + redimensionar + "Ver mais"), uma instância por tabela
 

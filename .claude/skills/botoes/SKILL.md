@@ -3,12 +3,12 @@ name: botoes
 description: >-
   Conjunto canônico de BOTÕES do Portal Líderes (repo lideres): a base .btn +
   modificadores (.btn--primary carbon/citric, .btn--danger vermelho, .btn--block,
-  .btn--sm), o botão só-ícone (.btn-icon padrão primário, 30×30; única exceção de
+  .btn--sm), o botão só-ícone (.btn-icon padrão primário, 28×28; única exceção de
   cor = .btn-icon--danger p/ lixeira), o link/texto (.btn-link), o toggle/switch
   (.toggle, ligado = carbon + botão citric) e o estado de LOADING canônico
   (spinner .btn-spin + keyframes btnRot + setBtnLoading, texto em gerúndio,
-  disabled). Raio 8px, altura 40px no desktop e 36px no celular, DM Mono 10px
-  uppercase PESO 400, :hover opacity .85, :disabled opacity .4. Inclui
+  disabled). Raio 8px, altura 40px no desktop e 34px no celular ("Ver mais" 24px no
+  desktop), DM Mono 10px uppercase PESO 400, :hover opacity .85, :disabled opacity .4. Inclui
   desktop×mobile (botão é OU texto OU ícone, nunca os dois: mobile=texto,
   desktop≥768px=ícone .btn-icon; ação de linha de tabela = ícone) e um MAPA DE MIGRAÇÃO das ~40 classes
   antigas (btn-gerar, btn-primary, modal-btn-save, btn-cancel, btn-excluir,
@@ -31,7 +31,7 @@ description: >-
 
 # Botões — Portal Líderes
 
-Conjunto canônico de botões (base `.btn` + modificadores). **Catálogo visual: `git-claude/catalogo-botoes.html`**. Baseado na varredura do portal (recrutamento/manutenção/papelaria + readmes). **Raio = 8px · altura 40px (desktop) / 36px (celular) · ícone 30×30 · fonte DM Mono peso 400.**
+Conjunto canônico de botões (base `.btn` + modificadores). **Catálogo visual: `git-claude/catalogo-botoes.html`**. Baseado na varredura do portal (recrutamento/manutenção/papelaria + readmes). **Raio = 8px · altura 40px (desktop) / 34px (celular) · ícone 28×28 · "Ver mais" 24px no desktop · fonte DM Mono peso 400.**
 
 ## 0. Regra de clique (governa toda página de conteúdo)
 
@@ -58,12 +58,12 @@ Tokens: padrão do portal (`--carbon #35383F`, `--citric #CFFF00`, `--surface #F
 ```css
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  height: 40px; padding: 0 18px; border: 1px solid transparent; border-radius: 8px;  /* --btn-r · 40px desktop (36px no celular, abaixo) */
+  height: 40px; padding: 0 18px; border: 1px solid transparent; border-radius: 8px;  /* --btn-r · 40px desktop (34px no celular, abaixo) */
   font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 400;  /* SEM peso: a DM Mono só carrega 400/500 — 600 vira negrito falso */
   letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
   transition: opacity .15s, border-color .15s, background .15s; white-space: nowrap;
 }
-@media (max-width: 767px) { .btn { height: 36px; } }  /* celular: 10% mais baixo (decisão do dono, 04/10/2026) */
+@media (max-width: 767px) { .btn { height: 34px; } }  /* celular: 34px (decisão do dono, 04/10/2026) */
 .btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 
@@ -83,11 +83,11 @@ Tokens: padrão do portal (`--carbon #35383F`, `--citric #CFFF00`, `--surface #F
 | `.btn--danger` | destrutivo (excluir) | `--red` | `#fff` | — |
 | `.btn--danger-ghost` | destrutivo discreto | `--red-bg` | `--red` | 1px `#FECACA` |
 
-Medidas: **altura 40px no desktop e 36px no celular** (`max-width:767px`) para todo botão de texto (primário e destrutivo), raio **8px**, fonte **DM Mono 10px uppercase, peso 400** (sem negrito) `letter-spacing:.08em`. `.btn--sm` = **mesma altura**, só mais estreito (rodapé de cartão). `.btn--block` = largura total (footer de modal). O só-ícone tem **30×30** (§3).
+Medidas: **altura 40px no desktop e 34px no celular** (`max-width:767px`) para todo botão de texto (primário e destrutivo), raio **8px**, fonte **DM Mono 10px uppercase, peso 400** (sem negrito) `letter-spacing:.08em`. `.btn--sm` = **mesma altura**, só mais estreito (rodapé de cartão). `.btn--block` = largura total (footer de modal). O só-ícone tem **28×28** (§3).
 
 > **Por que peso 400:** as páginas carregam a DM Mono só em `400;500`. Com `font-weight:600` o navegador inventa um negrito ("faux bold") — fica com peso fora do padrão. Botão não tem peso.
 
-**Ver mais / paginação:** é `.btn.btn--primary` (não é um botão à parte) com o **número entre parênteses = quantos itens faltam** — ex.: `Ver mais (12)`. Inline no fim de uma lista curta; `.btn--block` no rodapé de listas longas. Ao carregar mais, atualize o nº (e quando zerar, esconda o botão).
+**Ver mais / paginação:** é `.btn.btn--primary` (não é um botão à parte) com o **número entre parênteses = quantos itens faltam** — ex.: `Ver mais (12)`. **No desktop é 40% menor** (decisão do dono, 04/10/2026): `@media (min-width:768px) { .ver-mais-wrap .btn { height: 24px; padding: 0 12px; font-size: 9px; } }`; no celular segue a altura normal (34px). Inline no fim de uma lista curta; `.btn--block` no rodapé de listas longas. Ao carregar mais, atualize o nº (e quando zerar, esconda o botão).
 ```html
 <button class="btn btn--primary" id="btn-ver-mais" onclick="verMais()">Ver mais (12)</button>
 ```
@@ -126,9 +126,9 @@ function setBtnLoading(on, label){
 
 ## 3. Só-ícone, link e toggle
 
-**Só-ícone (30×30, ícone 14px — decisão do dono, 04/10/2026: 25% menor que o antigo 40×40):** **tudo igual ao primário** (carbon/citric) — editar, enviar, visualizar, foto, copiar, link. A **única exceção de cor** é a **lixeira** (destrutivo, `--danger`). Sempre com `title` e `aria-label` (o nome da ação).
+**Só-ícone (28×28, ícone 14px — decisão do dono, 04/10/2026; era 40×40):** **tudo igual ao primário** (carbon/citric) — editar, enviar, visualizar, foto, copiar, link. A **única exceção de cor** é a **lixeira** (destrutivo, `--danger`). Sempre com `title` e `aria-label` (o nome da ação).
 ```css
-.btn-icon { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 8px; cursor: pointer; flex-shrink: 0; background: var(--carbon); color: var(--citric); transition: opacity .15s, background .15s; }  /* padrão = primário (editar, enviar, visualizar, foto, copiar) */
+.btn-icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 8px; cursor: pointer; flex-shrink: 0; background: var(--carbon); color: var(--citric); transition: opacity .15s, background .15s; }  /* padrão = primário (editar, enviar, visualizar, foto, copiar) */
 .btn-icon:hover { opacity: .85; }
 .btn-icon svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .btn-icon--danger { background: var(--red); color: #fff; }   /* lixeira — única exceção de cor */
@@ -169,8 +169,8 @@ function setBtnLoading(on, label){
 ## 4. Desktop × Mobile
 
 Um botão é **ou texto ou ícone — nunca os dois juntos**. A ação é a mesma; o que muda é a forma conforme a largura:
-- **Mobile** → **texto** (segue a seção 1, `.btn.btn--primary` — altura 36px, DM Mono 10px uppercase).
-- **Desktop** (`@media min-width:768px`) → **ícone** (segue a seção 3, `.btn-icon` 30×30).
+- **Mobile** → **texto** (segue a seção 1, `.btn.btn--primary` — altura 34px, DM Mono 10px uppercase).
+- **Desktop** (`@media min-width:768px`) → **ícone** (segue a seção 3, `.btn-icon` 28×28).
 
 Dois elementos com a mesma ação (`onclick`), alternados por media query — nunca ícone+texto no mesmo botão.
 ```css
@@ -186,7 +186,7 @@ Dois elementos com a mesma ação (`onclick`), alternados por media query — nu
 ```
 O modal em que o botão vive vira bottom-sheet no mobile (skill `modal-formulario`); o header não muda.
 
-**Ações de linha de tabela (decisão do dono, 04/10/2026):** na **tabela do desktop** toda ação da linha é **`.btn-icon`**
+**Ações de linha de tabela (decisão do dono, 04/10/2026):** na **tabela do desktop** toda ação da linha é **`.btn-icon`** 28×28
 (nunca botão de texto — "Disparar agora", "Link", "Reemitir" viram avião, corrente, seta circular); no **cartão do
 celular** (`.tcard-actions`) a mesma ação é **texto** `.btn.btn--primary.btn--sm`. Como a tabela e os cartões são
 montados por JS a partir dos mesmos dados, gere os dois a partir de uma lista de ações — mesmo `onclick`, mesmo
@@ -244,12 +244,12 @@ modal de informação (`abrirInfoGrafico`/`closeInfoGrafico`, `.info-note`/`.inf
 
 ## Checklist
 - [ ] **Clique só em botão padrão**: nenhum `onclick`/`cursor:pointer`/`role="button"` em texto, `<tr>` ou card (exceções: gráfico, botões de componente, cards de menu).
-- [ ] Usa `.btn` + modificador (`--primary`/`--danger`), raio **8px**, altura **40px desktop / 36px celular**, DM Mono 10px uppercase **peso 400**.
+- [ ] Usa `.btn` + modificador (`--primary`/`--danger`), raio **8px**, altura **40px desktop / 34px celular** ("Ver mais" 24px no desktop), DM Mono 10px uppercase **peso 400**.
 - [ ] Primário = carbon/citric (inclui as antigas ações secundárias); destrutivo = `--red`.
 - [ ] Ação de modal/form full-width = `.btn--block`; de cartão do celular = `.btn--sm`; **de linha de tabela no desktop = `.btn-icon`**.
 - [ ] Loading = `disabled` + `.btn-spin` (`btnRot`) + texto em **gerúndio** via `setBtnLoading`.
 - [ ] Disabled = `opacity:.4 cursor:not-allowed`.
-- [ ] Só-ícone = `.btn-icon` **30×30** (ícone 14px, `title`+`aria-label`), **tudo igual ao primário**; só a **lixeira** (`--danger`) com cor diferente; link = `.btn-link`; mesmo desenho para a mesma ação (tabela §3).
+- [ ] Só-ícone = `.btn-icon` **28×28** (ícone 14px, `title`+`aria-label`), **tudo igual ao primário**; só a **lixeira** (`--danger`) com cor diferente; link = `.btn-link`; mesmo desenho para a mesma ação (tabela §3).
 - [ ] Toggle = `.toggle` (ligado = carbon + botão citric).
 - [ ] Texto **ou** ícone, nunca os dois: mobile = texto (`.btn`), desktop ≥768px = ícone (`.btn-icon`), via `.btn-resp-text`/`.btn-resp-icon`.
 - [ ] Pílula (raio 100px) NÃO entra aqui — a definir depois.

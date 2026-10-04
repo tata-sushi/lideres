@@ -100,6 +100,7 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 | 04/10 | (todas) | Valor em R$ não tem bypass de admin (corrigido na skill) | `controle-acesso-abas-botoes`: SKILL.md + backend |
 | 04/10 | (portal) | Apagadas 21 páginas antigas de `areas/**`; ids de desligamentos escritos por inteiro; auditoria e relatório leem chaves escritas no JS | `controle-acesso-abas-botoes` (scripts) + `botoes` §4 (`_acao(chave…)`) |
 | 04/10 | Uniformes & EPIs | Ganhou a aba **Sobre** (padrão das outras: abre nela) com o texto de Gestão de Estoque e Documentos; 6 páginas antigas apagadas | — (página) |
+| 04/10 | Desligamentos (piloto, 2ª rodada) | Ícone 28×28; "Ver mais" 40% menor no desktop (24px, fonte 9px); botão de texto 34px no celular | `botoes` §1/§3/§4 + catálogo + orientações + `tabelas.md` |
 | 04/10 | Desligamentos (piloto) | Botões: peso 400 (era negrito falso), 36px no celular, ícone 30×30; ações da tabela no desktop viram ícone (avião/corrente/copiar/balão/seta) e coluna Ações estreita | `botoes` (§1, §3 tabela de ícones, §4 ações de linha) + `catalogo-botoes.html` + `orientacoes-botoes.md` + `dashboards-kpi-graficos/references/tabelas.md` |
 
 ## 6. Bugs achados e ainda não corrigidos (regra de negócio)
