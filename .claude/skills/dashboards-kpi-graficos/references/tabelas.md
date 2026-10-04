@@ -125,7 +125,8 @@ var TAB_ANL = new TabelaOrg({
 
 Cada linha vira um cartão branco (o mesmo `.card` dos cards de Entrevistas/Testes do Recrutamento); no desktop o CSS
 esconde os cartões e mostra a tabela. O `.chart-card` da tabela leva a classe **`card-tabela`**: no celular ele perde o
-fundo branco, a borda e o "i", e os cartões ficam direto no fundo cinza (o título da lista continua acima).
+fundo branco, a borda, o "i" **e o título** (decisão do dono, 04/10/2026), e os cartões ficam direto no fundo cinza — a
+aba já diz o que é a lista. O título continua no HTML (desktop e "(N)" do Analítico); só o CSS do celular o esconde.
 
 ```css
 /* celular: a tabela vira cartões no modelo do Recrutamento (decisão do dono); no desktop fica a tabela */
@@ -146,9 +147,9 @@ fundo branco, a borda e o "i", e os cartões ficam direto no fundo cinza (o tít
 .tcard-actions .act-btn { margin-left: 0; }
 @media (max-width: 767px) {
   .tbl-scroll.tem-cartoes { display: none; }
-  /* no celular o card da tabela some (sem fundo branco, sem "i"): os cartões ficam no fundo cinza, como no Recrutamento */
+  /* no celular o card da tabela some (sem fundo branco, sem "i" e sem título): os cartões ficam no fundo cinza, como no Recrutamento */
   .card-tabela { background: none; border: none; box-shadow: none; padding: 0; }
-  .card-tabela > .chart-info-btn { display: none; }
+  .card-tabela > .chart-info-btn, .card-tabela > .chart-title { display: none; }
 }
 @media (min-width: 768px) { .tcards { display: none; } }
 ```
