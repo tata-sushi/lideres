@@ -190,8 +190,9 @@ function cartao(c){
   - **Seção e subseção** não têm estilo próprio (nada de faixa cinza nem DM Mono): são linhas iguais às outras, e a
     hierarquia aparece **só pelo recuo em cascata** — seção › subseção › página › aba/botão/valor (14px por nível no
     desktop, 8px no celular). O nome da seção fica na 1ª coluna fixa, então não rola de lado.
-  - **Colunas em ordem alfabética, admins junto** (só o nome, sem "admin" escrito), com **●** cinza onde o admin vê
-    automaticamente (tudo fora da seção App, menos os valores R$); nas telas do App e nos valores segue a liberação
+  - **Colunas em ordem alfabética, admins junto** (só o nome, sem "admin" escrito), com **●** onde o admin vê
+    automaticamente (tudo fora da seção App, menos os valores R$) — **a mesma bolinha carbon de todo mundo, sem cor
+    diferente para admin**; nas telas do App e nos valores segue a liberação
     como todo mundo. O Total não conta admins.
   - **Cabeçalho do colaborador só com o nome** — nada de botão em cima do nome.
   - **Editar por colaborador = botão na 1ª linha da tabela** (a linha da primeira seção), na coluna "Editar": ícone de
