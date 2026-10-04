@@ -181,7 +181,7 @@ function cartao(c){
   (seletores `.btn-icon.btn-resp-icon` e `.btn.btn-resp-text`, senão a regra base do `.btn-icon` vence e aparecem os dois).
   Decisões do dono para essa grade (04/10/2026), que valem para grades parecidas:
   - **Sem cartão branco em nenhuma largura**: a caixa da grade fica direto no fundo cinza e **ocupa a largura toda**
-    (`table { width: 100% }`; 1ª coluna fixa em 260px, 212px no celular — a sobra vai para as colunas dos colaboradores,
+    (`table { width: 100% }`; 1ª coluna fixa em 260px, 195px no celular — a sobra vai para as colunas dos colaboradores,
     nunca para a dos nomes). Sem título e sem legenda em cima. Cabeçalho da 1ª coluna ("Página") centralizado.
   - **Linhas verticais entre as colunas** (`border-left: 1px solid var(--border)` nas células e no cabeçalho de cada
     colaborador), contínuas também nas linhas de seção: nelas vão células vazias, uma por coluna — nunca `colspan`.
@@ -190,10 +190,15 @@ function cartao(c){
   - **Seção e subseção** não têm estilo próprio (nada de faixa cinza nem DM Mono): são linhas iguais às outras, e a
     hierarquia aparece **só pelo recuo em cascata** — seção › subseção › página › aba/botão/valor (14px por nível no
     desktop, 8px no celular). O nome da seção fica na 1ª coluna fixa, então não rola de lado.
-  - **Admins nas últimas colunas** (nome + " · admin"), com **●** cinza onde veem automaticamente (tudo fora da seção
-    App, menos os valores R$); nas telas do App e nos valores seguem a liberação como todo mundo. O Total não conta admins.
-  - **Lápis do colaborador** em cima do nome (só no computador), sempre no topo da célula do cabeçalho
-    (`position: absolute; top: 6px`, cabeçalho com `padding-top: 42px`), para não variar com o tamanho do nome.
+  - **Colunas em ordem alfabética, admins junto** (só o nome, sem "admin" escrito), com **●** cinza onde o admin vê
+    automaticamente (tudo fora da seção App, menos os valores R$); nas telas do App e nos valores segue a liberação
+    como todo mundo. O Total não conta admins.
+  - **Cabeçalho do colaborador só com o nome** — nada de botão em cima do nome.
+  - **Editar por colaborador = botão na 1ª linha da tabela** (a linha da primeira seção), na coluna "Editar": ícone de
+    pessoas no computador, texto "Colaborador" no celular (`.btn-resp-icon`/`.btn-resp-text`). Abre uma janela com um
+    **seletor do colaborador** no topo (grupos "Com acesso" / "Sem acesso", em ordem alfabética; quem ainda não tem
+    acesso também está lá) e a lista dele com chaves; com mudança por salvar, o seletor não troca de pessoa. O mesmo
+    atalho fica no Menu (+) › Ações.
   - **Coluna "Total"** (quantos veem) entre a última coluna de colaborador e "Editar": número DM Sans 13px/800,
     centralizado, 56px, rola junto com as outras (só "Editar" e a 1ª coluna ficam fixas). Nada de número dentro da
     célula do nome.
