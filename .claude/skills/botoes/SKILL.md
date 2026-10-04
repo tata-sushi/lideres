@@ -40,7 +40,8 @@ Conjunto canônico de botões (base `.btn` + modificadores). **Catálogo visual:
 
 ## Relação com as outras skills
 - **`header-abas-footer`** — `.header-plus` (toolbar) e `.tab-btn` (abas) são botões de componente; ficam lá (raio 4px, mantêm).
-- **`drawer-sobre`** — `.drawer-sam-btn` (ações do drawer) fica lá.
+- **`drawer-sobre`** — `.drawer-sam-btn` (ações do drawer) fica lá; é **diferente** do `.btn` (carbon + **branco**, raio 4px, full-width, peso 500, + variante `.secondary` clara) — no catálogo aparece na **seção 7** só pra referência.
+- **`dashboards-kpi-graficos`** — as **sub-abas** `.dash-subtab` (submenu interno do dashboard) ficam lá; pílula rosa (inativo) / carbon+citric (ativo) — no catálogo aparece na **seção 8** só pra referência.
 - **`modal-formulario`** — o `.btn-gerar` do modal é a aplicação do `.btn.btn--primary.btn--block` aqui.
 - **`controle-acesso-abas-botoes`** — o `data-botao-id` (quem vê o botão) é ortogonal ao visual.
 - **Pílulas** (raio 100px, ex.: "Ver mais"/"Voltar ao Portal") **ainda não fazem parte desta skill** — serão definidas depois.
