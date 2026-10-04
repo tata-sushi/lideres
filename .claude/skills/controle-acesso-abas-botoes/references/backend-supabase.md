@@ -71,7 +71,8 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 
 ## ⚠️ Cuidados ao configurar acesso
 
-- **Admin (`perfil='admin'`) vê tudo** — não precisa de liberação em `aba`/`botao`.
+- **Admin (`perfil='admin'`) vê tudo** — não precisa de liberação em `aba`/`botao`. **Valor é exceção:**
+  `pode_ver_valores(area)` só olha `dp_rh.perm_ver_valores` (a área ou `geral`); admin sem linha lá não vê R$.
   (Exceção: as features da seção **App** — Kanban/Escala/Limpeza — **não têm bypass de
   admin**; até admin precisa do grant.)
 - **Os setters `gov_admin_*_set` fazem REPLACE TOTAL por pessoa**: apagam **todos** os
@@ -85,3 +86,45 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
   botão; (4) acerte `dp_rh.perm_ver_valores` da **área**. Assim só aquela página é tocada.
 - Renomear um `aba_id` no HTML sem atualizar `governanca_abas` (e as tabelas por pessoa)
   **órfã** a config: o interruptor antigo deixa de casar e o controle para de funcionar.
+- **Antes de apagar um id "só no banco"** (está no catálogo e não aparece no HTML), procure se uma função usa a
+  chave: `select proname from pg_proc where pg_get_functiondef(oid) like '%<slug>%'`. Ex.: Armários
+  `::incluir-excluir` não tem botão próprio — é conferido pela RPC `armario_pode_gerir`.
+- **Id novo em botão que já existia:** cadastre o catálogo **e** libere para quem já abre a página **no mesmo
+  comando** (senão o botão some para todo mundo no meio do caminho). Modelo:
+  ```sql
+  insert into tata_plus.governanca_abas (aba_id,pagina_id,label,tipo,ordem,ativo) values (...) on conflict do nothing;
+  insert into tata_plus.governanca_abas_liberacoes (matricula,aba_id)
+  select g.matricula, v.aba_id from (values ('<pagina>::<slug>','<pagina>')) v(aba_id,pagina_id)
+  join tata_plus.governanca_acessos_paginas g on g.pagina_id=v.pagina_id
+  join tata_plus.profiles p on p.matricula=g.matricula and p.status='Ativo' and coalesce(p.perfil,'')<>'admin'
+  on conflict do nothing;
+  ```
+- **`gate.js` busca sempre a lista do que esconder** (desde 04/10/2026): botões montados depois pelo JS (linha,
+  cartão, ficha) também podem levar `data-aba-id`.
+
+## Tabela de acessos (o dono clica, o Claude aplica)
+
+Página privada no claude.ai (Artifact com capacidade `db`) feita de `assets/matriz-acessos.html` + um
+`estado.json` publicado junto. Visões: **Por página** (colunas Página · Abas · Botões · Valor, cada uma com as
+pessoas e "+ Incluir"), **Páginas × pessoas** (grade de acesso às páginas) e **Mudanças** (lista do que foi
+marcado). Cada clique grava um documento na coleção `mudancas` da página — nada vai para o banco sozinho.
+
+1. **Gerar o estado:** dump do banco (SQLs no topo de `scripts/relatorio-acessos.py`, confira contagens) →
+   `python3 scripts/estado-acessos.py <pasta_dump> <scratchpad>/estado.json [raiz]` (use como raiz uma cópia do
+   main se o repo tiver edições em andamento).
+2. **Publicar:** `Artifact` com `file_path` = `assets/matriz-acessos.html`, `files: {"estado.json": <scratchpad>/estado.json}`,
+   `capabilities: {db: {}}`. ⚠️ O estado.json tem nomes — fica no scratchpad, nunca no repo.
+3. **Quando o dono disser que terminou:** `ArtifactData list` da coleção `mudancas`. Cada documento tem
+   `tipo` (`pagina`/`aba`/`botao`/`valor`), `item`, `pagina`, `matricula` e `acao` (`incluir`/`tirar`).
+   Mostre o resumo ao dono e aplique **direto nas tabelas** (nunca os setters `gov_admin_*_set`):
+
+   | tipo | incluir | tirar |
+   |---|---|---|
+   | `pagina` | insert `governanca_acessos_paginas (matricula, pagina_id)` | delete da mesma (e dos bloqueios/liberações daquela página, se quiser limpar) |
+   | `aba` | delete `governanca_abas_bloqueios` (desbloqueia) | insert `governanca_abas_bloqueios` |
+   | `botao` | insert `governanca_abas_liberacoes` | delete `governanca_abas_liberacoes` |
+   | `valor` | upsert `dp_rh.perm_ver_valores (matricula, area=item, liberado=true)` | delete da mesma linha |
+
+4. **Fechar o ciclo:** apague os documentos aplicados (`ArtifactData batch` delete), gere de novo o estado e
+   republique (mesmo `file_path`, mesma URL).
+

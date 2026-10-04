@@ -59,6 +59,9 @@ Referências (leia conforme a tarefa):
   ```bash
   python3 .claude/skills/controle-acesso-abas-botoes/scripts/relatorio-acessos.py <pasta_dump> <saida.html>
   ```
+- **`assets/matriz-acessos.html` + `scripts/estado-acessos.py`** — a **tabela de acessos** onde o dono clica
+  para incluir/tirar pessoas (colunas Página · Abas · Botões · Valor, por página, e a grade páginas × pessoas).
+  Fluxo completo em `references/backend-supabase.md` §"Tabela de acessos".
 
 ---
 
@@ -81,11 +84,26 @@ Regras dos níveis:
 - **Botões de navegação do header NÃO têm id.** Zoom, fixar no menu, abrir o drawer, o
   "+" etc. entram **junto com o acesso à página** — não precisam de controle próprio,
   não recebem `data-aba-id`/`data-botao-id`.
-- **Admin (`perfil='admin'`) vê tudo** nos níveis Aba/Botão/Valor. (Exceção: as features
+- **Admin (`perfil='admin'`) vê tudo** nos níveis Página/Aba/Botão. **Valor não:** `pode_ver_valores` só olha
+  `dp_rh.perm_ver_valores` (área pedida ou `geral`), sem bypass de admin. (Outra exceção: as features
   da seção "App" do Plus — Kanban/Escala/Limpeza — não têm bypass de admin.)
 
 O nível **Valor** é diferente dos outros: não é atributo num elemento, é uma **área**
 mascarada no servidor. Detalhe no fim e em `references/backend-supabase.md`.
+
+---
+
+## Que botões levam id (decisão do dono, 04/10/2026)
+
+**Toda aba e todo botão que começa uma ação** levam id — o admin libera tudo pelo app.
+- **Leva:** criar, editar, excluir, enviar, gerar (PDF/documento/relatório), exportar/baixar, imprimir,
+  registrar, aprovar/reprovar/homologar/avaliar, importar/atualizar dados — no drawer, no topo da aba, na linha
+  da tabela, no cartão do celular ou dentro de uma ficha que abre só para leitura. Cópias do mesmo botão
+  (linha + cartão + ficha, texto + ícone) levam **o mesmo** id.
+- **Não leva:** header, "i" dos cards, filtros, "Limpar", "Ver mais", fechar/cancelar, abas internas de janela,
+  olho/visualizar (ver não é ação), e botões **dentro de uma janela que só abre por um botão que já tem id**.
+- **Id em botão que já existia:** cadastrar + liberar para quem já abre a página no mesmo comando (SQL modelo em
+  `references/backend-supabase.md`), para ninguém perder o botão no dia.
 
 ---
 
@@ -231,7 +249,7 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 - **`data-aba-id` não pede JS; `data-botao-id` pede** (`GOV_BOTOES` + `aplicarBotoes` +
   checar `GOV_BTN_OK` na ação).
 - **Cadastrar no catálogo é obrigatório** — o atributo sozinho não cria o interruptor.
-- **Admin vê tudo** (Aba/Botão/Valor).
+- **Admin vê tudo** em Página/Aba/Botão (não em Valor: precisa da área ou de `geral`).
 - O `gate.js` só roda embarcado no Plus; fora do app mostra "Disponível pelo aplicativo".
 
 ---

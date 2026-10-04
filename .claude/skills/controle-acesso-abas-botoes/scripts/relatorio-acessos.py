@@ -137,8 +137,10 @@ def varrer_html(raiz):
                 if not label:
                     tm = RE_TITLE.search(attrs)
                     label = html.unescape(tm.group(1)) if tm else ''
-                d = pg['ids'].setdefault(chave, {'tipo': tipo, 'label': label, 'n': 0, 'attr': attr})
+                d = pg['ids'].setdefault(chave, {'tipo': tipo, 'label': label, 'n': 0, 'attr': attr, 'menu': False})
                 d['n'] += 1
+                if 'drawer-sam-btn' in cls.split():
+                    d['menu'] = True
                 if not d['label'] and label:
                     d['label'] = label
     return paginas
