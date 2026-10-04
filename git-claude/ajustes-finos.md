@@ -92,6 +92,7 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 | 04/10 | (todas) | Botões que começam uma ação ganharam id (46) + cadastro/liberação no banco; Escalas: ordem do `comSupa` corrigida | `controle-acesso-abas-botoes`: SKILL.md §"Que botões levam id", backend §SQL modelo |
 | 04/10 | (todas) | Tabela de clicar (Página · Abas · Botões · Valor) — o dono marca, o Claude aplica | `controle-acesso-abas-botoes`: `assets/matriz-acessos.html`, `scripts/estado-acessos.py`, backend §"Tabela de acessos" |
 | 04/10 | (todas) | Valor em R$ não tem bypass de admin (corrigido na skill) | `controle-acesso-abas-botoes`: SKILL.md + backend |
+| 04/10 | Desligamentos (piloto) | Botões: peso 400 (era negrito falso), 36px no celular, ícone 30×30; ações da tabela no desktop viram ícone (avião/corrente/copiar/balão/seta) e coluna Ações estreita | `botoes` (§1, §3 tabela de ícones, §4 ações de linha) + `catalogo-botoes.html` + `orientacoes-botoes.md` + `dashboards-kpi-graficos/references/tabelas.md` |
 
 ## 6. Bugs achados e ainda não corrigidos (regra de negócio)
 
