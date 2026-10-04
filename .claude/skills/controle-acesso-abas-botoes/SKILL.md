@@ -70,7 +70,7 @@ Referências (leia conforme a tarefa):
   tabela, coluna Editar (ícone de pessoas no computador, "Colaborador" no celular), ou Menu › "Editar por colaborador":
   a janela tem um seletor do colaborador (só o nome, em ordem alfabética; inclui quem ainda não tem acesso) e abre tudo da pessoa em cascata, com chaves; o "Salvar" chama `gov_auditoria_salvar` uma vez por mudança, na
   ordem páginas que entram › abas/botões/valores › páginas que saem. Colunas em ordem alfabética, admins junto (só o nome), com
-  ● cinza onde veem automaticamente (fora da seção App, menos valores). Lê `gov_auditoria_acessos` e
+  ● carbon (igual aos demais) onde veem automaticamente (fora da seção App, menos valores). Lê `gov_auditoria_acessos` e
   grava `gov_auditoria_salvar` (backend §"Página Auditoria de páginas"). Não tem lista própria de ids: página,
   aba ou botão novo aparece nela assim que entra no catálogo (`ativo`).
 
