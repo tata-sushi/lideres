@@ -12,9 +12,10 @@ Trocar as ~40 classes antigas de botão pelas canônicas, página por página (o
 - `btn-gerar`/`btn-primary`/`modal-btn-save`/`btn-submit`/`btn-avaliar`/`btn-nova`/… → `.btn.btn--primary` (+ `.btn--block` se full-width, `.btn--sm` se de tabela).
 - `btn-cancel`/`modal-btn-cancel`/`btn-secondary`/`btn-show-more`/… → `.btn.btn--primary` (⚠️ o botão **secundário foi descartado** — ações tipo "Cancelar"/"Ver mais" usam o **primário**).
 - `modal-btn-del`/`btn-excluir`/`tool-delete-btn` → `.btn--danger` (texto) ou `.btn-icon--danger` (lixeira).
-- `btn-clear` → `.btn-link`. `btn-ver-mais` → `.btn--primary` (paginação) ou `.btn--primary.btn--pill` (CTA).
-- `btn-editar`/`btn-dt-edit`/`tbl-fotos-btn` (câmera) → `.btn-icon` (padrão primário); `tool-delete-btn`/`btn-excluir` (lixeira) → `.btn-icon--danger`; `btn-copia-card`/`chart-info-btn` → `.btn-icon--copy`.
+- `btn-clear` → `.btn-link`. `btn-ver-mais` → `.btn--primary`. (⚠️ **pílulas** — `gate-btn`/`hflow-lock-btn` — ainda **não** fazem parte desta skill; deixar como estão até definir.)
+- Ícones (editar, enviar, visualizar, foto, **copiar**, chart-info) → `.btn-icon` (tudo igual ao primário, 40×40); **só a lixeira** (`tool-delete-btn`/`btn-excluir`) → `.btn-icon--danger`.
 - **Raio 6px · altura ÚNICA 40px** (nenhum botão com altura diferente — nem destrutivo nem ícone), DM Mono 10px uppercase, loading com `.btn-spin`/`btnRot`/`setBtnLoading` + gerúndio.
+- **Toggle/switch** (componente novo da skill): `.toggle` — ligado = trilho carbon + botão citric.
 
 ## Regras / cuidados (IMPORTANTES)
 1. **NÃO quebrar o comportamento:** preserve TODOS os `onclick="…"`, os `id="…"` referenciados pelo JS, e os `data-aba-id`/`data-botao-id` (controle de acesso — skill `controle-acesso-abas-botoes`). Só troque as **classes CSS** e, se precisar, adicione o CSS do `.btn` na página.
