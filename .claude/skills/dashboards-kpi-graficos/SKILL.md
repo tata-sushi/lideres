@@ -295,8 +295,35 @@ Regras dos gráficos:
     } catch (e) { go(); }
   }
   ```
-- **Nitidez do canvas (obrigatório).** Todo `new Chart` leva
-  `devicePixelRatio: Math.max(2, window.devicePixelRatio || 1)` nas `options`. O canvas é uma imagem:
+- **Nitidez do canvas (obrigatório).** Todo gráfico sai com
+  `devicePixelRatio: Math.max(2, window.devicePixelRatio || 1)`. **Jeito padrão: o bloco abaixo logo depois
+  do `<script>` do Chart.js** (já está nos 37 dashboards) — vale para todos os gráficos da página sem mexer em
+  cada `new Chart`: 2x, DM Sans 500, sem balão por padrão e redesenho quando a fonte termina de carregar. O que a
+  página definir no próprio gráfico continua valendo (ex.: `tooltip:{enabled:true}`, `font:{family:'DM Mono'}`).
+  ```html
+  <script>
+  /* Padrão dos gráficos (skill dashboards-kpi-graficos): canvas em 2x (texto nítido no PC e com o zoom da
+     página), DM Sans 500 nos nomes, sem balão (tooltip) por padrão e redesenho quando a fonte termina de carregar. */
+  (function () {
+    function padrao() {
+      if (!window.Chart || Chart.__padraoLideres) return;
+      Chart.__padraoLideres = true;
+      Chart.defaults.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
+      Chart.defaults.font.family = "'DM Sans', sans-serif";
+      Chart.defaults.font.weight = 500;
+      Chart.defaults.plugins.tooltip.enabled = false;
+      if (document.fonts && document.fonts.load) {
+        Promise.all(['400', '500', '800'].map(function (w) { return document.fonts.load(w + ' 12px "DM Sans"'); })).then(function () {
+          Object.keys(Chart.instances || {}).forEach(function (k) { try { Chart.instances[k].update('none'); } catch (e) {} });
+        }, function () {});
+      }
+    }
+    padrao();
+    if (!window.Chart) document.addEventListener('DOMContentLoaded', padrao);
+  })();
+  </script>
+  ```
+  Opções do próprio gráfico (`devicePixelRatio` etc.) podem repetir o padrão sem problema. O canvas é uma imagem:
   no PC (devicePixelRatio 1) e com o zoom da página (`#zoom-content`, 70–160%) ela é esticada e o texto
   do gráfico borra, enquanto o título (HTML) fica nítido. Desenhar em 2x resolve. Junto com os nomes em
   **500**, o texto do gráfico fica tão firme quanto o resto da página.
@@ -549,9 +576,10 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
 Trabalhe **por camadas** (um PR por camada ou por página, merge só com o "sim" do dono) e **não
 mexa** em consultas ao Supabase, ids de acesso (`data-aba-id`/`data-botao-id`) nem geradores de PDF.
 
-1. **Base (mecânica, quase não muda a tela):** tokens completos no `:root`; Google Fonts com DM Sans
-   `300…800` + `preconnect`; Chart.js **4.4.1 do cdnjs**; `devicePixelRatio` ≥ 2 em todo `new Chart`;
-   `esperarFonte` antes de desenhar; `tooltip:{enabled:false}`.
+1. **Base (mecânica, quase não muda a tela) — já aplicada nos 37 dashboards:** tokens completos no
+   `:root`; Google Fonts com DM Sans `300…800` + `preconnect`; Chart.js **4.4.1 do cdnjs** + o bloco de
+   padrão do Chart.js (nitidez 2x, DM Sans 500, sem balão, redesenho com a fonte); `esperarFonte` antes de
+   desenhar quando a página tiver nomes longos em barra horizontal. Página nova: copie esses itens.
 2. **Faixas e cards:** faixa de KPIs e de filtros full-bleed (sai `max-width` + `margin:auto`);
    `.chart-card` com título + "i"; subtítulo vai para o "i"; número solto → KPI ou tabela simples;
    texto fora dos cards sai.
