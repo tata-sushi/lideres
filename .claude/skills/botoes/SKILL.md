@@ -24,8 +24,9 @@ description: >-
   "card clicável", "linha clicável". Pílulas (raio 100px) ainda NÃO
   fazem parte desta skill (a definir depois). NÃO cobre: .header-plus (skill
   header-abas-footer), .tab-btn/.dash-subtab (header-abas-footer/
-  dashboards-kpi-graficos) nem .drawer-sam-btn (drawer-sobre) — botões de
-  componente, ficam nas skills deles.
+  dashboards-kpi-graficos), .drawer-sam-btn (drawer-sobre) nem o "i" dos cards
+  .chart-info-btn (dashboards-kpi-graficos) — botões de componente, ficam nas
+  skills deles.
 ---
 
 # Botões — Portal Líderes
@@ -36,11 +37,12 @@ Conjunto canônico de botões (base `.btn` + modificadores). **Catálogo visual:
 
 **O único elemento clicável é um botão padrão** desta skill — `.btn` (+ modificadores), `.btn-icon`, `.btn-link` ou `.toggle`. **NÃO** colocar `onclick`, `cursor:pointer` nem `role="button"` em **texto simples, linha de tabela (`<tr>`) ou card**. Se algo precisa de ação, **coloque um botão padrão dentro** dele (ex.: um `.btn-icon` de visualizar/editar na linha da tabela; um `.btn--sm`/`.btn-link` no rodapé do card) — nunca torne a linha/card/texto inteiro clicável.
 
-**Exceções (já têm padrão próprio — não reescrever):** interações de **gráfico** (Chart.js — skill `dashboards-kpi-graficos`); os botões de componente `.header-plus` / `.tab-btn` / `.dash-subtab` / `.drawer-sam-btn`; e os **cards do menu** (`menucompliance.html` e similares), onde o card inteiro é o navegador por design.
+**Exceções (já têm padrão próprio — não reescrever):** interações de **gráfico** (Chart.js — skill `dashboards-kpi-graficos`); os botões de componente `.header-plus` / `.tab-btn` / `.dash-subtab` / `.drawer-sam-btn` / **`.chart-info-btn`** (o "i" dos cards, §6); e os **cards do menu** (`menucompliance.html` e similares), onde o card inteiro é o navegador por design.
 
 ## Relação com as outras skills
 - **`header-abas-footer`** — `.header-plus` (toolbar) e `.tab-btn` (abas) são botões de componente; ficam lá (raio 4px, mantêm).
 - **`dashboards-kpi-graficos`** — as sub-abas `.dash-subtab` (pílula rosa inativa / carbon+citric ativa) ficam lá.
+- **`dashboards-kpi-graficos`** — o **"i" de informação** dos cards (`.chart-info-btn`) é botão de componente: fica no padrão de lá (§6 aqui), **não** vira `.btn-icon`.
 - **`drawer-sobre`** — `.drawer-sam-btn` (ações do drawer) fica lá; é **diferente** do `.btn` (carbon + **branco**, raio 4px, full-width, peso 500) — no catálogo aparece na **seção 7** só pra referência.
 - **Cards de menu / submenu** (`.ac-dept-chip`) — navegação entre as páginas de uma seção (padrão de menu, `CLAUDE.md §3–5`); é a **única exceção de card clicável** da regra de clique — no catálogo aparece na **seção 8** só pra referência.
 - **`modal-formulario`** — o `.btn-gerar` do modal é a aplicação do `.btn.btn--primary.btn--block` aqui.
@@ -181,11 +183,27 @@ Hoje o mesmo visual tem ~40 nomes. Ao mexer numa página, troque pela classe can
 | `btn-secondary`, `btn-cancel`, `modal-btn-cancel`, `btn-modal-cancelar`, `ns-btn-cancel`, `ag-btn-sec`, `btn-show-more`, `btn-more`, `btn-comecar`, `btn-refresh`, `photo-upload-btn`, `btn-add`, `btn-add-item` | `.btn.btn--primary` |
 | `modal-btn-del`, `ag-btn-del`, `btn-excluir`, `tool-delete-btn`, `btn-split-remove` | `.btn--danger` (texto) ou `.btn-icon--danger` (lixeira) |
 | `btn-clear`, `btn-clear-filters` | `.btn-link` |
-| `btn-editar`, `btn-dt-edit`, `btn-row-edit`, `tbl-fotos-btn`, `tool-edit-btn`, `btn-copia-card`, `chart-info-btn` | `.btn-icon` (padrão primário) |
-| `btn-ver-mais` | `.btn.btn--primary` (paginação) |
+| `btn-editar`, `btn-dt-edit`, `btn-row-edit`, `tbl-fotos-btn`, `tool-edit-btn`, `btn-copia-card` | `.btn-icon` (padrão primário) |
+| `btn-ver-mais` | `.btn.btn--primary` (paginação — texto "Ver mais (N)") |
 | `gate-btn`, `hflow-lock-btn` (pílula/CTA) | **a definir** — pílula ainda não faz parte desta skill |
 
-> **NÃO migrar** (botões de componente, ficam nas skills deles): `.header-plus`, `.tab-btn`, `.dash-subtab`, `.drawer-sam-btn`. `.btn-help` âmbar (`#E8A020`) — decidir caso a caso (única cor fora da paleta).
+> **NÃO migrar** (botões de componente, ficam nas skills deles): `.header-plus`, `.tab-btn`, `.dash-subtab`, `.drawer-sam-btn`, `.chart-info-btn` (o "i" dos cards — §6). `.btn-help` âmbar (`#E8A020`) — decidir caso a caso (única cor fora da paleta).
+
+---
+
+## 6. Botão "i" de informação (componente — padrão da skill `dashboards-kpi-graficos`)
+
+**Decisão do dono (04/10/2026):** o "i" dos cards de gráfico/tabela é um botão de componente e fica **no padrão de
+dashboards** — pequeno, cinza, sem fundo, no canto superior direito do card — **não** vira `.btn-icon` 40×40. Abre o
+modal de informação (`abrirInfoGrafico`/`closeInfoGrafico`, `.info-note`/`.info-table`). O card precisa de
+`position:relative`.
+```css
+.chart-info-btn { position: absolute; top: 10px; right: 12px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; padding: 3px; color: #CFCFCF; cursor: pointer; line-height: 0; }
+.chart-info-btn:hover { color: var(--muted); }
+```
+```html
+<button class="chart-info-btn" onclick="abrirInfoGrafico('chave')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+```
 
 ---
 
@@ -200,5 +218,5 @@ Hoje o mesmo visual tem ~40 nomes. Ao mexer numa página, troque pela classe can
 - [ ] Toggle = `.toggle` (ligado = carbon + botão citric).
 - [ ] Texto **ou** ícone, nunca os dois: mobile = texto (`.btn`), desktop ≥768px = ícone (`.btn-icon`), via `.btn-resp-text`/`.btn-resp-icon`.
 - [ ] Pílula (raio 100px) NÃO entra aqui — a definir depois.
-- [ ] Não renomear `.header-plus`/`.tab-btn`/`.drawer-sam-btn` (skills próprias).
+- [ ] Não renomear `.header-plus`/`.tab-btn`/`.drawer-sam-btn`/`.chart-info-btn` (skills próprias).
 - [ ] JS validado (sem erro de sintaxe).

@@ -145,7 +145,7 @@ HTML:
     <!-- Departamento, Competência (mês), + intervalo De/Até -->
   </div>
   <div class="filters-actions">
-    <button class="btn-clear" onclick="clearDashFilters()">Limpar filtros</button>
+    <button class="btn-link" onclick="clearDashFilters()">Limpar filtros</button>
     <span class="results-count"><span>0</span> resultado(s)</span>
   </div>
 </div>
@@ -160,8 +160,9 @@ CSS (copiar exatamente):
 .filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); width: 100%; cursor: pointer; }
 .filter-select:focus { outline: none; border-color: var(--carbon); }
 .filters-actions { display: flex; align-items: center; justify-content: space-between; padding-top: 2px; }
-.btn-clear { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px 0; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
-.btn-clear:hover { color: var(--carbon); }
+/* "Limpar filtros" = .btn-link da skill botoes (decisão do dono, 04/10/2026) */
+.btn-link { background: none; border: none; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); text-decoration: underline; text-underline-offset: 2px; padding: 4px 0; }
+.btn-link:hover { color: var(--carbon); }
 .results-count { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; color: var(--muted); }
 .results-count span { color: var(--carbon); font-weight: 500; }
 ```
@@ -536,8 +537,9 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
 **DM Sans 13px/800** (`.tbl-nota`); nome em DM Sans 13px/600, pergunta em DM Sans 13px/400 que
 **quebra linha**. Colaborador: avatar circular carbon 34px com inicial citric (DM Mono) + nome +
 `cargo · unidade` (DM Mono 9px uppercase muted).
-- **Botão "Ver mais"** padrão: `.btn-ver-mais` — DM Sans 10px/500, `border:1px solid var(--border)`,
-  `border-radius:6px`, `padding:7px 16px`, hover `background:var(--bg)`; centralizado em `.ver-mais-wrap`.
+- **Botão "Ver mais"** = o da skill **`botoes`** (decisão do dono, 04/10/2026): `.btn.btn--primary` (carbon/citric,
+  40px, DM Mono 10px uppercase) com o texto **"Ver mais (N)"** — N = quantos itens faltam; centralizado em
+  `.ver-mais-wrap`. O "i" dos cards (`.chart-info-btn`) continua no padrão desta skill.
   Mostra N linhas e revela o resto ao clicar.
 - **Toda tabela tem título** (`.chart-head` + `.chart-title`), como os demais cards.
 - **No celular (<768px) a tabela vira CARTÕES no modelo do Recrutamento** (decisão do dono, 04/10/2026): um cartão
