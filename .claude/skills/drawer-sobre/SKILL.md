@@ -104,8 +104,8 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
 .drawer-kpi-card-sub strong { font-family: "DM Sans", sans-serif; font-weight: 700; color: var(--text); }
 ```
 
-**Contagem pág / dash** (sub do card Seções — hoje **19 pág / 35 dash**, desde 04/10/2026, quando saíram as 27 páginas antigas de `areas/**`, Caixa, Gorjeta, Ferramentas, Fornecedores e Matriz D/E/B):
-- **dash** = dashboards: todo `.html` em `compliance/kpis/`, **menos os menus** (`index.html` de pasta que tem outras páginas: `kpis/index.html`, `kpis/{estoque,limpeza,rh,tatahouse}/index.html`) — `kpis/manutencao/index.html` é dashboard (pasta com uma página só) — **mais** os dashboards fora de `kpis/` (`DRAWER_DASH_EXTRA`: `compliance/ps.html`, `compliance/auditoria/docsrh.html`).
+**Contagem pág / dash** (sub do card Seções — hoje **19 pág / 36 dash**, desde 04/10/2026: saíram as 27 páginas antigas de `areas/**`, Caixa, Gorjeta, Ferramentas, Fornecedores e Matriz D/E/B e entrou a Auditoria de páginas):
+- **dash** = dashboards: todo `.html` em `compliance/kpis/`, **menos os menus** (`index.html` de pasta que tem outras páginas: `kpis/index.html`, `kpis/{estoque,limpeza,rh,tatahouse}/index.html`) — `kpis/manutencao/index.html` é dashboard (pasta com uma página só) — **mais** os dashboards fora de `kpis/` (`DRAWER_DASH_EXTRA`: `compliance/ps.html`, `compliance/auditoria/docsrh.html`, `compliance/auditoria/paginas.html`).
 - **pág** = as demais páginas de `compliance/` que abrem no app (menus, áreas, conceitos, Papéis…). Ficam fora da conta as que não abrem no app (sem `GOV_PAGE_ID`, lista `DRAWER_FORA_APP`: `areas/organograma2.html`, `areas/rh/ouvidoria-qrcode.html`).
 - O `loadDrawerMeta` conta na árvore do repositório (API do GitHub) e guarda o resultado **12h no `localStorage`** (`lideres-drawer-meta`), porque a API sem login aceita só 60 consultas/hora por IP. O número **escrito no HTML** é o que aparece antes de carregar ou se a API falhar — mantenha-o **igual à conta atual** em todas as páginas.
 - **Ao criar/apagar página:** atualize o número do HTML em todas (`grep -rl 'id="drawer-kpi-pags"' compliance`). Dashboard novo **fora** de `kpis/` ou página que **não abre no app** → acrescente nas listas `DRAWER_DASH_EXTRA`/`DRAWER_FORA_APP` de **todas** as páginas. Confira a conta (na raiz do repo; tem que dar o número do HTML):
@@ -113,7 +113,7 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
   python3 - <<'PY'
   import glob, os
   FORA = {'compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'}  # DRAWER_FORA_APP
-  EXTRA = {'compliance/ps.html', 'compliance/auditoria/docsrh.html'}                       # DRAWER_DASH_EXTRA
+  EXTRA = {'compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'}  # DRAWER_DASH_EXTRA
   h = [p for p in glob.glob('compliance/**/*.html', recursive=True) if p not in FORA]
   def dash(p):
       if not p.startswith('compliance/kpis/'): return p in EXTRA
@@ -249,7 +249,7 @@ function loadDrawerKPIs() {
 // pág  = as demais páginas de compliance/ que abrem no app (DRAWER_FORA_APP fica fora da conta).
 // Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
-var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html'];
+var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'];
 var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
 function _pintarDrawerMeta(m) {
