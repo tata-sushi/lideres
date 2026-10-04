@@ -180,15 +180,18 @@ function cartao(c){
   **ícone no desktop, texto no celular**, os dois no mesmo `<td>` alternados por `.btn-resp-icon` / `.btn-resp-text`
   (seletores `.btn-icon.btn-resp-icon` e `.btn.btn-resp-text`, senão a regra base do `.btn-icon` vence e aparecem os dois).
   Decisões do dono para essa grade (04/10/2026), que valem para grades parecidas:
-  - **Sem cartão branco em nenhuma largura**: a caixa da grade (`width: fit-content; max-width: 100%`) fica direto no
-    fundo cinza; sem título e sem legenda em cima.
+  - **Sem cartão branco em nenhuma largura**: a caixa da grade fica direto no fundo cinza e **ocupa a largura toda**
+    (`table { width: 100% }`; 1ª coluna fixa em 260px, 212px no celular — a sobra vai para as colunas dos colaboradores,
+    nunca para a dos nomes). Sem título e sem legenda em cima.
+  - **Linhas verticais entre as colunas** (`border-left: 1px solid var(--border)` nas células e no cabeçalho de cada
+    colaborador), contínuas também nas linhas de seção: nelas vão células vazias, uma por coluna — nunca `colspan`.
   - **"i" dentro do cabeçalho da última coluna** ("Editar"), acima da palavra, no canto superior direito
     (`thead th.ed .chart-info-btn { top: 4px; right: 4px }`); no celular some, como em toda tabela.
   - **Seção e subseção** não têm estilo próprio (nada de faixa cinza nem DM Mono): são linhas iguais às outras, e a
     hierarquia aparece **só pelo recuo em cascata** — seção › subseção › página › aba/botão/valor (14px por nível no
     desktop, 8px no celular). O nome da seção fica na 1ª coluna fixa, então não rola de lado.
-  - **Pílulas do tipo, à direita do nome**: Aba = azul (`#E8F0FA`/`#1A3A5C`), Botão = âmbar (`#FFF4DC`/`#7A4A00`),
-    Valor R$ = carbon (`#35383F`/`#CFFF00`); a legenda das três vai no "i".
+  - **Pílulas do tipo, à direita do nome**: Página = azul e Aba = azul (`#E8F0FA`/`#1A3A5C`), Botão = âmbar
+    (`#FFF4DC`/`#7A4A00`), Valor R$ = carbon (`#35383F`/`#CFFF00`); a legenda vai no "i".
 - Topo: **nome em maiúsculas** + **status** à direita; `sub` (DM Mono 11px) embaixo do nome para um dado curto
   (contato, tipo · ano). Lista de texto (ex.: comentários): `titulo` = assunto, `sub` = tipo · ano, `texto` = comentário.
 - Campos: os mesmos da tabela, menos nome/status/ações; 2 colunas.
