@@ -101,6 +101,7 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 
 | Data | Página | Ajuste | Skill atualizada? |
 |---|---|---|---|
+| 04/10 | Auditoria de páginas | Pílula "Página" azul; linhas verticais entre as colunas (contínuas nas seções); tabela na largura toda (1ª coluna fixa 260px / 212px no celular) | `dashboards-kpi-graficos` (`tabelas.md` §4) |
 | 04/10 | Auditoria de páginas | Desktop também sem cartão branco; "i" no cabeçalho "Editar" (canto superior direito); seções em cascata só pelo recuo (seção › subseção › página › item); pílulas aba azul · botão âmbar · valor carbon | `dashboards-kpi-graficos` (`tabelas.md` §4) + `controle-acesso-abas-botoes` |
 | 04/10 | Auditoria de páginas | Sem a legenda em cima da tabela (fica no "i" e no Sobre); nome da seção preso na 1ª coluna, não rola de lado com os nomes | — (página) |
 | 04/10 | Auditoria de páginas | Tabela no padrão: no celular direto no fundo cinza (sem fundo branco, título e "i") e "Editar" em texto; no desktop, lápis | `dashboards-kpi-graficos` (`tabelas.md` §4) |
