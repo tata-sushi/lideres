@@ -107,6 +107,9 @@ Regras:
 - **Label** em DM Mono uppercase; **sub** opcional (recorte "hoje / mês" etc.).
 - Precisa de destaque de cor por card? Use uma classe modificadora que só troca
   cor/acento (ex.: `.kpi-card-vagas`), mantendo a estrutura.
+- **Quantidade de cards:** 2 colunas no celular; com número **ímpar**, o último ocupa a linha
+  (`.kpi-card:last-child:nth-child(odd) { grid-column: 1 / -1 }` só no celular); no desktop
+  (≥768px) pode ir a 3 colunas (`repeat(3, 1fr)`) quando são 3 cards.
 - 🚫 **Proibido: card de número solto** — número grande com uma frase embaixo, em cards
   empilhados pela página (ex.: "76% · foram informados previamente do motivo"). Não é um tipo
   de gráfico do portal. Número em destaque vai num **card de KPI** (faixa do topo); um grupo de
@@ -293,6 +296,9 @@ Regras dos gráficos:
   `gap:12px` + `margin-top:12px`; nunca 0). **Mesma linha = mesmo tipo ou, no mínimo, mesma
   altura** — nunca pareie um gráfico curto com um alto (ex.: barra + heatmap). Gráficos
   altos/de altura variável (heatmap, calendário, nuvem) vão **full-width** (`grid-column:1/-1`).
+  **3 gráficos por linha só a partir de 1024px** (`repeat(3, minmax(0,1fr))`); abaixo disso, um por
+  linha. Um card alto ao lado de dois curtos empilhados (ex.: mapa de calor + 2 tabelas) também
+  vale como "mesma altura".
   🚫 **Proibido texto solto fora dos cards** — título de seção, legenda ou subtítulo no fundo
   cinza entre os gráficos (ex.: "PROCESSO DE DESLIGAMENTO · quem foi desligado"). Todo texto vai
   **dentro do card**: no título (`.chart-title`) ou no botão "i" (para quem, de onde vem, como ler).
@@ -333,6 +339,11 @@ externos), "Identificou-se?" na Ouvidoria (rosca). Mesmo padrão dos outros grá
   carbon, `boxWidth:12, padding:12`) ou em **rótulos externos** com linha-guia (plugin, como o
   `outsideLabelsPlugin` do Recrutamento — reserve `layout.padding` para não cortar).
 - Ao filtrar, as fatias não selecionadas ficam mais claras (mesma ideia das barras).
+- **Card estreito (3 por linha) → legenda embaixo**, não rótulo por fora (não cabe): `legend:
+  { position:'bottom', onClick:function(){}, labels:{ …SANS12 500, boxWidth:12, padding:12,
+  generateLabels } }` com o texto `nome · quantidade (%)`. Use
+  `Chart.overrides.pie.plugins.legend.labels.generateLabels(chart)` (um item por fatia) — o
+  `Chart.defaults.plugins.legend…` gera um item por dataset e some com as outras fatias.
 
 ---
 
