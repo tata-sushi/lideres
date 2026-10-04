@@ -131,7 +131,7 @@ Regras:
 ## Filtros (logo abaixo dos KPIs)
 
 Toda página dashboard com dados filtráveis tem a **faixa de filtros** logo abaixo dos
-KPIs — **mesma faixa branca full-bleed**. Selects **cinza** (`--bg`), rótulo DM Mono, e
+KPIs — **mesma faixa branca full-bleed**. Selects **cinza** (`--bg`), rótulo **DM Sans 10px/500 uppercase carbon**, e
 uma linha de ações com "Limpar filtros" + contagem de resultados.
 
 HTML:
@@ -168,7 +168,10 @@ CSS (copiar exatamente):
 
 Regras dos filtros:
 - **Faixa branca full-bleed** (igual aos KPIs), com `border-bottom` — encostada nas margens.
-- **Selects/inputs cinza** (`--bg`) com chevron; rótulo DM Mono 10px uppercase.
+- **Selects/inputs cinza** (`--bg`) com chevron; rótulo **DM Sans** 10px/500 uppercase carbon (`<label class="filter-label">`).
+- **Grade:** 2 colunas no celular, **3 no desktop** (`@media (min-width:768px) { .filters-row { grid-template-columns: 1fr 1fr 1fr } }`).
+- **Uma faixa por aba**, logo abaixo da faixa de KPIs (ou no topo da aba sem KPIs); "Limpar filtros" + contagem sempre presentes.
+- Auditoria dos filtros dos 37 dashboards: `git-claude/auditoria-filtros.md`.
 - Conjunto padrão do RH: **Unidade · Departamento · Competência (mês) + intervalo De/Até**.
   Começa em "Todos"; o Departamento pode depender da Unidade escolhida.
 - Rodapé: **"Limpar filtros"** (link sublinhado, esquerda) + **contagem de resultados**
@@ -531,11 +534,12 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
   `border-radius:6px`, `padding:7px 16px`, hover `background:var(--bg)`; centralizado em `.ver-mais-wrap`.
   Mostra N linhas e revela o resto ao clicar.
 - **Toda tabela tem título** (`.chart-head` + `.chart-title`), como os demais cards.
-- **No celular (<768px) a tabela vira CARTÕES** (decisão do dono, 04/10/2026): um cartão cinza (`--bg`) por linha,
-  dentro do card branco — topo com o nome (DM Sans 13px/600) e o status (pílula) à direita; campos em 2 colunas
-  (rótulo DM Mono 10px uppercase muted + valor DM Sans 12px); texto longo em faixa própria; botões no rodapé do
-  cartão. Mesma ordem e mesmo "Ver mais" da tabela. No desktop fica a tabela. Código pronto em
-  `references/tabelas.md` (`cartao()` + opção `cartao` do organizador). **Nunca** esconder colunas no celular.
+- **No celular (<768px) a tabela vira CARTÕES no modelo do Recrutamento** (decisão do dono, 04/10/2026): um cartão
+  branco por linha (borda + sombra) — topo com o nome em **maiúsculas DM Sans 14px/700** e a pílula de status à direita
+  (linha embaixo); campos em 2 colunas (rótulo DM Mono 9px uppercase muted + valor DM Sans 13px/500); texto longo em
+  faixa própria; botões no rodapé `#FAFAFA` alinhados à direita. Mesma ordem e mesmo "Ver mais" da tabela. No desktop
+  fica a tabela. Código pronto em `references/tabelas.md` §4 (`cartao()` + opção `cartao` do organizador). **Nunca**
+  esconder colunas no celular.
 - **Corpo da tabela = DM Sans 12px** (decisão do dono); nome/nota em destaque conforme abaixo.
 - **Desktop: tabela larga rola na horizontal, nunca comprime/sobrepõe colunas.** A tabela precisa ser mais larga que o
   card para o wrapper rolar: `table-layout:fixed` com largura px em **todas** as colunas e `min-width` = soma (ex.: bug do

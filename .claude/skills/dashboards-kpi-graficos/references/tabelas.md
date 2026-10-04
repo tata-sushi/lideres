@@ -121,35 +121,37 @@ var TAB_ANL = new TabelaOrg({
   negativo (expirado/cancelado). Escala de 5 níveis (ex.: faixa destaque→crítico) agrupa em pos/amber/red.
 - **Datas**: `DD/MM/AAAA` (com hora: `DD/MM/AAAA · HHhMM`).
 
-## 4. Celular = cartões (decisão do dono)
+## 4. Celular = cartões no modelo do Recrutamento (decisão do dono)
 
-Cada linha vira um cartão cinza dentro do card branco; no desktop o CSS esconde os cartões e mostra a tabela.
+Cada linha vira um cartão branco (o mesmo `.card` dos cards de Entrevistas/Testes do Recrutamento); no desktop o CSS
+esconde os cartões e mostra a tabela.
 
 ```css
-/* celular: a tabela vira cartões (decisão do dono); no desktop fica a tabela */
-.tcards { display: flex; flex-direction: column; gap: 10px; }
-.tcard { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-.tcard-top { padding: 12px 14px 10px; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.tcard-tl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.tcard-sub { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.6px; text-transform: uppercase; color: var(--muted); }
-.tcard-title { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; color: var(--carbon); line-height: 1.3; }
+/* celular: a tabela vira cartões no modelo do Recrutamento (decisão do dono); no desktop fica a tabela */
+.tcards { display: flex; flex-direction: column; gap: 12px; }
+.tcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.tcard-top { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.tcard-tl { min-width: 0; }
+.tcard-title { font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 700; color: var(--carbon); letter-spacing: -0.1px; line-height: 1.3; text-transform: uppercase; }
+.tcard-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); margin-top: 3px; }
 .tcard-tr { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
-.tcard-fields { padding: 10px 14px; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
-.tcard-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.tcard-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.6px; text-transform: uppercase; color: var(--muted); }
-.tcard-value { font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--carbon); }
-.tcard-text { padding: 10px 14px; border-top: 1px solid var(--border); font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--carbon); line-height: 1.45; }
-.tcard-actions { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.tcard-fields { padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.tcard-field { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tcard-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
+.tcard-value { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--carbon); }
+.tcard-text { padding: 12px 16px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); line-height: 1.45; }
+.tcard-fields + .tcard-text { border-top: 1px solid var(--border); }
+.tcard-actions { border-top: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; background: #FAFAFA; }
 .tcard-actions .act-btn { margin-left: 0; }
 @media (max-width: 767px) { .tbl-scroll.tem-cartoes { display: none; } }
 @media (min-width: 768px) { .tcards { display: none; } }
 ```
 
 ```js
-// cartão do celular: { titulo, sub, direita, campos: [[rótulo, valor]], texto, acoes } — valores já em HTML escapado
+// cartão do celular (modelo do Recrutamento): { titulo, sub, direita, campos: [[rótulo, valor]], texto, acoes } — valores já escapados
 function cartao(c){
-  var h = '<div class="tcard"><div class="tcard-top"><div class="tcard-tl">' + (c.sub ? '<span class="tcard-sub">' + c.sub + '</span>' : '') +
-          '<div class="tcard-title">' + c.titulo + '</div></div>' + (c.direita ? '<div class="tcard-tr">' + c.direita + '</div>' : '') + '</div>';
+  var h = '<div class="tcard"><div class="tcard-top"><div class="tcard-tl"><div class="tcard-title">' + c.titulo + '</div>' +
+          (c.sub ? '<div class="tcard-sub">' + c.sub + '</div>' : '') + '</div>' + (c.direita ? '<div class="tcard-tr">' + c.direita + '</div>' : '') + '</div>';
   if (c.campos && c.campos.length) h += '<div class="tcard-fields">' + c.campos.map(function(f){ return '<div class="tcard-field"><span class="tcard-label">' + f[0] + '</span><span class="tcard-value">' + f[1] + '</span></div>'; }).join('') + '</div>';
   if (c.texto) h += '<div class="tcard-text">' + c.texto + '</div>';
   if (c.acoes) h += '<div class="tcard-actions">' + c.acoes + '</div>';
@@ -161,9 +163,9 @@ function cartao(c){
 //                   campos: [['Unidade', escH(r.unidade)], ['Emitido', _fmtData(r.criado_em)]],
 //                   acoes: '<button class="act-btn primary">…</button>' }); } })
 ```
-- Topo: **nome** (o que identifica a linha) + **status** à direita. Lista de texto (ex.: comentários): `sub` com o
-  assunto, `titulo` com o tipo, `texto` com o comentário.
+- Topo: **nome em maiúsculas** + **status** à direita; `sub` (DM Mono 11px) embaixo do nome para um dado curto
+  (contato, tipo · ano). Lista de texto (ex.: comentários): `titulo` = assunto, `sub` = tipo · ano, `texto` = comentário.
 - Campos: os mesmos da tabela, menos nome/status/ações; 2 colunas.
-- Ações: só se houver botão (texto tipo "respondida" fica fora do cartão).
-- Para não duplicar regra, monte as partes da linha numa função (ex.: `_anlPartes(r)` → `{media, acoes}`) e use nas
-  duas saídas (`linha` e `cartao`).
+- Rodapé só se houver botão (texto tipo "respondida" fica fora do cartão).
+- Monte as partes da linha numa função (ex.: `_anlPartes(r)` → `{media, acoes}`) e use nas duas saídas (`linha` e
+  `cartao`), para não duplicar regra.
