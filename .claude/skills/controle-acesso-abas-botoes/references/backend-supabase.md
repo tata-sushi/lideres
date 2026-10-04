@@ -54,6 +54,12 @@ prefixo `pagina_id::`; o valor é mascarado no servidor (salário etc.), não po
   `perm_valores_sync`.
 - Outras: `gov_admin_zerar_acessos` (zera tudo da pessoa), `admin_resetar_senha`.
 
+**Consumidas pela página Auditoria de páginas** (`compliance/auditoria/paginas.html`, só admin — `pode_publicar()`):
+- `gov_auditoria_acessos()` → `jsonb` com tudo de uma vez: `pessoas` (ativas: m, nome, cargo, unidade, admin),
+  `paginas` (ativas), `itens` (catálogo **ativo**), `acessos`, `bloqueios`, `liberacoes`, `valores` (pares
+  `[matricula, id]`).
+- `gov_auditoria_salvar(p_tipo, p_item, p_incluir[], p_tirar[])` → grava uma linha (SQL na §"Página Auditoria de páginas").
+
 ## Registrar/atualizar os controles de uma página
 
 Depois de pôr as chaves no HTML, cadastre-as no catálogo → **`upsert` em
@@ -140,3 +146,61 @@ Cada clique grava um documento na coleção `mudancas` da página — nada vai p
 4. **Fechar o ciclo:** apague os documentos aplicados (`ArtifactData batch` delete), gere de novo o estado e
    republique (mesmo `file_path`, mesma URL).
 
+
+
+## Página Auditoria de páginas (o dono edita direto no portal)
+
+`compliance/auditoria/paginas.html` — abas Sobre e Auditoria; ids `governanca-auditoria-paginas::{sobre,auditoria,editar-acessos}`.
+Mostra a grade páginas × colaboradores lida de `gov_auditoria_acessos` e grava pelo lápis de cada linha com
+`gov_auditoria_salvar`, que faz o mesmo mapeamento da tabela de acessos:
+
+| `p_tipo` | incluir | tirar |
+|---|---|---|
+| `pagina` | insert `governanca_acessos_paginas` | delete dela **e** dos bloqueios/liberações daquela página (não ficam "sem efeito") |
+| `aba` | dá a página se faltar + delete do bloqueio | insert `governanca_abas_bloqueios` |
+| `botao` | dá a página se faltar + insert `governanca_abas_liberacoes` | delete da liberação |
+| `valor` | upsert `dp_rh.perm_ver_valores (area = p_item, liberado)` | delete da área (a área `geral` fica no painel do app) |
+
+Só matrícula **ativa** entra; `p_tirar` ignora quem também está em `p_incluir`. Admin não aparece na lista onde já
+vê tudo (aba/botão/página fora da seção App); aparece nas telas da seção App e nos valores.
+
+```sql
+create or replace function tata_plus.gov_auditoria_salvar(p_tipo text, p_item text, p_incluir text[], p_tirar text[])
+returns jsonb language plpgsql security definer set search_path to 'tata_plus', 'dp_rh', 'public' as $$
+declare v_pagina text; v_inc text[]; v_tir text[];
+begin
+  if not tata_plus.pode_publicar() then raise exception 'Sem permissão para gerenciar acessos de governança'; end if;
+  select coalesce(array_agg(p.matricula), '{}') into v_inc from tata_plus.profiles p
+    where p.status = 'Ativo' and p.matricula = any(coalesce(p_incluir, '{}'));
+  select coalesce(array_agg(p.matricula), '{}') into v_tir from tata_plus.profiles p
+    where p.matricula = any(coalesce(p_tirar, '{}')) and not (p.matricula = any(v_inc));
+  if p_tipo = 'pagina' then
+    if not exists (select 1 from tata_plus.governanca_paginas where pagina_id = p_item) then raise exception 'Página não encontrada: %', p_item; end if;
+    insert into tata_plus.governanca_acessos_paginas(matricula, pagina_id) select m, p_item from unnest(v_inc) m on conflict do nothing;
+    delete from tata_plus.governanca_acessos_paginas where pagina_id = p_item and matricula = any(v_tir);
+    delete from tata_plus.governanca_abas_liberacoes l using tata_plus.governanca_abas a where a.aba_id = l.aba_id and a.pagina_id = p_item and l.matricula = any(v_tir);
+    delete from tata_plus.governanca_abas_bloqueios b using tata_plus.governanca_abas a where a.aba_id = b.aba_id and a.pagina_id = p_item and b.matricula = any(v_tir);
+  elsif p_tipo in ('aba', 'botao') then
+    select pagina_id into v_pagina from tata_plus.governanca_abas where aba_id = p_item and tipo = p_tipo;
+    if v_pagina is null then raise exception 'Item não encontrado: %', p_item; end if;
+    insert into tata_plus.governanca_acessos_paginas(matricula, pagina_id) select m, v_pagina from unnest(v_inc) m on conflict do nothing;
+    if p_tipo = 'aba' then
+      delete from tata_plus.governanca_abas_bloqueios where aba_id = p_item and matricula = any(v_inc);
+      insert into tata_plus.governanca_abas_bloqueios(matricula, aba_id) select m, p_item from unnest(v_tir) m on conflict do nothing;
+    else
+      insert into tata_plus.governanca_abas_liberacoes(matricula, aba_id) select m, p_item from unnest(v_inc) m on conflict do nothing;
+      delete from tata_plus.governanca_abas_liberacoes where aba_id = p_item and matricula = any(v_tir);
+    end if;
+  elsif p_tipo = 'valor' then
+    if not exists (select 1 from tata_plus.governanca_abas where aba_id = p_item and tipo = 'valor') then raise exception 'Área de valores não encontrada: %', p_item; end if;
+    insert into dp_rh.perm_ver_valores(matricula, area, liberado, criado_por) select m, p_item, true, tata_plus.minha_matricula() from unnest(v_inc) m
+      on conflict (matricula, area) do update set liberado = true, criado_por = tata_plus.minha_matricula();
+    delete from dp_rh.perm_ver_valores where area = p_item and matricula = any(v_tir);
+  else raise exception 'Tipo inválido: %', p_tipo;
+  end if;
+  return jsonb_build_object('ok', true, 'incluidos', cardinality(v_inc), 'retirados', cardinality(v_tir));
+end $$;
+revoke execute on function tata_plus.gov_auditoria_salvar(text, text, text[], text[]) from public, anon;
+grant execute on function tata_plus.gov_auditoria_salvar(text, text, text[], text[]) to authenticated;
+```
+Enquanto a função não existir, o "Salvar" da página avisa "A gravação ainda não está ativa no banco" e não muda nada.

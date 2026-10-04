@@ -27,6 +27,13 @@ Tudo no `main`:
 
 ## 3. Pendente no banco (fase 2 do #2991)
 
+**04/10:** os 14 nomes antigos foram **desativados** (`ativo = false`): não estão em nenhum HTML nem em função do banco,
+e assim somem do painel do app e da Auditoria de páginas. Falta só apagar de vez.
+
+**Pendente também:** criar `tata_plus.gov_auditoria_salvar` (SQL em `controle-acesso-abas-botoes/references/backend-supabase.md`
+§"Página Auditoria de páginas") — o banco pede confirmação do dono por ter `delete`. Sem ela, o lápis da Auditoria de páginas
+abre e lista, mas o "Salvar" avisa que a gravação ainda não está ativa.
+
 Quando o dono confirmar que o app já mostra a versão nova (ex.: "Ver mais (N)" escuro), apagar os 14 nomes antigos.
 Os bloqueios antigos saem junto (FK `on delete cascade`); os novos já têm a cópia (62 bloqueios).
 ```sql
@@ -94,6 +101,7 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 
 | Data | Página | Ajuste | Skill atualizada? |
 |---|---|---|---|
+| 04/10 | Auditoria de páginas (nova) | Página nova em Compliance: abas Sobre e Auditoria; grade páginas × colaboradores ao vivo (linha da página + abas/botões/valores), pílula do tipo à direita do nome, lápis na última coluna (fixa à direita) para incluir/excluir. RPCs `gov_auditoria_acessos`/`gov_auditoria_salvar`. Menu do app: "Auditoria de páginas" abre a página nova. Drawer: 19 pág / 36 dash | `controle-acesso-abas-botoes` (SKILL.md + backend) + `drawer-sobre` |
 | 04/10 | (todas) | Relatório "ids × quem vê" (por página, por pessoa, pontos de atenção) — fica fora do repo (nomes) | `controle-acesso-abas-botoes`: `scripts/relatorio-acessos.py` + SKILL.md |
 | 04/10 | (todas) | Botões que começam uma ação ganharam id (46) + cadastro/liberação no banco; Escalas: ordem do `comSupa` corrigida | `controle-acesso-abas-botoes`: SKILL.md §"Que botões levam id", backend §SQL modelo |
 | 04/10 | (todas) | Tabela de clicar (Página · Abas · Botões · Valor) — o dono marca, o Claude aplica | `controle-acesso-abas-botoes`: `assets/matriz-acessos.html`, `scripts/estado-acessos.py`, backend §"Tabela de acessos" |
