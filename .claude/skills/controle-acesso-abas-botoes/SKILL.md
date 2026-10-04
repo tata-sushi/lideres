@@ -68,7 +68,7 @@ Referências (leia conforme a tarefa):
   do nome (página e aba azul · botão âmbar · valor carbon), coluna **Total** (quantos veem) e lápis na **última coluna (fixa à direita)**
   que abre a lista de colaboradores com chaves; "Salvar" grava só o que mudou. **Por colaborador:** botão na 1ª linha da
   tabela, coluna Editar (ícone de pessoas no computador, "Colaborador" no celular), ou Menu › "Editar por colaborador":
-  a janela tem um seletor do colaborador (inclui quem ainda não tem acesso) e abre tudo da pessoa em cascata, com chaves; o "Salvar" chama `gov_auditoria_salvar` uma vez por mudança, na
+  a janela tem um seletor do colaborador (só o nome, em ordem alfabética; inclui quem ainda não tem acesso) e abre tudo da pessoa em cascata, com chaves; o "Salvar" chama `gov_auditoria_salvar` uma vez por mudança, na
   ordem páginas que entram › abas/botões/valores › páginas que saem. Colunas em ordem alfabética, admins junto (só o nome), com
   ● cinza onde veem automaticamente (fora da seção App, menos valores). Lê `gov_auditoria_acessos` e
   grava `gov_auditoria_salvar` (backend §"Página Auditoria de páginas"). Não tem lista própria de ids: página,

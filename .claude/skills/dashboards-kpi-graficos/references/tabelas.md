@@ -196,8 +196,8 @@ function cartao(c){
   - **Cabeçalho do colaborador só com o nome** — nada de botão em cima do nome.
   - **Editar por colaborador = botão na 1ª linha da tabela** (a linha da primeira seção), na coluna "Editar": ícone de
     pessoas no computador, texto "Colaborador" no celular (`.btn-resp-icon`/`.btn-resp-text`). Abre uma janela com um
-    **seletor do colaborador** no topo (grupos "Com acesso" / "Sem acesso", em ordem alfabética; quem ainda não tem
-    acesso também está lá) e a lista dele com chaves; com mudança por salvar, o seletor não troca de pessoa. O mesmo
+    **seletor do colaborador** no topo (**só o nome**, sem cargo/unidade/contagem e sem grupos; todos em ordem
+    alfabética, inclusive quem ainda não tem acesso) e a lista dele com chaves; com mudança por salvar, o seletor não troca de pessoa. O mesmo
     atalho fica no Menu (+) › Ações.
   - **Coluna "Total"** (quantos veem) entre a última coluna de colaborador e "Editar": número DM Sans 13px/800,
     centralizado, 56px, rola junto com as outras (só "Editar" e a 1ª coluna ficam fixas). Nada de número dentro da
