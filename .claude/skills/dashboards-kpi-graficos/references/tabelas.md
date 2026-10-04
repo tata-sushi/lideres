@@ -174,6 +174,11 @@ function cartao(c){
 //                   campos: [['Unidade', escH(r.unidade)], ['Emitido', _fmtData(r.criado_em)]],
 //                   acoes: '<button class="act-btn primary">…</button>' }); } })
 ```
+- **Tabela que continua tabela no celular** (grade larga que não vira cartão — ex.: a grade páginas × colaboradores da
+  Auditoria de páginas, `compliance/auditoria/paginas.html`): o card leva o mesmo **`card-tabela`** (no celular a grade
+  fica direto no fundo cinza, sem fundo branco do card, sem título e sem "i") e a ação da linha segue a skill `botoes` §4:
+  **ícone no desktop, texto no celular**, os dois no mesmo `<td>` alternados por `.btn-resp-icon` / `.btn-resp-text`
+  (seletores `.btn-icon.btn-resp-icon` e `.btn.btn-resp-text`, senão a regra base do `.btn-icon` vence e aparecem os dois).
 - Topo: **nome em maiúsculas** + **status** à direita; `sub` (DM Mono 11px) embaixo do nome para um dado curto
   (contato, tipo · ano). Lista de texto (ex.: comentários): `titulo` = assunto, `sub` = tipo · ano, `texto` = comentário.
 - Campos: os mesmos da tabela, menos nome/status/ações; 2 colunas.
