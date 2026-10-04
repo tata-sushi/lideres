@@ -105,9 +105,17 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 ## Tabela de acessos (o dono clica, o Claude aplica)
 
 Página privada no claude.ai (Artifact com capacidade `db`) feita de `assets/matriz-acessos.html` + um
-`estado.json` publicado junto. Visões: **Por página** (colunas Página · Abas · Botões · Valor, cada uma com as
-pessoas e "+ Incluir"), **Páginas × pessoas** (grade de acesso às páginas) e **Mudanças** (lista do que foi
-marcado). Cada clique grava um documento na coleção `mudancas` da página — nada vai para o banco sozinho.
+`estado.json` publicado junto. Visões:
+- **Por página** — colunas Página · Abas · Botões · Valor, cada uma com as pessoas e "+ Incluir".
+- **Por pessoa** — para um colaborador: páginas que abre, e em cada página as abas (✓ vê / – bloqueada), os
+  botões (✓ liberado / – não) e os valores R$; páginas sem abas/botões num cartão só; "Páginas que não abre"
+  com "+ Dar página". Admin: só as telas da seção App e os valores (o resto ele já vê).
+- **Ids das páginas** — quais páginas têm ids (abas, botões, valor), quantas pessoas abrem e, ao abrir,
+  cada id com quantos veem; filtro "Pedem atenção" mostra página no banco sem arquivo, id sem cadastro e
+  HTML do repo sem `GOV_PAGE_ID` (`semId`) ou com id fora do banco (`foraDoBanco`).
+- **Páginas × pessoas** (grade de acesso às páginas) e **Mudanças** (lista do que foi marcado).
+
+Cada clique grava um documento na coleção `mudancas` da página — nada vai para o banco sozinho.
 
 1. **Gerar o estado:** dump do banco (SQLs no topo de `scripts/relatorio-acessos.py`, confira contagens) →
    `python3 scripts/estado-acessos.py <pasta_dump> <scratchpad>/estado.json [raiz]` (use como raiz uma cópia do

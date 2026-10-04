@@ -60,7 +60,7 @@ Referências (leia conforme a tarefa):
   python3 .claude/skills/controle-acesso-abas-botoes/scripts/relatorio-acessos.py <pasta_dump> <saida.html>
   ```
 - **`assets/matriz-acessos.html` + `scripts/estado-acessos.py`** — a **tabela de acessos** onde o dono clica
-  para incluir/tirar pessoas (colunas Página · Abas · Botões · Valor, por página, e a grade páginas × pessoas).
+  para incluir/tirar pessoas (por página, por pessoa, ids das páginas, grade páginas × pessoas).
   Fluxo completo em `references/backend-supabase.md` §"Tabela de acessos".
 
 ---
