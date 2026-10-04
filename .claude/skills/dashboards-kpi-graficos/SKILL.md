@@ -178,6 +178,20 @@ Regras dos filtros:
 - Rodapé: **"Limpar filtros"** (link sublinhado, esquerda) + **contagem de resultados**
   (direita; o número vem num `<span>` em carbon).
 - Trocar filtro **re-renderiza os gráficos** (cada chart faz `chartInst.destroy()` antes).
+- **Campo de busca (texto livre: nome, página…) NÃO entra na grade de filtros.** Fica numa **faixa própria, logo
+  abaixo de "Limpar filtros"**: faixa cinza (`--bg`) full-bleed com `border-top`, input **branco** 34px, raio 6px,
+  **sem rótulo** (só placeholder "Buscar …"); o `.filters-wrap` perde o `border-bottom` (a faixa fecha o painel).
+  Referência: Analítico do `recrutamento.html` (e Auditoria de páginas). "Limpar filtros" também limpa a busca.
+  ```css
+  .anl-busca-bar { margin: 4px -20px -14px; padding: 14px 20px; background: var(--bg); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+  .anl-busca { width: 100%; box-sizing: border-box; height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); background: var(--surface); outline: none; }
+  .anl-busca:focus { border-color: var(--carbon); }
+  .anl-busca::placeholder { color: var(--muted); }
+  ```
+  ```html
+  <div class="filters-actions">…Limpar filtros… resultado(s)</div>
+  <div class="anl-busca-bar"><input class="anl-busca" type="text" placeholder="Buscar por nome…" aria-label="Buscar por nome"></div>
+  ```
 
 ---
 
