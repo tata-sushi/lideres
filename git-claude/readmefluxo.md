@@ -2,7 +2,7 @@
 
 **Versão atual:** v1.0a  
 **Última atualização:** 2026-05-11  
-**Referências canônicas:** `compliance/conceitos/5s.html` · `compliance/areas/rh/sancoes.html`
+**Referências canônicas:** `compliance/conceitos/5s.html` · `compliance/kpis/rh/sancoes.html` (aba Sobre)
 
 ---
 

@@ -66,6 +66,11 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
     pela RPC `armario_pode_gerir`). Cópia para desfazer guardada fora do repo.
   - 27 páginas cadastradas (seção nova "Áreas & Processos", Caixa, Gorjeta, Matriz D/E/B, Ferramentas,
     Fornecedores) sem ninguém liberado, e postas no menu do app Plus. Nomes das páginas no banco iguais aos do menu.
+  - **Depois:** as 21 páginas de processo antigas de `compliance/areas/**` (índices + RH + Estoque + Limpeza + Tatá
+    House) foram **apagadas** — o conteúdo já estava na aba Sobre de cada dashboard (97–100% do texto). Ficam:
+    `areas/rh/ouvidoria-qrcode.html` (link da Ouvidoria em 79 páginas), `papeis.html` (RH e Tatá House),
+    `organograma*.html`, os PDFs/imagens e **`areas/rh/gestaodocs.html`** (só ~50% do texto está em
+    Documentos/Uniformes — decidir se porta ou apaga).
   - 58 ids novos (12 que estavam sem cadastro + 46 de botões de ação/abas), cada botão liberado para quem já abria
     a página — ninguém perdeu nada no dia. "Enviar Cartão de Ponto" das Escalas agora obedece o painel.
   - `gate.js` busca sempre a lista do que esconder (antes, botão montado por JS escapava).
@@ -92,6 +97,7 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 | 04/10 | (todas) | Botões que começam uma ação ganharam id (46) + cadastro/liberação no banco; Escalas: ordem do `comSupa` corrigida | `controle-acesso-abas-botoes`: SKILL.md §"Que botões levam id", backend §SQL modelo |
 | 04/10 | (todas) | Tabela de clicar (Página · Abas · Botões · Valor) — o dono marca, o Claude aplica | `controle-acesso-abas-botoes`: `assets/matriz-acessos.html`, `scripts/estado-acessos.py`, backend §"Tabela de acessos" |
 | 04/10 | (todas) | Valor em R$ não tem bypass de admin (corrigido na skill) | `controle-acesso-abas-botoes`: SKILL.md + backend |
+| 04/10 | (portal) | Apagadas 21 páginas antigas de `areas/**`; ids de desligamentos escritos por inteiro; auditoria e relatório leem chaves escritas no JS | `controle-acesso-abas-botoes` (scripts) + `botoes` §4 (`_acao(chave…)`) |
 | 04/10 | Desligamentos (piloto) | Botões: peso 400 (era negrito falso), 36px no celular, ícone 30×30; ações da tabela no desktop viram ícone (avião/corrente/copiar/balão/seta) e coluna Ações estreita | `botoes` (§1, §3 tabela de ícones, §4 ações de linha) + `catalogo-botoes.html` + `orientacoes-botoes.md` + `dashboards-kpi-graficos/references/tabelas.md` |
 
 ## 6. Bugs achados e ainda não corrigidos (regra de negócio)
