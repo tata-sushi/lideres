@@ -538,8 +538,9 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
   branco por linha (borda + sombra) — topo com o nome em **maiúsculas DM Sans 14px/700** e a pílula de status à direita
   (linha embaixo); campos em 2 colunas (rótulo DM Mono 9px uppercase muted + valor DM Sans 13px/500); texto longo em
   faixa própria; botões no rodapé `#FAFAFA` alinhados à direita. Mesma ordem e mesmo "Ver mais" da tabela. No desktop
-  fica a tabela. Código pronto em `references/tabelas.md` §4 (`cartao()` + opção `cartao` do organizador). **Nunca**
-  esconder colunas no celular.
+  fica a tabela. **No celular o card da tabela some** (classe `card-tabela`: sem fundo branco, sem borda e **sem o "i"**)
+  — os cartões ficam direto no fundo cinza, com o título da lista acima. Código pronto em `references/tabelas.md` §4
+  (`cartao()` + opção `cartao` do organizador). **Nunca** esconder colunas no celular.
 - **Corpo da tabela = DM Sans 12px** (decisão do dono); nome/nota em destaque conforme abaixo.
 - **Desktop: tabela larga rola na horizontal, nunca comprime/sobrepõe colunas.** A tabela precisa ser mais larga que o
   card para o wrapper rolar: `table-layout:fixed` com largura px em **todas** as colunas e `min-width` = soma (ex.: bug do
