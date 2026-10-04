@@ -4,10 +4,11 @@ description: >-
   Conjunto canônico de BOTÕES do Portal Líderes (repo lideres): a base .btn +
   modificadores (.btn--primary carbon/citric, .btn--danger vermelho,
   .btn--block, .btn--sm, .btn--pill), o botão só-ícone
-  (.btn-icon --primary/--ghost/--naked, 28×28), o link/texto (.btn-link) e o
+  (.btn-icon padrão primário + --danger/--copy, 40×40), o link/texto (.btn-link) e o
   estado de LOADING canônico (spinner .btn-spin + keyframes btnRot +
-  setBtnLoading, texto em gerúndio, disabled). Raio 6px, DM Mono 10px uppercase,
-  :hover opacity .85, :disabled opacity .4. Inclui desktop×mobile (.btn-text some
+  setBtnLoading, texto em gerúndio, disabled). Raio 6px, altura ÚNICA 40px
+  (nenhum botão com altura diferente), DM Mono 10px uppercase, :hover opacity .85,
+  :disabled opacity .4. Inclui desktop×mobile (.btn-text some
   <480px) e um MAPA DE MIGRAÇÃO das ~40 classes antigas (btn-gerar, btn-primary,
   modal-btn-save, btn-cancel, btn-excluir, btn-clear, btn-ver-mais…) → novas.
   Catálogo visual: git-claude/catalogo-botoes.html. Use SEMPRE que for criar,
@@ -39,12 +40,12 @@ Tokens: padrão do portal (`--carbon #35383F`, `--citric #CFFF00`, `--surface #F
 ```css
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  padding: 10px 18px; border: 1px solid transparent; border-radius: 6px;  /* --btn-r */
+  height: 40px; padding: 0 18px; border: 1px solid transparent; border-radius: 6px;  /* --btn-r · altura ÚNICA p/ todos */
   font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600;
   letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
   transition: opacity .15s, border-color .15s, background .15s; white-space: nowrap;
 }
-.btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 
 .btn--primary   { background: var(--carbon); color: var(--citric); }   /* dominante (inclui as antigas ações secundárias, ex.: Cancelar) */
@@ -54,8 +55,8 @@ Tokens: padrão do portal (`--carbon #35383F`, `--citric #CFFF00`, `--surface #F
 .btn--danger-ghost  { background: var(--red-bg); color: var(--red); border-color: #FECACA; }  /* destrutivo claro */
 
 .btn--block { width: 100%; }                      /* ação principal de modal/form */
-.btn--sm    { padding: 6px 12px; font-size: 9px; }/* linha de tabela / compacto */
-.btn--pill  { border-radius: 100px; padding: 11px 22px; }  /* CTA / paginação pílula */
+.btn--sm    { padding: 0 12px; font-size: 9px; }  /* mais estreito (MESMA altura) */
+.btn--pill  { border-radius: 100px; padding: 0 22px; }  /* CTA / paginação pílula (mesma altura) */
 ```
 
 | Variante | Uso | Fundo | Texto | Borda |
@@ -64,7 +65,7 @@ Tokens: padrão do portal (`--carbon #35383F`, `--citric #CFFF00`, `--surface #F
 | `.btn--danger` | destrutivo (excluir) | `--red` | `#fff` | — |
 | `.btn--danger-ghost` | destrutivo discreto | `--red-bg` | `--red` | 1px `#FECACA` |
 
-Medidas: **altura ≈38px** (padding 10/18), raio **6px**, fonte **DM Mono 10px/600 uppercase** `letter-spacing:.08em`. `.btn--sm` ≈ 28px (tabela). `.btn--block` = largura total (footer de modal). `.btn--pill` = raio 100px.
+Medidas: **altura ÚNICA = 40px** para TODOS os botões (texto, destrutivo e ícone — nenhum com altura diferente), raio **6px**, fonte **DM Mono 10px/600 uppercase** `letter-spacing:.08em`. `.btn--sm` = **mesma altura**, só mais estreito (tabela). `.btn--block` = largura total (footer de modal). `.btn--pill` = raio 100px.
 
 ---
 
@@ -100,14 +101,14 @@ function setBtnLoading(on, label){
 
 ## 3. Só-ícone, link e pílula
 
-**Só-ícone (28×28):**
+**Só-ícone (40×40 — mesma altura dos demais):** o padrão é o **primário** (carbon/citric), usado por editar e câmera. As **únicas exceções de cor** são a **lixeira** (destrutivo, `--danger`) e o **copiar** (`--copy`).
 ```css
-.btn-icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 6px; cursor: pointer; flex-shrink: 0; background: none; transition: opacity .15s, border-color .15s; }
-.btn-icon svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.btn-icon--primary { background: var(--carbon); color: var(--citric); }   /* editar */
-.btn-icon--ghost   { background: var(--surface); color: var(--carbon); border-color: var(--border); }  /* fotos */
-.btn-icon--naked   { color: var(--muted); }   /* copiar, info, lixeira (naked) */
-.btn-icon--naked:hover { color: var(--carbon); }
+.btn-icon { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 6px; cursor: pointer; flex-shrink: 0; background: var(--carbon); color: var(--citric); transition: opacity .15s, background .15s; }  /* padrão = primário (editar, câmera) */
+.btn-icon:hover { opacity: .85; }
+.btn-icon svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.btn-icon--danger { background: var(--red); color: #fff; }     /* lixeira — destrutivo */
+.btn-icon--copy   { background: none; color: var(--carbon); }  /* copiar — cor diferente */
+.btn-icon--copy:hover { background: var(--bg); }
 ```
 
 **Link / texto** (ex.: "Limpar filtros"):
@@ -141,25 +142,24 @@ Hoje o mesmo visual tem ~40 nomes. Ao mexer numa página, troque pela classe can
 |---|---|
 | `btn-gerar`, `btn-primary`, `btn-avaliar`, `btn-registrar`, `btn-nova`, `btn-submit`, `btn-enviar`, `btn-confirmar`, `btn-cta`, `btn-recibo`, `btn-dev`, `modal-btn-save`, `btn-modal-confirmar`, `ns-btn-enviar`, `adm-btn`, `benef-btn`, `btn-lancar`, `btn-add-cat`, `ag-btn-pri`, `sec-div-btn`, `cat-drawer-btn` | `.btn.btn--primary` (+`.btn--block` se full-width, +`.btn--sm` se de tabela) |
 | `btn-secondary`, `btn-cancel`, `modal-btn-cancel`, `btn-modal-cancelar`, `ns-btn-cancel`, `ag-btn-sec`, `btn-show-more`, `btn-more`, `btn-comecar`, `btn-refresh`, `photo-upload-btn`, `btn-add`, `btn-add-item` | `.btn.btn--primary` |
-| `modal-btn-del`, `ag-btn-del`, `btn-excluir`, `tool-delete-btn`, `btn-split-remove` | `.btn--danger` ou `.btn-icon--naked` (vermelho) |
+| `modal-btn-del`, `ag-btn-del`, `btn-excluir`, `tool-delete-btn`, `btn-split-remove` | `.btn--danger` (texto) ou `.btn-icon--danger` (lixeira) |
 | `btn-clear`, `btn-clear-filters` | `.btn-link` |
 | `btn-ver-mais` | `.btn.btn--primary.btn--pill` (CTA) ou `.btn.btn--primary` (paginação) |
 | `gate-btn`, `hflow-lock-btn` | `.btn.btn--primary.btn--pill` |
-| `btn-editar`, `btn-dt-edit`, `btn-row-edit` | `.btn-icon.btn-icon--primary` |
-| `tbl-fotos-btn`, `tool-edit-btn` | `.btn-icon.btn-icon--ghost` |
-| `btn-copia-card`, `chart-info-btn` | `.btn-icon.btn-icon--naked` |
+| `btn-editar`, `btn-dt-edit`, `btn-row-edit`, `tbl-fotos-btn` (câmera), `tool-edit-btn` | `.btn-icon` (padrão primário) |
+| `btn-copia-card`, `chart-info-btn` | `.btn-icon.btn-icon--copy` |
 
 > **NÃO migrar** (botões de componente, ficam nas skills deles): `.header-plus`, `.tab-btn`, `.dash-subtab`, `.drawer-sam-btn`. `.btn-help` âmbar (`#E8A020`) — decidir caso a caso (única cor fora da paleta).
 
 ---
 
 ## Checklist
-- [ ] Usa `.btn` + modificador (`--primary`/`--danger`), raio **6px**, DM Mono 10px/600 uppercase.
+- [ ] Usa `.btn` + modificador (`--primary`/`--danger`), raio **6px**, **altura única 40px** (nenhum diferente), DM Mono 10px/600 uppercase.
 - [ ] Primário = carbon/citric (inclui as antigas ações secundárias); destrutivo = `--red`.
 - [ ] Ação de modal/form full-width = `.btn--block`; de tabela = `.btn--sm`; CTA/paginação = `.btn--pill`.
 - [ ] Loading = `disabled` + `.btn-spin` (`btnRot`) + texto em **gerúndio** via `setBtnLoading`.
 - [ ] Disabled = `opacity:.4 cursor:not-allowed`.
-- [ ] Só-ícone = `.btn-icon` 28×28 (`--primary`/`--ghost`/`--naked`); link = `.btn-link`.
+- [ ] Só-ícone = `.btn-icon` 40×40 (mesma altura), padrão primário carbon/citric; só **lixeira** (`--danger`) e **copiar** (`--copy`) com cor diferente; link = `.btn-link`.
 - [ ] Rótulo que some no mobile = `.btn-text` (`@media max-width:480px`).
 - [ ] Não renomear `.header-plus`/`.tab-btn`/`.drawer-sam-btn` (skills próprias).
 - [ ] JS validado (sem erro de sintaxe).
