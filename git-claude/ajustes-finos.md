@@ -101,6 +101,7 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 
 | Data | Página | Ajuste | Skill atualizada? |
 |---|---|---|---|
+| 04/10 | Auditoria de páginas | Sai o aviso verde "Salvo…" em cima da tabela; a confirmação de salvar vira o alerta do navegador (padrão do portal) | `modal-formulario` (regra "Salvou") |
 | 04/10 | Auditoria de páginas | Seletor do colaborador só com o nome (sem cargo, unidade, contagem e grupos), em ordem alfabética | `dashboards-kpi-graficos` (`tabelas.md` §4) + `controle-acesso-abas-botoes` |
 | 04/10 | Auditoria de páginas | Colunas em ordem alfabética, admins junto e sem "admin" no nome; sem lápis no cabeçalho. Editar por colaborador vira botão na 1ª linha da tabela (ícone de pessoas no computador, "Colaborador" no celular) e a janela ganha seletor do colaborador; Menu › "Editar por colaborador" | `dashboards-kpi-graficos` (`tabelas.md` §4) + `controle-acesso-abas-botoes` + `botoes` (ícone pessoas) |
 | 04/10 | Auditoria de páginas | Admins nas últimas colunas (● cinza = vê automaticamente); lápis do cabeçalho sempre no topo | `dashboards-kpi-graficos` (`tabelas.md` §4) + `controle-acesso-abas-botoes` |

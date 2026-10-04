@@ -192,6 +192,7 @@ document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeM
 | Fechar por Esc | **sim** (listener `keydown`) |
 | Loading | `.btn-spin` + `disabled` + texto em **gerúndio** |
 | Erro | banner `.modal-error.show` no footer, acima do botão |
+| Salvou (sucesso) | fecha o modal e confirma com o **`alert()` do navegador** (ex.: `alert('Salvo para Fulano: 2 mudanças.')`, num `setTimeout` curto para o modal fechar antes). **Nada de faixa/aviso verde na página** (decisão do dono, 04/10/2026) |
 | Vários modais | IDs únicos por modal (`#overlay-x`), **mesmas** classes CSS |
 | Scroll do fundo | travar com `body.style.overflow='hidden'` ao abrir |
 
@@ -203,5 +204,6 @@ document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeM
 - [ ] Header sticky com eyebrow (DM Mono 9px) + título (18px/700) + ✕; footer sticky.
 - [ ] Campos em `.form-group`: rótulo DM Mono 9px uppercase; controle DM Sans 13px, borda 1px raio 6px, foco `border-color:--carbon`; `.form-row` 1fr/1fr; `.form-select` com seta custom; textarea `min-height:72px`.
 - [ ] Botão `.btn-gerar` full-width 40px carbon/citric; loading = `.btn-spin` + disabled + gerúndio; erro = `.modal-error.show`.
+- [ ] Salvou → fecha o modal e confirma com `alert()` do navegador (sem aviso/faixa verde na página).
 - [ ] `body.style.overflow='hidden'` ao abrir / `''` ao fechar.
 - [ ] JS validado (sem erro de sintaxe).
