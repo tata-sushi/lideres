@@ -59,14 +59,21 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 - **Escolhas de agentes a confirmar:** Feriados (opções Folga/Pagamento/Não tem direito só em texto), HC (duas
   lixeiras "Remover depto/unidade" no desktop), Agenda (texto da caixa de arquivos sem "arraste"), Experiências
   ("Avaliado" deixou de ser verde), Abastecimento ("Processar Parcialmente" saiu do âmbar).
-- **Acesso fora dos dashboards:** 9 ids sem registro no catálogo (áreas/RH, ferramentas, fornecedores) e o
-  "Enviar Cartão de Ponto" das Escalas (seção App, sem bypass de admin — registrar com cuidado).
+- **Acesso (relatório "ids × quem vê", 04/10/2026 — `scripts/relatorio-acessos.py` da skill de acesso):**
+  - 12 ids na página sem registro no banco: 11 em páginas de Áreas/RH, Ferramentas e Fornecedores, e o
+    "Enviar Cartão de Ponto" das Escalas, que hoje aparece para todos que abrem Escalas.
+  - 27 páginas declaram `GOV_PAGE_ID` mas não estão no cadastro de páginas → só admins entram (Áreas/RH,
+    Caixa, Gorjeta, Ferramentas, Fornecedores…). Cadastrar ou confirmar que saíram de uso.
+  - 5 ids só no banco, sem botão na página: Brainstorm "Compartilhar", Armários "Incluir/Excluir armário",
+    Estoque ADM "Enviar para Assinatura Digital", Cardápio "Compras" e "Preços" (esses 2 já desativados).
+  - 4 pessoas inativas ainda com acesso a páginas; 3 liberações/bloqueios sem efeito (pessoa sem a página).
+  - 9 páginas cadastradas que só admins abrem (Agenda, Documentos, Ouvidoria, Reclamações, Semanal, P&S…).
 
 ## 5. Ajustes feitos nesta fase (e o que foi para as skills)
 
 | Data | Página | Ajuste | Skill atualizada? |
 |---|---|---|---|
-| — | — | — | — |
+| 04/10 | (todas) | Relatório "ids × quem vê" (por página, por pessoa, pontos de atenção) — fica fora do repo (nomes) | `controle-acesso-abas-botoes`: `scripts/relatorio-acessos.py` + SKILL.md |
 
 ## 6. Bugs achados e ainda não corrigidos (regra de negócio)
 

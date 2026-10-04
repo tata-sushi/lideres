@@ -49,6 +49,16 @@ Referências (leia conforme a tarefa):
   ```bash
   python3 .claude/skills/controle-acesso-abas-botoes/scripts/auditar-acessos.py
   ```
+- **`scripts/relatorio-acessos.py`** — quando o dono pedir **"quais ids temos e quem vê o quê"**:
+  cruza os ids do HTML com o banco e gera uma página com a visão **por página** (cada aba/botão
+  e quem vê), a visão **por pessoa** e os **pontos de atenção** (id sem registro no banco, nome
+  antigo, id só no banco, pessoa inativa com acesso, liberação sem efeito, página fora do
+  cadastro). Os 4 SQLs que geram os dados estão no topo do script; confira as contagens antes de
+  mostrar. ⚠️ **Tem nome de pessoas: gere no scratchpad e entregue como arquivo — nunca commite
+  nem publique** (o repo vai inteiro para o GitHub Pages).
+  ```bash
+  python3 .claude/skills/controle-acesso-abas-botoes/scripts/relatorio-acessos.py <pasta_dump> <saida.html>
+  ```
 
 ---
 
