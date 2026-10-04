@@ -101,6 +101,7 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 
 | Data | Página | Ajuste | Skill atualizada? |
 |---|---|---|---|
+| 04/10 | Auditoria de páginas | Tabela no padrão: no celular direto no fundo cinza (sem fundo branco, título e "i") e "Editar" em texto; no desktop, lápis | `dashboards-kpi-graficos` (`tabelas.md` §4) |
 | 04/10 | Auditoria de páginas (nova) | Página nova em Compliance: abas Sobre e Auditoria; grade páginas × colaboradores ao vivo (linha da página + abas/botões/valores), pílula do tipo à direita do nome, lápis na última coluna (fixa à direita) para incluir/excluir. RPCs `gov_auditoria_acessos`/`gov_auditoria_salvar`. Menu do app: "Auditoria de páginas" abre a página nova. Drawer: 19 pág / 36 dash | `controle-acesso-abas-botoes` (SKILL.md + backend) + `drawer-sobre` |
 | 04/10 | (todas) | Relatório "ids × quem vê" (por página, por pessoa, pontos de atenção) — fica fora do repo (nomes) | `controle-acesso-abas-botoes`: `scripts/relatorio-acessos.py` + SKILL.md |
 | 04/10 | (todas) | Botões que começam uma ação ganharam id (46) + cadastro/liberação no banco; Escalas: ordem do `comSupa` corrigida | `controle-acesso-abas-botoes`: SKILL.md §"Que botões levam id", backend §SQL modelo |
