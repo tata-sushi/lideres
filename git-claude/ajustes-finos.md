@@ -101,6 +101,7 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 
 | Data | Página | Ajuste | Skill atualizada? |
 |---|---|---|---|
+| 04/10 | Auditoria de páginas | Colunas em ordem alfabética, admins junto e sem "admin" no nome; sem lápis no cabeçalho. Editar por colaborador vira botão na 1ª linha da tabela (ícone de pessoas no computador, "Colaborador" no celular) e a janela ganha seletor do colaborador; Menu › "Editar por colaborador" | `dashboards-kpi-graficos` (`tabelas.md` §4) + `controle-acesso-abas-botoes` + `botoes` (ícone pessoas) |
 | 04/10 | Auditoria de páginas | Admins nas últimas colunas (● cinza = vê automaticamente); lápis do cabeçalho sempre no topo | `dashboards-kpi-graficos` (`tabelas.md` §4) + `controle-acesso-abas-botoes` |
 | 04/10 | Auditoria de páginas | Edição por colaborador: lápis em cima do nome (computador) e Menu › "Adicionar ou editar colaborador" (qualquer tela); janela com tudo da pessoa em cascata e chaves | `controle-acesso-abas-botoes` |
 | 04/10 | Auditoria de páginas (banco) | Sem seção "Admin": Auditoria, Auditoria de páginas e Gestão de Documentos passam para a seção **Compliance** (como no menu do app), ordem 730/740/750, depois de Parceiros & Sistemas | — (banco) |
