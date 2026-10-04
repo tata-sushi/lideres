@@ -2513,8 +2513,8 @@ function setTab(t){
     var us={}, ds={};
     ROWS.forEach(function(r){ if(r.due){ if(r.unidade) us[r.unidade]=1; if(r.departamento) ds[r.departamento]=1; } });
     var uSel=document.getElementById('pend-f-unidade'), dSel=document.getElementById('pend-f-depto');
-    uSel.innerHTML='<option value="">Todas as unidades</option>'+Object.keys(us).sort().map(function(u){return '<option>'+esc(u)+'</option>';}).join('');
-    dSel.innerHTML='<option value="">Todos os departamentos</option>'+Object.keys(ds).sort().map(function(d){return '<option>'+esc(d)+'</option>';}).join('');
+    uSel.innerHTML='<option value="">Todas</option>'+Object.keys(us).sort().map(function(u){return '<option>'+esc(u)+'</option>';}).join('');
+    dSel.innerHTML='<option value="">Todos</option>'+Object.keys(ds).sort().map(function(d){return '<option>'+esc(d)+'</option>';}).join('');
   }
 
   window.pendClear=function(){
@@ -2530,75 +2530,78 @@ function setTab(t){
     document.getElementById('pend-kpis').innerHTML=kpi('Pendentes agora',due.length)+kpi('Efetivos',ROWS.length)+kpi('Já avaliados',avaliados);
     document.getElementById('pend-count').textContent=list.length;
     var g=document.getElementById('pend-grid');
+    // card padrão (skill references/tabelas.md): monta uma vez; se a área foi trocada (ex.: erro), monta de novo
+    if(!document.getElementById('tbl-perf-pend')){ g.innerHTML=PEND_HTML; TAB_PEND.colW=null; }
+    var tt=document.getElementById('pend-titulo'); if(tt) tt.textContent='Pendentes ('+list.length+')';
+    var vazio='Nenhuma avaliação pendente com esses filtros.';
     if(!list.length){
       var futuras=ROWS.filter(function(r){return !r.due && r.proxima_prevista;}).map(function(r){return String(r.proxima_prevista).slice(0,10);}).sort();
-      var msg=(due.length===0 && futuras.length)
-        ? 'Nenhuma avaliação pendente no momento.<br><span style="font-size:12.5px">As primeiras entram a partir de <strong>'+fmtDate(futuras[0])+'</strong>.</span>'
-        : 'Nenhuma avaliação pendente com esses filtros.';
-      g.innerHTML='<div class="pend-empty">'+msg+'</div>'; return;
+      if(due.length===0 && futuras.length) vazio='Nenhuma avaliação pendente no momento.<br>As primeiras entram a partir de '+fmtDate(futuras[0])+'.';
     }
-    var mobileHTML = '<div class="pend-cards">'+list.map(card).join('')+'</div>';
-    var thead = '<thead><tr>'+
-      '<th>Nome</th><th>Matrícula</th><th>Rodada</th><th>Unidade</th>'+
-      '<th>Departamento</th><th>Cargo</th><th>Média anterior</th>'+
-      '<th>Status</th><th>Ação</th>'+
-    '</tr></thead>';
-    var tbody='<tbody>'+list.map(tableRow).join('')+'</tbody>';
-    var deskHTML='<div class="pend-table-wrap"><table class="pend-table">'+thead+tbody+'</table></div>';
-    g.innerHTML=mobileHTML+deskHTML;
+    TAB_PEND.o.vazio=vazio;
+    TAB_PEND.todos=false;
+    TAB_PEND.dados(list);
   };
 
+  function _pendAtrasada(r){ return !!(r.proxima_prevista && String(r.proxima_prevista).slice(0,10) < todayISO()); }
+  function _pendPill(r){ var o=_pendAtrasada(r); return '<span class="status-badge '+(o?'s-atrasada':'s-pendente')+'">'+(o?'Atrasada':'Pendente')+'</span>'; }
+  var _ICON_LAPIS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  var PEND_HTML='<div class="chart-card card-tabela">'+
+    '<button class="chart-info-btn" onclick="abrirInfoGrafico(\'pendentes\')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>'+
+    '<div class="chart-title" id="pend-titulo">Pendentes</div>'+
+    '<div class="tcards" id="pend-cards"></div>'+
+    '<div class="tbl-scroll tem-cartoes"><table class="mini tbl-org" id="tbl-perf-pend" style="min-width:1120px"><thead><tr>'+
+      '<th data-col="nome" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'nome\')" style="width:220px">Nome <span class="sort-arrow" data-sa="nome">↕</span></th>'+
+      '<th data-col="matricula" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'matricula\')" style="width:100px">Matrícula <span class="sort-arrow" data-sa="matricula">↕</span></th>'+
+      '<th data-col="rodada" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'rodada\')" style="width:80px">Rodada <span class="sort-arrow" data-sa="rodada">↕</span></th>'+
+      '<th data-col="unidade" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'unidade\')" style="width:130px">Unidade <span class="sort-arrow" data-sa="unidade">↕</span></th>'+
+      '<th data-col="departamento" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'departamento\')" style="width:140px">Departamento <span class="sort-arrow" data-sa="departamento">↕</span></th>'+
+      '<th data-col="cargo" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'cargo\')" style="width:160px">Cargo <span class="sort-arrow" data-sa="cargo">↕</span></th>'+
+      '<th data-col="media" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'media\')" style="width:110px">Média anterior <span class="sort-arrow" data-sa="media">↕</span></th>'+
+      '<th data-col="status" class="th-sort" onclick="TAB_PERF_PEND.ordenar(\'status\')" style="width:110px">Status <span class="sort-arrow" data-sa="status">↕</span></th>'+
+      '<th style="width:70px">Ação</th>'+
+    '</tr></thead><tbody id="pend-tbody"></tbody></table></div>'+
+    '<div class="ver-mais-wrap" id="pend-mais" style="display:none"><button class="btn-ver-mais" onclick="TAB_PERF_PEND.verMais()">Ver mais</button></div>'+
+  '</div>';
+
   function tableRow(r){
-    var overdue = r.proxima_prevista && String(r.proxima_prevista).slice(0,10) < todayISO();
-    var badgeCls = overdue ? 's-atrasada' : 's-pendente';
-    var badgeLbl = overdue ? 'Atrasada' : 'Pendente';
     var i = ROWS.indexOf(r);
     var media = (r.ultima_media!=null) ? fmtNum(r.ultima_media) : '—';
     return '<tr>'+
-      '<td class="ptt-nome">'+esc(r.nome||'—')+'</td>'+
-      '<td>'+esc(r.matricula||'—')+'</td>'+
-      '<td>'+ord(r.proxima_rodada)+'</td>'+
+      '<td class="nm">'+esc(r.nome||'—')+'</td>'+
+      '<td class="td-c">'+esc(r.matricula||'—')+'</td>'+
+      '<td class="td-c">'+ord(r.proxima_rodada)+'</td>'+
       '<td>'+esc(r.unidade||'—')+'</td>'+
       '<td>'+esc(r.departamento||'—')+'</td>'+
       '<td>'+esc(r.cargo||'—')+'</td>'+
-      '<td>'+media+'</td>'+
-      '<td><span class="status-badge '+badgeCls+'">'+badgeLbl+'</span></td>'+
-      '<td class="ptt-acoes"><button class="btn-editar" title="Avaliar" onclick="pendAbrir('+i+')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></td>'+
+      '<td class="td-c">'+media+'</td>'+
+      '<td class="td-c">'+_pendPill(r)+'</td>'+
+      '<td class="td-c"><button class="btn-editar" title="Avaliar" onclick="pendAbrir('+i+')">'+_ICON_LAPIS+'</button></td>'+
     '</tr>';
   }
 
-  function kpi(lbl,n){ return '<div class="pend-kpi"><span class="pend-kpi-label">'+lbl+'</span><span class="pend-kpi-num">'+n+'</span></div>'; }
+  // KPIs da aba (faixa padrão da skill §2)
+  function kpi(lbl,n){ return '<div class="kpi-card"><span class="kpi-label">'+lbl+'</span><span class="kpi-number">'+n+'</span></div>'; }
 
+  // cartão do celular (cartao() da skill): mesmos dados e o mesmo botão Avaliar
   function card(r){
-    var overdue = r.proxima_prevista && String(r.proxima_prevista).slice(0,10) < todayISO();
-    var badgeCls = overdue ? 's-atrasada' : 's-pendente';
-    var badgeLbl = overdue ? 'Atrasada' : 'Pendente';
-    var prev = (r.ultima_media!=null)
-      ? '<div class="card-field"><span class="field-label">Média anterior</span><span class="field-value">'+fmtNum(r.ultima_media)+'</span></div>'
-      : '';
     var i = ROWS.indexOf(r);
-    return '<div class="card">'+
-      '<div class="card-header">'+
-        '<div>'+
-          '<div class="candidate-name">'+esc(r.nome||'—')+'</div>'+
-          '<div class="candidate-contact">Matrícula '+esc(r.matricula||'—')+'</div>'+
-        '</div>'+
-        '<span class="status-badge '+badgeCls+'">'+badgeLbl+'</span>'+
-      '</div>'+
-      '<div class="card-body">'+
-        '<div class="card-field"><span class="field-label">Rodada</span><span class="field-value">'+ord(r.proxima_rodada)+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+esc(r.unidade||'—')+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Departamento</span><span class="field-value">'+esc(r.departamento||'—')+'</span></div>'+
-        '<div class="card-field"><span class="field-label">Cargo</span><span class="field-value">'+esc(r.cargo||'—')+'</span></div>'+
-        prev+
-      '</div>'+
-      '<div class="card-footer">'+
-        '<button class="btn-avaliar" onclick="pendAbrir('+i+')">'+
-          '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Avaliar'+
-        '</button>'+
-      '</div>'+
-    '</div>';
+    var campos = [['Rodada', ord(r.proxima_rodada)], ['Unidade', esc(r.unidade||'—')], ['Departamento', esc(r.departamento||'—')], ['Cargo', esc(r.cargo||'—')]];
+    if (r.ultima_media!=null) campos.push(['Média anterior', fmtNum(r.ultima_media)]);
+    return cartao({ titulo: esc(r.nome||'—'), sub: 'Matrícula '+esc(r.matricula||'—'), direita: _pendPill(r), campos: campos,
+      acoes: '<button class="btn-avaliar" onclick="pendAbrir('+i+')">'+
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Avaliar'+
+      '</button>' });
   }
+
+  var TAB_PEND = window.TAB_PERF_PEND = new TabelaOrg({ tabela: 'tbl-perf-pend', corpo: 'pend-tbody', mais: 'pend-mais', chave: 'performance_pendentes_cols_v1',
+    n: 10, colspan: 9, vazio: 'Nenhuma avaliação pendente com esses filtros.',
+    valor: { nome: function(r){ return r.nome||''; }, matricula: function(r){ return String(r.matricula||''); },
+             rodada: function(r){ return Number(r.proxima_rodada)||1; }, unidade: function(r){ return r.unidade||''; },
+             departamento: function(r){ return r.departamento||''; }, cargo: function(r){ return r.cargo||''; },
+             media: function(r){ var n=parseFloat(r.ultima_media); return isNaN(n)?-1:n; },
+             status: function(r){ return _pendAtrasada(r)?'Atrasada':'Pendente'; } },
+    linha: tableRow, cartoes: 'pend-cards', cartao: card });
 
   window.pendAbrir=function(i){
     var r=ROWS[i]; if(!r) return; cur=r; resp={};
