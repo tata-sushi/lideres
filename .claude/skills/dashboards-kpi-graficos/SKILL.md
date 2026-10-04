@@ -21,6 +21,10 @@ Padrão visual dos dashboards do portal (`compliance/**`, embarcados no Tatá Pl
 O objetivo da skill é que **todo dashboard tenha o mesmo layout e CSS** — mesmos
 tokens, mesmos cards de KPI, mesmos gráficos. **Referência canônica:**
 `compliance/kpis/rh/recrutamento.html` — quando em dúvida, copie de lá.
+**Piloto com o padrão completo aplicado:** `compliance/kpis/rh/desligamentos.html`, aba **KPIs**
+(faixa de KPIs, filtros, 3 gráficos por linha, mapa de calor, tabelas simples, analítico, "i" em
+tudo, nitidez). O Recrutamento ainda tem desvios (rótulo do KPI, fonte dos filtros/pílulas) —
+para o **como fazer**, prefira a Desligamentos e a receita da §7.
 
 Regra de ouro: **não invente cores nem tamanhos.** Use os tokens do `:root` e os
 blocos de CSS abaixo (são os que já estão em produção). Cor solta / número com
@@ -153,7 +157,7 @@ CSS (copiar exatamente):
 .filters-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .filter-group { display: flex; flex-direction: column; gap: 4px; }
 .filter-label { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); }
-.filter-select { appearance: none; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); width: 100%; cursor: pointer; }
+.filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); width: 100%; cursor: pointer; }
 .filter-select:focus { outline: none; border-color: var(--carbon); }
 .filters-actions { display: flex; align-items: center; justify-content: space-between; padding-top: 2px; }
 .btn-clear { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px 0; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
@@ -198,6 +202,7 @@ CSS:
 ```css
 .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px 16px; display: flex; flex-direction: column; margin-bottom: 14px; position: relative; }
 .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
+.chart-card .chart-title { padding: 0 18px; }   /* título não passa por baixo do "i" (quebra antes) */
 .chart-info-btn { position: absolute; top: 10px; right: 12px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; padding: 3px; color: #CFCFCF; cursor: pointer; line-height: 0; }
 .chart-info-btn:hover { color: var(--muted); }
 .chart-wrap { position: relative; height: 220px; overflow-x: auto; overflow-y: hidden; }
@@ -276,8 +281,20 @@ Regras dos gráficos:
   `document.fonts.load` de **todos os pesos usados no canvas** (`'800 12px "DM Sans"'`, `'500 12px "DM Sans"'`,
   `'400 12px "DM Sans"'`) antes do `new Chart(...)` — peso que não carregou é medido com outra
   fonte e o nome sai cortado (ex.: "'im de experiência"),
-  com um `setTimeout` de ~2s como fallback. Sem isso, o rótulo aparece numa fonte errada no
+  com um `setTimeout` de ~2s como fallback (`esperarFonte`, abaixo). Sem isso, o rótulo aparece numa fonte errada no
   carregamento e só corrige no próximo redraw.
+  ```js
+  // no fim do carregamento dos dados: esperarFonte(function(){ applyFilter(); hideLoading(); });
+  function esperarFonte(cb){
+    var feito = false;
+    function go(){ if (!feito) { feito = true; cb(); } }
+    setTimeout(go, 2000);
+    try {
+      Promise.all([document.fonts.load('800 12px "DM Sans"'), document.fonts.load('500 12px "DM Sans"'),
+                   document.fonts.load('400 12px "DM Sans"')]).then(go, go);
+    } catch (e) { go(); }
+  }
+  ```
 - **Nitidez do canvas (obrigatório).** Todo `new Chart` leva
   `devicePixelRatio: Math.max(2, window.devicePixelRatio || 1)` nas `options`. O canvas é uma imagem:
   no PC (devicePixelRatio 1) e com o zoom da página (`#zoom-content`, 70–160%) ela é esticada e o texto
@@ -292,6 +309,8 @@ Regras dos gráficos:
   ex.: as etapas do **funil** e a **legenda de cores das pílulas** (nº · pílula real ·
   significado). Não descrever etapas/cores só em texto corrido quando cabem numa tabelinha.
   O card precisa de `position:relative`.
+  **Sem subtítulo no card** (`.chart-sub`, "(tipos de desligamento)" embaixo do título): a explicação
+  — a pergunta feita, para quem vale, como ler — vai no **"i"**. O card fica só com título + gráfico.
 - **Espaçamento e disposição.** 12px entre gráficos (colunas, linhas e **entre seções** —
   `gap:12px` + `margin-top:12px`; nunca 0). **Mesma linha = mesmo tipo ou, no mínimo, mesma
   altura** — nunca pareie um gráfico curto com um alto (ex.: barra + heatmap). Gráficos
@@ -449,6 +468,24 @@ do mapa**. Card full-width, título (ex.: "Avaliação por pergunta") e "i" com 
 .heat-hh, .heat-day { font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--carbon); display: flex; align-items: center; justify-content: center; }
 .heat-day { justify-content: flex-start; padding-right: 8px; line-height: 1.25; }
 ```
+```js
+// PERGUNTAS = [[campo, 'Tema curto', 'Pergunta completa'], …]; countNota(rows, campo) → [['1',n1],…,['5',n5]]
+function renderHeatNotas(rows){
+  var el = document.getElementById('heat-notas'); if (!el) return;
+  var linhas = PERGUNTAS.map(function(p){ return { nome: p[1], c: countNota(rows, p[0]).map(function(e){ return e[1]; }) }; });
+  var max = 0; linhas.forEach(function(l){ l.c.forEach(function(v){ if (v > max) max = v; }); });
+  var html = '<div class="heat-grid"><div class="heat-hh"></div>' + [1,2,3,4,5].map(function(n){ return '<div class="heat-hh">'+n+'</div>'; }).join('');
+  linhas.forEach(function(l){
+    html += '<div class="heat-day">'+escH(l.nome)+'</div>';
+    l.c.forEach(function(v, i){
+      var a = v === 0 ? 0 : 0.15 + 0.85 * (v / (max || 1));
+      var bg = v === 0 ? 'var(--bg)' : 'rgba(53,56,63,'+a.toFixed(2)+')';
+      html += '<div class="heat-cell" style="background:'+bg+';color:'+(a > 0.5 ? '#fff' : '#35383F')+'" title="'+escH(l.nome)+' · nota '+(i+1)+' · '+v+'">'+(v || '')+'</div>';
+    });
+  });
+  el.innerHTML = html + '</div>';
+}
+```
 
 ### Nuvem de palavras — cor por categoria (paleta das pílulas)
 Palavra colorida pela **categoria**, com as cores das pílulas, + legenda:
@@ -507,6 +544,38 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
 
 ---
 
+## 7. Receita: padronizar um dashboard existente (aprendida no piloto da Desligamentos)
+
+Trabalhe **por camadas** (um PR por camada ou por página, merge só com o "sim" do dono) e **não
+mexa** em consultas ao Supabase, ids de acesso (`data-aba-id`/`data-botao-id`) nem geradores de PDF.
+
+1. **Base (mecânica, quase não muda a tela):** tokens completos no `:root`; Google Fonts com DM Sans
+   `300…800` + `preconnect`; Chart.js **4.4.1 do cdnjs**; `devicePixelRatio` ≥ 2 em todo `new Chart`;
+   `esperarFonte` antes de desenhar; `tooltip:{enabled:false}`.
+2. **Faixas e cards:** faixa de KPIs e de filtros full-bleed (sai `max-width` + `margin:auto`);
+   `.chart-card` com título + "i"; subtítulo vai para o "i"; número solto → KPI ou tabela simples;
+   texto fora dos cards sai.
+3. **Gráficos:** barras carbon (raio 5, ~22px, rótulo 800 / nome 500); notas 1–5 em carbon (nada de
+   vermelho→verde); pizza em tons de carbon; barra horizontal longa = 220px + rolagem vertical;
+   questionário → mapa de calor; mesma altura por linha.
+4. **Arranjo das linhas e tabelas** (decisão do dono, página por página): o que vai lado a lado,
+   analítico com organizador de colunas, KPIs que sobem para a faixa.
+
+**Como validar antes do merge** (o site só publica o `main`; o teste não tem login):
+- Playwright com **dados falsos**: `addInitScript` define `window.__lideresSupa` com `schema().rpc()`
+  e `from().select()` devolvendo linhas inventadas no formato da RPC da página (consulte o
+  `RETURNS TABLE` da função no Supabase — só a estrutura, sem dados pessoais); `gate.js` respondido
+  com `data-auth='ok'`.
+- Se o ambiente bloquear CDN, sirva o Chart.js local (`npm pack chart.js@4.4.1`) por `route.fulfill`.
+- Prints em **390px** (celular) e **1280px** (desktop), também com o zoom da página ≠ 100%. Para
+  print da página inteira, aumente a janela até a altura da página — o `fullPage` emula outra tela e
+  redimensiona o canvas (gráfico sai maior que o card só no print).
+- Confira: todos os "i" abrem/fecham; filtros e "Limpar" atualizam tudo; outras abas abrem;
+  `scrollWidth - innerWidth = 0` (sem rolagem lateral); nenhum erro de JS; sintaxe dos `<script>`.
+- Mande os prints (antes × depois) para o dono validar; depois do merge ele confere com os dados reais.
+
+---
+
 ## Checklist ao criar/editar um dashboard
 
 - [ ] `:root` com os tokens da §1; fontes DM Sans + DM Mono no `<head>`.
@@ -524,8 +593,8 @@ Reaproveitam a `table.mini` (cabeçalho DM Mono 10px uppercase muted). Número (
       `document.fonts.load` de 400/500/800 (evita flash e nome cortado no canvas).
 - [ ] `devicePixelRatio: Math.max(2, window.devicePixelRatio || 1)` em todo `new Chart`; nomes no
       canvas em **500** (nitidez).
-- [ ] Nenhum texto solto fora dos cards (título de seção/legenda no fundo): tudo no título do card
-      ou no "i".
+- [ ] Nenhum texto solto fora dos cards (título de seção/legenda no fundo) e nenhum subtítulo no card:
+      tudo no título do card ou no "i".
 - [ ] Várias perguntas com a mesma escala = **um** mapa de calor pergunta × nota (não um gráfico
       por pergunta).
 - [ ] Nenhum card com espaço em branco por causa do vizinho: barra horizontal longa = 220px +
