@@ -193,7 +193,7 @@ function cartao(c){
   - **Colunas em ordem alfabética, admins junto** (só o nome, sem "admin" escrito), com **●** onde o admin vê
     automaticamente (tudo fora da seção App, menos os valores R$) — **a mesma bolinha carbon de todo mundo, sem cor
     diferente para admin**; nas telas do App e nos valores segue a liberação
-    como todo mundo. O Total não conta admins.
+    como todo mundo. O Total **conta os admins** (é a soma das ● da linha).
   - **Cabeçalho do colaborador só com o nome** — nada de botão em cima do nome.
   - **Editar por colaborador = botão na 1ª linha da tabela** (a linha da primeira seção), na coluna "Editar": ícone de
     pessoas no computador, texto "Colaborador" no celular (`.btn-resp-icon`/`.btn-resp-text`). Abre uma janela com um

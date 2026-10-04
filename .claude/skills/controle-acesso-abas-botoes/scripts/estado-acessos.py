@@ -92,14 +92,17 @@ def main():
                         'adminVeTudo': secao not in SECOES_SEM_BYPASS,
                         'acesso': sorted(m for m in acesso if m in ativos), 'itens': itens})
 
-    # páginas do repo fora do controle: sem GOV_PAGE_ID (abrem sem gate) e com id mas sem cadastro no banco
+    # páginas do repo fora do controle: sem GOV_PAGE_ID (abrem sem gate) e com id mas sem cadastro no banco.
+    # ABERTAS_DE_PROPOSITO não entram em semId: ficam sem gate por decisão do dono.
+    ABERTAS_DE_PROPOSITO = {'compliance/areas/organograma2.html'}   # 04/10/2026
     no_banco = {p['id'] for p in paginas} | {f[0] for f in rel.ler(pasta, 'paginas.txt', 7)}
     sem_id = []
     for base, _, arqs in os.walk(os.path.join(raiz_repo, 'compliance')):
         for nome in sorted(arqs):
             if nome.endswith('.html'):
                 fp = os.path.join(base, nome)
-                if not rel.RE_PAGE_ID.search(open(fp, encoding='utf-8', errors='replace').read()):
+                if not rel.RE_PAGE_ID.search(open(fp, encoding='utf-8', errors='replace').read()) \
+                        and os.path.relpath(fp, raiz_repo) not in ABERTAS_DE_PROPOSITO:
                     sem_id.append(os.path.relpath(fp, raiz_repo))
     fora = [{'id': pid, 'arquivo': os.path.relpath(ph['arquivo'], raiz_repo), 'ids': len(ph['ids'])}
             for pid, ph in sorted(html_pags.items()) if pid not in no_banco]

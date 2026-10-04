@@ -65,7 +65,7 @@ Referências (leia conforme a tarefa):
 - **`compliance/auditoria/paginas.html` (Auditoria de páginas, menu Compliance do app)** — a mesma grade
   páginas × colaboradores, **ao vivo no portal e só para admin**: linha da página (quem abre) + uma linha por
   aba / botão / valor (quem vê) em cascata (seção › subseção › página › item, só pelo recuo), pílula do tipo à direita
-  do nome (página e aba azul · botão âmbar · valor carbon), coluna **Total** (quantos veem) e lápis na **última coluna (fixa à direita)**
+  do nome (página e aba azul · botão âmbar · valor carbon), coluna **Total** (quantos veem, admins incluídos) e lápis na **última coluna (fixa à direita)**
   que abre a lista de colaboradores com chaves; "Salvar" grava só o que mudou. **Por colaborador:** botão na 1ª linha da
   tabela, coluna Editar (ícone de pessoas no computador, "Colaborador" no celular), ou Menu › "Editar por colaborador":
   a janela tem um seletor do colaborador (só o nome, em ordem alfabética; inclui quem ainda não tem acesso) e abre tudo da pessoa em cascata, com chaves; o "Salvar" chama `gov_auditoria_salvar` uma vez por mudança, na
@@ -262,6 +262,8 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 - **Cadastrar no catálogo é obrigatório** — o atributo sozinho não cria o interruptor.
 - **Admin vê tudo** em Página/Aba/Botão (não em Valor: precisa da área ou de `geral`).
 - O `gate.js` só roda embarcado no Plus; fora do app mostra "Disponível pelo aplicativo".
+- **Exceção aberta de propósito:** `compliance/areas/organograma2.html` fica **sem `GOV_PAGE_ID` e sem gate**
+  (decisão do dono, 04/10/2026). Não "corrija"; o `estado-acessos.py` já não a lista em `semId`.
 
 ---
 
