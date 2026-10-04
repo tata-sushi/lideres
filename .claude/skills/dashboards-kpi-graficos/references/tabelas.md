@@ -100,7 +100,7 @@ TabelaOrg.prototype._arrasta = function(e, th, k, h){
   }
   document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
 };
-// pílula de status (skill §5): positivo · não iniciado · iniciado com pendência · negativo
+// pílula de status (skill §5): positivo · vez do RH (azul) · aguardando o outro (âmbar) · negativo
 var STATUS_PILL = { respondida:'pos', respondido:'pos', nenhum:'blue', pendente:'amber', emitido:'amber', enviado:'amber',
                     expirada:'red', expirado:'red', cancelada:'red', cancelado:'red' };
 function pill(status, texto){ return '<span class="status-badge pill-' + (STATUS_PILL[status] || 'blue') + '">' + escH(texto) + '</span>'; }
@@ -117,8 +117,9 @@ var TAB_ANL = new TabelaOrg({
 - **`n`**: 10 linhas em tabelas operacionais (6 em listas curtas de painel); o resto no "Ver mais (N)".
 - **Ordenar por valor bruto** (`valor`): data em ISO, número como número; o texto formatado é só para exibir.
 - **Status → pílula**: um mapa `STATUS_PILL` (status → `pos|blue|amber|red`) e a função `pill(status, texto)`:
-  positivo (respondido/concluído) · não iniciado (não enviado) · iniciado com pendência (pendente/emitido/enviado) ·
-  negativo (expirado/cancelado). Escala de 5 níveis (ex.: faixa destaque→crítico) agrupa em pos/amber/red.
+  positivo (respondido/concluído) · **azul = vez do RH** (não enviado: falta o RH enviar) · **âmbar = aguardando o
+  outro** (pendente/emitido/enviado: espera a resposta da pessoa) · negativo (expirado/cancelado). Na dúvida: de quem é
+  a próxima ação? RH → azul; outra pessoa → âmbar. Escala de 5 níveis (ex.: faixa destaque→crítico) agrupa em pos/amber/red.
 - **Datas**: `DD/MM/AAAA` (com hora: `DD/MM/AAAA · HHhMM`).
 
 ## 4. Celular = cartões no modelo do Recrutamento (decisão do dono)
