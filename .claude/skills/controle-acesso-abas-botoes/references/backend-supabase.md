@@ -113,7 +113,11 @@ Página privada no claude.ai (Artifact com capacidade `db`) feita de `assets/mat
 - **Ids das páginas** — quais páginas têm ids (abas, botões, valor), quantas pessoas abrem e, ao abrir,
   cada id com quantos veem; filtro "Pedem atenção" mostra página no banco sem arquivo, id sem cadastro e
   HTML do repo sem `GOV_PAGE_ID` (`semId`) ou com id fora do banco (`foraDoBanco`).
-- **Páginas × pessoas** (grade de acesso às páginas) e **Mudanças** (lista do que foi marcado).
+- **Páginas × pessoas** — grade com uma coluna por pessoa (sem os admins). Em cada seção, a linha da página
+  (quem abre) e, logo abaixo, uma linha por aba / botão / valor (● vê · ○ não vê · vazio = não abre a página);
+  tocar no nome da página abre/fecha as linhas dela, "Só páginas" fecha todas, tocar no nome da pessoa leva
+  para a visão Por pessoa.
+- **Mudanças** — lista do que foi marcado.
 
 Cada clique grava um documento na coleção `mudancas` da página — nada vai para o banco sozinho.
 

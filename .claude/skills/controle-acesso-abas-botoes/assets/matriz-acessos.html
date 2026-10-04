@@ -98,7 +98,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 
 /* ---------- Grade páginas × pessoas ---------- */
 .grade-wrap { padding: 14px 16px 120px; }
-.grade-scroll { overflow: auto; max-height: calc(100vh - 170px); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.grade-scroll { overflow: auto; max-height: calc(100vh - 230px); min-height: 320px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
 table.grade { border-collapse: separate; border-spacing: 0; font-size: 12px; }
 .grade th, .grade td { border-bottom: 1px solid var(--line); padding: 0; }
 .grade thead th { position: sticky; top: 0; background: var(--surface); z-index: 2; vertical-align: bottom; }
@@ -116,6 +116,23 @@ table.grade { border-collapse: separate; border-spacing: 0; font-size: 12px; }
 .cel.del { background: var(--del-bg); }
 .cel:hover { background: var(--surface-2); }
 .grade tr:hover th.pg { background: var(--surface-2); }
+.grade thead th.pessoa button { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; color: inherit; }
+.grade thead th.pessoa button:hover span { text-decoration: underline; text-underline-offset: 2px; }
+.grade tr.pgr th.pg { font-weight: 700; }
+.grade .abre { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; color: inherit; text-align: left; display: flex; gap: 6px; align-items: baseline; width: 100%; }
+.grade .car { flex: 0 0 10px; font-size: 10px; color: var(--muted); }
+.grade tr.itr th.pg { font-weight: 400; font-size: 11.5px; color: var(--mid); padding: 4px 10px 4px 26px; }
+.grade tr.itr .cel { height: 26px; }
+.grade .tg { display: inline-block; font-size: 9px; font-weight: 500; letter-spacing: .3px; text-transform: uppercase; padding: 1px 6px; border-radius: 100px;
+  margin-right: 6px; vertical-align: 1px; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); }
+.grade .tg.aba { background: var(--aba-bg); color: var(--aba-fg); border-color: transparent; }
+.grade .tg.menu { border-style: dashed; border-color: var(--mid); }
+.grade .tg.valor { background: var(--val-bg); color: var(--val-fg); border-color: transparent; }
+.cel.nao::before { content: '○'; color: var(--muted); font-size: 11px; }
+.cel.geral::before { content: '●'; color: var(--muted); }
+.cel[disabled] { cursor: default; }
+.cel[disabled]:hover { background: none; }
+#grade-modo { margin-bottom: 10px; }
 
 /* ---------- Mudanças ---------- */
 .mud { padding: 14px 16px 120px; max-width: 900px; }
@@ -314,7 +331,11 @@ details.fora > summary { cursor: pointer; padding: 12px; font-weight: 700; font-
   </section>
 
   <section id="v-gr" class="grade-wrap" aria-labelledby="tab-gr" hidden>
-    <p class="regra" style="margin:0 0 10px">Toque numa célula para dar ou tirar o acesso à página. ● tem acesso · <b>+</b> vai ganhar · <b>×</b> vai perder. Admins veem tudo e não aparecem aqui.</p>
+    <p class="regra" style="margin:0 0 8px">Toque numa célula para mudar. <b>●</b> vê · <b>○</b> não vê · <b>+</b> vai ganhar · <b>×</b> vai perder · vazio = não abre a página. Toque no nome da página para abrir ou fechar as abas e botões dela; no nome da pessoa, para ver tudo dela. Admins veem tudo e não aparecem aqui.</p>
+    <div class="filtros" id="grade-modo" role="group" aria-label="O que mostrar">
+      <button class="fb" type="button" data-g="tudo" aria-pressed="true">Páginas, abas, botões e valores</button>
+      <button class="fb" type="button" data-g="pags" aria-pressed="false">Só páginas</button>
+    </div>
     <div class="grade-scroll"><table class="grade" id="grade"></table></div>
   </section>
 
@@ -910,30 +931,82 @@ details.fora > summary { cursor: pointer; padding: 12px; font-weight: 700; font-
   document.querySelectorAll('#ids-filtros .fb').forEach(function (b) { b.addEventListener('click', function () { filtroIds = b.dataset.f; renderIds(); }); });
 
   // ---------- grade páginas × pessoas ----------
+  var gradeTudo = ler('acessos-portal-grade') !== 'pags', gradeExp = {};
+  var TIPO_CURTO = { aba: 'Aba', botao: 'Botão', menu: 'Menu', valor: 'R$' };
+  function gradeAberta(pg) { return pg.id in gradeExp ? gradeExp[pg.id] : gradeTudo; }
+
+  // Linha da página = quem abre; embaixo, uma linha por aba / botão / valor = quem vê.
   function renderGrade() {
+    var sc = document.querySelector('.grade-scroll'), topo = sc.scrollTop, esq = sc.scrollLeft;
+    document.querySelectorAll('#grade-modo .fb').forEach(function (b) { b.setAttribute('aria-pressed', String((b.dataset.g === 'tudo') === gradeTudo)); });
     var t = $('grade'); t.textContent = '';
     var gente = E.pessoas.filter(function (p) { return !p.admin; });
     var th = el('thead'), tr = el('tr'), c0 = el('th', 'pg', 'Página'); tr.appendChild(c0);
-    gente.forEach(function (p) { var h = el('th', 'pessoa'); var s = el('span', null, p.curto); s.title = p.nome + ' · ' + p.cargo; h.appendChild(s); tr.appendChild(h); });
+    gente.forEach(function (p) {
+      var h = el('th', 'pessoa'), b = el('button'); b.type = 'button'; b.dataset.pessoa = p.m;
+      b.title = p.nome + ' · ' + p.cargo + ' — ver tudo desta pessoa';
+      b.appendChild(el('span', null, p.curto)); h.appendChild(b); tr.appendChild(h);
+    });
     th.appendChild(tr); t.appendChild(th);
     var tb = el('tbody'), sec = null;
     ORDEM.forEach(function (pg) {
       var s = pg.secao + (pg.sub ? ' · ' + pg.sub : '');
       if (s !== sec) { sec = s; var r = el('tr', 'sec'), h = el('th', null, s); h.colSpan = gente.length + 1; r.appendChild(h); tb.appendChild(r); }
-      var row = el('tr'), nome = el('th', 'pg', pg.label); nome.title = pg.arquivo; row.appendChild(nome);
+      var aberta = pg.itens.length > 0 && gradeAberta(pg);
+      var row = el('tr', 'pgr'), nome = el('th', 'pg'); nome.title = pg.arquivo;
+      var ab = el('button', 'abre'); ab.type = 'button';
+      ab.appendChild(el('span', 'car', pg.itens.length ? (aberta ? '▾' : '▸') : ''));
+      ab.appendChild(el('span', null, pg.label));
+      if (pg.itens.length) { ab.dataset.abre = pg.id; ab.setAttribute('aria-expanded', String(aberta)); } else ab.disabled = true;
+      nome.appendChild(ab); row.appendChild(nome);
       gente.forEach(function (p) {
         var td = el('td', 'c'), b = el('button', 'cel'); b.type = 'button';
         var agora = temPag(pg, p.m), antes = pg.acessoSet.has(p.m);
         b.className = 'cel' + (agora && antes ? ' tem' : agora ? ' add' : antes ? ' del' : '');
-        b.setAttribute('aria-label', p.nome + ' — ' + pg.label + (agora ? ': tem acesso' : ': sem acesso'));
+        b.dataset.p = pg.id; b.dataset.m = p.m;
+        b.setAttribute('aria-label', p.nome + ' — ' + pg.label + (agora ? ': abre a página' : ': não abre a página'));
         b.title = p.curto + ' · ' + pg.label;
-        b.addEventListener('click', function () { tocarChip('pagina', pg, null, p.m); });
         td.appendChild(b); row.appendChild(td);
       });
       tb.appendChild(row);
+      if (!aberta) return;
+      pg.itens.forEach(function (it, i) {
+        var r = el('tr', 'itr'), h = el('th', 'pg'), tipo = it.tipo === 'botao' && it.menu ? 'menu' : it.tipo;
+        h.appendChild(el('span', 'tg ' + tipo, TIPO_CURTO[tipo])); h.appendChild(document.createTextNode(it.label));
+        h.title = it.tipo === 'valor' ? 'Valores em R$ da área ' + it.id : it.id;
+        r.appendChild(h);
+        gente.forEach(function (p) {
+          var td = el('td', 'c'), b = el('button', 'cel'); b.type = 'button';
+          var m = p.m, oque;
+          if (it.tipo === 'valor' && it.geralSet.has(m)) { b.className = 'cel geral'; b.disabled = true; oque = 'vê os valores de todas as áreas (muda no painel do app)'; }
+          else if (it.tipo !== 'valor' && !temPag(pg, m)) { b.disabled = true; oque = 'não abre a página'; }
+          else {
+            var agora = ef(it.tipo, pg, it, m), antes = base(it.tipo, pg, it, m);
+            b.className = 'cel' + (agora && antes ? ' tem' : agora ? ' add' : antes ? ' del' : ' nao');
+            b.dataset.p = pg.id; b.dataset.i = String(i); b.dataset.m = m;
+            oque = it.tipo === 'aba' ? (agora ? 'vê a aba' : 'aba bloqueada') : (agora ? 'vê' : 'não vê');
+          }
+          b.setAttribute('aria-label', p.nome + ' — ' + it.label + ': ' + oque);
+          b.title = p.curto + ' · ' + it.label + ' — ' + oque;
+          td.appendChild(b); r.appendChild(td);
+        });
+        tb.appendChild(r);
+      });
     });
     t.appendChild(tb);
+    sc.scrollTop = topo; sc.scrollLeft = esq;
   }
+  $('grade').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b || b.disabled) return;
+    if (b.dataset.pessoa) { pessoa = b.dataset.pessoa; guardar('acessos-portal-pessoa', pessoa); trocarVis('ps'); window.scrollTo(0, 0); return; }
+    if (b.dataset.abre) { var pa = PAG[b.dataset.abre]; gradeExp[pa.id] = !gradeAberta(pa); renderGrade(); return; }
+    var pg = PAG[b.dataset.p]; if (!pg) return;
+    if (b.dataset.i == null) { tocarChip('pagina', pg, null, b.dataset.m); return; }
+    var it = pg.itens[+b.dataset.i]; if (it) tocarChip(it.tipo, pg, it, b.dataset.m);
+  });
+  document.querySelectorAll('#grade-modo .fb').forEach(function (b) {
+    b.addEventListener('click', function () { gradeTudo = b.dataset.g === 'tudo'; gradeExp = {}; guardar('acessos-portal-grade', b.dataset.g); renderGrade(); });
+  });
 
   // ---------- mudanças ----------
   function itemDe(v) { var pg = PAG[v.pagina]; if (!pg) return null; return v.tipo === 'pagina' ? null : pg.itens.filter(function (i) { return i.id === v.item; })[0] || null; }
@@ -1020,6 +1093,10 @@ details.fora > summary { cursor: pointer; padding: 12px; font-weight: 700; font-
       pg.itens.forEach(function (it) { it.bloqSet = new Set(it.bloq || []); it.libSet = new Set(it.lib || []); it.geralSet = new Set(it.geral || []); });
       PAG[pg.id] = pg; ORDEM.push(pg);
     });
+    // agrupa por seção (na ordem em que cada seção aparece primeiro) para não repetir o título da seção
+    var primeira = {};
+    ORDEM.forEach(function (pg, i) { var s = pg.secao + '|' + (pg.sub || ''); if (!(s in primeira)) primeira[s] = i; pg._i = i; });
+    ORDEM.sort(function (a, b) { return primeira[a.secao + '|' + (a.sub || '')] - primeira[b.secao + '|' + (b.sub || '')] || a._i - b._i; });
   }
   function ligarBanco() {
     var c = window.claude;
