@@ -450,10 +450,16 @@ compactas de status, que mostram só o nome + a contagem (`.status-name`):
 
 | Significado | bg | text |
 |---|---|---|
-| **Positivo** (aprovado, concluído) | `#35383F` | `#CFFF00` |
-| **Não iniciado** (processo que ainda não começou) | `#E8F0FA` | `#1A3A5C` |
-| **Iniciado com pendências / ressalvas** | `#FFF4DC` | `#7A4A00` |
-| **Negativo** (situação negativa) | `#FDEAEA` | `#7A1A1A` |
+| **Positivo** — terminou bem (aprovado, concluído, respondido) | `#35383F` | `#CFFF00` |
+| **Azul = vez do RH** — pendente do nosso lado: a próxima ação é do RH (ou da área dona da página). Ex.: não enviado, enviado — validar, aguardando entrevista | `#E8F0FA` | `#1A3A5C` |
+| **Âmbar = aguardando o outro** — o processo andou e espera a outra parte (colaborador, candidato, gestor, fornecedor, justiça). Ex.: aguardando preenchimento, emitido/enviado, aguardando resposta, aguardando julgamento | `#FFF4DC` | `#7A4A00` |
+| **Negativo** — terminou mal (expirado, cancelado, reprovado) | `#FDEAEA` | `#7A1A1A` |
+
+**Como escolher (decisão do dono, 04/10/2026): de quem é a próxima ação?** RH → **azul**; outra pessoa →
+**âmbar**; ninguém (acabou) → **escuro** (bem) ou **vermelho** (mal). A palavra "Aguardando" no texto não decide
+sozinha: "Aguardando entrevista" (quem entrevista é o RH) é azul; "Aguardando preenchimento" (quem preenche é o
+candidato) é âmbar. O **escuro é só para o que terminou** — nunca para algo que ainda pede ação (ex.: "Enviado —
+validar" pede o RH validar → azul).
 
 ```css
 .status-badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; flex-shrink: 0; }

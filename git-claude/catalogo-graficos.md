@@ -169,7 +169,7 @@ Tokens: carbon `#35383F`, muted `#999`, border/teia `#E2E2E2`.
 | **Avaliação por Pergunta** | tabela pergunta (quebra linha) + média (DM Sans 800) | cei (Cultura & Clima) | **padrão** de tabela pergunta/média |
 | **Colaboradores** | lista: avatar (inicial carbon/citric) + nome + cargo·unidade + nota, com **Ver mais** | performance | **padrão** de lista de pessoas |
 | **Analítico — candidaturas** | tabela com **título**, status em **pílula**, data `DD/MM/AAAA · HHhMM`, botão **Ver mais**, **organizador de colunas** (ordenar + dimensionar) | páginas com aba Analítico | **padrão** |
-| **Pílulas de Status** (seção) | pílulas semânticas — carbon = positivo · azul = não iniciado · âmbar = iniciado com pendências · vermelho = negativo | só na tabela do Analítico | referência do design system |
+| **Pílulas de Status** (seção) | pílulas semânticas — carbon = positivo (terminou) · azul = vez do RH · âmbar = aguardando o outro · vermelho = negativo | só na tabela do Analítico | referência do design system |
 
 ## Padrão x desvio (resumo)
 
