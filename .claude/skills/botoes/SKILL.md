@@ -80,6 +80,11 @@ Tokens: padrão do portal (`--carbon #35383F`, `--citric #CFFF00`, `--surface #F
 
 Medidas: **altura ÚNICA = 40px** para TODOS os botões (texto, destrutivo e ícone — nenhum com altura diferente), raio **8px**, fonte **DM Mono 10px/600 uppercase** `letter-spacing:.08em`. `.btn--sm` = **mesma altura**, só mais estreito (tabela). `.btn--block` = largura total (footer de modal).
 
+**Ver mais / paginação:** é `.btn.btn--primary` (não é um botão à parte) com o **número entre parênteses = quantos itens faltam** — ex.: `Ver mais (12)`. Inline no fim de uma lista curta; `.btn--block` no rodapé de listas longas. Ao carregar mais, atualize o nº (e quando zerar, esconda o botão).
+```html
+<button class="btn btn--primary" id="btn-ver-mais" onclick="verMais()">Ver mais (12)</button>
+```
+
 ---
 
 ## 2. Estados
