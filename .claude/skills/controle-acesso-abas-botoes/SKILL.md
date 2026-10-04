@@ -69,7 +69,8 @@ Referências (leia conforme a tarefa):
   que abre a lista de colaboradores com chaves; "Salvar" grava só o que mudou. **Por colaborador:** lápis em cima do
   nome (só no computador) ou Menu › "Adicionar ou editar colaborador" (qualquer tela, inclui quem ainda não tem
   acesso) abrem tudo da pessoa em cascata, com chaves; o "Salvar" chama `gov_auditoria_salvar` uma vez por mudança, na
-  ordem páginas que entram › abas/botões/valores › páginas que saem. Lê `gov_auditoria_acessos` e
+  ordem páginas que entram › abas/botões/valores › páginas que saem. Os admins ficam nas últimas colunas, com ● cinza onde veem
+  automaticamente (fora da seção App, menos valores). Lê `gov_auditoria_acessos` e
   grava `gov_auditoria_salvar` (backend §"Página Auditoria de páginas"). Não tem lista própria de ids: página,
   aba ou botão novo aparece nela assim que entra no catálogo (`ativo`).
 

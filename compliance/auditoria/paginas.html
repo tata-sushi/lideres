@@ -99,8 +99,8 @@ table.grade { width: 100%; border-collapse: separate; border-spacing: 0; font-fa
 .grade td.ed .btn-icon { vertical-align: middle; }
 .grade thead th.ed .chart-info-btn { top: 4px; right: 4px; }
 @media (min-width: 768px) {   /* lápis do colaborador, em cima do nome (só no computador; no celular fica a ação do Menu) */
-  .grade thead th.pessoa { height: 168px; }
-  .grade thead th.pessoa .btn-icon.btn-resp-icon { display: flex; margin: 0 auto 6px; }
+  .grade thead th.pessoa { height: 180px; padding-top: 42px; }   /* lápis sempre no topo; o nome fica embaixo */
+  .grade thead th.pessoa .btn-icon.btn-resp-icon { display: flex; position: absolute; top: 6px; left: 50%; transform: translateX(-50%); margin: 0; }
 }
 .grade tr:not(.sec):hover th.pg, .grade tr:not(.sec):hover td { background: #FAFAFA; }
 .tg { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 100px; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; flex-shrink: 0; }
@@ -404,7 +404,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <li>Cada <strong>coluna</strong> é um colaborador. Cada <strong>linha</strong> é uma página e, logo abaixo dela, as abas, os botões e os valores da página.</li>
         <li><strong>●</strong> vê · <strong>○</strong> não vê · <strong>vazio</strong> = não abre a página.</li>
         <li>A coluna <strong>Total</strong>, antes de Editar, mostra quantos colaboradores veem aquilo, sem contar os admins.</li>
-        <li><strong>Admins</strong> veem todas as páginas, abas e botões e por isso não aparecem como coluna. As exceções são as telas da seção App e os valores em R$, que seguem a liberação: confira em Editar, na linha.</li>
+        <li><strong>Admins</strong> ficam nas últimas colunas. Eles veem todas as páginas, abas e botões automaticamente (<strong>●</strong> cinza), menos as telas da seção App e os valores em R$, que seguem a liberação como para todo mundo.</li>
         <li>Use os filtros para achar uma <strong>seção</strong>, uma <strong>página</strong> ou um <strong>colaborador</strong> (mostra só a coluna dele), ou para ver <strong>só as páginas</strong>.</li>
       </ul>
     </div>
@@ -767,13 +767,13 @@ var _INFO_GRAFICOS = {
     '<tr><td>1</td><td>●</td><td>Vê: abre a página, vê a aba, o botão ou os valores</td></tr>' +
     '<tr><td>2</td><td>○</td><td>Abre a página, mas não vê: aba bloqueada, botão ou valor não liberado</td></tr>' +
     '<tr><td>3</td><td>vazio</td><td>Não abre a página</td></tr>' +
-    '<tr><td>4</td><td style="color:#999">●</td><td>Valores: liberado em todas as áreas (muda no painel do app)</td></tr>' +
+    '<tr><td>4</td><td style="color:#999">●</td><td>Vê automaticamente: admin (todas as páginas, abas e botões, menos a seção App) ou valores liberados em todas as áreas — muda no painel do app</td></tr>' +
     '<tr><td>5</td><td><span class="tg pagina">Página</span></td><td>Página: só abre quem foi incluído</td></tr>' +
     '<tr><td>6</td><td><span class="tg aba">Aba</span></td><td>Aba da página: todos que abrem veem, a não ser que seja bloqueada</td></tr>' +
     '<tr><td>7</td><td><span class="tg botao">Botão</span></td><td>Botão de ação: escondido, aparece só para quem foi incluído</td></tr>' +
     '<tr><td>8</td><td><span class="tg valor">R$</span></td><td>Valores em R$ da área: só vê quem foi liberado (inclusive admin)</td></tr>' +
     '</tbody></table>' +
-    '<div class="info-note">Admins veem todas as páginas, abas e botões e não aparecem como coluna; as telas da seção App e os valores em R$ seguem a liberação. Toque no lápis, na última coluna à direita, para incluir ou excluir colaboradores.</div>'
+    '<div class="info-note">Os admins ficam nas últimas colunas; a coluna Total não conta os admins. Toque no lápis, na última coluna à direita, para incluir ou excluir colaboradores.</div>'
 };
 function abrirInfoGrafico(key){
   var html = _INFO_GRAFICOS[key]; if (!html) return;
@@ -857,9 +857,10 @@ document.addEventListener('keydown', function(e){ if (e.key === 'Escape') { var 
       pg.acesso.forEach(function (m) { tem.add(m); });
       pg.itens.forEach(function (it) { if (it.tipo === 'valor') it.lib.forEach(function (m) { tem.add(m); }); });
     });
-    COLUNAS = d.pessoas.filter(function (p) { return !p.admin && tem.has(p.m); })
-      .sort(function (a, b) { return a.curto.localeCompare(b.curto, 'pt'); });
-    ADMINS = d.pessoas.filter(function (p) { return p.admin; });
+    var porNome = function (a, b) { return a.curto.localeCompare(b.curto, 'pt'); };
+    ADMINS = d.pessoas.filter(function (p) { return p.admin; }).sort(porNome);
+    // colunas: colaboradores com acesso e, nas últimas, os admins
+    COLUNAS = d.pessoas.filter(function (p) { return !p.admin && tem.has(p.m); }).sort(porNome).concat(ADMINS);
   }
   function abre(pg, m) { return pg.acesso.has(m); }
   function ve(pg, it, m) {
@@ -868,8 +869,9 @@ document.addEventListener('keydown', function(e){ if (e.key === 'Escape') { var 
     if (!abre(pg, m)) return false;
     return it.tipo === 'aba' ? !it.bloq.has(m) : it.lib.has(m);
   }
-  // marca da célula: 'v' vê · 'n' não vê · 'g' valores de todas as áreas · '' não abre a página
+  // marca da célula: 'v' vê · 'n' não vê · 'g' vê automaticamente (admin, ou valores de todas as áreas) · '' não abre a página
   function marca(pg, it, m) {
+    if (PES[m].admin && pg.adminVeTudo && (!it || it.tipo !== 'valor')) return 'g';
     if (!it) return abre(pg, m) ? 'v' : '';
     if (it.tipo === 'valor') return GERAL.has(m) ? 'g' : (it.lib.has(m) ? 'v' : 'n');
     if (!abre(pg, m)) return '';
@@ -889,7 +891,7 @@ document.addEventListener('keydown', function(e){ if (e.key === 'Escape') { var 
       pg.itens.forEach(function (it) { if (it.tipo === 'aba') abas++; else if (it.tipo === 'botao') botoes++; });
     });
     $('kpi-paginas').textContent = ORDEM.length; $('kpi-abas').textContent = abas; $('kpi-botoes').textContent = botoes;
-    $('kpi-pessoas').textContent = COLUNAS.length; $('kpi-admins').textContent = ADMINS.length;
+    $('kpi-pessoas').textContent = COLUNAS.length - ADMINS.length; $('kpi-admins').textContent = ADMINS.length;
   }
   function preencherFiltros() {
     var fs = $('f-secao'), vs = fs.value, vistas = [];
@@ -936,7 +938,7 @@ document.addEventListener('keydown', function(e){ if (e.key === 'Escape') { var 
       h.push('<th class="pessoa" title="' + esc(p.nome + (p.cargo ? ' · ' + p.cargo : '')) + '">' +
         '<button class="btn-icon btn-resp-icon" type="button" data-aba-id="governanca-auditoria-paginas::editar-acessos" data-pe="' + esc(p.m) +
         '" title="Editar acessos de ' + esc(p.nome) + '" aria-label="Editar acessos de ' + esc(p.nome) + '">' + ICO_EDITAR + '</button>' +
-        '<span>' + esc(p.curto) + '</span></th>');
+        '<span>' + esc(p.curto) + (p.admin ? ' · admin' : '') + '</span></th>');
     });
     h.push('<th class="tot">Total</th><th class="ed"><button class="chart-info-btn" type="button" data-info="grade" title="Informações" aria-label="Informações">' + ICO_INFO + '</button>Editar</th></tr></thead><tbody>');
     var sec = null, sub = null, n = 0;
