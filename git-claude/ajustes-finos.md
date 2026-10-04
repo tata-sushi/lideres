@@ -101,6 +101,7 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 
 | Data | Página | Ajuste | Skill atualizada? |
 |---|---|---|---|
+| 04/10 | Auditoria de páginas (banco) | Sem seção "Admin": Auditoria, Auditoria de páginas e Gestão de Documentos passam para a seção **Compliance** (como no menu do app), ordem 730/740/750, depois de Parceiros & Sistemas | — (banco) |
 | 04/10 | Auditoria de páginas | Cabeçalho "Página" centralizado; KPIs viram 2 cards: Páginas (abas / botões) e Acessos liberados (admins) | — (página) |
 | 04/10 | Auditoria de páginas | Total em coluna própria, entre o último colaborador e Editar (saiu da célula do nome); coluna dos nomes no celular volta a 195px | `dashboards-kpi-graficos` (`tabelas.md` §4) |
 | 04/10 | Auditoria de páginas | Pílula "Página" azul; linhas verticais entre as colunas (contínuas nas seções); tabela na largura toda (1ª coluna fixa 260px / 212px no celular) | `dashboards-kpi-graficos` (`tabelas.md` §4) |
