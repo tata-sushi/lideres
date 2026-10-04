@@ -2,8 +2,8 @@
 name: botoes
 description: >-
   Conjunto canônico de BOTÕES do Portal Líderes (repo lideres): a base .btn +
-  modificadores (.btn--primary carbon/citric, .btn--secondary claro/borda,
-  .btn--danger vermelho, .btn--block, .btn--sm, .btn--pill), o botão só-ícone
+  modificadores (.btn--primary carbon/citric, .btn--danger vermelho,
+  .btn--block, .btn--sm, .btn--pill), o botão só-ícone
   (.btn-icon --primary/--ghost/--naked, 28×28), o link/texto (.btn-link) e o
   estado de LOADING canônico (spinner .btn-spin + keyframes btnRot +
   setBtnLoading, texto em gerúndio, disabled). Raio 6px, DM Mono 10px uppercase,
@@ -11,10 +11,10 @@ description: >-
   <480px) e um MAPA DE MIGRAÇÃO das ~40 classes antigas (btn-gerar, btn-primary,
   modal-btn-save, btn-cancel, btn-excluir, btn-clear, btn-ver-mais…) → novas.
   Catálogo visual: git-claude/catalogo-botoes.html. Use SEMPRE que for criar,
-  editar ou padronizar um botão (primário/secundário/destrutivo/só-ícone/link/
-  pílula), o estado de carregando/disabled de um botão, ou migrar classes de
-  botão antigas pro padrão; e quando o pedido falar em "botão", "button", "btn",
-  "salvar", "ação", "primário", "secundário", "excluir", "loading", "disabled".
+  editar ou padronizar um botão (primário/destrutivo/só-ícone/link/pílula), o
+  estado de carregando/disabled de um botão, ou migrar classes de botão antigas
+  pro padrão; e quando o pedido falar em "botão", "button", "btn", "salvar",
+  "ação", "primário", "excluir", "loading", "disabled", "cancelar".
   NÃO cobre: .header-plus (skill header-abas-footer), .tab-btn/.dash-subtab
   (header-abas-footer/dashboards-kpi-graficos) nem .drawer-sam-btn (drawer-sobre)
   — esses são botões de componente e ficam nas skills deles.
@@ -47,10 +47,8 @@ Tokens: padrão do portal (`--carbon #35383F`, `--citric #CFFF00`, `--surface #F
 .btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 
-.btn--primary   { background: var(--carbon); color: var(--citric); }   /* dominante */
+.btn--primary   { background: var(--carbon); color: var(--citric); }   /* dominante (inclui as antigas ações secundárias, ex.: Cancelar) */
 .btn--primary:hover:not(:disabled)   { opacity: .85; }
-.btn--secondary { background: var(--surface); color: var(--mid); border-color: var(--border); }
-.btn--secondary:hover:not(:disabled) { border-color: var(--carbon); color: var(--carbon); }
 .btn--danger        { background: var(--red); color: #fff; }           /* destrutivo cheio */
 .btn--danger:hover:not(:disabled)        { opacity: .85; }
 .btn--danger-ghost  { background: var(--red-bg); color: var(--red); border-color: #FECACA; }  /* destrutivo claro */
@@ -62,8 +60,7 @@ Tokens: padrão do portal (`--carbon #35383F`, `--citric #CFFF00`, `--surface #F
 
 | Variante | Uso | Fundo | Texto | Borda |
 |---|---|---|---|---|
-| `.btn--primary` | ação principal (salvar, gerar, nova entrada) | `--carbon` | `--citric` | — |
-| `.btn--secondary` | ação secundária (cancelar, ver mais) | `--surface` | `--mid`→`--carbon` | 1px `--border`→`--carbon` |
+| `.btn--primary` | ação principal **e secundária** (salvar, gerar, nova entrada, cancelar, ver mais) | `--carbon` | `--citric` | — |
 | `.btn--danger` | destrutivo (excluir) | `--red` | `#fff` | — |
 | `.btn--danger-ghost` | destrutivo discreto | `--red-bg` | `--red` | 1px `#FECACA` |
 
@@ -73,7 +70,7 @@ Medidas: **altura ≈38px** (padding 10/18), raio **6px**, fonte **DM Mono 10px/
 
 ## 2. Estados
 
-**Hover:** primário/danger = `opacity:.85`; secundário = borda+texto viram `--carbon`.
+**Hover:** primário/danger = `opacity:.85`.
 **Disabled:** `opacity:.4; cursor:not-allowed`.
 
 **Loading (canônico — igual ao `readmemodal.md`):** o botão fica **`disabled`**, mostra o **spinner inline** e o texto vai pra **gerúndio** ("Salvando…", "Gerando…", "Enviando…").
@@ -119,7 +116,7 @@ function setBtnLoading(on, label){
 .btn-link:hover { color: var(--carbon); }
 ```
 
-**Pílula / CTA** = `.btn--pill` (raio 100px) combinado com `--primary` (CTA, ex.: "Voltar ao Portal", desbloqueio) ou `--secondary` (paginação "Ver mais").
+**Pílula / CTA** = `.btn--pill` (raio 100px) com `--primary` (ex.: "Ver mais", "Voltar ao Portal", desbloqueio).
 
 ---
 
@@ -143,11 +140,10 @@ Hoje o mesmo visual tem ~40 nomes. Ao mexer numa página, troque pela classe can
 | Classe(s) antiga(s) | Nova |
 |---|---|
 | `btn-gerar`, `btn-primary`, `btn-avaliar`, `btn-registrar`, `btn-nova`, `btn-submit`, `btn-enviar`, `btn-confirmar`, `btn-cta`, `btn-recibo`, `btn-dev`, `modal-btn-save`, `btn-modal-confirmar`, `ns-btn-enviar`, `adm-btn`, `benef-btn`, `btn-lancar`, `btn-add-cat`, `ag-btn-pri`, `sec-div-btn`, `cat-drawer-btn` | `.btn.btn--primary` (+`.btn--block` se full-width, +`.btn--sm` se de tabela) |
-| `btn-secondary`, `btn-cancel`, `modal-btn-cancel`, `btn-modal-cancelar`, `ns-btn-cancel`, `ag-btn-sec`, `btn-show-more`, `btn-more`, `btn-comecar`, `btn-refresh`, `photo-upload-btn` | `.btn.btn--secondary` |
-| `btn-add`, `btn-add-item` (borda tracejada) | `.btn.btn--secondary` (+ `border-style:dashed`) |
+| `btn-secondary`, `btn-cancel`, `modal-btn-cancel`, `btn-modal-cancelar`, `ns-btn-cancel`, `ag-btn-sec`, `btn-show-more`, `btn-more`, `btn-comecar`, `btn-refresh`, `photo-upload-btn`, `btn-add`, `btn-add-item` | `.btn.btn--primary` |
 | `modal-btn-del`, `ag-btn-del`, `btn-excluir`, `tool-delete-btn`, `btn-split-remove` | `.btn--danger` ou `.btn-icon--naked` (vermelho) |
 | `btn-clear`, `btn-clear-filters` | `.btn-link` |
-| `btn-ver-mais` (pílula) / (outline) | `.btn.btn--primary.btn--pill` (CTA) / `.btn.btn--secondary` (paginação) |
+| `btn-ver-mais` | `.btn.btn--primary.btn--pill` (CTA) ou `.btn.btn--primary` (paginação) |
 | `gate-btn`, `hflow-lock-btn` | `.btn.btn--primary.btn--pill` |
 | `btn-editar`, `btn-dt-edit`, `btn-row-edit` | `.btn-icon.btn-icon--primary` |
 | `tbl-fotos-btn`, `tool-edit-btn` | `.btn-icon.btn-icon--ghost` |
@@ -158,8 +154,8 @@ Hoje o mesmo visual tem ~40 nomes. Ao mexer numa página, troque pela classe can
 ---
 
 ## Checklist
-- [ ] Usa `.btn` + modificador (`--primary`/`--secondary`/`--danger`), raio **6px**, DM Mono 10px/600 uppercase.
-- [ ] Primário = carbon/citric; secundário = claro + borda (`:hover` carbon); destrutivo = `--red`.
+- [ ] Usa `.btn` + modificador (`--primary`/`--danger`), raio **6px**, DM Mono 10px/600 uppercase.
+- [ ] Primário = carbon/citric (inclui as antigas ações secundárias); destrutivo = `--red`.
 - [ ] Ação de modal/form full-width = `.btn--block`; de tabela = `.btn--sm`; CTA/paginação = `.btn--pill`.
 - [ ] Loading = `disabled` + `.btn-spin` (`btnRot`) + texto em **gerúndio** via `setBtnLoading`.
 - [ ] Disabled = `opacity:.4 cursor:not-allowed`.
