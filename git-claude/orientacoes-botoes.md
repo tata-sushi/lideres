@@ -16,6 +16,7 @@ Trocar as ~40 classes antigas de botão pelas canônicas, página por página (o
 - Ícones (editar, enviar, visualizar, foto, **copiar**, chart-info) → `.btn-icon` (tudo igual ao primário, 40×40); **só a lixeira** (`tool-delete-btn`/`btn-excluir`) → `.btn-icon--danger`.
 - **Raio 6px · altura ÚNICA 40px** (nenhum botão com altura diferente — nem destrutivo nem ícone), DM Mono 10px uppercase, loading com `.btn-spin`/`btnRot`/`setBtnLoading` + gerúndio.
 - **Toggle/switch** (componente novo da skill): `.toggle` — ligado = trilho carbon + botão citric.
+- **Desktop × Mobile:** um botão é **ou texto ou ícone, nunca os dois juntos**. Mobile = **texto** (`.btn.btn--primary`); desktop (`@media min-width:768px`) = **ícone** (`.btn-icon` 40×40). Implementa com dois elementos de mesma ação alternados por `.btn-resp-text`/`.btn-resp-icon` (ver §4 da skill). Onde hoje a página usa `.btn-text` sumindo em `max-width:480px` (ex.: `.btn-nova` do manutenção), migre pro novo padrão.
 
 ## Regras / cuidados (IMPORTANTES)
 1. **NÃO quebrar o comportamento:** preserve TODOS os `onclick="…"`, os `id="…"` referenciados pelo JS, e os `data-aba-id`/`data-botao-id` (controle de acesso — skill `controle-acesso-abas-botoes`). Só troque as **classes CSS** e, se precisar, adicione o CSS do `.btn` na página.

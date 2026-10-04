@@ -9,7 +9,8 @@ description: >-
   (spinner .btn-spin + keyframes btnRot + setBtnLoading, texto em gerúndio,
   disabled). Raio 6px, altura ÚNICA 40px (nenhum botão com altura diferente),
   DM Mono 10px uppercase, :hover opacity .85, :disabled opacity .4. Inclui
-  desktop×mobile (.btn-text some <480px) e um MAPA DE MIGRAÇÃO das ~40 classes
+  desktop×mobile (botão é OU texto OU ícone, nunca os dois: mobile=texto,
+  desktop≥768px=ícone .btn-icon) e um MAPA DE MIGRAÇÃO das ~40 classes
   antigas (btn-gerar, btn-primary, modal-btn-save, btn-cancel, btn-excluir,
   btn-clear…) → novas. Catálogo visual: git-claude/catalogo-botoes.html. Use
   SEMPRE que for criar, editar ou padronizar um botão (primário/destrutivo/
@@ -133,14 +134,23 @@ function setBtnLoading(on, label){
 
 ## 4. Desktop × Mobile
 
-Botão com ícone + rótulo: o rótulo (`.btn-text`) **some abaixo de 480px**, fica só o ícone.
+Um botão é **ou texto ou ícone — nunca os dois juntos**. A ação é a mesma; o que muda é a forma conforme a largura:
+- **Mobile** → **texto** (segue a seção 1, `.btn.btn--primary` — altura 40px, DM Mono 10px uppercase).
+- **Desktop** (`@media min-width:768px`) → **ícone** (segue a seção 3, `.btn-icon` 40×40, mesmo tamanho/estrutura).
+
+Dois elementos com a mesma ação (`onclick`), alternados por media query — nunca ícone+texto no mesmo botão.
 ```css
-@media (max-width: 480px) { .btn .btn-text { display: none; } }
+.btn-resp-icon { display: none; }                /* mobile: esconde o ícone, mostra o texto */
+@media (min-width: 768px) {
+  .btn-resp-text { display: none; }              /* desktop: esconde o texto, mostra o ícone */
+  .btn-resp-icon { display: inline-flex; }
+}
 ```
 ```html
-<button class="btn btn--primary"><svg>…+…</svg><span class="btn-text">Nova solicitação</span></button>
+<button class="btn-icon btn-resp-icon" title="Nova solicitação" onclick="novo()"><svg>…+…</svg></button>
+<button class="btn btn--primary btn-resp-text" onclick="novo()">Nova solicitação</button>
 ```
-(Padrão herdado do `.btn-nova` do manutenção.) O modal em que o botão vive vira bottom-sheet no mobile (skill `modal-formulario`); o header não muda.
+O modal em que o botão vive vira bottom-sheet no mobile (skill `modal-formulario`); o header não muda.
 
 ---
 
@@ -170,7 +180,7 @@ Hoje o mesmo visual tem ~40 nomes. Ao mexer numa página, troque pela classe can
 - [ ] Disabled = `opacity:.4 cursor:not-allowed`.
 - [ ] Só-ícone = `.btn-icon` 40×40 (mesma altura), **tudo igual ao primário**; só a **lixeira** (`--danger`) com cor diferente; link = `.btn-link`.
 - [ ] Toggle = `.toggle` (ligado = carbon + botão citric).
-- [ ] Rótulo que some no mobile = `.btn-text` (`@media max-width:480px`).
+- [ ] Texto **ou** ícone, nunca os dois: mobile = texto (`.btn`), desktop ≥768px = ícone (`.btn-icon`), via `.btn-resp-text`/`.btn-resp-icon`.
 - [ ] Pílula (raio 100px) NÃO entra aqui — a definir depois.
 - [ ] Não renomear `.header-plus`/`.tab-btn`/`.drawer-sam-btn` (skills próprias).
 - [ ] JS validado (sem erro de sintaxe).
