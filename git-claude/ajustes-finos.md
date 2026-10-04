@@ -30,9 +30,9 @@ Tudo no `main`:
 **04/10:** os 14 nomes antigos foram **desativados** (`ativo = false`): não estão em nenhum HTML nem em função do banco,
 e assim somem do painel do app e da Auditoria de páginas. Falta só apagar de vez.
 
-**Pendente também:** criar `tata_plus.gov_auditoria_salvar` (SQL em `controle-acesso-abas-botoes/references/backend-supabase.md`
-§"Página Auditoria de páginas") — o banco pede confirmação do dono por ter `delete`. Sem ela, o lápis da Auditoria de páginas
-abre e lista, mas o "Salvar" avisa que a gravação ainda não está ativa.
+**04/10:** `tata_plus.gov_auditoria_salvar` criada pelo dono no SQL Editor (o MCP do Supabase cancela sozinho todo comando
+com `delete` nesta sessão — quando for assim, entregue o `.sql` para o dono rodar). Testada numa transação desfeita:
+recusa sem admin; botão dá a página junto; tirar a página tira as liberações dela; valor inclui e tira.
 
 Quando o dono confirmar que o app já mostra a versão nova (ex.: "Ver mais (N)" escuro), apagar os 14 nomes antigos.
 Os bloqueios antigos saem junto (FK `on delete cascade`); os novos já têm a cópia (62 bloqueios).

@@ -203,4 +203,7 @@ end $$;
 revoke execute on function tata_plus.gov_auditoria_salvar(text, text, text[], text[]) from public, anon;
 grant execute on function tata_plus.gov_auditoria_salvar(text, text, text[], text[]) to authenticated;
 ```
-Enquanto a função não existir, o "Salvar" da página avisa "A gravação ainda não está ativa no banco" e não muda nada.
+Se a função sumir do banco, o "Salvar" da página avisa "A gravação ainda não está ativa no banco" e não muda nada.
+⚠️ Nesta integração o MCP do Supabase **cancela sozinho** qualquer SQL com `delete` (o pedido de confirmação não chega ao dono):
+para criar/alterar uma função assim, entregue o `.sql` para o dono rodar no SQL Editor e depois confira com
+`pg_proc` + um teste dentro de um `do $$ … raise exception … $$` (desfaz tudo no fim).
