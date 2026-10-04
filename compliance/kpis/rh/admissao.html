@@ -305,6 +305,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </main>
 </div><!-- /view-dashboard -->
 
+<!-- INFO DA TABELA (botão "i") -->
+<div class="modal-overlay" id="info-overlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header" style="justify-content:flex-end;border-bottom:none;padding-bottom:0">
+      <button class="modal-close" onclick="closeInfoGrafico()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="info-body" style="padding-top:0"></div>
+  </div>
+</div>
+
 <style id="gov-sobre-css">
 /* blindagem tabela Sobre — vence vazamento das regras globais de tabela do dashboard */
 #view-sobre .data-table thead th::after { content: none !important; }
@@ -1868,7 +1878,7 @@ async function renderPaginaAtiva() {
 function renderKPIsPage() {
   var container = document.getElementById('page-kpis');
   if (!container) return;
-  container.innerHTML = '<div class="empty"><p>KPIs de estoque em construção.</p></div>';
+  container.innerHTML = '<div class="empty"><p>KPIs de admissão em construção.</p></div>';
 }
 
 // ── MODAL CONTAGEM SEMANAL (aberto pelo drawer) ──────────────────────────────
@@ -5670,34 +5680,75 @@ window.toggleFta = toggleFta;
 
 <!-- ══ PAINEL PENDENTE — Admissões em andamento + validação ══ -->
 <style>
-#page-pendente { padding: 4px 0 24px; }
+/* layout (skill dashboards-kpi-graficos §4): página full-width, card com respiro de 12px no celular e 24px no desktop */
+#view-dashboard .content { padding: 0 0 100px; }
+#page-pendente { padding: 14px 12px 24px; }
+@media(min-width:768px){ #page-pendente { padding: 14px 24px 24px; } }
 .adm-empty { text-align:center; padding:40px 16px; color:#888; font-family:'DM Mono',monospace; font-size:12px; letter-spacing:.4px; text-transform:uppercase; }
-/* card do dashboard (envolve a tabela) */
-.adm-card-wrap { background:#fff; border:1px solid #E2E2E2; border-radius:8px; padding:14px 20px 16px; margin:0 12px; }
-@media(min-width:768px){ #page-pendente { padding-left:24px; padding-right:24px; } .adm-card-wrap{ margin:0; } }
-.adm-card-title { font-family:'DM Mono',monospace; font-size:11px; letter-spacing:.8px; text-transform:uppercase; color:#35383F; font-weight:700; text-align:center; margin-bottom:14px; }
-.adm-card-title span { color:#999; font-weight:500; }
-/* tabela padrão portal */
-.adm-tbl-scroll { overflow-x:auto; }
-.adm-tbl { width:100%; border-collapse:collapse; min-width:720px; }
-.adm-tbl thead th { font-family:'DM Mono',monospace; font-size:10px; font-weight:500; letter-spacing:.8px; text-transform:uppercase; color:#999; padding:8px 8px; text-align:left; border-bottom:2px solid #35383F; white-space:nowrap; cursor:pointer; user-select:none; }
-.adm-tbl thead th:hover { color:#35383F; }
-.adm-tbl thead th.num { text-align:center; }
-.adm-tbl thead th .sa { color:#35383F; margin-left:3px; }
-.adm-tbl tbody tr { border-bottom:1px solid #E2E2E2; cursor:pointer; transition:background .12s; }
-.adm-tbl tbody tr:last-child { border-bottom:none; }
-.adm-tbl tbody tr:hover { background:#FAFAFA; }
-.adm-tbl tbody td { padding:9px 8px; font-family:'DM Sans',sans-serif; font-size:13px; color:#111; vertical-align:middle; white-space:nowrap; }
-.adm-tbl td.nome { font-weight:600; }
-.adm-tbl td.num { text-align:center; font-variant-numeric:tabular-nums; }
-.adm-tbl td.muted { color:#555; }
-.adm-badge { display:inline-flex; align-items:center; font-family:'DM Sans',sans-serif; font-size:10px; font-weight:500; letter-spacing:.3px; padding:3px 9px; border-radius:100px; white-space:nowrap; }
+/* card da tabela (skill §6 + references/tabelas.md): título, "i", table.mini.tbl-org, "Ver mais" e cartões no celular */
+.chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px 16px; display: flex; flex-direction: column; position: relative; min-width: 0; }
+.chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; padding: 0 18px; }
+.chart-info-btn { position: absolute; top: 10px; right: 12px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; padding: 3px; color: #CFCFCF; cursor: pointer; line-height: 0; }
+.chart-info-btn:hover { color: var(--muted); }
+.info-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.info-table th, .info-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.info-table th { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--carbon); font-weight: 600; }
+.info-table td { color: var(--carbon); font-weight: 600; }
+.info-table td:first-child { color: var(--muted); font-weight: 500; width: 22px; }
+.info-note { font-size: 12.5px; color: var(--carbon); font-weight: 600; line-height: 1.5; margin-bottom: 12px; text-align: center; }
+.tbl-scroll { overflow-x: auto; }
+table.mini { width: 100%; min-width: 520px; border-collapse: collapse; }
+table.mini thead th { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.6px; text-transform: uppercase; color: var(--muted); text-align: left; padding: 9px 10px; border-bottom: 2px solid var(--carbon); white-space: nowrap; }
+table.mini tbody td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--carbon); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+table.mini tbody tr:last-child td { border-bottom: none; }
+table.mini tbody tr:hover { background: #FAFAFA; }
+table.mini.tbl-org { table-layout: fixed; min-width: 600px; }
+table.mini.tbl-org thead th { position: relative; overflow: hidden; cursor: pointer; user-select: none; text-align: center; }
+.tbl-org thead th:hover { color: var(--carbon); }
+.th-sort { white-space: nowrap; }
+.sort-arrow { margin-left: 3px; color: var(--muted); }
+.tbl-org thead th .col-resizer { position: absolute; top: 4px; bottom: 4px; right: 0; width: 8px; cursor: col-resize; user-select: none; border-right: 1px solid var(--border); transition: border-color 0.12s; }
+.tbl-org thead th .col-resizer:hover, .tbl-org thead th .col-resizer.dragging { border-right-color: var(--carbon); }
+body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none !important; }
+table.mini td.nm { font-weight: 600; }
+table.mini td.num { text-align: center; font-variant-numeric: tabular-nums; }
+table.mini td.td-muted { color: var(--mid); }
+/* a linha inteira abre a ficha no desktop (comportamento de antes) */
+#tbl-adm-pend tbody tr.adm-tr { cursor: pointer; }
+.tcards { display: flex; flex-direction: column; gap: 12px; }
+.tcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.tcard-top { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.tcard-tl { min-width: 0; }
+.tcard-title { font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 700; color: var(--carbon); letter-spacing: -0.1px; line-height: 1.3; text-transform: uppercase; }
+.tcard-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); margin-top: 3px; }
+.tcard-tr { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.tcard-fields { padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.tcard-field { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tcard-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
+.tcard-value { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--carbon); }
+.tcard-actions { border-top: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; background: #FAFAFA; }
+.tcard-actions .act-btn { margin-left: 0; }
+.act-btn { font-family:'DM Sans',sans-serif; font-size:10px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; border:1px solid var(--border); background:var(--surface); color:var(--carbon); border-radius:6px; padding:6px 10px; cursor:pointer; margin-left:6px; }
+.act-btn:hover { border-color:var(--carbon); }
+.act-btn.primary { background:var(--carbon); color:var(--citric); border-color:var(--carbon); }
+@media (max-width: 767px) {
+  .tbl-scroll.tem-cartoes { display: none; }
+  /* no celular o card da tabela some (sem fundo branco, sem "i" e sem título): os cartões ficam no fundo cinza */
+  .card-tabela { background: none; border: none; box-shadow: none; padding: 0; }
+  .card-tabela > .chart-info-btn, .card-tabela > .chart-title { display: none; }
+}
+@media (min-width: 768px) { .tcards { display: none; } }
+.status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.ver-mais-wrap { text-align: center; padding: 12px 0 2px; }
+.btn-ver-mais { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; color: var(--carbon); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 7px 16px; cursor: pointer; transition: background 0.15s; }
+.btn-ver-mais:hover { background: var(--bg); }
 /* pílulas (skill §5): azul = vez do RH · âmbar = aguardando o candidato */
-.adm-badge.pill-blue { background:#E8F0FA; color:#1A3A5C; }
-.adm-badge.pill-amber { background:#FFF4DC; color:#7A4A00; }
+.status-badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; flex-shrink: 0; }
+.pill-pos { background: #35383F; color: #CFFF00; } .pill-blue { background: #E8F0FA; color: #1A3A5C; }
+.pill-amber { background: #FFF4DC; color: #7A4A00; } .pill-red { background: #FDEAEA; color: #7A1A1A; }
 .adm-prog { display:inline-block; min-width:64px; }
-.adm-prog-bar { height:5px; background:#EEE; border-radius:100px; overflow:hidden; margin-top:3px; }
-.adm-prog-fill { height:100%; background:#35383F; border-radius:100px; }
+.adm-prog-bar { display:block; height:5px; background:#EEE; border-radius:100px; overflow:hidden; margin-top:3px; }
+.adm-prog-fill { display:block; height:100%; background:#35383F; border-radius:100px; }
 /* overlay ficha */
 .adm-ov { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:400; display:none; align-items:flex-end; justify-content:center; }
 .adm-ov.show { display:flex; }
@@ -5784,51 +5835,142 @@ window.toggleFta = toggleFta;
     }).catch(function(e){ c.innerHTML='<div class="adm-empty">Erro: '+E(e&&e.message||e)+'</div>'; });
   };
 
-  function badge(st){ var m={liberado:['Aguardando preenchimento','pill-amber'],em_andamento:['Preenchendo','pill-amber'],enviado:['Aguardando conferência','pill-blue']}; var v=m[st]||[st,'pill-blue']; return '<span class="adm-badge '+v[1]+'">'+E(v[0])+'</span>'; }
-  function dh(s){ if(!s) return '—'; var d=new Date(s); if(isNaN(d.getTime())) return '—'; var p=function(n){return n<10?'0'+n:n;}; return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+  function badge(st){ var m={liberado:['Aguardando preenchimento','pill-amber'],em_andamento:['Preenchendo','pill-amber'],enviado:['Aguardando conferência','pill-blue']}; var v=m[st]||[st,'pill-blue']; return '<span class="status-badge '+v[1]+'">'+E(v[0])+'</span>'; }
+  function dh(s){ if(!s) return '—'; var d=new Date(s); if(isNaN(d.getTime())) return '—'; var p=function(n){return n<10?'0'+n:n;}; return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' · '+p(d.getHours())+'h'+p(d.getMinutes()); }
   function cpfMask(s){ s=(s||'').replace(/\D/g,''); return s.length>=11 ? s.slice(0,3)+'•••••'+s.slice(-3) : (s||'—'); }
 
-  var _sort = { col:'enviado_em', dir:-1 };
-  var _COLS = [
-    { k:'nome', lbl:'Colaborador', cls:'' },
-    { k:'cargo', lbl:'Cargo', cls:'' },
-    { k:'unidade', lbl:'Unidade', cls:'' },
-    { k:'status', lbl:'Status', cls:'' },
-    { k:'validados', lbl:'Validados', cls:'num' },
-    { k:'n_docs', lbl:'Anexos', cls:'num' },
-    { k:'enviado_em', lbl:'Enviado', cls:'' }
-  ];
-  function _val(a, col){
-    if(col==='validados') return (a.n_itens>0)?(a.n_validados/a.n_itens):-1;
-    if(col==='n_docs') return a.n_docs||0;
-    if(col==='enviado_em') return a.enviado_em||'';
-    return (a[col]==null?'':String(a[col])).toLowerCase();
+  // Organizador de tabela (skill dashboards-kpi-graficos §6 / references/tabelas.md): ordenar pelo cabeçalho (↕/↑/↓),
+  // largura das colunas ajustável e salva no localStorage, "Ver mais" e cartões no celular. Cópia da Desligamentos.
+  function TabelaOrg(o){ this.o = o; this.rows = []; this.todos = false; this.col = null; this.dir = 1; this.colW = null; }
+  TabelaOrg.prototype.dados = function(rows){ this.rows = rows.slice(); if (this.col) this._ordena(); this._larguras(); this.pinta(); };
+  TabelaOrg.prototype._ordena = function(){
+    var k = this.col, d = this.dir, val = (this.o.valor && this.o.valor[k]) || function(r){ return r[k]; };
+    this.rows.sort(function(a, b){
+      var va = val(a), vb = val(b); va = va == null ? '' : va; vb = vb == null ? '' : vb;
+      return (typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), 'pt', { numeric: true })) * d;
+    });
+  };
+  TabelaOrg.prototype.ordenar = function(col){
+    if (this.col === col) this.dir = -this.dir; else { this.col = col; this.dir = 1; }
+    this._ordena();
+    var self = this;
+    Array.prototype.forEach.call(document.querySelectorAll('#' + this.o.tabela + ' .sort-arrow'), function(sp){
+      sp.textContent = sp.getAttribute('data-sa') === col ? (self.dir > 0 ? '↑' : '↓') : '↕';
+    });
+    this.pinta();
+  };
+  TabelaOrg.prototype.verMais = function(){ this.todos = true; this.pinta(); };
+  TabelaOrg.prototype.pinta = function(){
+    var o = this.o, tb = document.getElementById(o.corpo); if (!tb) return;
+    var lista = this.todos ? this.rows : this.rows.slice(0, o.n);
+    tb.innerHTML = lista.length ? lista.map(o.linha).join('') : '<tr><td colspan="' + o.colspan + '"><div class="status-empty">' + o.vazio + '</div></td></tr>';
+    var cc = o.cartoes && document.getElementById(o.cartoes);   // celular: mesma lista, em cartões
+    if (cc) cc.innerHTML = lista.length ? lista.map(o.cartao).join('') : '<div class="status-empty">' + o.vazio + '</div>';
+    var w = document.getElementById(o.mais), resto = this.rows.length - o.n;
+    if (w) { w.style.display = (!this.todos && resto > 0) ? 'block' : 'none'; var bt = w.querySelector('.btn-ver-mais'); if (bt) bt.textContent = 'Ver mais (' + resto + ')'; }
+  };
+  TabelaOrg.prototype._larguras = function(){
+    var t = document.getElementById(this.o.tabela); if (!t || this.colW) return;
+    var self = this;
+    try { this.colW = JSON.parse(localStorage.getItem(this.o.chave) || '{}') || {}; } catch (e) { this.colW = {}; }
+    Array.prototype.forEach.call(t.querySelectorAll('thead th[data-col]'), function(th){
+      var k = th.getAttribute('data-col');
+      if (self.colW[k]) th.style.width = self.colW[k] + 'px';
+      var h = document.createElement('span'); h.className = 'col-resizer';
+      h.addEventListener('mousedown', function(e){ self._arrasta(e, th, k, h); });
+      h.addEventListener('click', function(e){ e.stopPropagation(); });
+      th.appendChild(h);
+    });
+  };
+  TabelaOrg.prototype._arrasta = function(e, th, k, h){
+    e.preventDefault(); e.stopPropagation();
+    var self = this, x = e.clientX, w0 = th.offsetWidth;
+    h.classList.add('dragging'); document.body.classList.add('col-resizing');
+    function move(ev){ var w = Math.max(40, w0 + (ev.clientX - x)); th.style.width = w + 'px'; self.colW[k] = w; }
+    function up(){
+      h.classList.remove('dragging'); document.body.classList.remove('col-resizing');
+      document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+      try { localStorage.setItem(self.o.chave, JSON.stringify(self.colW)); } catch (err) {}
+    }
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  };
+  // cartão do celular (modelo do Recrutamento): { titulo, sub, direita, campos: [[rótulo, valor]], acoes } — valores já escapados
+  function cartao(c){
+    var h = '<div class="tcard"><div class="tcard-top"><div class="tcard-tl"><div class="tcard-title">' + c.titulo + '</div>' +
+            (c.sub ? '<div class="tcard-sub">' + c.sub + '</div>' : '') + '</div>' + (c.direita ? '<div class="tcard-tr">' + c.direita + '</div>' : '') + '</div>';
+    if (c.campos && c.campos.length) h += '<div class="tcard-fields">' + c.campos.map(function(f){ return '<div class="tcard-field"><span class="tcard-label">' + f[0] + '</span><span class="tcard-value">' + f[1] + '</span></div>'; }).join('') + '</div>';
+    if (c.acoes) h += '<div class="tcard-actions">' + c.acoes + '</div>';
+    return h + '</div>';
   }
+
+  // colunas: chave, rótulo, largura (px) — table-layout:fixed com largura em todas e min-width = soma
+  var _COLS = [
+    { k:'nome', lbl:'Colaborador', w:220 },
+    { k:'cargo', lbl:'Cargo', w:170 },
+    { k:'unidade', lbl:'Unidade', w:150 },
+    { k:'status', lbl:'Status', w:180 },
+    { k:'validados', lbl:'Validados', w:110 },
+    { k:'n_docs', lbl:'Anexos', w:90 },
+    { k:'enviado_em', lbl:'Enviado', w:160 }
+  ];
+  var _MINW = _COLS.reduce(function(t, c){ return t + c.w; }, 0);
+  var _DESC = { enviado_em:1, validados:1, n_docs:1 };   // colunas que começam do maior para o menor (como antes)
+  function _str(k){ return function(a){ return (a[k]==null?'':String(a[k])).toLowerCase(); }; }
+  function _partes(a){
+    var prog=(a.n_itens>0)?(a.n_validados+'/'+a.n_itens):'—';
+    var pct=(a.n_itens>0)?Math.round(100*a.n_validados/a.n_itens):0;
+    return { prog: prog,
+      progHtml: '<span class="adm-prog">'+prog+(a.n_itens>0?'<span class="adm-prog-bar"><span class="adm-prog-fill" style="width:'+pct+'%"></span></span>':'')+'</span>',
+      enviado: a.enviado_em ? dh(a.enviado_em) : '—' };
+  }
+  var TAB_PEND = new TabelaOrg({ tabela: 'tbl-adm-pend', corpo: 'adm-pend-tbody', mais: 'adm-pend-mais', chave: 'adm_pend_cols_v1',
+    n: 10, colspan: _COLS.length, vazio: 'Nenhuma admissão em andamento',
+    valor: { nome:_str('nome'), cargo:_str('cargo'), unidade:_str('unidade'), status:_str('status'),
+             validados: function(a){ return (a.n_itens>0)?(a.n_validados/a.n_itens):-1; },
+             n_docs: function(a){ return a.n_docs||0; },
+             enviado_em: function(a){ return a.enviado_em||''; } },
+    // desktop: a linha inteira abre a ficha (como antes)
+    linha: function(a){
+      var p=_partes(a);
+      return '<tr class="adm-tr" onclick="_admAbrirFicha(\''+E(a.token)+'\')">'+
+        '<td class="nm">'+E(a.nome||'—')+'</td>'+
+        '<td class="td-muted">'+E(a.cargo||'—')+'</td>'+
+        '<td>'+E(a.unidade||'—')+'</td>'+
+        '<td>'+badge(a.status)+'</td>'+
+        '<td class="num">'+p.progHtml+'</td>'+
+        '<td class="num">'+(a.n_docs||0)+'</td>'+
+        '<td class="td-muted">'+p.enviado+'</td>'+
+      '</tr>';
+    },
+    // celular: cartão com o botão "Abrir ficha" no rodapé (mesma função da linha)
+    cartoes: 'adm-pend-cards',
+    cartao: function(a){
+      var p=_partes(a);
+      return cartao({ titulo: E(a.nome||'—'), sub: E(a.cargo||'—'), direita: badge(a.status),
+        campos: [['Unidade', E(a.unidade||'—')], ['Validados', p.prog], ['Anexos', String(a.n_docs||0)], ['Enviado', p.enviado]],
+        acoes: '<button class="act-btn primary" onclick="_admAbrirFicha(\''+E(a.token)+'\')">Abrir ficha</button>' });
+    } });
+  TAB_PEND.col = 'enviado_em'; TAB_PEND.dir = -1;   // ordem inicial: enviados mais recentes primeiro (como antes)
+  window.TAB_ADM_PEND = TAB_PEND;
   window._admSort = function(col){
-    if(_sort.col===col) _sort.dir=-_sort.dir; else { _sort.col=col; _sort.dir=(col==='enviado_em'||col==='validados'||col==='n_docs')?-1:1; }
-    _renderLista();
+    if (TAB_PEND.col !== col && _DESC[col]) { TAB_PEND.col = col; TAB_PEND.dir = 1; }   // 1º clique em data/número = maior primeiro
+    TAB_PEND.ordenar(col);
   };
   function _renderLista(){
     var c = document.getElementById('page-pendente'); if(!c) return;
-    if(!_rows.length){ c.innerHTML='<div class="adm-card-wrap"><div class="adm-card-title">Admissões em andamento</div><div class="adm-empty">Nenhuma admissão em andamento.</div></div>'; return; }
-    var col=_sort.col, dir=_sort.dir;
-    var rows=_rows.slice().sort(function(a,b){ var va=_val(a,col), vb=_val(b,col); if(va<vb) return -1*dir; if(va>vb) return 1*dir; return 0; });
-    var ths=_COLS.map(function(cc){ var arw=(cc.k===col)?(dir>0?'↑':'↓'):'↕'; return '<th class="'+cc.cls+'" onclick="_admSort(\''+cc.k+'\')">'+E(cc.lbl)+'<span class="sa">'+arw+'</span></th>'; }).join('');
-    var body=rows.map(function(a){
-      var prog=(a.n_itens>0)?(a.n_validados+'/'+a.n_itens):'—';
-      var pct=(a.n_itens>0)?Math.round(100*a.n_validados/a.n_itens):0;
-      return '<tr onclick="_admAbrirFicha(\''+E(a.token)+'\')">'+
-        '<td class="nome">'+E(a.nome||'—')+'</td>'+
-        '<td class="muted">'+E(a.cargo||'—')+'</td>'+
-        '<td>'+E(a.unidade||'—')+'</td>'+
-        '<td>'+badge(a.status)+'</td>'+
-        '<td class="num"><span class="adm-prog">'+prog+(a.n_itens>0?'<span class="adm-prog-bar"><span class="adm-prog-fill" style="width:'+pct+'%"></span></span>':'')+'</span></td>'+
-        '<td class="num">'+(a.n_docs||0)+'</td>'+
-        '<td class="muted">'+(a.enviado_em?dh(a.enviado_em):'—')+'</td>'+
-      '</tr>';
+    var ths=_COLS.map(function(cc){
+      var arw=(cc.k===TAB_PEND.col)?(TAB_PEND.dir>0?'↑':'↓'):'↕';
+      return '<th data-col="'+cc.k+'" class="th-sort" onclick="_admSort(\''+cc.k+'\')" style="width:'+cc.w+'px">'+E(cc.lbl)+' <span class="sort-arrow" data-sa="'+cc.k+'">'+arw+'</span></th>';
     }).join('');
-    c.innerHTML='<div class="adm-card-wrap"><div class="adm-card-title">Admissões em andamento <span>('+_rows.length+')</span></div>'+
-      '<div class="adm-tbl-scroll"><table class="adm-tbl"><thead><tr>'+ths+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    c.innerHTML='<div class="chart-card card-tabela">'+
+      '<button class="chart-info-btn" onclick="abrirInfoGrafico(\'pendente\')" title="Informações da tabela" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>'+
+      '<div class="chart-title">Admissões em andamento ('+_rows.length+')</div>'+
+      '<div class="tcards" id="adm-pend-cards"></div>'+
+      '<div class="tbl-scroll tem-cartoes"><table class="mini tbl-org" id="tbl-adm-pend" style="min-width:'+_MINW+'px"><thead><tr>'+ths+'</tr></thead><tbody id="adm-pend-tbody"></tbody></table></div>'+
+      '<div class="ver-mais-wrap" id="adm-pend-mais" style="display:none"><button class="btn-ver-mais" onclick="TAB_ADM_PEND.verMais()">Ver mais</button></div>'+
+    '</div>';
+    TAB_PEND.colW = null;   // a tabela foi recriada: reaplica as larguras salvas e as alças de redimensionar
+    TAB_PEND.dados(_rows);
   }
 
   window._admAbrirFicha = function(token){
@@ -6045,6 +6187,24 @@ window.toggleFta = toggleFta;
   };
 
   document.addEventListener('keydown', function(e){ if(e.key==='Escape' && document.getElementById('adm-ficha-ov').classList.contains('show')) _admFecharFicha(); });
+
+  // Info da tabela (botão "i"): o que a lista mostra + legenda das pílulas (skill §5)
+  var _INFO_GRAFICOS = {
+    pendente: '<div class="info-note">Admissões abertas pelo RH que ainda não terminaram: o candidato preenche a ficha pelo link e o RH confere item a item. Toque na linha (no celular, em “Abrir ficha”) para conferir. Clique no cabeçalho para ordenar e arraste a borda da coluna para mudar a largura.</div>'
+      + '<table class="info-table"><thead><tr><th>#</th><th>Status</th><th>Significado</th></tr></thead><tbody>'
+      + '<tr><td>1</td><td><span class="status-badge pill-amber">Aguardando preenchimento</span></td><td>Link liberado, o candidato ainda não começou</td></tr>'
+      + '<tr><td>2</td><td><span class="status-badge pill-amber">Preenchendo</span></td><td>O candidato está preenchendo a ficha</td></tr>'
+      + '<tr><td>3</td><td><span class="status-badge pill-blue">Aguardando conferência</span></td><td>Ficha enviada — vez do RH conferir e mandar para o DP</td></tr>'
+      + '</tbody></table>'
+  };
+  if (typeof window.abrirInfoGrafico !== 'function') window.abrirInfoGrafico = function(key){
+    var html = _INFO_GRAFICOS[key]; if (!html) return;
+    document.getElementById('info-body').innerHTML = html;
+    document.getElementById('info-overlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+  };
+  if (typeof window.closeInfoGrafico !== 'function') window.closeInfoGrafico = function(){ document.getElementById('info-overlay').classList.remove('active'); document.body.style.overflow = ''; };
+  document.addEventListener('keydown', function(e){ var ov = document.getElementById('info-overlay'); if (e.key === 'Escape' && ov && ov.classList.contains('active')) closeInfoGrafico(); });
 })();
 </script>
 <script>

@@ -7,6 +7,28 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+/* Padrão dos gráficos (skill dashboards-kpi-graficos): canvas em 2x (texto nítido no PC e com o zoom da
+   página), DM Sans 500 nos nomes, sem balão (tooltip) por padrão e redesenho quando a fonte termina de carregar. */
+(function () {
+  function padrao() {
+    if (!window.Chart || Chart.__padraoLideres) return;
+    Chart.__padraoLideres = true;
+    Chart.defaults.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
+    Chart.defaults.font.family = "'DM Sans', sans-serif";
+    Chart.defaults.font.weight = 500;
+    Chart.defaults.plugins.tooltip.enabled = false;
+    if (document.fonts && document.fonts.load) {
+      Promise.all(['400', '500', '800'].map(function (w) { return document.fonts.load(w + ' 12px "DM Sans"'); })).then(function () {
+        Object.keys(Chart.instances || {}).forEach(function (k) { try { Chart.instances[k].update('none'); } catch (e) {} });
+      }, function () {});
+    }
+  }
+  padrao();
+  if (!window.Chart) document.addEventListener('DOMContentLoaded', padrao);
+})();
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -28,32 +50,57 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 #btn-pin.is-pinned svg { fill: var(--citric); }
 #btn-zoom-out:disabled, #btn-zoom-in:disabled { opacity: .32; cursor: default; }
 
-/* FILTER BAR */
-.filter-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:10px;}
-.filter-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--mid);letter-spacing:0.5px;text-transform:uppercase;white-space:nowrap;}
-.filter-select{appearance:none;background:var(--bg) url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;border:1px solid var(--border);border-radius:6px;padding:7px 32px 7px 12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--carbon);cursor:pointer;min-width:120px;}
-.filter-select:focus{outline:2px solid var(--carbon);}
-
-/* KPI GRID */
-.kpi-section{padding:20px 20px 8px;}
-.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
-@media(max-width:600px){.kpi-grid{grid-template-columns:1fr 1fr;}}
-.kpi-card{background:var(--surface);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);border:1px solid var(--border);}
-.kpi-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.8px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
-.kpi-value{font-size:20px;font-weight:700;color:var(--carbon);letter-spacing:-0.5px;line-height:1;}
-.kpi-sub{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:5px;}
-
-/* CHARTS */
-.charts-section{padding:8px 20px 20px;display:flex;flex-direction:column;gap:16px;}
-.chart-card{background:var(--surface);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);border:1px solid var(--border);}
-.chart-title{font-size:14px;font-weight:600;color:var(--carbon);margin-bottom:18px;letter-spacing:-0.2px;}
-
-/* BAR CHART */
-.bar-row{display:grid;grid-template-columns:70px 1fr 90px;align-items:center;gap:10px;margin-bottom:10px;}
-.bar-label{font-family:'DM Mono',monospace;font-size:11px;color:var(--mid);text-align:right;white-space:nowrap;}
-.bar-track{background:#F0F0F0;border-radius:3px;height:22px;overflow:hidden;}
-.bar-fill{height:100%;background:var(--carbon);border-radius:3px;transition:width 0.5s ease;}
-.bar-value{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;color:var(--carbon);text-align:right;white-space:nowrap;}
+/* KPIs — faixa branca full-bleed, card cinza (skill dashboards-kpi-graficos §2) */
+.kpis-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
+.kpi-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); }
+.kpi-number { font-size: 28px; font-weight: 700; color: var(--carbon); line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.kpi-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+.kpi-sub strong { color: var(--carbon); font-weight: 600; }
+@media (min-width: 768px) { .kpis-wrap { grid-template-columns: repeat(3, 1fr); } }
+/* FILTROS — faixa branca full-bleed logo abaixo dos KPIs, campo cinza */
+.filters-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+.filters-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filter-label { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); }
+.filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); width: 100%; cursor: pointer; }
+.filter-select:focus { outline: none; border-color: var(--carbon); }
+.filters-actions { display: flex; align-items: center; justify-content: space-between; padding-top: 2px; }
+.btn-clear { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px 0; text-transform: uppercase; text-decoration: underline; text-underline-offset: 2px; }
+.btn-clear:hover { color: var(--carbon); }
+.results-count { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; color: var(--muted); }
+.results-count span { color: var(--carbon); font-weight: 500; }
+/* GRÁFICOS — cards com respiro lateral (12px celular / 24px desktop), 12px entre eles */
+.dashboard { padding: 14px 12px 80px; }
+.top-section { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px 16px; display: flex; flex-direction: column; margin-bottom: 14px; position: relative; }
+.top-section .chart-card { margin-bottom: 0; min-width: 0; }
+.chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
+/* título não passa por baixo do "i" */
+.chart-card .chart-title { padding: 0 18px; }
+.chart-info-btn { position: absolute; top: 10px; right: 12px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; padding: 3px; color: #CFCFCF; cursor: pointer; line-height: 0; }
+.chart-info-btn:hover { color: var(--muted); }
+.chart-wrap { position: relative; height: 220px; overflow-x: auto; overflow-y: hidden; }
+/* barras horizontais com muitas categorias: o card fica em 220px e o gráfico rola na vertical */
+.chart-wrap-y { overflow-x: hidden; overflow-y: auto; }
+.chart-scroll-y { position: relative; height: 100%; }
+@media (min-width: 768px) {
+  .dashboard { padding-left: 24px; padding-right: 24px; }
+  .filters-row { grid-template-columns: 1fr 1fr 1fr; }
+}
+/* 3 gráficos na linha só com largura para os três (abaixo disso, um por linha) */
+@media (min-width: 1024px) {
+  .top-section { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* Info do gráfico (botão "i") — modal padrão do recrutamento */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
+.modal-overlay.active { opacity: 1; visibility: visible; }
+.modal { background: var(--surface); border-radius: 12px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,0.2); }
+.modal-header { padding: 18px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.modal-close { background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; transition: color 0.15s; flex-shrink: 0; }
+.modal-close:hover { color: var(--carbon); }
+.modal-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+.info-note { font-size: 12.5px; color: var(--carbon); font-weight: 600; line-height: 1.5; margin-bottom: 12px; text-align: center; }
 
 /* FOOTER */
 .footer { background: var(--carbon); padding: 12px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; }
@@ -171,257 +218,86 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </header>
 <div id="zoom-content">
 
-<div class="filter-bar">
-  <span class="filter-label">Unidade</span>
-  <select class="filter-select">
-    <option>Itaim</option>
-    <option>Pinheiros</option>
-    <option>Todas</option>
-  </select>
+<!-- maquete: números fixos de exemplo (ainda não ligada ao banco) -->
+<div class="kpis-wrap">
+  <div class="kpi-card">
+    <span class="kpi-label">Gorjeta · Último mês</span>
+    <span class="kpi-number">R$77.424</span>
+    <span class="kpi-sub">03/2026</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Gorjeta · Média</span>
+    <span class="kpi-number">R$71.925</span>
+    <span class="kpi-sub">Últimos 9 meses</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Valor do Ponto</span>
+    <span class="kpi-number">R$279,24</span>
+    <span class="kpi-sub">03/2026</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Ponto · Média</span>
+    <span class="kpi-number">R$280,62</span>
+    <span class="kpi-sub">Últimos 9 meses</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Pedidos Ifood · Mês</span>
+    <span class="kpi-number">6.486</span>
+    <span class="kpi-sub">03/2026</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Pedidos · Acumulado</span>
+    <span class="kpi-number">58.339</span>
+    <span class="kpi-sub">Últimos 9 meses</span>
+  </div>
 </div>
 
-<section class="kpi-section">
-  <div class="kpi-grid">
-    <div class="kpi-card">
-      <div class="kpi-label">Gorjeta · Último mês</div>
-      <div class="kpi-value">R$77.424</div>
-      <div class="kpi-sub">03/2026</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Gorjeta · Média</div>
-      <div class="kpi-value">R$71.925</div>
-      <div class="kpi-sub">Últimos 9 meses</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Valor do Ponto</div>
-      <div class="kpi-value">R$279,24</div>
-      <div class="kpi-sub">03/2026</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Ponto · Média</div>
-      <div class="kpi-value">R$280,62</div>
-      <div class="kpi-sub">Últimos 9 meses</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Pedidos Ifood · Mês</div>
-      <div class="kpi-value">6.486</div>
-      <div class="kpi-sub">03/2026</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Pedidos · Acumulado</div>
-      <div class="kpi-value">58.339</div>
-      <div class="kpi-sub">Últimos 9 meses</div>
+<div class="filters-wrap">
+  <div class="filters-row">
+    <div class="filter-group">
+      <label class="filter-label" for="f-unidade">Unidade</label>
+      <select class="filter-select" id="f-unidade">
+        <option>Todas</option>
+        <option>Itaim</option>
+        <option>Pinheiros</option>
+      </select>
     </div>
   </div>
-</section>
+  <div class="filters-actions">
+    <button class="btn-clear" onclick="limparFiltrosGorjeta()">Limpar filtros</button>
+    <span class="results-count"><span>9</span> mês(es)</span>
+  </div>
+</div>
 
-<section class="charts-section">
-
+<div class="dashboard">
+<div class="top-section">
   <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('gorjeta')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Acumulação da gorjeta (mês a mês)</div>
-    
-        <div class="bar-row">
-          <span class="bar-label">03/2026</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:96.7%"></div>
-          </div>
-          <span class="bar-value">R$77.424</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">02/2026</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:98.3%"></div>
-          </div>
-          <span class="bar-value">R$78.670</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">01/2026</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:77.4%"></div>
-          </div>
-          <span class="bar-value">R$61.915</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">12/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:100.0%"></div>
-          </div>
-          <span class="bar-value">R$80.040</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">11/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:94.1%"></div>
-          </div>
-          <span class="bar-value">R$75.348</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">10/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:81.1%"></div>
-          </div>
-          <span class="bar-value">R$64.916</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">09/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:91.1%"></div>
-          </div>
-          <span class="bar-value">R$72.933</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">08/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:80.6%"></div>
-          </div>
-          <span class="bar-value">R$64.503</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">07/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:75.7%"></div>
-          </div>
-          <span class="bar-value">R$60.576</span>
-        </div>
+    <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="c-gorjeta"></canvas></div></div>
   </div>
-
   <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('ponto')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Valor do ponto (mês a mês)</div>
-    
-        <div class="bar-row">
-          <span class="bar-label">03/2026</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:87.9%"></div>
-          </div>
-          <span class="bar-value">R$279,24</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">02/2026</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:95.8%"></div>
-          </div>
-          <span class="bar-value">R$304,43</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">01/2026</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:82.2%"></div>
-          </div>
-          <span class="bar-value">R$261,26</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">12/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:100.0%"></div>
-          </div>
-          <span class="bar-value">R$317,81</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">11/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:95.9%"></div>
-          </div>
-          <span class="bar-value">R$304,71</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">10/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:80.7%"></div>
-          </div>
-          <span class="bar-value">R$256,43</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">09/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:93.7%"></div>
-          </div>
-          <span class="bar-value">R$297,89</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">08/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:79.9%"></div>
-          </div>
-          <span class="bar-value">R$253,87</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">07/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:78.5%"></div>
-          </div>
-          <span class="bar-value">R$249,61</span>
-        </div>
+    <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="c-ponto"></canvas></div></div>
   </div>
-
   <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('ifood')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Qtda de pedidos no Ifood (mês a mês)</div>
-    
-        <div class="bar-row">
-          <span class="bar-label">03/2026</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:77.7%"></div>
-          </div>
-          <span class="bar-value">6.486</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">02/2026</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:79.5%"></div>
-          </div>
-          <span class="bar-value">6.633</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">01/2026</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:73.0%"></div>
-          </div>
-          <span class="bar-value">6.091</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">12/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:100.0%"></div>
-          </div>
-          <span class="bar-value">8.345</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">11/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:95.1%"></div>
-          </div>
-          <span class="bar-value">7.937</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">10/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:79.9%"></div>
-          </div>
-          <span class="bar-value">6.670</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">09/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:82.0%"></div>
-          </div>
-          <span class="bar-value">6.845</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">08/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:69.5%"></div>
-          </div>
-          <span class="bar-value">5.800</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">07/2025</span>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:66.3%"></div>
-          </div>
-          <span class="bar-value">5.532</span>
-        </div>
+    <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="c-ifood"></canvas></div></div>
   </div>
+</div>
+</div>
 
-</section>
+<!-- INFO GRÁFICO (botão "i") -->
+<div class="modal-overlay" id="info-overlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header" style="justify-content:flex-end;border-bottom:none;padding-bottom:0">
+      <button class="modal-close" onclick="closeInfoGrafico()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="info-body" style="padding-top:0"></div>
+  </div>
+</div>
 
 </div><!-- /zoom-content -->
 
@@ -482,6 +358,82 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </aside>
 
+<script>
+// === Gráficos da maquete (skill dashboards-kpi-graficos): barras carbon, raio 5, valor em DM Sans 800 ===
+// Os números são os mesmos fixos de exemplo que a página já mostrava (a tela ainda não está ligada ao banco).
+var GJ_MESES = ["03/2026", "02/2026", "01/2026", "12/2025", "11/2025", "10/2025", "09/2025", "08/2025", "07/2025"];
+var GJ_SERIES = {"gorjeta": {"valores": [77424.0, 78670.0, 61915.0, 80040.0, 75348.0, 64916.0, 72933.0, 64503.0, 60576.0], "rotulos": ["R$77.424", "R$78.670", "R$61.915", "R$80.040", "R$75.348", "R$64.916", "R$72.933", "R$64.503", "R$60.576"]}, "ponto": {"valores": [279.24, 304.43, 261.26, 317.81, 304.71, 256.43, 297.89, 253.87, 249.61], "rotulos": ["R$279,24", "R$304,43", "R$261,26", "R$317,81", "R$304,71", "R$256,43", "R$297,89", "R$253,87", "R$249,61"]}, "ifood": {"valores": [6486.0, 6633.0, 6091.0, 8345.0, 7937.0, 6670.0, 6845.0, 5800.0, 5532.0], "rotulos": ["6.486", "6.633", "6.091", "8.345", "7.937", "6.670", "6.845", "5.800", "5.532"]}};
+var GJ_DPR = Math.max(2, window.devicePixelRatio || 1);
+var _gjCharts = {};
+// rótulo do valor no fim da barra (o texto já formatado: R$, milhar)
+var gjValorPlugin = {
+  id: 'gjValor',
+  afterDatasetsDraw: function(chart) {
+    var meta = chart.getDatasetMeta(0); if (!meta.data) return;
+    var rot = chart.data.datasets[0].rotulos || [];
+    var ctx = chart.ctx;
+    ctx.save();
+    ctx.fillStyle = '#35383F'; ctx.font = '800 12px "DM Sans", sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    meta.data.forEach(function(bar, i) { if (rot[i]) ctx.fillText(rot[i], bar.x + 5, bar.y); });
+    ctx.restore();
+  }
+};
+function gjBarH(chave) {
+  var canvas = document.getElementById('c-' + chave), d = GJ_SERIES[chave];
+  if (!canvas || !d) return;
+  if (_gjCharts[chave]) { _gjCharts[chave].destroy(); delete _gjCharts[chave]; }
+  if (typeof Chart === 'undefined') return;
+  // eixo de data em mm/aa; o card fica em 220px e rola na vertical
+  var labels = GJ_MESES.map(function(m) { return m.slice(0, 3) + m.slice(-2); });
+  canvas.parentElement.style.height = Math.max(220, labels.length * 30 + 10) + 'px';
+  _gjCharts[chave] = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ data: d.valores, rotulos: d.rotulos, backgroundColor: '#35383F', borderWidth: 0, borderRadius: 5, barPercentage: 0.6, maxBarThickness: 22 }] },
+    plugins: [gjValorPlugin],
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false, animation: false, devicePixelRatio: GJ_DPR,
+      layout: { padding: { right: 72 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true },
+        y: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: "'DM Sans', sans-serif", size: 12, weight: '500' } } }
+      }
+    }
+  });
+}
+function gjDesenhar() { ['gorjeta', 'ponto', 'ifood'].forEach(gjBarH); }
+// desenha só com a DM Sans pronta (o canvas não redesenha quando a fonte chega)
+// (se a fonte chegar depois dos 2s, desenha de novo: o Chart.js guarda a largura dos nomes medida com a fonte reserva)
+function esperarFonte(cb){
+  var feito = false;
+  function go(){ if (!feito) { feito = true; cb(); } }
+  setTimeout(go, 2000);
+  try {
+    Promise.all([document.fonts.load('800 12px "DM Sans"'), document.fonts.load('500 12px "DM Sans"'), document.fonts.load('400 12px "DM Sans"')]).then(function(){ if (feito) cb(); else go(); }, go);
+  } catch (e) { go(); }
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function() { esperarFonte(gjDesenhar); });
+else esperarFonte(gjDesenhar);
+// maquete: o filtro ainda não muda os números; "Limpar" só volta para "Todas"
+function limparFiltrosGorjeta() { var f = document.getElementById('f-unidade'); if (f) f.value = 'Todas'; }
+
+// === Info dos gráficos (botão "i") ===
+var _INFO_GRAFICOS = {
+  gorjeta: '<div class="info-note">Total de gorjeta acumulada em cada mês (R$), do mais recente para o mais antigo. Tela de demonstração: os números ainda são fixos.</div>',
+  ponto: '<div class="info-note">Valor do ponto da gorjeta em cada mês (R$), do mais recente para o mais antigo. Tela de demonstração: os números ainda são fixos.</div>',
+  ifood: '<div class="info-note">Quantidade de pedidos no iFood em cada mês, do mais recente para o mais antigo. Tela de demonstração: os números ainda são fixos.</div>'
+};
+function abrirInfoGrafico(key){
+  var html = _INFO_GRAFICOS[key]; if (!html) return;
+  document.getElementById('info-body').innerHTML = html;
+  document.getElementById('info-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function closeInfoGrafico(){ document.getElementById('info-overlay').classList.remove('active'); document.body.style.overflow = ''; }
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeInfoGrafico(); });
+</script>
 <script>
 
 
