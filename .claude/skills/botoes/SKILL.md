@@ -87,7 +87,7 @@ Medidas: **altura 40px no desktop e 34px no celular** (`max-width:767px`) para t
 
 > **Por que peso 400:** as páginas carregam a DM Mono só em `400;500`. Com `font-weight:600` o navegador inventa um negrito ("faux bold") — fica com peso fora do padrão. Botão não tem peso.
 
-**Ver mais / paginação:** é `.btn.btn--primary` (não é um botão à parte) com o **número entre parênteses = quantos itens faltam** — ex.: `Ver mais (12)`. **No desktop é 40% menor** (decisão do dono, 04/10/2026): `@media (min-width:768px) { .ver-mais-wrap .btn { height: 24px; padding: 0 12px; font-size: 9px; } }`; no celular segue a altura normal (34px). Inline no fim de uma lista curta; `.btn--block` no rodapé de listas longas. Ao carregar mais, atualize o nº (e quando zerar, esconda o botão).
+**Ver mais / paginação:** é `.btn.btn--primary` (não é um botão à parte) com o **número entre parênteses = quantos itens faltam** — ex.: `Ver mais (12)`. **No desktop é 40% menor** (decisão do dono, 04/10/2026): `@media (min-width:768px) { .ver-mais-wrap .btn { height: 24px; padding: 0 12px; font-size: 8px; border-radius: 4px; } }` — fonte 8px e canto 4px para não parecer pílula; no celular segue o botão normal (34px, canto 8px). Inline no fim de uma lista curta; `.btn--block` no rodapé de listas longas. Ao carregar mais, atualize o nº (e quando zerar, esconda o botão).
 ```html
 <button class="btn btn--primary" id="btn-ver-mais" onclick="verMais()">Ver mais (12)</button>
 ```
@@ -126,12 +126,16 @@ function setBtnLoading(on, label){
 
 ## 3. Só-ícone, link e toggle
 
-**Só-ícone (28×28, ícone 14px — decisão do dono, 04/10/2026; era 40×40):** **tudo igual ao primário** (carbon/citric) — editar, enviar, visualizar, foto, copiar, link. A **única exceção de cor** é a **lixeira** (destrutivo, `--danger`). Sempre com `title` e `aria-label` (o nome da ação).
+**Só-ícone (28×28 — decisão do dono, 04/10/2026; era 40×40). No desktop: desenho 12px e canto 4px** (com 8px o quadrado de 28px parecia um círculo); no celular, desenho 14px e canto 8px: **tudo igual ao primário** (carbon/citric) — editar, enviar, visualizar, foto, copiar, link. A **única exceção de cor** é a **lixeira** (destrutivo, `--danger`). Sempre com `title` e `aria-label` (o nome da ação).
 ```css
 .btn-icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 8px; cursor: pointer; flex-shrink: 0; background: var(--carbon); color: var(--citric); transition: opacity .15s, background .15s; }  /* padrão = primário (editar, enviar, visualizar, foto, copiar) */
 .btn-icon:hover { opacity: .85; }
 .btn-icon svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .btn-icon--danger { background: var(--red); color: #fff; }   /* lixeira — única exceção de cor */
+@media (min-width: 768px) {                                  /* desktop: ícone menor e canto mais reto (DEPOIS da regra base) */
+  .btn-icon { border-radius: 4px; }
+  .btn-icon svg { width: 12px; height: 12px; }
+}
 ```
 Ícones (SVG stroke, `viewBox="0 0 24 24"`) — use **sempre o mesmo desenho para a mesma ação**:
 
@@ -249,7 +253,7 @@ modal de informação (`abrirInfoGrafico`/`closeInfoGrafico`, `.info-note`/`.inf
 - [ ] Ação de modal/form full-width = `.btn--block`; de cartão do celular = `.btn--sm`; **de linha de tabela no desktop = `.btn-icon`**.
 - [ ] Loading = `disabled` + `.btn-spin` (`btnRot`) + texto em **gerúndio** via `setBtnLoading`.
 - [ ] Disabled = `opacity:.4 cursor:not-allowed`.
-- [ ] Só-ícone = `.btn-icon` **28×28** (ícone 14px, `title`+`aria-label`), **tudo igual ao primário**; só a **lixeira** (`--danger`) com cor diferente; link = `.btn-link`; mesmo desenho para a mesma ação (tabela §3).
+- [ ] Só-ícone = `.btn-icon` **28×28** (desktop: desenho 12px e canto 4px; celular: 14px e 8px; `title`+`aria-label`), **tudo igual ao primário**; só a **lixeira** (`--danger`) com cor diferente; link = `.btn-link`; mesmo desenho para a mesma ação (tabela §3).
 - [ ] Toggle = `.toggle` (ligado = carbon + botão citric).
 - [ ] Texto **ou** ícone, nunca os dois: mobile = texto (`.btn`), desktop ≥768px = ícone (`.btn-icon`), via `.btn-resp-text`/`.btn-resp-icon`.
 - [ ] Pílula (raio 100px) NÃO entra aqui — a definir depois.
