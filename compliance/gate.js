@@ -1,4 +1,5 @@
 /* gate.js — Controle de acesso das páginas de Governança de Processos (modelo novo).
+ * rev: 2026-10-04 — busca sempre os ids a esconder (botões montados por JS também têm id).
  * rev: 2026-07-20 — tela "abra pelo app" ancorada no #auth-gate (não escondida pelo denied).
  *
  * A página abre SOMENTE embarcada no app Tatá Plus, que passa o token da sessão
@@ -321,26 +322,25 @@
         var permitidos = (r && r.data ? r.data : []).map(function (x) {
           return { id: x.pagina_id, url: x.url }
         })
-        // Só busca bloqueios de aba se a página tem abas controláveis.
-        if (document.querySelector('[data-aba-id]')) {
-          return _sb
-            .schema('tata_plus')
-            .rpc('gov_minhas_abas_bloqueadas')
-            .then(
-              function (rb) {
-                return {
-                  permitidos: permitidos,
-                  bloqueadas: (rb && rb.data ? rb.data : []).map(function (x) {
-                    return x.aba_id
-                  }),
-                }
-              },
-              function () {
-                return { permitidos: permitidos, bloqueadas: [] }
-              },
-            )
-        }
-        return { permitidos: permitidos, bloqueadas: [] }
+        // Busca sempre a lista do que esconder: botões montados depois pelo JS
+        // (linhas de tabela, cartões, modais) também levam data-aba-id e ainda não
+        // estão no DOM agora. A lista vale para o portal todo e vai pro cache.
+        return _sb
+          .schema('tata_plus')
+          .rpc('gov_minhas_abas_bloqueadas')
+          .then(
+            function (rb) {
+              return {
+                permitidos: permitidos,
+                bloqueadas: (rb && rb.data ? rb.data : []).map(function (x) {
+                  return x.aba_id
+                }),
+              }
+            },
+            function () {
+              return { permitidos: permitidos, bloqueadas: [] }
+            },
+          )
       })
       .then(function (res) {
         if (res === null) return

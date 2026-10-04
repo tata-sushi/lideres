@@ -59,14 +59,39 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 - **Escolhas de agentes a confirmar:** Feriados (opções Folga/Pagamento/Não tem direito só em texto), HC (duas
   lixeiras "Remover depto/unidade" no desktop), Agenda (texto da caixa de arquivos sem "arraste"), Experiências
   ("Avaliado" deixou de ser verde), Abastecimento ("Processar Parcialmente" saiu do âmbar).
-- **Acesso fora dos dashboards:** 9 ids sem registro no catálogo (áreas/RH, ferramentas, fornecedores) e o
-  "Enviar Cartão de Ponto" das Escalas (seção App, sem bypass de admin — registrar com cuidado).
+- **Acesso — feito em 04/10/2026** (banco + HTML + app; tabela de clicar em `assets/matriz-acessos.html` da skill
+  de acesso, publicada como página privada do dono):
+  - Banco: tirado o acesso de 4 pessoas inativas; apagadas 3 sobras (Brainstorm "Compartilhar", Cardápio
+    "Compras"/"Preços") e 3 liberações/bloqueios sem efeito. Armários `::incluir-excluir` **fica** (é conferido
+    pela RPC `armario_pode_gerir`). Cópia para desfazer guardada fora do repo.
+  - 27 páginas cadastradas (seção nova "Áreas & Processos", Caixa, Gorjeta, Matriz D/E/B, Ferramentas,
+    Fornecedores) sem ninguém liberado, e postas no menu do app Plus. Nomes das páginas no banco iguais aos do menu.
+  - 58 ids novos (12 que estavam sem cadastro + 46 de botões de ação/abas), cada botão liberado para quem já abria
+    a página — ninguém perdeu nada no dia. "Enviar Cartão de Ponto" das Escalas agora obedece o painel.
+  - `gate.js` busca sempre a lista do que esconder (antes, botão montado por JS escapava).
+- **Acesso — pendente / para decidir:**
+  - Fase 2: apagar os 14 nomes antigos (SQL na §3) quando o app mostrar a versão nova.
+  - Documentos: a bolinha "✕" da aba Analítico ainda abre o anexar sem id (pôr id esconderia o indicador);
+    "aplica/não aplica" + "usar padrão do cargo" estão num id só (`editar-excecao-documento`), e "quebrar
+    período" + "desfazer quebra" em outro (`quebrar-periodo`) — separar exige renomear.
+  - Admissão: `validar-informacao-ficha` está numa caixa de seleção (é um "aprovar").
+  - Desligamentos: os 5 cartões que geram modelos em branco (pedido de demissão, acordo mútuo) ficaram sem id.
+  - Escalas: sem `editar-dia` a pessoa ainda abre a janela do dia, só sem Salvar/Voltar ao padrão.
+  - Férias: Validar/Aprovar ainda têm a trava antiga por perfil (RH/admin) — liberado sem esse perfil vê o
+    botão desabilitado.
+  - Botão escondido deixa rodapé/coluna de ações vazio (Cardápio, ficha de Armários, cartão de Desligamentos,
+    ficha de Cargos) — só visual.
+  - Código morto achado: Semanal "Editar" HC (desenha em `#content`, que não existe), Admissão e Limpeza (janelas
+    de estoque que nada abre), Cardápio `modal-servir`, Medicina "Editar Exame", Férias `openDevModal`.
 
 ## 5. Ajustes feitos nesta fase (e o que foi para as skills)
 
 | Data | Página | Ajuste | Skill atualizada? |
 |---|---|---|---|
-| — | — | — | — |
+| 04/10 | (todas) | Relatório "ids × quem vê" (por página, por pessoa, pontos de atenção) — fica fora do repo (nomes) | `controle-acesso-abas-botoes`: `scripts/relatorio-acessos.py` + SKILL.md |
+| 04/10 | (todas) | Botões que começam uma ação ganharam id (46) + cadastro/liberação no banco; Escalas: ordem do `comSupa` corrigida | `controle-acesso-abas-botoes`: SKILL.md §"Que botões levam id", backend §SQL modelo |
+| 04/10 | (todas) | Tabela de clicar (Página · Abas · Botões · Valor) — o dono marca, o Claude aplica | `controle-acesso-abas-botoes`: `assets/matriz-acessos.html`, `scripts/estado-acessos.py`, backend §"Tabela de acessos" |
+| 04/10 | (todas) | Valor em R$ não tem bypass de admin (corrigido na skill) | `controle-acesso-abas-botoes`: SKILL.md + backend |
 
 ## 6. Bugs achados e ainda não corrigidos (regra de negócio)
 
