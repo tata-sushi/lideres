@@ -76,14 +76,14 @@ Na página existe um IIFE no `<script>` final que percorre todos os cards com `d
 
 ## 4. Visual dos estados
 
-- **Building** (badge amber): card não clicável, ícone de alerta, layout igual ao aberto
-- **Locked** (badge coral/vermelho): cadeado fechado, card não clicável, **ícone do departamento (sigla) mantém cor citric original**
+- **Building** (badge âmbar): card não clicável, ícone de alerta (triângulo), layout igual ao aberto
+- **Locked** (badge vermelho): cadeado fechado, card não clicável, **ícone do departamento (sigla) mantém cor citric original**
 - **Open**: card clicável, sem badge
 
-Cores do badge locked:
+**Badge building e badge locked seguem o MESMO padrão** — ícone puro (14px, `stroke-width:2`, **sem caixa de fundo**), só muda a cor do traço:
 ```css
-background: rgba(180,40,40,0.5);
-color: #ff8a8a;
+.ac-chip-badge svg        { stroke: #b08a00; }  /* building / alerta — âmbar */
+.ac-chip-badge.locked svg { stroke: #b42828; }  /* locked / cadeado — vermelho (mesmo padrão, sem caixa) */
 ```
 
 ## 5. Subpáginas (ex.: chips em `institucional/index.html`)
