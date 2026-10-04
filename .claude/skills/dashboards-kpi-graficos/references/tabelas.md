@@ -190,6 +190,9 @@ function cartao(c){
   - **Seção e subseção** não têm estilo próprio (nada de faixa cinza nem DM Mono): são linhas iguais às outras, e a
     hierarquia aparece **só pelo recuo em cascata** — seção › subseção › página › aba/botão/valor (14px por nível no
     desktop, 8px no celular). O nome da seção fica na 1ª coluna fixa, então não rola de lado.
+  - **Coluna "Total"** (quantos veem) entre a última coluna de colaborador e "Editar": número DM Sans 13px/800,
+    centralizado, 56px, rola junto com as outras (só "Editar" e a 1ª coluna ficam fixas). Nada de número dentro da
+    célula do nome.
   - **Pílulas do tipo, à direita do nome**: Página = azul e Aba = azul (`#E8F0FA`/`#1A3A5C`), Botão = âmbar
     (`#FFF4DC`/`#7A4A00`), Valor R$ = carbon (`#35383F`/`#CFFF00`); a legenda vai no "i".
 - Topo: **nome em maiúsculas** + **status** à direita; `sub` (DM Mono 11px) embaixo do nome para um dado curto
