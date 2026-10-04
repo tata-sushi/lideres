@@ -17,7 +17,7 @@ tabela de **Comentários** da aba KPIs (as três usam o mesmo organizador abaixo
       …
       <th style="width:230px">Ações</th>                                   <!-- coluna de ações: sem ordenar/redimensionar -->
     </tr></thead><tbody id="anl-tbody"></tbody></table></div>
-    <div class="ver-mais-wrap" id="anl-mais" style="display:none"><button class="btn-ver-mais" onclick="TAB_ANL.verMais()">Ver mais</button></div>
+    <div class="ver-mais-wrap" id="anl-mais" style="display:none"><button class="btn btn--primary" onclick="TAB_ANL.verMais()">Ver mais</button></div>
   </div>
 </div></div>
 ```
@@ -31,7 +31,7 @@ tabela de **Comentários** da aba KPIs (as três usam o mesmo organizador abaixo
 
 ## 2. CSS
 
-Copie o bloco `table.mini` / `.tbl-org` / `.col-resizer` / `.ver-mais-wrap` / `.btn-ver-mais` da §6 da skill e:
+Copie o bloco `table.mini` / `.tbl-org` / `.col-resizer` / `.ver-mais-wrap` da §6 da skill (o botão "Ver mais" é o `.btn.btn--primary` da skill `botoes`) e:
 ```css
 .status-badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 100px; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; flex-shrink: 0; }
 .pill-pos { background: #35383F; color: #CFFF00; } .pill-blue { background: #E8F0FA; color: #1A3A5C; }
@@ -73,7 +73,7 @@ TabelaOrg.prototype.pinta = function(){
   var lista = this.todos ? this.rows : this.rows.slice(0, o.n);
   tb.innerHTML = lista.length ? lista.map(o.linha).join('') : '<tr><td colspan="' + o.colspan + '"><div class="status-empty">' + o.vazio + '</div></td></tr>';
   var w = document.getElementById(o.mais), resto = this.rows.length - o.n;
-  if (w) { w.style.display = (!this.todos && resto > 0) ? 'block' : 'none'; var b = w.querySelector('.btn-ver-mais'); if (b) b.textContent = 'Ver mais (' + resto + ')'; }
+  if (w) { w.style.display = (!this.todos && resto > 0) ? 'block' : 'none'; var b = w.querySelector('button'); if (b) b.textContent = 'Ver mais (' + resto + ')'; }
 };
 TabelaOrg.prototype._larguras = function(){
   var t = document.getElementById(this.o.tabela); if (!t || this.colW) return;
