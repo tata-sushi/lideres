@@ -2463,6 +2463,8 @@ function _pagtoSit(r){
 function _sitPill(s){ if(s.cls==='muted') return '<span class="td-muted" title="Não se aplica">—</span>'; return '<span class="status-badge pill-'+s.cls+'">'+escH(s.txt)+'</span>'; }
 function _demById(id){ for(var i=0;i<DEM_ROWS.length;i++){ if(DEM_ROWS[i].id===id) return DEM_ROWS[i]; } return null; }
 function _homologPendente(r){ var s=(r.status_homologacao==null?'':String(r.status_homologacao)).trim().toLowerCase(); return !(s==='agendada'||s==='realizada'||s==='realizado'||s==='esgotado'); }
+// disparos (agenda de homologação e pesquisa) só valem p/ desligamentos a partir de 01/01/2026 (históricos ficam fora do fluxo)
+function _demAtivavel2026(r){ var dd=String(r && r.data_demissao || '').slice(0,10); return dd>='2026-01-01'; }
 // tipo de desligamento -> qual pesquisa de saída enviar (ramo 'demissao' x 'desligado')
 function _entrevistaTipo(t){
   if(t==='pedido_demissao'||t==='demissao') return 'demissao';
@@ -2478,15 +2480,19 @@ function _demAcoes(r, modo){
     if(ico) return '<button class="btn-icon"'+attrs+' title="'+t+'" aria-label="'+t+'"><svg viewBox="0 0 24 24">'+ICO[iconKey]+'</svg></button>';
     return '<button class="btn btn--primary btn--sm"'+attrs+'>'+label+'</button>';
   }
-  var agendaOk = _homologPendente(r);
-  var pesqOk   = !r.entrevista_realizada;
-  return btn('governanca-kpis-rh-desligamentos::enviar-agenda', agendaOk, "enviarAgendaRow('"+escAttr(r.id)+"')", 'Agenda', 'agenda', 'Enviar agenda de homologação', 'Homologação já agendada/concluída')
-       + btn('governanca-kpis-rh-desligamentos::disparar-entrevista', pesqOk, "enviarPesquisaRow('"+escAttr(r.id)+"')", 'Pesquisa', 'enviar', 'Enviar pesquisa de desligamento', 'Pesquisa já respondida')
+  var ativo2026 = _demAtivavel2026(r);
+  var agendaOk = ativo2026 && _homologPendente(r);
+  var pesqOk   = ativo2026 && !r.entrevista_realizada;
+  var titAgDis = !ativo2026 ? 'Desligamento anterior a 01/01/2026 — fora do fluxo' : 'Homologação já agendada/concluída';
+  var titPeDis = !ativo2026 ? 'Desligamento anterior a 01/01/2026 — fora do fluxo' : 'Pesquisa já respondida';
+  return btn('governanca-kpis-rh-desligamentos::enviar-agenda', agendaOk, "enviarAgendaRow('"+escAttr(r.id)+"')", 'Agenda', 'agenda', 'Enviar agenda de homologação', titAgDis)
+       + btn('governanca-kpis-rh-desligamentos::disparar-entrevista', pesqOk, "enviarPesquisaRow('"+escAttr(r.id)+"')", 'Pesquisa', 'enviar', 'Enviar pesquisa de desligamento', titPeDis)
        + btn('governanca-kpis-rh-desligamentos::editar-demissao', true, "openEditDem('"+escAttr(r.id)+"')", 'Editar', 'editar', 'Editar demissão', 'Editar demissão');
 }
 // envio direto a partir da linha
 function enviarAgendaRow(id){
   var r=_demById(id); if(!r) return;
+  if(!_demAtivavel2026(r)){ toast('Desligamento anterior a 2026 — fora do fluxo de homologação.'); return; }
   if(!confirm('Enviar a agenda de homologação por WhatsApp para '+(r.nome||'')+'?')) return;
   function go(supa){ supa.functions.invoke('homologacao-disparar',{ body:{ demissao_id:id } }).then(function(res){
     var d=res&&res.data;
@@ -2498,6 +2504,7 @@ function enviarAgendaRow(id){
 }
 function enviarPesquisaRow(id){
   var r=_demById(id); if(!r) return;
+  if(!_demAtivavel2026(r)){ toast('Desligamento anterior a 2026 — fora do fluxo de pesquisa.'); return; }
   if(r.entrevista_realizada){ toast('Pesquisa já respondida.'); return; }
   var tipo=_entrevistaTipo(r.tipo);
   if(!tipo){ toast('Defina o tipo de desligamento (Editar) para enviar a pesquisa certa.'); return; }
