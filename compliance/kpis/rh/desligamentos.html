@@ -383,26 +383,21 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div id="view-dashboard" style="display:none">
 <div class="kpis-wrap" id="kpis-wrap">
   <div class="kpi-card">
-    <span class="kpi-label">Pesquisas respondidas</span>
+    <span class="kpi-label">Formulários respondidos</span>
     <span class="kpi-number" id="kpi-realizadas">—</span>
     <span class="kpi-sub" id="kpi-pesq-sub"></span>
   </div>
   <div class="kpi-card">
-    <span class="kpi-label">Média geral</span>
-    <span class="kpi-number" id="kpi-media">—</span>
-    <span class="kpi-sub" id="kpi-faixa"></span>
-  </div>
-  <div class="kpi-card">
     <span class="kpi-label">Índice de recomendação</span>
     <span class="kpi-number" id="pct-irec">—</span>
-    <span class="kpi-sub">nota 4–5</span>
+    <span class="kpi-sub"><span id="kpi-media">—</span> de média geral</span>
   </div>
 </div>
 
 <div class="filters-wrap">
   <div class="filters-row">
     <div class="filter-group">
-      <label class="filter-label" for="f-tipo">Tipo</label>
+      <label class="filter-label" for="f-tipo">Tipos de rescisão</label>
       <select class="filter-select" id="f-tipo" onchange="applyFilter()">
         <option value="">Todos</option>
         <option>Pedi demissão</option>
@@ -410,7 +405,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </select>
     </div>
     <div class="filter-group">
-      <label class="filter-label" for="f-ano">Ano</label>
+      <label class="filter-label" for="f-unidade">Unidade</label>
+      <select class="filter-select" id="f-unidade" onchange="applyFilter()">
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" for="f-departamento">Departamento</label>
+      <select class="filter-select" id="f-departamento" onchange="applyFilter()">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" for="f-ano">Período</label>
       <select class="filter-select" id="f-ano" onchange="applyFilter()">
         <option value="">Todos</option>
       </select>
@@ -1920,11 +1927,11 @@ function hideLoading(){ var el = document.getElementById('loading-overlay'); if 
 function loadData(){
   // Dados reais via RPC (schema tata_plus) usando o client autenticado do portal.
   function go(supa){
-    supa.schema('tata_plus').rpc('av_desligamento_rows').then(function(res){
-      if (res && res.error) console.error('Erro RPC av_desligamento_rows:', res.error);
+    supa.schema('tata_plus').rpc('av_desligamento_rows_v2').then(function(res){
+      if (res && res.error) console.error('Erro RPC av_desligamento_rows_v2:', res.error);
       DATA = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
       onDataReady();
-    }).catch(function(e){ console.error('Erro RPC av_desligamento_rows:', e); DATA = []; onDataReady(); });
+    }).catch(function(e){ console.error('Erro RPC av_desligamento_rows_v2:', e); DATA = []; onDataReady(); });
   }
   if (window.__lideresSupa) go(window.__lideresSupa);
   else window.addEventListener('lideres:supa', function(){ go(window.__lideresSupa); }, { once:true });
@@ -1952,6 +1959,17 @@ function populateAnoSelect(){
   var arr = Object.keys(anos).sort().reverse();
   var sel = document.getElementById('f-ano');
   arr.forEach(function(a){ var opt = document.createElement('option'); opt.value = a; opt.textContent = a; sel.appendChild(opt); });
+  _fillKpiFiltro('f-unidade', 'unidade');
+  _fillKpiFiltro('f-departamento', 'departamento');
+}
+function _fillKpiFiltro(selId, campo){
+  var sel = document.getElementById(selId); if(!sel) return;
+  var cur = sel.value;
+  var vals = {}; DATA.forEach(function(r){ var v = r[campo]; if(v) vals[v]=1; });
+  // mantém a 1ª option ("Todas/Todos") e recria o resto
+  while(sel.options.length > 1) sel.remove(1);
+  Object.keys(vals).sort().forEach(function(v){ var o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
+  if(cur) sel.value = cur;
 }
 
 function updateFooterDate(){
@@ -1969,9 +1987,13 @@ function updateFooterDate(){
 function applyFilter(){
   var fTipo = document.getElementById('f-tipo').value;
   var fAno  = document.getElementById('f-ano').value;
+  var fUni  = (document.getElementById('f-unidade')||{}).value || '';
+  var fDep  = (document.getElementById('f-departamento')||{}).value || '';
   filtered = DATA.filter(function(r){
     if (fTipo && r.tipo !== fTipo) return false;
     if (fAno  && getAno(r) !== fAno) return false;
+    if (fUni  && r.unidade !== fUni) return false;
+    if (fDep  && r.departamento !== fDep) return false;
     return true;
   });
   document.getElementById('results-count').innerHTML = '<span>'+filtered.length+'</span> desligamento(s)';
@@ -1981,6 +2003,8 @@ function applyFilter(){
 function clearFilters(){
   document.getElementById('f-tipo').value = '';
   document.getElementById('f-ano').value  = '';
+  var u=document.getElementById('f-unidade'); if(u) u.value='';
+  var d=document.getElementById('f-departamento'); if(d) d.value='';
   applyFilter();
 }
 
@@ -2260,7 +2284,7 @@ function _updatePesqSub(){
   var el=document.getElementById('kpi-pesq-sub'); if(!el) return;
   var pend=0, nr=0;
   (typeof DEM_ROWS!=='undefined'?DEM_ROWS:[]).forEach(function(r){ var k=_pesqSit(r).key; if(k==='pendente') pend++; else if(k==='nao_respondeu') nr++; });
-  el.textContent = pend+' pendentes · '+nr+' não respondidas';
+  el.textContent = pend+' pendentes · '+nr+' não respondidos';
 }
 function renderAll(rows){
   document.getElementById('kpi-realizadas').textContent = rows.length;
@@ -2278,8 +2302,8 @@ function renderAll(rows){
   // ── média geral da experiência de quem saiu ──
   var wm = rows.filter(function(r){ return r.media != null; });
   var mg = wm.length ? wm.reduce(function(a,r){ return a+Number(r.media); },0)/wm.length : null;
-  document.getElementById('kpi-media').textContent = (mg!=null) ? mg.toFixed(2) : '—';
-  document.getElementById('kpi-faixa').textContent = (mg!=null) ? faixaLabel(mg) : '';
+  var _mgEl=document.getElementById('kpi-media'); if(_mgEl) _mgEl.textContent = (mg!=null) ? mg.toFixed(2) : '—';
+  var _fxEl=document.getElementById('kpi-faixa'); if(_fxEl) _fxEl.textContent = (mg!=null) ? faixaLabel(mg) : '';
 
   // ── processo de desligamento (involuntário) ──
   var desl = rows.filter(function(r){ return r.tipo==='Fui desligado(a)'; });
