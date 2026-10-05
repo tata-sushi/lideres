@@ -93,6 +93,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 /* barras horizontais com muitas categorias: o card fica em 220px e o gráfico rola na vertical */
 .chart-wrap-y { overflow-x: hidden; overflow-y: auto; }
 .chart-scroll-y { position: relative; height: 100%; }
+.chart-scroll { position: relative; height: 100%; }
 /* título não passa por baixo do "i" */
 .chart-card .chart-title { padding: 0 18px; }
 /* mapa de calor pergunta × nota (skill §6): célula em banda, cor = opacidade do carbon */
@@ -430,8 +431,27 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <div class="dashboard" id="dashboard">
-<!-- linha 1: tipo · motivo informado (desligados) · motivos de saída (pedidos) -->
+<!-- linha 0: custos de rescisão (verbas) — fonte: tabela demissoes -->
 <div class="top-section">
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('val-mes')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Custo de rescisões por mês</div>
+    <div class="chart-wrap"><div class="chart-scroll" id="v-mes-scroll"><canvas id="v-mes"></canvas></div></div>
+  </div>
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('val-unidade')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Custo por unidade</div>
+    <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="v-unidade"></canvas></div></div>
+  </div>
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('val-tipo')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Custo médio por tipo</div>
+    <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="v-tipo"></canvas></div></div>
+  </div>
+</div>
+
+<!-- linha 1: tipo · motivo informado (desligados) · motivos de saída (pedidos) -->
+<div class="top-section" style="margin-top:12px">
   <div class="chart-card">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('tipo')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Tipo de desligamento</div>
@@ -1968,6 +1988,16 @@ function populateAnoSelect(){
   _fillKpiFiltro('f-unidade', 'unidade');
   _fillKpiFiltro('f-departamento', 'departamento');
 }
+// inclui no filtro de Período (e unidade/depto) os anos/valores vindos das demissões (DEM_ROWS)
+function _mergeAnosDemissoes(){
+  var sel=document.getElementById('f-ano'); if(!sel) return;
+  var have={}; for(var i=0;i<sel.options.length;i++){ have[sel.options[i].value]=true; }
+  var anos={}; (typeof DEM_ROWS!=='undefined'?DEM_ROWS:[]).forEach(function(r){ var a=String(r.data_demissao||'').slice(0,4); if(a && !have[a]) anos[a]=true; });
+  Object.keys(anos).sort().reverse().forEach(function(a){ var o=document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o); have[a]=true; });
+  // reordena desc mantendo "Todos" no topo
+  var opts=[].slice.call(sel.options,1).sort(function(x,y){ return y.value.localeCompare(x.value); });
+  opts.forEach(function(o){ sel.appendChild(o); });
+}
 function _fillKpiFiltro(selId, campo){
   var sel = document.getElementById(selId); if(!sel) return;
   var cur = sel.value;
@@ -2004,6 +2034,7 @@ function applyFilter(){
   });
   document.getElementById('results-count').innerHTML = '<span>'+filtered.length+'</span> desligamento(s)';
   renderAll(filtered);
+  renderValores();
 }
 
 function clearFilters(){
@@ -2153,6 +2184,62 @@ function renderPie(canvasId, entries){
       }
     }
   });
+}
+
+// ===== Custos de rescisão (verbas) — fonte: DEM_ROWS (tabela demissoes) =====
+function _brlK(v){ v=Number(v)||0; if(v>=1000) return 'R$ '+(v/1000).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:1})+'k'; return 'R$ '+v.toLocaleString('pt-BR',{maximumFractionDigits:0}); }
+function _barValLabels(fmt){ return { id:'bvl', afterDatasetsDraw:function(chart){ var ctx=chart.ctx; var horiz=chart.options&&chart.options.indexAxis==='y'; chart.data.datasets.forEach(function(ds,di){ var meta=chart.getDatasetMeta(di); meta.data.forEach(function(bar,i){ var val=ds.data[i]; if(val==null||val===0) return; ctx.save(); ctx.fillStyle='#35383F'; ctx.font='800 12px "DM Sans", sans-serif'; var txt=fmt(val); if(horiz){ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(txt,bar.x+5,bar.y);}else{ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(txt,bar.x,bar.y-4);} ctx.restore(); }); }); } }; }
+function _demDashFiltradas(){
+  var fu=_demVal('f-unidade'), fd=_demVal('f-departamento'), fa=_demVal('f-ano');
+  return (typeof DEM_ROWS!=='undefined'?DEM_ROWS:[]).filter(function(r){
+    if(fu && r.unidade!==fu) return false;
+    if(fd && r.departamento!==fd) return false;
+    if(fa && String(r.data_demissao||'').slice(0,4)!==fa) return false;
+    return true;
+  });
+}
+function _renderValBarV(canvasId, scrollId, entries){
+  destroyChart(canvasId);
+  var canvas=document.getElementById(canvasId); if(!canvas||typeof Chart==='undefined') return;
+  var labels=entries.map(function(e){return e[0];}), data=entries.map(function(e){return e[1];});
+  var sc=document.getElementById(scrollId); if(sc) sc.style.minWidth=Math.max(entries.length*46,10)+'px';
+  _charts[canvasId]=new Chart(canvas,{ type:'bar',
+    data:{labels:labels,datasets:[{data:data,backgroundColor:'#35383F',borderWidth:0,borderRadius:5,barPercentage:0.6,maxBarThickness:22}]},
+    plugins:[_barValLabels(_brlK)],
+    options:{ responsive:true,maintainAspectRatio:false,animation:false,devicePixelRatio:CHART_DPR,
+      layout:{padding:{top:20}},
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{ x:{grid:{display:false},border:{display:false},ticks:{color:'#35383F',font:{family:"'DM Sans', sans-serif",size:12,weight:'500'}}},
+               y:{grid:{display:false},border:{display:false},ticks:{display:false},beginAtZero:true} } } });
+}
+function _renderValBarH(canvasId, entries){
+  destroyChart(canvasId);
+  var canvas=document.getElementById(canvasId); if(!canvas||typeof Chart==='undefined') return;
+  var labels=entries.map(function(e){return e[0];}), data=entries.map(function(e){return e[1];});
+  if(canvas.parentElement) canvas.parentElement.style.height=Math.max(220,labels.length*30+10)+'px';
+  _charts[canvasId]=new Chart(canvas,{ type:'bar',
+    data:{labels:labels,datasets:[{data:data,backgroundColor:'#35383F',borderWidth:0,borderRadius:5,barPercentage:0.6,maxBarThickness:22}]},
+    plugins:[_barValLabels(_brlK)],
+    options:{ indexAxis:'y', responsive:true,maintainAspectRatio:false,animation:false,devicePixelRatio:CHART_DPR,
+      layout:{padding:{right:56}},
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{ x:{grid:{display:false},border:{display:false},ticks:{display:false},beginAtZero:true},
+               y:{grid:{display:false},border:{display:false},ticks:{color:'#35383F',font:{family:"'DM Sans', sans-serif",size:12,weight:'500'},
+                 callback:function(v){ var max=Math.min(26,Math.max(8,Math.floor((this.chart.width/2-16)/7.5))); return truncate(this.getLabelForValue(v),max);}}} } } });
+}
+function renderValores(){
+  if(typeof Chart==='undefined') return;
+  var rows=_demDashFiltradas();
+  // 1) custo por mês (soma de verbas)
+  var m={}; rows.forEach(function(r){ var d=String(r.data_demissao||'').slice(0,7); var v=Number(r.valor_rescisao)||0; if(d.length===7 && v>0) m[d]=(m[d]||0)+v; });
+  var mesEntries=Object.keys(m).sort().map(function(k){ var p=k.split('-'); return [p[1]+'/'+p[0].slice(2), m[k]]; });
+  _renderValBarV('v-mes','v-mes-scroll',mesEntries);
+  // 2) custo por unidade (soma de verbas)
+  var u={}; rows.forEach(function(r){ var v=Number(r.valor_rescisao)||0; if(v>0){ var k=r.unidade||'—'; u[k]=(u[k]||0)+v; } });
+  _renderValBarH('v-unidade', Object.keys(u).map(function(k){return [k,Math.round(u[k])];}).sort(function(a,b){return b[1]-a[1];}));
+  // 3) custo médio por tipo (média de verbas quando > 0)
+  var t={}; rows.forEach(function(r){ var v=Number(r.valor_rescisao)||0; if(v<=0) return; var k=(typeof TIPO_DESLIG_TXT!=='undefined'&&TIPO_DESLIG_TXT[r.tipo])||r.tipo||'—'; if(!t[k]) t[k]={s:0,n:0}; t[k].s+=v; t[k].n++; });
+  _renderValBarH('v-tipo', Object.keys(t).map(function(k){return [k,Math.round(t[k].s/t[k].n)];}).sort(function(a,b){return b[1]-a[1];}));
 }
 
 var ORDER_NIVEL = ['Bom','Excelente','Regular','Ruim'];
@@ -2333,6 +2420,9 @@ var INFO_NOTAS = '<div class="info-note">Cada linha é um tema da entrevista de 
   + PERGUNTAS.map(function(p, i){ return '<tr><td>'+(i+1)+'</td><td>'+p[1]+'</td><td>'+p[2]+'</td></tr>'; }).join('')
   + '</tbody></table>';
 var _INFO_GRAFICOS = {
+  'val-mes': '<div class="info-note">Soma das <b>verbas rescisórias</b> (R$) por mês do desligamento. Fonte: tabela de demissões. Respeita os filtros de unidade, departamento e período. Só entram registros com verba lançada (&gt; 0). Valores abreviados (ex.: R$ 12k = R$ 12 mil).</div>',
+  'val-unidade': '<div class="info-note">Soma das <b>verbas rescisórias</b> (R$) por unidade. Mostra onde o custo de rescisão se concentra. Só entram registros com verba lançada (&gt; 0). Respeita os filtros do topo.</div>',
+  'val-tipo': '<div class="info-note"><b>Custo médio</b> de verbas rescisórias (R$) por tipo de desligamento (Acordo Mútuo / Desligamento empresa / Pedido de demissão / Término do contrato de experiência). Média calculada só sobre registros com verba lançada (&gt; 0). Respeita os filtros do topo.</div>',
   tipo: '<div class="info-note">Tipos de desligamento das entrevistas de saída respondidas: quem pediu demissão e quem foi desligado(a).</div>',
   saidas: '<div class="info-note">Motivos de saída de quem <b>pediu demissão</b> (P). Cada pessoa pode marcar mais de um motivo; aparecem os 9 mais citados.</div>',
   motivotata: '<div class="info-note">Motivo do desligamento conforme comunicado pelo TATÁ, entre quem foi desligado(a).</div>',
@@ -2531,6 +2621,7 @@ function loadDemissoes(){
       _demLoaded=true;
       _updatePesqSub();
       try { _fillDemFiltros(); renderDemissoes(); } catch(e){ console.error('render demissoes:', e); }
+      try { _mergeAnosDemissoes(); renderValores(); } catch(e){ console.error('render valores:', e); }
     }).catch(function(e){ console.error('Erro RPC av_demissoes_grid:', e); });
   }
   if (window.__lideresSupa) go(window.__lideresSupa);
