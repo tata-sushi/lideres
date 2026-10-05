@@ -123,21 +123,20 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
   PY
   ```
 
-**Ações (OPCIONAL — a única parte que varia por página)** — botões `.drawer-sam-btn` full-width; cada botão fecha o drawer e abre um modal/ação. Variante `.secondary` (clara).
+**Ações (OPCIONAL — a única parte que varia por página)** — botões `.drawer-sam-btn` full-width; cada botão fecha o drawer e abre um modal/ação. **Todos iguais: carbon, texto branco — sem variante clara** (`.secondary` saiu do padrão em 05/10/2026: o "Janelas de homologação" claro destoava; todas as Ações têm o mesmo peso).
 - **Só `.drawer-sam-btn`** — nada de `.drawer-cta-btn` ou outras classes.
 - **Página sem ação → sem a seção** (nunca deixar o rótulo "Ações" vazio).
 - **Acesso:** o botão leva `data-aba-id` (padrão, o `gate.js` esconde) ou `data-botao-id` (quando a ação precisa ser travada) com a chave `<GOV_PAGE_ID>::<slug>` — regras na skill `controle-acesso-abas-botoes`. **Não renomeie** chave existente (é contrato com o catálogo).
 ```css
 .drawer-sam-btn { display: flex; align-items: center; justify-content: center; width: 100%; padding: 10px 14px; background: var(--carbon); border: none; border-radius: 4px; font-family: "DM Mono", monospace; font-size: 10px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #fff; cursor: pointer; transition: opacity .15s; }
 .drawer-sam-btn:hover { opacity: .85; }
-.drawer-sam-btn.secondary { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
 ```
 ```html
 <div class="drawer-section">
   <div class="drawer-section-label">Ações</div>
   <div style="display:flex;flex-direction:column;gap:8px;">
     <button class="drawer-sam-btn" data-aba-id="<GOV_PAGE_ID>::nova-solicitacao" onclick="closeDrawer(); openFab()">Nova Solicitação</button>
-    <button class="drawer-sam-btn secondary" onclick="closeDrawer(); gerarRelatorio()">Gerar Relatório</button>
+    <button class="drawer-sam-btn" data-aba-id="<GOV_PAGE_ID>::gerar-relatorio" onclick="closeDrawer(); gerarRelatorio()">Gerar Relatório</button>
   </div>
 </div>
 ```
@@ -323,7 +322,7 @@ document.addEventListener('keydown', function (e) { if (e.key === 'Escape') clos
 - [ ] Seções na ordem **Versão atual · O que é · Números · Ações**; conteúdo fixo copiado do §4b, **só Ações varia**; versão **v4.3**.
 - [ ] Números = cards Seções/Unidades com os ids padrão + `loadDrawerMeta`/`loadDrawerKPIs` chamados no `openDrawer`.
 - [ ] `loadDrawerMeta` = o do §5 (regra pág/dash + cache); número do HTML = conta atual (**44 pág / 37 dash**), igual em todas as páginas.
-- [ ] Ações só com `.drawer-sam-btn` + `data-aba-id`/`data-botao-id`; sem ações → sem a seção.
+- [ ] Ações só com `.drawer-sam-btn` (todos carbon, **sem `.secondary`**) + `data-aba-id`/`data-botao-id`; sem ações → sem a seção.
 - [ ] Footer = Responsável (avatar citric + nome DM Sans 13/600 + cargo DM Sans 9).
 - [ ] Abre pelo botão Menu do header (`openDrawer`); fecha no ✕, Esc **e** clique fora; trava scroll do fundo; listener do Esc no topo (não dentro do `closeDrawer`).
 - [ ] `</div>` do `#drawer` fechado; tokens presentes no `:root`; JS validado (sem erro de sintaxe).
