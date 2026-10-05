@@ -608,7 +608,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="ed-f"><label class="hm-label">Rescisão</label>
           <select class="hm-input" id="ed-resctipo"><option value="">—</option><option value="normal">Normal</option><option value="complementar">Complementar</option></select></div>
         <div class="ed-f"><label class="hm-label">Homologação</label>
-          <select class="hm-input" id="ed-homolog"><option value="">—</option><option value="pendente">Pendente</option><option value="agendada">Agendada</option><option value="realizada">Realizada</option></select></div>
+          <select class="hm-input" id="ed-homolog"><option value="">—</option><option value="pendente">Pendente</option><option value="agendada">Agendada</option><option value="realizada">Realizada</option><option value="faltou">Não compareceu</option><option value="esgotado">Esgotado (3x)</option></select></div>
         <div class="ed-f"><label class="hm-label">Data homologação</label><input type="date" class="hm-input" id="ed-data-homolog"></div>
         <div class="ed-f"><label class="hm-label">Data rescisão</label><input type="date" class="hm-input" id="ed-data-rescisao"></div>
         <div class="ed-f"><label class="hm-label">Verbas rescisórias (R$)</label><input type="number" step="0.01" inputmode="decimal" class="hm-input" id="ed-rescisao" placeholder="0,00"></div>
@@ -624,6 +624,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <div class="hm-label" style="margin-bottom:6px">Agenda de homologação</div>
         <div id="dem-agenda-info" style="font-size:12px;color:var(--muted);margin-bottom:8px"></div>
         <button class="btn btn--block" id="dem-agenda-btn" onclick="enviarAgenda()"><span class="btn-spin"></span><span class="btn-label">📅 Enviar agenda no WhatsApp</span></button>
+        <button class="btn btn--sm btn--block" id="dem-falta-btn" onclick="registrarFalta()" style="margin-top:8px;display:none">Registrar não comparecimento</button>
         <div id="dem-agenda-msg" style="font-size:12px;margin-top:6px"></div>
       </div>
     </div>
@@ -2400,8 +2401,9 @@ function _juntar(lista, campo){ return lista.map(function(x){ return x[campo]; }
 // === Aba Analítico · Tabela de Demissões (verbas & homologação) =============
 var DEM_ROWS=[];
 function _fmtBRL(v){ if(v==null||v==='') return '<span class="td-muted">—</span>'; var n=Number(v); if(isNaN(n)) return '<span class="td-muted">—</span>'; return 'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-var HOMOLOG_PILL={ realizada:'pos', agendada:'amber', pendente:'blue' };
-function _homologPill(s){ if(!s) return '<span class="td-muted">—</span>'; return '<span class="status-badge pill-'+(HOMOLOG_PILL[s]||'blue')+'">'+escH(s)+'</span>'; }
+var HOMOLOG_PILL={ realizada:'pos', agendada:'amber', pendente:'blue', faltou:'red', esgotado:'red' };
+var HOMOLOG_TXT={ pendente:'Pendente', agendada:'Agendada', realizada:'Realizada', faltou:'Não compareceu', esgotado:'Esgotado (3x)' };
+function _homologPill(s){ if(!s) return '<span class="td-muted">—</span>'; return '<span class="status-badge pill-'+(HOMOLOG_PILL[s]||'blue')+'">'+escH(HOMOLOG_TXT[s]||s)+'</span>'; }
 var TIPO_DESLIG_TXT={ acordo_mutuo:'Acordo Mútuo', desligamento_empresa:'Desligamento empresa', pedido_demissao:'Pedido de demissão', termino_experiencia:'Término do contrato de experiência',
   /* legados */ demissao:'Pedido de demissão', desligado:'Desligamento empresa', sem_justa_causa:'Desligamento empresa', comum_acordo:'Acordo Mútuo', acordo:'Acordo Mútuo', termino_contrato:'Término do contrato de experiência', justa_causa:'Justa causa', outro:'Outro' };
 function _tipoDeslig(s){ return s ? escH(TIPO_DESLIG_TXT[s]||s) : '<span class="td-muted">—</span>'; }
@@ -2477,8 +2479,15 @@ function openEditDem(id){
   document.getElementById('ed-obs').value=r.obs||'';
   document.getElementById('dem-ov-err').textContent='';
   var ag=r.homologacao_agendada_em;
+  var tent=r.homologacao_tentativas||0;
+  var esg=r.status_homologacao==='esgotado';
   var info=document.getElementById('dem-agenda-info');
-  if(info) info.textContent = ag ? ('Agendada para '+_fmtDataHora(ag)) : 'Ainda não agendada. Envie o link para a pessoa escolher o horário.';
+  if(info){
+    if(esg) info.textContent='Esgotado — 3 tentativas sem comparecimento.';
+    else info.textContent = (ag ? ('Agendada para '+_fmtDataHora(ag)) : 'Ainda não agendada. Envie o link para a pessoa escolher o horário.') + ' · Tentativas: '+tent+'/3';
+  }
+  var sbtn=document.getElementById('dem-agenda-btn'); if(sbtn) sbtn.style.display = esg?'none':'';
+  var fbtn=document.getElementById('dem-falta-btn'); if(fbtn) fbtn.style.display = (ag && !esg) ? '' : 'none';
   var am=document.getElementById('dem-agenda-msg'); if(am){ am.textContent=''; am.style.color=''; }
   document.getElementById('dem-overlay').classList.add('open');
 }
@@ -2522,6 +2531,24 @@ function enviarAgenda(){
       var url=d&&d.url;
       if(url){ msg.style.color='var(--amber-tx,#7A4A00)'; msg.innerHTML='Não enviou automático ('+escH((d&&d.erro)||'erro')+'). <a href="#" onclick="_copy(\''+escAttr(url)+'\');toast(\'Link copiado\');return false;">Copiar link</a> para mandar manual.'; }
       else { msg.style.color='var(--red-tx,#8B1A1A)'; msg.textContent='Não foi possível ('+escH((d&&d.erro)||(e&&e.message)||'erro')+').'; }
+    }).catch(function(){ _busy(btn,false); msg.style.color='var(--red-tx,#8B1A1A)'; msg.textContent='Erro de conexão. Tente de novo.'; });
+  }
+  if(window.__lideresSupa) go(window.__lideresSupa); else { _busy(btn,false); msg.textContent='Sessão carregando.'; }
+}
+function registrarFalta(){
+  if(!_demId) return;
+  if(!confirm('Registrar que a pessoa foi convocada e NÃO compareceu? Isso libera o horário e conta uma tentativa.')) return;
+  var btn=document.getElementById('dem-falta-btn'); var msg=document.getElementById('dem-agenda-msg'); msg.textContent=''; msg.style.color=''; _busy(btn,true);
+  function go(supa){
+    supa.schema('tata_plus').rpc('homologacao_registrar_falta',{ p_demissao_id:_demId }).then(function(res){
+      _busy(btn,false); var d=res&&res.data;
+      if((res&&res.error)||!d||!d.ok){ msg.style.color='var(--red-tx,#8B1A1A)'; msg.textContent='Não foi possível registrar.'; return; }
+      msg.style.color='var(--amber-tx,#7A4A00)';
+      msg.textContent = d.status==='esgotado' ? 'Registrado. 3 tentativas sem comparecimento — encerrado.' : ('Não comparecimento registrado (tentativa '+d.tentativas+'/3). Pode enviar uma nova agenda.');
+      var info=document.getElementById('dem-agenda-info'); if(info) info.textContent = d.status==='esgotado' ? 'Esgotado — 3 tentativas sem comparecimento.' : ('Ainda não agendada. · Tentativas: '+d.tentativas+'/3');
+      btn.style.display='none';
+      if(d.status==='esgotado'){ var sb2=document.getElementById('dem-agenda-btn'); if(sb2) sb2.style.display='none'; }
+      loadDemissoes();
     }).catch(function(){ _busy(btn,false); msg.style.color='var(--red-tx,#8B1A1A)'; msg.textContent='Erro de conexão. Tente de novo.'; });
   }
   if(window.__lideresSupa) go(window.__lideresSupa); else { _busy(btn,false); msg.textContent='Sessão carregando.'; }
