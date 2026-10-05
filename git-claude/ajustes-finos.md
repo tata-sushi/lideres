@@ -101,6 +101,7 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 
 | Data | Página | Ajuste | Skill atualizada? |
 |---|---|---|---|
+| 05/10 | Desligamentos (Analítico) | Tabela de Entrevistas vazia mostra só "Nenhuma entrevista" (sem a instrução do menu) | — |
 | 05/10 | Desligamentos (Analítico) | Filtros das Demissões saem de dentro do card para a faixa full-bleed no topo da aba (5 selects com rótulo + Limpar filtros + contagem) e a busca vai para a faixa própria; os filtros valem para as duas tabelas. Botões: todos primários, sem emoji; "Editar" ganha id `::editar-demissao` e os botões da janela Editar ganham o id da ação (`::enviar-agenda`, `::disparar-entrevista`, novo `::registrar-falta`). Toast vira alerta do navegador. "i" das Demissões com legenda das pílulas | `dashboards-kpi-graficos` (`tabelas.md` §1) + `controle-acesso-abas-botoes` (liberar id novo para quem já usava) + `botoes` (checklist) |
 | 05/10 | Desligamentos (banco) | Catálogo: `editar-demissao` e `registrar-falta` cadastrados; ordem dos botões corrigida (5–12); "Disparar entrevista" vira "Enviar pesquisa de desligamento (WhatsApp)". Os 2 não-admins que abrem a página recebem `enviar-agenda`, `editar-demissao` e `registrar-falta` (já usavam essas ações) | `controle-acesso-abas-botoes` |
 | 04/10 | Auditoria de páginas | Busca sai da grade de filtros e vai para a faixa própria abaixo de "Limpar filtros" (input branco sobre cinza, sem rótulo), como no Analítico do Recrutamento; filtros em 3 colunas | `dashboards-kpi-graficos` (SKILL.md, regra do campo de busca) |
