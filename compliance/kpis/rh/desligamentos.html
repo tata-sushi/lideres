@@ -439,9 +439,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-wrap"><div class="chart-scroll" id="v-mes-scroll"><canvas id="v-mes"></canvas></div></div>
   </div>
   <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('val-qtd-mes')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Quantidade de rescisões por mês</div>
+    <div class="chart-wrap"><div class="chart-scroll" id="v-qtd-mes-scroll"><canvas id="v-qtd-mes"></canvas></div></div>
+  </div>
+  <div class="chart-card">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('val-unidade')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Custo por unidade</div>
     <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="v-unidade"></canvas></div></div>
+  </div>
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('val-depto')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Custo por departamento</div>
+    <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="v-depto"></canvas></div></div>
   </div>
   <div class="chart-card">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('val-tipo')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
@@ -2198,28 +2208,31 @@ function _demDashFiltradas(){
     return true;
   });
 }
-function _renderValBarV(canvasId, scrollId, entries){
+function _intBR(v){ return Number(v||0).toLocaleString('pt-BR'); }
+function _renderValBarV(canvasId, scrollId, entries, fmt){
+  fmt=fmt||_brlK;
   destroyChart(canvasId);
   var canvas=document.getElementById(canvasId); if(!canvas||typeof Chart==='undefined') return;
   var labels=entries.map(function(e){return e[0];}), data=entries.map(function(e){return e[1];});
   var sc=document.getElementById(scrollId); if(sc) sc.style.minWidth=Math.max(entries.length*46,10)+'px';
   _charts[canvasId]=new Chart(canvas,{ type:'bar',
     data:{labels:labels,datasets:[{data:data,backgroundColor:'#35383F',borderWidth:0,borderRadius:5,barPercentage:0.6,maxBarThickness:22}]},
-    plugins:[_barValLabels(_brlK)],
+    plugins:[_barValLabels(fmt)],
     options:{ responsive:true,maintainAspectRatio:false,animation:false,devicePixelRatio:CHART_DPR,
       layout:{padding:{top:20}},
       plugins:{legend:{display:false},tooltip:{enabled:false}},
       scales:{ x:{grid:{display:false},border:{display:false},ticks:{color:'#35383F',font:{family:"'DM Sans', sans-serif",size:12,weight:'500'}}},
                y:{grid:{display:false},border:{display:false},ticks:{display:false},beginAtZero:true} } } });
 }
-function _renderValBarH(canvasId, entries){
+function _renderValBarH(canvasId, entries, fmt){
+  fmt=fmt||_brlK;
   destroyChart(canvasId);
   var canvas=document.getElementById(canvasId); if(!canvas||typeof Chart==='undefined') return;
   var labels=entries.map(function(e){return e[0];}), data=entries.map(function(e){return e[1];});
   if(canvas.parentElement) canvas.parentElement.style.height=Math.max(220,labels.length*30+10)+'px';
   _charts[canvasId]=new Chart(canvas,{ type:'bar',
     data:{labels:labels,datasets:[{data:data,backgroundColor:'#35383F',borderWidth:0,borderRadius:5,barPercentage:0.6,maxBarThickness:22}]},
-    plugins:[_barValLabels(_brlK)],
+    plugins:[_barValLabels(fmt)],
     options:{ indexAxis:'y', responsive:true,maintainAspectRatio:false,animation:false,devicePixelRatio:CHART_DPR,
       layout:{padding:{right:56}},
       plugins:{legend:{display:false},tooltip:{enabled:false}},
@@ -2234,9 +2247,16 @@ function renderValores(){
   var m={}; rows.forEach(function(r){ var d=String(r.data_demissao||'').slice(0,7); var v=Number(r.valor_rescisao)||0; if(d.length===7 && v>0) m[d]=(m[d]||0)+v; });
   var mesEntries=Object.keys(m).sort().map(function(k){ var p=k.split('-'); return [p[1]+'/'+p[0].slice(2), m[k]]; });
   _renderValBarV('v-mes','v-mes-scroll',mesEntries);
+  // 1b) quantidade de rescisões por mês (contagem)
+  var qm={}; rows.forEach(function(r){ var d=String(r.data_demissao||'').slice(0,7); if(d.length===7) qm[d]=(qm[d]||0)+1; });
+  var qmEntries=Object.keys(qm).sort().map(function(k){ var p=k.split('-'); return [p[1]+'/'+p[0].slice(2), qm[k]]; });
+  _renderValBarV('v-qtd-mes','v-qtd-mes-scroll',qmEntries,_intBR);
   // 2) custo por unidade (soma de verbas)
   var u={}; rows.forEach(function(r){ var v=Number(r.valor_rescisao)||0; if(v>0){ var k=r.unidade||'—'; u[k]=(u[k]||0)+v; } });
   _renderValBarH('v-unidade', Object.keys(u).map(function(k){return [k,Math.round(u[k])];}).sort(function(a,b){return b[1]-a[1];}));
+  // 2b) custo por departamento (soma de verbas)
+  var dp={}; rows.forEach(function(r){ var v=Number(r.valor_rescisao)||0; if(v>0){ var k=r.departamento||'—'; dp[k]=(dp[k]||0)+v; } });
+  _renderValBarH('v-depto', Object.keys(dp).map(function(k){return [k,Math.round(dp[k])];}).sort(function(a,b){return b[1]-a[1];}));
   // 3) custo médio por tipo (média de verbas quando > 0)
   var t={}; rows.forEach(function(r){ var v=Number(r.valor_rescisao)||0; if(v<=0) return; var k=(typeof TIPO_DESLIG_TXT!=='undefined'&&TIPO_DESLIG_TXT[r.tipo])||r.tipo||'—'; if(!t[k]) t[k]={s:0,n:0}; t[k].s+=v; t[k].n++; });
   _renderValBarH('v-tipo', Object.keys(t).map(function(k){return [k,Math.round(t[k].s/t[k].n)];}).sort(function(a,b){return b[1]-a[1];}));
@@ -2421,7 +2441,9 @@ var INFO_NOTAS = '<div class="info-note">Cada linha é um tema da entrevista de 
   + '</tbody></table>';
 var _INFO_GRAFICOS = {
   'val-mes': '<div class="info-note">Soma das <b>verbas rescisórias</b> (R$) por mês do desligamento. Fonte: tabela de demissões. Respeita os filtros de unidade, departamento e período. Só entram registros com verba lançada (&gt; 0). Valores abreviados (ex.: R$ 12k = R$ 12 mil).</div>',
+  'val-qtd-mes': '<div class="info-note"><b>Quantidade</b> de rescisões por mês do desligamento (nº de pessoas). Fonte: tabela de demissões. Respeita os filtros de unidade, departamento e período.</div>',
   'val-unidade': '<div class="info-note">Soma das <b>verbas rescisórias</b> (R$) por unidade. Mostra onde o custo de rescisão se concentra. Só entram registros com verba lançada (&gt; 0). Respeita os filtros do topo.</div>',
+  'val-depto': '<div class="info-note">Soma das <b>verbas rescisórias</b> (R$) por departamento. Só entram registros com verba lançada (&gt; 0). Respeita os filtros do topo.</div>',
   'val-tipo': '<div class="info-note"><b>Custo médio</b> de verbas rescisórias (R$) por tipo de desligamento (Acordo Mútuo / Desligamento empresa / Pedido de demissão / Término do contrato de experiência). Média calculada só sobre registros com verba lançada (&gt; 0). Respeita os filtros do topo.</div>',
   tipo: '<div class="info-note">Tipos de desligamento das entrevistas de saída respondidas: quem pediu demissão e quem foi desligado(a).</div>',
   saidas: '<div class="info-note">Motivos de saída de quem <b>pediu demissão</b> (P). Cada pessoa pode marcar mais de um motivo; aparecem os 9 mais citados.</div>',
