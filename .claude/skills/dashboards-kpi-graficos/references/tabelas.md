@@ -25,6 +25,11 @@ tabela de **Comentários** da aba KPIs (as três usam o mesmo organizador abaixo
   classe `tem-cartoes` — no celular aparecem os cartões, no desktop a tabela (§4).
 - **Largura:** `table-layout:fixed` + largura em px em **todas** as colunas + `min-width` = soma (no celular rola de lado,
   nunca espreme).
+- **Filtros nunca dentro do card da tabela** (nada de barra de selects/busca no topo do card): vão na **faixa de
+  filtros full-bleed no topo da aba** (rótulo + select "Todas/Todos", "Limpar filtros" + contagem) e a busca por nome na
+  **faixa própria logo abaixo** (SKILL §Filtros). **Aba com duas tabelas** (ex.: Analítico de Desligamentos: Entrevistas +
+  Demissões): a faixa filtra **as duas** — o campo que a outra tabela também tem (unidade, nome) filtra direto; o que só
+  uma tem (departamento, status) filtra a outra **pelas pessoas (matrícula) do resultado**. Decisão de 05/10/2026.
 - **Nada solto fora do card:** contagem vai no título (`Analítico (14)`) ou na faixa de filtros (`26 colaborador(es)`);
   botão de ação da página (ex.: "+ Homologar") vai para a seção **Ações do drawer** (skill `drawer-sobre`).
 - **"i"** com o que a tabela mostra + `.info-table` com a legenda das pílulas (pílula real · significado).

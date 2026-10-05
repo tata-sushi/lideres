@@ -257,6 +257,10 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 - **O prefixo tem que ser o `GOV_PAGE_ID` da página**, senão o admin liga um interruptor
   que não existe.
 - **Slug é contrato.** Não renomeie sem atualizar o catálogo; renomear zera a config.
+- **Botão que já era usado e ganha id agora** (ex.: "Editar" da linha sem id) passa a ficar **oculto** para quem não é
+  admin. Antes de publicar, **libere o id para quem já usava** (quem abre a página e tem as outras ações dela), senão o
+  botão some para essas pessoas. A mesma ação dentro de um modal leva **o mesmo slug** do botão da linha
+  (ex.: "Enviar agenda" na linha e no modal = `::enviar-agenda`).
 - **`data-aba-id` não pede JS; `data-botao-id` pede** (`GOV_BOTOES` + `aplicarBotoes` +
   checar `GOV_BTN_OK` na ação).
 - **Cadastrar no catálogo é obrigatório** — o atributo sozinho não cria o interruptor.

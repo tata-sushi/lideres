@@ -260,6 +260,8 @@ modal de informação (`abrirInfoGrafico`/`closeInfoGrafico`, `.info-note`/`.inf
 - [ ] Usa `.btn` + modificador (`--primary`/`--danger`), raio **8px**, altura **40px desktop / 34px celular** ("Ver mais" 24px no desktop), DM Mono 10px uppercase **peso 400**.
 - [ ] Primário = carbon/citric (inclui as antigas ações secundárias); destrutivo = `--red`.
 - [ ] Ação de modal/form full-width = `.btn--block`; de cartão do celular = `.btn--sm`; **de linha de tabela no desktop = `.btn-icon`**.
+- [ ] Todo botão de texto é `.btn--primary` (nada de `.btn` "pelado" nem `.btn--sm` sem modificador) e **sem emoji** no rótulo.
+- [ ] Retorno da ação ("Link copiado", "Agenda enviada", "Salvo…") = **`alert()` do navegador** — nada de toast/faixa na página.
 - [ ] Loading = `disabled` + `.btn-spin` (`btnRot`) + texto em **gerúndio** via `setBtnLoading`.
 - [ ] Disabled = `opacity:.4 cursor:not-allowed`.
 - [ ] Só-ícone = `.btn-icon` **28×28** (desktop: desenho 12px e canto 4px; celular: 14px e 8px; `title`+`aria-label`), **tudo igual ao primário**; só a **lixeira** (`--danger`) com cor diferente; link = `.btn-link`; mesmo desenho para a mesma ação (tabela §3).
