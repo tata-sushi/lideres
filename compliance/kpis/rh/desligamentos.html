@@ -499,14 +499,28 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <button class="chart-info-btn" onclick="abrirInfoGrafico('demissoes')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Demissões — verbas &amp; homologação</div>
     <div class="dem-toolbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0 10px">
-      <select class="filter-select" id="dem-unidade" onchange="renderDemissoes()" style="max-width:200px"><option value="">Todas unidades</option></select>
-      <select class="filter-select" id="dem-homolog" onchange="renderDemissoes()" style="max-width:200px">
-        <option value="">Toda homologação</option>
-        <option value="__sem">Sem status</option>
+      <input type="search" class="filter-select" id="dem-busca" oninput="renderDemissoes()" placeholder="Buscar por nome…" style="min-width:180px;flex:1 1 180px">
+      <select class="filter-select" id="dem-unidade" onchange="renderDemissoes()" style="max-width:180px"><option value="">Todas unidades</option></select>
+      <select class="filter-select" id="dem-departamento" onchange="renderDemissoes()" style="max-width:180px"><option value="">Todos departamentos</option></select>
+      <select class="filter-select" id="dem-sit-homolog" onchange="renderDemissoes()" style="max-width:180px">
+        <option value="">Homologação: todas</option>
         <option value="pendente">Pendente</option>
-        <option value="agendada">Agendada</option>
+        <option value="nao_compareceu">Não compareceu</option>
         <option value="realizada">Realizada</option>
       </select>
+      <select class="filter-select" id="dem-sit-pesquisa" onchange="renderDemissoes()" style="max-width:180px">
+        <option value="">Pesquisa: todas</option>
+        <option value="pendente">Pendente</option>
+        <option value="nao_respondeu">Não respondeu</option>
+        <option value="realizada">Realizada</option>
+      </select>
+      <select class="filter-select" id="dem-sit-pagamento" onchange="renderDemissoes()" style="max-width:180px">
+        <option value="">Pagamento: todos</option>
+        <option value="pendente">Pendente</option>
+        <option value="nao_realizado">Não realizado</option>
+        <option value="realizado">Realizado</option>
+      </select>
+      <button class="btn-link" onclick="limparDem()">Limpar</button>
       <span class="results-count" id="dem-count" style="margin-left:auto"><span>0</span> demissão(ões)</span>
     </div>
     <div class="tcards" id="dem-cards"></div><div class="tbl-scroll tem-cartoes"><table class="mini tbl-org" id="tbl-dem" style="min-width:1700px"><thead><tr><th data-col="nome" class="th-sort" onclick="TAB_DEM.ordenar('nome')" style="width:190px">Colaborador <span class="sort-arrow" data-sa="nome">↕</span></th><th data-col="unidade" class="th-sort" onclick="TAB_DEM.ordenar('unidade')" style="width:130px">Unidade <span class="sort-arrow" data-sa="unidade">↕</span></th><th data-col="departamento" class="th-sort" onclick="TAB_DEM.ordenar('departamento')" style="width:130px">Departamento <span class="sort-arrow" data-sa="departamento">↕</span></th><th data-col="demissao" class="th-sort" onclick="TAB_DEM.ordenar('demissao')" style="width:100px">Data rescisão <span class="sort-arrow" data-sa="demissao">↕</span></th><th data-col="tipo" class="th-sort" onclick="TAB_DEM.ordenar('tipo')" style="width:150px">Tipo de desligamento <span class="sort-arrow" data-sa="tipo">↕</span></th><th data-col="resctipo" class="th-sort" onclick="TAB_DEM.ordenar('resctipo')" style="width:120px">Rescisão <span class="sort-arrow" data-sa="resctipo">↕</span></th><th data-col="homolog" class="th-sort" onclick="TAB_DEM.ordenar('homolog')" style="width:150px">Homologação <span class="sort-arrow" data-sa="homolog">↕</span></th><th data-col="pesquisa" class="th-sort" onclick="TAB_DEM.ordenar('pesquisa')" style="width:140px">Pesquisa <span class="sort-arrow" data-sa="pesquisa">↕</span></th><th data-col="verbas" class="th-sort" onclick="TAB_DEM.ordenar('verbas')" style="width:120px">Verbas (R$) <span class="sort-arrow" data-sa="verbas">↕</span></th><th data-col="grrf" class="th-sort" onclick="TAB_DEM.ordenar('grrf')" style="width:120px">GRRF (R$) <span class="sort-arrow" data-sa="grrf">↕</span></th><th data-col="saldo" class="th-sort" onclick="TAB_DEM.ordenar('saldo')" style="width:130px">Saldo Devedor <span class="sort-arrow" data-sa="saldo">↕</span></th><th data-col="pagamento" class="th-sort" onclick="TAB_DEM.ordenar('pagamento')" style="width:150px">Pagamento <span class="sort-arrow" data-sa="pagamento">↕</span></th><th style="width:130px">Ações</th></tr></thead><tbody id="dem-body"><tr><td colspan="13"><div class="status-empty">Carregando…</div></td></tr></tbody></table></div>
@@ -2380,19 +2394,19 @@ function _homologPill(s){ if(!s) return '<span class="td-muted">—</span>'; ret
 // Status por seção — 3 estados: Pendente (amber) / negativo (vermelho) / concluído (carbon)
 function _homologSit(r){
   var s=r.status_homologacao;
-  if(s==='realizada') return { txt:'Realizada', cls:'pos', rank:3 };
-  if(s==='faltou'||s==='esgotado') return { txt:'Não compareceu', cls:'red', rank:2 };
-  return { txt:'Pendente', cls:'amber', rank:1 };
+  if(s==='realizada') return { txt:'Realizada', cls:'pos', rank:3, key:'realizada' };
+  if(s==='faltou'||s==='esgotado') return { txt:'Não compareceu', cls:'red', rank:2, key:'nao_compareceu' };
+  return { txt:'Pendente', cls:'amber', rank:1, key:'pendente' };
 }
 function _pesqSit(r){
-  if(r.entrevista_status==='realizada' || r.entrevista_realizada) return { txt:'Realizada', cls:'pos', rank:3 };
-  if(r.entrevista_status==='nao_respondeu') return { txt:'Não respondeu', cls:'red', rank:2 };
-  return { txt:'Pendente', cls:'amber', rank:1 };
+  if(r.entrevista_status==='realizada' || r.entrevista_realizada) return { txt:'Realizada', cls:'pos', rank:3, key:'realizada' };
+  if(r.entrevista_status==='nao_respondeu') return { txt:'Não respondeu', cls:'red', rank:2, key:'nao_respondeu' };
+  return { txt:'Pendente', cls:'amber', rank:1, key:'pendente' };
 }
 function _pagtoSit(r){
-  if((r.data_pagamento!=null && r.data_pagamento!=='') || r.status_pagamento==='realizado') return { txt:'Realizado', cls:'pos', rank:3 };
-  if(r.status_pagamento==='nao_realizado') return { txt:'Não realizado', cls:'red', rank:2 };
-  return { txt:'Pendente', cls:'amber', rank:1 };
+  if((r.data_pagamento!=null && r.data_pagamento!=='') || r.status_pagamento==='realizado') return { txt:'Realizado', cls:'pos', rank:3, key:'realizado' };
+  if(r.status_pagamento==='nao_realizado') return { txt:'Não realizado', cls:'red', rank:2, key:'nao_realizado' };
+  return { txt:'Pendente', cls:'amber', rank:1, key:'pendente' };
 }
 function _sitPill(s){ return '<span class="status-badge pill-'+s.cls+'">'+escH(s.txt)+'</span>'; }
 function _demById(id){ for(var i=0;i<DEM_ROWS.length;i++){ if(DEM_ROWS[i].id===id) return DEM_ROWS[i]; } return null; }
@@ -2462,11 +2476,16 @@ function loadDemissoes(){
   else window.addEventListener('lideres:supa', function(){ go(window.__lideresSupa); }, { once:true });
 }
 function _fillDemFiltros(){
-  var sel=document.getElementById('dem-unidade'); if(!sel) return;
-  var uni={}; DEM_ROWS.forEach(function(r){ if(r.unidade) uni[r.unidade]=1; });
-  var cur=sel.value;
-  sel.innerHTML='<option value="">Todas unidades</option>'+Object.keys(uni).sort().map(function(u){ return '<option>'+escH(u)+'</option>'; }).join('');
-  if(cur) sel.value=cur;
+  var sel=document.getElementById('dem-unidade');
+  if(sel){ var uni={}; DEM_ROWS.forEach(function(r){ if(r.unidade) uni[r.unidade]=1; });
+    var cur=sel.value;
+    sel.innerHTML='<option value="">Todas unidades</option>'+Object.keys(uni).sort().map(function(u){ return '<option>'+escH(u)+'</option>'; }).join('');
+    if(cur) sel.value=cur; }
+  var sd=document.getElementById('dem-departamento');
+  if(sd){ var dep={}; DEM_ROWS.forEach(function(r){ if(r.departamento) dep[r.departamento]=1; });
+    var curd=sd.value;
+    sd.innerHTML='<option value="">Todos departamentos</option>'+Object.keys(dep).sort().map(function(u){ return '<option>'+escH(u)+'</option>'; }).join('');
+    if(curd) sd.value=curd; }
 }
 var TAB_DEM = new TabelaOrg({ tabela:'tbl-dem', corpo:'dem-body', mais:'dem-mais', chave:'desl_dem_cols_v3', n:15, colspan:13,
   vazio:'Nenhuma demissão no filtro atual',
@@ -2489,17 +2508,26 @@ var TAB_DEM = new TabelaOrg({ tabela:'tbl-dem', corpo:'dem-body', mais:'dem-mais
       '<td>'+_sitPill(_pagtoSit(r))+'</td>'+
       '<td class="td-acoes">'+_demAcoes(r,'ico')+'</td></tr>';
   } });
+function _demVal(id){ var e=document.getElementById(id); return e?(e.value||''):''; }
 function renderDemissoes(){
-  var fu=(document.getElementById('dem-unidade')||{}).value||'';
-  var fh=(document.getElementById('dem-homolog')||{}).value||'';
+  var fu=_demVal('dem-unidade'), fd=_demVal('dem-departamento'),
+      fh=_demVal('dem-sit-homolog'), fp=_demVal('dem-sit-pesquisa'), fg=_demVal('dem-sit-pagamento'),
+      fb=_demVal('dem-busca').trim().toLowerCase();
   var rows=DEM_ROWS.filter(function(r){
     if(fu && r.unidade!==fu) return false;
-    if(fh==='__sem') return !r.status_homologacao;
-    if(fh && r.status_homologacao!==fh) return false;
+    if(fd && r.departamento!==fd) return false;
+    if(fh && _homologSit(r).key!==fh) return false;
+    if(fp && _pesqSit(r).key!==fp) return false;
+    if(fg && _pagtoSit(r).key!==fg) return false;
+    if(fb && String(r.nome||'').toLowerCase().indexOf(fb)<0) return false;
     return true;
   });
   var cnt=document.getElementById('dem-count'); if(cnt) cnt.innerHTML='<b>'+rows.length+'</b> demissão(ões)';
   TAB_DEM.dados(rows);
+}
+function limparDem(){
+  ['dem-busca','dem-unidade','dem-departamento','dem-sit-homolog','dem-sit-pesquisa','dem-sit-pagamento'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  renderDemissoes();
 }
 var _demId=null;
 function openEditDem(id){
