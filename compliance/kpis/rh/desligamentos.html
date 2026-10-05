@@ -383,8 +383,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div id="view-dashboard" style="display:none">
 <div class="kpis-wrap" id="kpis-wrap">
   <div class="kpi-card">
-    <span class="kpi-label">Entrevistas realizadas</span>
+    <span class="kpi-label">Pesquisas respondidas</span>
     <span class="kpi-number" id="kpi-realizadas">—</span>
+    <span class="kpi-sub" id="kpi-pesq-sub"></span>
   </div>
   <div class="kpi-card">
     <span class="kpi-label">Média geral</span>
@@ -1912,7 +1913,7 @@ function setTab(tab){
     var v=document.getElementById('view-'+t); if(v) v.style.display = (t===tab)?'':'none';
   });
   if (tab==='dashboard' && typeof _charts!=='undefined') { Object.keys(_charts).forEach(function(k){ var c=_charts[k]; if(c && c.resize) c.resize(); }); }
-  if (tab==='analitico' && !_analiticoLoaded) { _analiticoLoaded=true; loadAnalitico(); loadDemissoes(); }
+  if (tab==='analitico' && !_analiticoLoaded) { _analiticoLoaded=true; loadAnalitico(); if(!_demLoaded) loadDemissoes(); }
 }
 function hideLoading(){ var el = document.getElementById('loading-overlay'); if (el) el.classList.remove('show'); }
 
@@ -2255,8 +2256,15 @@ function renderComentarios(rows){
   TAB_COMENT.dados(itens);
 }
 
+function _updatePesqSub(){
+  var el=document.getElementById('kpi-pesq-sub'); if(!el) return;
+  var pend=0, nr=0;
+  (typeof DEM_ROWS!=='undefined'?DEM_ROWS:[]).forEach(function(r){ var k=_pesqSit(r).key; if(k==='pendente') pend++; else if(k==='nao_respondeu') nr++; });
+  el.textContent = pend+' pendentes · '+nr+' não respondidas';
+}
 function renderAll(rows){
   document.getElementById('kpi-realizadas').textContent = rows.length;
+  _updatePesqSub();
 
   var tipoCounts = countByField(rows, 'tipo');
   renderPie('chart-tipo', entriesSortedDesc(tipoCounts));
@@ -2392,7 +2400,7 @@ function _acao(chave, onclick, rotulo, icone){
 function _juntar(lista, campo){ return lista.map(function(x){ return x[campo]; }).join(''); }
 
 // === Aba Analítico · Tabela de Demissões (verbas & homologação) =============
-var DEM_ROWS=[];
+var DEM_ROWS=[]; var _demLoaded=false;
 function _fmtBRL(v){ if(v==null||v==='') return '<span class="td-muted">—</span>'; var n=Number(v); if(isNaN(n)) return '<span class="td-muted">—</span>'; return 'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 var HOMOLOG_PILL={ realizada:'pos', agendada:'amber', pendente:'blue', faltou:'red', esgotado:'red' };
 var HOMOLOG_TXT={ pendente:'Pendente', agendada:'Agendada', realizada:'Realizada', faltou:'Não compareceu', esgotado:'Esgotado (3x)' };
@@ -2475,8 +2483,10 @@ function loadDemissoes(){
     supa.schema('tata_plus').rpc('av_demissoes_grid',{ p_dias:null }).then(function(res){
       if(res && res.error) console.error('Erro RPC av_demissoes_grid:', res.error);
       DEM_ROWS=(res && !res.error && Array.isArray(res.data))?res.data:[];
-      _fillDemFiltros(); renderDemissoes();
-    }).catch(function(e){ console.error('Erro RPC av_demissoes_listar:', e); DEM_ROWS=[]; renderDemissoes(); });
+      _demLoaded=true;
+      _updatePesqSub();
+      try { _fillDemFiltros(); renderDemissoes(); } catch(e){ console.error('render demissoes:', e); }
+    }).catch(function(e){ console.error('Erro RPC av_demissoes_grid:', e); });
   }
   if (window.__lideresSupa) go(window.__lideresSupa);
   else window.addEventListener('lideres:supa', function(){ go(window.__lideresSupa); }, { once:true });
@@ -2904,6 +2914,7 @@ document.addEventListener('DOMContentLoaded', function(){
   var el = document.getElementById('header-user');
   if (el) el.textContent = u;
   loadData();
+  if(!_demLoaded) loadDemissoes(); // base p/ subtexto do KPI (pendentes/não respondidas) + aba Analítico
 });
 </script>
 
