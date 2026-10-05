@@ -101,6 +101,7 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 
 | Data | Página | Ajuste | Skill atualizada? |
 |---|---|---|---|
+| 05/10 | Desligamentos (Analítico) | Tabela vazia some inteira (Entrevistas e Demissões) — sai o "Nenhuma entrevista" que flutuava no celular | `dashboards-kpi-graficos` (`tabelas.md` §3) |
 | 05/10 | Desligamentos + Sanções (drawer) | Botão claro (`.secondary`) das Ações vira carbon como os demais ("Janelas de homologação", "Escrever com SAM"); variante sai da skill e do catálogo | `drawer-sobre` (Ações todas iguais) |
 | 05/10 | Desligamentos (Analítico) | Tabela de Entrevistas vazia mostra só "Nenhuma entrevista" (sem a instrução do menu) | — |
 | 05/10 | Desligamentos (Analítico) | Filtros das Demissões saem de dentro do card para a faixa full-bleed no topo da aba (5 selects com rótulo + Limpar filtros + contagem) e a busca vai para a faixa própria; os filtros valem para as duas tabelas. Botões: todos primários, sem emoji; "Editar" ganha id `::editar-demissao` e os botões da janela Editar ganham o id da ação (`::enviar-agenda`, `::disparar-entrevista`, novo `::registrar-falta`). Toast vira alerta do navegador. "i" das Demissões com legenda das pílulas | `dashboards-kpi-graficos` (`tabelas.md` §1) + `controle-acesso-abas-botoes` (liberar id novo para quem já usava) + `botoes` (checklist) |

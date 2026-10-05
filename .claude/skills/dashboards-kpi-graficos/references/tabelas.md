@@ -122,6 +122,10 @@ var TAB_ANL = new TabelaOrg({
 });
 // ao carregar/filtrar:  TAB_ANL.dados(lista);
 ```
+- **Tabela vazia → o card some inteiro** (decisão do dono, 05/10/2026): nada de "Nenhum…/Sem dados" solto na tela —
+  no celular o card perde moldura e título e o texto ficava flutuando. Depois do `TAB.dados(rows)`:
+  `card.style.display = rows.length ? '' : 'none'` (`_cardVazio(id, n)` em `desligamentos.html`). A contagem da faixa de
+  filtros (ou o "(N)" do título) já diz que não há linhas.
 - **`n`**: 10 linhas em tabelas operacionais (6 em listas curtas de painel); o resto no "Ver mais (N)".
 - **Ordenar por valor bruto** (`valor`): data em ISO, número como número; o texto formatado é só para exibir.
 - **Status → pílula**: um mapa `STATUS_PILL` (status → `pos|blue|amber|red`) e a função `pill(status, texto)`:
