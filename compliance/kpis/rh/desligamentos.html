@@ -508,6 +508,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <option value="agendada">Agendada</option>
         <option value="realizada">Realizada</option>
       </select>
+      <button class="btn btn--sm" onclick="openJanelas()" title="Configurar janelas de horário da homologação">⚙ Janelas</button>
       <span class="results-count" id="dem-count" style="margin-left:auto"><span>0</span> demissão(ões)</span>
     </div>
     <div class="tcards" id="dem-cards"></div><div class="tbl-scroll tem-cartoes"><table class="mini tbl-org" id="tbl-dem" style="min-width:1580px"><thead><tr><th data-col="nome" class="th-sort" onclick="TAB_DEM.ordenar('nome')" style="width:190px">Colaborador <span class="sort-arrow" data-sa="nome">↕</span></th><th data-col="unidade" class="th-sort" onclick="TAB_DEM.ordenar('unidade')" style="width:130px">Unidade <span class="sort-arrow" data-sa="unidade">↕</span></th><th data-col="departamento" class="th-sort" onclick="TAB_DEM.ordenar('departamento')" style="width:130px">Departamento <span class="sort-arrow" data-sa="departamento">↕</span></th><th data-col="demissao" class="th-sort" onclick="TAB_DEM.ordenar('demissao')" style="width:100px">Data rescisão <span class="sort-arrow" data-sa="demissao">↕</span></th><th data-col="tipo" class="th-sort" onclick="TAB_DEM.ordenar('tipo')" style="width:150px">Tipo de desligamento <span class="sort-arrow" data-sa="tipo">↕</span></th><th data-col="resctipo" class="th-sort" onclick="TAB_DEM.ordenar('resctipo')" style="width:120px">Rescisão <span class="sort-arrow" data-sa="resctipo">↕</span></th><th data-col="homolog" class="th-sort" onclick="TAB_DEM.ordenar('homolog')" style="width:120px">Homologação <span class="sort-arrow" data-sa="homolog">↕</span></th><th data-col="verbas" class="th-sort" onclick="TAB_DEM.ordenar('verbas')" style="width:120px">Verbas (R$) <span class="sort-arrow" data-sa="verbas">↕</span></th><th data-col="grrf" class="th-sort" onclick="TAB_DEM.ordenar('grrf')" style="width:120px">GRRF (R$) <span class="sort-arrow" data-sa="grrf">↕</span></th><th data-col="saldo" class="th-sort" onclick="TAB_DEM.ordenar('saldo')" style="width:130px">Saldo Devedor <span class="sort-arrow" data-sa="saldo">↕</span></th><th data-col="pagamento" class="th-sort" onclick="TAB_DEM.ordenar('pagamento')" style="width:110px">Pagamento <span class="sort-arrow" data-sa="pagamento">↕</span></th><th data-col="entrevista" class="th-sort" onclick="TAB_DEM.ordenar('entrevista')" style="width:100px">Entrevista <span class="sort-arrow" data-sa="entrevista">↕</span></th><th style="width:70px">Ações</th></tr></thead><tbody id="dem-body"><tr><td colspan="13"><div class="status-empty">Carregando…</div></td></tr></tbody></table></div>
@@ -619,6 +620,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <textarea class="hm-input" id="ed-obs" rows="2" style="resize:vertical;width:100%;box-sizing:border-box"></textarea>
       <div class="hm-err" id="dem-ov-err"></div>
       <button class="btn btn--primary btn--block" id="dem-save" onclick="submitEditDem()" style="margin-top:10px"><span class="btn-spin"></span><span class="btn-label">Salvar</span></button>
+      <div style="border-top:1px solid var(--border);margin:14px 0 0;padding-top:12px">
+        <div class="hm-label" style="margin-bottom:6px">Agenda de homologação</div>
+        <div id="dem-agenda-info" style="font-size:12px;color:var(--muted);margin-bottom:8px"></div>
+        <button class="btn btn--block" id="dem-agenda-btn" onclick="enviarAgenda()"><span class="btn-spin"></span><span class="btn-label">📅 Enviar agenda no WhatsApp</span></button>
+        <div id="dem-agenda-msg" style="font-size:12px;margin-top:6px"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -630,6 +637,36 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 #dem-overlay .ed-f{ display:flex; flex-direction:column; gap:3px; }
 #dem-overlay .hm-input{ width:100%; box-sizing:border-box; }
 @media(max-width:520px){ #dem-overlay .ed-grid{ grid-template-columns:1fr; } }
+</style>
+
+<!-- Modal de configuração das janelas de homologação -->
+<div class="hm-overlay" id="jan-overlay" onclick="closeJanelas()">
+  <div class="hm-card" onclick="event.stopPropagation()" style="max-width:560px">
+    <div class="hm-head"><span>Janelas de homologação</span><button class="modal-close" onclick="closeJanelas()" aria-label="Fechar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="hm-body">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Dias e horários em que cada unidade faz homologação. A pessoa só vê slots dentro dessas janelas. Deixe a unidade em "Todas" para valer pra qualquer unidade.</div>
+      <div class="ed-grid-jan">
+        <div class="ed-f"><label class="hm-label">Unidade</label><select class="hm-input" id="jan-unidade"><option value="">Todas</option></select></div>
+        <div class="ed-f"><label class="hm-label">Dia da semana</label><select class="hm-input" id="jan-dia"><option value="1">Segunda</option><option value="2">Terça</option><option value="3">Quarta</option><option value="4">Quinta</option><option value="5">Sexta</option><option value="6">Sábado</option><option value="0">Domingo</option></select></div>
+        <div class="ed-f"><label class="hm-label">Início</label><input type="time" class="hm-input" id="jan-ini" value="09:00"></div>
+        <div class="ed-f"><label class="hm-label">Fim</label><input type="time" class="hm-input" id="jan-fim" value="12:00"></div>
+        <div class="ed-f"><label class="hm-label">Duração (min)</label><input type="number" class="hm-input" id="jan-dur" value="30" min="5" step="5"></div>
+      </div>
+      <button class="btn btn--primary btn--block" id="jan-add" onclick="salvarJanela()" style="margin-top:8px"><span class="btn-spin"></span><span class="btn-label">Adicionar janela</span></button>
+      <div id="jan-err" class="hm-err"></div>
+      <div id="jan-list" style="margin-top:14px"></div>
+    </div>
+  </div>
+</div>
+<style>
+#jan-overlay .hm-card{ max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
+#jan-overlay .hm-head{ flex:0 0 auto; }
+#jan-overlay .hm-body{ overflow-y:auto; -webkit-overflow-scrolling:touch; }
+#jan-overlay .ed-grid-jan{ display:grid; grid-template-columns:1fr 1fr; gap:8px 10px; }
+#jan-overlay .ed-f{ display:flex; flex-direction:column; gap:3px; }
+#jan-overlay .hm-input{ width:100%; box-sizing:border-box; }
+.jan-row{ display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+.jan-row .jx{ margin-left:auto; flex:0 0 auto; }
 </style>
 
 <style id="gov-sobre-css">
@@ -2439,8 +2476,14 @@ function openEditDem(id){
   document.getElementById('ed-data-rescisao').value=r.data_rescisao||r.data_demissao||'';
   document.getElementById('ed-obs').value=r.obs||'';
   document.getElementById('dem-ov-err').textContent='';
+  var ag=r.homologacao_agendada_em;
+  var info=document.getElementById('dem-agenda-info');
+  if(info) info.textContent = ag ? ('Agendada para '+_fmtDataHora(ag)) : 'Ainda não agendada. Envie o link para a pessoa escolher o horário.';
+  var am=document.getElementById('dem-agenda-msg'); if(am){ am.textContent=''; am.style.color=''; }
   document.getElementById('dem-overlay').classList.add('open');
 }
+function _fmtDataHora(iso){ if(!iso) return '—'; var d=new Date(iso); if(isNaN(d.getTime())) return '—'; var p=function(n){return n<10?'0'+n:n;}; return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+function _busy(b,on){ if(typeof setBtnLoading==='function'){ setBtnLoading(b,on); } else if(b){ b.disabled=on; } }
 function closeEditDem(){ document.getElementById('dem-overlay').classList.remove('open'); }
 function submitEditDem(){
   if(!_demId) return;
@@ -2466,6 +2509,59 @@ function submitEditDem(){
   }
   if(window.__lideresSupa) go(window.__lideresSupa);
   else { _demLoad(btn,false); document.getElementById('dem-ov-err').textContent='Sessão carregando — tente de novo.'; }
+}
+// --- Enviar agenda de homologação (WhatsApp) ---
+function enviarAgenda(){
+  if(!_demId) return;
+  var btn=document.getElementById('dem-agenda-btn'); var msg=document.getElementById('dem-agenda-msg');
+  msg.textContent=''; msg.style.color=''; _busy(btn,true);
+  function go(supa){
+    supa.functions.invoke('homologacao-disparar',{ body:{ demissao_id:_demId } }).then(function(res){
+      _busy(btn,false); var d=res&&res.data; var e=res&&res.error;
+      if(d&&d.ok){ msg.style.color='var(--green-tx,#1A5C2A)'; msg.textContent='Agenda enviada'+(d.telefone?(' para '+d.telefone):'')+' ✓'; loadDemissoes(); return; }
+      var url=d&&d.url;
+      if(url){ msg.style.color='var(--amber-tx,#7A4A00)'; msg.innerHTML='Não enviou automático ('+escH((d&&d.erro)||'erro')+'). <a href="#" onclick="_copy(\''+escAttr(url)+'\');toast(\'Link copiado\');return false;">Copiar link</a> para mandar manual.'; }
+      else { msg.style.color='var(--red-tx,#8B1A1A)'; msg.textContent='Não foi possível ('+escH((d&&d.erro)||(e&&e.message)||'erro')+').'; }
+    }).catch(function(){ _busy(btn,false); msg.style.color='var(--red-tx,#8B1A1A)'; msg.textContent='Erro de conexão. Tente de novo.'; });
+  }
+  if(window.__lideresSupa) go(window.__lideresSupa); else { _busy(btn,false); msg.textContent='Sessão carregando.'; }
+}
+// --- Config de janelas de homologação ---
+var JAN=[]; var DIAS_SEM=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+function openJanelas(){ document.getElementById('jan-overlay').classList.add('open'); document.getElementById('jan-err').textContent=''; _fillJanUnidades(); loadJanelas(); }
+function closeJanelas(){ document.getElementById('jan-overlay').classList.remove('open'); }
+function _fillJanUnidades(){
+  var sel=document.getElementById('jan-unidade'); if(!sel) return;
+  var uni={}; (typeof DEM_ROWS!=='undefined'?DEM_ROWS:[]).forEach(function(r){ if(r.unidade) uni[r.unidade]=1; });
+  var cur=sel.value;
+  sel.innerHTML='<option value="">Todas</option>'+Object.keys(uni).sort().map(function(u){ return '<option>'+escH(u)+'</option>'; }).join('');
+  if(cur) sel.value=cur;
+}
+function loadJanelas(){
+  function go(supa){ supa.schema('tata_plus').rpc('homologacao_janelas_listar').then(function(res){ JAN=(res&&!res.error&&Array.isArray(res.data))?res.data:[]; renderJanelas(); }).catch(function(){ JAN=[]; renderJanelas(); }); }
+  if(window.__lideresSupa) go(window.__lideresSupa); else window.addEventListener('lideres:supa',function(){ go(window.__lideresSupa); },{once:true});
+}
+function renderJanelas(){
+  var el=document.getElementById('jan-list'); if(!el) return;
+  if(!JAN.length){ el.innerHTML='<div class="status-empty" style="padding:12px">Nenhuma janela cadastrada ainda.</div>'; return; }
+  el.innerHTML=JAN.map(function(j){
+    return '<div class="jan-row"><span>'+escH(j.unidade||'Todas')+' · '+(DIAS_SEM[j.dia_semana]||'?')+' · '+String(j.hora_inicio).slice(0,5)+'–'+String(j.hora_fim).slice(0,5)+' · '+j.duracao_min+'min'+(j.ativo?'':' <span class="td-muted">(inativa)</span>')+'</span>'+
+      '<button class="btn-icon btn-icon--danger jx" onclick="excluirJanela(\''+escAttr(j.id)+'\')" title="Excluir" aria-label="Excluir"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></div>';
+  }).join('');
+}
+function salvarJanela(){
+  var btn=document.getElementById('jan-add'); var err=document.getElementById('jan-err'); err.textContent='';
+  var ini=document.getElementById('jan-ini').value, fim=document.getElementById('jan-fim').value;
+  if(!ini||!fim||ini>=fim){ err.textContent='Informe início e fim válidos (fim após o início).'; return; }
+  _busy(btn,true);
+  var p={ unidade:document.getElementById('jan-unidade').value, dia_semana:document.getElementById('jan-dia').value,
+          hora_inicio:ini, hora_fim:fim, duracao_min:document.getElementById('jan-dur').value, ativo:true };
+  function go(supa){ supa.schema('tata_plus').rpc('homologacao_janela_salvar',{ p:p }).then(function(res){ _busy(btn,false); var d=res&&res.data; if((res&&res.error)||!d||!d.ok){ err.textContent='Não foi possível salvar.'; return; } loadJanelas(); }).catch(function(){ _busy(btn,false); err.textContent='Erro de conexão.'; }); }
+  if(window.__lideresSupa) go(window.__lideresSupa); else { _busy(btn,false); err.textContent='Sessão carregando.'; }
+}
+function excluirJanela(id){
+  function go(supa){ supa.schema('tata_plus').rpc('homologacao_janela_excluir',{ p_id:id }).then(function(){ loadJanelas(); }).catch(function(){}); }
+  if(window.__lideresSupa) go(window.__lideresSupa);
 }
 function _anlPartes(r){
     var media = (r.media != null)
