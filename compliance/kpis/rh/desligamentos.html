@@ -644,9 +644,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="hm-card" onclick="event.stopPropagation()" style="max-width:560px">
     <div class="hm-head"><span>Janelas de homologação</span><button class="modal-close" onclick="closeJanelas()" aria-label="Fechar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="hm-body">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Dias e horários em que cada unidade faz homologação. A pessoa só vê slots dentro dessas janelas. Deixe a unidade em "Todas" para valer pra qualquer unidade.</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Dias e horários em que a homologação acontece. A pessoa só vê slots dentro dessas janelas.</div>
       <div class="ed-grid-jan">
-        <div class="ed-f"><label class="hm-label">Unidade</label><select class="hm-input" id="jan-unidade"><option value="">Selecione a unidade…</option></select></div>
         <div class="ed-f"><label class="hm-label">Quando</label><select class="hm-input" id="jan-tipo" onchange="janTipoChange()"><option value="recorrente">Toda semana (recorrente)</option><option value="especifica">Data específica (só nesse dia)</option></select></div>
         <div class="ed-f" id="jan-dia-wrap"><label class="hm-label">Dia da semana</label><select class="hm-input" id="jan-dia"><option value="1">Segunda</option><option value="2">Terça</option><option value="3">Quarta</option><option value="4">Quinta</option><option value="5">Sexta</option><option value="6">Sábado</option><option value="0">Domingo</option></select></div>
         <div class="ed-f" id="jan-data-wrap" style="display:none"><label class="hm-label">Data</label><input type="date" class="hm-input" id="jan-data"></div>
@@ -2417,7 +2416,7 @@ function loadDemissoes(){
     supa.schema('tata_plus').rpc('av_demissoes_grid',{ p_dias:null }).then(function(res){
       if(res && res.error) console.error('Erro RPC av_demissoes_grid:', res.error);
       DEM_ROWS=(res && !res.error && Array.isArray(res.data))?res.data:[];
-      _fillDemFiltros(); renderDemissoes(); _fillJanUnidades();
+      _fillDemFiltros(); renderDemissoes();
     }).catch(function(e){ console.error('Erro RPC av_demissoes_listar:', e); DEM_ROWS=[]; renderDemissoes(); });
   }
   if (window.__lideresSupa) go(window.__lideresSupa);
@@ -2557,7 +2556,7 @@ function registrarFalta(){
 }
 // --- Config de janelas de homologação ---
 var JAN=[]; var DIAS_SEM=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
-function openJanelas(){ document.getElementById('jan-overlay').classList.add('open'); document.getElementById('jan-err').textContent=''; var t=document.getElementById('jan-tipo'); if(t) t.value='recorrente'; janTipoChange(); if(typeof DEM_ROWS==='undefined'||!DEM_ROWS.length){ if(typeof loadDemissoes==='function') loadDemissoes(); } _fillJanUnidades(); loadJanelas(); }
+function openJanelas(){ document.getElementById('jan-overlay').classList.add('open'); document.getElementById('jan-err').textContent=''; var t=document.getElementById('jan-tipo'); if(t) t.value='recorrente'; janTipoChange(); loadJanelas(); }
 function closeJanelas(){ document.getElementById('jan-overlay').classList.remove('open'); }
 function _fillJanUnidades(){
   var sel=document.getElementById('jan-unidade'); if(!sel) return;
@@ -2569,7 +2568,7 @@ function _fillJanUnidades(){
   if(cur) sel.value=cur;
 }
 function loadJanelas(){
-  function go(supa){ supa.schema('tata_plus').rpc('homologacao_janelas_listar').then(function(res){ JAN=(res&&!res.error&&Array.isArray(res.data))?res.data:[]; renderJanelas(); _fillJanUnidades(); }).catch(function(){ JAN=[]; renderJanelas(); }); }
+  function go(supa){ supa.schema('tata_plus').rpc('homologacao_janelas_listar').then(function(res){ JAN=(res&&!res.error&&Array.isArray(res.data))?res.data:[]; renderJanelas(); }).catch(function(){ JAN=[]; renderJanelas(); }); }
   if(window.__lideresSupa) go(window.__lideresSupa); else window.addEventListener('lideres:supa',function(){ go(window.__lideresSupa); },{once:true});
 }
 function renderJanelas(){
@@ -2577,7 +2576,7 @@ function renderJanelas(){
   if(!JAN.length){ el.innerHTML='<div class="status-empty" style="padding:12px">Nenhuma janela cadastrada ainda.</div>'; return; }
   el.innerHTML=JAN.map(function(j){
     var quando = j.data_especifica ? _fmtData(j.data_especifica) : (DIAS_SEM[j.dia_semana]||'?');
-    return '<div class="jan-row"><span>'+escH(j.unidade||'Todas')+' · '+quando+' · '+String(j.hora_inicio).slice(0,5)+'–'+String(j.hora_fim).slice(0,5)+' · '+j.duracao_min+'min'+(j.ativo?'':' <span class="td-muted">(inativa)</span>')+'</span>'+
+    return '<div class="jan-row"><span>'+quando+' · '+String(j.hora_inicio).slice(0,5)+'–'+String(j.hora_fim).slice(0,5)+' · '+j.duracao_min+'min'+(j.ativo?'':' <span class="td-muted">(inativa)</span>')+'</span>'+
       '<button class="btn-icon btn-icon--danger jx" onclick="excluirJanela(\''+escAttr(j.id)+'\')" title="Excluir" aria-label="Excluir"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></div>';
   }).join('');
 }
@@ -2589,15 +2588,13 @@ function janTipoChange(){
 }
 function salvarJanela(){
   var btn=document.getElementById('jan-add'); var err=document.getElementById('jan-err'); err.textContent='';
-  var uni=document.getElementById('jan-unidade').value;
-  if(!uni){ err.textContent='Escolha a unidade.'; return; }
   var ini=document.getElementById('jan-ini').value, fim=document.getElementById('jan-fim').value;
   if(!ini||!fim||ini>=fim){ err.textContent='Informe início e fim válidos (fim após o início).'; return; }
   var esp=(document.getElementById('jan-tipo')||{}).value==='especifica';
   var dataEsp=esp?(document.getElementById('jan-data').value||''):'';
   if(esp && !dataEsp){ err.textContent='Escolha a data específica.'; return; }
   _busy(btn,true);
-  var p={ unidade:document.getElementById('jan-unidade').value,
+  var p={ unidade:'',
           dia_semana:document.getElementById('jan-dia').value, data_especifica:dataEsp,
           hora_inicio:ini, hora_fim:fim, duracao_min:document.getElementById('jan-dur').value, ativo:true };
   function go(supa){ supa.schema('tata_plus').rpc('homologacao_janela_salvar',{ p:p }).then(function(res){ _busy(btn,false); var d=res&&res.data; if((res&&res.error)||!d||!d.ok){ err.textContent='Não foi possível salvar.'; return; } loadJanelas(); }).catch(function(){ _busy(btn,false); err.textContent='Erro de conexão.'; }); }
