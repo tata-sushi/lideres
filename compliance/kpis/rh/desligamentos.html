@@ -2469,6 +2469,34 @@ function renderBarPct(canvasId, entries){
                y:{grid:{display:false},border:{display:false},ticks:{color:'#35383F',font:{family:"'DM Sans', sans-serif",size:12,weight:'500'},
                  callback:function(v){ var max=Math.min(30,Math.max(8,Math.floor((this.chart.width/2-16)/7.5))); return truncate(this.getLabelForValue(v),max);}}} } } });
 }
+// barra de progresso: preenchido (carbon) + trilho (cinza) até 100%, com o % no fim do preenchido
+function renderBarProgress(canvasId, entries){
+  destroyChart(canvasId);
+  var canvas=document.getElementById(canvasId); if(!canvas||typeof Chart==='undefined') return;
+  var labels=entries.map(function(e){return e[0];});
+  var fill=entries.map(function(e){ var v=e[1]==null?0:Number(e[1]); return Math.max(0,Math.min(100,v)); });
+  var rest=fill.map(function(v){ return 100-v; });
+  if(canvas.parentElement) canvas.parentElement.style.height=Math.max(220,labels.length*44+24)+'px';
+  var pctLabels={ id:'progPct', afterDatasetsDraw:function(chart){
+    var ctx=chart.ctx; var meta=chart.getDatasetMeta(0);
+    meta.data.forEach(function(bar,i){
+      ctx.save(); ctx.fillStyle='#35383F'; ctx.font='800 12px "DM Sans", sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText(fill[i]+'%', bar.x+6, bar.y); ctx.restore();
+    });
+  }};
+  _charts[canvasId]=new Chart(canvas,{ type:'bar',
+    data:{labels:labels,datasets:[
+      {data:fill,backgroundColor:'#35383F',borderWidth:0,borderRadius:{topLeft:6,bottomLeft:6,topRight:0,bottomRight:0},borderSkipped:false,maxBarThickness:16,stack:'s'},
+      {data:rest,backgroundColor:'#ECECEC',borderWidth:0,borderRadius:{topLeft:0,bottomLeft:0,topRight:6,bottomRight:6},borderSkipped:false,maxBarThickness:16,stack:'s'}
+    ]},
+    plugins:[pctLabels],
+    options:{ indexAxis:'y', responsive:true,maintainAspectRatio:false,animation:false,devicePixelRatio:CHART_DPR,
+      layout:{padding:{right:46}},
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{ x:{stacked:true,grid:{display:false},border:{display:false},ticks:{display:false},beginAtZero:true,max:100},
+               y:{stacked:true,grid:{display:false},border:{display:false},ticks:{color:'#35383F',font:{family:"'DM Sans', sans-serif",size:12,weight:'500'},
+                 callback:function(v){ var max=Math.min(30,Math.max(8,Math.floor((this.chart.width/2-16)/7.5))); return truncate(this.getLabelForValue(v),max);}}} } } });
+}
 // pizza em tons de carbon; legenda mostra o % de cada fatia (não a fração do total)
 function renderPiePct(canvasId, entries){
   destroyChart(canvasId);
@@ -2506,8 +2534,8 @@ function renderAll(rows){
   var mt = countByField(desl,'motivo_tata'); Object.keys(mt).forEach(function(k){ merged[k]=(merged[k]||0)+mt[k]; });
   var mp = countMotivos(pede); Object.keys(mp).forEach(function(k){ merged[k]=(merged[k]||0)+mp[k]; });
   renderStatusList('st-motivos', entriesSortedDesc(merged).slice(0,12));
-  // Percepção do processo (D) — pizza
-  renderPiePct('chart-percepcao', [
+  // Percepção do processo (D) — barra de progresso (% + trilho até 100%)
+  renderBarProgress('chart-percepcao', [
     ['Informados do motivo', pctSim(desl,'informado')],
     ['Concordam com o motivo', pctSim(desl,'concorda')],
     ['Processo justo/transparente', pctSim(desl,'processo_justo')]
@@ -2536,7 +2564,7 @@ var _INFO_GRAFICOS = {
   saidas: '<div class="info-note">Motivos de saída de quem <b>pediu demissão</b> (P). Cada pessoa pode marcar mais de um motivo; aparecem os 9 mais citados.</div>',
   motivotata: '<div class="info-note">Motivo do desligamento conforme comunicado pelo TATÁ, entre quem foi desligado(a).</div>',
   motivos: '<div class="info-note">Motivos da saída, juntando os <b>motivos de quem pediu demissão</b> (P) e o <b>motivo informado pelo TATÁ</b> de quem foi desligado(a) (D). Cada pessoa pode ter mais de um motivo; aparecem os 12 mais citados.</div>',
-  percepcao: '<div class="info-note">Percepção do processo entre quem <b>foi desligado(a)</b> (D): percentual que respondeu “Sim” a cada pergunta (informado do motivo, concorda, processo justo), contando só quem respondeu. As fatias são proporcionais ao %.</div>',
+  percepcao: '<div class="info-note">Percepção do processo entre quem <b>foi desligado(a)</b> (D): percentual que respondeu “Sim” a cada pergunta (informado do motivo, concorda, processo justo), contando só quem respondeu. Cada barra vai de 0 a 100%.</div>',
   voluntaria: '<div class="info-note">Entre quem saiu para outra empresa: percentual que respondeu “Sim” a cada pergunta, contando só quem respondeu.</div>',
   notas: INFO_NOTAS,
   demissoes: '<div class="info-note">Todos os desligados (status Inativo no RHID). Entram automaticamente (toda madrugada + no momento em que o status vira Inativo). O RH preenche os valores e a homologação em Editar; os campos preenchidos NÃO são sobrescritos pela automação. “Verbas” = verbas rescisórias · “GRRF” = guia de recolhimento rescisório do FGTS. Os filtros do topo valem para as duas tabelas da aba.</div>'
