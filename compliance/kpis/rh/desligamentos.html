@@ -86,6 +86,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .dash-stack { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
 /* linha de custos: 2 horizontais + 1 vertical; a vertical fica 20% mais larga */
 .cost-row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.dash-sep { border: none; border-top: 1px solid var(--border); margin: 18px 12px; }
+@media (min-width: 768px) { .dash-sep { margin: 20px 24px; } }
 .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px 16px; display: flex; flex-direction: column; margin-bottom: 14px; position: relative; }
 .top-section .chart-card, .dash-row .chart-card, .dash-stack .chart-card, .cost-row .chart-card { margin-bottom: 0; min-width: 0; }
 .chart-card .chart-title { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); margin-bottom: 14px; text-align: center; font-weight: 700; }
@@ -407,7 +409,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <div class="filters-wrap">
-  <div class="filters-row">
+  <div class="filters-row dem-filters-row">
     <div class="filter-group">
       <label class="filter-label" for="f-tipo">Tipos de rescisão</label>
       <select class="filter-select" id="f-tipo" onchange="applyFilter()">
@@ -429,10 +431,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       </select>
     </div>
     <div class="filter-group">
-      <label class="filter-label" for="f-ano">Período</label>
-      <select class="filter-select" id="f-ano" onchange="applyFilter()">
-        <option value="">Todos</option>
-      </select>
+      <label class="filter-label" for="f-de">De</label>
+      <input class="filter-select" id="f-de" type="date" onchange="applyFilter()">
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" for="f-ate">Até</label>
+      <input class="filter-select" id="f-ate" type="date" onchange="applyFilter()">
     </div>
   </div>
   <div class="filters-actions">
@@ -489,6 +493,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<hr class="dash-sep">
 <!-- linha 1: tipo · motivo informado (desligados) · motivos de saída (pedidos) -->
 <div class="top-section" style="margin-top:12px">
   <div class="chart-card">
@@ -2019,24 +2024,11 @@ function esperarFonte(cb){
 }
 
 function populateAnoSelect(){
-  var anos = {};
-  DATA.forEach(function(r){ var a = getAno(r); if (a) anos[a] = true; });
-  var arr = Object.keys(anos).sort().reverse();
-  var sel = document.getElementById('f-ano');
-  arr.forEach(function(a){ var opt = document.createElement('option'); opt.value = a; opt.textContent = a; sel.appendChild(opt); });
   _fillKpiFiltro('f-unidade', 'unidade');
   _fillKpiFiltro('f-departamento', 'departamento');
 }
-// inclui no filtro de Período (e unidade/depto) os anos/valores vindos das demissões (DEM_ROWS)
+// inclui no filtro de unidade/depto os valores que só existem nas demissões (DEM_ROWS)
 function _mergeAnosDemissoes(){
-  var sel=document.getElementById('f-ano'); if(!sel) return;
-  var have={}; for(var i=0;i<sel.options.length;i++){ have[sel.options[i].value]=true; }
-  var anos={}; (typeof DEM_ROWS!=='undefined'?DEM_ROWS:[]).forEach(function(r){ var a=String(r.data_demissao||'').slice(0,4); if(a && !have[a]) anos[a]=true; });
-  Object.keys(anos).sort().reverse().forEach(function(a){ var o=document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o); have[a]=true; });
-  // reordena desc mantendo "Todos" no topo
-  var opts=[].slice.call(sel.options,1).sort(function(x,y){ return y.value.localeCompare(x.value); });
-  opts.forEach(function(o){ sel.appendChild(o); });
-  // unidade/departamento: inclui valores que só existem nas demissões (não cobertos pela pesquisa)
   _mergeDemOpt('f-unidade','unidade');
   _mergeDemOpt('f-departamento','departamento');
 }
@@ -2070,26 +2062,29 @@ function updateFooterDate(){
 
 function applyFilter(){
   var fTipo = document.getElementById('f-tipo').value;
-  var fAno  = document.getElementById('f-ano').value;
   var fUni  = (document.getElementById('f-unidade')||{}).value || '';
   var fDep  = (document.getElementById('f-departamento')||{}).value || '';
+  var fDe   = (document.getElementById('f-de')||{}).value || '';
+  var fAte  = (document.getElementById('f-ate')||{}).value || '';
+  var deAno = fDe? fDe.slice(0,4) : '', ateAno = fAte? fAte.slice(0,4) : '';
+  // pesquisa (av_desligamento_rows_v2) só tem o ANO -> período filtra por ano
   filtered = DATA.filter(function(r){
     if (fTipo && r.tipo !== fTipo) return false;
-    if (fAno  && getAno(r) !== fAno) return false;
     if (fUni  && r.unidade !== fUni) return false;
     if (fDep  && r.departamento !== fDep) return false;
+    var a = getAno(r);
+    if (deAno && a && a < deAno) return false;
+    if (ateAno && a && a > ateAno) return false;
     return true;
   });
-  document.getElementById('results-count').innerHTML = '<span>'+filtered.length+'</span> desligamento(s)';
+  // contagem = nº de DEMISSÕES no filtro (não as respostas de pesquisa)
+  document.getElementById('results-count').innerHTML = '<span>'+_demDashFiltradas().length+'</span> desligamento(s)';
   renderAll(filtered);
   renderValores();
 }
 
 function clearFilters(){
-  document.getElementById('f-tipo').value = '';
-  document.getElementById('f-ano').value  = '';
-  var u=document.getElementById('f-unidade'); if(u) u.value='';
-  var d=document.getElementById('f-departamento'); if(d) d.value='';
+  ['f-tipo','f-unidade','f-departamento','f-de','f-ate'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
   applyFilter();
 }
 
@@ -2252,11 +2247,13 @@ function renderValAno(){
 }
 function _barValLabels(fmt){ return { id:'bvl', afterDatasetsDraw:function(chart){ var ctx=chart.ctx; var horiz=chart.options&&chart.options.indexAxis==='y'; chart.data.datasets.forEach(function(ds,di){ var meta=chart.getDatasetMeta(di); meta.data.forEach(function(bar,i){ var val=ds.data[i]; if(val==null||val===0) return; ctx.save(); ctx.fillStyle='#35383F'; ctx.font='800 12px "DM Sans", sans-serif'; var txt=fmt(val); if(horiz){ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(txt,bar.x+5,bar.y);}else{ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(txt,bar.x,bar.y-4);} ctx.restore(); }); }); } }; }
 function _demDashFiltradas(){
-  var fu=_demVal('f-unidade'), fd=_demVal('f-departamento'), fa=_demVal('f-ano');
+  var fu=_demVal('f-unidade'), fd=_demVal('f-departamento'), fde=_demVal('f-de'), fate=_demVal('f-ate');
   return (typeof DEM_ROWS!=='undefined'?DEM_ROWS:[]).filter(function(r){
     if(fu && r.unidade!==fu) return false;
     if(fd && r.departamento!==fd) return false;
-    if(fa && String(r.data_demissao||'').slice(0,4)!==fa) return false;
+    var dd=String(r.data_demissao||'').slice(0,10);
+    if(fde && (!dd || dd<fde)) return false;
+    if(fate && (!dd || dd>fate)) return false;
     return true;
   });
 }
