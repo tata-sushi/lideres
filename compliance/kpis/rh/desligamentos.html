@@ -492,7 +492,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="chart-card">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('val-ano')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Resumo por ano</div>
-    <div class="tbl-scroll"><table class="mini" style="width:100%"><thead><tr><th style="text-align:left">Ano</th><th style="text-align:right">Rescisões</th><th style="text-align:right">Saldo devedor</th><th style="text-align:right">Média</th><th style="text-align:right">Montante</th></tr></thead><tbody id="v-ano-body"><tr><td colspan="5"><div class="status-empty">Carregando…</div></td></tr></tbody></table></div>
+    <div class="tbl-scroll"><table class="mini" style="width:100%"><thead><tr><th style="text-align:left">Ano</th><th style="text-align:right">Rescisões</th><th style="text-align:right">Saldo devedor</th><th style="text-align:right">Média</th><th style="text-align:right">Montante</th><th style="text-align:right">Variação ano anterior</th></tr></thead><tbody id="v-ano-body"><tr><td colspan="6"><div class="status-empty">Carregando…</div></td></tr></tbody></table></div>
   </div>
 </div>
 
@@ -2249,10 +2249,13 @@ function renderValAno(){
   var rows=_demDashFiltradas();
   var y={}; rows.forEach(function(r){ var a=String(r.data_demissao||'').slice(0,4); if(a.length!==4) return; if(!y[a]) y[a]={n:0,s:0,sd:0}; y[a].n++; var v=Number(r.valor_rescisao)||0; if(v>0) y[a].s+=v; var d=Number(r.saldo_devedor)||0; if(d>0) y[a].sd+=d; });
   var anos=Object.keys(y).sort().reverse();
-  if(!anos.length){ el.innerHTML='<tr><td colspan="5"><div class="status-empty">Sem dados</div></td></tr>'; return; }
+  if(!anos.length){ el.innerHTML='<tr><td colspan="6"><div class="status-empty">Sem dados</div></td></tr>'; return; }
   var NUM='text-align:right;font-weight:800;font-variant-numeric:tabular-nums';
   el.innerHTML=anos.map(function(a){ var o=y[a]; var med=o.n? o.s/o.n : 0;
-    return '<tr><td class="nm">'+a+'</td><td style="'+NUM+'">'+_intBR(o.n)+'</td><td style="'+NUM+'">'+_brlFull(o.sd)+'</td><td style="'+NUM+'">'+_brlFull(med)+'</td><td style="'+NUM+'">'+_brlFull(o.s)+'</td></tr>'; }).join('');
+    var pv=y[String(Number(a)-1)]; var vcell;
+    if(pv && pv.s>0){ var dpct=(o.s-pv.s)/pv.s*100; vcell='<td style="'+NUM+'">'+(dpct>=0?'+':'−')+Math.abs(Math.round(dpct))+'%</td>'; }
+    else { vcell='<td style="'+NUM+'"><span class="td-muted">—</span></td>'; }
+    return '<tr><td class="nm">'+a+'</td><td style="'+NUM+'">'+_intBR(o.n)+'</td><td style="'+NUM+'">'+_brlFull(o.sd)+'</td><td style="'+NUM+'">'+_brlFull(med)+'</td><td style="'+NUM+'">'+_brlFull(o.s)+'</td>'+vcell+'</tr>'; }).join('');
 }
 function _barValLabels(fmt){ return { id:'bvl', afterDatasetsDraw:function(chart){ var ctx=chart.ctx; var horiz=chart.options&&chart.options.indexAxis==='y'; chart.data.datasets.forEach(function(ds,di){ var meta=chart.getDatasetMeta(di); meta.data.forEach(function(bar,i){ var val=ds.data[i]; if(val==null||val===0) return; ctx.save(); ctx.fillStyle='#35383F'; ctx.font='800 12px "DM Sans", sans-serif'; var txt=fmt(val); if(horiz){ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(txt,bar.x+5,bar.y);}else{ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(txt,bar.x,bar.y-4);} ctx.restore(); }); }); } }; }
 function _demDashFiltradas(){
@@ -2518,7 +2521,7 @@ var _INFO_GRAFICOS = {
   'val-depto': '<div class="info-note">Soma das <b>verbas rescisórias</b> (R$) por departamento. Só entram registros com verba lançada (&gt; 0). Respeita os filtros do topo.</div>',
   'dem-unidade': '<div class="info-note"><b>Quantidade</b> de demissões por unidade (nº de desligamentos). Fonte: tabela de demissões. Respeita os filtros do topo.</div>',
   'dem-depto': '<div class="info-note"><b>Quantidade</b> de demissões por departamento (nº de desligamentos). Fonte: tabela de demissões. Respeita os filtros do topo.</div>',
-  'val-ano': '<div class="info-note">Resumo por ano: <b>Rescisões</b> = nº de desligamentos; <b>Montante</b> = soma das verbas (R$); <b>Saldo devedor</b> = soma dos saldos devedores (R$); <b>Média</b> = montante ÷ rescisões (custo médio por desligamento no ano). Respeita os filtros do topo.</div>',
+  'val-ano': '<div class="info-note">Resumo por ano: <b>Rescisões</b> = nº de desligamentos; <b>Saldo devedor</b> = soma dos saldos devedores (R$); <b>Média</b> = montante ÷ rescisões; <b>Montante</b> = soma das verbas (R$); <b>Variação ano anterior</b> = variação % do montante em relação ao ano anterior (+ subiu / − caiu; "—" quando não há ano anterior na base). Respeita os filtros do topo.</div>',
   'val-tipo': '<div class="info-note"><b>Custo médio</b> de verbas rescisórias (R$) por tipo de desligamento (Acordo Mútuo / Desligamento empresa / Pedido de demissão / Término do contrato de experiência). Média calculada só sobre registros com verba lançada (&gt; 0). Respeita os filtros do topo.</div>',
   tipo: '<div class="info-note">Tipos de desligamento das entrevistas de saída respondidas: quem pediu demissão e quem foi desligado(a).</div>',
   saidas: '<div class="info-note">Motivos de saída de quem <b>pediu demissão</b> (P). Cada pessoa pode marcar mais de um motivo; aparecem os 9 mais citados.</div>',
