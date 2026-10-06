@@ -384,6 +384,21 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div id="view-dashboard" style="display:none">
 <div class="kpis-wrap" id="kpis-wrap">
   <div class="kpi-card">
+    <span class="kpi-label">Total verbas rescisórias</span>
+    <span class="kpi-number" id="kpi-verbas">—</span>
+    <span class="kpi-sub" id="kpi-verbas-sub"></span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Total GRRF</span>
+    <span class="kpi-number" id="kpi-grrf">—</span>
+    <span class="kpi-sub">guia FGTS</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Ticket médio</span>
+    <span class="kpi-number" id="kpi-ticket">—</span>
+    <span class="kpi-sub">por rescisão c/ verba</span>
+  </div>
+  <div class="kpi-card">
     <span class="kpi-label">Formulários respondidos</span>
     <span class="kpi-number" id="kpi-realizadas">—</span>
     <span class="kpi-sub" id="kpi-pesq-sub"></span>
@@ -2012,6 +2027,15 @@ function _mergeAnosDemissoes(){
   // reordena desc mantendo "Todos" no topo
   var opts=[].slice.call(sel.options,1).sort(function(x,y){ return y.value.localeCompare(x.value); });
   opts.forEach(function(o){ sel.appendChild(o); });
+  // unidade/departamento: inclui valores que só existem nas demissões (não cobertos pela pesquisa)
+  _mergeDemOpt('f-unidade','unidade');
+  _mergeDemOpt('f-departamento','departamento');
+}
+function _mergeDemOpt(selId, campo){
+  var sel=document.getElementById(selId); if(!sel) return;
+  var have={}; for(var i=0;i<sel.options.length;i++){ have[sel.options[i].value]=true; }
+  var vals={}; (typeof DEM_ROWS!=='undefined'?DEM_ROWS:[]).forEach(function(r){ var v=r[campo]; if(v && !have[v]) vals[v]=true; });
+  Object.keys(vals).sort().forEach(function(v){ var o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
 }
 function _fillKpiFiltro(selId, campo){
   var sel = document.getElementById(selId); if(!sel) return;
@@ -2256,9 +2280,20 @@ function _renderValBarH(canvasId, entries, fmt){
                y:{grid:{display:false},border:{display:false},ticks:{color:'#35383F',font:{family:"'DM Sans', sans-serif",size:12,weight:'500'},
                  callback:function(v){ var max=Math.min(26,Math.max(8,Math.floor((this.chart.width/2-16)/7.5))); return truncate(this.getLabelForValue(v),max);}}} } } });
 }
+function _brlKpi(v){ return 'R$ '+Math.round(Number(v)||0).toLocaleString('pt-BR'); }
+function _setTxt(id,t){ var e=document.getElementById(id); if(e) e.textContent=t; }
+function renderKpisValores(rows){
+  var sVerbas=0, sGrrf=0, nVerba=0;
+  rows.forEach(function(r){ var v=Number(r.valor_rescisao)||0, g=Number(r.valor_grrf)||0; if(v>0){ sVerbas+=v; nVerba++; } if(g>0) sGrrf+=g; });
+  _setTxt('kpi-verbas', _brlKpi(sVerbas));
+  _setTxt('kpi-grrf', _brlKpi(sGrrf));
+  _setTxt('kpi-ticket', nVerba? _brlKpi(sVerbas/nVerba) : '—');
+  _setTxt('kpi-verbas-sub', nVerba+' rescisão(ões) com verba');
+}
 function renderValores(){
-  if(typeof Chart==='undefined') return;
   var rows=_demDashFiltradas();
+  renderKpisValores(rows);
+  if(typeof Chart==='undefined') return;
   // 1) custo por mês (soma de verbas)
   var m={}; rows.forEach(function(r){ var d=String(r.data_demissao||'').slice(0,7); var v=Number(r.valor_rescisao)||0; if(d.length===7 && v>0) m[d]=(m[d]||0)+v; });
   var mesEntries=Object.keys(m).sort().map(function(k){ var p=k.split('-'); return [p[1]+'/'+p[0].slice(2), m[k]]; });
