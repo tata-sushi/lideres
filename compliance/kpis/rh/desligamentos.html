@@ -414,8 +414,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <label class="filter-label" for="f-tipo">Tipos de rescisão</label>
       <select class="filter-select" id="f-tipo" onchange="applyFilter()">
         <option value="">Todos</option>
-        <option>Pedi demissão</option>
-        <option>Fui desligado(a)</option>
+        <option value="Pedi demissão">Pedido de demissão</option>
+        <option value="Fui desligado(a)">Desligamento</option>
       </select>
     </div>
     <div class="filter-group">
@@ -503,13 +503,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
   <div class="chart-card">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('motivotata')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-    <div class="chart-title">Motivo Informado</div>
-    <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="c-motivotata"></canvas></div></div>
+    <div class="chart-title">Motivo da Saída (D)</div>
+    <div class="status-table" id="st-motivotata"></div>
   </div>
   <div class="chart-card">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('saidas')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-    <div class="chart-title">Motivos de saída (P)</div>
-    <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="chart-saidas"></canvas></div></div>
+    <div class="chart-title">Motivos da saída (P)</div>
+    <div class="status-table" id="st-saidas"></div>
   </div>
 </div>
 
@@ -524,19 +524,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-card">
       <button class="chart-info-btn" onclick="abrirInfoGrafico('percepcao')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
       <div class="chart-title">Percepção do processo</div>
-      <div class="status-table">
-        <div class="status-row"><span class="status-name">Foram informados previamente do motivo</span><span class="status-count" id="pct-informado">—</span></div>
-        <div class="status-row"><span class="status-name">Concordam com o motivo apresentado</span><span class="status-count" id="pct-concorda">—</span></div>
-        <div class="status-row"><span class="status-name">Acharam o processo justo e transparente</span><span class="status-count" id="pct-justo">—</span></div>
-      </div>
+      <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="chart-percepcao"></canvas></div></div>
     </div>
     <div class="chart-card">
       <button class="chart-info-btn" onclick="abrirInfoGrafico('voluntaria')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-      <div class="chart-title">Por que foram para outra empresa</div>
-      <div class="status-table">
-        <div class="status-row"><span class="status-name">Receberam oferta melhor (salário/benefícios)</span><span class="status-count" id="pct-oferta">—</span></div>
-        <div class="status-row"><span class="status-name">Foram por mais oportunidade de crescimento</span><span class="status-count" id="pct-cresc">—</span></div>
-      </div>
+      <div class="chart-title">Motivos da saída</div>
+      <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="chart-voluntaria"></canvas></div></div>
     </div>
   </div>
 </div>
@@ -2462,16 +2455,39 @@ function _updatePesqSub(){
   (typeof DEM_ROWS!=='undefined'?DEM_ROWS:[]).forEach(function(r){ var k=_pesqSit(r).key; if(k==='pendente') pend++; else if(k==='nao_respondeu') nr++; });
   el.textContent = pend+' pendentes · '+nr+' não respondidos';
 }
+var TIPO_SAIDA_TXT = { 'Pedi demissão':'Pedido de demissão', 'Fui desligado(a)':'Desligamento' };
+// tabela simples (nome + contagem), padrão .status-row
+function renderStatusList(elId, entries){
+  var el=document.getElementById(elId); if(!el) return;
+  if(!entries || !entries.length){ el.innerHTML='<div class="status-empty">Sem dados</div>'; return; }
+  el.innerHTML=entries.map(function(e){ return '<div class="status-row"><span class="status-name">'+escH(e[0])+'</span><span class="status-count">'+e[1]+'</span></div>'; }).join('');
+}
+// barras horizontais 100% (eixo 0–100), rótulo em %
+function renderBarPct(canvasId, entries){
+  destroyChart(canvasId);
+  var canvas=document.getElementById(canvasId); if(!canvas||typeof Chart==='undefined') return;
+  var labels=entries.map(function(e){return e[0];}), data=entries.map(function(e){return e[1]==null?0:e[1];});
+  if(canvas.parentElement) canvas.parentElement.style.height=Math.max(220,labels.length*34+20)+'px';
+  _charts[canvasId]=new Chart(canvas,{ type:'bar',
+    data:{labels:labels,datasets:[{data:data,backgroundColor:'#35383F',borderWidth:0,borderRadius:5,barPercentage:0.6,maxBarThickness:22}]},
+    plugins:[_barValLabels(function(v){return v+'%';})],
+    options:{ indexAxis:'y', responsive:true,maintainAspectRatio:false,animation:false,devicePixelRatio:CHART_DPR,
+      layout:{padding:{right:44}},
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{ x:{grid:{display:false},border:{display:false},ticks:{display:false},beginAtZero:true,max:100},
+               y:{grid:{display:false},border:{display:false},ticks:{color:'#35383F',font:{family:"'DM Sans', sans-serif",size:12,weight:'500'},
+                 callback:function(v){ var max=Math.min(30,Math.max(8,Math.floor((this.chart.width/2-16)/7.5))); return truncate(this.getLabelForValue(v),max);}}} } } });
+}
 function renderAll(rows){
   document.getElementById('kpi-realizadas').textContent = rows.length;
   _updatePesqSub();
 
   var tipoCounts = countByField(rows, 'tipo');
-  renderPie('chart-tipo', entriesSortedDesc(tipoCounts));
+  renderPie('chart-tipo', entriesSortedDesc(tipoCounts).map(function(e){ return [TIPO_SAIDA_TXT[e[0]]||e[0], e[1]]; }));
 
   var motivos = countMotivos(rows);
   var motivosTop = entriesSortedDesc(motivos).slice(0, 9);
-  renderBarHorizontal('chart-saidas', motivosTop);
+  renderStatusList('st-saidas', motivosTop);
 
   renderHeatNotas(rows);
 
@@ -2483,14 +2499,18 @@ function renderAll(rows){
 
   // ── processo de desligamento (involuntário) ──
   var desl = rows.filter(function(r){ return r.tipo==='Fui desligado(a)'; });
-  renderBarHorizontal('c-motivotata', entriesSortedDesc(countByField(desl,'motivo_tata')));
-  setPct('pct-informado', pctSim(desl,'informado'));
-  setPct('pct-concorda',  pctSim(desl,'concorda'));
-  setPct('pct-justo',     pctSim(desl,'processo_justo'));
+  renderStatusList('st-motivotata', entriesSortedDesc(countByField(desl,'motivo_tata')));
+  renderBarPct('chart-percepcao', [
+    ['Informados do motivo', pctSim(desl,'informado')],
+    ['Concordam com o motivo', pctSim(desl,'concorda')],
+    ['Processo justo/transparente', pctSim(desl,'processo_justo')]
+  ]);
 
   // ── saída voluntária (complementos de quem foi pra outra empresa) ──
-  setPct('pct-oferta', pctSim(rows,'oferta_salarial'));
-  setPct('pct-cresc',  pctSim(rows,'novo_crescimento'));
+  renderBarPct('chart-voluntaria', [
+    ['Oferta melhor (salário/benefícios)', pctSim(rows,'oferta_salarial')],
+    ['Mais oportunidade de crescimento', pctSim(rows,'novo_crescimento')]
+  ]);
 
   // ── escuta ──
   setPct('pct-irec', pctGte(rows,'recomendaria',4));
