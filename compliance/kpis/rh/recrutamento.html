@@ -181,6 +181,7 @@ body[data-view="analitico"] .filters-wrap { border-bottom: none; }
 .card-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .candidate-name { font-size: 14px; font-weight: 700; color: var(--carbon); letter-spacing: -0.1px; line-height: 1.3; text-transform: uppercase; }
 .ent-num { display: inline-block; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; color: var(--muted); background: #F0F0F0; border-radius: 4px; padding: 1px 5px; vertical-align: middle; margin-left: 4px; }
+.dup-mark { background: var(--citric); color: inherit; border-radius: 3px; padding: 0 3px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }  /* nome/telefone/CPF repetido */
 .candidate-contact { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mid); margin-top: 3px; display: flex; align-items: center; gap: 5px; }
 .status-badge { display: inline-flex; align-items: center; flex-shrink: 0; padding: 3px 9px; border-radius: 100px; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; }
 
@@ -2245,6 +2246,7 @@ function loadAllData() {
     if (res.error) { entrevistas = []; testes = []; analitico = []; finishLoad(['Supabase: ' + res.error.message]); return; }
     var rows = Array.isArray(res.data) ? res.data : [];
     entrevistas = []; entrevistasAll = []; testes = []; analitico = rows;   // Analítico usa a candidatura crua (mãe + dias)
+    _buildDupIdx(rows);   // marca-texto de nome/telefone/CPF repetidos
     rows.forEach(function (r) {
       var dias = Array.isArray(r.dias) ? r.dias : []; // filha rec_teste_dias (aninhada pelo RPC)
       var temTeste = dias.length > 0;
@@ -2327,6 +2329,38 @@ function escH(s) {
 }
 function norm(s) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+
+// ─── Repetidos (marca-texto): nome / telefone / CPF em mais de uma candidatura ───
+// Cada coluna é avaliada sozinha. Conta candidaturas (1 linha de rec_candidaturas cada), então as
+// várias entrevistas / dias de teste da MESMA candidatura não contam como repetição.
+var _dupIdx = { nome:{}, tel:{}, cpf:{} };
+var _DUP_LBL = { nome:'Nome', tel:'Telefone', cpf:'CPF' };
+function _dupKeyNome(v){ v=norm(String(v==null?'':v).toLowerCase()).replace(/\s+/g,' ').trim(); return v.length>=3 ? v : ''; }
+function _dupKeyTel(v){
+  var d=String(v==null?'':v).replace(/\D/g,'').replace(/^0+/,'');
+  if (d.length>=12 && d.indexOf('55')===0) d=d.slice(2);
+  return d.length>=10 ? d.slice(0,2)+d.slice(-8) : '';   // DDD + 8 últimos: casa com e sem o 9º dígito
+}
+function _dupKeyCpf(v){
+  var d=String(v==null?'':v).replace(/\D/g,'');
+  if (d.length<9 || d.length>11) return '';               // "Não informado", "0" etc.
+  d=('00'+d).slice(-11);                                    // zeros à esquerda perdidos
+  return /^(\d)\1+$/.test(d) ? '' : d;
+}
+var _DUP_KEY = { nome:_dupKeyNome, tel:_dupKeyTel, cpf:_dupKeyCpf };
+function _buildDupIdx(rows){
+  var idx = { nome:{}, tel:{}, cpf:{} };
+  function add(m, k){ if (k) m[k]=(m[k]||0)+1; }
+  rows.forEach(function(r){
+    add(idx.nome, _dupKeyNome(r.nome)); add(idx.tel, _dupKeyTel(r.contato)); add(idx.cpf, _dupKeyCpf(r.cpf));
+  });
+  _dupIdx = idx;
+}
+// html da célula com marca-texto quando o valor se repete (campo: 'nome' | 'tel' | 'cpf')
+function _dupMark(campo, v, html){
+  var k=_DUP_KEY[campo](v), n=k ? (_dupIdx[campo][k]||0) : 0;
+  return n>1 ? '<mark class="dup-mark" title="'+_DUP_LBL[campo]+' repetido em '+n+' candidaturas">'+html+'</mark>' : html;
 }
 function slugStatus(s) {
   if (!s) return 'default';
@@ -2498,11 +2532,12 @@ function waLink(contato) {
 function phoneIcon() {
   return '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
 }
-function contactHTML(c) {
+function contactHTML(c, marcarRepetido) {
   var wa = waLink(c);
+  var txt = marcarRepetido ? _dupMark('tel', c, escH(c||'')) : escH(c||'');
   return wa
-    ? '<a href="'+wa+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;color:inherit;text-decoration:none;">'+phoneIcon()+escH(c)+'</a>'
-    : phoneIcon()+' '+escH(c||'');
+    ? '<a href="'+wa+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;color:inherit;text-decoration:none;">'+phoneIcon()+txt+'</a>'
+    : phoneIcon()+' '+txt;
 }
 
 // ─── Filtros ──────────────────────────────────────────────────────────────────
@@ -2774,8 +2809,8 @@ function cardEntrevista(r) {
   }
   return '<div class="card">'+
     '<div class="card-header"><div>'+
-    '<div class="candidate-name">'+escH(r.nome)+(r._ent_total>1?' <span class="ent-num">E'+r._ent_num+'</span>':'')+'</div>'+
-    '<div class="candidate-contact">'+contactHTML(r.contato)+'</div></div>'+
+    '<div class="candidate-name">'+_dupMark('nome',r.nome,escH(r.nome))+(r._ent_total>1?' <span class="ent-num">E'+r._ent_num+'</span>':'')+'</div>'+
+    '<div class="candidate-contact">'+contactHTML(r.contato, true)+'</div></div>'+
     '<span class="status-badge s-'+sf+'">'+escH(sfLabel)+'</span></div>'+
     '<div class="card-body">'+
     '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+escH(r.unidade)+'</span></div>'+
@@ -2804,8 +2839,8 @@ function cardTeste(r) {
   }
   return '<div class="card">'+
     '<div class="card-header"><div>'+
-    '<div class="candidate-name">'+escH(r.nome)+'</div>'+
-    '<div class="candidate-contact">'+contactHTML(r.contato)+'</div></div>'+
+    '<div class="candidate-name">'+_dupMark('nome',r.nome,escH(r.nome))+'</div>'+
+    '<div class="candidate-contact">'+contactHTML(r.contato, true)+'</div></div>'+
     '<span class="status-badge sf-'+sf+'">'+escH(sfLabel)+'</span></div>'+
     '<div class="card-body">'+
     '<div class="card-field"><span class="field-label">Unidade</span><span class="field-value">'+escH(r.unidade)+'</span></div>'+
@@ -3006,8 +3041,8 @@ function renderEntrevistasTableHtml(rows) {
       acoes = '<button class="btn-icon" data-aba-id="governanca-kpis-rh-recrutamento::enviar-devolutiva" title="Enviar devolutiva" aria-label="Enviar devolutiva" onclick="abrirModalEntrevista('+idx+')">'+_sendSvg+'</button>' + acoes;
     }
     return '<tr>'+
-      '<td class="ett-nome">'+escH(r.nome||'—')+(r._ent_total>1?' <span class="ent-num">E'+r._ent_num+'</span>':'')+'</td>'+
-      '<td>'+escH(r.contato||'—')+'</td>'+
+      '<td class="ett-nome">'+_dupMark('nome',r.nome,escH(r.nome||'—'))+(r._ent_total>1?' <span class="ent-num">E'+r._ent_num+'</span>':'')+'</td>'+
+      '<td>'+_dupMark('tel',r.contato,escH(r.contato||'—'))+'</td>'+
       '<td>'+escH(r.unidade||'—')+'</td>'+
       '<td>'+escH(r.departamento||'—')+'</td>'+
       '<td>'+escH(r.cargo||'—')+'</td>'+
@@ -3044,8 +3079,8 @@ function renderTestesTableHtml(rows) {
       acoes = '<button class="btn-icon" data-aba-id="governanca-kpis-rh-recrutamento::avaliar-teste" title="Avaliar teste" aria-label="Avaliar teste" onclick="abrirModal('+idx+')">'+_clipSvg+'</button>' + acoes;
     }
     return '<tr>'+
-      '<td class="ett-nome">'+escH(r.nome||'—')+'</td>'+
-      '<td>'+escH(r.contato||'—')+'</td>'+
+      '<td class="ett-nome">'+_dupMark('nome',r.nome,escH(r.nome||'—'))+'</td>'+
+      '<td>'+_dupMark('tel',r.contato,escH(r.contato||'—'))+'</td>'+
       '<td>'+escH(r.unidade||'—')+'</td>'+
       '<td>'+escH(r.departamento||'—')+'</td>'+
       '<td>'+escH(r.cargo||'—')+'</td>'+
@@ -3181,8 +3216,8 @@ function _anlBuildCols() {
   }
   var groups = [
     { label:'Informações de candidatos', sigla:'I', cols:[
-      ['Contato', function(r){ return _anlTxt(r.contato); }],
-      ['CPF', function(r){ return _anlTxt(r.cpf); }],
+      ['Contato', function(r){ return _dupMark('tel', r.contato, _anlTxt(r.contato)); }],
+      ['CPF', function(r){ return _dupMark('cpf', r.cpf, _anlTxt(r.cpf)); }],
       ['Unidade de interesse', function(r){ return _anlTxt(r.unidade); }],
       ['Departamento de interesse', function(r){ return _anlTxt(r.departamento); }],
       ['Cargo de interesse', function(r){ return _anlTxt(r.cargo); }],
@@ -3261,7 +3296,7 @@ function _anlStatusResumo(r){
   return out.join('');
 }
 function _anlRowHtml(r) {
-  var tds = '<td class="anl-sticky"><div class="anl-nome-cell"><span class="anl-nome-txt">'+_anlTxt(r.nome)+'</span>'+_anlStatusResumo(r)+'</div></td>';
+  var tds = '<td class="anl-sticky"><div class="anl-nome-cell"><span class="anl-nome-txt">'+_dupMark('nome', r.nome, _anlTxt(r.nome))+'</span>'+_anlStatusResumo(r)+'</div></td>';
   _anlGroupsF().forEach(function(g, gi){
     if (_anlCollapsed[gi]) { tds += '<td class="anl-gsep anl-ccol">·</td>'; return; }
     g.cols.forEach(function(c, ci){ tds += '<td'+(ci===0?' class="anl-gsep"':'')+'>'+c[1](r)+'</td>'; });
