@@ -2137,4 +2137,41 @@ documento/assinatura pra alguém: checar primeiro `docs_pode_gerir()`
 mexer em `data-aba-id`/catálogo de governança — o controle real desse
 fluxo específico está no banco, não na página.
 
-_Última atualização: 2026-10-01._
+**Feito (2026-10-07): corrigido bug "foto não aparece na Ficha de
+Registro" — a RPC `admissao_foto_por_cpf` sempre apontava pro bucket
+errado pra quem já tinha sido migrado.** Usuário reportou que a foto
+não carregava ("veja se está funcionando? Não roda"). Causa raiz:
+quando o CPF da admissão vira `profile` (ganha matrícula), o job de
+migração de documentos (`git-claude/migracao.md`, feito 03/10) move o
+arquivo de `admissao-docs/<token>/foto/...` pra
+`dp-documentos/<matricula>/admissao/foto-...` e atualiza
+`dp_rh.admissao_documentos.link_bucket` de `'admissao-docs'` pra
+`'dp-documentos'` — mas a RPC só devolvia `d.link` (o path), nunca o
+bucket, e o front (`admissao.html`, `_admFregFotoAutoFill`) tinha o
+bucket **fixo** em `'admissao-docs'`. Resultado: pra qualquer um que
+já tivesse sido migrado — ou seja, a imensa maioria de quem passa
+pela Ficha de Registro, já que só se preenche a ficha depois de
+contratado — o `createSignedUrl` ia procurar no bucket errado e
+falhava silenciosamente (o `.catch(function(){})` do auto-fill engole
+o erro, por isso parecia só "não aparecer", sem erro visível).
+
+Conferido direto no banco antes de mexer: das 8 fotos `entregue` em
+`admissao_documentos`, **5 já estavam com `link_bucket='dp-documentos'`**
+(migradas) e só 3 ainda em `'admissao-docs'` — batendo exatamente com
+o sintoma relatado.
+
+Corrigido sem `DROP FUNCTION` (a sessão não conseguiu confirmar o
+DROP nem o DELETE da chave órfã do backlog anterior — parece que
+operações destrutivas via SQL direto ficam pendentes de uma
+confirmação que não chega por aqui; `CREATE OR REPLACE` funciona
+normal). Como trocar o tipo de retorno (`text`→`jsonb`) exige DROP, a
+RPC continua devolvendo `text`, só que agora no formato
+`"<bucket>::<path>"` em vez de só `"<path>"` — `_admFregFotoAutoFill`
+faz o split em `::` e usa o bucket que vier, nunca mais fixo.
+
+Testado com Playwright (RPC mockada devolvendo os dois formatos,
+`createSignedUrl` conferido chamando o bucket certo em cada caso) —
+confirmado que colaborador migrado usa `dp-documentos` e colaborador
+não migrado continua usando `admissao-docs`, sem regressão.
+
+_Última atualização: 2026-10-07._
