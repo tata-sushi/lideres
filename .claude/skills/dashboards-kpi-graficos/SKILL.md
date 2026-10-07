@@ -402,9 +402,9 @@ seção** (ex.: "Percepção do processo" na Desligamentos: pergunta + `76%`). L
 .status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
 ```
 Cada linha: nome (DM Sans 13px/400) + contagem (DM Sans 13px/**800** tabular). Vazio → `.status-empty` "Sem dados".
-**Lista longa ao lado de cards curtos** (ex.: "Motivos da saída" na mesma linha da pizza): mostra os **6 primeiros** +
-botão **"Ver mais (N)"** (`.ver-mais-wrap` + `.btn.btn--primary`), para não abrir buraco nos cards vizinhos
-(`renderStatusList(id, entries, 6)` em `desligamentos.html`).
+**Lista longa ao lado de gráficos** (ex.: "Motivos da saída" na mesma linha da pizza): **altura fixa de 220px (a dos
+gráficos vizinhos) + rolagem vertical** dentro do card — nada de "Ver mais" nem de card esticando a linha
+(decisão do dono, 07/10/2026): `.status-table.st-rolagem { height: 220px; overflow-y: auto; }`.
 
 **Barra de progresso (percentuais de 0 a 100%)** — ex.: "Percepção do processo" da Desligamentos. Em **HTML**, não
 canvas: nome · trilho cinza (`#ECECEC`, 16px, raio 6) com o preenchido carbon · `%` (DM Sans 12px/800) depois do
