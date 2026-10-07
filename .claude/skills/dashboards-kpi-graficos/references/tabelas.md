@@ -122,6 +122,9 @@ var TAB_ANL = new TabelaOrg({
 });
 // ao carregar/filtrar:  TAB_ANL.dados(lista);
 ```
+- **Tabela-resumo (ex.: "Resumo por ano") também vira cartão no celular** — um cartão por linha (título = o ano), com os
+  mesmos números; o card leva `card-tabela` e o `.tbl-scroll` ganha `tem-cartoes`. Nada de coluna escondida que só
+  aparece rolando de lado.
 - **Tabela vazia → o card some inteiro** (decisão do dono, 05/10/2026): nada de "Nenhum…/Sem dados" solto na tela —
   no celular o card perde moldura e título e o texto ficava flutuando. Depois do `TAB.dados(rows)`:
   `card.style.display = rows.length ? '' : 'none'` (`_cardVazio(id, n)` em `desligamentos.html`). A contagem da faixa de

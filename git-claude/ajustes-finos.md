@@ -101,6 +101,7 @@ delete from tata_plus.governanca_abas_liberacoes where aba_id in (/* mesma lista
 
 | Data | Página | Ajuste | Skill atualizada? |
 |---|---|---|---|
+| 07/10 | Desligamentos (KPIs) | Média com vírgula (3,42); data sem a setinha e com a altura do select; filtros no celular com Departamento na linha toda e De/Até lado a lado; "Tipo de desligamento" e "N demissão(ões)"; Percepção do processo em barras HTML (nome em cima no celular, sem cortar); Motivos com 6 + "Ver mais"; Resumo por ano em cartões no celular; 4 KPIs numa linha no desktop. Separador entre custos e pesquisa mantido | `dashboards-kpi-graficos` (SKILL: KPIs, decimal, data, De/Até, lista longa, barra de progresso; `tabelas.md`: resumo em cartões) |
 | 05/10 | Desligamentos (Analítico) | Tabela vazia some inteira (Entrevistas e Demissões) — sai o "Nenhuma entrevista" que flutuava no celular | `dashboards-kpi-graficos` (`tabelas.md` §3) |
 | 05/10 | Desligamentos + Sanções (drawer) | Botão claro (`.secondary`) das Ações vira carbon como os demais ("Janelas de homologação", "Escrever com SAM"); variante sai da skill e do catálogo | `drawer-sobre` (Ações todas iguais) |
 | 05/10 | Desligamentos (Analítico) | Tabela de Entrevistas vazia mostra só "Nenhuma entrevista" (sem a instrução do menu) | — |

@@ -74,7 +74,8 @@ Convenções de tipografia (padrão do catálogo):
   gráfico/canvas os nomes vão em 500** — ver Nitidez na §3).
 - **`'DM Mono'` só em:** título do card (11px/700), rótulo e sub do KPI, cabeçalho de
   tabela (`thead th`), dia da semana do calendário e hints. `uppercase`, `letter-spacing` ~`0.8px`.
-- **Números** → sempre `font-variant-numeric: tabular-nums`.
+- **Números** → sempre `font-variant-numeric: tabular-nums`. Decimal com **vírgula** (pt-BR): média `3,42`, nunca
+  `3.42` — use `toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})`, não `toFixed` na tela.
 - Tamanhos por papel: ver a tabela na §3.
 
 ---
@@ -113,7 +114,8 @@ Regras:
   cor/acento (ex.: `.kpi-card-vagas`), mantendo a estrutura.
 - **Quantidade de cards:** 2 colunas no celular; com número **ímpar**, o último ocupa a linha
   (`.kpi-card:last-child:nth-child(odd) { grid-column: 1 / -1 }` só no celular); no desktop
-  (≥768px) pode ir a 3 colunas (`repeat(3, 1fr)`) quando são 3 cards.
+  (≥768px) **todos numa linha só** (`repeat(N, 1fr)`: 3 cards → 3, 4 cards → 4 — decisão do dono, 05/10/2026,
+  Desligamentos: 4 na linha, nada de 2×2 com cards largos e baixos).
 - 🚫 **Proibido: card de número solto** — número grande com uma frase embaixo, em cards
   empilhados pela página (ex.: "76% · foram informados previamente do motivo"). Não é um tipo
   de gráfico do portal. Número em destaque vai num **card de KPI** (faixa do topo); um grupo de
@@ -178,6 +180,12 @@ Regras dos filtros:
 - Rodapé: **"Limpar filtros"** (link sublinhado, esquerda) + **contagem de resultados**
   (direita; o número vem num `<span>` em carbon).
 - Trocar filtro **re-renderiza os gráficos** (cada chart faz `chartInst.destroy()` antes).
+- **Campo de data** (`<input type="date" class="filter-select">`): só o calendário do navegador — tire a setinha do
+  select (`input[type="date"].filter-select { background-image:none; padding:8px 12px; }`, mesma altura do select).
+- **Intervalo De/Até sempre lado a lado**, também no celular: arrume a grade para o par cair na mesma linha (ex.: com 5
+  filtros, o 3º ocupa a linha toda no celular e De | Até ficam juntos embaixo; no desktop os 5 numa linha).
+- **Rótulo no singular e com o mesmo nome do resto da página** ("Tipo de desligamento", igual ao título do gráfico e à
+  coluna da tabela); a contagem usa a mesma palavra nas abas ("N demissão(ões)").
 - **Campo de busca (texto livre: nome, página…) NÃO entra na grade de filtros.** Fica numa **faixa própria, logo
   abaixo de "Limpar filtros"**: faixa cinza (`--bg`) full-bleed com `border-top`, input **branco** 34px, raio 6px,
   **sem rótulo** (só placeholder "Buscar …"); o `.filters-wrap` perde o `border-bottom` (a faixa fecha o painel).
@@ -394,6 +402,23 @@ seção** (ex.: "Percepção do processo" na Desligamentos: pergunta + `76%`). L
 .status-empty { padding: 24px 0; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
 ```
 Cada linha: nome (DM Sans 13px/400) + contagem (DM Sans 13px/**800** tabular). Vazio → `.status-empty` "Sem dados".
+**Lista longa ao lado de cards curtos** (ex.: "Motivos da saída" na mesma linha da pizza): mostra os **6 primeiros** +
+botão **"Ver mais (N)"** (`.ver-mais-wrap` + `.btn.btn--primary`), para não abrir buraco nos cards vizinhos
+(`renderStatusList(id, entries, 6)` em `desligamentos.html`).
+
+**Barra de progresso (percentuais de 0 a 100%)** — ex.: "Percepção do processo" da Desligamentos. Em **HTML**, não
+canvas: nome · trilho cinza (`#ECECEC`, 16px, raio 6) com o preenchido carbon · `%` (DM Sans 12px/800) depois do
+trilho. No desktop o nome fica à esquerda (alinhado à direita); **no celular o nome sobe para cima da barra** — nunca
+cortado com "…". A lista ocupa a altura do card (`flex:1; justify-content:space-around`).
+```css
+.prog-list { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 22px; min-height: 200px; padding: 4px 4px 8px; }
+.prog-row { display: grid; grid-template-columns: minmax(110px, 42%) 1fr 40px; align-items: center; gap: 6px 10px; }
+.prog-nome { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); text-align: right; line-height: 1.3; }
+.prog-bar { height: 16px; background: #ECECEC; border-radius: 6px; overflow: hidden; }
+.prog-fill { height: 100%; background: var(--carbon); border-radius: 6px 0 0 6px; }
+.prog-pct { font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 800; color: var(--carbon); font-variant-numeric: tabular-nums; }
+@media (max-width: 767px) { .prog-row { grid-template-columns: 1fr 40px; } .prog-nome { grid-column: 1 / -1; text-align: left; } }
+```
 
 **Pizza / rosca (permitidas).** Ex.: "por recrutador" no Recrutamento (pizza com rótulos
 externos), "Identificou-se?" na Ouvidoria (rosca). Mesmo padrão dos outros gráficos:
