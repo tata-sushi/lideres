@@ -122,6 +122,11 @@ var TAB_ANL = new TabelaOrg({
 });
 // ao carregar/filtrar:  TAB_ANL.dados(lista);
 ```
+- **Tabelas de leitura da aba KPIs continuam tabela no celular** (decisão do dono, 07/10/2026: "o formato cartão não é
+  bom para esse tipo de informação") — ex.: **Comentários** e **Resumo por ano** da Desligamentos. Card branco normal
+  (sem `card-tabela`), com título e "i". Comentários: no celular a tabela cabe na tela (`min-width:0`, colunas curtas
+  estreitas — Ano 52px, Tipo 96px — e texto quebrando linha); tabela só de números (Resumo) pode rolar de lado dentro
+  do card. Cartões no celular ficam para as listas operacionais com ações (ex.: aba Analítico).
 - **Tabela vazia → o card some inteiro** (decisão do dono, 05/10/2026): nada de "Nenhum…/Sem dados" solto na tela —
   no celular o card perde moldura e título e o texto ficava flutuando. Depois do `TAB.dados(rows)`:
   `card.style.display = rows.length ? '' : 'none'` (`_cardVazio(id, n)` em `desligamentos.html`). A contagem da faixa de
