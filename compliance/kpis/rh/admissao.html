@@ -5905,6 +5905,23 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
       if (typeof renderPendentesPage === 'function') renderPendentesPage();
     }).catch(function(){ if (btn) btn.disabled = false; toast('Erro de conexão. Tente de novo.', true); });
   };
+  // Botão: APAGAR DE VEZ (irreversível) — remove ficha + respostas + documentos (cascade). Arquivos no Storage ficam órfãos.
+  window._admExcluir = function(token, btn){
+    if (!window.confirm('APAGAR DE VEZ esta admissão?\n\nIsso remove a ficha, as respostas e os documentos deste candidato. Não dá pra desfazer.')) return;
+    if (btn) btn.disabled = true;
+    TP(function(t){ return t.rpc('admissao_excluir', { p_token: token }); }).then(function(r){
+      var d = r && r.data, e = r && r.error;
+      if (e) { if (btn) btn.disabled = false; toast('Erro: ' + (e.message || 'falha'), true); return; }
+      if (!d || !d.ok) {
+        if (btn) btn.disabled = false;
+        var m = d && d.motivo;
+        var txt = m==='nao_encontrado' ? 'Admissão não encontrada (já removida?).' : ('Não deu pra apagar ('+(m||'desconhecido')+').');
+        toast(txt, true); return;
+      }
+      toast('Admissão apagada' + (d.candidato ? (' · ' + d.candidato) : ''));
+      if (typeof renderPendentesPage === 'function') renderPendentesPage();
+    }).catch(function(){ if (btn) btn.disabled = false; toast('Erro de conexão. Tente de novo.', true); });
+  };
 
   window.renderPendentesPage = function(){
     var c = document.getElementById('page-pendente'); if(!c) return;
@@ -5994,7 +6011,7 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
     { k:'n_docs', lbl:'Anexos', w:90 },
     { k:'enviado_em', lbl:'Enviado', w:160 }
   ];
-  var _W_ACOES = 124;   // coluna "Ações" (copiar link · +48h · abrir ficha): fixa, sem ordenar/redimensionar
+  var _W_ACOES = 160;   // coluna "Ações" (copiar link · +48h · abrir ficha · apagar): fixa, sem ordenar/redimensionar
   var _MINW = _COLS.reduce(function(t, c){ return t + c.w; }, 0) + _W_ACOES;
   var _DESC = { enviado_em:1, validados:1, n_docs:1 };   // colunas que começam do maior para o menor (como antes)
   function _str(k){ return function(a){ return (a[k]==null?'':String(a[k])).toLowerCase(); }; }
@@ -6026,6 +6043,7 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
           '<button class="btn-icon" title="Copiar link da admissão" aria-label="Copiar link" onclick="_admCopiarLink(\''+E(a.token)+'\',this)">'+SVG_LINK+'</button>'+
           '<button class="btn-icon" title="Estender +48h no prazo" aria-label="+48h" onclick="_admEstender48h(\''+E(a.token)+'\',this)">'+SVG_RELOGIO+'</button>'+
           '<button class="btn-icon" title="Abrir ficha" aria-label="Abrir ficha" onclick="_admAbrirFicha(\''+E(a.token)+'\')">'+SVG_OLHO+'</button>'+
+          '<button class="btn-icon btn-icon--danger" title="Apagar de vez (irreversível)" aria-label="Apagar" onclick="_admExcluir(\''+E(a.token)+'\',this)">'+SVG_LIXO+'</button>'+
         '</td>'+
       '</tr>';
     },
@@ -6037,7 +6055,8 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
         campos: [['Unidade', E(a.unidade||'—')], ['Validados', p.prog], ['Anexos', String(a.n_docs||0)], ['Enviado', p.enviado]],
         acoes: '<button class="btn btn--sm" onclick="_admCopiarLink(\''+E(a.token)+'\',this)">Copiar link</button>'+
                '<button class="btn btn--sm" onclick="_admEstender48h(\''+E(a.token)+'\',this)">+48h</button>'+
-               '<button class="btn btn--primary btn--sm" onclick="_admAbrirFicha(\''+E(a.token)+'\')">Abrir ficha</button>' });
+               '<button class="btn btn--primary btn--sm" onclick="_admAbrirFicha(\''+E(a.token)+'\')">Abrir ficha</button>'+
+               '<button class="btn btn--sm btn--danger" onclick="_admExcluir(\''+E(a.token)+'\',this)">Apagar</button>' });
     } });
   TAB_PEND.col = 'enviado_em'; TAB_PEND.dir = -1;   // ordem inicial: enviados mais recentes primeiro (como antes)
   window.TAB_ADM_PEND = TAB_PEND;
