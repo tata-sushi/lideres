@@ -3269,6 +3269,8 @@ window.toggleFta = toggleFta;
     if (depCheck && depCheck.checked) _admDependentesAutoFill();
     var fregCheck = document.getElementById('admdoc_ficha_registro');
     if (fregCheck && fregCheck.checked) { _admFichaRegistroAutoFill(); _admFregDependentesAutoFill(); }
+    var vtCheck = document.getElementById('admdoc_vale_transporte');
+    if (vtCheck && vtCheck.checked) { ['admvt-ct-rows','admvt-tc-rows'].forEach(function(id){ var c=document.getElementById(id); if(c) c.innerHTML=''; }); var vee=document.getElementById('admvt-endereco'); if(vee) vee.value=''; _admVtAutoFill(); }
   }
 
   function openModalAdmissao() {
@@ -3586,10 +3588,78 @@ window.toggleFta = toggleFta;
       };
     }).filter(function(e){ return e.bilhete || e.linha || e.valor; });
   }
+  // Agrupa as linhas de grupo=conducao por "ordem" dentro de um sentido (ida/volta),
+  // juntando operadora/linha/valor da mesma condução num objeto só.
+  function _admVtConducaoRows(respostas, sentido){
+    var porOrdem = {};
+    respostas.filter(function(r){ return r.grupo==='conducao' && String(r.sentido||'')===sentido && r.ordem; })
+      .forEach(function(r){ var k=r.ordem; (porOrdem[k]=porOrdem[k]||{})[r.campo]=r.valor; });
+    return Object.keys(porOrdem).sort(function(a,b){ return a-b; }).map(function(k){ return porOrdem[k]; });
+  }
+  // operadora da ficha (texto livre) → opção do select de bilhete. Se não casar com
+  // a lista oficial, cai em "OUTROS" e devolve o texto p/ ir no campo "linha".
+  function _admVtMapBilhete(operadora){
+    var op = String(operadora||'').trim();
+    if (!op) return { bilhete:'', resto:'' };
+    var hit = VT_BILHETES.find(function(x){ return x.toLowerCase()===op.toLowerCase(); });
+    if (hit) return { bilhete:hit, resto:'' };
+    return { bilhete: (VT_BILHETES.indexOf('OUTROS')>=0?'OUTROS':''), resto: op };
+  }
+  function _admVtValorLimpo(v){ return String(v||'').replace(/[^0-9,\.]/g,'').trim(); }   // "R$ 5,40" → "5,40"
+  function _admVtSetRow(container, obj){
+    container.insertAdjacentHTML('beforeend', _admVtRowHtml());
+    var row = container.lastElementChild;
+    if (obj.bilhete){
+      var s = row.querySelector('.vt-bilhete');
+      if (s && Array.prototype.some.call(s.options, function(o){ return o.value===obj.bilhete; })) s.value = obj.bilhete;
+    }
+    var l = row.querySelector('.vt-linha'); if (l) l.value = obj.linha||'';
+    var vv = row.querySelector('.vt-valor'); if (vv) vv.value = obj.valor||'';
+  }
+  // Puxa VT da ficha do candidato (opção, endereço, linhas casa→trabalho e trabalho→casa).
+  function _admVtAutoFill(){
+    var sel = document.getElementById('adm-colab');
+    if (!sel || !sel.value) return;
+    var colabData = _admColabMap[sel.value] || {};
+    if (!colabData.cpf) return;
+    _admCarregarAdmissaoRespostas(colabData.cpf).then(function(respostas){
+      if (!respostas.length) return;
+      // opção SIM/NÃO
+      var vt = _admAdmissaoValor(respostas, 'conducao', 'vale_transporte');
+      var o = document.getElementById('admvt-opcao');
+      if (o){ if (/^\s*sim/i.test(vt)) o.value='sim'; else if (/n[aã]o/i.test(vt)) o.value='nao'; }
+      // endereço residencial
+      var eEl = document.getElementById('admvt-endereco');
+      if (eEl && !eEl.value.trim()){
+        var partes = [_admAdmissaoValor(respostas,'endereco','endereco'), _admAdmissaoValor(respostas,'endereco','bairro'), _admAdmissaoValor(respostas,'endereco','cidade_estado')].filter(Boolean);
+        var cep = _admAdmissaoValor(respostas,'endereco','cep'); if (cep) partes.push('CEP '+cep);
+        if (partes.length) eEl.value = partes.join(', ');
+      }
+      function preenche(container, linhas){
+        if (!container || !linhas.length) return false;
+        container.innerHTML = '';
+        linhas.forEach(function(e){
+          var m = _admVtMapBilhete(e.operadora);
+          _admVtSetRow(container, { bilhete:m.bilhete, linha:[m.resto, e.linha].filter(Boolean).join(' — '), valor:_admVtValorLimpo(e.valor) });
+        });
+        return true;
+      }
+      // casa → trabalho (ida)
+      var ida = _admVtConducaoRows(respostas, 'ida');
+      preenche(document.getElementById('admvt-ct-rows'), ida);
+      // trabalho → casa (volta): usa as linhas de volta se existirem; senão repete a ida quando marcou "as mesmas"
+      var volta = _admVtConducaoRows(respostas, 'volta');
+      var vconf = _admAdmissaoValor(respostas, 'conducao', 'volta_conducoes');
+      var tc = document.getElementById('admvt-tc-rows');
+      if (volta.length) preenche(tc, volta);
+      else if (ida.length && /sim|mesma/i.test(vconf||'')) preenche(tc, ida);
+    });
+  }
   function _admToggleVtFields(on){
     var f = document.getElementById('admvt-fields');
     if (f) f.style.display = on ? 'block' : 'none';
     if (on){
+      _admVtAutoFill();   // puxa da ficha (assíncrono); garante ao menos 1 linha vazia em cada
       ['ct','tc'].forEach(function(dir){
         var c = document.getElementById(dir==='ct'?'admvt-ct-rows':'admvt-tc-rows');
         if (c && !c.children.length) _admVtAddRow(dir);
