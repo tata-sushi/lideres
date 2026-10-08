@@ -5808,7 +5808,9 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
 .adm-doc { background:#fff; border:1px solid #E2E2E2; border-radius:8px; padding:9px 10px; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
 .adm-doc-nome { flex:1; min-width:0; font-size:13px; color:#111; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .adm-doc-slug { font-family:'DM Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:.4px; color:#999; }
-.adm-mf { background:#fff; border-top:1px solid #E2E2E2; padding:12px 16px; display:flex; gap:8px; justify-content:flex-end; align-items:center; flex-shrink:0; }
+.adm-mf { background:#fff; border-top:1px solid #E2E2E2; padding:12px 16px; display:flex; gap:8px; justify-content:flex-end; align-items:center; flex-shrink:0; flex-wrap:wrap; }
+.adm-status-sel { height:40px; border:1px solid #E2E2E2; border-radius:8px; padding:0 10px; font-family:'DM Sans',sans-serif; font-size:13px; background:#fff; color:#111; max-width:210px; }
+@media (max-width:767px){ .adm-status-sel { height:34px; } }
 </style>
 
 <div class="adm-ov" id="adm-ficha-ov" onclick="if(event.target===this)_admFecharFicha()">
@@ -5823,7 +5825,9 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
     </div>
     <div class="adm-mb" id="adm-mb"></div>
     <div class="adm-mf">
-      <button class="btn btn--primary" id="adm-mf-zip" data-aba-id="governanca-kpis-rh-admissao::baixar-zip-documentos" onclick="_admBaixarZipDocs()"><span class="btn-spin"></span><span class="btn-label">Baixar .zip</span></button>
+      <select class="adm-status-sel" id="adm-status-sel" data-aba-id="governanca-kpis-rh-admissao::mudar-status-ficha" title="Status da admissão" aria-label="Status da admissão"></select>
+      <button class="btn btn--primary" id="adm-mf-salvar" data-aba-id="governanca-kpis-rh-admissao::salvar-status-ficha" onclick="_admSalvarStatus()"><span class="btn-spin"></span><span class="btn-label">Salvar</span></button>
+      <button class="btn btn--primary" id="adm-mf-zip" style="margin-left:auto" data-aba-id="governanca-kpis-rh-admissao::baixar-zip-documentos" onclick="_admBaixarZipDocs()"><span class="btn-spin"></span><span class="btn-label">Baixar .zip</span></button>
       <button class="btn btn--primary" data-aba-id="governanca-kpis-rh-admissao::copiar-email-dp" onclick="_admCopiarCorpo()">Copiar corpo</button>
       <button class="btn btn--primary" id="adm-mf-send" data-aba-id="governanca-kpis-rh-admissao::enviar-ficha-dp" onclick="_admEnviarEmail()"><span class="btn-spin"></span><span class="btn-label">Enviar para o DP</span></button>
     </div>
@@ -5934,7 +5938,7 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
     }).catch(function(e){ c.innerHTML='<div class="adm-empty">Erro: '+E(e&&e.message||e)+'</div>'; });
   };
 
-  function badge(st){ var m={liberado:['Aguardando preenchimento','pill-amber'],em_andamento:['Preenchendo','pill-amber'],enviado:['Aguardando conferência','pill-blue']}; var v=m[st]||[st,'pill-blue']; return '<span class="status-badge '+v[1]+'">'+E(v[0])+'</span>'; }
+  function badge(st){ var m={liberado:['Aguardando preenchimento','pill-amber'],em_andamento:['Preenchendo','pill-amber'],enviado:['Aguardando conferência','pill-blue'],concluido:['Concluído','pill-pos'],expirado:['Expirado','pill-red']}; var v=m[st]||[st,'pill-blue']; return '<span class="status-badge '+v[1]+'">'+E(v[0])+'</span>'; }
   function dh(s){ if(!s) return '—'; var d=new Date(s); if(isNaN(d.getTime())) return '—'; var p=function(n){return n<10?'0'+n:n;}; return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' · '+p(d.getHours())+'h'+p(d.getMinutes()); }
   function cpfMask(s){ s=(s||'').replace(/\D/g,''); return s.length>=11 ? s.slice(0,3)+'•••••'+s.slice(-3) : (s||'—'); }
 
@@ -6104,6 +6108,7 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
     document.getElementById('adm-mh-sub').textContent = (a.cargo||'—')+' · '+(a.unidade||'—')+' · CPF '+cpfMask(a.cpf);
     var nv=resp.filter(function(x){return x.validado;}).length;
     document.getElementById('adm-mh-prog').textContent = 'Validados: '+nv+'/'+resp.length+(docs.length?(' · '+docs.length+' anexo(s)'):'');
+    _admPopularStatusSel(a.status);
     // agrupa
     var byG=_admAgrupar(resp);
     var grupos = GRUPO_ORDEM.filter(function(g){return byG[g];}).concat(Object.keys(byG).filter(function(g){return GRUPO_ORDEM.indexOf(g)<0;}));
@@ -6350,6 +6355,34 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
       if(!w){ alert('Não consegui abrir o Outlook (pop-up bloqueado?). Use "Copiar corpo" e cole no e-mail (destinatário: '+EMAIL_DP+').'); }
     });
   }
+  // Status da admissão — rótulos e seletor manual no rodapé da ficha.
+  var STATUS_LABELS = { liberado:'Aguardando preenchimento', em_andamento:'Preenchendo', enviado:'Aguardando conferência', concluido:'Concluído', expirado:'Expirado' };
+  function _admPopularStatusSel(atual){
+    var sel=document.getElementById('adm-status-sel'); if(!sel) return;
+    // opções relevantes p/ o RH: conferência → concluído; mais o status atual, se for outro
+    var vals=[]; [atual,'enviado','concluido'].forEach(function(v){ if(v && vals.indexOf(v)<0) vals.push(v); });
+    sel.innerHTML = vals.map(function(v){
+      return '<option value="'+E(v)+'"'+(v===atual?' selected':'')+'>'+E(STATUS_LABELS[v]||v)+'</option>';
+    }).join('');
+  }
+  window._admSalvarStatus = function(){
+    if(!_ficha) return;
+    var sel=document.getElementById('adm-status-sel'); if(!sel) return;
+    var novo=sel.value;
+    var atual=(_ficha.admissao||{}).status;
+    if(novo===atual){ toast('Status já está como "'+(STATUS_LABELS[novo]||novo)+'".'); return; }
+    var tok=(_ficha.admissao||{}).token || _token;
+    setBtnLoading(true, 'Salvando…', 'adm-mf-salvar');
+    TP(function(t){ return t.rpc('admissao_status_set', { p_token: tok, p_status: novo }); }).then(function(r){
+      setBtnLoading(false, 'Salvar', 'adm-mf-salvar');
+      var d=r&&r.data, e=r&&r.error;
+      if(e){ toast('Erro: '+(e.message||'falha'), true); return; }
+      if(!d || !d.ok){ var m=d&&d.motivo; toast(m==='nao_encontrado'?'Admissão não encontrada.':(m==='status_invalido'?'Status inválido.':'Não deu pra salvar o status.'), true); return; }
+      if(_ficha.admissao) _ficha.admissao.status=novo;
+      toast('Status salvo: '+(STATUS_LABELS[novo]||novo));
+      if(typeof renderPendentesPage==='function') renderPendentesPage();
+    }).catch(function(){ setBtnLoading(false, 'Salvar', 'adm-mf-salvar'); toast('Erro de conexão. Tente de novo.', true); });
+  };
   window._admEnviarEmail = function(){
     if(!_ficha) return;
     var resp=_ficha.respostas||[]; var faltam=resp.filter(function(x){return !x.validado;}).length;
@@ -6379,6 +6412,7 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
       + '<tr><td>1</td><td><span class="status-badge pill-amber">Aguardando preenchimento</span></td><td>Link liberado, o candidato ainda não começou</td></tr>'
       + '<tr><td>2</td><td><span class="status-badge pill-amber">Preenchendo</span></td><td>O candidato está preenchendo a ficha</td></tr>'
       + '<tr><td>3</td><td><span class="status-badge pill-blue">Aguardando conferência</span></td><td>Ficha enviada — vez do RH conferir e mandar para o DP</td></tr>'
+      + '<tr><td>4</td><td><span class="status-badge pill-pos">Concluído</span></td><td>RH conferiu e finalizou — marcado manualmente na ficha (botão Salvar)</td></tr>'
       + '</tbody></table>'
   };
   if (typeof window.abrirInfoGrafico !== 'function') window.abrirInfoGrafico = function(key){
