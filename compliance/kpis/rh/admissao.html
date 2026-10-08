@@ -5877,6 +5877,34 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
   var SVG_LAPIS = '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
   var SVG_LIXO = '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
   var SVG_X = '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  var SVG_LINK = '<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+  var SVG_RELOGIO = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+  var BASE_ADMISSAO = 'https://admissao.tatasushi.tech';
+  // Botão: ver/copiar o link da admissão do candidato
+  window._admCopiarLink = function(token, btn){
+    var url = BASE_ADMISSAO + '/?t=' + token;
+    function ok(){ toast('Link copiado'); }
+    function fb(){ try { window.prompt('Copie o link:', url); } catch(e){} }
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(ok, fb); else fb(); }
+    catch(e){ fb(); }
+  };
+  // Botão: estender +48h o prazo da admissão (não mexe em quem já enviou/concluiu)
+  window._admEstender48h = function(token, btn){
+    if (!window.confirm('Adicionar +48h ao prazo deste candidato?')) return;
+    if (btn) btn.disabled = true;
+    TP(function(t){ return t.rpc('admissao_estender', { p_token: token, p_horas: 48 }); }).then(function(r){
+      if (btn) btn.disabled = false;
+      var d = r && r.data, e = r && r.error;
+      if (e) { toast('Erro: ' + (e.message || 'falha'), true); return; }
+      if (!d || !d.ok) {
+        var m = d && d.motivo;
+        var txt = m==='ja_enviado' ? 'Candidato já enviou/concluiu a ficha.' : (m==='cancelado' ? 'Admissão cancelada.' : (m==='nao_encontrado' ? 'Admissão não encontrada.' : ('Não deu pra estender ('+(m||'desconhecido')+').')));
+        toast(txt, true); return;
+      }
+      toast('Prazo estendido +48h' + (d.expira_em ? (' · vence ' + new Date(d.expira_em).toLocaleString('pt-BR')) : ''));
+      if (typeof renderPendentesPage === 'function') renderPendentesPage();
+    }).catch(function(){ if (btn) btn.disabled = false; toast('Erro de conexão. Tente de novo.', true); });
+  };
 
   window.renderPendentesPage = function(){
     var c = document.getElementById('page-pendente'); if(!c) return;
@@ -5966,7 +5994,7 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
     { k:'n_docs', lbl:'Anexos', w:90 },
     { k:'enviado_em', lbl:'Enviado', w:160 }
   ];
-  var _W_ACOES = 72;   // coluna "Ações" (olho que abre a ficha): fixa, sem ordenar/redimensionar
+  var _W_ACOES = 124;   // coluna "Ações" (copiar link · +48h · abrir ficha): fixa, sem ordenar/redimensionar
   var _MINW = _COLS.reduce(function(t, c){ return t + c.w; }, 0) + _W_ACOES;
   var _DESC = { enviado_em:1, validados:1, n_docs:1 };   // colunas que começam do maior para o menor (como antes)
   function _str(k){ return function(a){ return (a[k]==null?'':String(a[k])).toLowerCase(); }; }
@@ -5994,7 +6022,11 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
         '<td class="num">'+p.progHtml+'</td>'+
         '<td class="num">'+(a.n_docs||0)+'</td>'+
         '<td class="td-muted">'+p.enviado+'</td>'+
-        '<td class="td-acoes"><button class="btn-icon" title="Abrir ficha" aria-label="Abrir ficha" onclick="_admAbrirFicha(\''+E(a.token)+'\')">'+SVG_OLHO+'</button></td>'+
+        '<td class="td-acoes">'+
+          '<button class="btn-icon" title="Copiar link da admissão" aria-label="Copiar link" onclick="_admCopiarLink(\''+E(a.token)+'\',this)">'+SVG_LINK+'</button>'+
+          '<button class="btn-icon" title="Estender +48h no prazo" aria-label="+48h" onclick="_admEstender48h(\''+E(a.token)+'\',this)">'+SVG_RELOGIO+'</button>'+
+          '<button class="btn-icon" title="Abrir ficha" aria-label="Abrir ficha" onclick="_admAbrirFicha(\''+E(a.token)+'\')">'+SVG_OLHO+'</button>'+
+        '</td>'+
       '</tr>';
     },
     // celular: cartão com o botão "Abrir ficha" no rodapé (mesma função da linha)
@@ -6003,7 +6035,9 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
       var p=_partes(a);
       return cartao({ titulo: E(a.nome||'—'), sub: E(a.cargo||'—'), direita: badge(a.status),
         campos: [['Unidade', E(a.unidade||'—')], ['Validados', p.prog], ['Anexos', String(a.n_docs||0)], ['Enviado', p.enviado]],
-        acoes: '<button class="btn btn--primary btn--sm" onclick="_admAbrirFicha(\''+E(a.token)+'\')">Abrir ficha</button>' });
+        acoes: '<button class="btn btn--sm" onclick="_admCopiarLink(\''+E(a.token)+'\',this)">Copiar link</button>'+
+               '<button class="btn btn--sm" onclick="_admEstender48h(\''+E(a.token)+'\',this)">+48h</button>'+
+               '<button class="btn btn--primary btn--sm" onclick="_admAbrirFicha(\''+E(a.token)+'\')">Abrir ficha</button>' });
     } });
   TAB_PEND.col = 'enviado_em'; TAB_PEND.dir = -1;   // ordem inicial: enviados mais recentes primeiro (como antes)
   window.TAB_ADM_PEND = TAB_PEND;
