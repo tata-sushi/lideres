@@ -514,6 +514,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="kpis-wrap" id="vtKpiRow">
     <div class="kpi-card"><span class="kpi-label">Colaboradores</span><span class="kpi-number" id="vtKpiQtd">—</span></div>
     <div class="kpi-card"><span class="kpi-label">Total de dias</span><span class="kpi-number" id="vtKpiTotal">—</span></div>
+    <div class="kpi-card"><span class="kpi-label">Total a pagar</span><span class="kpi-number" id="vtKpiPagar">—</span></div>
   </div>
   <div class="filters-wrap">
     <div class="filters-row">
@@ -2008,12 +2009,17 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <button class="modal-close" onclick="vtpCloseModal()" aria-label="Fechar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="vtm-id">
       <div style="margin-bottom:10px">
         <label class="filter-label" for="vtm-colab" style="display:block;margin-bottom:5px">Colaborador</label>
         <select class="form-select" id="vtm-colab" onchange="vtpColabChange()"><option value="">— Selecione —</option></select>
       </div>
-      <div id="vtm-sub" style="font-size:12px;color:var(--muted)"></div>
-      <div style="font-size:12px;color:var(--muted);margin-top:8px">Os dias de cada semana são calculados pela data de admissão — sexta a quinta, teto de 6 dias por semana.</div>
+      <div id="vtm-sub" style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>
+      <div>
+        <label class="filter-label" for="vtm-valor" style="display:block;margin-bottom:5px">Valor por dia (R$)</label>
+        <input class="form-input" type="text" id="vtm-valor" placeholder="0,00" inputmode="decimal" style="max-width:160px">
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:8px">Os dias de cada semana são calculados pela data de admissão (sex→qui, teto de 6/semana). O total a pagar = dias × valor/dia.</div>
       <div id="vt-modal-error" style="display:none;margin-top:10px;color:#b42828;font-size:12.5px"></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--border)">
@@ -4254,11 +4260,14 @@ function renderFtBeneficios(tools, parceiros) {
   var MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   var FOLGA_MAX = 6; // teto de dias por semana (1 folga)
   var VTP_LIXO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+  var VTP_LAPIS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
   var vtpColabMap = {}, vtpColabLoaded = false, vtpInited = false, vtpRows = [], vtpWeeksCache = [];
 
   function vtpEl(id){ return document.getElementById(id); }
   function vtpEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function vtp2(n){ return (n<10?'0':'')+n; }
+  function vtpBRL(n){ n=Number(n)||0; return 'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function vtpParseValor(s){ s=String(s==null?'':s).replace(/[^0-9,.-]/g,'').trim(); if(!s) return 0; if(s.indexOf(',')>=0) s=s.replace(/\./g,'').replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; }
 
   // "dd/mm/aaaa" ou "aaaa-mm-dd" → Date (meia-noite local) ou null
   function vtpParseDate(s){
@@ -4341,6 +4350,10 @@ function renderFtBeneficios(tools, parceiros) {
     });
   };
 
+  function vtpAcoes(id){
+    return '<button class="btn-icon" title="Editar valor/dia" aria-label="Editar" onclick="vtpOpenModal(\''+id+'\')">'+VTP_LAPIS+'</button>'+
+           '<button class="btn-icon btn-icon--danger" title="Remover do mês" aria-label="Remover" onclick="vtpDelete(\''+id+'\')">'+VTP_LIXO+'</button>';
+  }
   function vtpPaint(){
     var weeks = vtpWeeksCache;
     var thead = vtpEl('vt-thead'), tbody = vtpEl('vt-tbody'), cards = vtpEl('vt-cards');
@@ -4348,22 +4361,25 @@ function renderFtBeneficios(tools, parceiros) {
       thead.innerHTML = '<tr>'+
         '<th>Matrícula</th><th>Colaborador</th><th>Unidade</th><th>Departamento</th>'+
         weeks.map(function(w){ return '<th style="text-align:center">Semana '+w.n+'<br><span style="font-weight:400;font-size:9px;color:var(--muted)">'+vtpWeekLabel(w)+'</span></th>'; }).join('')+
-        '<th style="text-align:center">Total</th><th style="text-align:center">Ações</th>'+
+        '<th style="text-align:center">Total dias</th><th style="text-align:right">Valor/dia</th><th style="text-align:right">Total a pagar</th><th style="text-align:center">Ações</th>'+
       '</tr>';
     }
-    var totalDias = 0;
+    var totalDias = 0, totalPagar = 0;
     vtpRows.forEach(function(r){
       r._adm = vtpParseDate(r.admissao);
       r._dias = weeks.map(function(w){ return vtpDias(w, r._adm); });
       r._tot = r._dias.reduce(function(a,b){ return a+b; }, 0);
-      totalDias += r._tot;
+      r._vdia = Number(r.valor_dia)||0;
+      r._pagar = r._tot * r._vdia;
+      totalDias += r._tot; totalPagar += r._pagar;
     });
-    var kq=vtpEl('vtKpiQtd'), kt=vtpEl('vtKpiTotal'), cnt=vtpEl('vt-count');
+    var kq=vtpEl('vtKpiQtd'), kt=vtpEl('vtKpiTotal'), kp=vtpEl('vtKpiPagar'), cnt=vtpEl('vt-count');
     if (kq) kq.textContent = vtpRows.length;
     if (kt) kt.textContent = totalDias;
+    if (kp) kp.textContent = vtpBRL(totalPagar);
     if (cnt) cnt.innerHTML = '<span>'+vtpRows.length+'</span> colaborador(es)';
     if (!vtpRows.length){
-      if (tbody) tbody.innerHTML = '<tr><td colspan="'+(6+weeks.length)+'" style="text-align:center;color:var(--muted);padding:18px">Nenhum colaborador neste mês. Use “+ Adicionar colaborador”.</td></tr>';
+      if (tbody) tbody.innerHTML = '<tr><td colspan="'+(8+weeks.length)+'" style="text-align:center;color:var(--muted);padding:18px">Nenhum colaborador neste mês. Use “+ Adicionar colaborador”.</td></tr>';
       if (cards) cards.innerHTML = '<div style="text-align:center;color:var(--muted);padding:18px">Nenhum colaborador neste mês.</div>';
       return;
     }
@@ -4376,47 +4392,64 @@ function renderFtBeneficios(tools, parceiros) {
         '<td>'+vtpEsc(r.departamento||'—')+'</td>'+
         r._dias.map(function(d){ return '<td style="text-align:center'+(d?';font-variant-numeric:tabular-nums':';color:var(--muted)')+'">'+d+'</td>'; }).join('')+
         '<td style="text-align:center;font-weight:700;font-variant-numeric:tabular-nums">'+r._tot+'</td>'+
-        '<td style="text-align:center;white-space:nowrap"><button class="btn-icon btn-icon--danger" title="Remover do mês" aria-label="Remover" onclick="vtpDelete(\''+id+'\')">'+VTP_LIXO+'</button></td>'+
+        '<td style="text-align:right;font-variant-numeric:tabular-nums'+(r._vdia?'':';color:var(--muted)')+'">'+(r._vdia?vtpBRL(r._vdia):'—')+'</td>'+
+        '<td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums">'+vtpBRL(r._pagar)+'</td>'+
+        '<td style="text-align:center;white-space:nowrap">'+vtpAcoes(id)+'</td>'+
       '</tr>';
     }).join('');
     if (cards) cards.innerHTML = vtpRows.map(function(r){
       var id=vtpEsc(r.id);
       return '<div class="tcard">'+
         '<div class="tcard-top"><div class="tcard-tl"><div class="tcard-title">'+vtpEsc(r.nome||'—')+'</div><div class="tcard-sub">'+vtpEsc(r.matricula)+' · '+vtpEsc(r.unidade||'—')+'</div></div>'+
-          '<div class="tcard-tr"><span class="tcard-value" style="font-weight:700">'+r._tot+' dias</span></div></div>'+
+          '<div class="tcard-tr"><span class="tcard-value" style="font-weight:700">'+vtpBRL(r._pagar)+'</span><span class="tcard-label">'+r._tot+' dias × '+(r._vdia?vtpBRL(r._vdia):'—')+'</span></div></div>'+
         '<div class="tcard-fields">'+ weeks.map(function(w,i){ return '<div class="tcard-field"><span class="tcard-label">Sem '+w.n+' · '+vtpWeekLabel(w)+'</span><span class="tcard-value">'+r._dias[i]+' dia(s)</span></div>'; }).join('') +'</div>'+
-        '<div class="tcard-actions"><button class="btn-icon btn-icon--danger" title="Remover do mês" aria-label="Remover" onclick="vtpDelete(\''+id+'\')">'+VTP_LIXO+'</button></div>'+
+        '<div class="tcard-actions">'+vtpAcoes(id)+'</div>'+
       '</div>';
     }).join('');
   }
 
-  window.vtpOpenModal = function(){
+  window.vtpOpenModal = function(id){
     vtpInit();
     vtpEl('vt-modal-error').style.display='none';
-    vtpEl('vt-modal-title').textContent = 'Adicionar colaborador';
-    function apply(){ vtpEl('vtm-colab').value=''; vtpColabChange(); }
+    var row = id ? vtpRows.filter(function(r){return String(r.id)===String(id);})[0] : null;
+    vtpEl('vtm-id').value = row ? row.id : '';
+    vtpEl('vt-modal-title').textContent = row ? 'Editar valor/dia' : 'Adicionar colaborador';
+    vtpEl('vtm-valor').value = row ? (row.valor_dia!=null ? String(row.valor_dia).replace('.',',') : '') : '';
+    var colSel = vtpEl('vtm-colab');
+    function apply(){
+      if (row){
+        if (!Array.prototype.some.call(colSel.options,function(o){return o.value===(row.matricula||'');})){
+          var o=document.createElement('option'); o.value=row.matricula||''; o.textContent=(row.nome||row.matricula||'')+(row.matricula?(' · '+row.matricula):''); colSel.appendChild(o);
+          vtpColabMap[row.matricula||'']={nome:row.nome,unidade:row.unidade,departamento:row.departamento,matricula:row.matricula,admissao:''};
+        }
+        colSel.value=row.matricula||''; colSel.disabled=true;
+      } else { colSel.value=''; colSel.disabled=false; }
+      vtpColabChange();
+    }
     if (vtpColabLoaded) apply(); else vtpLoadColab(apply);
     vtpEl('vt-overlay').classList.add('active'); document.body.style.overflow='hidden';
   };
-  window.vtpCloseModal = function(){ vtpEl('vt-overlay').classList.remove('active'); document.body.style.overflow=''; };
+  window.vtpCloseModal = function(){ vtpEl('vt-overlay').classList.remove('active'); var cs=vtpEl('vtm-colab'); if(cs) cs.disabled=false; document.body.style.overflow=''; };
 
   window.vtpSave = function(){
     var err = vtpEl('vt-modal-error');
     function showErr(m){ err.textContent=m; err.style.display='block'; }
+    var id = vtpEl('vtm-id').value || null;
     var key = vtpEl('vtm-colab').value, c = vtpColabMap[key];
     if (!key || !c){ showErr('Selecione o colaborador.'); return; }
     var ano = parseInt(vtpEl('vtAno').value,10), mes = parseInt(vtpEl('vtMes').value,10);
     var admIso = vtpIso(vtpParseDate(c.admissao));
+    var valor = vtpParseValor(vtpEl('vtm-valor').value);
     setBtnLoading('vt-save-btn', true, 'Salvando…');
     comSupa(function(supa){
-      supa.schema('tata_plus').rpc('vt_roster_add',{
-        p_matricula:c.matricula, p_nome:c.nome, p_unidade:c.unidade, p_departamento:c.departamento,
-        p_admissao:admIso, p_ano:ano, p_mes:mes
+      supa.schema('tata_plus').rpc('vt_roster_salvar',{
+        p_id:id, p_matricula:c.matricula, p_nome:c.nome, p_unidade:c.unidade, p_departamento:c.departamento,
+        p_admissao:admIso, p_ano:ano, p_mes:mes, p_valor:valor
       }).then(function(res){
         setBtnLoading('vt-save-btn', false, 'Salvar');
         var d=res&&res.data, e=res&&res.error;
         if (e){ showErr('Erro: '+(e.message||'falha')); return; }
-        if (!d || !d.ok){ showErr('Não deu pra adicionar ('+((d&&d.motivo)||'desconhecido')+').'); return; }
+        if (!d || !d.ok){ showErr('Não deu pra salvar ('+((d&&d.motivo)||'desconhecido')+').'); return; }
         vtpCloseModal(); vtpRender();
       }).catch(function(){ setBtnLoading('vt-save-btn', false, 'Salvar'); showErr('Erro de conexão. Tente de novo.'); });
     });
