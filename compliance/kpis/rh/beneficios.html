@@ -1967,6 +1967,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <div class="drawer-section-label">Ações</div>
       <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-beneficios::gerar-termos" onclick="closeDrawer();openModalBenef()">Gerar Termos</button>
       <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-beneficios::editar-premiacoes" onclick="closeDrawer();openPremModal()" style="margin-top:8px;">Editar premiações</button>
+      <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-beneficios::recibos-vt" onclick="closeDrawer();abrirModalRecibosVT()" style="margin-top:8px;">Recibos de VT</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -4496,6 +4497,273 @@ function renderFtBeneficios(tools, parceiros) {
   }
   if (document.readyState === 'complete') restaurar();
   else window.addEventListener('load', restaurar);
+})();
+</script>
+
+<!-- Modal Recibos de VT -->
+<div class="modal-overlay" id="modal-rec-vt" onclick="if(event.target===this) fecharModalRecibosVT()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-header-info">
+        <div class="candidate-name">Recibos de VT</div>
+      </div>
+      <button class="modal-close" onclick="fecharModalRecibosVT()" aria-label="Fechar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+        <div class="form-group">
+          <label class="form-label" for="rvt-mes">Mês</label>
+          <select class="form-select" id="rvt-mes" onchange="_rvtCarregaSemanas()"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rvt-ano">Ano</label>
+          <select class="form-select" id="rvt-ano" onchange="_rvtCarregaSemanas()"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rvt-sem">Semana</label>
+          <select class="form-select" id="rvt-sem" onchange="_rvtCarregaLista()"></select>
+        </div>
+      </div>
+      <div style="margin-top:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Colaboradores</span>
+          <span style="display:flex;gap:12px;">
+            <button type="button" class="btn-link" onclick="_rvtMarcarTodos(true)">Todos</button>
+            <button type="button" class="btn-link" onclick="_rvtMarcarTodos(false)">Nenhum</button>
+          </span>
+        </div>
+        <div id="rvt-lista" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+          <div style="padding:20px;text-align:center;color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;">Selecione mês/ano/semana acima.</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn--primary" onclick="fecharModalRecibosVT()">Cancelar</button>
+      <button class="btn btn--primary" onclick="gerarRecibosVTPDF()">Gerar Recibos</button>
+    </div>
+  </div>
+</div>
+<style>
+  .rvt-item { display:flex; align-items:center; gap:10px; padding:9px 12px; border-bottom:1px solid var(--border); cursor:pointer; }
+  .rvt-item:last-child { border-bottom:none; }
+  .rvt-item:hover { background:var(--bg); }
+  .rvt-item input[type="checkbox"] { width:16px; height:16px; accent-color:var(--carbon); cursor:pointer; margin:0; flex-shrink:0; }
+  .rvt-item-nome { flex:1; font-size:13px; color:var(--carbon); font-weight:500; }
+  .rvt-item-dias { font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); margin-right:12px; }
+  .rvt-item-val { font-family:'DM Mono',monospace; font-size:12px; color:var(--carbon); font-weight:600; }
+</style>
+
+
+<script>
+// ─── Recibos de VT (por semana, até 4 por página) ────────────────────────────
+(function(){
+  var _rvtSel = {};
+  var MESES_ = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  function _rvt2(n){ return n<10 ? '0'+n : String(n); }
+  function _rvtEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function _rvtBRL(n){ n=Number(n)||0; return 'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function _rvtDataBR(d){ return _rvt2(d.getDate())+'/'+_rvt2(d.getMonth()+1)+'/'+d.getFullYear(); }
+  function _rvtWeeks(ano, mes){
+    var last = new Date(ano, mes, 0);
+    var fri = new Date(ano, mes-1, 1);
+    while (fri.getDay() !== 5) fri.setDate(fri.getDate()+1);
+    var weeks = [], cur = new Date(fri), n = 0;
+    while (cur <= last){
+      var start = new Date(cur);
+      var end = new Date(cur); end.setDate(end.getDate()+6);
+      if (end > last) end = new Date(last);
+      weeks.push({ n: ++n, start: start, end: end });
+      cur.setDate(cur.getDate()+7);
+    }
+    return weeks;
+  }
+  function _rvtDias(w, adm){
+    var FOLGA_MAX = 6;
+    var s = (adm && adm > w.start) ? adm : w.start;
+    if (s > w.end) return 0;
+    var cal = Math.round((w.end - s)/86400000) + 1;
+    return Math.min(cal, FOLGA_MAX);
+  }
+  function _rvtParseDate(s){
+    if (!s) return null;
+    s = String(s);
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)){ var p=s.slice(0,10).split('-'); return new Date(+p[0], +p[1]-1, +p[2]); }
+    if (/^\d{2}\/\d{2}\/\d{4}/.test(s)){ var q=s.slice(0,10).split('/'); return new Date(+q[2], +q[1]-1, +q[0]); }
+    var d = new Date(s); return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  function _rvtInitSelects(){
+    var ms = document.getElementById('rvt-mes'), ya = document.getElementById('rvt-ano');
+    if (!ms || !ya) return;
+    var now = new Date(), cm = now.getMonth()+1, cy = now.getFullYear();
+    ms.innerHTML = MESES_.map(function(m,i){ return '<option value="'+(i+1)+'"'+((i+1)===cm?' selected':'')+'>'+m+'</option>'; }).join('');
+    var anos=''; for(var y=cy-1;y<=cy+1;y++){ anos+='<option value="'+y+'"'+(y===cy?' selected':'')+'>'+y+'</option>'; }
+    ya.innerHTML = anos;
+  }
+  window._rvtCarregaSemanas = function(){
+    var mes = parseInt(document.getElementById('rvt-mes').value, 10);
+    var ano = parseInt(document.getElementById('rvt-ano').value, 10);
+    var sel = document.getElementById('rvt-sem');
+    if (!mes || !ano || !sel) return;
+    var weeks = _rvtWeeks(ano, mes);
+    sel.innerHTML = weeks.map(function(w){
+      return '<option value="'+w.n+'">Semana '+w.n+' · '+_rvt2(w.start.getDate())+'/'+_rvt2(w.start.getMonth()+1)+' – '+_rvt2(w.end.getDate())+'/'+_rvt2(w.end.getMonth()+1)+'</option>';
+    }).join('');
+    _rvtCarregaLista();
+  };
+  function _rvtCarregarRoster(ano, mes, cb){
+    if (typeof comSupa !== 'function') { cb([]); return; }
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('vt_roster_listar', { p_ano:ano, p_mes:mes }).then(function(res){
+        cb((res && !res.error && Array.isArray(res.data)) ? res.data : []);
+      }).catch(function(){ cb([]); });
+    });
+  }
+  window._rvtCarregaLista = function(){
+    var mes = parseInt(document.getElementById('rvt-mes').value, 10);
+    var ano = parseInt(document.getElementById('rvt-ano').value, 10);
+    var semN = parseInt(document.getElementById('rvt-sem').value, 10);
+    var wrap = document.getElementById('rvt-lista');
+    _rvtSel = {};
+    if (!mes || !ano || !semN) {
+      wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-family:\'DM Mono\',monospace;font-size:11px;">Selecione mês/ano/semana.</div>';
+      return;
+    }
+    wrap.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-family:\'DM Mono\',monospace;font-size:11px;">Carregando…</div>';
+    _rvtCarregarRoster(ano, mes, function(rows){
+      var weeks = _rvtWeeks(ano, mes);
+      var w = weeks[semN-1]; if (!w) { wrap.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:11px;">Semana inválida.</div>'; return; }
+      var lista = (rows||[]).map(function(r){
+        var adm = _rvtParseDate(r.admissao);
+        var dias = _rvtDias(w, adm);
+        var vdia = Number(r.valor_dia)||0;
+        return Object.assign({}, r, { _dias:dias, _vdia:vdia, _pagar: dias*vdia });
+      }).filter(function(r){ return r._dias > 0 && r._pagar > 0; })
+        .sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
+      if (!lista.length){
+        wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-family:\'DM Mono\',monospace;font-size:11px;">Nenhum colaborador com VT nessa semana.</div>';
+        return;
+      }
+      window._rvtListaAtual = lista;
+      wrap.innerHTML = lista.map(function(r){
+        var id = String(r.id||r.matricula||r.nome);
+        return '<label class="rvt-item">'+
+          '<input type="checkbox" data-id="'+_rvtEsc(id)+'" onchange="_rvtToggle(this)">'+
+          '<span class="rvt-item-nome">'+_rvtEsc(r.nome||'—')+'</span>'+
+          '<span class="rvt-item-dias">'+r._dias+' dia'+(r._dias!==1?'s':'')+'</span>'+
+          '<span class="rvt-item-val">'+_rvtBRL(r._pagar)+'</span>'+
+        '</label>';
+      }).join('');
+    });
+  };
+  window._rvtToggle = function(cb){
+    var id = cb.dataset.id;
+    if (cb.checked) _rvtSel[id] = true; else delete _rvtSel[id];
+  };
+  window._rvtMarcarTodos = function(on){
+    document.querySelectorAll('#rvt-lista input[type="checkbox"]').forEach(function(cb){
+      cb.checked = on;
+      var id = cb.dataset.id;
+      if (on) _rvtSel[id] = true; else delete _rvtSel[id];
+    });
+  };
+  window.abrirModalRecibosVT = function(){
+    _rvtSel = {}; window._rvtListaAtual = [];
+    _rvtInitSelects();
+    _rvtCarregaSemanas();
+    document.getElementById('modal-rec-vt').classList.add('active');
+  };
+  window.fecharModalRecibosVT = function(){
+    document.getElementById('modal-rec-vt').classList.remove('active');
+  };
+  window.gerarRecibosVTPDF = function(){
+    var mes = parseInt(document.getElementById('rvt-mes').value, 10);
+    var ano = parseInt(document.getElementById('rvt-ano').value, 10);
+    var semN = parseInt(document.getElementById('rvt-sem').value, 10);
+    if (!mes || !ano || !semN) { alert('Selecione mês/ano/semana.'); return; }
+    var sel = (window._rvtListaAtual || []).filter(function(r){
+      var id = String(r.id||r.matricula||r.nome);
+      return _rvtSel[id];
+    });
+    if (!sel.length) { alert('Selecione ao menos um colaborador.'); return; }
+    var weeks = _rvtWeeks(ano, mes);
+    var w = weeks[semN-1];
+    var periodoCurto = _rvtDataBR(w.start)+' a '+_rvtDataBR(w.end);
+    var hoje = new Date();
+    var cidade = 'São Paulo';
+    var dataEmit = _rvt2(hoje.getDate())+' de '+MESES_[hoje.getMonth()].toLowerCase()+' de '+hoje.getFullYear();
+    var logoSrc = (document.querySelector('.logo-img') || {}).src || '';
+    function slotHtml(r){
+      var valor = r._pagar;
+      var valorTxt = _rvtBRL(valor);
+      var extenso = (typeof _extensoReais === 'function') ? _extensoReais(valor) : '';
+      var cargoUn = [r.cargo, r.departamento, r.unidade].filter(Boolean).map(_rvtEsc).join(' · ');
+      return '<div class="rvt-slot"><div class="rvt-slot-inner">'+
+        '<div class="rvt-slot-topbar">'+
+          (logoSrc? '<img class="rvt-slot-logo-top" src="'+logoSrc+'" alt="TATÁ">' : '<div style="width:32px;"></div>')+
+          '<div class="rvt-slot-title">RECIBO</div>'+
+          '<div class="rvt-slot-val-box">R$ <strong>'+(valor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}))+'</strong></div>'+
+        '</div>'+
+        '<div class="rvt-slot-linhas">'+
+          '<div class="rvt-line"><span class="rvt-lbl">Recebi de:</span><span class="rvt-val"><strong>TATÁ SUSHI</strong></span></div>'+
+          '<div class="rvt-line"><span class="rvt-lbl">Nome:</span><span class="rvt-val">'+_rvtEsc(r.nome||'')+'</span></div>'+
+          '<div class="rvt-line rvt-line-hi"><span class="rvt-lbl">A importância de:</span><span class="rvt-val"><strong>'+valorTxt+'</strong>'+(extenso?' ('+extenso+')':'')+'</span></div>'+
+          '<div class="rvt-line"><span class="rvt-lbl">Referente a:</span><span class="rvt-val">Vale-Transporte · '+r._dias+' dia'+(r._dias!==1?'s':'')+' · '+periodoCurto+(cargoUn?' — '+cargoUn:'')+'</span></div>'+
+          '<div class="rvt-line"><span class="rvt-lbl">Realizado em:</span><span class="rvt-val">'+cidade+', '+dataEmit+'</span></div>'+
+        '</div>'+
+        '<div class="rvt-slot-foot">'+
+          '<div class="rvt-slot-ass">'+
+            '<div class="rvt-slot-ass-line"></div>'+
+            '<div class="rvt-slot-ass-name">'+_rvtEsc(r.nome||'—')+'</div>'+
+          '</div>'+
+        '</div>'+
+      '</div></div>';
+    }
+    var pages = [];
+    for (var i=0; i<sel.length; i+=4){
+      var slots = sel.slice(i, i+4).map(slotHtml).join('');
+      pages.push('<div class="rvt-page">'+slots+'</div>');
+    }
+    var html = pages.join('');
+    var w = window.open('', '_blank');
+    if (!w){ alert('Permita pop-ups para gerar o PDF.'); return; }
+    var doc = '<!DOCTYPE html><html lang="pt-BR"><head>'+
+      '<meta charset="UTF-8">'+
+      '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+      '<title>Recibos de VT · TATÁ Sushi</title>'+
+      '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">'+
+      '<style>'+
+        '@page { size: A4 portrait; margin: 0; }'+
+        'html,body { background:#fff; margin:0; padding:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; font-family:"DM Sans","Helvetica Neue",Arial,sans-serif; color:#000; }'+
+        '.rvt-page { width: 210mm; height: 297mm; padding: 6mm 4mm; box-sizing: border-box; display: grid; grid-template-columns: 1fr; grid-template-rows: repeat(4, 1fr); gap: 4mm; justify-items: center; }'+
+        '.rvt-page:not(:last-child) { page-break-after: always; }'+
+        '.rvt-slot { border: 1.2px dashed #666; border-radius: 3px; padding: 1.5mm; overflow: hidden; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; height: 100%; width: 70%; }'+
+        '.rvt-slot-inner { border: 1px solid #111; height: 100%; display: flex; flex-direction: column; padding: 4mm 5mm; box-sizing: border-box; }'+
+        '.rvt-slot-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 3px; border-bottom: 1px solid #ccc; flex-shrink: 0; }'+
+        '.rvt-slot-logo-top { width: 32px; height: 32px; object-fit: contain; flex-shrink: 0; }'+
+        '.rvt-slot-val-box { border: 1px solid #666; border-radius: 3px; padding: 3px 10px; font-family: "DM Mono",monospace; font-size: 11px; color: #333; text-align: right; background: #F4F4F4; }'+
+        '.rvt-slot-val-box strong { color: #111; font-weight: 700; letter-spacing: .3px; }'+
+        '.rvt-slot-title { flex: 1; text-align: center; font-size: 20px; font-weight: 700; letter-spacing: .18em; color: #111; }'+
+        '.rvt-slot-linhas { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; flex: 1; min-height: 0; justify-content: space-around; }'+
+        '.rvt-line { display: flex; align-items: baseline; gap: 6px; font-size: 10px; line-height: 1.3; color: #222; border-bottom: 1px solid #999; padding-bottom: 2px; }'+
+        '.rvt-lbl { color: #555; font-size: 9px; white-space: nowrap; flex-shrink: 0; }'+
+        '.rvt-val { flex: 1; color: #111; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }'+
+        '.rvt-val strong { color: #111; font-weight: 700; }'+
+        '.rvt-line-hi { background: #F0F8FF; padding: 3px 6px; border-radius: 3px; border-bottom: 1px solid #B0C8E0; }'+
+        '.rvt-line-hi .rvt-val { font-size: 10.5px; white-space: normal; }'+
+        '.rvt-slot-foot { display: flex; align-items: flex-end; justify-content: flex-end; gap: 16px; margin-top: 8px; padding-top: 6px; flex-shrink: 0; }'+
+        '.rvt-slot-ass { max-width: 280px; min-width: 240px; }'+
+        '.rvt-slot-ass-line { border-top: 1px solid #000; margin-bottom: 2px; }'+
+        '.rvt-slot-ass-name { font-size: 10px; font-weight: 600; color: #111; margin-top: 1px; text-align: center; }'+
+      '</style>'+
+      '</head><body>'+html+'</body></html>';
+    w.document.write(doc);
+    w.document.close();
+    w.focus();
+    fecharModalRecibosVT();
+    setTimeout(function(){ w.print(); }, 400);
+  };
 })();
 </script>
 </body>
