@@ -1270,9 +1270,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="modal-section">
       <div class="modal-section-label">Devolutiva</div>
-      <div id="m-devolutiva"></div>
+      <textarea id="m-dev-text" rows="4" placeholder="Escreva a devolutiva…" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;line-height:1.6;color:var(--carbon);background:var(--white);resize:vertical;outline:none;"></textarea>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--carbon);cursor:pointer;">
+        <input type="checkbox" id="m-dev-concluir"> Marcar ocorrência como concluída ao salvar
+      </label>
+      <div id="m-dev-error" style="display:none;margin-top:8px;color:#b42828;font-size:12.5px;"></div>
     </div>
-    <button class="btn btn--primary btn--block" onclick="document.getElementById('modal-overlay').classList.remove('open')">Fechar</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn--primary btn--block" id="m-dev-save" data-aba-id="governanca-kpis-rh-ouvidoria::salvar-devolutiva" onclick="salvarDevolutiva()">Salvar devolutiva</button>
+      <button class="btn btn--primary btn--block" onclick="document.getElementById('modal-overlay').classList.remove('open')">Fechar</button>
+    </div>
   </div>
 </div>
 
@@ -1477,6 +1484,8 @@ function loadData() {
         if (res.error) { console.error('Erro RPC ouvidoria_listar:', res.error); hideLoading(); return; }
         DATA = (res.data || []).map(function(r){
           return {
+            id:           r.id || '',
+            status:       r.status || '',
             data:         r.data_ocorrido || r.created_at || '',
             reclamante:   r.nome || '',
             identificado: r.identificado,
@@ -1876,18 +1885,43 @@ function kpiCard(label, value, sub) {
   return '<div class="kpi-card"><div class="kpi-label">'+label+'</div><div class="kpi-value">'+value+'</div><div class="kpi-sub">'+sub+'</div></div>';
 }
 
+var _ouvCurrent = null;   // ocorrência aberta no modal (p/ salvar a devolutiva)
 function openModal(idx) {
   var r = displayedRows[idx];
+  _ouvCurrent = r;
   document.getElementById('m-reclamante').textContent = toTitleCase(r.reclamante || 'Anônimo');
   document.getElementById('m-meta').textContent = formatDateBR(r.data) + ' · ' + (isIdentificado(r) ? 'Identificado' : 'Anônimo');
   document.getElementById('m-ocorrencia').textContent = toSentenceCase(r.ocorrencia);
-  var devEl = document.getElementById('m-devolutiva');
-  if (r.devolutiva) {
-    devEl.innerHTML = '<div class="modal-devolutiva">'+r.devolutiva+'</div>';
-  } else {
-    devEl.innerHTML = '<div class="modal-devolutiva-empty">Devolutiva pendente</div>';
-  }
+  var ta = document.getElementById('m-dev-text'); if (ta) ta.value = r.devolutiva || '';
+  var jaConcluida = String(r.status||'').toLowerCase() === 'concluida';
+  var cc = document.getElementById('m-dev-concluir'); if (cc) cc.checked = !jaConcluida;   // já concluída → não remarca
+  var err = document.getElementById('m-dev-error'); if (err) err.style.display = 'none';
   document.getElementById('modal-overlay').classList.add('open');
+}
+
+function salvarDevolutiva() {
+  if (!_ouvCurrent || !_ouvCurrent.id) return;
+  var err = document.getElementById('m-dev-error');
+  function showErr(m){ if(err){ err.textContent = m; err.style.display = 'block'; } }
+  var texto = (document.getElementById('m-dev-text').value || '').trim();
+  if (!texto) { showErr('Escreva a devolutiva antes de salvar.'); return; }
+  var concluir = !!document.getElementById('m-dev-concluir').checked;
+  var btn = document.getElementById('m-dev-save'); if (btn) { btn.disabled = true; btn.textContent = 'Salvando…'; }
+  var alvo = _ouvCurrent;
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('ouvidoria_devolutiva_salvar', { p_id: alvo.id, p_devolutiva: texto, p_concluir: concluir })
+      .then(function(res){
+        if (btn) { btn.disabled = false; btn.textContent = 'Salvar devolutiva'; }
+        var d = res && res.data, e = res && res.error;
+        if (e) { showErr('Erro: ' + (e.message || 'falha')); return; }
+        if (!d || !d.ok) { showErr('Não deu pra salvar (' + ((d && d.motivo) || 'desconhecido') + ').'); return; }
+        alvo.devolutiva = texto;
+        if (d.status) alvo.status = d.status;
+        document.getElementById('modal-overlay').classList.remove('open');
+        applyFilter();   // atualiza a tabela/KPIs (ex.: passa p/ "Com devolutiva")
+      })
+      .catch(function(){ if (btn) { btn.disabled = false; btn.textContent = 'Salvar devolutiva'; } showErr('Erro de conexão. Tente de novo.'); });
+  });
 }
 
 function closeModal(e) {
