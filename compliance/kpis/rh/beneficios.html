@@ -4371,7 +4371,12 @@ function renderFtBeneficios(tools, parceiros) {
       r._dias = weeks.map(function(w){ return vtpDias(w, r._adm); });
       r._tot = r._dias.reduce(function(a,b){ return a+b; }, 0);
       r._vdia = Number(r.valor_dia)||0;
-      r._pagar = r._tot * r._vdia;
+      // total a pagar = soma, por semana, do valor ajustado (override) ou ceil(dias × valor/dia)
+      r._pagar = weeks.reduce(function(acc, w, i){
+        var ov = (r.overrides && r.overrides[String(w.n)]!=null) ? Number(r.overrides[String(w.n)]) : null;
+        var auto = Math.ceil((r._dias[i] * r._vdia) - 1e-9);
+        return acc + (ov!=null ? ov : auto);
+      }, 0);
       totalDias += r._tot; totalPagar += r._pagar;
     });
     var kq=vtpEl('vtKpiQtd'), kt=vtpEl('vtKpiTotal'), kp=vtpEl('vtKpiPagar'), cnt=vtpEl('vt-count');
@@ -4564,6 +4569,12 @@ function renderFtBeneficios(tools, parceiros) {
   function _rvt2(n){ return n<10 ? '0'+n : String(n); }
   function _rvtEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function _rvtBRL(n){ n=Number(n)||0; return 'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function _rvtCeil(n){ n=Number(n)||0; return Math.ceil(n - 1e-9); }   // arredonda sempre pra cima (pro real)
+  function _rvtParseValor(s){ s=String(s==null?'':s).replace(/[^0-9,.-]/g,'').trim(); if(!s) return 0; if(s.indexOf(',')>=0) s=s.replace(/\./g,'').replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; }
+  function _rvtValSemana(r, semN){
+    var ov = (r && r.overrides && r.overrides[String(semN)]!=null) ? Number(r.overrides[String(semN)]) : null;
+    return ov;  // null = sem override (usa o automático arredondado)
+  }
   function _rvtDataBR(d){ return _rvt2(d.getDate())+'/'+_rvt2(d.getMonth()+1)+'/'+d.getFullYear(); }
   function _rvtWeeks(ano, mes){
     var last = new Date(ano, mes, 0);
@@ -4638,8 +4649,11 @@ function renderFtBeneficios(tools, parceiros) {
         var adm = _rvtParseDate(r.admissao);
         var dias = _rvtDias(w, adm);
         var vdia = Number(r.valor_dia)||0;
-        return Object.assign({}, r, { _dias:dias, _vdia:vdia, _pagar: dias*vdia });
-      }).filter(function(r){ return r._dias > 0 && r._pagar > 0; })
+        var auto = _rvtCeil(dias*vdia);               // automático: dias × valor/dia, arredondado pra cima
+        var ov = _rvtValSemana(r, semN);              // override manual (ou null)
+        var pagar = (ov!=null) ? ov : auto;
+        return Object.assign({}, r, { _dias:dias, _vdia:vdia, _auto:auto, _ov:ov, _pagar:pagar, _semana:semN });
+      }).filter(function(r){ return r._dias > 0 && (r._pagar > 0 || r._ov!=null); })
         .sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
       if (!lista.length){
         wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-family:\'DM Mono\',monospace;font-size:11px;">Nenhum colaborador com VT nessa semana.</div>';
@@ -4648,11 +4662,15 @@ function renderFtBeneficios(tools, parceiros) {
       window._rvtListaAtual = lista;
       wrap.innerHTML = lista.map(function(r){
         var id = String(r.id||r.matricula||r.nome);
+        var ovr = (r._ov!=null);
         return '<label class="rvt-item">'+
           '<input type="checkbox" data-id="'+_rvtEsc(id)+'" onchange="_rvtToggle(this)">'+
           '<span class="rvt-item-nome">'+_rvtEsc(r.nome||'—')+'</span>'+
           '<span class="rvt-item-dias">'+r._dias+' dia'+(r._dias!==1?'s':'')+'</span>'+
-          '<span class="rvt-item-val">'+_rvtBRL(r._pagar)+'</span>'+
+          '<input class="rvt-item-val-inp" type="text" value="'+_rvtEsc(_rvtBRL(r._pagar))+'" data-mat="'+_rvtEsc(r.matricula||'')+'"'+
+            ' title="Valor da semana — edite para ajustar; apague para voltar ao automático ('+_rvtEsc(_rvtBRL(r._auto))+')"'+
+            ' onclick="event.stopPropagation()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" onchange="_rvtSalvarValor(this)"'+
+            ' style="width:94px;flex-shrink:0;text-align:right;font-family:\'DM Mono\',monospace;font-size:12px;font-weight:600;border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:var(--carbon);background:'+(ovr?'#FFF7E0':'#fff')+'">'+
         '</label>';
       }).join('');
     });
@@ -4660,6 +4678,31 @@ function renderFtBeneficios(tools, parceiros) {
   window._rvtToggle = function(cb){
     var id = cb.dataset.id;
     if (cb.checked) _rvtSel[id] = true; else delete _rvtSel[id];
+  };
+  // Salva o ajuste manual do valor da semana (vazio = volta ao automático). Fica salvo no banco.
+  window._rvtSalvarValor = function(inp){
+    var mat = inp.getAttribute('data-mat');
+    var semN = parseInt(document.getElementById('rvt-sem').value, 10);
+    var ano  = parseInt(document.getElementById('rvt-ano').value, 10);
+    var mes  = parseInt(document.getElementById('rvt-mes').value, 10);
+    var item = (window._rvtListaAtual||[]).filter(function(r){ return String(r.matricula)===String(mat); })[0];
+    var raw  = (inp.value||'').trim();
+    var valor = (raw==='') ? null : _rvtParseValor(raw);   // override exato (null = remove, volta ao auto)
+    inp.disabled = true;
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('vt_semana_valor_salvar', { p_matricula:mat, p_ano:ano, p_mes:mes, p_semana:semN, p_valor:valor }).then(function(res){
+        inp.disabled = false;
+        var d = res && res.data;
+        if (!d || !d.ok){ inp.style.borderColor = 'var(--red,#b42828)'; return; }
+        inp.style.borderColor = 'var(--border)';
+        if (item){
+          if (valor==null){ item._ov=null; item._pagar=item._auto; if(item.overrides) delete item.overrides[String(semN)]; }
+          else { item._ov=valor; item._pagar=valor; item.overrides=item.overrides||{}; item.overrides[String(semN)]=valor; }
+        }
+        inp.value = _rvtBRL((item?item._pagar:valor)||0);
+        inp.style.background = (valor!=null) ? '#FFF7E0' : '#fff';   // amarelo = ajustado manualmente
+      }).catch(function(){ inp.disabled=false; inp.style.borderColor='var(--red,#b42828)'; });
+    });
   };
   window._rvtMarcarTodos = function(on){
     document.querySelectorAll('#rvt-lista input[type="checkbox"]').forEach(function(cb){
