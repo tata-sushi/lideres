@@ -6322,13 +6322,172 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
       .catch(function(e){ input.value=''; alert('Falha no upload: '+(e&&e.message||e)); });
   };
 
+  // ── TXT de importação para a folha (layout Domínio / FOEMPREGADOS) ──
+  //    79 colunas separadas por TAB, conforme o arquivo-modelo (o leiaute
+  //    oficial lista 78; o modelo real tem 1 coluna extra S/N na posição 32,
+  //    que espelhamos). UTF-8, CRLF, datas DD/MM/AAAA, decimal com ponto.
+  //    Campos que são CÓDIGO INTERNO do Domínio (empresa, filial, cargo,
+  //    depto, banco, sindicato, município, grau, cor, categoria, eSocial…)
+  //    saem em branco — o DP completa na importação.
+  function _admMontarTxtFolha(){
+    var a = (_ficha && _ficha.admissao) || {};
+    var resp = (_ficha && _ficha.respostas) || [];
+    var M = {};
+    resp.forEach(function(x){ M[(x.grupo||'')+'.'+(x.campo||'')] = x.valor; });
+    function g(k){ var v=M[k]; return (v==null)?'':String(v).trim(); }
+    function dig(s){ return String(s||'').replace(/\D/g,''); }
+    function limpa(s){ return String(s==null?'':s).replace(/[\t\r\n]+/g,' ').trim(); }
+
+    // salário: extrai "Salário fixo de R$ 1.882,11" do texto da proposta → 1882.11
+    var proposta = g('trabalho.proposta');
+    var salario = '';
+    var ms = proposta.match(/sal[áa]rio\s+fixo\s+de\s+R\$\s*([\d.]+,\d{2})/i);
+    if (ms) salario = ms[1].replace(/\./g,'').replace(',','.');
+
+    // cidade/UF a partir de "Cidade/UF"
+    var cidEst = g('endereco.cidade_estado'), cidade='', uf='';
+    if (cidEst){ var pp=cidEst.split('/'); uf=(pp.length>1?pp.pop():'').trim(); cidade=pp.join('/').trim(); }
+
+    // estado civil → letra Domínio (S/C/V/D/O/J/U)
+    function civil(s){
+      var l=String(s||'').toLowerCase();
+      if(l.indexOf('solteir')>=0)return 'S';
+      if(l.indexOf('casad')>=0)return 'C';
+      if(l.indexOf('viúv')>=0||l.indexOf('viuv')>=0)return 'V';
+      if(l.indexOf('divorc')>=0)return 'D';
+      if(l.indexOf('separ')>=0)return 'J';
+      if(l.indexOf('uni')>=0)return 'U';
+      if(l.indexOf('concub')>=0)return 'O';
+      return '';
+    }
+    // tipo de conta → código Domínio (2=corrente, 3=salário, 4=poupança)
+    function tipoConta(s){
+      var l=String(s||'').toLowerCase();
+      if(l.indexOf('poup')>=0)return '4';
+      if(l.indexOf('sal')>=0)return '3';
+      if(l.indexOf('corr')>=0)return '2';
+      return '';
+    }
+    // sexo → M/F
+    var sx = g('pessoais.sexo').toUpperCase();
+    sx = (sx.charAt(0)==='M') ? 'M' : (sx.charAt(0)==='F' ? 'F' : '');
+    // telefone → DDD + número
+    var tel = dig(g('pessoais.telefone')), ddd='', fone='';
+    if(tel.length>=10){ ddd=tel.slice(0,2); fone=tel.slice(2); } else if(tel){ fone=tel; }
+
+    var nome = g('pessoais.nome') || a.nome || '';
+    var cpf = dig(g('pessoais.cpf') || a.cpf || '');
+
+    var F = [];
+    F[1]='';                               // codi_emp  (código interno)
+    F[2]='';                               // i_empregados
+    F[3]=limpa(nome);                      // nome
+    F[4]=cpf;                              // cpf (11)
+    F[5]='';                               // i_filiais
+    F[6]='';                               // i_servicos
+    F[7]='';                               // i_cargos
+    F[8]='';                               // i_depto
+    F[9]='';                               // i_ccustos
+    F[10]=salario;                         // salario
+    F[11]='';                              // admissao (não capturada na ficha)
+    F[12]='';                              // CODIGO_ESOCIAL
+    F[13]='';                              // vinculo
+    F[14]='';                              // opta_fgts
+    F[15]='';                              // opcao_fgts
+    F[16]='';                              // oco_sefip
+    F[17]=limpa(g('endereco.endereco'));   // endereco (logradouro + nº no mesmo campo da ficha)
+    F[18]='';                              // numero_end
+    F[19]='';                              // complemento
+    F[20]=limpa(g('endereco.bairro'));     // bairro
+    F[21]=limpa(cidade);                   // cidade
+    F[22]=uf;                              // estado (UF)
+    F[23]=dig(g('endereco.cep'));          // cep (8)
+    F[24]=g('pessoais.nascimento');        // data_nascimento
+    F[25]='';                              // i_bancos
+    F[26]=limpa(g('bancario.conta'));      // conta_corr
+    F[27]='';                              // DIGITO_CONTA_PAGAMENTO
+    F[28]=tipoConta(g('bancario.tipo_conta')); // TIPO_CONTA
+    F[29]='';                              // i_sindicatos
+    F[30]='';                              // possui_vinc_out_emp
+    F[31]='';                              // paga_contr_sind
+    F[32]='N';                             // coluna extra do modelo (S/N) — espelha o exemplo
+    F[33]='';                              // venc_ferias
+    F[34]='';                              // horas_dia
+    F[35]='';                              // categoria
+    F[36]='';                              // TIPO_INDICATIVO_ADMISSAO
+    F[37]='';                              // grau_instrucao
+    F[38]='';                              // deficiente_fisico
+    F[39]='';                              // emprego_ant
+    F[40]='';                              // horas_semana
+    F[41]='';                              // forma_pagto
+    F[42]='';                              // horas_mes
+    F[43]='';                              // SITUACAO_QUALIFICACAO
+    F[44]=sx;                              // sexo
+    F[45]='';                              // PAIS_NACIONALIDADE
+    F[46]='';                              // cor
+    F[47]=civil(g('pessoais.estado_civil')); // estado_civil
+    F[48]='';                              // RECEBIA_SEGURO_DESEMPREGO
+    F[49]='';                              // I_JORNADA
+    F[50]=limpa(g('pessoais.nome_pai'));   // nome_pai
+    F[51]=limpa(g('pessoais.nome_mae'));   // nome_mae
+    F[52]='';                              // TIPO_ENDERECO
+    F[53]='';                              // MUNICIPIO_ENDERECO
+    F[54]='';                              // MUNICIPIO_NASCIMENTO
+    F[55]='';                              // PAIS_ENDERECO
+    F[56]='';                              // PAIS_NASCIMENTO
+    F[57]=limpa(g('pessoais.rg_numero'));  // identidade
+    F[58]=limpa(g('pessoais.rg_orgao'));   // org_exp_ident
+    F[59]=g('pessoais.rg_uf');             // uf_exp_ident
+    F[60]=g('pessoais.rg_expedicao');      // dt_exp_ident
+    F[61]='';                              // contr_exper
+    F[62]='';                              // TIPO_CLA_ASSEC
+    F[63]='';                              // QTD_DIAS_CONTR_EXP
+    F[64]='';                              // ini_praz_det
+    F[65]='';                              // fim_praz_det
+    F[66]='';                              // QTD_DIAS_PRORROG
+    F[67]='';                              // pro_praz_det
+    F[68]='';                              // MOTIVO_PRORROG
+    F[69]='';                              // FORMA_CALCULO
+    F[70]='';                              // simples_072007
+    F[71]=limpa(g('pessoais.email'));      // EMAIL
+    F[72]=ddd;                             // DDD_FONE
+    F[73]=fone;                            // fone
+    F[74]='';                              // DDD_CONTATO_2
+    F[75]='';                              // CONTATO_2
+    F[76]='';                              // data_base
+    F[77]=g('pessoais.nasc_uf');           // uf_nascimento
+    F[78]='';                              // CATEGORIA_ESOCIAL_EMPREGADO
+    F[79]='';                              // I_SINDICATOS_CADASTRO
+
+    var linha = [];
+    for (var i=1;i<=79;i++) linha.push(F[i]==null?'':F[i]);
+    return linha.join('\t');
+  }
+
+  // baixa o TXT da folha (independente dos anexos; usado junto do .zip)
+  window._admBaixarTxtFolha = function(){
+    try {
+      if (!_ficha) return;
+      var txt = _admMontarTxtFolha();
+      var nome = (_ficha.admissao && _ficha.admissao.nome) || 'colaborador';
+      var blob = new Blob([txt + '\r\n'], { type:'text/plain;charset=utf-8' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = String(nome).replace(/[\/\\:*?"<>|]/g,'-') + ' - Folha (Dominio).txt';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 30000);
+    } catch(e){ if(window.console&&console.warn) console.warn('TXT folha:', e); }
+  };
+
   // ── Baixar .zip de todos os anexos da ficha (JSZip carregado sob demanda,
   //    mesmo padrão de pdf.js acima — e mesma lógica de doc.html, que já
   //    tem download em lote por colaborador) ──
   window._admBaixarZipDocs = function(){
     if (window._admZipBaixando) return;
+    // o TXT da folha baixa sempre junto do clique, mesmo sem anexos
+    _admBaixarTxtFolha();
     var docs = (_ficha && _ficha.documentos) || [];
-    if (!docs.length) { alert('Nenhum anexo pra baixar.'); return; }
+    if (!docs.length) { alert('TXT da folha baixado. (Nenhum anexo pra montar o .zip.)'); return; }
     window._admZipBaixando = true;
     setBtnLoading(true, 'Carregando…', 'adm-mf-zip');
 
