@@ -1638,11 +1638,11 @@ function TP(){ return window.__lideresSupa.schema('tata_plus'); }
 /* ── Helpers de data (handoff §6 — sempre local, sem toISOString) ────────── */
 var pad = function(n){ return String(n).padStart(2,'0'); };
 var isoLocal = function(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
-function segunda(offset){
+function inicioSemana(offset){
   offset = offset || 0;
   var h = new Date();
   var x = new Date(h.getFullYear(), h.getMonth(), h.getDate());
-  x.setDate(x.getDate() - ((x.getDay()+6)%7) + offset*7);
+  x.setDate(x.getDate() - x.getDay() + offset*7);   // domingo da semana (semana começa no domingo)
   return x;
 }
 var hm = function(t){ return t ? String(t).slice(0,5) : ''; };
@@ -1661,7 +1661,10 @@ function fmtH(h){
   return mm ? (hh+'h'+(mm<10?'0':'')+mm) : (hh+'h');
 }
 
-var DIAS_CURTO = ['SEG','TER','QUA','QUI','SEX','SÁB','DOM'];
+var DIAS_CURTO = ['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
+// Reordenação visual do editor de ciclo: coluna visual (domingo-primeiro) -> índice interno
+// dia_semana do banco (0=Seg..6=Dom, via isodow). O armazenamento continua ancorado na segunda.
+var SUN_ORDER = [6,0,1,2,3,4,5];
 var DIAS_NOME  = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 // Cada preset agora é {marc:[[entrada,saida],...]} (até 3 pares = 6 marcações).
 // Fonte no banco (dp_rh.escala_horarios); estes valores são só fallback.
@@ -1753,7 +1756,7 @@ function removerHorario(id){
 }
 
 /* ── Estado ──────────────────────────────────────────────────────────────── */
-var ST = { unidade:null, depto:'Todos', inicio:segunda(0), equipe:[], carregando:false, tab:'sobre', admin:false };
+var ST = { unidade:null, depto:'Todos', inicio:inicioSemana(0), equipe:[], carregando:false, tab:'sobre', admin:false };
 
 /* ── Loading / toast ─────────────────────────────────────────────────────── */
 function showLoading(){ if (ST.tab === 'sobre') return; var o=document.getElementById('loading-overlay'); if(o) o.classList.add('show'); }
@@ -2222,7 +2225,7 @@ function navSemana(delta){ ST.inicio = addDias(ST.inicio, delta*7); carregarSema
 function confirmarSemana(){
   var btn = document.getElementById('esc-confirmar');
   if (btn){ btn.disabled = true; btn.textContent = 'Confirmando…'; }
-  TP().rpc('escala_semana_confirmar', { p_inicio: isoLocal(ST.inicio), p_unidade: ST.unidade }).then(function(r){
+  TP().rpc('escala_semana_confirmar', { p_inicio: isoLocal(addDias(ST.inicio,1)), p_unidade: ST.unidade }).then(function(r){
     if (btn){ btn.disabled = false; btn.textContent = 'Confirmar semana'; }
     if (r.error){ erroRPC(r.error); return; }
     var d = r.data || {};
@@ -2248,7 +2251,7 @@ function setTab(tab){
    KPIs — Grade Visual, Mapa de Calor e Resumo Semanal (adaptados do app de
    escalas ao modelo entrada/saída/folga). + Impressão (PDF) no drawer.
    ══════════════════════════════════════════════════════════════════════════ */
-var DIAS_FULL = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+var DIAS_FULL = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 var META_H = 40;
 var ICON_GRADE  = '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>';
 var ICON_MAPA   = '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>';
@@ -2676,7 +2679,7 @@ function novaSemanaCiclo(){ var a=[]; for(var i=0;i<7;i++) a.push(novoDia()); re
 function abrirPadrao(pi){
   if (GOV_BTN_OK['governanca-app-escala::editar-semana'] === false){ toast('Sem acesso para editar a semana.'); return; }
   var p = ST.equipe[pi]; if(!p) return;
-  PD = { matricula:p.matricula, nome:p.nome, cargo:p.cargo||'', controla:true, efetivo:isoLocal(ST.inicio), ciclo:1, grid:[novaSemanaCiclo()] };
+  PD = { matricula:p.matricula, nome:p.nome, cargo:p.cargo||'', controla:true, efetivo:isoLocal(addDias(ST.inicio,1)), ciclo:1, grid:[novaSemanaCiclo()] };
   document.getElementById('pd-nome').textContent = p.nome;
   document.getElementById('pd-efetivo').value = PD.efetivo;
   document.getElementById('pd-overlay').classList.add('open');
@@ -2737,7 +2740,8 @@ function renderPdGrid(){
             presetOptionsHtml('Horário pré-definido…')+
             '</select>'+
             '<button type="button" class="btn-icon" onclick="pdLimpar('+c+')" title="Limpar" aria-label="Limpar"><svg viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></button></span></div>';
-    for (var d=0; d<7; d++){
+    for (var vc=0; vc<7; vc++){
+      var d = SUN_ORDER[vc];   // coluna visual (domingo-primeiro) -> dia_semana interno (0=Seg)
       var cell = PD.grid[c][d];
       if (!cell.marc || !cell.marc.length) cell.marc = [{ entrada:'', saida:'' }];
       var trab = !cell.folga;
@@ -2755,7 +2759,7 @@ function renderPdGrid(){
         timesHtml = '<div class="esc-day-times">'+pairs+'</div>' + addBtn;
       }
       html += '<div class="esc-day-row'+(cell.folga?' is-folga':'')+'">'+
-                '<span class="esc-day-name">'+DIAS_CURTO[d]+'</span>'+
+                '<span class="esc-day-name">'+DIAS_CURTO[vc]+'</span>'+
                 timesHtml +
                 '<span class="esc-folga-sw">Folga<button type="button" class="toggle'+(cell.folga?' on':'')+'" role="switch" aria-checked="'+(cell.folga?'true':'false')+'" title="Folga" onclick="pdToggleFolga('+c+','+d+')"></button></span>'+
               '</div>';
@@ -2797,7 +2801,7 @@ function pdLimpar(c){ if(!PD) return; PD.grid[c] = novaSemanaCiclo(); renderPdGr
 // líder; dedup por membro/semana no backend). Best-effort, não bloqueia a UI.
 function confirmarMembroSemana(mat){
   if(!mat) return;
-  TP().rpc('escala_membro_confirmar', { p_matricula: mat, p_inicio: isoLocal(ST.inicio) }).then(function(){}, function(){});
+  TP().rpc('escala_membro_confirmar', { p_matricula: mat, p_inicio: isoLocal(addDias(ST.inicio,1)) }).then(function(){}, function(){});
 }
 
 function salvarPadrao(){
