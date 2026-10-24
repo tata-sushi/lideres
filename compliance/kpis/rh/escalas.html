@@ -2261,10 +2261,19 @@ var ICON_MAPA   = '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" st
 var ICON_RESUMO = '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>';
 
 function _mins(t){ if(!t) return null; var p=String(t).split(':'); return (+p[0])*60 + (+(p[1]||0)); }
-function _diaHoras(dia){ // {a,b} em horas (b pode passar de 24) ou null
-  if(!dia || !dia.definido || dia.folga || dia.entrada==null) return null;
-  var a=_mins(dia.entrada), b=_mins(dia.saida); if(a==null||b==null) return null;
-  a/=60; b/=60; if(b<=a) b+=24; return { a:a, b:b };
+function _diaHorasTodas(dia){ // [{a,b,ent,sai}, …] em horas (b pode passar de 24) — TODAS as marcações
+  if(!dia || !dia.definido || dia.folga) return [];
+  var pares=[];
+  if(Array.isArray(dia.marcacoes) && dia.marcacoes.length){
+    dia.marcacoes.forEach(function(m){
+      var a=_mins(m.entrada), b=_mins(m.saida);
+      if(a!=null && b!=null){ a/=60; b/=60; if(b<=a) b+=24; pares.push({ a:a, b:b, ent:m.entrada, sai:m.saida }); }
+    });
+  } else if(dia.entrada!=null){
+    var a=_mins(dia.entrada), b=_mins(dia.saida);
+    if(a!=null && b!=null){ a/=60; b/=60; if(b<=a) b+=24; pares.push({ a:a, b:b, ent:dia.entrada, sai:dia.saida }); }
+  }
+  return pares;
 }
 function horasDia(dia){
   if(!dia || !dia.definido || dia.folga) return 0;
@@ -2359,7 +2368,7 @@ function renderResumo(){
 
 function _hourRange(vis){
   var lo=24, hi=0, any=false;
-  vis.forEach(function(p){ (p.dias||[]).forEach(function(d){ var h=_diaHoras(d); if(h){ any=true; lo=Math.min(lo,Math.floor(h.a)); hi=Math.max(hi,Math.ceil(h.b)); } }); });
+  vis.forEach(function(p){ (p.dias||[]).forEach(function(d){ _diaHorasTodas(d).forEach(function(h){ any=true; lo=Math.min(lo,Math.floor(h.a)); hi=Math.max(hi,Math.ceil(h.b)); }); }); });
   if(!any) return null;
   return { lo:lo, hi:Math.min(hi,28) };
 }
@@ -2369,7 +2378,7 @@ function renderHeatmap(){
   if(!rg){ el.innerHTML='<div class="kpi-empty">Sem horários para o mapa.</div>'; return; }
   var max=0, cells={};
   for(var h=rg.lo; h<rg.hi; h++){ for(var d=0; d<7; d++){
-    var n=0; vis.forEach(function(p){ var x=_diaHoras((p.dias||[])[d]); if(x && (_ov(x.a,x.b,h,h+1)||_ov(x.a,x.b,h+24,h+25))) n++; });
+    var n=0; vis.forEach(function(p){ var xs=_diaHorasTodas((p.dias||[])[d]); for(var k=0;k<xs.length;k++){ var x=xs[k]; if(_ov(x.a,x.b,h,h+1)||_ov(x.a,x.b,h+24,h+25)){ n++; break; } } });
     cells[h+'_'+d]=n; if(n>max)max=n;
   } }
   var head='<tr><th></th>'+DIAS_FULL.map(function(x){return '<th>'+x+'</th>';}).join('')+'</tr>';
@@ -2395,9 +2404,12 @@ function renderGradeVisual(){
   else {
     var span=rg.hi-rg.lo || 1;
     var rows=vis.map(function(p){
-      var dia=(p.dias||[])[di]; var h=_diaHoras(dia); var bar='';
-      if(h){ var left=(h.a-rg.lo)/span*100, w=(h.b-h.a)/span*100;
-        bar='<div class="gv-bar" style="left:'+left.toFixed(1)+'%;width:'+w.toFixed(1)+'%" title="'+hm(dia.entrada)+'–'+hm(dia.saida)+'"><span>'+_gvHora(dia.entrada)+'–'+_gvHora(dia.saida)+'</span></div>';
+      var dia=(p.dias||[])[di]; var ranges=_diaHorasTodas(dia); var bar='';
+      if(ranges.length){
+        ranges.forEach(function(h){   // uma barra por turno (almoço, jantar, …)
+          var left=(h.a-rg.lo)/span*100, w=(h.b-h.a)/span*100;
+          bar+='<div class="gv-bar" style="left:'+left.toFixed(1)+'%;width:'+w.toFixed(1)+'%" title="'+hm(h.ent)+'–'+hm(h.sai)+'"><span>'+_gvHora(h.ent)+'–'+_gvHora(h.sai)+'</span></div>';
+        });
       } else if(dia && dia.folga){ bar='<div class="gv-bar folga" style="left:0;width:100%"></div>'; }
       return '<div class="gv-row"><span class="gv-name">'+esc(primeiroNome(p.nome))+'</span><div class="gv-track">'+bar+'</div></div>';
     }).join('');
