@@ -643,6 +643,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="filters-actions">
     <button class="btn-link" onclick="limparFiltros()">Limpar filtros</button>
     <div class="esc-actions-right">
+      <button type="button" class="btn btn--primary btn--sm" id="esc-add-free" onclick="acrescentarFreelance()" title="Acrescentar freelance no departamento selecionado">+ Freelance</button>
       <span class="results-count"><span id="esc-count">0</span> registro(s)</span>
     </div>
   </div>
@@ -2292,7 +2293,7 @@ function horasDia(dia){
 function horasPessoa(p){ var s=0; (p.dias||[]).forEach(function(d){ s+=horasDia(d); }); return s; }
 function fmtH(h){ var m=Math.round((h||0)*60); var H=Math.floor(m/60), M=m%60; return M ? (H+'h'+(M<10?'0':'')+M) : (H+'h'); }
 function _ov(a,b,s,e){ return Math.max(a,s) < Math.min(b,e); }
-function _kpiVis(){ return ST.equipe.filter(_deptoOk); }
+function _kpiVis(){ return ST.equipe.filter(function(p){ return _deptoOk(p) && !p.freelance; }); }  // freelance fora dos KPIs
 
 function renderKpis(){
   var box = document.getElementById('esc-kpis');
@@ -2518,18 +2519,26 @@ function carregarSemana(){
   var ini = isoLocal(ST.inicio), fim = isoLocal(addDias(ST.inicio, 6));
   var pFer = TP().rpc('escala_feriados_periodo', { p_inicio: ini, p_fim: fim });
   var pAus = TP().rpc('escala_ausencias_equipe_semana', { p_inicio: ini, p_unidade: ST.unidade });
+  var pFree = TP().rpc('escala_freelancers_semana', { p_inicio: ini, p_unidade: ST.unidade });
   TP().rpc('escala_equipe_semana', { p_inicio: ini, p_unidade: ST.unidade }).then(function(r){
     hideLoading(); ST.carregando = false;
     if (r.error) { erroRPC(r.error); renderEmpty('Não foi possível carregar a escala.'); return; }
-    ST.equipe = Array.isArray(r.data) ? r.data : [];
-    popularDeptos();
-    var impOv = document.getElementById('imp-overlay');
-    if (impOv && impOv.classList.contains('open')) { _impPopularDepto(); _impAtualizaSemanaLabel(); } // sincroniza modal de impressão
-    // Feriados (fato do dia) e ausências (por pessoa) — pinta a grade quando chegarem.
+    var base = Array.isArray(r.data) ? r.data : [];
+    // Feriados (fato do dia), ausências (por pessoa) e freelancers da semana —
+    // junta tudo antes de pintar a grade.
     Promise.all([
       pFer.then(function(rf){ ST.feriados = (rf && rf.data && typeof rf.data === 'object') ? rf.data : {}; }, function(){ ST.feriados = {}; }),
-      pAus.then(function(ra){ ST.ausencias = (ra && ra.data && typeof ra.data === 'object') ? ra.data : {}; }, function(){ ST.ausencias = {}; })
-    ]).then(function(){ _rerenderViews(); });
+      pAus.then(function(ra){ ST.ausencias = (ra && ra.data && typeof ra.data === 'object') ? ra.data : {}; }, function(){ ST.ausencias = {}; }),
+      pFree.then(function(rfl){ return (rfl && !rfl.error && Array.isArray(rfl.data)) ? rfl.data : []; }, function(){ return []; })
+    ]).then(function(arr){
+      var frees = arr[2] || [];
+      frees.forEach(function(f){ f.freelance = true; });
+      ST.equipe = base.concat(frees);   // CLT + freelancers (por semana)
+      popularDeptos();
+      var impOv = document.getElementById('imp-overlay');
+      if (impOv && impOv.classList.contains('open')) { _impPopularDepto(); _impAtualizaSemanaLabel(); } // sincroniza modal de impressão
+      _rerenderViews();
+    });
   }, function(e){ hideLoading(); ST.carregando = false; erroRPC(e); renderEmpty('Não foi possível carregar a escala.'); });
 }
 
@@ -2604,7 +2613,7 @@ function renderGrade(){
     return;
   }
   var vis = ST.equipe.filter(_deptoOk);
-  setCount(vis.length);
+  setCount(vis.filter(function(p){ return !p.freelance; }).length);   // freelance não conta como colaborador
   if (!vis.length){
     renderEmpty('Nenhum colaborador neste departamento.');
     return;
@@ -2621,13 +2630,20 @@ function renderGrade(){
   var body = '';
   ST.equipe.forEach(function(p, pi){
     if (!_deptoOk(p)) return;
-    var av = p.avatar ? '<img src="'+esc(p.avatar)+'" alt="">' : iniciais(p.nome);
+    var isFree = !!p.freelance;
+    var av = isFree ? '<span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--citric,#CFFF00);">FR</span>'
+                    : (p.avatar ? '<img src="'+esc(p.avatar)+'" alt="">' : iniciais(p.nome));
+    var avStyle = isFree ? ' style="background:var(--carbon,#35383F);"' : '';
+    var chip = isFree ? ' <span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:100px;background:var(--carbon,#35383F);color:var(--citric,#CFFF00);font-family:\'DM Mono\',monospace;font-size:8.5px;font-weight:700;letter-spacing:.5px;vertical-align:middle;">FREE</span>' : '';
+    var acaoBtn = isFree
+      ? '<button type="button" class="btn-icon btn-icon--danger" title="Remover freelance" aria-label="Remover freelance" onclick="removerFreelance('+pi+')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>'
+      : '<button type="button" class="btn-icon" data-botao-id="governanca-app-escala::editar-semana" title="Editar semana" aria-label="Editar semana" onclick="abrirPadrao('+pi+')"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>';
     body += '<tr>';
     body += '<td class="esc-col-name"><div class="esc-name-cell">'+
-              '<span class="esc-avatar">'+av+'</span>'+
-              '<span class="esc-name-txt"><span class="esc-name-1">'+esc(p.nome)+'</span>'+
+              '<span class="esc-avatar"'+avStyle+'>'+av+'</span>'+
+              '<span class="esc-name-txt"><span class="esc-name-1">'+esc(p.nome)+chip+'</span>'+
               '<span class="esc-name-cargo">'+esc(p.cargo||'')+'</span></span>'+
-              '<button type="button" class="btn-icon" data-botao-id="governanca-app-escala::editar-semana" title="Editar semana" aria-label="Editar semana" onclick="abrirPadrao('+pi+')"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></div></td>';
+              acaoBtn+'</div></td>';
     for (var di=0; di<7; di++){
       var d2 = addDias(ST.inicio, di);
       body += celulaHtml((p.dias||[])[di], pi, di, isoLocal(d2) === hojeIso, ausDoDia(p.matricula, isoLocal(d2)));
@@ -2639,7 +2655,11 @@ function renderGrade(){
   // ── Mobile (< 768px): um card por colaborador ──
   var cards = ST.equipe.map(function(p, pi){
     if (!_deptoOk(p)) return '';
-    var av = p.avatar ? '<img src="'+esc(p.avatar)+'" alt="">' : iniciais(p.nome);
+    var isFree = !!p.freelance;
+    var av = isFree ? '<span style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--citric,#CFFF00);">FR</span>'
+                    : (p.avatar ? '<img src="'+esc(p.avatar)+'" alt="">' : iniciais(p.nome));
+    var avStyle = isFree ? ' style="background:var(--carbon,#35383F);"' : '';
+    var chip = isFree ? ' <span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:100px;background:var(--carbon,#35383F);color:var(--citric,#CFFF00);font-family:\'DM Mono\',monospace;font-size:8px;font-weight:700;letter-spacing:.5px;vertical-align:middle;">FREE</span>' : '';
     var dias = '', totalH = 0;
     for (var di=0; di<7; di++){
       var dd = addDias(ST.inicio, di);
@@ -2652,24 +2672,65 @@ function renderGrade(){
                 '<span class="epd-state">'+estadoHtml(dia, ausM)+hBadge+'</span>'+
               '</button>';
     }
+    var footBtn = isFree
+      ? '<button type="button" class="btn btn--danger btn--sm" onclick="removerFreelance('+pi+')">Remover freelance</button>'
+      : '<button type="button" class="btn btn--primary btn--sm" data-botao-id="governanca-app-escala::editar-semana" onclick="abrirPadrao('+pi+')">Editar semana</button>';
     return '<div class="card">'+
              '<div class="card-header esc-pcard-hd">'+
                '<div style="display:flex;align-items:center;gap:10px;min-width:0;">'+
-                 '<span class="esc-avatar">'+av+'</span>'+
-                 '<div style="min-width:0;"><div class="candidate-name">'+esc(p.nome)+'</div>'+
+                 '<span class="esc-avatar"'+avStyle+'>'+av+'</span>'+
+                 '<div style="min-width:0;"><div class="candidate-name">'+esc(p.nome)+chip+'</div>'+
                  '<div class="candidate-mt">'+esc(p.cargo||'')+'</div></div>'+
                '</div>'+
                '<span class="esc-pcard-total">('+fmtH(totalH)+')</span>'+
              '</div>'+
              '<div class="esc-pcard-days">'+dias+'</div>'+
              '<div class="card-footer esc-pcard-foot">'+
-               '<button type="button" class="btn btn--primary btn--sm" data-botao-id="governanca-app-escala::editar-semana" onclick="abrirPadrao('+pi+')">Editar semana</button>'+
+               footBtn+
              '</div>'+
            '</div>';
   }).join('');
   var mobile = '<div class="esc-mobile">'+cards+'</div>';
 
   document.getElementById('esc-content').innerHTML = mobile + desk;
+}
+
+/* ── Freelance (slot de cobertura por semana, dentro de um departamento) ──
+   Vive só na escala: matrícula sintética FREE|<departamento>|<n>, dias na
+   mesma escala_dias via RPC escala_freelance_*. Zera toda semana. */
+function acrescentarFreelance(){
+  if (GOV_BTN_OK['governanca-app-escala::editar-dia'] === false){ toast('Sem acesso para editar a escala.'); return; }
+  if (ST.admin && !ST.unidade){ toast('Selecione uma unidade.'); return; }
+  var depto = ST.depto;
+  if (!depto || depto === 'Todos'){ toast('Selecione um departamento para o freelance.'); return; }
+  if (String(depto).indexOf('|') >= 0){ toast('Departamento inválido para freelance.'); return; }
+  var max = 0;
+  (ST.equipe||[]).forEach(function(p){
+    if (p.freelance && String(p.departamento) === depto){
+      var n = parseInt(String(p.matricula).split('|')[2], 10) || 0; if (n > max) max = n;
+    }
+  });
+  var num = max + 1;
+  var dias = []; for (var i=0;i<7;i++) dias.push({ definido:false, folga:false });
+  ST.equipe.push({ matricula:'FREE|'+depto+'|'+num, nome:'Freelance '+num, cargo:'Freelance',
+                   departamento:depto, freelance:true, _novo:true, dias:dias });
+  renderGrade();
+  toast('Freelance '+num+' adicionado — marque os dias.');
+}
+function removerFreelance(pi){
+  var p = ST.equipe[pi]; if(!p || !p.freelance) return;
+  if (!confirm('Remover '+p.nome+' e todos os dias desta semana?')) return;
+  var calls = [];
+  for (var di=0; di<7; di++){
+    var dia = (p.dias||[])[di];
+    if (dia && dia.definido){
+      calls.push(TP().rpc('escala_freelance_dia_reset', { p_matricula:p.matricula, p_data:isoLocal(addDias(ST.inicio, di)) }));
+    }
+  }
+  if (!calls.length){ ST.equipe.splice(pi,1); renderGrade(); return; }  // ainda sem dia salvo
+  showLoading();
+  Promise.all(calls).then(function(){ hideLoading(); toast('Freelance removido.'); carregarSemana(); },
+                          function(e){ hideLoading(); erroRPC(e); });
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2857,7 +2918,7 @@ function abrirPontual(pi, di){
   var p = ST.equipe[pi]; if(!p) return;
   var dia = (p.dias||[])[di] || {};
   var d = addDias(ST.inicio, di);
-  PT = { matricula:p.matricula, nome:p.nome, data:isoLocal(d), origem:dia.origem||null, marc:[], folga: dia.folga ? (dia.tipo_folga || 'Folga') : null };
+  PT = { matricula:p.matricula, nome:p.nome, data:isoLocal(d), origem:dia.origem||null, marc:[], folga: dia.folga ? (dia.tipo_folga || 'Folga') : null, freelance: !!p.freelance, unidade: ST.unidade };
   // Nome do colaborador + (dia abreviado dd/mm)
   document.getElementById('pt-nome').innerHTML =
     esc(p.nome) + ' <span class="esc-sheet-day">(' + diaAbrev(di) + ' ' + ddmm(d) + ')</span>';
@@ -2875,7 +2936,7 @@ function abrirPontual(pi, di){
   var fs = document.getElementById('pt-folga-sel'); if (fs) fs.value = (dia.folga && dia.tipo_folga) ? dia.tipo_folga : '';
   document.getElementById('pt-reset').style.display = (PT.origem === 'manual') ? '' : 'none';
   document.getElementById('pt-overlay').classList.add('open');
-  carregarFolgaAniv();
+  if (!PT.freelance) carregarFolgaAniv();   // freelance não tem folga-aniversário
 }
 function fecharPontual(){ document.getElementById('pt-overlay').classList.remove('open'); PT = null; var fa=document.getElementById('pt-folga-aniv'); if(fa) fa.innerHTML=''; }
 
@@ -2974,16 +3035,29 @@ function ptFolgaSel(v){
   var el = document.getElementById('pt-folga-sel'); if (el) el.value = v || '';
 }
 
+// Freelance usa a mesma folha de edição, mas grava via RPC própria (passa a
+// unidade direto, pois não há profile) e não mexe em membro/folga-aniversário.
+function _ptDiaSet(a){
+  if (PT && PT.freelance){
+    return TP().rpc('escala_freelance_dia_set', {
+      p_matricula:a.p_matricula, p_data:a.p_data, p_unidade:PT.unidade,
+      p_entrada:a.p_entrada, p_saida:a.p_saida, p_folga:a.p_folga,
+      p_marcacoes:a.p_marcacoes||null, p_folga_tipo:a.p_folga_tipo||null });
+  }
+  return TP().rpc('escala_dia_set', a);
+}
+function _ptMembro(mat){ if (PT && PT.freelance) return; confirmarMembroSemana(mat); }
+
 function salvarPontual(){
   if (GOV_BTN_OK['governanca-app-escala::editar-dia'] === false){ toast('Sem acesso para ajustar o dia.'); return; }
   if(!PT) return;
   // Se uma folga foi selecionada, salva folga (com o tipo); senão, salva marcações.
   if (PT.folga){
     showLoading();
-    TP().rpc('escala_dia_set', { p_matricula:PT.matricula, p_data:PT.data, p_entrada:null, p_saida:null, p_folga:true, p_folga_tipo:PT.folga }).then(function(r){
+    _ptDiaSet({ p_matricula:PT.matricula, p_data:PT.data, p_entrada:null, p_saida:null, p_folga:true, p_folga_tipo:PT.folga }).then(function(r){
       hideLoading();
       if (r.error) { erroRPC(r.error); return; }
-      toast(PT.folga + ' marcada.'); confirmarMembroSemana(PT.matricula); fecharPontual(); carregarSemana();
+      toast(PT.folga + ' marcada.'); _ptMembro(PT.matricula); fecharPontual(); carregarSemana();
     }, function(e){ hideLoading(); erroRPC(e); });
     return;
   }
@@ -2991,30 +3065,33 @@ function salvarPontual(){
   if (!marc.length){ toast('Selecione um horário/marcação ou uma folga.'); return; }
   var m0 = marc[0];
   showLoading();
-  TP().rpc('escala_dia_set', { p_matricula:PT.matricula, p_data:PT.data, p_entrada:m0.entrada, p_saida:m0.saida, p_folga:false, p_marcacoes:marc }).then(function(r){
+  _ptDiaSet({ p_matricula:PT.matricula, p_data:PT.data, p_entrada:m0.entrada, p_saida:m0.saida, p_folga:false, p_marcacoes:marc }).then(function(r){
     hideLoading();
     if (r.error) { erroRPC(r.error); return; }
-    toast('Ajuste salvo.'); confirmarMembroSemana(PT.matricula); fecharPontual(); carregarSemana();
+    toast('Ajuste salvo.'); _ptMembro(PT.matricula); fecharPontual(); carregarSemana();
   }, function(e){ hideLoading(); erroRPC(e); });
 }
 function marcarFolga(tipo){
   if(!PT) return;
   tipo = tipo || 'Folga';
   showLoading();
-  TP().rpc('escala_dia_set', { p_matricula:PT.matricula, p_data:PT.data, p_entrada:null, p_saida:null, p_folga:true, p_folga_tipo:tipo }).then(function(r){
+  _ptDiaSet({ p_matricula:PT.matricula, p_data:PT.data, p_entrada:null, p_saida:null, p_folga:true, p_folga_tipo:tipo }).then(function(r){
     hideLoading();
     if (r.error) { erroRPC(r.error); return; }
-    toast(tipo + ' marcada.'); confirmarMembroSemana(PT.matricula); fecharPontual(); carregarSemana();
+    toast(tipo + ' marcada.'); _ptMembro(PT.matricula); fecharPontual(); carregarSemana();
   }, function(e){ hideLoading(); erroRPC(e); });
 }
 function resetPontual(){
   if (GOV_BTN_OK['governanca-app-escala::editar-dia'] === false){ toast('Sem acesso para ajustar o dia.'); return; }
   if(!PT) return;
   showLoading();
-  TP().rpc('escala_dia_reset', { p_matricula:PT.matricula, p_data:PT.data }).then(function(r){
+  var pr = (PT.freelance)
+    ? TP().rpc('escala_freelance_dia_reset', { p_matricula:PT.matricula, p_data:PT.data })
+    : TP().rpc('escala_dia_reset', { p_matricula:PT.matricula, p_data:PT.data });
+  pr.then(function(r){
     hideLoading();
     if (r.error) { erroRPC(r.error); return; }
-    toast('Dia voltou ao padrão.'); fecharPontual(); carregarSemana();
+    toast(PT.freelance ? 'Dia do freelance limpo.' : 'Dia voltou ao padrão.'); fecharPontual(); carregarSemana();
   }, function(e){ hideLoading(); erroRPC(e); });
 }
 function hardRefresh() {
