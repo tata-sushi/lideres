@@ -2000,18 +2000,26 @@ function openDrawer() {
     });
   }
 
-  function gerarPDF() {
-    var nome     = document.getElementById('f-nome').value.trim();
-    var dataVal  = document.getElementById('f-data').value;
-    var tipoSel  = document.getElementById('f-tipo');
-    var tipoVal  = tipoSel.value; // verbal | escrita | suspensao
-    var desc     = document.getElementById('f-descricao').value.trim();
-    var cargoColab = document.getElementById('f-cargo-colab').value.trim();
-    var matricula  = document.getElementById('f-matricula').value.trim();
-    var unidade    = document.getElementById('f-unidade').value.trim();
-    var dias       = document.getElementById('f-dias').value;
-    var lider    = document.getElementById('f-lider').value.trim();
-    var cargoLid = document.getElementById('f-cargo').value.trim();
+  // _sv preenchido = SEGUNDA VIA (imprime a partir de uma sanção já salva, sem re-registrar).
+  function gerarPDF(_sv) {
+    var segundaVia = !!_sv;
+    var nome, dataVal, tipoVal, desc, cargoColab, matricula, unidade, dias, lider, cargoLid;
+    if (segundaVia) {
+      nome = _sv.nome||''; dataVal = _sv.dataVal||''; tipoVal = _sv.tipoVal||'';
+      desc = _sv.desc||''; cargoColab = _sv.cargoColab||''; matricula = _sv.matricula||'';
+      unidade = _sv.unidade||''; dias = (_sv.dias==null?'':_sv.dias); lider = _sv.lider||''; cargoLid = '';
+    } else {
+      nome       = document.getElementById('f-nome').value.trim();
+      dataVal    = document.getElementById('f-data').value;
+      tipoVal    = document.getElementById('f-tipo').value; // verbal | escrita | suspensao
+      desc       = document.getElementById('f-descricao').value.trim();
+      cargoColab = document.getElementById('f-cargo-colab').value.trim();
+      matricula  = document.getElementById('f-matricula').value.trim();
+      unidade    = document.getElementById('f-unidade').value.trim();
+      dias       = document.getElementById('f-dias').value;
+      lider      = document.getElementById('f-lider').value.trim();
+      cargoLid   = document.getElementById('f-cargo').value.trim();
+    }
 
     if (!nome || !dataVal || !tipoVal || !desc) {
       alert('Preencha ao menos: nome, data, tipo de sanção e descrição.');
@@ -2171,20 +2179,39 @@ function openDrawer() {
     w.document.write(html);
     w.document.close();
     w.focus();
-    registrarSancao({
-      dataOcorrencia:   dataVal,
-      nomeColaborador:  nome,
-      matricula:        matricula,
-      cargoColaborador: cargoColab,
-      unidade:          unidade,
-      tipoSancao:       tipoVal,
-      diasSuspensao:    tipoVal === 'suspensao' ? String(dias) : '',
-      descricao:        desc,
-      lider:            lider,
-      cargoLider:       cargoLid
-    });
+    if (!segundaVia) {
+      registrarSancao({
+        dataOcorrencia:   dataVal,
+        nomeColaborador:  nome,
+        matricula:        matricula,
+        cargoColaborador: cargoColab,
+        unidade:          unidade,
+        tipoSancao:       tipoVal,
+        diasSuspensao:    tipoVal === 'suspensao' ? String(dias) : '',
+        descricao:        desc,
+        lider:            lider,
+        cargoLider:       cargoLid
+      });
+    }
     setTimeout(function(){ w.print(); }, 800);
   }
+
+  /* ── SEGUNDA VIA: reimprime uma sanção já emitida, a partir da linha da lista ── */
+  window.sncSegundaVia = function(id){
+    var r = (_SNC_ROWS||[]).filter(function(x){ return String(x.id)===String(id); })[0];
+    if(!r){ alert('Sanção não encontrada para reimprimir.'); return; }
+    gerarPDF({
+      nome:       (r.colaborador==null?'':String(r.colaborador)),
+      dataVal:    (r.data_ocorrencia||'').toString().slice(0,10),
+      tipoVal:    (r.tipo_sancao||'').toString(),
+      desc:       (r.descricao==null?'':String(r.descricao)),
+      cargoColab: (r.cargo==null?'':String(r.cargo)),
+      matricula:  (r.matricula==null?'':String(r.matricula)),
+      unidade:    (r.unidade==null?'':String(r.unidade)),
+      dias:       r.dias_suspensao,
+      lider:      (r.lider==null?'':String(r.lider))
+    });
+  };
 
   /* ── MODAL IA ── */
   // ⚙️ CONFIGURAÇÃO — trocar para a URL do proxy assim que o Worker estiver publicado.
@@ -2990,6 +3017,10 @@ function _sncBadge(t){
 function _sncDelBtn(r){
   return r.id ? '<button class="btn-icon btn-icon--danger" title="Apagar sanção" aria-label="Apagar sanção" data-aba-id="governanca-kpis-rh-sancoes::excluir-sancao" onclick="sncApagar(\''+_sncEsc(r.id)+'\')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>' : '';
 }
+// segunda via (reimprimir o documento da sanção já emitida)
+function _sncReimpBtn(r){
+  return r.id ? '<button class="btn-icon" title="Segunda via (imprimir)" aria-label="Segunda via" data-aba-id="governanca-kpis-rh-sancoes::segunda-via" onclick="sncSegundaVia(\''+_sncEsc(r.id)+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>' : '';
+}
 // cartão do celular (modelo do Recrutamento): { titulo, sub, direita, campos: [[rótulo, valor]], texto, acoes } — valores já escapados
 function cartao(c){
   var h = '<div class="tcard"><div class="tcard-top"><div class="tcard-tl"><div class="tcard-title">' + c.titulo + '</div>' +
@@ -3008,7 +3039,7 @@ function _sncCartao(r){
              ['Departamento', _sncEsc(_sncDepInfo(r.departamento).label)], ['Dias', ((parseInt(r.dias_suspensao,10)||0) || '—')],
              ['Líder', _sncEsc(_sncTxt(r.lider))]],
     texto: _sncEsc(_sncTxt(r.descricao)),
-    acoes: _sncDelBtn(r)
+    acoes: _sncReimpBtn(r) + _sncDelBtn(r)
   });
 }
 function _sncRenderTabela(rows){
@@ -3035,7 +3066,7 @@ function _sncRenderTabela(rows){
       '<td class="desc" title="'+_sncEsc(_sncTxt(r.descricao))+'">'+_sncEsc(_sncTxt(r.descricao))+'</td>'+
       '<td class="num">'+((parseInt(r.dias_suspensao,10)||0) || '—')+'</td>'+
       '<td class="muted" title="'+_sncEsc(_sncTxt(r.lider))+'">'+_sncEsc(_sncTxt(r.lider))+'</td>'+
-      '<td class="acao">'+ _sncDelBtn(r) +'</td>'+
+      '<td class="acao">'+ _sncReimpBtn(r) + _sncDelBtn(r) +'</td>'+
     '</tr>';
   }).join('') || '<tr><td colspan="10"><div class="status-empty">Sem registros</div></td></tr>';
   // celular: a mesma lista (mesma ordem e mesmo "Ver mais") em cartões
