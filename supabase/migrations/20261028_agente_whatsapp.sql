@@ -372,8 +372,10 @@ begin
   end loop;
 end $$;
 
--- ── 5. Senha do webhook (vai na URL: …/agente-whatsapp?k=<senha>) ────────
--- Gerada no banco (não fica no repo). Consultar: select valor from dp_rh.agente_config where chave='webhook_secret'
+-- ── 5. Senhas (geradas no banco, fora do repo) ──────────────────────────
+-- webhook_secret: vai na URL do webhook (…/agente-whatsapp?k=<senha>) — fica visível no painel da uazapi
+-- teste_secret:   só p/ o modo teste (…?teste=<senha>), que devolve a resposta no corpo
+-- Consultar: select chave, valor from dp_rh.agente_config;
 create table if not exists dp_rh.agente_config (
   chave text primary key,
   valor text not null,
@@ -382,15 +384,16 @@ create table if not exists dp_rh.agente_config (
 alter table dp_rh.agente_config enable row level security;
 
 insert into dp_rh.agente_config (chave, valor)
-values ('webhook_secret', replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', ''))
+values ('webhook_secret', replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '')),
+       ('teste_secret',   replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', ''))
 on conflict (chave) do nothing;
 
-create or replace function tata_plus.agente_segredo()
+create or replace function tata_plus.agente_segredo(p_chave text)
 returns text
 language sql stable security definer
 set search_path = dp_rh, pg_catalog
 as $fn$
-  select valor from dp_rh.agente_config where chave = 'webhook_secret';
+  select valor from dp_rh.agente_config where chave = p_chave and p_chave in ('webhook_secret', 'teste_secret');
 $fn$;
-revoke execute on function tata_plus.agente_segredo() from public, anon, authenticated;
-grant execute on function tata_plus.agente_segredo() to service_role;
+revoke execute on function tata_plus.agente_segredo(text) from public, anon, authenticated;
+grant execute on function tata_plus.agente_segredo(text) to service_role;

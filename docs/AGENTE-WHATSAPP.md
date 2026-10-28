@@ -17,7 +17,7 @@ Decisões do usuário (28/10): **lista fixa** de números · **instância uazapi
 - [x] Edge `agente-whatsapp` publicada (v1). Teste ponta a ponta em modo teste: "quantas entrevistas a
       Jéssica agendou" → 80 candidatos / 86 entrevistas (6 remarcadas) — bate com a consulta manual.
       Modelo em uso: `anthropic/claude-sonnet-5.5`.
-- [ ] Senha própria para o modo teste (hoje usa a mesma do webhook, que fica visível no painel da uazapi).
+- [x] Senha própria para o modo teste (`teste_secret`) — a do webhook fica visível no painel da uazapi e não abre mais o modo teste (testado: 401).
 - [ ] **[USUÁRIO]** secret `SAM_UAZAPI_TOKEN`.
 - [ ] **[USUÁRIO]** números autorizados (nome + WhatsApp).
 - [ ] **[USUÁRIO]** webhook na instância do Sam (ver "Ligar" abaixo).
@@ -65,13 +65,13 @@ Arquivos: `supabase/migrations/20261028_agente_whatsapp.sql`, `supabase/function
 
 ## Testar sem WhatsApp
 
-`POST …/agente-whatsapp?k=<senha>&teste=1` com `{"texto":"pergunta"}` devolve a resposta
-e as consultas no corpo (não envia nem grava). Pelo banco:
+`POST …/agente-whatsapp?teste=<teste_secret>` com `{"texto":"pergunta"}` devolve a resposta
+e as consultas no corpo (não envia nem grava). Senha própria, diferente da do webhook. Pelo banco:
 
 ```sql
 select net.http_post(
-  url := 'https://aoqsbusfrffapjglpqjk.supabase.co/functions/v1/agente-whatsapp?teste=1&k='
-         || (select valor from dp_rh.agente_config where chave = 'webhook_secret'),
+  url := 'https://aoqsbusfrffapjglpqjk.supabase.co/functions/v1/agente-whatsapp?teste='
+         || (select valor from dp_rh.agente_config where chave = 'teste_secret'),
   body := '{"texto":"quantos colaboradores ativos por unidade?"}'::jsonb,
   timeout_milliseconds := 120000);
 -- depois: select status_code, content from net._http_response order by id desc limit 1;

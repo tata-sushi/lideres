@@ -5,8 +5,8 @@
 // `consultar_banco` (tata_plus.agente_sql: só-leitura, só as visões do schema
 // `agente`) → responde pela uazapi → grava pergunta/consultas/resposta.
 //
-// Senha do webhook: dp_rh.agente_config (chave 'webhook_secret'), vai na URL:
-//   …/agente-whatsapp?k=<senha>
+// Senhas em dp_rh.agente_config: 'webhook_secret' vai na URL do webhook
+// (…/agente-whatsapp?k=<senha>); 'teste_secret' só no modo teste.
 // Secrets (Supabase → Edge Functions → Secrets):
 //   SAM_UAZAPI_TOKEN       token da instância uazapi do Sam
 //   SAM_UAZAPI_URL         (opcional) base da uazapi; padrão https://tatasushi.uazapi.com
@@ -14,8 +14,9 @@
 //   AGENTE_LLM_MODEL       (opcional) padrão anthropic/claude-sonnet-5.5
 // (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY são injetados.)
 //
-// Teste sem WhatsApp: POST …?k=<senha>&teste=1 com {"texto":"…"} → devolve a
-// resposta no corpo, não envia nada e não exige número cadastrado.
+// Teste sem WhatsApp: POST …?teste=<teste_secret> com {"texto":"…"} → devolve a
+// resposta no corpo, não envia nada e não exige número cadastrado. Senha
+// separada porque a URL do webhook fica visível no painel da uazapi.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
@@ -109,15 +110,15 @@ async function enviar(numero: string, texto: string) {
 }
 
 // ── contexto do banco ───────────────────────────────────────────────────────
-let segredoCache: string | null = null;
+const segredos: Record<string, string> = {};
 
-async function segredo(): Promise<string> {
-  if (segredoCache === null) {
-    const { data, error } = await supa.rpc("agente_segredo");
+async function segredo(chave: "webhook_secret" | "teste_secret"): Promise<string> {
+  if (segredos[chave] === undefined) {
+    const { data, error } = await supa.rpc("agente_segredo", { p_chave: chave });
     if (error) throw new Error("segredo: " + error.message);
-    segredoCache = String(data ?? "");
+    segredos[chave] = String(data ?? "");
   }
-  return segredoCache;
+  return segredos[chave];
 }
 
 let catalogoCache: string | null = null;
@@ -299,12 +300,12 @@ async function processar(e: Entrada, usuario: { telefone: string; nome: string }
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: true });
   const url = new URL(req.url);
-  const k = await segredo();
-  if (!k || url.searchParams.get("k") !== k) return json({ ok: false, erro: "nao_autorizado" }, 401);
   const payload = await req.json().catch(() => null);
 
   // modo teste: responde no corpo, não envia nem grava
-  if (url.searchParams.get("teste") === "1") {
+  if (url.searchParams.has("teste")) {
+    const t = await segredo("teste_secret");
+    if (!t || url.searchParams.get("teste") !== t) return json({ ok: false, erro: "nao_autorizado" }, 401);
     try {
       const r = await responder(String(payload?.nome ?? "Teste"), [{ papel: "user", texto: String(payload?.texto ?? "") }]);
       return json({ ok: true, ...r });
@@ -312,6 +313,9 @@ Deno.serve(async (req) => {
       return json({ ok: false, erro: String((err as Error)?.message ?? err) }, 500);
     }
   }
+
+  const k = await segredo("webhook_secret");
+  if (!k || url.searchParams.get("k") !== k) return json({ ok: false, erro: "nao_autorizado" }, 401);
 
   const lido = lerWebhook(payload);
   if (!lido.ok) {
