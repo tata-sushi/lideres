@@ -4,6 +4,26 @@ Pergunta em linguagem natural pelo WhatsApp → resposta com dados do Supabase.
 Ex.: "quantas entrevistas a Jéssica agendou?", "quem folga sábado no Itaim?",
 "quantos atestados em outubro por unidade?".
 
+Decisões do usuário (28/10): **lista fixa** de números · **instância uazapi do Sam** ·
+**Claude via OpenRouter** (reaproveita `LLM_API_KEY`) · **consulta livre só-leitura**, sem colunas sensíveis.
+
+## Status (checklist vivo)
+
+- [x] Migração aplicada: lista de números, histórico/auditoria, log de ignorados (7 dias), senha do webhook,
+      papel `agente_leitor` + schema `agente` (26 visões limpas) e `tata_plus.agente_sql`.
+- [x] Teste de segurança (28/10): 13 tentativas bloqueadas (tabela fora de `agente`, coluna sensível,
+      função do portal via `public.`, `current_setting`, `query_to_xml`, `pg_proc`, `pg_sleep`, `;`);
+      o papel não lê `dp_rh` direto e não grava nem chamando função que grava (read-only).
+- [x] Edge `agente-whatsapp` publicada (v1). Teste ponta a ponta em modo teste: "quantas entrevistas a
+      Jéssica agendou" → 80 candidatos / 86 entrevistas (6 remarcadas) — bate com a consulta manual.
+      Modelo em uso: `anthropic/claude-sonnet-5.5`.
+- [ ] Senha própria para o modo teste (hoje usa a mesma do webhook, que fica visível no painel da uazapi).
+- [ ] **[USUÁRIO]** secret `SAM_UAZAPI_TOKEN`.
+- [ ] **[USUÁRIO]** números autorizados (nome + WhatsApp).
+- [ ] **[USUÁRIO]** webhook na instância do Sam (ver "Ligar" abaixo).
+- [ ] Primeira mensagem real: conferir `agente_webhook_log` / `agente_mensagens` — o formato do payload
+      da uazapi não pôde ser confirmado na documentação (a leitura é tolerante a variações).
+
 ## Como funciona
 
 ```

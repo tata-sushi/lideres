@@ -57,15 +57,6 @@
       - **[CLAUDE] 5.** setar `gatilho.pausado=false` (liga auto-30d) após 1+2. **6.** teste real ponta-a-ponta. **7.** limpar teste (`TESTE-AGENDA` + janelas de teste Itaim). **8.** (cosmético) dropar órfãs `av_demissoes_listar`/`av_demissoes_rows`.
     - **Ordem:** A/B/C/D/E (construção) → 1 → 2 → 3 → 5 → 6 → 7 → 8 → **GO LIVE**.
 
-### Agente RH no WhatsApp (Sam) — perguntas sobre a base 🏗️ EM ANDAMENTO (28/10)
-> Guia completo: `docs/AGENTE-WHATSAPP.md`. Decisões do usuário (28/10): **lista fixa** de números, **instância uazapi do Sam**, **Claude via OpenRouter** (reaproveita `LLM_API_KEY`), **consulta livre só-leitura** sem colunas sensíveis.
-- [x] Migração aplicada (`20261028_agente_whatsapp.sql`): `dp_rh.agente_usuarios` (lista), `agente_mensagens` (histórico/auditoria), `agente_webhook_log` (ignorados, 7d), `agente_config` (senha do webhook); papel **`agente_leitor`** + schema **`agente`** com 26 visões limpas (sem CPF/telefone/e-mail/valores/respostas confidenciais); RPC `tata_plus.agente_sql` (filtro de texto + SET ROLE + read-only + timeout 8s + 200 linhas). **Teste de segurança OK** (13 tentativas bloqueadas; papel não lê `dp_rh` e não grava nem via função).
-- [x] Edge **`agente-whatsapp`** publicada (v1, sem JWT, senha `?k=` na URL). **Teste ponta a ponta OK** em modo `teste=1`: "quantas entrevistas a Jéssica agendou" → 80 candidatos / 86 entrevistas (bate com o print), modelo `anthropic/claude-sonnet-5.5`.
-- [ ] **[USUÁRIO]** secret `SAM_UAZAPI_TOKEN` (token da instância do Sam).
-- [ ] **[USUÁRIO]** números autorizados (nome + WhatsApp) → Claude cadastra em `agente_usuarios`.
-- [ ] **[USUÁRIO]** webhook na instância do Sam (evento messages, excluir wasSentByApi/isGroupYes). Se já houver webhook do n8n, **adicionar** outro.
-- [ ] Primeira mensagem real: conferir `agente_webhook_log`/`agente_mensagens` (formato do payload da uazapi não pôde ser confirmado na doc — leitura é tolerante).
-
 ### Agente Observador de Grupos WhatsApp → atividades estruturadas 💡 IDEIA (21/09)
 - [ ] **Agente de memória operacional** (não é só bot que salva msg). Ideia do usuário: um agente com **número próprio dentro do grupo**, em **modo exclusivamente observador**, que captura tudo, interpreta com IA e vira histórico/métricas consultáveis. **Não iniciar sem "ok" explícito.**
   - **Fluxo:** WhatsApp (grupo) → captura bruta → interpretação por IA → banco estruturado → histórico/métricas → consultas e dashboard.
