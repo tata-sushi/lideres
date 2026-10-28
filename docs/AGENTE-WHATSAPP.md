@@ -38,6 +38,8 @@ Decisões do usuário (28/10):
 - [x] **Mapa ampliado** a partir de `docs/mapas/dp_rh.md` + **nível por grupo** (28/10): básico = 38 visões
       (`agente`), completo = +14 restritas (`agente_restrito`: atas, avaliações, valores, reclamações). Grupo Agentes = completo.
       Teste: "últimas pautas da reunião de RH" → completo resumiu a reunião de 21/10; básico respondeu que não tem acesso.
+- [x] **Grupo oficial (28/10)**: **DP/RH TATÁ SUSHI** (`120363040657807495@g.us`, 8 participantes) liberado, nível completo.
+      **Agentes** continua ativo como grupo de teste (completo).
 - [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).
 - [ ] Na 1ª mensagem real, conferir o payload em `agente_webhook_log` (formato da uazapi não confirmado na doc):
       @menção pelo contato (se o Sam usar ID anônimo/LID, cadastrar em `bot_ids`) e reply.
