@@ -484,3 +484,259 @@ begin
     execute format('grant execute on function %s to service_role', f);
   end loop;
 end $$;
+
+-- ── 7. Mapa ampliado (28/10, a partir de docs/mapas/dp_rh.md) + nível por grupo ──
+-- basico   = schema `agente` (sem valores, atas, avaliações, reclamações)
+-- completo = `agente` + `agente_restrito` (decisão do usuário: liberar tudo, só em grupo permitido).
+-- Grupo novo nasce básico; liberar: update dp_rh.agente_grupos set nivel = 'completo' where chat_id = '…';
+-- Continuam fora em qualquer nível: ouvidoria, respostas de clima/desligamento, CPF/telefone/e-mail, dados da ficha de admissão.
+alter table dp_rh.agente_grupos add column if not exists nivel text not null default 'basico'
+  check (nivel in ('basico', 'completo'));
+
+do $$ begin
+  if not exists (select 1 from pg_roles where rolname = 'agente_leitor_total') then
+    create role agente_leitor_total nologin inherit;
+  end if;
+end $$;
+grant agente_leitor to agente_leitor_total;     -- herda as visões básicas
+grant agente_leitor_total to service_role;      -- p/ o SET ROLE em agente_consultar
+
+create schema if not exists agente_restrito;
+revoke all on schema agente_restrito from public;
+grant usage on schema agente_restrito to agente_leitor_total;
+
+-- 7a. novas visões básicas
+create or replace view agente.documentos_colaborador as
+select d.matricula, p.nome, t.nome as documento, t.categoria, d.competencia, d.status, d.validade, d.versao,
+       d.enviado_em, d.enviado_por, d.evento_origem, d.observacao
+from dp_rh.colaborador_documentos d
+left join dp_rh.doc_tipos t on t.id = d.tipo_id
+left join tata_plus.profiles p on p.matricula = d.matricula;
+comment on view agente.documentos_colaborador is '"Pastinha" do colaborador: documentos anexados (um por tipo, ou por tipo+competência se mensal). Para saber o que FALTA, compare com documentos_tipos (obrigatorio) e documentos_excecoes.';
+
+create or replace view agente.documentos_tipos as
+select nome, categoria, obrigatorio, periodicidade, intervalo_meses, requer_assinatura, exige_admissao,
+       aplica_somente_inativo, origem, ativo
+from dp_rh.doc_tipos;
+comment on view agente.documentos_tipos is 'Catálogo de tipos de documento/termo (obrigatório, periodicidade, exige assinatura, exige admissão).';
+
+create or replace view agente.documentos_excecoes as
+select 'pessoa' as por, e.matricula as alvo, t.nome as documento, e.aplica
+from dp_rh.colaborador_doc_excecoes e join dp_rh.doc_tipos t on t.id = e.tipo_id
+union all
+select 'cargo', c.cargo, t.nome, c.aplica
+from dp_rh.doc_tipos_cargo_excecoes c join dp_rh.doc_tipos t on t.id = c.tipo_id;
+comment on view agente.documentos_excecoes is 'Exceções: um tipo de documento aplica (true) ou não (false) para uma pessoa (alvo = matrícula) ou um cargo.';
+
+create or replace view agente.admissao_documentos as
+select a.nome as candidato, a.cargo, a.unidade, a.status as status_admissao, t.nome as documento,
+       d.status, d.versao, d.validade, d.enviado_em, d.migrado_em, d.observacao
+from dp_rh.admissao_documentos d
+join dp_rh.admissoes a on a.token = d.admissao_token
+left join dp_rh.doc_tipos t on t.id = d.tipo_id;
+comment on view agente.admissao_documentos is 'Documentos enviados na admissão digital (sem o arquivo). migrado_em preenchido = já foi para a pastinha do colaborador.';
+
+create or replace view agente.armarios_historico as
+select data_mov, unidade, num, tipo, colaborador, matricula, responsavel, obs from dp_rh.armarios_hist;
+comment on view agente.armarios_historico is 'Movimentações de armário. tipo: Atribuição | Devolução | Troca | Manutenção.';
+
+create or replace view agente.estoque_movimentos as
+select data, unidade, colaborador, matricula, tipo, categoria, item, tamanho, quantidade, cargo, ca, responsavel, obs
+from dp_rh.estoque_admin;
+comment on view agente.estoque_movimentos is 'Estoque administrativo (uniformes/EPI): entradas e saídas por item e tamanho. Saldo = soma das entradas − saídas (sem custo; custo em agente_restrito.estoque_custos).';
+
+create or replace view agente.limpeza_banheiros as
+select nome, unidade, ativo from dp_rh.banheiros;
+comment on view agente.limpeza_banheiros is 'Banheiros cadastrados por unidade (check de limpeza por QR).';
+
+create or replace view agente.limpeza_checks as
+select banheiro_nome, unidade, matricula, criado_em, foto_tipo, observacao, itens, pontos from dp_rh.limpeza_checks;
+comment on view agente.limpeza_checks is 'Checks de limpeza feitos pelos colaboradores (sem as fotos).';
+
+create or replace view agente.escala_horarios as
+select entrada, saida, ativo, ordem, marcacoes, chave from dp_rh.escala_horarios;
+comment on view agente.escala_horarios is 'Catálogo de horários (entrada/saída) disponíveis para montar escala.';
+
+create or replace view agente.premiacoes_tempo_casa as
+select p.marco_meses, p.marco_label, p.ativo, i.item, i.ativo as item_ativo
+from dp_rh.beneficios_premiacoes p
+left join dp_rh.beneficios_premiacao_itens i on i.marco_meses = p.marco_meses;
+comment on view agente.premiacoes_tempo_casa is 'Premiações por tempo de casa (marcos em meses: 6, 12, 24…) e seus itens (sem valor; valores em agente_restrito.premiacoes_valores).';
+
+create or replace view agente.lideres_responsaveis as
+select r.unidade, r.departamento, r.matricula_lider, p.nome as lider
+from tata_plus.pendencia_responsavel r
+left join tata_plus.profiles p on p.matricula = r.matricula_lider;
+comment on view agente.lideres_responsaveis is 'Líder responsável por unidade/departamento (quem responde pelas pendências).';
+
+grant select on all tables in schema agente to agente_leitor;
+
+-- 7b. regras do mapa nos comentários (viram explicação para a IA)
+comment on view agente.colaboradores is 'Cadastro de colaboradores (sync do RHID). Ativos: status = ''Ativo''. Desligados: status = ''Inativo'' + data_demissao. status = ''Bot'' são contas técnicas — ignore. Unidades (texto livre): Itaim, Pinheiros, Poke - Pinheiros, Tatá House, Administrativo, Central — outras tabelas usam grafias diferentes (Itaim Bibi, TATÁ House, Tatá House Itaim/Pinheiros): compare com ilike/sem_acento, não por igualdade. Matrícula 7 = Victor (People & HR Manager).';
+comment on column agente.recrutamento_entrevistas.criado_por is 'Quem lançou o registro: ''7'' = Victor (matrícula), ''sandbox'' = ação pelo portal sem identidade, ou marcador de importação. NÃO serve para saber quem agendou: use recrutamento_candidaturas.responsavel.';
+comment on view agente.ausencias is 'Faltas, atestados, folgas, licenças e suspensões por dia (tipo). status = situação do colaborador (Ativo/Afastado/Inativo). Falta pendente de devolutiva do líder = tipo ''Falta'' + status ''Ativo'' + devolutiva vazia. Origem RHiD (ponto) ou manual.';
+comment on view agente.escala_dias is 'Escala dia a dia por colaborador. Só existem linhas das semanas já abertas no portal; semana futura pode estar incompleta. Líderes (ex.: encarregados) podem aparecer sem horário e sem folga — não é erro. Junte com colaboradores por matricula.';
+comment on view agente.cargos is 'Descrição de cargos (sem salários). O banco NÃO guarda salário individual: o salário sai de cargo + nível + unidade em agente_restrito.cargos_salarios (só em grupo completo).';
+
+-- 7c. visões restritas (só nível completo)
+create or replace view agente_restrito.reunioes_rh as
+select id, data_reuniao, conteudo, created_at from dp_rh.alinhamento_transcricao;
+comment on view agente_restrito.reunioes_rh is 'Atas/transcrições das reuniões de DP/RH (pautas, decisões). conteudo é longo (média 2,4 mil caracteres): traga poucas por vez — ex.: order by data_reuniao desc limit 1 — e resuma.';
+
+create or replace view agente_restrito.avaliacoes as
+select a.id, m.slug as modelo, m.nome as modelo_nome, a.alvo_matricula as matricula, p.nome, p.unidade,
+       p.departamento, p.cargo, a.periodo, a.estado, a.data_referencia, a.media, a.faixa, a.decisao,
+       a.devolutiva, a.devolutiva_por, a.devolutiva_em, a.ciente_em, a.created_at
+from dp_rh.avaliacoes a
+join dp_rh.avaliacao_modelos m on m.id = a.modelo_id
+left join tata_plus.profiles p on p.matricula = a.alvo_matricula;
+comment on view agente_restrito.avaliacoes is 'Avaliações consolidadas por pessoa (sem respostas individuais). modelo: exp14_colab/exp14_lider/exp60_colab/exp60_lider = experiência 14 e 60 dias (avaliada pelo colaborador ou pelo líder); desempenho; lideranca. estado: coletando | consolidada. faixa: destaque | saudavel | observacao | atencao | critico. É a tabela atual de experiência; o histórico antigo está em avaliacoes_experiencia_legado.';
+
+create or replace view agente_restrito.avaliacoes_experiencia_legado as
+select matricula, nome, unidade, departamento, periodo, data_avaliacao, efetivar, soma, obs, avaliador_nome, origem
+from dp_rh.experiencia_avaliacoes_hist;
+comment on view agente_restrito.avaliacoes_experiencia_legado is 'LEGADO: avaliações de experiência migradas de planilha (antes do sistema atual).';
+
+create or replace view agente_restrito.cargos_salarios as
+select * from dp_rh.cargos_salarios;
+comment on view agente_restrito.cargos_salarios is 'Salário por cargo + nível (niveis: JR/PL/SR/SR 2/SR 3) + unidade, com pontos de gorjeta/prêmio da loja. bruto = fixo + gorjeta_total + premio_total. abaixo_piso = alerta. Salário de uma pessoa = linha do cargo/nível/unidade dela.';
+
+create or replace view agente_restrito.cargos_loja_pontos as
+select * from dp_rh.cargos_loja_pontos;
+comment on view agente_restrito.cargos_loja_pontos is 'Valor do ponto (gorjeta/prêmio) e pisos (CCT, TATÁ, mínimo) por loja, com histórico (vigente_desde).';
+
+create or replace view agente_restrito.banco_horas_valores as
+select data, matricula, tipo, saldo, salario, custo, origem from dp_rh.banco_horas;
+comment on view agente_restrito.banco_horas_valores is 'Banco de horas com salário e custo (congelados no dia do registro).';
+
+create or replace view agente_restrito.recrutamento_valores as
+select c.id as candidatura_id, c.nome, c.cargo, c.unidade, c.pretensao_salarial,
+       t.data_teste, t.valor_diaria, t.pago, t.pago_em, t.recibo_status
+from dp_rh.rec_candidaturas c
+left join dp_rh.rec_teste_dias t on t.candidatura_id = c.id;
+comment on view agente_restrito.recrutamento_valores is 'Pretensão salarial do candidato e valor da diária de cada dia de teste (pago/recibo). 1 linha por dia de teste (ou 1 sem teste).';
+
+create or replace view agente_restrito.vagas_salarios as
+select id, cargo, unidade, departamento, status_vaga, salario_fixo, salario_bruto, data_solicitacao from dp_rh.vagas;
+comment on view agente_restrito.vagas_salarios is 'Salário fixo e bruto previstos em cada vaga.';
+
+create or replace view agente_restrito.demissoes_valores as
+select matricula, nome, unidade, departamento, data_demissao, tipo, rescisao_tipo, valor_rescisao, valor_grrf,
+       saldo_devedor, status_pagamento, data_pagamento
+from dp_rh.demissoes;
+comment on view agente_restrito.demissoes_valores is 'Valores de rescisão (verbas), GRRF (guia FGTS) e saldo devedor por desligamento.';
+
+create or replace view agente_restrito.vt_semanal as
+select matricula, nome, unidade, departamento, ano, mes, semana, valor, admissao from dp_rh.vt_semanal;
+comment on view agente_restrito.vt_semanal is 'Vale-transporte semanal por pessoa (valor em R$).';
+
+create or replace view agente_restrito.estoque_custos as
+select data, unidade, tipo, categoria, item, tamanho, quantidade, custo_unit, custo_total, colaborador, matricula
+from dp_rh.estoque_admin;
+comment on view agente_restrito.estoque_custos is 'Estoque administrativo (uniformes/EPI) com custo unitário e total.';
+
+create or replace view agente_restrito.manutencao_custos as
+select id, titulo, unidade, categoria, status, data_abertura, custo from manutencao.chamados;
+comment on view agente_restrito.manutencao_custos is 'Custo informado em cada chamado de manutenção (texto livre).';
+
+create or replace view agente_restrito.premiacoes_valores as
+select i.marco_meses, p.marco_label, i.item, i.valor, i.ativo
+from dp_rh.beneficios_premiacao_itens i
+left join dp_rh.beneficios_premiacoes p on p.marco_meses = i.marco_meses;
+comment on view agente_restrito.premiacoes_valores is 'Valor de cada item das premiações por tempo de casa; custo da faixa = soma dos itens ativos.';
+
+create or replace view agente_restrito.reclamacoes_trabalhistas as
+select data_notificacao, data_audiencia, reclamante, solicitacoes, resultado, resolucao, valor_causa, valor_quitacao,
+       unidade, departamento, obs
+from dp_rh.reclamacoes;
+comment on view agente_restrito.reclamacoes_trabalhistas is 'Reclamações trabalhistas: reclamante, datas, pedidos, resultado e valores (causa e quitação).';
+
+grant select on all tables in schema agente_restrito to agente_leitor_total;
+
+-- 7d. RPCs com nível (substituem agente_sql / agente_catalogo, que ficam sem uso)
+create or replace function tata_plus.agente_consultar(p_sql text, p_limite int default 200, p_completo boolean default false)
+returns jsonb
+language plpgsql
+as $fn$
+declare
+  v_sql  text := regexp_replace(btrim(coalesce(p_sql, '')), '[;[:space:]]+$', '');
+  v_norm text;
+  v_lim  int  := least(greatest(coalesce(p_limite, 200), 1), 500);
+  v_res  jsonb;
+begin
+  if v_sql = '' then raise exception 'consulta vazia'; end if;
+  if v_sql !~* '^(select|with)[[:space:](]' then raise exception 'use só SELECT ou WITH'; end if;
+  if position(';' in v_sql) > 0 then raise exception 'envie uma consulta por vez (sem ;)'; end if;
+  v_norm := lower(replace(v_sql, '"', ''));
+  if v_norm ~ '(--|/\*|u&)' then raise exception 'consulta sem comentários'; end if;
+  if v_norm ~ '\m(pg_[a-z0-9_]*|information_schema|current_setting|set_config|[a-z_]*to_xml[a-z_]*|xpath[a-z_]*|ts_stat|ts_rewrite|lo_[a-z_]+|dblink[a-z_]*)\M' then
+    raise exception 'função/tabela de sistema não permitida';
+  end if;
+  if v_norm ~ '\m(public|net|extensions|vault|auth|storage|cron|realtime|graphql|graphql_public|dp_rh|tata_plus|tata_kanban|tata_refeicoes|tata_abastecimento|manutencao|operacao|supabase_migrations|supabase_functions|pgbouncer)[[:space:]]*\.' then
+    raise exception 'consulte só as visões dos schemas agente/agente_restrito';
+  end if;
+
+  if p_completo then
+    set local role agente_leitor_total;
+    set local search_path = agente, agente_restrito, pg_catalog;
+  else
+    set local role agente_leitor;
+    set local search_path = agente, pg_catalog;
+  end if;
+  set local transaction_read_only = on;
+
+  execute format(
+    'select coalesce(jsonb_agg(to_jsonb(_q)), ''[]''::jsonb) from (select * from (%s) _s limit %s) _q',
+    v_sql, v_lim)
+  into v_res;
+
+  return jsonb_build_object('linhas', jsonb_array_length(v_res), 'limite', v_lim, 'dados', v_res);
+end $fn$;
+
+create or replace function tata_plus.agente_mapa(p_completo boolean default false)
+returns jsonb
+language sql stable
+set search_path = pg_catalog
+as $fn$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'schema', n.nspname,
+           'visao', c.relname,
+           'descricao', obj_description(c.oid, 'pg_class'),
+           'colunas', (select jsonb_agg(jsonb_build_object(
+                           'nome', a.attname,
+                           'tipo', format_type(a.atttypid, a.atttypmod),
+                           'descricao', col_description(c.oid, a.attnum)) order by a.attnum)
+                       from pg_attribute a
+                       where a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped)
+         ) order by n.nspname, c.relname), '[]'::jsonb)
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where c.relkind in ('v', 'm')
+    and (n.nspname = 'agente' or (p_completo and n.nspname = 'agente_restrito'));
+$fn$;
+
+-- agente_grupo passa a devolver o nível
+create or replace function tata_plus.agente_grupo(p_chat_id text, p_nome text default null)
+returns jsonb
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare g dp_rh.agente_grupos;
+begin
+  insert into dp_rh.agente_grupos (chat_id, nome) values (p_chat_id, nullif(p_nome, ''))
+  on conflict (chat_id) do update set nome = coalesce(nullif(excluded.nome, ''), dp_rh.agente_grupos.nome)
+  returning * into g;
+  return jsonb_build_object('chat_id', g.chat_id, 'nome', g.nome, 'ativo', g.ativo, 'nivel', g.nivel);
+end $fn$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'tata_plus.agente_consultar(text,int,boolean)',
+    'tata_plus.agente_mapa(boolean)',
+    'tata_plus.agente_grupo(text,text)'
+  ] loop
+    execute format('revoke execute on function %s from public, anon, authenticated', f);
+    execute format('grant execute on function %s to service_role', f);
+  end loop;
+end $$;

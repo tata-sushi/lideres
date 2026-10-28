@@ -3,11 +3,14 @@
 // Fluxo: uazapi (instância do Sam) → n8n (fluxo próprio do agente, repassa só grupo) → POST aqui
 // → grupo autorizado (dp_rh.agente_grupos)? → chamaram o Sam ("Sam, …", @Sam ou
 // reply a uma mensagem dele)? → Claude via OpenRouter com a ferramenta
-// `consultar_banco` (tata_plus.agente_sql: só-leitura, só as visões do schema
-// `agente`) → responde no grupo citando a pergunta → grava tudo (auditoria).
+// `consultar_banco` (tata_plus.agente_consultar: só-leitura, só as visões dos
+// schemas `agente`/`agente_restrito`) → responde no grupo citando a pergunta →
+// grava tudo (auditoria).
 //
 // Decisões (28/10): só em grupo (privado é ignorado); todos do grupo podem
-// perguntar; grupo novo nasce pendente e é liberado no banco.
+// perguntar; grupo novo nasce pendente e é liberado no banco. Cada grupo tem
+// nível: básico (schema `agente`) ou completo (+ `agente_restrito`: atas,
+// avaliações, valores, reclamações).
 //
 // Banco (dp_rh.agente_config): webhook_secret (URL ?k=), teste_secret (modo
 // teste), uazapi_token (instância do Sam), prompt_estilo (persona/jeito de
@@ -201,17 +204,21 @@ async function parametros() {
   return params;
 }
 
-let catalogoCache: string | null = null;
+// mapa das visões por nível — relido a cada 10 min (visão/comentário novo vale sem publicar)
+const mapas: Record<string, { texto: string; em: number }> = {};
 
-async function catalogo(): Promise<string> {
-  if (catalogoCache) return catalogoCache;
-  const { data, error } = await supa.rpc("agente_catalogo");
-  if (error) throw new Error("catalogo: " + error.message);
-  catalogoCache = (data as any[]).map((v) =>
-    `agente.${v.visao}${v.descricao ? " — " + v.descricao : ""}\n` +
-    (v.colunas as any[]).map((c) => `  · ${c.nome} (${c.tipo})${c.descricao ? ": " + c.descricao : ""}`).join("\n")
-  ).join("\n\n");
-  return catalogoCache;
+async function catalogo(completo: boolean): Promise<string> {
+  const k = completo ? "completo" : "basico";
+  if (!mapas[k] || Date.now() - mapas[k].em > 600_000) {
+    const { data, error } = await supa.rpc("agente_mapa", { p_completo: completo });
+    if (error) throw new Error("mapa: " + error.message);
+    const texto = (data as any[]).map((v) =>
+      `${v.schema}.${v.visao}${v.descricao ? " — " + v.descricao : ""}\n` +
+      (v.colunas as any[]).map((c) => `  · ${c.nome} (${c.tipo})${c.descricao ? ": " + c.descricao : ""}`).join("\n")
+    ).join("\n\n");
+    mapas[k] = { texto, em: Date.now() };
+  }
+  return mapas[k].texto;
 }
 
 function agoraSP(): string {
@@ -222,20 +229,24 @@ function agoraSP(): string {
 }
 
 // prompt = estilo (editável no banco) + regras técnicas de consulta (fixas aqui)
-function sistema(estilo: string, grupoNome: string, mapa: string): any[] {
+function sistema(estilo: string, grupoNome: string, mapa: string, completo: boolean): any[] {
+  const foraDoAlcance = completo
+    ? "CPF, telefone, e-mail, dados pessoais da ficha de admissão, ouvidoria e respostas confidenciais de clima/desligamento"
+    : "CPF, telefone, e-mail, salários e valores em R$, atas de reunião, avaliações, reclamações trabalhistas, ouvidoria e respostas confidenciais de clima/desligamento";
   const tecnico = `Agora: ${agoraSP()} (horário de São Paulo).${grupoNome ? ` Grupo: ${grupoNome}.` : ""}
 
 FONTE DOS DADOS
 Responda SEMPRE consultando o banco com a ferramenta consultar_banco. Nunca invente número, nome ou data: se não achou, diga que não achou. Todos do grupo leem a resposta.
 
 COMO CONSULTAR
-• Só existem as visões do schema agente listadas abaixo. Uma consulta por chamada, só SELECT/WITH, sem ponto e vírgula e sem comentários.
+• Só existem as visões listadas abaixo — escreva o nome com o schema (agente.x${completo ? " ou agente_restrito.x" : ""}). Uma consulta por chamada, só SELECT/WITH, sem ponto e vírgula e sem comentários.
+• matricula é texto e liga quase tudo a agente.colaboradores. Unidades são texto livre com grafias diferentes entre visões: compare com ilike/sem_acento.
 • Use agente.hoje() para "hoje" (current_date do banco está em UTC).
 • Nomes: busque sem acento e por parte do nome — agente.sem_acento(nome) ilike agente.sem_acento('%jessica%'). Se aparecer mais de uma pessoa possível, pergunte qual antes de responder.
 • Prefira agregar no banco (count, group by) em vez de trazer linhas soltas. O resultado vem com no máximo 200 linhas.
 • Se der erro, corrija a consulta e tente de novo. Se a pergunta for ambígua (período, unidade), assuma o mais provável e diga o critério que usou.
 • Você só lê dados. Se pedirem para alterar algo, explique que isso é feito no portal.
-• Dados que não estão disponíveis aqui (CPF, telefone, e-mail, salários e valores, respostas confidenciais de clima/desligamento/ouvidoria): diga que não tem acesso.
+• Fora do seu alcance neste grupo (${foraDoAlcance}): diga que não tem acesso.
 
 MAPA DO BANCO (visões disponíveis)
 ${mapa}`;
@@ -246,7 +257,7 @@ const FERRAMENTAS = [{
   type: "function",
   function: {
     name: "consultar_banco",
-    description: "Executa UMA consulta SQL somente-leitura (SELECT/WITH) nas visões do schema agente e devolve as linhas em JSON (máx. 200).",
+    description: "Executa UMA consulta SQL somente-leitura (SELECT/WITH) nas visões do mapa (agente / agente_restrito) e devolve as linhas em JSON (máx. 200).",
     parameters: {
       type: "object",
       properties: {
@@ -293,9 +304,9 @@ async function chamarLLM(messages: any[]): Promise<{ msg: any; modelo: string; u
 
 type Consulta = { sql: string; linhas?: number; erro?: string; ms: number };
 
-async function consultar(sql: string): Promise<{ conteudo: string; reg: Consulta }> {
+async function consultar(sql: string, completo: boolean): Promise<{ conteudo: string; reg: Consulta }> {
   const t0 = Date.now();
-  const { data, error } = await supa.rpc("agente_sql", { p_sql: sql, p_limite: 200 });
+  const { data, error } = await supa.rpc("agente_consultar", { p_sql: sql, p_limite: 200, p_completo: completo });
   const ms = Date.now() - t0;
   if (error) return { conteudo: "ERRO: " + error.message, reg: { sql, erro: error.message, ms } };
   let conteudo = JSON.stringify(data);
@@ -305,9 +316,9 @@ async function consultar(sql: string): Promise<{ conteudo: string; reg: Consulta
 
 type Fala = { papel: string; texto: string; autor?: string | null };
 
-async function responder(grupoNome: string, historico: Fala[]) {
+async function responder(grupoNome: string, historico: Fala[], completo: boolean) {
   const { estilo } = await parametros();
-  const messages: any[] = sistema(estilo, grupoNome, await catalogo());
+  const messages: any[] = sistema(estilo, grupoNome, await catalogo(completo), completo);
   // a conversa precisa começar por mensagem de usuário
   const ini = historico.findIndex((h) => h.papel !== "assistant");
   for (const h of ini < 0 ? [] : historico.slice(ini)) {
@@ -334,7 +345,7 @@ async function responder(grupoNome: string, historico: Fala[]) {
     for (const tc of chamadas) {
       let sql = "";
       try { sql = String(JSON.parse(tc.function?.arguments || "{}").sql ?? ""); } catch { /* argumento inválido */ }
-      const { conteudo, reg } = await consultar(sql);
+      const { conteudo, reg } = await consultar(sql, completo);
       consultas.push(reg);
       messages.push({ role: "tool", tool_call_id: tc.id, content: conteudo });
     }
@@ -346,7 +357,7 @@ async function responder(grupoNome: string, historico: Fala[]) {
 }
 
 // ── processamento de uma pergunta ───────────────────────────────────────────
-async function processar(e: Entrada, pergunta: string, grupoNome: string) {
+async function processar(e: Entrada, pergunta: string, grupoNome: string, completo: boolean) {
   const autor = { autor_id: e.autorId, autor_nome: e.autorNome.split(" ")[0] || e.autorNome };
   const { data: reg, error: eReg } = await supa.rpc("agente_registrar", {
     p_telefone: e.chatId, p_papel: "user", p_texto: pergunta, p_msg_id: e.msgId, p_meta: autor,
@@ -358,9 +369,10 @@ async function processar(e: Entrada, pergunta: string, grupoNome: string) {
   let meta: Record<string, unknown> = {};
   try {
     const { data: hist } = await supa.rpc("agente_historico", { p_telefone: e.chatId });
-    const r = await responder(grupoNome, (hist as Fala[]) ?? [{ papel: "user", texto: pergunta, autor: autor.autor_nome }]);
+    const hist0 = [{ papel: "user", texto: pergunta, autor: autor.autor_nome }];
+    const r = await responder(grupoNome, (hist as Fala[]) ?? hist0, completo);
     texto = r.texto || "Não encontrei uma resposta para isso.";
-    meta = { consultas: r.consultas, modelo: r.modelo, tokens: r.uso, pergunta_id: e.msgId };
+    meta = { consultas: r.consultas, modelo: r.modelo, tokens: r.uso, pergunta_id: e.msgId, nivel: completo ? "completo" : "basico" };
   } catch (err) {
     texto = "Tive um problema para consultar agora. Tenta de novo em alguns minutos?";
     meta = { erro: erroTxt(err), pergunta_id: e.msgId };
@@ -390,7 +402,8 @@ Deno.serve(async (req) => {
     if (!t || url.searchParams.get("teste") !== t) return json({ ok: false, erro: "nao_autorizado" }, 401);
     try {
       const autor = String(payload?.nome ?? "Teste");
-      const r = await responder(String(payload?.grupo ?? "Teste"), [{ papel: "user", texto: String(payload?.texto ?? ""), autor }]);
+      const fala = [{ papel: "user", texto: String(payload?.texto ?? ""), autor }];
+      const r = await responder(String(payload?.grupo ?? "Teste"), fala, payload?.completo === true);
       return json({ ok: true, ...r });
     } catch (err) {
       return json({ ok: false, erro: erroTxt(err) }, 500);
@@ -418,7 +431,7 @@ Deno.serve(async (req) => {
 
   // responde já ao webhook e processa em segundo plano (a IA pode levar ~10–40s)
   EdgeRuntime.waitUntil(
-    processar(e, pergunta, (g as any)?.nome || e.grupoNome).catch((err) =>
+    processar(e, pergunta, (g as any)?.nome || e.grupoNome, (g as any)?.nivel === "completo").catch((err) =>
       supa.rpc("agente_ignorado", { p_motivo: "falha:" + erroTxt(err).slice(0, 200), p_telefone: e.chatId })
     ),
   );

@@ -17,7 +17,7 @@ Decisões do usuário (28/10):
 ## Status (checklist vivo)
 
 - [x] Banco: grupos autorizados, histórico/auditoria, log de ignorados (7 dias), senhas, estilo do prompt,
-      papel `agente_leitor` + schema `agente` (26 visões limpas) e `tata_plus.agente_sql`.
+      papel `agente_leitor` + schema `agente` e o executor de consultas só-leitura.
 - [x] Teste de segurança (28/10): 13 tentativas bloqueadas (tabela fora de `agente`, coluna sensível,
       função do portal via `public.`, `current_setting`, `query_to_xml`, `pg_proc`, `pg_sleep`, `;`);
       o papel não lê `dp_rh` direto e não grava nem chamando função que grava (read-only).
@@ -33,12 +33,17 @@ Decisões do usuário (28/10):
 - [x] **Ligado (28/10, ok do usuário)**: fluxo publicado no n8n; webhook da instância `sam` →
       `https://auto.tatasushi.tech/webhook/agente-rh-sam` (enabled, evento messages, excluir wasSentByApi).
       Teste de conexão (mensagem falsa de privado) → execução n8n com sucesso, parou no "não é grupo".
-- [ ] Primeira pergunta real no grupo Agentes.
+- [x] Primeiras perguntas reais no grupo Agentes (28/10, 23h56): "Sam," e **@Sam** reconhecidos (o grupo usa LID),
+      resposta citando a pergunta, id da resposta gravado (reply ao Sam funciona). Sem erros.
+- [x] **Mapa ampliado** a partir de `docs/mapas/dp_rh.md` + **nível por grupo** (28/10): básico = 38 visões
+      (`agente`), completo = +14 restritas (`agente_restrito`: atas, avaliações, valores, reclamações). Grupo Agentes = completo.
+      Teste: "últimas pautas da reunião de RH" → completo resumiu a reunião de 21/10; básico respondeu que não tem acesso.
 - [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).
 - [ ] Na 1ª mensagem real, conferir o payload em `agente_webhook_log` (formato da uazapi não confirmado na doc):
       @menção pelo contato (se o Sam usar ID anônimo/LID, cadastrar em `bot_ids`) e reply.
-- [ ] Limpeza: grupo de teste `000000000000000000-teste@g.us` em `dp_rh.agente_grupos` (inativo, pode apagar);
-      `dp_rh.agente_usuarios` e `tata_plus.agente_usuario` ficaram sem uso (eram do modo privado).
+- [ ] Limpeza (precisa de ok p/ apagar): grupo de teste `000000000000000000-teste@g.us` (inativo); sem uso:
+      `dp_rh.agente_usuarios`, `tata_plus.agente_usuario`, `tata_plus.agente_sql`, `tata_plus.agente_catalogo`,
+      `tata_plus.agente_segredo()` (sem parâmetro).
 
 ## Fluxo
 
@@ -58,7 +63,7 @@ Supabase · Edge agente-whatsapp (o "cérebro")
   1. É grupo autorizado?          dp_rh.agente_grupos (novo → pendente, não responde)
   2. Chamaram o Sam?              "Sam, …" · @Sam · reply a mensagem dele (senão ignora, nada gravado)
   3. Histórico do grupo (3h)      dp_rh.agente_mensagens
-  4. Claude (OpenRouter) ⇄ consultar_banco → tata_plus.agente_sql (só-leitura, visões `agente`)
+  4. Claude (OpenRouter) ⇄ consultar_banco → tata_plus.agente_consultar (só-leitura; `agente` + `agente_restrito` se completo)
   5. Responde no grupo citando a pergunta  → uazapi /send/text (token da instância sam)
   6. Grava pergunta, quem perguntou, SQL rodado, modelo, tokens
 ```
@@ -80,12 +85,27 @@ update dp_rh.agente_config set valor = $p$…novo estilo…$p$, atualizado_em = 
 
 ## O que o agente enxerga
 
-Só as visões do schema `agente` (26): colaboradores, recrutamento (candidaturas, entrevistas, testes, vagas,
-agenda dos líderes), escalas (dias, padrão, controle), ausências, férias, banco de horas, feriados, exames,
-HC programado, cargos, admissões, demissões, sanções, solicitações, armários, agenda, score de líderes,
-reconhecimentos, treinamentos, chamados de manutenção.
-Fora: CPF, telefone, e-mail, salários/valores, respostas de clima/desligamento/ouvidoria.
-Para liberar mais: criar/alterar a visão em `agente` + `grant select … to agente_leitor` + comentário.
+Fonte: `docs/mapas/dp_rh.md` (mapa do schema, com as regras de leitura). Cada grupo tem um **nível**:
+
+- **básico** (padrão de grupo novo) — schema `agente`, 38 visões: colaboradores, recrutamento (candidaturas, entrevistas,
+  testes, vagas, agenda dos líderes), escalas (dias, padrão, horários, controle), ausências, férias, banco de horas,
+  feriados, exames, HC programado, cargos, admissões + documentos da admissão, pastinha de documentos + catálogo +
+  exceções, demissões, sanções, solicitações, armários + histórico, estoque (sem custo), limpeza (sem fotos), agenda,
+  score de líderes, líderes responsáveis, reconhecimentos, treinamentos, premiações (sem valor), chamados de manutenção.
+- **completo** — + schema `agente_restrito`, 14 visões: atas das reuniões de DP/RH, avaliações (experiência, desempenho,
+  liderança — só o consolidado) + legado, salários por cargo, pontos da loja, banco de horas com custo, diárias de teste
+  e pretensão, salário das vagas, valores de rescisão, VT, custo de estoque, custo de manutenção, premiações com valor,
+  reclamações trabalhistas.
+- **Fora em qualquer nível**: ouvidoria, respostas de clima e de desligamento, CPF/telefone/e-mail, ficha da admissão.
+
+```sql
+update dp_rh.agente_grupos set nivel = 'completo' where chat_id = '…@g.us';   -- ou 'basico'
+```
+
+Para liberar mais: criar a visão em `agente` (básico) ou `agente_restrito` (completo) + `grant select` ao papel +
+**comentário** na visão/colunas (vira explicação para a IA; o mapa é relido a cada 10 min, sem publicar).
+Consultas passam por `tata_plus.agente_consultar` (filtro de texto + SET ROLE `agente_leitor`/`agente_leitor_total` +
+transação read-only + timeout 8s + 200 linhas).
 
 Arquivos: `supabase/migrations/20261028_agente_whatsapp.sql`, `supabase/functions/agente-whatsapp/index.ts`.
 
