@@ -30,8 +30,10 @@ Decisões do usuário (28/10):
       `bot_ids` = número + LID do Sam (`5511939311173,83499130314972`) — o grupo usa LID.
 - [x] Fluxo próprio no n8n criado: **Agente RH — Sam (WhatsApp)** (`w45flILm6pftpj1V`, projeto pessoal Victor Carvalho),
       https://auto.tatasushi.tech/workflow/w45flILm6pftpj1V — **ainda desligado**.
-- [ ] **Ligar** (com ok do usuário): publicar o fluxo + apontar o webhook da instância `sam` para
-      `https://auto.tatasushi.tech/webhook/agente-rh-sam` (evento messages, excluir wasSentByApi) + teste no grupo.
+- [x] **Ligado (28/10, ok do usuário)**: fluxo publicado no n8n; webhook da instância `sam` →
+      `https://auto.tatasushi.tech/webhook/agente-rh-sam` (enabled, evento messages, excluir wasSentByApi).
+      Teste de conexão (mensagem falsa de privado) → execução n8n com sucesso, parou no "não é grupo".
+- [ ] Primeira pergunta real no grupo Agentes.
 - [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).
 - [ ] Na 1ª mensagem real, conferir o payload em `agente_webhook_log` (formato da uazapi não confirmado na doc):
       @menção pelo contato (se o Sam usar ID anônimo/LID, cadastrar em `bot_ids`) e reply.
