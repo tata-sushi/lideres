@@ -1,6 +1,6 @@
 // agente-whatsapp — Sam, assistente do RH num grupo de WhatsApp.
 //
-// Fluxo: uazapi (instância do Sam) → n8n (porteiro, repassa só grupo) → POST aqui
+// Fluxo: uazapi (instância do Sam) → n8n (fluxo próprio do agente, repassa só grupo) → POST aqui
 // → grupo autorizado (dp_rh.agente_grupos)? → chamaram o Sam ("Sam, …", @Sam ou
 // reply a uma mensagem dele)? → Claude via OpenRouter com a ferramenta
 // `consultar_banco` (tata_plus.agente_sql: só-leitura, só as visões do schema
@@ -10,11 +10,12 @@
 // perguntar; grupo novo nasce pendente e é liberado no banco.
 //
 // Banco (dp_rh.agente_config): webhook_secret (URL ?k=), teste_secret (modo
-// teste), prompt_estilo (persona/jeito de responder — editável sem publicar),
-// bot_ids (ids extras do Sam p/ reconhecer @menção, separados por vírgula).
-// Secrets (Supabase → Edge Functions → Secrets):
-//   SAM_UAZAPI_TOKEN       token da instância uazapi do Sam
-//   SAM_UAZAPI_URL         (opcional) base da uazapi; padrão https://tatasushi.uazapi.com
+// teste), uazapi_token (instância do Sam), prompt_estilo (persona/jeito de
+// responder — editável sem publicar), bot_ids (número e LID do Sam p/
+// reconhecer @menção, separados por vírgula).
+// Secrets (Supabase → Edge Functions → Secrets), todos opcionais:
+//   SAM_UAZAPI_TOKEN       sobrepõe o uazapi_token do banco
+//   SAM_UAZAPI_URL         base da uazapi; padrão https://tatasushi.uazapi.com
 //   LLM_API_URL / LLM_API_KEY  já existem (gerar-cardapio) — OpenRouter
 //   AGENTE_LLM_MODEL       (opcional) padrão anthropic/claude-sonnet-5.5
 // (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY são injetados.)
@@ -27,7 +28,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 
 const UAZ_BASE = (Deno.env.get("SAM_UAZAPI_URL") || "https://tatasushi.uazapi.com").replace(/\/+$/, "");
-const UAZ_TOKEN = Deno.env.get("SAM_UAZAPI_TOKEN") ?? "";
+const UAZ_TOKEN_ENV = Deno.env.get("SAM_UAZAPI_TOKEN") ?? "";
 const LLM_URL = Deno.env.get("LLM_API_URL") || "https://openrouter.ai/api/v1/chat/completions";
 const LLM_KEY = Deno.env.get("LLM_API_KEY") ?? "";
 const MODELOS = [...new Set([
@@ -149,14 +150,15 @@ function partes(t: string, max = 3500): string[] {
 
 // envia (citando a pergunta na 1ª parte) e devolve os ids das mensagens enviadas
 async function enviar(destino: string, texto: string, citarId: string | null): Promise<string[]> {
-  if (!UAZ_TOKEN) throw new Error("sem SAM_UAZAPI_TOKEN");
+  const token = UAZ_TOKEN_ENV || await segredo("uazapi_token");
+  if (!token) throw new Error("sem token da uazapi (agente_config.uazapi_token)");
   const ids: string[] = [];
   for (const [i, parte] of partes(texto).entries()) {
     const corpo: Record<string, unknown> = { number: destino, text: parte, delay: 0, linkPreview: false };
     if (i === 0 && citarId) corpo.replyid = citarId;
     const r = await fetch(UAZ_BASE + "/send/text", {
       method: "POST",
-      headers: { "Content-Type": "application/json", token: UAZ_TOKEN },
+      headers: { "Content-Type": "application/json", token },
       body: JSON.stringify(corpo),
     });
     const txt = await r.text().catch(() => "");
@@ -173,7 +175,7 @@ async function enviar(destino: string, texto: string, citarId: string | null): P
 // ── configuração no banco ───────────────────────────────────────────────────
 const segredos: Record<string, string> = {};
 
-async function segredo(chave: "webhook_secret" | "teste_secret"): Promise<string> {
+async function segredo(chave: "webhook_secret" | "teste_secret" | "uazapi_token"): Promise<string> {
   if (segredos[chave] === undefined) {
     const { data, error } = await supa.rpc("agente_segredo", { p_chave: chave });
     if (error) throw new Error("segredo: " + error.message);

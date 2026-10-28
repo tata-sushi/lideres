@@ -7,7 +7,8 @@ Decisões do usuário (28/10):
 - **Só em grupo**: mensagem no privado é ignorada.
 - **Todos do grupo podem perguntar**: o controle é o grupo, e grupo novo nasce pendente.
 - **Responde só quando chamado**: "Sam, …", @Sam ou reply a uma mensagem dele.
-- **Instância uazapi do Sam**, que já tem webhook no n8n, então o **n8n entra como porteiro**.
+- **Instância uazapi do Sam** (`sam`, número 5511939311173). Ela só enviava (resumos, aniversários, pendências)
+  e não tinha webhook. O agente tem **fluxo próprio no n8n** (porteiro). Os fluxos existentes não foram mexidos.
 - **Claude via OpenRouter**, reaproveitando a `LLM_API_KEY`.
 - **Consulta livre só-leitura**, sem colunas sensíveis.
 
@@ -24,11 +25,14 @@ Decisões do usuário (28/10):
       conversa normal → ignorada (nada gravado); modo teste → "Jéssica, são *9 exames* vencidos ou vencendo…".
       Entrevistas da Jéssica → 80 candidatos / 86 entrevistas (bate com a consulta manual). Modelo: `anthropic/claude-sonnet-5.5`.
 - [x] Senha própria para o modo teste (a do webhook fica visível no n8n/uazapi e não abre o modo teste).
+- [x] Token da instância `sam` validado na uazapi (conectada) e gravado no banco (`agente_config.uazapi_token`, fora do repo).
+- [x] Grupo **Agentes** (`120363406109168905@g.us`, 3 participantes, o Sam já está dentro) liberado em `agente_grupos`.
+      `bot_ids` = número + LID do Sam (`5511939311173,83499130314972`) — o grupo usa LID.
+- [x] Fluxo próprio no n8n criado: **Agente RH — Sam (WhatsApp)** (`w45flILm6pftpj1V`, projeto pessoal Victor Carvalho),
+      https://auto.tatasushi.tech/workflow/w45flILm6pftpj1V — **ainda desligado**.
+- [ ] **Ligar** (com ok do usuário): publicar o fluxo + apontar o webhook da instância `sam` para
+      `https://auto.tatasushi.tech/webhook/agente-rh-sam` (evento messages, excluir wasSentByApi) + teste no grupo.
 - [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).
-- [ ] **[USUÁRIO]** secret `SAM_UAZAPI_TOKEN` (Supabase → Edge Functions → Secrets).
-- [ ] **[USUÁRIO]** colar os 2 nós do porteiro no fluxo do Sam no n8n (ver abaixo).
-- [ ] **[USUÁRIO]** conferir que o webhook do Sam na uazapi **não exclui grupos** (`isGroupYes`).
-- [ ] Adicionar o Sam ao grupo → mandar "Sam, oi" → grupo aparece pendente → liberar (`ativo = true`).
 - [ ] Na 1ª mensagem real, conferir o payload em `agente_webhook_log` (formato da uazapi não confirmado na doc):
       @menção pelo contato (se o Sam usar ID anônimo/LID, cadastrar em `bot_ids`) e reply.
 - [ ] Limpeza: grupo de teste `000000000000000000-teste@g.us` em `dp_rh.agente_grupos` (inativo, pode apagar);
@@ -37,43 +41,28 @@ Decisões do usuário (28/10):
 ## Fluxo
 
 ```
-Pessoa no grupo: "Sam, quantas entrevistas a Jéssica agendou?"
+Pessoa no grupo Agentes: "Sam, quantas entrevistas a Jéssica agendou?"
         │
         ▼
-uazapi (instância do Sam) ── webhook ──► n8n: fluxo do Sam (já existe)
-                                           │
-                                     [Webhook]
-                                           │
-                                     [É grupo?] ──não──► (fluxo atual do Sam, privado — sem mudança)
-                                           │sim
-                                           ▼
-                                [Agente RH (Supabase)]  POST …/agente-whatsapp?k=<senha>
-                                           │
-                                           ▼
+uazapi (instância sam) ── webhook ──► n8n: "Agente RH — Sam (WhatsApp)"  (fluxo próprio)
+                                        [Recebe WhatsApp]  POST /webhook/agente-rh-sam
+                                              │
+                                        [É mensagem de grupo?] ──não──► para (privado)
+                                              │sim
+                                        [Envia para o cérebro]  POST …/agente-whatsapp?k=<senha>
+                                              │
+                                              ▼
 Supabase · Edge agente-whatsapp (o "cérebro")
   1. É grupo autorizado?          dp_rh.agente_grupos (novo → pendente, não responde)
   2. Chamaram o Sam?              "Sam, …" · @Sam · reply a mensagem dele (senão ignora, nada gravado)
   3. Histórico do grupo (3h)      dp_rh.agente_mensagens
   4. Claude (OpenRouter) ⇄ consultar_banco → tata_plus.agente_sql (só-leitura, visões `agente`)
-  5. Responde no grupo citando a pergunta  → uazapi /send/text
+  5. Responde no grupo citando a pergunta  → uazapi /send/text (token da instância sam)
   6. Grava pergunta, quem perguntou, SQL rodado, modelo, tokens
 ```
 
-## n8n — porteiro
-
-Arquivo: `docs/n8n-agente-rh-porteiro.json` (2 nós: **É grupo?** + **Agente RH (Supabase)**).
-
-1. Abrir o fluxo do Sam no n8n, copiar o conteúdo do JSON e colar no canvas (Ctrl+V).
-2. Ligar **Webhook do Sam → É grupo?**.
-3. Saída **true** já vai para **Agente RH (Supabase)**. Ligar a saída **false** no que hoje vem depois do Webhook
-   (o Sam continua igual no privado e **para de responder em grupo** — evita resposta dupla).
-4. No nó **Agente RH (Supabase)**, trocar `COLE_A_SENHA_DO_WEBHOOK` pela senha
-   (`select valor from dp_rh.agente_config where chave = 'webhook_secret'` — ou pedir ao Claude).
-5. O nó usa `$json.body` (saída padrão do Webhook do n8n). Se o fluxo do Sam tiver algo entre o Webhook e o
-   **É grupo?**, ajustar para `$('Nome do Webhook').item.json.body`.
-
-O porteiro só repassa; quem decide (grupo autorizado, chamado ou não) é o cérebro. O nó tem
-`continuar em erro` ligado: se o Supabase falhar, o fluxo do Sam não quebra.
+O n8n só repassa; quem decide (grupo autorizado, chamado ou não) é o cérebro. O nó que chama o Supabase
+tem `continuar em erro`, e a senha do webhook vai na URL dele.
 
 ## Prompt
 
@@ -100,11 +89,11 @@ Arquivos: `supabase/migrations/20261028_agente_whatsapp.sql`, `supabase/function
 
 ## Ligar
 
-1. Secret `SAM_UAZAPI_TOKEN` = token da instância do Sam. Opcionais: `SAM_UAZAPI_URL`
-   (padrão `https://tatasushi.uazapi.com`), `AGENTE_LLM_MODEL` (padrão `anthropic/claude-sonnet-5.5`).
-2. n8n: porteiro (acima). Webhook do Sam na uazapi com evento **messages**, excluindo **wasSentByApi**
-   e **sem** excluir grupos.
-3. Adicionar o número do Sam ao grupo e mandar **"Sam, oi"**. O grupo aparece pendente:
+1. Token da instância `sam`: já no banco (`agente_config.uazapi_token`). Secret `SAM_UAZAPI_TOKEN` é opcional
+   (sobrepõe). Outros opcionais: `SAM_UAZAPI_URL`, `AGENTE_LLM_MODEL` (padrão `anthropic/claude-sonnet-5.5`).
+2. n8n: publicar **Agente RH — Sam (WhatsApp)**. Webhook da instância `sam` na uazapi → URL de produção do fluxo,
+   evento **messages**, excluindo **wasSentByApi** e **sem** excluir grupos.
+3. Grupo novo: adicionar o Sam e mandar **"Sam, oi"**. O grupo aparece pendente:
    ```sql
    select * from dp_rh.agente_grupos;
    update dp_rh.agente_grupos set ativo = true where chat_id = '…@g.us';

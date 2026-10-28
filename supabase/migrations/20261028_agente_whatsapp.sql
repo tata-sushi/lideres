@@ -393,10 +393,14 @@ returns text
 language sql stable security definer
 set search_path = dp_rh, pg_catalog
 as $fn$
-  select valor from dp_rh.agente_config where chave = p_chave and p_chave in ('webhook_secret', 'teste_secret');
+  select valor from dp_rh.agente_config
+  where chave = p_chave and p_chave in ('webhook_secret', 'teste_secret', 'uazapi_token');
 $fn$;
 revoke execute on function tata_plus.agente_segredo(text) from public, anon, authenticated;
 grant execute on function tata_plus.agente_segredo(text) to service_role;
+comment on table dp_rh.agente_config is 'Config do agente RH (Sam). Segredos (*_secret, uazapi_token) só via tata_plus.agente_segredo (service_role). prompt_estilo e bot_ids via agente_parametros.';
+-- uazapi_token (instância "sam") é gravado direto no banco, fora do repo:
+--   insert into dp_rh.agente_config (chave, valor) values ('uazapi_token', '<token>') on conflict (chave) do update set valor = excluded.valor;
 
 -- ── 6. Grupos: o Sam responde só em grupo autorizado e só quando chamado ──
 -- (decisão 28/10: só grupo; todos do grupo podem perguntar; gatilho = "Sam…", @Sam ou reply ao Sam)
