@@ -371,3 +371,26 @@ begin
     execute format('grant execute on function %s to service_role', f);
   end loop;
 end $$;
+
+-- ── 5. Senha do webhook (vai na URL: …/agente-whatsapp?k=<senha>) ────────
+-- Gerada no banco (não fica no repo). Consultar: select valor from dp_rh.agente_config where chave='webhook_secret'
+create table if not exists dp_rh.agente_config (
+  chave text primary key,
+  valor text not null,
+  atualizado_em timestamptz not null default now()
+);
+alter table dp_rh.agente_config enable row level security;
+
+insert into dp_rh.agente_config (chave, valor)
+values ('webhook_secret', replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', ''))
+on conflict (chave) do nothing;
+
+create or replace function tata_plus.agente_segredo()
+returns text
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select valor from dp_rh.agente_config where chave = 'webhook_secret';
+$fn$;
+revoke execute on function tata_plus.agente_segredo() from public, anon, authenticated;
+grant execute on function tata_plus.agente_segredo() to service_role;
