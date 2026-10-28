@@ -1,72 +1,119 @@
 # Agente RH no WhatsApp (Sam)
 
-Pergunta em linguagem natural pelo WhatsApp → resposta com dados do Supabase.
-Ex.: "quantas entrevistas a Jéssica agendou?", "quem folga sábado no Itaim?",
-"quantos atestados em outubro por unidade?".
+O Sam fica num **grupo de WhatsApp** e responde perguntas sobre a base do RH quando é chamado.
+Ex.: "Sam, quantas entrevistas a Jéssica agendou?", "@Sam quem folga sábado no Itaim?".
 
-Decisões do usuário (28/10): **lista fixa** de números · **instância uazapi do Sam** ·
-**Claude via OpenRouter** (reaproveita `LLM_API_KEY`) · **consulta livre só-leitura**, sem colunas sensíveis.
+Decisões do usuário (28/10):
+- **Só em grupo**: mensagem no privado é ignorada.
+- **Todos do grupo podem perguntar**: o controle é o grupo, e grupo novo nasce pendente.
+- **Responde só quando chamado**: "Sam, …", @Sam ou reply a uma mensagem dele.
+- **Instância uazapi do Sam**, que já tem webhook no n8n, então o **n8n entra como porteiro**.
+- **Claude via OpenRouter**, reaproveitando a `LLM_API_KEY`.
+- **Consulta livre só-leitura**, sem colunas sensíveis.
+
+> ⚠️ Adicionar alguém ao grupo = dar acesso aos dados que o Sam consulta (a resposta é vista por todos do grupo).
 
 ## Status (checklist vivo)
 
-- [x] Migração aplicada: lista de números, histórico/auditoria, log de ignorados (7 dias), senha do webhook,
+- [x] Banco: grupos autorizados, histórico/auditoria, log de ignorados (7 dias), senhas, estilo do prompt,
       papel `agente_leitor` + schema `agente` (26 visões limpas) e `tata_plus.agente_sql`.
 - [x] Teste de segurança (28/10): 13 tentativas bloqueadas (tabela fora de `agente`, coluna sensível,
       função do portal via `public.`, `current_setting`, `query_to_xml`, `pg_proc`, `pg_sleep`, `;`);
       o papel não lê `dp_rh` direto e não grava nem chamando função que grava (read-only).
-- [x] Edge `agente-whatsapp` publicada (v1). Teste ponta a ponta em modo teste: "quantas entrevistas a
-      Jéssica agendou" → 80 candidatos / 86 entrevistas (6 remarcadas) — bate com a consulta manual.
-      Modelo em uso: `anthropic/claude-sonnet-5.5`.
-- [x] Senha própria para o modo teste (`teste_secret`) — a do webhook fica visível no painel da uazapi e não abre mais o modo teste (testado: 401).
-- [ ] **[USUÁRIO]** secret `SAM_UAZAPI_TOKEN`.
-- [ ] **[USUÁRIO]** números autorizados (nome + WhatsApp).
-- [ ] **[USUÁRIO]** webhook na instância do Sam (ver "Ligar" abaixo).
-- [ ] Primeira mensagem real: conferir `agente_webhook_log` / `agente_mensagens` — o formato do payload
-      da uazapi não pôde ser confirmado na documentação (a leitura é tolerante a variações).
+- [x] Edge `agente-whatsapp` v3 (modo grupo). Testes 28/10: pergunta em grupo novo → fica pendente;
+      conversa normal → ignorada (nada gravado); modo teste → "Jéssica, são *9 exames* vencidos ou vencendo…".
+      Entrevistas da Jéssica → 80 candidatos / 86 entrevistas (bate com a consulta manual). Modelo: `anthropic/claude-sonnet-5.5`.
+- [x] Senha própria para o modo teste (a do webhook fica visível no n8n/uazapi e não abre o modo teste).
+- [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).
+- [ ] **[USUÁRIO]** secret `SAM_UAZAPI_TOKEN` (Supabase → Edge Functions → Secrets).
+- [ ] **[USUÁRIO]** colar os 2 nós do porteiro no fluxo do Sam no n8n (ver abaixo).
+- [ ] **[USUÁRIO]** conferir que o webhook do Sam na uazapi **não exclui grupos** (`isGroupYes`).
+- [ ] Adicionar o Sam ao grupo → mandar "Sam, oi" → grupo aparece pendente → liberar (`ativo = true`).
+- [ ] Na 1ª mensagem real, conferir o payload em `agente_webhook_log` (formato da uazapi não confirmado na doc):
+      @menção pelo contato (se o Sam usar ID anônimo/LID, cadastrar em `bot_ids`) e reply.
+- [ ] Limpeza: grupo de teste `000000000000000000-teste@g.us` em `dp_rh.agente_grupos` (inativo, pode apagar);
+      `dp_rh.agente_usuarios` e `tata_plus.agente_usuario` ficaram sem uso (eram do modo privado).
 
-## Como funciona
+## Fluxo
 
 ```
-WhatsApp → uazapi (instância do Sam) → webhook
-  → Edge `agente-whatsapp`
-      1. número está em dp_rh.agente_usuarios? senão ignora (sem responder)
-      2. histórico das últimas 3h da conversa
-      3. Claude (OpenRouter) + ferramenta consultar_banco
-         → tata_plus.agente_sql: só SELECT, como o papel agente_leitor,
-           transação read-only, timeout 8s, até 200 linhas
-      4. responde pela uazapi e grava tudo em dp_rh.agente_mensagens
+Pessoa no grupo: "Sam, quantas entrevistas a Jéssica agendou?"
+        │
+        ▼
+uazapi (instância do Sam) ── webhook ──► n8n: fluxo do Sam (já existe)
+                                           │
+                                     [Webhook]
+                                           │
+                                     [É grupo?] ──não──► (fluxo atual do Sam, privado — sem mudança)
+                                           │sim
+                                           ▼
+                                [Agente RH (Supabase)]  POST …/agente-whatsapp?k=<senha>
+                                           │
+                                           ▼
+Supabase · Edge agente-whatsapp (o "cérebro")
+  1. É grupo autorizado?          dp_rh.agente_grupos (novo → pendente, não responde)
+  2. Chamaram o Sam?              "Sam, …" · @Sam · reply a mensagem dele (senão ignora, nada gravado)
+  3. Histórico do grupo (3h)      dp_rh.agente_mensagens
+  4. Claude (OpenRouter) ⇄ consultar_banco → tata_plus.agente_sql (só-leitura, visões `agente`)
+  5. Responde no grupo citando a pergunta  → uazapi /send/text
+  6. Grava pergunta, quem perguntou, SQL rodado, modelo, tokens
 ```
 
-O agente **só lê**, e só as visões do schema `agente` (26 visões: colaboradores,
-recrutamento, escalas, ausências, férias, banco de horas, exames, HC, cargos,
-admissões, demissões, sanções, solicitações, armários, agenda, score de líderes,
-reconhecimentos, treinamentos, chamados de manutenção). Fora das visões:
-CPF, telefone, e-mail, salários/valores, respostas de clima/desligamento/ouvidoria.
-Para liberar mais coisa: criar/alterar a visão em `agente` + `grant select … to agente_leitor`
-(o catálogo do prompt é lido do banco — comentário da visão/coluna vira explicação pra IA).
+## n8n — porteiro
+
+Arquivo: `docs/n8n-agente-rh-porteiro.json` (2 nós: **É grupo?** + **Agente RH (Supabase)**).
+
+1. Abrir o fluxo do Sam no n8n, copiar o conteúdo do JSON e colar no canvas (Ctrl+V).
+2. Ligar **Webhook do Sam → É grupo?**.
+3. Saída **true** já vai para **Agente RH (Supabase)**. Ligar a saída **false** no que hoje vem depois do Webhook
+   (o Sam continua igual no privado e **para de responder em grupo** — evita resposta dupla).
+4. No nó **Agente RH (Supabase)**, trocar `COLE_A_SENHA_DO_WEBHOOK` pela senha
+   (`select valor from dp_rh.agente_config where chave = 'webhook_secret'` — ou pedir ao Claude).
+5. O nó usa `$json.body` (saída padrão do Webhook do n8n). Se o fluxo do Sam tiver algo entre o Webhook e o
+   **É grupo?**, ajustar para `$('Nome do Webhook').item.json.body`.
+
+O porteiro só repassa; quem decide (grupo autorizado, chamado ou não) é o cérebro. O nó tem
+`continuar em erro` ligado: se o Supabase falhar, o fluxo do Sam não quebra.
+
+## Prompt
+
+Duas partes, montadas a cada pergunta:
+- **Estilo** (persona, tom, formato da resposta): `dp_rh.agente_config`, chave `prompt_estilo`.
+  Editar no banco vale em até 1 minuto, **sem publicar código**.
+- **Técnico** (como consultar, o que não pode, data/hora, mapa das visões): fixo no código da edge.
+  O mapa é lido do banco: o comentário de cada visão/coluna em `agente` vira explicação para a IA.
+
+```sql
+update dp_rh.agente_config set valor = $p$…novo estilo…$p$, atualizado_em = now() where chave = 'prompt_estilo';
+```
+
+## O que o agente enxerga
+
+Só as visões do schema `agente` (26): colaboradores, recrutamento (candidaturas, entrevistas, testes, vagas,
+agenda dos líderes), escalas (dias, padrão, controle), ausências, férias, banco de horas, feriados, exames,
+HC programado, cargos, admissões, demissões, sanções, solicitações, armários, agenda, score de líderes,
+reconhecimentos, treinamentos, chamados de manutenção.
+Fora: CPF, telefone, e-mail, salários/valores, respostas de clima/desligamento/ouvidoria.
+Para liberar mais: criar/alterar a visão em `agente` + `grant select … to agente_leitor` + comentário.
 
 Arquivos: `supabase/migrations/20261028_agente_whatsapp.sql`, `supabase/functions/agente-whatsapp/index.ts`.
 
 ## Ligar
 
-1. **Secret** `SAM_UAZAPI_TOKEN` (Supabase → Edge Functions → Secrets) = token da instância do Sam.
-   Opcionais: `SAM_UAZAPI_URL` (padrão `https://tatasushi.uazapi.com`), `AGENTE_LLM_MODEL`
-   (padrão `anthropic/claude-sonnet-5.5`). A IA usa `LLM_API_URL`/`LLM_API_KEY` (os mesmos do gerar-cardapio).
-2. **Webhook** na instância do Sam (painel uazapi): URL
-   `https://aoqsbusfrffapjglpqjk.supabase.co/functions/v1/agente-whatsapp?k=<senha>`,
-   evento **messages**, excluir **wasSentByApi** e **isGroupYes**.
-   Senha: `select valor from dp_rh.agente_config where chave = 'webhook_secret';`
-   Se a instância já tiver webhook (n8n), **adicionar** um segundo — não trocar.
-3. **Números autorizados:**
+1. Secret `SAM_UAZAPI_TOKEN` = token da instância do Sam. Opcionais: `SAM_UAZAPI_URL`
+   (padrão `https://tatasushi.uazapi.com`), `AGENTE_LLM_MODEL` (padrão `anthropic/claude-sonnet-5.5`).
+2. n8n: porteiro (acima). Webhook do Sam na uazapi com evento **messages**, excluindo **wasSentByApi**
+   e **sem** excluir grupos.
+3. Adicionar o número do Sam ao grupo e mandar **"Sam, oi"**. O grupo aparece pendente:
    ```sql
-   insert into dp_rh.agente_usuarios (telefone, nome, matricula) values ('5511999999999', 'Nome', '12345');
-   -- desligar: update dp_rh.agente_usuarios set ativo = false where telefone = '…';
+   select * from dp_rh.agente_grupos;
+   update dp_rh.agente_grupos set ativo = true where chat_id = '…@g.us';
    ```
 
 ## Testar sem WhatsApp
 
-`POST …/agente-whatsapp?teste=<teste_secret>` com `{"texto":"pergunta"}` devolve a resposta
-e as consultas no corpo (não envia nem grava). Senha própria, diferente da do webhook. Pelo banco:
+`POST …/agente-whatsapp?teste=<teste_secret>` com `{"texto":"pergunta","nome":"Jéssica","grupo":"RH"}`
+devolve a resposta e as consultas no corpo (não envia nem grava). Pelo banco:
 
 ```sql
 select net.http_post(
@@ -80,8 +127,9 @@ select net.http_post(
 ## Acompanhar
 
 ```sql
--- conversas (pergunta, resposta, SQL rodado, modelo, tokens, erros)
-select telefone, papel, texto, meta, criado_em from dp_rh.agente_mensagens order by id desc limit 50;
--- o que foi ignorado (número fora da lista, áudio, payload estranho) — guarda 7 dias
+-- conversas (pergunta, quem perguntou, resposta, SQL rodado, modelo, tokens, erros)
+select telefone as conversa, papel, meta->>'autor_nome' as autor, texto, meta, criado_em
+from dp_rh.agente_mensagens order by id desc limit 50;
+-- grupos pendentes e falhas (guarda 7 dias)
 select * from dp_rh.agente_webhook_log order by id desc limit 50;
 ```

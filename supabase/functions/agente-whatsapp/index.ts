@@ -1,12 +1,17 @@
-// agente-whatsapp — Sam, assistente do RH no WhatsApp.
+// agente-whatsapp — Sam, assistente do RH num grupo de WhatsApp.
 //
-// Fluxo: uazapi (instância do Sam) → POST aqui (webhook) → confere a lista fixa
-// (dp_rh.agente_usuarios) → Claude via OpenRouter com a ferramenta
+// Fluxo: uazapi (instância do Sam) → n8n (porteiro, repassa só grupo) → POST aqui
+// → grupo autorizado (dp_rh.agente_grupos)? → chamaram o Sam ("Sam, …", @Sam ou
+// reply a uma mensagem dele)? → Claude via OpenRouter com a ferramenta
 // `consultar_banco` (tata_plus.agente_sql: só-leitura, só as visões do schema
-// `agente`) → responde pela uazapi → grava pergunta/consultas/resposta.
+// `agente`) → responde no grupo citando a pergunta → grava tudo (auditoria).
 //
-// Senhas em dp_rh.agente_config: 'webhook_secret' vai na URL do webhook
-// (…/agente-whatsapp?k=<senha>); 'teste_secret' só no modo teste.
+// Decisões (28/10): só em grupo (privado é ignorado); todos do grupo podem
+// perguntar; grupo novo nasce pendente e é liberado no banco.
+//
+// Banco (dp_rh.agente_config): webhook_secret (URL ?k=), teste_secret (modo
+// teste), prompt_estilo (persona/jeito de responder — editável sem publicar),
+// bot_ids (ids extras do Sam p/ reconhecer @menção, separados por vírgula).
 // Secrets (Supabase → Edge Functions → Secrets):
 //   SAM_UAZAPI_TOKEN       token da instância uazapi do Sam
 //   SAM_UAZAPI_URL         (opcional) base da uazapi; padrão https://tatasushi.uazapi.com
@@ -15,8 +20,8 @@
 // (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY são injetados.)
 //
 // Teste sem WhatsApp: POST …?teste=<teste_secret> com {"texto":"…"} → devolve a
-// resposta no corpo, não envia nada e não exige número cadastrado. Senha
-// separada porque a URL do webhook fica visível no painel da uazapi.
+// resposta no corpo, não envia nada. Senha separada porque a URL do webhook
+// fica visível no n8n/uazapi.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
@@ -40,38 +45,83 @@ const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
 
+const erroTxt = (err: unknown) => String((err as Error)?.message ?? err);
+
 // ── leitura do webhook (tolerante ao formato da uazapi) ─────────────────────
-type Entrada = { telefone: string; texto: string; msgId: string | null; nome: string };
+type Entrada = {
+  grupo: boolean;
+  chatId: string;          // id da conversa (…@g.us no grupo)
+  grupoNome: string;
+  autorId: string;         // número ou id de quem mandou
+  autorNome: string;
+  texto: string;
+  msgId: string | null;
+  citadoId: string | null;        // id da mensagem respondida (reply)
+  citadoAutor: string;            // dígitos de quem escreveu a mensagem respondida
+  mencoes: string[];              // dígitos dos @mencionados
+  dono: string;                   // dígitos do número do Sam (owner da instância)
+};
 
-function digitos(v: unknown): string {
-  const s = String(v ?? "");
-  if (/@(g\.us|lid|broadcast|newsletter)/.test(s)) return "";
-  return s.split("@")[0].split(":")[0].replace(/\D/g, "");
-}
+const soDigitos = (v: unknown) => String(v ?? "").split("@")[0].split(":")[0].replace(/\D/g, "");
 
-function lerWebhook(p: any): { ok: true; e: Entrada } | { ok: false; motivo: string; telefone?: string } {
+function lerWebhook(p: any): { ok: true; e: Entrada } | { ok: false; motivo: string } {
   const evento = String(p?.EventType ?? p?.event ?? p?.type ?? "");
   if (evento && !/message/i.test(evento)) return { ok: false, motivo: "evento:" + evento };
   const m = p?.message ?? p?.data?.message ?? p?.data ?? {};
   if (m.fromMe === true || m.key?.fromMe === true || m.wasSentByApi === true) return { ok: false, motivo: "proprio" };
-  const chat = String(m.chatid ?? m.key?.remoteJid ?? p?.chat?.wa_chatid ?? "");
-  if (m.isGroup === true || chat.endsWith("@g.us")) return { ok: false, motivo: "grupo" };
 
-  const telefone = [m.sender_pn, chat, m.sender, p?.chat?.phone, p?.chat?.wa_chatid]
-    .map(digitos).find((d) => d.length >= 10) ?? "";
-  if (!telefone) return { ok: false, motivo: "sem_telefone" };
-
-  const c = m.content;
+  const chatId = String(m.chatid ?? m.key?.remoteJid ?? p?.chat?.wa_chatid ?? "");
+  const grupo = m.isGroup === true || chatId.endsWith("@g.us");
+  const c = typeof m.content === "object" && m.content ? m.content : {};
+  const ctx = c.contextInfo ?? m.contextInfo ?? {};
   const texto = String(
-    m.text ?? (typeof c === "string" ? c : c?.text ?? c?.conversation) ?? m.body ?? m.conversation ?? "",
+    m.text ?? (typeof m.content === "string" ? m.content : c.text ?? c.conversation) ?? m.body ?? m.conversation ?? "",
   ).trim();
-  const tipo = String(m.messageType ?? m.type ?? "");
-  if (!texto) return { ok: false, motivo: "sem_texto:" + tipo, telefone };
+  if (!texto) return { ok: false, motivo: "sem_texto:" + String(m.messageType ?? m.type ?? "") };
+
+  const citado = m.quoted ?? m.quotedMsg ?? null;
+  const mencoes = [ctx.mentionedJid, m.mentionedJid, m.mentions, c.mentionedJid]
+    .find((a) => Array.isArray(a)) as unknown[] | undefined;
 
   return {
     ok: true,
-    e: { telefone, texto, msgId: m.messageid ?? m.id ?? m.key?.id ?? null, nome: String(m.senderName ?? "") },
+    e: {
+      grupo,
+      chatId,
+      grupoNome: String(p?.chat?.name ?? p?.chat?.wa_name ?? m.groupName ?? m.chatName ?? ""),
+      autorId: String(m.sender_pn ?? m.sender ?? m.participant ?? m.key?.participant ?? chatId),
+      autorNome: String(m.senderName ?? m.pushName ?? ""),
+      texto,
+      msgId: m.messageid ?? m.id ?? m.key?.id ?? null,
+      citadoId: (typeof citado === "string" ? citado : citado?.messageid ?? citado?.id ?? null) ??
+        ctx.stanzaId ?? null,
+      citadoAutor: soDigitos(citado?.sender ?? citado?.participant ?? ctx.participant ?? ""),
+      mencoes: (mencoes ?? []).map(soDigitos).filter(Boolean),
+      dono: soDigitos(p?.owner ?? p?.instance?.owner ?? ""),
+    },
   };
+}
+
+// chamaram o Sam? devolve o texto da pergunta (sem o chamado) ou null
+async function chamado(e: Entrada, botIds: string[]): Promise<string | null> {
+  const ids = [e.dono, ...botIds].filter(Boolean);
+  const semMencaoDoSam = (t: string) =>
+    ids.reduce((s, id) => s.replaceAll("@" + id, " "), t).replace(/\s+/g, " ").trim();
+
+  // 1) começa com "Sam" ou "@Sam"
+  const porNome = e.texto.match(/^\s*@?sam\b[\s,:;!.\-–—]*/i);
+  if (porNome) return semMencaoDoSam(e.texto.slice(porNome[0].length)) || e.texto;
+  // 2) @menção ao número do Sam (lista de menções ou "@<número>" no texto) ou "@Sam" no meio
+  if (ids.some((id) => e.mencoes.includes(id) || e.texto.includes("@" + id)) || /(^|\s)@sam\b/i.test(e.texto)) {
+    return semMencaoDoSam(e.texto.replace(/(^|\s)@sam\b/gi, " ")) || e.texto;
+  }
+  // 3) reply a uma mensagem do Sam
+  if (e.citadoAutor && ids.includes(e.citadoAutor)) return e.texto;
+  if (e.citadoId) {
+    const { data } = await supa.rpc("agente_msg_do_sam", { p_msg_id: e.citadoId });
+    if (data === true) return e.texto;
+  }
+  return null;
 }
 
 // ── WhatsApp ────────────────────────────────────────────────────────────────
@@ -97,19 +147,30 @@ function partes(t: string, max = 3500): string[] {
   return out;
 }
 
-async function enviar(numero: string, texto: string) {
+// envia (citando a pergunta na 1ª parte) e devolve os ids das mensagens enviadas
+async function enviar(destino: string, texto: string, citarId: string | null): Promise<string[]> {
   if (!UAZ_TOKEN) throw new Error("sem SAM_UAZAPI_TOKEN");
-  for (const parte of partes(texto)) {
+  const ids: string[] = [];
+  for (const [i, parte] of partes(texto).entries()) {
+    const corpo: Record<string, unknown> = { number: destino, text: parte, delay: 0, linkPreview: false };
+    if (i === 0 && citarId) corpo.replyid = citarId;
     const r = await fetch(UAZ_BASE + "/send/text", {
       method: "POST",
       headers: { "Content-Type": "application/json", token: UAZ_TOKEN },
-      body: JSON.stringify({ number: numero, text: parte, delay: 0, linkPreview: false }),
+      body: JSON.stringify(corpo),
     });
-    if (!r.ok) throw new Error("uazapi " + r.status + ": " + (await r.text().catch(() => "")).slice(0, 300));
+    const txt = await r.text().catch(() => "");
+    if (!r.ok) throw new Error("uazapi " + r.status + ": " + txt.slice(0, 300));
+    try {
+      const out = JSON.parse(txt);
+      const id = out?.messageid ?? out?.id ?? out?.key?.id ?? out?.message?.messageid;
+      if (id) ids.push(String(id));
+    } catch { /* resposta sem JSON */ }
   }
+  return ids;
 }
 
-// ── contexto do banco ───────────────────────────────────────────────────────
+// ── configuração no banco ───────────────────────────────────────────────────
 const segredos: Record<string, string> = {};
 
 async function segredo(chave: "webhook_secret" | "teste_secret"): Promise<string> {
@@ -119,6 +180,23 @@ async function segredo(chave: "webhook_secret" | "teste_secret"): Promise<string
     segredos[chave] = String(data ?? "");
   }
   return segredos[chave];
+}
+
+// prompt_estilo e bot_ids — relidos a cada minuto (editar no banco vale sem publicar)
+let params: { estilo: string; botIds: string[]; em: number } | null = null;
+
+async function parametros() {
+  if (!params || Date.now() - params.em > 60_000) {
+    const { data, error } = await supa.rpc("agente_parametros");
+    if (error) throw new Error("parametros: " + error.message);
+    const d = (data ?? {}) as Record<string, string>;
+    params = {
+      estilo: d.prompt_estilo || "Você é o Sam, assistente do RH do TATÁ. Responda em português, curto, no formato do WhatsApp.",
+      botIds: String(d.bot_ids ?? "").split(",").map(soDigitos).filter(Boolean),
+      em: Date.now(),
+    };
+  }
+  return params;
 }
 
 let catalogoCache: string | null = null;
@@ -141,11 +219,12 @@ function agoraSP(): string {
   }).format(new Date());
 }
 
-function sistema(nomeUsuario: string, mapa: string): any[] {
-  const regras = `Você é o Sam, assistente do RH do TATÁ Sushi / TATÁ Poke, conversando pelo WhatsApp com ${nomeUsuario || "alguém do RH"}.
-Você responde perguntas sobre colaboradores, recrutamento, escalas, ausências, férias, exames, desligamentos etc., SEMPRE consultando o banco com a ferramenta consultar_banco. Nunca invente número, nome ou data: se não achou, diga que não achou.
+// prompt = estilo (editável no banco) + regras técnicas de consulta (fixas aqui)
+function sistema(estilo: string, grupoNome: string, mapa: string): any[] {
+  const tecnico = `Agora: ${agoraSP()} (horário de São Paulo).${grupoNome ? ` Grupo: ${grupoNome}.` : ""}
 
-Agora: ${agoraSP()} (horário de São Paulo).
+FONTE DOS DADOS
+Responda SEMPRE consultando o banco com a ferramenta consultar_banco. Nunca invente número, nome ou data: se não achou, diga que não achou. Todos do grupo leem a resposta.
 
 COMO CONSULTAR
 • Só existem as visões do schema agente listadas abaixo. Uma consulta por chamada, só SELECT/WITH, sem ponto e vírgula e sem comentários.
@@ -156,16 +235,9 @@ COMO CONSULTAR
 • Você só lê dados. Se pedirem para alterar algo, explique que isso é feito no portal.
 • Dados que não estão disponíveis aqui (CPF, telefone, e-mail, salários e valores, respostas confidenciais de clima/desligamento/ouvidoria): diga que não tem acesso.
 
-COMO RESPONDER (WhatsApp)
-• Português, direto e curto: a resposta primeiro, depois o detalhe que ajuda.
-• Formatação do WhatsApp: *negrito* com um asterisco, listas com "• ". Nada de tabelas, títulos com # ou **.
-• Datas em DD/MM (com ano só se não for o atual). Números com separador brasileiro.
-• Para listas longas, mostre os principais e diga quantos faltam.
-• Não mostre SQL a menos que peçam.
-
 MAPA DO BANCO (visões disponíveis)
 ${mapa}`;
-  return [{ role: "system", content: [{ type: "text", text: regras, cache_control: { type: "ephemeral" } }] }];
+  return [{ role: "system", content: [{ type: "text", text: estilo + "\n\n" + tecnico, cache_control: { type: "ephemeral" } }] }];
 }
 
 const FERRAMENTAS = [{
@@ -229,15 +301,19 @@ async function consultar(sql: string): Promise<{ conteudo: string; reg: Consulta
   return { conteudo, reg: { sql, linhas: (data as any)?.linhas, ms } };
 }
 
-async function responder(nomeUsuario: string, historico: { papel: string; texto: string }[]) {
-  const messages: any[] = sistema(nomeUsuario, await catalogo());
-  // a conversa precisa começar por mensagem do usuário
+type Fala = { papel: string; texto: string; autor?: string | null };
+
+async function responder(grupoNome: string, historico: Fala[]) {
+  const { estilo } = await parametros();
+  const messages: any[] = sistema(estilo, grupoNome, await catalogo());
+  // a conversa precisa começar por mensagem de usuário
   const ini = historico.findIndex((h) => h.papel !== "assistant");
   for (const h of ini < 0 ? [] : historico.slice(ini)) {
     const role = h.papel === "assistant" ? "assistant" : "user";
+    const texto = role === "user" && h.autor ? `${h.autor}: ${h.texto}` : h.texto;
     const ult = messages[messages.length - 1];
-    if (ult.role === role && typeof ult.content === "string") ult.content += "\n\n" + h.texto;
-    else messages.push({ role, content: h.texto });
+    if (ult.role === role && typeof ult.content === "string") ult.content += "\n\n" + texto;
+    else messages.push({ role, content: texto });
   }
 
   const consultas: Consulta[] = [];
@@ -267,10 +343,11 @@ async function responder(nomeUsuario: string, historico: { papel: string; texto:
   };
 }
 
-// ── processamento de uma mensagem ───────────────────────────────────────────
-async function processar(e: Entrada, usuario: { telefone: string; nome: string }) {
+// ── processamento de uma pergunta ───────────────────────────────────────────
+async function processar(e: Entrada, pergunta: string, grupoNome: string) {
+  const autor = { autor_id: e.autorId, autor_nome: e.autorNome.split(" ")[0] || e.autorNome };
   const { data: reg, error: eReg } = await supa.rpc("agente_registrar", {
-    p_telefone: usuario.telefone, p_papel: "user", p_texto: e.texto, p_msg_id: e.msgId,
+    p_telefone: e.chatId, p_papel: "user", p_texto: pergunta, p_msg_id: e.msgId, p_meta: autor,
   });
   if (eReg) throw new Error("registrar: " + eReg.message);
   if ((reg as any)?.duplicado) return; // webhook reenviado
@@ -278,22 +355,25 @@ async function processar(e: Entrada, usuario: { telefone: string; nome: string }
   let texto: string;
   let meta: Record<string, unknown> = {};
   try {
-    const { data: hist } = await supa.rpc("agente_historico", { p_telefone: usuario.telefone });
-    const r = await responder(usuario.nome, (hist as any[]) ?? [{ papel: "user", texto: e.texto }]);
+    const { data: hist } = await supa.rpc("agente_historico", { p_telefone: e.chatId });
+    const r = await responder(grupoNome, (hist as Fala[]) ?? [{ papel: "user", texto: pergunta, autor: autor.autor_nome }]);
     texto = r.texto || "Não encontrei uma resposta para isso.";
-    meta = { consultas: r.consultas, modelo: r.modelo, tokens: r.uso };
+    meta = { consultas: r.consultas, modelo: r.modelo, tokens: r.uso, pergunta_id: e.msgId };
   } catch (err) {
     texto = "Tive um problema para consultar agora. Tenta de novo em alguns minutos?";
-    meta = { erro: String((err as Error)?.message ?? err) };
+    meta = { erro: erroTxt(err), pergunta_id: e.msgId };
   }
 
+  let enviados: string[] = [];
   try {
-    await enviar(e.telefone, texto);
+    enviados = await enviar(e.chatId, texto, e.msgId);
   } catch (err) {
-    meta.erro_envio = String((err as Error)?.message ?? err);
+    meta.erro_envio = erroTxt(err);
   }
+  // msg_id = id da resposta enviada → reconhece reply ao Sam
   await supa.rpc("agente_registrar", {
-    p_telefone: usuario.telefone, p_papel: "assistant", p_texto: texto, p_msg_id: null, p_meta: meta,
+    p_telefone: e.chatId, p_papel: "assistant", p_texto: texto, p_msg_id: enviados[0] ?? null,
+    p_meta: { ...meta, enviados },
   });
 }
 
@@ -307,10 +387,11 @@ Deno.serve(async (req) => {
     const t = await segredo("teste_secret");
     if (!t || url.searchParams.get("teste") !== t) return json({ ok: false, erro: "nao_autorizado" }, 401);
     try {
-      const r = await responder(String(payload?.nome ?? "Teste"), [{ papel: "user", texto: String(payload?.texto ?? "") }]);
+      const autor = String(payload?.nome ?? "Teste");
+      const r = await responder(String(payload?.grupo ?? "Teste"), [{ papel: "user", texto: String(payload?.texto ?? ""), autor }]);
       return json({ ok: true, ...r });
     } catch (err) {
-      return json({ ok: false, erro: String((err as Error)?.message ?? err) }, 500);
+      return json({ ok: false, erro: erroTxt(err) }, 500);
     }
   }
 
@@ -318,28 +399,25 @@ Deno.serve(async (req) => {
   if (!k || url.searchParams.get("k") !== k) return json({ ok: false, erro: "nao_autorizado" }, 401);
 
   const lido = lerWebhook(payload);
-  if (!lido.ok) {
-    if (lido.motivo === "sem_telefone") {
-      await supa.rpc("agente_ignorado", { p_motivo: lido.motivo, p_telefone: null, p_payload: payload });
-    } else if (lido.motivo.startsWith("sem_texto") && lido.telefone) {
-      // áudio, foto etc. — só avisa quem está na lista
-      const { data: u } = await supa.rpc("agente_usuario", { p_telefone: lido.telefone });
-      await supa.rpc("agente_ignorado", { p_motivo: lido.motivo, p_telefone: lido.telefone, p_payload: u ? payload : null });
-      if (u) await enviar(lido.telefone, "Por enquanto eu só entendo mensagem de texto. Pode escrever a pergunta?").catch(() => {});
-    }
-    return json({ ok: true, ignorado: lido.motivo });
-  }
+  if (!lido.ok) return json({ ok: true, ignorado: lido.motivo });
+  const e = lido.e;
+  if (!e.grupo) return json({ ok: true, ignorado: "privado" }); // decisão: só em grupo
 
-  const { data: usuario } = await supa.rpc("agente_usuario", { p_telefone: lido.e.telefone });
-  if (!usuario) {
-    await supa.rpc("agente_ignorado", { p_motivo: "nao_cadastrado", p_telefone: lido.e.telefone, p_payload: null });
-    return json({ ok: true, ignorado: "nao_cadastrado" });
+  const pergunta = await chamado(e, (await parametros()).botIds);
+  if (!pergunta) return json({ ok: true, ignorado: "nao_chamado" }); // conversa normal do grupo: nada é gravado
+
+  const { data: g, error: eG } = await supa.rpc("agente_grupo", { p_chat_id: e.chatId, p_nome: e.grupoNome });
+  if (eG) return json({ ok: false, erro: eG.message }, 500);
+  if (!(g as any)?.ativo) {
+    // grupo novo: fica pendente até liberar no banco; guarda o payload p/ conferir o formato
+    await supa.rpc("agente_ignorado", { p_motivo: "grupo_pendente", p_telefone: e.chatId, p_payload: payload });
+    return json({ ok: true, ignorado: "grupo_pendente" });
   }
 
   // responde já ao webhook e processa em segundo plano (a IA pode levar ~10–40s)
   EdgeRuntime.waitUntil(
-    processar(lido.e, usuario as any).catch((err) =>
-      supa.rpc("agente_ignorado", { p_motivo: "falha:" + String(err?.message ?? err).slice(0, 200), p_telefone: lido.e.telefone })
+    processar(e, pergunta, (g as any)?.nome || e.grupoNome).catch((err) =>
+      supa.rpc("agente_ignorado", { p_motivo: "falha:" + erroTxt(err).slice(0, 200), p_telefone: e.chatId })
     ),
   );
   return json({ ok: true });

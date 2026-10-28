@@ -397,3 +397,86 @@ as $fn$
 $fn$;
 revoke execute on function tata_plus.agente_segredo(text) from public, anon, authenticated;
 grant execute on function tata_plus.agente_segredo(text) to service_role;
+
+-- ── 6. Grupos: o Sam responde só em grupo autorizado e só quando chamado ──
+-- (decisão 28/10: só grupo; todos do grupo podem perguntar; gatilho = "Sam…", @Sam ou reply ao Sam)
+create table if not exists dp_rh.agente_grupos (
+  chat_id   text primary key,                 -- id do grupo no WhatsApp (…@g.us)
+  nome      text,
+  ativo     boolean not null default false,   -- nasce pendente; liberar: update dp_rh.agente_grupos set ativo = true where chat_id = '…'
+  criado_em timestamptz not null default now()
+);
+alter table dp_rh.agente_grupos enable row level security;
+comment on column dp_rh.agente_mensagens.telefone is 'Conversa: id do grupo (…@g.us) ou telefone (privado)';
+
+-- registra o grupo na 1ª vez que chamam o Sam (pendente) e diz se está liberado
+create or replace function tata_plus.agente_grupo(p_chat_id text, p_nome text default null)
+returns jsonb
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare g dp_rh.agente_grupos;
+begin
+  insert into dp_rh.agente_grupos (chat_id, nome) values (p_chat_id, nullif(p_nome, ''))
+  on conflict (chat_id) do update set nome = coalesce(nullif(excluded.nome, ''), dp_rh.agente_grupos.nome)
+  returning * into g;
+  return jsonb_build_object('chat_id', g.chat_id, 'nome', g.nome, 'ativo', g.ativo);
+end $fn$;
+
+-- a mensagem citada (reply) é uma resposta do Sam?
+create or replace function tata_plus.agente_msg_do_sam(p_msg_id text)
+returns boolean
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select exists (select 1 from dp_rh.agente_mensagens where msg_id = p_msg_id and papel = 'assistant');
+$fn$;
+
+-- parâmetros não secretos: prompt_estilo (persona/jeito de responder) e bot_ids (ids extras do Sam p/ detectar @menção)
+create or replace function tata_plus.agente_parametros()
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select coalesce(jsonb_object_agg(chave, valor), '{}'::jsonb) from dp_rh.agente_config where chave not like '%\_secret';
+$fn$;
+
+-- histórico passa a trazer quem perguntou (grupo)
+create or replace function tata_plus.agente_historico(p_telefone text, p_limite int default 12, p_horas int default 3)
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select coalesce(jsonb_agg(jsonb_build_object('papel', s.papel, 'texto', s.texto, 'autor', s.autor) order by s.id), '[]'::jsonb)
+  from (
+    select id, papel, texto, meta->>'autor_nome' as autor from dp_rh.agente_mensagens
+    where telefone = p_telefone and criado_em > now() - make_interval(hours => p_horas)
+    order by id desc limit p_limite
+  ) s;
+$fn$;
+
+insert into dp_rh.agente_config (chave, valor) values
+  ('bot_ids', ''),
+  ('prompt_estilo', $p$Você é o Sam, assistente do RH do TATÁ Sushi / TATÁ Poke, num grupo de WhatsApp da equipe. As perguntas chegam no formato "Nome: mensagem"; responda a quem perguntou (pode chamar pelo primeiro nome).
+
+COMO RESPONDER
+• Português, direto e curto: a resposta primeiro, depois o detalhe que ajuda.
+• Formatação do WhatsApp: *negrito* com um asterisco, listas com "• ". Nada de tabelas, títulos com # ou **.
+• Datas em DD/MM (com ano só se não for o atual). Números com separador brasileiro.
+• Para listas longas, mostre os principais e diga quantos faltam.
+• Não mostre SQL a menos que peçam.$p$)
+on conflict (chave) do nothing;
+
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'tata_plus.agente_grupo(text,text)',
+    'tata_plus.agente_msg_do_sam(text)',
+    'tata_plus.agente_parametros()',
+    'tata_plus.agente_historico(text,int,int)'
+  ] loop
+    execute format('revoke execute on function %s from public, anon, authenticated', f);
+    execute format('grant execute on function %s to service_role', f);
+  end loop;
+end $$;
