@@ -11,7 +11,7 @@ Notação das colunas: `nome:tipo`. Tipos abreviados: `tstz` = timestamp com fus
 ## 1. Convenções gerais (leia antes de consultar)
 
 - **`matricula` (text)** é a chave de pessoa em quase todas as tabelas. Aponta para `tata_plus.profiles.matricula` **sem FK declarada**. Sempre texto, nunca número. Pessoas ativas: `tata_plus.profiles.status = 'Ativo'`.
-- **Cadastro de colaboradores NÃO fica em `dp_rh`**: fica em `tata_plus.profiles` (nome, cargo, unidade, departamento, status, `lider` bool, `perfil`). Foto: `tata_plus.auth_users.avatar_url` via view `tata_plus.colaboradores_publicos`.
+- **Cadastro de colaboradores NÃO fica em `dp_rh`**: fica em `tata_plus.profiles` (nome, cargo, unidade, departamento, status, `lider` bool, `perfil`). **Foto**: `tata_plus.auth_users.avatar_url` (liga por `matricula`; 1 por pessoa; bucket público `avatares`; 137 de 138 ativos têm em 02/11), também na view `tata_plus.colaboradores_publicos`. `profiles.avatar_url` está vazio — não usar.
 - **Unidades** (texto livre, sem tabela de domínio): `Itaim`, `Pinheiros`, `Poke - Pinheiros`, `Tatá House`, `Administrativo`, `Central`. Em `armarios` aparecem `Itaim Bibi` e `TATÁ House`. Em `cargos` existem `Tatá House Itaim` e `Tatá House Pinheiros`. Ao cruzar tabelas, não assumir que o texto da unidade é idêntico.
 - **Tabelas `*_kanban`**: ligam um registro a um card do kanban (`card_id`). Têm PK igual à chave do registro de origem. Maioria tem FK com `ON DELETE CASCADE` para a tabela de origem; `avaliacao_exp_kanban`, `experiencia_kanban`, `aniversario_kanban`, `assistencia_medica_kanban`, `exame_kanban` e `rec_devolutiva_kanban` **não têm FK** (limpeza manual).
 - **`criado_por` / `atualizado_por`**: guardam nome ou matrícula do autor. Valor `7` = matrícula do Victor (People & HR Manager). `sandbox` = ações feitas pelo portal sem identidade. Não é confiável para saber "quem agendou/fez".
@@ -285,7 +285,7 @@ Toda tabela nova que o Sam deva enxergar precisa de uma visão nesses schemas (c
 | `agente_config` | Senhas do webhook/teste, token da instância `sam`, `prompt_estilo` (jeito de responder) e `bot_ids`. | PK `chave` |
 | `agente_usuarios` | Sem uso (era do modo privado). | PK `telefone` |
 
-O que o Sam vê (28/10): **básico = 38 visões** (colaboradores, recrutamento, escalas, ausências, férias, banco de horas
+O que o Sam vê (28/10): **básico = 38 visões** (colaboradores com foto (`foto_url`, desde 02/11 — o Sam envia como imagem), recrutamento, escalas, ausências, férias, banco de horas
 sem valores, feriados, exames, HC, cargos sem salário, admissões e documentos sem arquivo, demissões sem valores, sanções,
 solicitações, armários + histórico, estoque sem custo, limpeza sem fotos, agenda, score de líderes, reconhecimentos,
 treinamentos, manutenção, líderes responsáveis); **completo = +14 restritas** (atas das reuniões de DP/RH, avaliações,

@@ -177,6 +177,42 @@ async function enviar(destino: string, texto: string, citarId: string | null): P
   return ids;
 }
 
+// fotos: linhas "Nome: <link do avatar>" na resposta viram imagem no WhatsApp (até 10)
+const AVATAR_RE = new RegExp(
+  (Deno.env.get("SUPABASE_URL") ?? "").replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") +
+    "/storage/v1/object/public/avatares/[^\\s)>\\]]+",
+);
+type Foto = { url: string; legenda: string };
+
+function separarFotos(t: string): { texto: string; fotos: Foto[] } {
+  const fotos: Foto[] = [];
+  const linhas = t.split("\n").filter((l) => {
+    const m = l.match(AVATAR_RE);
+    if (!m || fotos.length >= 10) return true;
+    const legenda = l.replace(m[0], "").replace(/^[\s•*\-–]+|[\s:*\-–()]+$/g, "").replace(/\*/g, "").trim();
+    fotos.push({ url: m[0], legenda });
+    return false;
+  });
+  return { texto: linhas.join("\n").replace(/\n{3,}/g, "\n\n").trim(), fotos };
+}
+
+async function enviarImagem(destino: string, foto: Foto): Promise<string | null> {
+  const token = UAZ_TOKEN_ENV || await segredo("uazapi_token");
+  const r = await fetch(UAZ_BASE + "/send/media", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", token },
+    body: JSON.stringify({ number: destino, type: "image", file: foto.url, text: foto.legenda, delay: 0 }),
+  });
+  const txt = await r.text().catch(() => "");
+  if (!r.ok) throw new Error("uazapi media " + r.status + ": " + txt.slice(0, 200));
+  try {
+    const out = JSON.parse(txt);
+    return String(out?.messageid ?? out?.id ?? out?.key?.id ?? "") || null;
+  } catch {
+    return null;
+  }
+}
+
 // ── configuração no banco ───────────────────────────────────────────────────
 const segredos: Record<string, string> = {};
 
@@ -391,8 +427,24 @@ async function processar(e: Entrada, pergunta: string, cv: Conversa) {
   }
 
   let enviados: string[] = [];
+  const { texto: textoSemFotos, fotos } = separarFotos(texto);
   try {
-    enviados = await enviar(cv.chave, texto, cv.citar ? e.msgId : null);
+    if (textoSemFotos) enviados = await enviar(cv.chave, textoSemFotos, cv.citar ? e.msgId : null);
+    const semImagem: Foto[] = [];
+    for (const f of fotos) {
+      try {
+        const id = await enviarImagem(cv.chave, f);
+        if (id) enviados.push(id);
+      } catch (err) {
+        semImagem.push(f);
+        meta.erro_imagem = erroTxt(err);
+      }
+    }
+    // imagem falhou → manda o link como texto
+    if (semImagem.length) {
+      enviados.push(...await enviar(cv.chave, semImagem.map((f) => `${f.legenda}: ${f.url}`).join("\n"), null));
+    }
+    if (fotos.length) meta.fotos = fotos.length;
   } catch (err) {
     meta.erro_envio = erroTxt(err);
   }
@@ -430,7 +482,7 @@ Deno.serve(async (req) => {
       const fala = [{ papel: "user", texto: String(payload?.texto ?? ""), autor }];
       const local: Local = payload?.privado === true ? { privadoCom: autor } : { grupo: String(payload?.grupo ?? "Teste") };
       const r = await responder(local, fala, payload?.completo === true);
-      return json({ ok: true, ...r });
+      return json({ ok: true, ...r, ...separarFotos(r.texto) });
     } catch (err) {
       return json({ ok: false, erro: erroTxt(err) }, 500);
     }

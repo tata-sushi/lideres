@@ -43,6 +43,8 @@ Decisões do usuário (28/10):
 - [x] **Privado (02/11)**: Victor (5511934252017, matrícula 7) e Tito (5511976149080, matrícula 8, CEO) cadastrados
       em `dp_rh.agente_usuarios`, nível completo, com o LID de cada um. Edge v6 responde no privado só a cadastrados
       (sem precisar chamar "Sam"); fluxo n8n passa a repassar tudo que chega (descarta só o que o Sam enviou).
+- [x] **Fotos (02/11)**: `agente.colaboradores.foto_url` (avatar do app). Edge v7 transforma linhas "Nome: <link do avatar>"
+      da resposta em imagem no WhatsApp (uazapi `/send/media`, até 10); se a imagem falhar, manda o link como texto.
 - [ ] **Estilo sucinto** (02/11): texto pronto, não gravado — o `UPDATE` em `agente_config` pede aprovação do Supabase,
       que não chega no celular. Rodar `update dp_rh.agente_config set valor = … where chave = 'prompt_estilo'` no SQL Editor.
 - [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).

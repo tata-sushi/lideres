@@ -771,3 +771,14 @@ revoke execute on function tata_plus.agente_usuario(text) from public, anon, aut
 grant execute on function tata_plus.agente_usuario(text) to service_role;
 -- cadastro (dados, fora do repo):
 --   insert into dp_rh.agente_usuarios (telefone, nome, matricula, nivel, lid) values ('55…', 'Nome', 'mat', 'completo', '<lid>');
+
+-- ── 9. Foto do colaborador (02/11) ────────────────────────────────────────
+-- Avatar do app (tata_plus.auth_users.avatar_url, bucket público `avatares`; 137 de 138 ativos têm).
+-- A edge transforma linhas "Nome: <link do avatar>" da resposta em imagem no WhatsApp (até 10).
+create or replace view agente.colaboradores as
+select p.matricula, p.nome, p.cargo, p.status, p.unidade, p.departamento, p.data_admissao, p.data_demissao,
+       p.nome_superior, p.lider, to_char(p.data_nascimento, 'DD/MM') as aniversario, a.avatar_url as foto_url
+from tata_plus.profiles p
+left join tata_plus.auth_users a on a.matricula = p.matricula;
+comment on column agente.colaboradores.foto_url is 'Link da foto do colaborador (avatar do app, imagem pública; vazio = sem foto). Para MOSTRAR fotos, escreva uma por linha no formato "Nome: <foto_url>" — o sistema envia cada uma como imagem no WhatsApp (até 10 por resposta) e tira o link do texto.';
+grant select on agente.colaboradores to agente_leitor;
