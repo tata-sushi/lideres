@@ -45,6 +45,7 @@ Decisões do usuário (28/10):
       (sem precisar chamar "Sam"); fluxo n8n passa a repassar tudo que chega (descarta só o que o Sam enviou).
 - [x] **Fotos (02/11)**: `agente.colaboradores.foto_url` (avatar do app). Edge v7 transforma linhas "Nome: <link do avatar>"
       da resposta em imagem no WhatsApp (uazapi `/send/media`, até 10); se a imagem falhar, manda o link como texto.
+      Envio real confirmado em 02/11 (resposta do aviso #28 ao Tito, 1 foto, sem erro).
 - [x] **Avisos de pergunta sem resposta (02/11)**: vão para o privado do responsável (`agente_config.responsavel_telefone`
       = Victor) com quem perguntou (nome pelo cadastro de colaboradores), onde, a pergunta, o motivo e o que o Sam respondeu.
       Casos: número não cadastrado, grupo não liberado, a IA chamou `sem_resposta` (dado inexistente / fora do alcance /
