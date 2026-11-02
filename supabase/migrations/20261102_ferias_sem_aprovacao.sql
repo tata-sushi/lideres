@@ -15,8 +15,10 @@
 --     descanso num período só; sem venda = até 3 períodos, um ≥ 14 dias e os
 --     demais ≥ 5, sem sobreposição.
 --
--- Status: AINDA NÃO APLICADO em produção (projeto TATÁ SUSHI | TATÁ POKE) —
--- aguardando o teste em transação e a confirmação.
+-- Status: AINDA NÃO APLICADO em produção (projeto TATÁ SUSHI | TATÁ POKE).
+-- A página nova já funciona com o banco antigo (grava com action 'save'); ao aplicar,
+-- entram as travas no banco, o filtro por líder, o card no Kanban (com backfill de
+-- quem agendou antes) e os agendamentos antigos passam a valer na Escala.
 -- Quadro RH  = 08b636b2-7daf-444b-950a-8255e3049e5f
 -- Coluna     = 652e8e47-d3ec-4ef4-90c4-dcfd7c8d3c7f ("Solicitações Líderes")
 -- Etiqueta   = e8f5c391-20ab-4b78-bf05-ea39a207563e ("Benefícios", a mesma das solicitações de férias)
@@ -289,8 +291,8 @@ begin
 end $function$;
 
 -- ── 5) Agendou → card no Kanban do RH ───────────────────────────────────────
-create or replace function dp_rh.tg_ferias_para_kanban()
-returns trigger
+create or replace function dp_rh.ferias_criar_card(p_matricula text, p_ini_aqui date)
+returns uuid
 language plpgsql
 security definer
 set search_path to 'dp_rh', 'tata_kanban', 'tata_plus', 'public'
@@ -300,48 +302,62 @@ declare
   v_col    uuid := '652e8e47-d3ec-4ef4-90c4-dcfd7c8d3c7f';   -- Solicitações Líderes
   v_etq    uuid := 'e8f5c391-20ab-4b78-bf05-ea39a207563e';   -- Benefícios
   v_resp   text := '7';                                      -- Victor
+  f dp_rh.ferias%rowtype;
   v_nome text; v_uni text; v_dep text; v_por text;
   v_ordem int; v_card uuid; v_titulo text; v_desc text; v_per text;
 begin
-  if exists (select 1 from dp_rh.ferias_kanban where matricula = NEW.matricula and ini_aqui = NEW.ini_aqui) then
-    return NEW;
-  end if;
+  select card_id into v_card from dp_rh.ferias_kanban where matricula = p_matricula and ini_aqui = p_ini_aqui;
+  if v_card is not null then return v_card; end if;
+  select * into f from dp_rh.ferias where matricula = p_matricula and ini_aqui = p_ini_aqui;
+  if not found or f.ini1 is null then return null; end if;
+
+  select p.nome, p.unidade, p.departamento into v_nome, v_uni, v_dep
+    from tata_plus.profiles p where p.matricula = f.matricula;
+  v_nome := coalesce(v_nome, f.nome_hist, f.matricula);
+  v_por := coalesce((select p.nome from tata_plus.profiles p where p.matricula = f.atualizado_por),
+                    f.atualizado_por, '—');
+
+  v_per := 'Período 1: ' || to_char(f.ini1, 'DD/MM/YYYY') || ' a ' || coalesce(to_char(f.fim1, 'DD/MM/YYYY'), '—')
+           || coalesce(' (' || (f.fim1 - f.ini1 + 1) || ' dias)', '')
+        || coalesce(E'\n' || 'Período 2: ' || to_char(f.ini2, 'DD/MM/YYYY') || ' a ' || to_char(f.fim2, 'DD/MM/YYYY')
+           || ' (' || (f.fim2 - f.ini2 + 1) || ' dias)', '')
+        || coalesce(E'\n' || 'Período 3: ' || to_char(f.ini3, 'DD/MM/YYYY') || ' a ' || to_char(f.fim3, 'DD/MM/YYYY')
+           || ' (' || (f.fim3 - f.ini3 + 1) || ' dias)', '');
+
+  select coalesce(max(ordem), -1) + 1 into v_ordem
+    from tata_kanban.cards where coluna_id = v_col and not arquivado;
+
+  v_titulo := 'Férias · ' || v_nome || ' · ' || to_char(f.ini1, 'DD/MM/YYYY');
+
+  v_desc := 'Colaborador: ' || v_nome || ' (' || f.matricula || ')' || E'\n'
+         || 'Unidade: ' || coalesce(nullif(v_uni, ''), '—') || coalesce(' · ' || nullif(v_dep, ''), '') || E'\n'
+         || 'Período aquisitivo: ' || to_char(f.ini_aqui, 'DD/MM/YYYY') || ' a ' || coalesce(to_char(f.fim_aqui, 'DD/MM/YYYY'), '—') || E'\n'
+         || 'Período concessivo: ' || coalesce(to_char(f.ini_conc, 'DD/MM/YYYY'), '—') || ' a ' || coalesce(to_char(f.fim_conc, 'DD/MM/YYYY'), '—') || E'\n'
+         || 'Venda de férias (abono): ' || coalesce(f.abono, '—') || E'\n'
+         || 'Fracionamento: ' || coalesce(f.frac, '—') || E'\n\n'
+         || v_per || E'\n\n'
+         || 'Agendado por: ' || v_por || ' em ' || to_char(f.atualizado_em at time zone 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI')
+         || coalesce(E'\n\n' || 'Observações: ' || nullif(btrim(f.obs), ''), '');
+
+  insert into tata_kanban.cards(quadro_id, coluna_id, titulo, descricao, ordem, criado_por)
+  values (v_quadro, v_col, v_titulo, v_desc, v_ordem, nullif(f.atualizado_por, ''))
+  returning id into v_card;
+  insert into tata_kanban.card_etiquetas(card_id, etiqueta_id) values (v_card, v_etq);
+  insert into tata_kanban.card_responsaveis(card_id, matricula) values (v_card, v_resp);
+  insert into dp_rh.ferias_kanban(matricula, ini_aqui, card_id) values (f.matricula, f.ini_aqui, v_card)
+    on conflict (matricula, ini_aqui) do nothing;
+  return v_card;
+end $function$;
+
+create or replace function dp_rh.tg_ferias_para_kanban()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'dp_rh', 'tata_kanban', 'tata_plus', 'public'
+as $function$
+begin
   begin
-    select p.nome, p.unidade, p.departamento into v_nome, v_uni, v_dep
-      from tata_plus.profiles p where p.matricula = NEW.matricula;
-    v_nome := coalesce(v_nome, NEW.nome_hist, NEW.matricula);
-    v_por := coalesce((select p.nome from tata_plus.profiles p where p.matricula = NEW.atualizado_por),
-                      NEW.atualizado_por, '—');
-
-    v_per := 'Período 1: ' || to_char(NEW.ini1, 'DD/MM/YYYY') || ' a ' || coalesce(to_char(NEW.fim1, 'DD/MM/YYYY'), '—')
-             || coalesce(' (' || (NEW.fim1 - NEW.ini1 + 1) || ' dias)', '')
-          || coalesce(E'\n' || 'Período 2: ' || to_char(NEW.ini2, 'DD/MM/YYYY') || ' a ' || to_char(NEW.fim2, 'DD/MM/YYYY')
-             || ' (' || (NEW.fim2 - NEW.ini2 + 1) || ' dias)', '')
-          || coalesce(E'\n' || 'Período 3: ' || to_char(NEW.ini3, 'DD/MM/YYYY') || ' a ' || to_char(NEW.fim3, 'DD/MM/YYYY')
-             || ' (' || (NEW.fim3 - NEW.ini3 + 1) || ' dias)', '');
-
-    select coalesce(max(ordem), -1) + 1 into v_ordem
-      from tata_kanban.cards where coluna_id = v_col and not arquivado;
-
-    v_titulo := 'Férias · ' || v_nome || ' · ' || to_char(NEW.ini1, 'DD/MM/YYYY');
-
-    v_desc := 'Colaborador: ' || v_nome || ' (' || NEW.matricula || ')' || E'\n'
-           || 'Unidade: ' || coalesce(nullif(v_uni, ''), '—') || coalesce(' · ' || nullif(v_dep, ''), '') || E'\n'
-           || 'Período aquisitivo: ' || to_char(NEW.ini_aqui, 'DD/MM/YYYY') || ' a ' || coalesce(to_char(NEW.fim_aqui, 'DD/MM/YYYY'), '—') || E'\n'
-           || 'Período concessivo: ' || coalesce(to_char(NEW.ini_conc, 'DD/MM/YYYY'), '—') || ' a ' || coalesce(to_char(NEW.fim_conc, 'DD/MM/YYYY'), '—') || E'\n'
-           || 'Venda de férias (abono): ' || coalesce(NEW.abono, '—') || E'\n'
-           || 'Fracionamento: ' || coalesce(NEW.frac, '—') || E'\n\n'
-           || v_per || E'\n\n'
-           || 'Agendado por: ' || v_por || ' em ' || to_char(now() at time zone 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI')
-           || coalesce(E'\n\n' || 'Observações: ' || nullif(btrim(NEW.obs), ''), '');
-
-    insert into tata_kanban.cards(quadro_id, coluna_id, titulo, descricao, ordem, criado_por)
-    values (v_quadro, v_col, v_titulo, v_desc, v_ordem, nullif(NEW.atualizado_por, ''))
-    returning id into v_card;
-    insert into tata_kanban.card_etiquetas(card_id, etiqueta_id) values (v_card, v_etq);
-    insert into tata_kanban.card_responsaveis(card_id, matricula) values (v_card, v_resp);
-    insert into dp_rh.ferias_kanban(matricula, ini_aqui, card_id) values (NEW.matricula, NEW.ini_aqui, v_card)
-      on conflict (matricula, ini_aqui) do nothing;
+    perform dp_rh.ferias_criar_card(NEW.matricula, NEW.ini_aqui);
   exception when others then
     null;  -- nunca bloqueia o agendamento
   end;
@@ -354,6 +370,23 @@ create trigger trg_ferias_para_kanban
   for each row
   when (OLD.ini1 is null and NEW.ini1 is not null)
   execute function dp_rh.tg_ferias_para_kanban();
+
+-- Agendamentos feitos pela página nova antes desta migration (o banco antigo ainda
+-- não criava card): gera o card de quem agendou a partir de 02/11/2026.
+do $$
+declare r record;
+begin
+  for r in
+    select matricula, ini_aqui from dp_rh.ferias f
+     where f.ini1 is not null
+       and f.atualizado_em >= '2026-11-02'
+       and f.atualizado_por ~ '^\d+$'           -- gravado por uma pessoa (não pelo sync)
+       and not exists (select 1 from dp_rh.ferias_kanban k where k.matricula = f.matricula and k.ini_aqui = f.ini_aqui)
+     order by f.atualizado_em
+  loop
+    perform dp_rh.ferias_criar_card(r.matricula, r.ini_aqui);
+  end loop;
+end $$;
 
 -- ── 6) Agendamentos que esperavam aprovação passam a valer ───────────────────
 --   (a Escala só mostra férias com aprovado='Sim' — tata_plus.escala_ferias_periodo)
