@@ -59,8 +59,8 @@ Decisões do usuário (28/10):
       responder" quando continua sem cadastro).
 - [x] **Identidade (02/11)**: nas instruções fixas (código): o Sam é o assistente virtual do RH, não uma pessoa, e se reporta
       ao responsável (`responsavel_nome`, Victor) — o que não resolver, alinha com ele. Não anuncia; só diz se perguntarem.
-- [ ] **Estilo sucinto** (02/11): texto pronto, não gravado — o `UPDATE` em `agente_config` pede aprovação do Supabase,
-      que não chega no celular. Rodar `update dp_rh.agente_config set valor = … where chave = 'prompt_estilo'` no SQL Editor.
+- [x] **Estilo sucinto (02/11)**: entrou no código (instruções fixas, com prioridade sobre `prompt_estilo` do banco) — o
+      `UPDATE` no banco pedia aprovação do Supabase que não chegava no celular. Responde em 1–3 linhas; só aprofunda quando pedem.
 - [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).
 - [ ] Na 1ª mensagem real, conferir o payload em `agente_webhook_log` (formato da uazapi não confirmado na doc):
       @menção pelo contato (se o Sam usar ID anônimo/LID, cadastrar em `bot_ids`) e reply.
