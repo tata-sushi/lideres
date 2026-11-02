@@ -460,7 +460,7 @@ async function entregar(destino: string, texto: string, citarId: string | null, 
 type Aviso = {
   de: string; onde: string; pergunta: string; motivo: string; resposta?: string;
   destino: string; tipo: "privado" | "grupo"; perguntaMsgId: string | null; nivel: string;
-  registrado: boolean; nomeCurto: string; grupoNome?: string;
+  registrado: boolean; nomeCurto: string; grupoNome?: string; naoLiberado?: boolean;
 };
 
 // manda o aviso (com número #id e os comandos) no privado do responsável e grava na conversa dele
@@ -477,7 +477,7 @@ async function avisarResponsavel(a: Aviso, limitarOrigem?: string) {
     p_meta: {
       motivo: a.motivo, de: a.de, onde: a.onde, pergunta: a.pergunta, destino: a.destino, tipo: a.tipo,
       pergunta_msg_id: a.perguntaMsgId, nivel: a.nivel, registrado: a.registrado, nome_curto: a.nomeCurto,
-      grupo_nome: a.grupoNome ?? null,
+      grupo_nome: a.grupoNome ?? null, nao_liberado: a.naoLiberado === true,
     },
   });
   if (error) throw new Error("aviso: " + error.message);
@@ -564,12 +564,30 @@ async function executarComando(verbo: string, a: any, textoManual: string, respo
   await supa.rpc("agente_registrar", {
     p_telefone: a.destino, p_papel: "user", p_texto: a.pergunta, p_msg_id: null, p_meta: { autor_nome: a.nome_curto, aviso_id: a.id },
   });
-  const { enviados, textoSemFotos } = await entregar(a.destino, r.texto, citar, meta);
-  await supa.rpc("agente_registrar", { p_telefone: a.destino, p_papel: "assistant", p_texto: r.texto, p_msg_id: enviados[0] ?? null, p_meta: meta });
+  const textoFinal = (await introNaoLiberado(a, verbo)) + r.texto;
+  const { enviados, textoSemFotos } = await entregar(a.destino, textoFinal, citar, meta);
+  await supa.rpc("agente_registrar", { p_telefone: a.destino, p_papel: "assistant", p_texto: textoFinal, p_msg_id: enviados[0] ?? null, p_meta: meta });
   await supa.rpc("agente_aviso_marcar", { p_id: a.id, p_status: verbo === "libe" ? "liberado" : "respondido" });
   if (meta.erro_envio) return confirmar(`⚠️ ${liberado}não consegui mandar a resposta para ${a.de}: ${meta.erro_envio}`);
   const previa = textoSemFotos.length > 300 ? textoSemFotos.slice(0, 300) + "…" : textoSemFotos;
   return confirmar(`✅ ${liberado}respondi ${a.de.split(" (")[0]}${meta.fotos ? ` (+${meta.fotos} foto${Number(meta.fotos) > 1 ? "s" : ""})` : ""}:\n${previa}`);
+}
+
+// quando a pergunta chegou de quem não estava liberado, a resposta começa explicando (e dizendo que já foi liberado)
+async function introNaoLiberado(a: any, verbo: string): Promise<string> {
+  // aviso antigo (sem a marcação nao_liberado): decide pelo motivo
+  const naoLiberado = a.registrado === false || a.nao_liberado === true ||
+    (a.nao_liberado === undefined && /liberad/i.test(a.motivo ?? ""));
+  if (!naoLiberado) return "";
+  const resp = (await parametros()).responsavel.nome;
+  const grupo = a.tipo === "grupo";
+  const saudacao = grupo ? "Oi, pessoal!" : `Oi, ${a.nome_curto || "tudo bem"}!`;
+  const quem = grupo ? "Este grupo" : "Seu número";
+  const sobre = grupo ? `a pergunta de ${a.nome_curto}` : "a sua pergunta";
+  const liberadoAgora = verbo === "libe" || a.registrado === true;
+  return liberadoAgora
+    ? `${saudacao} ${quem} ainda não estava liberado para falar comigo quando a mensagem chegou. Reportei para o ${resp} e ele já liberou o acesso. Agora, sobre ${sobre}:\n\n`
+    : `${saudacao} ${quem} não está liberado para falar comigo, mas o ${resp} pediu para eu responder ${sobre}:\n\n`;
 }
 
 // quem mandou: nome do cadastro de colaboradores pelo número, senão o nome do WhatsApp
@@ -697,7 +715,7 @@ Deno.serve(async (req) => {
           .then((de) =>
             avisarResponsavel({
               de, onde: "privado", pergunta: e.texto, motivo: "número não cadastrado — o Sam não respondeu",
-              destino: tel ?? e.chatId, tipo: "privado", perguntaMsgId: e.msgId, nivel: "basico", registrado: false,
+              destino: tel ?? e.chatId, tipo: "privado", perguntaMsgId: e.msgId, nivel: "basico", registrado: false, naoLiberado: true,
               nomeCurto: (de.split(" (")[0] || e.autorNome).split(" ")[0],
             }, origem)
           )
@@ -735,7 +753,7 @@ Deno.serve(async (req) => {
             de, onde: `grupo ${(g as any)?.nome || e.grupoNome || e.chatId}`, pergunta,
             motivo: "grupo não liberado para o Sam — ele não respondeu",
             destino: e.chatId, tipo: "grupo", perguntaMsgId: e.msgId, nivel: (g as any)?.nivel ?? "basico",
-            registrado: false, nomeCurto: (e.autorNome || de).split(" ")[0], grupoNome: (g as any)?.nome || e.grupoNome,
+            registrado: false, naoLiberado: true, nomeCurto: (e.autorNome || de).split(" ")[0], grupoNome: (g as any)?.nome || e.grupoNome,
           }, e.chatId)
         )
         .catch(falha(e.chatId)),
