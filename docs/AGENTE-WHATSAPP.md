@@ -57,6 +57,8 @@ Decisões do usuário (28/10):
       Se a pergunta veio de quem não estava liberado, a resposta começa explicando: "Seu número ainda não estava liberado…
       Reportei para o Victor e ele já liberou o acesso. Agora, sobre a sua pergunta:" (ou "…mas o Victor pediu para eu
       responder" quando continua sem cadastro).
+- [x] **Identidade (02/11)**: nas instruções fixas (código): o Sam é o assistente virtual do RH, não uma pessoa, e se reporta
+      ao responsável (`responsavel_nome`, Victor) — o que não resolver, alinha com ele. Não anuncia; só diz se perguntarem.
 - [ ] **Estilo sucinto** (02/11): texto pronto, não gravado — o `UPDATE` em `agente_config` pede aprovação do Supabase,
       que não chega no celular. Rodar `update dp_rh.agente_config set valor = … where chave = 'prompt_estilo'` no SQL Editor.
 - [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).

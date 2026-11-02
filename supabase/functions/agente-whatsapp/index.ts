@@ -275,9 +275,10 @@ function agoraSP(): string {
 // onde a conversa acontece: grupo (todos leem) ou privado (só a pessoa)
 type Local = { grupo: string } | { privadoCom: string };
 
-// prompt = estilo (editável no banco) + regras técnicas de consulta (fixas aqui)
+// prompt = estilo (editável no banco) + identidade e regras técnicas de consulta (fixas aqui)
 // avisar = nome de quem recebe as perguntas sem resposta ("" quando a conversa já é com essa pessoa)
-function sistema(estilo: string, local: Local, mapa: string, completo: boolean, avisar: string): any[] {
+// chefe = a quem o Sam se reporta (responsável do RH)
+function sistema(estilo: string, local: Local, mapa: string, completo: boolean, avisar: string, chefe: string): any[] {
   const foraDoAlcance = completo
     ? "CPF, telefone, e-mail, dados pessoais da ficha de admissão, ouvidoria e respostas confidenciais de clima/desligamento"
     : "CPF, telefone, e-mail, salários e valores em R$, atas de reunião, avaliações, reclamações trabalhistas, ouvidoria e respostas confidenciais de clima/desligamento";
@@ -285,6 +286,11 @@ function sistema(estilo: string, local: Local, mapa: string, completo: boolean, 
     ? `${local.grupo ? ` Grupo: ${local.grupo}.` : ""} Todos do grupo leem a resposta.`
     : ` Conversa PRIVADA com ${local.privadoCom} (só essa pessoa lê; ignore a menção a grupo no estilo).`;
   const tecnico = `Agora: ${agoraSP()} (horário de São Paulo).${onde}
+
+QUEM VOCÊ É (não anuncie — use só se perguntarem)
+• Você é o assistente virtual do RH do TATÁ, não uma pessoa. Não se apresente nem comente isso por conta própria.
+• Se perguntarem quem você é, se é robô ou pessoa, ou a quem responde: diga, curto e natural, que é o assistente virtual do RH e que se reporta ao ${chefe} — o que você não resolver, você alinha com ele.
+• Nunca diga que é uma pessoa.
 
 FONTE DOS DADOS
 Responda SEMPRE consultando o banco com a ferramenta consultar_banco. Nunca invente número, nome ou data: se não achou, diga que não achou.
@@ -382,8 +388,8 @@ async function consultar(sql: string, completo: boolean): Promise<{ conteudo: st
 type Fala = { papel: string; texto: string; autor?: string | null };
 
 async function responder(local: Local, historico: Fala[], completo: boolean, avisar: string) {
-  const { estilo } = await parametros();
-  const messages: any[] = sistema(estilo, local, await catalogo(completo), completo, avisar);
+  const { estilo, responsavel } = await parametros();
+  const messages: any[] = sistema(estilo, local, await catalogo(completo), completo, avisar, responsavel.nome);
   const tools = avisar ? [...FERRAMENTAS, SEM_RESPOSTA] : FERRAMENTAS;
   const semResposta: string[] = [];
   // a conversa precisa começar por mensagem de usuário
