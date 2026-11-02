@@ -365,3 +365,9 @@ comment on column dp_rh.ferias.aprovado is
   'Desde 02/11/2026 não há etapa de aprovação: o agendamento já grava ''Sim''.';
 comment on column dp_rh.ferias.direito is
   'Dias de direito (vazio = 30). ''Não tem direito a férias'' tira o período das pendências.';
+
+-- ── 7) Botões que saíram da página: tira do catálogo de acessos ─────────────
+update tata_plus.governanca_abas
+   set ativo = false
+ where aba_id in ('governanca-kpis-rh-ferias::validar-ferias',
+                  'governanca-kpis-rh-ferias::aprovar-ferias');
