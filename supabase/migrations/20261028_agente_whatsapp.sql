@@ -782,3 +782,51 @@ from tata_plus.profiles p
 left join tata_plus.auth_users a on a.matricula = p.matricula;
 comment on column agente.colaboradores.foto_url is 'Link da foto do colaborador (avatar do app, imagem pública; vazio = sem foto). Para MOSTRAR fotos, escreva uma por linha no formato "Nome: <foto_url>" — o sistema envia cada uma como imagem no WhatsApp (até 10 por resposta) e tira o link do texto.';
 grant select on agente.colaboradores to agente_leitor;
+
+-- ── 10. Avisos de pergunta sem resposta (02/11) ───────────────────────────
+-- Pedido do usuário: toda dúvida/pergunta sem resposta cai no privado dele (com o Sam).
+-- Casos: número não cadastrado, grupo não liberado, a IA chamou a ferramenta `sem_resposta`, erro.
+-- Limite de 10 avisos/hora por origem (número ou grupo) p/ não virar spam.
+insert into dp_rh.agente_config (chave, valor) values
+  ('responsavel_telefone', '5511934252017'),
+  ('responsavel_nome', 'Victor')
+on conflict (chave) do nothing;
+
+create or replace function tata_plus.agente_encaminhar_ok(p_origem text, p_max int default 10)
+returns boolean
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare n int;
+begin
+  select count(*) into n from dp_rh.agente_webhook_log
+   where motivo = 'encaminhado' and telefone = p_origem and recebido_em > now() - interval '1 hour';
+  if n >= p_max then return false; end if;
+  insert into dp_rh.agente_webhook_log (motivo, telefone) values ('encaminhado', p_origem);
+  return true;
+end $fn$;
+
+-- quem é o número (cadastro de colaboradores), p/ o aviso dizer o nome
+create or replace function tata_plus.agente_quem(p_id text)
+returns jsonb
+language sql stable security definer
+set search_path = tata_plus, pg_catalog
+as $fn$
+  with t as (select regexp_replace(regexp_replace(coalesce(p_id, ''), '\D', '', 'g'), '^55(\d{10,11})$', '\1') as d)
+  select jsonb_build_object('nome', p.nome, 'cargo', p.cargo, 'unidade', p.unidade, 'matricula', p.matricula, 'status', p.status)
+  from tata_plus.profiles p, t
+  where length(t.d) between 10 and 11
+    and right(regexp_replace(coalesce(p.telefone, ''), '\D', '', 'g'), 8) = right(t.d, 8)
+    and left(regexp_replace(regexp_replace(coalesce(p.telefone, ''), '\D', '', 'g'), '^55', ''), 2) = left(t.d, 2)
+  order by (p.status = 'Ativo') desc
+  limit 1;
+$fn$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array['tata_plus.agente_encaminhar_ok(text,int)', 'tata_plus.agente_quem(text)'] loop
+    execute format('revoke execute on function %s from public, anon, authenticated', f);
+    execute format('grant execute on function %s to service_role', f);
+  end loop;
+end $$;

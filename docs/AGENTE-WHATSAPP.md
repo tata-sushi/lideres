@@ -45,6 +45,10 @@ Decisões do usuário (28/10):
       (sem precisar chamar "Sam"); fluxo n8n passa a repassar tudo que chega (descarta só o que o Sam enviou).
 - [x] **Fotos (02/11)**: `agente.colaboradores.foto_url` (avatar do app). Edge v7 transforma linhas "Nome: <link do avatar>"
       da resposta em imagem no WhatsApp (uazapi `/send/media`, até 10); se a imagem falhar, manda o link como texto.
+- [x] **Avisos de pergunta sem resposta (02/11)**: vão para o privado do responsável (`agente_config.responsavel_telefone`
+      = Victor) com quem perguntou (nome pelo cadastro de colaboradores), onde, a pergunta, o motivo e o que o Sam respondeu.
+      Casos: número não cadastrado, grupo não liberado, a IA chamou `sem_resposta` (dado inexistente / fora do alcance /
+      depende de uma pessoa), erro. Limite 10 avisos/h por origem. O aviso entra no histórico do Victor (o Sam lembra dele).
 - [ ] **Estilo sucinto** (02/11): texto pronto, não gravado — o `UPDATE` em `agente_config` pede aprovação do Supabase,
       que não chega no celular. Rodar `update dp_rh.agente_config set valor = … where chave = 'prompt_estilo'` no SQL Editor.
 - [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).
