@@ -830,3 +830,90 @@ begin
     execute format('grant execute on function %s to service_role', f);
   end loop;
 end $$;
+
+-- ── 11. Comandos do responsável sobre os avisos (02/11) ────────────────────
+-- No privado dele com o Sam: "responde 27" (a IA responde a pergunta original), "libera 27" (cadastra o número /
+-- libera o grupo no nível básico e responde), "27: texto" (manda o texto dele), "ignora 27". Sem número = último aviso aberto.
+-- Aviso = linha em agente_mensagens na conversa do responsável com meta.aviso = true + destino/pergunta/nível.
+create or replace function tata_plus.agente_aviso_criar(p_responsavel text, p_meta jsonb)
+returns bigint
+language sql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  insert into dp_rh.agente_mensagens (telefone, papel, texto, meta)
+  values (p_responsavel, 'assistant', '', coalesce(p_meta, '{}'::jsonb) || '{"aviso": true}'::jsonb)
+  returning id;
+$fn$;
+
+create or replace function tata_plus.agente_aviso_enviado(p_id bigint, p_texto text, p_msg_id text default null)
+returns void
+language sql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  update dp_rh.agente_mensagens set texto = coalesce(p_texto, ''), msg_id = nullif(p_msg_id, '')
+  where id = p_id and meta->>'aviso' = 'true';
+$fn$;
+
+create or replace function tata_plus.agente_aviso(p_id bigint default null, p_msg_id text default null)
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select m.meta || jsonb_build_object('id', m.id, 'responsavel', m.telefone)
+  from dp_rh.agente_mensagens m
+  where m.meta->>'aviso' = 'true'
+    and case
+          when p_id is not null then m.id = p_id
+          when p_msg_id is not null then m.msg_id = p_msg_id
+          else m.meta->>'status' is null and m.criado_em > now() - interval '24 hours'
+        end
+  order by m.id desc
+  limit 1;
+$fn$;
+
+create or replace function tata_plus.agente_aviso_marcar(p_id bigint, p_status text)
+returns void
+language sql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  update dp_rh.agente_mensagens
+     set meta = meta || jsonb_build_object('status', p_status, 'resolvido_em', now())
+   where id = p_id and meta->>'aviso' = 'true';
+$fn$;
+
+create or replace function tata_plus.agente_liberar(p_tipo text, p_alvo text, p_nome text, p_nivel text default 'basico')
+returns jsonb
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare v_tel text;
+begin
+  if p_tipo = 'grupo' then
+    insert into dp_rh.agente_grupos (chat_id, nome, ativo, nivel) values (p_alvo, nullif(p_nome, ''), true, p_nivel)
+    on conflict (chat_id) do update set ativo = true, nome = coalesce(nullif(excluded.nome, ''), dp_rh.agente_grupos.nome);
+    return jsonb_build_object('ok', true, 'tipo', 'grupo', 'alvo', p_alvo);
+  end if;
+  v_tel := regexp_replace(coalesce(p_alvo, ''), '\D', '', 'g');
+  if length(v_tel) in (10, 11) then v_tel := '55' || v_tel; end if;
+  if v_tel !~ '^55\d{10,11}$' then
+    return jsonb_build_object('ok', false, 'erro', 'sem número de telefone (só o id anônimo do WhatsApp)');
+  end if;
+  insert into dp_rh.agente_usuarios (telefone, nome, nivel, obs) values (v_tel, coalesce(nullif(p_nome, ''), v_tel), p_nivel, 'liberado pelo comando "libera"')
+  on conflict (telefone) do update set ativo = true;
+  return jsonb_build_object('ok', true, 'tipo', 'privado', 'alvo', v_tel);
+end $fn$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'tata_plus.agente_aviso_criar(text,jsonb)',
+    'tata_plus.agente_aviso_enviado(bigint,text,text)',
+    'tata_plus.agente_aviso(bigint,text)',
+    'tata_plus.agente_aviso_marcar(bigint,text)',
+    'tata_plus.agente_liberar(text,text,text,text)'
+  ] loop
+    execute format('revoke execute on function %s from public, anon, authenticated', f);
+    execute format('grant execute on function %s to service_role', f);
+  end loop;
+end $$;

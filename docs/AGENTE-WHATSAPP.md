@@ -49,6 +49,10 @@ Decisões do usuário (28/10):
       = Victor) com quem perguntou (nome pelo cadastro de colaboradores), onde, a pergunta, o motivo e o que o Sam respondeu.
       Casos: número não cadastrado, grupo não liberado, a IA chamou `sem_resposta` (dado inexistente / fora do alcance /
       depende de uma pessoa), erro. Limite 10 avisos/h por origem. O aviso entra no histórico do Victor (o Sam lembra dele).
+- [x] **Comandos do responsável (02/11)**: cada aviso tem número (#id). No privado com o Sam o Victor escreve
+      `responde 27` (a IA responde a pergunta original para a pessoa/grupo), `libera 27` (cadastra o número ou libera o grupo,
+      nível básico, e responde), `27: texto` (manda o texto dele pelo Sam) ou `ignora 27`. Sem número = último aviso aberto
+      (24h). O Sam confirma cada comando. Aviso manual: `?teste=<senha>&aviso=1` (usado p/ a pergunta do Tito de 01/11, #28).
 - [ ] **Estilo sucinto** (02/11): texto pronto, não gravado — o `UPDATE` em `agente_config` pede aprovação do Supabase,
       que não chega no celular. Rodar `update dp_rh.agente_config set valor = … where chave = 'prompt_estilo'` no SQL Editor.
 - [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).

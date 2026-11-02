@@ -13,9 +13,10 @@
 // dp_rh.agente_usuarios; os demais são ignorados. Grupo e pessoa têm nível:
 // básico (schema `agente`) ou completo (+ `agente_restrito`: atas, avaliações,
 // valores, reclamações).
-// Pergunta sem resposta (02/11) vira aviso no privado do responsável
+// Pergunta sem resposta (02/11) vira aviso (#id) no privado do responsável
 // (agente_config.responsavel_telefone): número não cadastrado, grupo não
-// liberado, a IA chamou `sem_resposta`, ou erro.
+// liberado, a IA chamou `sem_resposta`, ou erro. Ele resolve no privado com o
+// Sam: "responde 27", "libera 27", "27: texto", "ignora 27".
 //
 // Banco (dp_rh.agente_config): webhook_secret (URL ?k=), teste_secret (modo
 // teste), uazapi_token (instância do Sam), prompt_estilo (persona/jeito de
@@ -427,10 +428,42 @@ async function responder(local: Local, historico: Fala[], completo: boolean, avi
   };
 }
 
-// ── avisos ao responsável (perguntas sem resposta) ──────────────────────────
-type Aviso = { de: string; onde: string; pergunta: string; motivo: string; resposta?: string };
+// ── entrega: texto + fotos (linhas "Nome: <link do avatar>" viram imagem) ────
+async function entregar(destino: string, texto: string, citarId: string | null, meta: Record<string, unknown>) {
+  let enviados: string[] = [];
+  const { texto: textoSemFotos, fotos } = separarFotos(texto);
+  try {
+    if (textoSemFotos) enviados = await enviar(destino, textoSemFotos, citarId);
+    const semImagem: Foto[] = [];
+    for (const f of fotos) {
+      try {
+        const id = await enviarImagem(destino, f);
+        if (id) enviados.push(id);
+      } catch (err) {
+        semImagem.push(f);
+        meta.erro_imagem = erroTxt(err);
+      }
+    }
+    // imagem falhou → manda o link como texto
+    if (semImagem.length) {
+      enviados.push(...await enviar(destino, semImagem.map((f) => `${f.legenda}: ${f.url}`).join("\n"), null));
+    }
+    if (fotos.length) meta.fotos = fotos.length;
+  } catch (err) {
+    meta.erro_envio = erroTxt(err);
+  }
+  return { enviados, textoSemFotos };
+}
 
-// manda o aviso no privado do responsável e grava na conversa dele (o Sam lembra do aviso se ele comentar)
+// ── avisos ao responsável (perguntas sem resposta) ──────────────────────────
+// destino = para onde vai a resposta (número/LID no privado, id do grupo); registrado = já pode falar com o Sam
+type Aviso = {
+  de: string; onde: string; pergunta: string; motivo: string; resposta?: string;
+  destino: string; tipo: "privado" | "grupo"; perguntaMsgId: string | null; nivel: string;
+  registrado: boolean; nomeCurto: string; grupoNome?: string;
+};
+
+// manda o aviso (com número #id e os comandos) no privado do responsável e grava na conversa dele
 // limite: origem → no máximo 10 avisos por hora (número desconhecido ou grupo não liberado)
 async function avisarResponsavel(a: Aviso, limitarOrigem?: string) {
   const { responsavel } = await parametros();
@@ -439,19 +472,104 @@ async function avisarResponsavel(a: Aviso, limitarOrigem?: string) {
     const { data: ok } = await supa.rpc("agente_encaminhar_ok", { p_origem: limitarOrigem });
     if (ok === false) return;
   }
+  const { data: id, error } = await supa.rpc("agente_aviso_criar", {
+    p_responsavel: responsavel.telefone,
+    p_meta: {
+      motivo: a.motivo, de: a.de, onde: a.onde, pergunta: a.pergunta, destino: a.destino, tipo: a.tipo,
+      pergunta_msg_id: a.perguntaMsgId, nivel: a.nivel, registrado: a.registrado, nome_curto: a.nomeCurto,
+      grupo_nome: a.grupoNome ?? null,
+    },
+  });
+  if (error) throw new Error("aviso: " + error.message);
   const linhas = [
-    "🔔 *Sam — pergunta sem resposta*",
+    `🔔 *Sam — pergunta sem resposta* (#${id})`,
     `*De:* ${a.de} · ${a.onde}`,
     `*Pergunta:* ${a.pergunta}`,
     `*Motivo:* ${a.motivo}`,
   ];
   if (a.resposta) linhas.push(`*Sam respondeu:* ${a.resposta.length > 600 ? a.resposta.slice(0, 600) + "…" : a.resposta}`);
+  linhas.push(
+    "",
+    `↩️ *responde ${id}* · ${a.registrado ? "" : `*libera ${id}* · `}*${id}: sua resposta* · *ignora ${id}*`,
+  );
   const texto = linhas.join("\n");
   const ids = await enviar(responsavel.telefone, texto, null);
-  await supa.rpc("agente_registrar", {
-    p_telefone: responsavel.telefone, p_papel: "assistant", p_texto: texto, p_msg_id: ids[0] ?? null,
-    p_meta: { aviso: true, motivo: a.motivo },
+  await supa.rpc("agente_aviso_enviado", { p_id: id, p_texto: texto, p_msg_id: ids[0] ?? null });
+}
+
+// ── comandos do responsável (no privado dele com o Sam) ─────────────────────
+//   responde 27 · libera 27 · 27: texto · ignora 27   (sem número = último aviso aberto; ou respondendo ao aviso)
+const CMD_RE = /^\s*(responde|responder|libera|liberar|ignora|ignorar)\s*#?(\d+)?\s*[.!]?\s*$/i;
+const MANUAL_RE = /^\s*#?(\d+)\s*:\s*([\s\S]+)$/;
+
+async function comandoResponsavel(e: Entrada, responsavel: { telefone: string }): Promise<boolean> {
+  const cmd = e.texto.match(CMD_RE);
+  const manual = cmd ? null : e.texto.match(MANUAL_RE);
+  if (!cmd && !manual) return false;
+  const num = cmd ? cmd[2] : manual![1];
+  const { data: av } = await supa.rpc("agente_aviso", {
+    p_id: num ? Number(num) : null, p_msg_id: num ? null : e.citadoId,
   });
+  if (!av || (av as any).responsavel !== responsavel.telefone) {
+    if (manual) return false; // "10: …" sem aviso 10 → é pergunta normal
+    await enviar(responsavel.telefone, num ? `Não achei o aviso #${num}.` : "Não achei aviso aberto nas últimas 24h.", null);
+    return true;
+  }
+  const a = av as any;
+  const verbo = cmd ? cmd[1].toLowerCase().slice(0, 4) : "manual"; // resp | libe | igno | manual
+  EdgeRuntime.waitUntil(executarComando(verbo, a, manual ? manual[2].trim() : "", responsavel.telefone)
+    .catch((err) => enviar(responsavel.telefone, `Não consegui executar no aviso #${a.id}: ${erroTxt(err).slice(0, 200)}`, null)));
+  return true;
+}
+
+async function executarComando(verbo: string, a: any, textoManual: string, responsavelTel: string) {
+  const confirmar = async (t: string) => {
+    const ids = await enviar(responsavelTel, t, null);
+    await supa.rpc("agente_registrar", {
+      p_telefone: responsavelTel, p_papel: "assistant", p_texto: t, p_msg_id: ids[0] ?? null, p_meta: { comando: verbo, aviso_id: a.id },
+    });
+  };
+  const citar = a.tipo === "grupo" ? a.pergunta_msg_id : null;
+
+  if (verbo === "igno") {
+    await supa.rpc("agente_aviso_marcar", { p_id: a.id, p_status: "ignorado" });
+    return confirmar(`👍 Aviso #${a.id} encerrado, sem resposta.`);
+  }
+
+  if (verbo === "manual") {
+    const meta: Record<string, unknown> = { manual: true, aviso_id: a.id };
+    const { enviados } = await entregar(a.destino, textoManual, citar, meta);
+    await supa.rpc("agente_registrar", { p_telefone: a.destino, p_papel: "assistant", p_texto: textoManual, p_msg_id: enviados[0] ?? null, p_meta: meta });
+    await supa.rpc("agente_aviso_marcar", { p_id: a.id, p_status: "respondido_manual" });
+    return confirmar(meta.erro_envio ? `⚠️ Não consegui mandar para ${a.de}: ${meta.erro_envio}` : `✅ Mandei sua resposta para ${a.de}.`);
+  }
+
+  let liberado = "";
+  if (verbo === "libe") {
+    if (a.registrado) {
+      liberado = "já estava liberado; ";
+    } else {
+      const { data: l } = await supa.rpc("agente_liberar", {
+        p_tipo: a.tipo, p_alvo: a.destino, p_nome: a.tipo === "grupo" ? (a.grupo_nome ?? "") : (a.de ?? "").split(" (")[0], p_nivel: "basico",
+      });
+      if (!(l as any)?.ok) return confirmar(`⚠️ Não consegui liberar #${a.id}: ${(l as any)?.erro ?? "erro"}.`);
+      liberado = a.tipo === "grupo" ? "grupo liberado (nível básico) e " : "número cadastrado (nível básico) e ";
+    }
+  }
+
+  // responde: a IA responde a pergunta original para a pessoa/grupo (sem novo aviso)
+  const local: Local = a.tipo === "grupo" ? { grupo: a.grupo_nome ?? "" } : { privadoCom: a.nome_curto ?? "" };
+  const r = await responder(local, [{ papel: "user", texto: a.pergunta, autor: a.nome_curto }], a.nivel === "completo", "");
+  const meta: Record<string, unknown> = { consultas: r.consultas, modelo: r.modelo, tokens: r.uso, aviso_id: a.id };
+  await supa.rpc("agente_registrar", {
+    p_telefone: a.destino, p_papel: "user", p_texto: a.pergunta, p_msg_id: null, p_meta: { autor_nome: a.nome_curto, aviso_id: a.id },
+  });
+  const { enviados, textoSemFotos } = await entregar(a.destino, r.texto, citar, meta);
+  await supa.rpc("agente_registrar", { p_telefone: a.destino, p_papel: "assistant", p_texto: r.texto, p_msg_id: enviados[0] ?? null, p_meta: meta });
+  await supa.rpc("agente_aviso_marcar", { p_id: a.id, p_status: verbo === "libe" ? "liberado" : "respondido" });
+  if (meta.erro_envio) return confirmar(`⚠️ ${liberado}não consegui mandar a resposta para ${a.de}: ${meta.erro_envio}`);
+  const previa = textoSemFotos.length > 300 ? textoSemFotos.slice(0, 300) + "…" : textoSemFotos;
+  return confirmar(`✅ ${liberado}respondi ${a.de.split(" (")[0]}${meta.fotos ? ` (+${meta.fotos} foto${Number(meta.fotos) > 1 ? "s" : ""})` : ""}:\n${previa}`);
 }
 
 // quem mandou: nome do cadastro de colaboradores pelo número, senão o nome do WhatsApp
@@ -498,28 +616,7 @@ async function processar(e: Entrada, pergunta: string, cv: Conversa) {
     motivosAviso = ["erro: " + erroTxt(err).slice(0, 150)];
   }
 
-  let enviados: string[] = [];
-  const { texto: textoSemFotos, fotos } = separarFotos(texto);
-  try {
-    if (textoSemFotos) enviados = await enviar(cv.chave, textoSemFotos, cv.citar ? e.msgId : null);
-    const semImagem: Foto[] = [];
-    for (const f of fotos) {
-      try {
-        const id = await enviarImagem(cv.chave, f);
-        if (id) enviados.push(id);
-      } catch (err) {
-        semImagem.push(f);
-        meta.erro_imagem = erroTxt(err);
-      }
-    }
-    // imagem falhou → manda o link como texto
-    if (semImagem.length) {
-      enviados.push(...await enviar(cv.chave, semImagem.map((f) => `${f.legenda}: ${f.url}`).join("\n"), null));
-    }
-    if (fotos.length) meta.fotos = fotos.length;
-  } catch (err) {
-    meta.erro_envio = erroTxt(err);
-  }
+  const { enviados, textoSemFotos } = await entregar(cv.chave, texto, cv.citar ? e.msgId : null, meta);
   // msg_id = id da resposta enviada → reconhece reply ao Sam
   await supa.rpc("agente_registrar", {
     p_telefone: cv.chave, p_papel: "assistant", p_texto: texto, p_msg_id: enviados[0] ?? null,
@@ -527,8 +624,14 @@ async function processar(e: Entrada, pergunta: string, cv: Conversa) {
   });
 
   if (motivosAviso.length && cv.avisar) {
-    const onde = "grupo" in cv.local ? `grupo ${cv.local.grupo}` : "privado";
-    await avisarResponsavel({ de: cv.de, onde, pergunta, motivo: motivosAviso.join("; "), resposta: textoSemFotos });
+    const grupo = "grupo" in cv.local;
+    await avisarResponsavel({
+      de: cv.de, onde: grupo ? `grupo ${(cv.local as { grupo: string }).grupo}` : "privado", pergunta,
+      motivo: motivosAviso.join("; "), resposta: textoSemFotos,
+      destino: cv.chave, tipo: grupo ? "grupo" : "privado", perguntaMsgId: e.msgId,
+      nivel: completo ? "completo" : "basico", registrado: true, nomeCurto: cv.autorNome,
+      grupoNome: grupo ? (cv.local as { grupo: string }).grupo : undefined,
+    });
   }
 }
 
@@ -554,6 +657,15 @@ Deno.serve(async (req) => {
   if (url.searchParams.has("teste")) {
     const t = await segredo("teste_secret");
     if (!t || url.searchParams.get("teste") !== t) return json({ ok: false, erro: "nao_autorizado" }, 401);
+    // ?aviso=1: cria um aviso manualmente (ex.: pergunta que chegou antes de existir o aviso) — este envia ao responsável
+    if (url.searchParams.get("aviso") === "1") {
+      try {
+        await avisarResponsavel(payload as Aviso);
+        return json({ ok: true });
+      } catch (err) {
+        return json({ ok: false, erro: erroTxt(err) }, 500);
+      }
+    }
     try {
       const autor = String(payload?.nome ?? "Teste");
       const fala = [{ papel: "user", texto: String(payload?.texto ?? ""), autor }];
@@ -579,14 +691,23 @@ Deno.serve(async (req) => {
     if (!u) {
       // não cadastrado: não responde; avisa o responsável (até 10/h por remetente)
       const origem = soDigitos(e.autorId || e.chatId);
+      const tel = [e.autorId, e.chatId].map(soDigitos).find((d) => /^55\d{10,11}$/.test(d));
       EdgeRuntime.waitUntil(
         descreverRemetente(e)
           .then((de) =>
-            avisarResponsavel({ de, onde: "privado", pergunta: e.texto, motivo: "número não cadastrado — o Sam não respondeu" }, origem)
+            avisarResponsavel({
+              de, onde: "privado", pergunta: e.texto, motivo: "número não cadastrado — o Sam não respondeu",
+              destino: tel ?? e.chatId, tipo: "privado", perguntaMsgId: e.msgId, nivel: "basico", registrado: false,
+              nomeCurto: (de.split(" (")[0] || e.autorNome).split(" ")[0],
+            }, origem)
           )
           .catch(falha(origem)),
       );
       return json({ ok: true, ignorado: "privado_nao_cadastrado" });
+    }
+    // o responsável pode dar comandos sobre os avisos (responde/libera/ignora/"27: texto")
+    if (u.telefone === responsavel.telefone && await comandoResponsavel(e, responsavel)) {
+      return json({ ok: true, comando: true });
     }
     const primeiro = u.nome.split(" ")[0] || u.nome;
     const pergunta = (await chamado(e, botIds)) ?? e.texto;
@@ -613,6 +734,8 @@ Deno.serve(async (req) => {
           avisarResponsavel({
             de, onde: `grupo ${(g as any)?.nome || e.grupoNome || e.chatId}`, pergunta,
             motivo: "grupo não liberado para o Sam — ele não respondeu",
+            destino: e.chatId, tipo: "grupo", perguntaMsgId: e.msgId, nivel: (g as any)?.nivel ?? "basico",
+            registrado: false, nomeCurto: (e.autorNome || de).split(" ")[0], grupoNome: (g as any)?.nome || e.grupoNome,
           }, e.chatId)
         )
         .catch(falha(e.chatId)),
