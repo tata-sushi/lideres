@@ -740,3 +740,34 @@ begin
     execute format('grant execute on function %s to service_role', f);
   end loop;
 end $$;
+
+-- ── 8. Privado para números cadastrados (02/11) ───────────────────────────
+-- Pedido do usuário: Victor e Tito podem perguntar no privado (além do grupo). Só quem está em
+-- dp_rh.agente_usuarios recebe resposta; o resto é ignorado sem gravar nada. Cada pessoa tem nível.
+-- lid = id anônimo do WhatsApp (o chat às vezes chega sem o número).
+alter table dp_rh.agente_usuarios add column if not exists nivel text not null default 'basico'
+  check (nivel in ('basico', 'completo'));
+alter table dp_rh.agente_usuarios add column if not exists lid text;
+comment on table dp_rh.agente_usuarios is 'Números que podem falar com o Sam no PRIVADO (grupo é controlado por agente_grupos). nivel = basico | completo. lid = id anônimo do WhatsApp da pessoa (quando o chat vem sem número).';
+
+create or replace function tata_plus.agente_usuario(p_telefone text)
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  with t as (select regexp_replace(coalesce(p_telefone, ''), '\D', '', 'g') as d),
+  v as (
+    select d from t
+    union select '55' || d from t where length(d) in (10, 11)
+    union select substr(d, 1, 4) || substr(d, 6) from t where length(d) = 13 and d like '55%' and substr(d, 5, 1) = '9'
+    union select substr(d, 1, 4) || '9' || substr(d, 5) from t where length(d) = 12 and d like '55%'
+  )
+  select jsonb_build_object('telefone', u.telefone, 'nome', u.nome, 'matricula', u.matricula, 'nivel', u.nivel)
+  from dp_rh.agente_usuarios u
+  where u.ativo and (u.telefone in (select d from v) or u.lid = (select d from t))
+  limit 1;
+$fn$;
+revoke execute on function tata_plus.agente_usuario(text) from public, anon, authenticated;
+grant execute on function tata_plus.agente_usuario(text) to service_role;
+-- cadastro (dados, fora do repo):
+--   insert into dp_rh.agente_usuarios (telefone, nome, matricula, nivel, lid) values ('55…', 'Nome', 'mat', 'completo', '<lid>');

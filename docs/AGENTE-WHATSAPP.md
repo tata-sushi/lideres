@@ -4,7 +4,7 @@ O Sam fica num **grupo de WhatsApp** e responde perguntas sobre a base do RH qua
 Ex.: "Sam, quantas entrevistas a Jéssica agendou?", "@Sam quem folga sábado no Itaim?".
 
 Decisões do usuário (28/10):
-- **Só em grupo**: mensagem no privado é ignorada.
+- **Grupo** (todos do grupo perguntam) e, desde 02/11, **privado só para números cadastrados** (Victor e Tito).
 - **Todos do grupo podem perguntar**: o controle é o grupo, e grupo novo nasce pendente.
 - **Responde só quando chamado**: "Sam, …", @Sam ou reply a uma mensagem dele.
 - **Instância uazapi do Sam** (`sam`, número 5511939311173). Ela só enviava (resumos, aniversários, pendências)
@@ -40,6 +40,11 @@ Decisões do usuário (28/10):
       Teste: "últimas pautas da reunião de RH" → completo resumiu a reunião de 21/10; básico respondeu que não tem acesso.
 - [x] **Grupo oficial (28/10)**: **DP/RH TATÁ SUSHI** (`120363040657807495@g.us`, 8 participantes) liberado, nível completo.
       **Agentes** continua ativo como grupo de teste (completo).
+- [x] **Privado (02/11)**: Victor (5511934252017, matrícula 7) e Tito (5511976149080, matrícula 8, CEO) cadastrados
+      em `dp_rh.agente_usuarios`, nível completo, com o LID de cada um. Edge v6 responde no privado só a cadastrados
+      (sem precisar chamar "Sam"); fluxo n8n passa a repassar tudo que chega (descarta só o que o Sam enviou).
+- [ ] **Estilo sucinto** (02/11): texto pronto, não gravado — o `UPDATE` em `agente_config` pede aprovação do Supabase,
+      que não chega no celular. Rodar `update dp_rh.agente_config set valor = … where chave = 'prompt_estilo'` no SQL Editor.
 - [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).
 - [ ] Na 1ª mensagem real, conferir o payload em `agente_webhook_log` (formato da uazapi não confirmado na doc):
       @menção pelo contato (se o Sam usar ID anônimo/LID, cadastrar em `bot_ids`) e reply.

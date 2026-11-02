@@ -1,16 +1,18 @@
 // agente-whatsapp — Sam, assistente do RH num grupo de WhatsApp.
 //
-// Fluxo: uazapi (instância do Sam) → n8n (fluxo próprio do agente, repassa só grupo) → POST aqui
-// → grupo autorizado (dp_rh.agente_grupos)? → chamaram o Sam ("Sam, …", @Sam ou
-// reply a uma mensagem dele)? → Claude via OpenRouter com a ferramenta
+// Fluxo: uazapi (instância do Sam) → n8n (fluxo próprio do agente, repassa) → POST aqui
+// → grupo autorizado (dp_rh.agente_grupos) e chamaram o Sam ("Sam, …", @Sam ou
+// reply a uma mensagem dele)? ou privado de número cadastrado (dp_rh.agente_usuarios)?
+// → Claude via OpenRouter com a ferramenta
 // `consultar_banco` (tata_plus.agente_consultar: só-leitura, só as visões dos
 // schemas `agente`/`agente_restrito`) → responde no grupo citando a pergunta →
 // grava tudo (auditoria).
 //
-// Decisões (28/10): só em grupo (privado é ignorado); todos do grupo podem
-// perguntar; grupo novo nasce pendente e é liberado no banco. Cada grupo tem
-// nível: básico (schema `agente`) ou completo (+ `agente_restrito`: atas,
-// avaliações, valores, reclamações).
+// Decisões (28/10): em grupo autorizado todos podem perguntar (grupo novo nasce
+// pendente e é liberado no banco). No privado (02/11) só números cadastrados em
+// dp_rh.agente_usuarios; os demais são ignorados. Grupo e pessoa têm nível:
+// básico (schema `agente`) ou completo (+ `agente_restrito`: atas, avaliações,
+// valores, reclamações).
 //
 // Banco (dp_rh.agente_config): webhook_secret (URL ?k=), teste_secret (modo
 // teste), uazapi_token (instância do Sam), prompt_estilo (persona/jeito de
@@ -228,15 +230,21 @@ function agoraSP(): string {
   }).format(new Date());
 }
 
+// onde a conversa acontece: grupo (todos leem) ou privado (só a pessoa)
+type Local = { grupo: string } | { privadoCom: string };
+
 // prompt = estilo (editável no banco) + regras técnicas de consulta (fixas aqui)
-function sistema(estilo: string, grupoNome: string, mapa: string, completo: boolean): any[] {
+function sistema(estilo: string, local: Local, mapa: string, completo: boolean): any[] {
   const foraDoAlcance = completo
     ? "CPF, telefone, e-mail, dados pessoais da ficha de admissão, ouvidoria e respostas confidenciais de clima/desligamento"
     : "CPF, telefone, e-mail, salários e valores em R$, atas de reunião, avaliações, reclamações trabalhistas, ouvidoria e respostas confidenciais de clima/desligamento";
-  const tecnico = `Agora: ${agoraSP()} (horário de São Paulo).${grupoNome ? ` Grupo: ${grupoNome}.` : ""}
+  const onde = "grupo" in local
+    ? `${local.grupo ? ` Grupo: ${local.grupo}.` : ""} Todos do grupo leem a resposta.`
+    : ` Conversa PRIVADA com ${local.privadoCom} (só essa pessoa lê; ignore a menção a grupo no estilo).`;
+  const tecnico = `Agora: ${agoraSP()} (horário de São Paulo).${onde}
 
 FONTE DOS DADOS
-Responda SEMPRE consultando o banco com a ferramenta consultar_banco. Nunca invente número, nome ou data: se não achou, diga que não achou. Todos do grupo leem a resposta.
+Responda SEMPRE consultando o banco com a ferramenta consultar_banco. Nunca invente número, nome ou data: se não achou, diga que não achou.
 
 COMO CONSULTAR
 • Só existem as visões listadas abaixo — escreva o nome com o schema (agente.x${completo ? " ou agente_restrito.x" : ""}). Uma consulta por chamada, só SELECT/WITH, sem ponto e vírgula e sem comentários.
@@ -246,7 +254,7 @@ COMO CONSULTAR
 • Prefira agregar no banco (count, group by) em vez de trazer linhas soltas. O resultado vem com no máximo 200 linhas.
 • Se der erro, corrija a consulta e tente de novo. Se a pergunta for ambígua (período, unidade), assuma o mais provável e diga o critério que usou.
 • Você só lê dados. Se pedirem para alterar algo, explique que isso é feito no portal.
-• Fora do seu alcance neste grupo (${foraDoAlcance}): diga que não tem acesso.
+• Fora do seu alcance nesta conversa (${foraDoAlcance}): diga que não tem acesso.
 
 MAPA DO BANCO (visões disponíveis)
 ${mapa}`;
@@ -316,9 +324,9 @@ async function consultar(sql: string, completo: boolean): Promise<{ conteudo: st
 
 type Fala = { papel: string; texto: string; autor?: string | null };
 
-async function responder(grupoNome: string, historico: Fala[], completo: boolean) {
+async function responder(local: Local, historico: Fala[], completo: boolean) {
   const { estilo } = await parametros();
-  const messages: any[] = sistema(estilo, grupoNome, await catalogo(completo), completo);
+  const messages: any[] = sistema(estilo, local, await catalogo(completo), completo);
   // a conversa precisa começar por mensagem de usuário
   const ini = historico.findIndex((h) => h.papel !== "assistant");
   for (const h of ini < 0 ? [] : historico.slice(ini)) {
@@ -357,10 +365,14 @@ async function responder(grupoNome: string, historico: Fala[], completo: boolean
 }
 
 // ── processamento de uma pergunta ───────────────────────────────────────────
-async function processar(e: Entrada, pergunta: string, grupoNome: string, completo: boolean) {
-  const autor = { autor_id: e.autorId, autor_nome: e.autorNome.split(" ")[0] || e.autorNome };
+// conversa = chave do histórico e destino da resposta (id do grupo, ou o número cadastrado no privado)
+type Conversa = { chave: string; local: Local; autorNome: string; completo: boolean; citar: boolean };
+
+async function processar(e: Entrada, pergunta: string, cv: Conversa) {
+  const autor = { autor_id: e.autorId, autor_nome: cv.autorNome };
+  const completo = cv.completo;
   const { data: reg, error: eReg } = await supa.rpc("agente_registrar", {
-    p_telefone: e.chatId, p_papel: "user", p_texto: pergunta, p_msg_id: e.msgId, p_meta: autor,
+    p_telefone: cv.chave, p_papel: "user", p_texto: pergunta, p_msg_id: e.msgId, p_meta: autor,
   });
   if (eReg) throw new Error("registrar: " + eReg.message);
   if ((reg as any)?.duplicado) return; // webhook reenviado
@@ -368,9 +380,9 @@ async function processar(e: Entrada, pergunta: string, grupoNome: string, comple
   let texto: string;
   let meta: Record<string, unknown> = {};
   try {
-    const { data: hist } = await supa.rpc("agente_historico", { p_telefone: e.chatId });
+    const { data: hist } = await supa.rpc("agente_historico", { p_telefone: cv.chave });
     const hist0 = [{ papel: "user", texto: pergunta, autor: autor.autor_nome }];
-    const r = await responder(grupoNome, (hist as Fala[]) ?? hist0, completo);
+    const r = await responder(cv.local, (hist as Fala[]) ?? hist0, completo);
     texto = r.texto || "Não encontrei uma resposta para isso.";
     meta = { consultas: r.consultas, modelo: r.modelo, tokens: r.uso, pergunta_id: e.msgId, nivel: completo ? "completo" : "basico" };
   } catch (err) {
@@ -380,16 +392,29 @@ async function processar(e: Entrada, pergunta: string, grupoNome: string, comple
 
   let enviados: string[] = [];
   try {
-    enviados = await enviar(e.chatId, texto, e.msgId);
+    enviados = await enviar(cv.chave, texto, cv.citar ? e.msgId : null);
   } catch (err) {
     meta.erro_envio = erroTxt(err);
   }
   // msg_id = id da resposta enviada → reconhece reply ao Sam
   await supa.rpc("agente_registrar", {
-    p_telefone: e.chatId, p_papel: "assistant", p_texto: texto, p_msg_id: enviados[0] ?? null,
+    p_telefone: cv.chave, p_papel: "assistant", p_texto: texto, p_msg_id: enviados[0] ?? null,
     p_meta: { ...meta, enviados },
   });
 }
+
+// privado: a pessoa está cadastrada? (procura pelo número e pelo id anônimo do WhatsApp)
+async function usuarioCadastrado(e: Entrada): Promise<{ telefone: string; nome: string; nivel: string } | null> {
+  const ids = [...new Set([e.autorId, e.chatId].map(soDigitos).filter((d) => d.length >= 10))];
+  for (const id of ids) {
+    const { data } = await supa.rpc("agente_usuario", { p_telefone: id });
+    if (data) return data as any;
+  }
+  return null;
+}
+
+const falha = (chave: string) => (err: unknown) =>
+  supa.rpc("agente_ignorado", { p_motivo: "falha:" + erroTxt(err).slice(0, 200), p_telefone: chave });
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: true });
@@ -403,7 +428,8 @@ Deno.serve(async (req) => {
     try {
       const autor = String(payload?.nome ?? "Teste");
       const fala = [{ papel: "user", texto: String(payload?.texto ?? ""), autor }];
-      const r = await responder(String(payload?.grupo ?? "Teste"), fala, payload?.completo === true);
+      const local: Local = payload?.privado === true ? { privadoCom: autor } : { grupo: String(payload?.grupo ?? "Teste") };
+      const r = await responder(local, fala, payload?.completo === true);
       return json({ ok: true, ...r });
     } catch (err) {
       return json({ ok: false, erro: erroTxt(err) }, 500);
@@ -416,9 +442,23 @@ Deno.serve(async (req) => {
   const lido = lerWebhook(payload);
   if (!lido.ok) return json({ ok: true, ignorado: lido.motivo });
   const e = lido.e;
-  if (!e.grupo) return json({ ok: true, ignorado: "privado" }); // decisão: só em grupo
+  const { botIds } = await parametros();
 
-  const pergunta = await chamado(e, (await parametros()).botIds);
+  // privado: só quem está cadastrado; não precisa chamar o Sam (a conversa já é com ele)
+  if (!e.grupo) {
+    const u = await usuarioCadastrado(e);
+    if (!u) return json({ ok: true, ignorado: "privado_nao_cadastrado" }); // nada é gravado
+    const primeiro = u.nome.split(" ")[0] || u.nome;
+    const pergunta = (await chamado(e, botIds)) ?? e.texto;
+    const cv: Conversa = {
+      chave: u.telefone, local: { privadoCom: primeiro }, autorNome: primeiro,
+      completo: u.nivel === "completo", citar: false,
+    };
+    EdgeRuntime.waitUntil(processar(e, pergunta, cv).catch(falha(u.telefone)));
+    return json({ ok: true });
+  }
+
+  const pergunta = await chamado(e, botIds);
   if (!pergunta) return json({ ok: true, ignorado: "nao_chamado" }); // conversa normal do grupo: nada é gravado
 
   const { data: g, error: eG } = await supa.rpc("agente_grupo", { p_chat_id: e.chatId, p_nome: e.grupoNome });
@@ -430,10 +470,10 @@ Deno.serve(async (req) => {
   }
 
   // responde já ao webhook e processa em segundo plano (a IA pode levar ~10–40s)
-  EdgeRuntime.waitUntil(
-    processar(e, pergunta, (g as any)?.nome || e.grupoNome, (g as any)?.nivel === "completo").catch((err) =>
-      supa.rpc("agente_ignorado", { p_motivo: "falha:" + erroTxt(err).slice(0, 200), p_telefone: e.chatId })
-    ),
-  );
+  const cv: Conversa = {
+    chave: e.chatId, local: { grupo: (g as any)?.nome || e.grupoNome },
+    autorNome: e.autorNome.split(" ")[0] || e.autorNome, completo: (g as any)?.nivel === "completo", citar: true,
+  };
+  EdgeRuntime.waitUntil(processar(e, pergunta, cv).catch(falha(e.chatId)));
   return json({ ok: true });
 });
