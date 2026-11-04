@@ -15,14 +15,13 @@
 --     descanso num período só; sem venda = até 3 períodos, um ≥ 14 dias e os
 --     demais ≥ 5, sem sobreposição.
 --
--- Status: AINDA NÃO APLICADO em produção (projeto TATÁ SUSHI | TATÁ POKE).
--- A página nova já funciona com o banco antigo (grava com action 'save'); ao aplicar,
--- entram as travas no banco, o filtro por líder, o card no Kanban (com backfill de
--- quem agendou antes) e os agendamentos antigos passam a valer na Escala.
+-- Aplicado em produção em 2026-11-04 (projeto TATÁ SUSHI | TATÁ POKE), com testes
+-- em transação (líder vê só a equipe, travas de data, card com 2 responsáveis).
+-- Na mesma aplicação: apagado o agendamento de teste da Thamires (03/01–22/01/2027).
 -- Quadro RH  = 08b636b2-7daf-444b-950a-8255e3049e5f
 -- Coluna     = 652e8e47-d3ec-4ef4-90c4-dcfd7c8d3c7f ("Solicitações Líderes")
 -- Etiqueta   = e8f5c391-20ab-4b78-bf05-ea39a207563e ("Benefícios", a mesma das solicitações de férias)
--- Responsável= Victor (7)
+-- Responsáveis= Thamires (24332) e Victor (7)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1) Calendário de feriados (nacionais + estado e cidade de SP) ────────────
@@ -301,7 +300,7 @@ declare
   v_quadro uuid := '08b636b2-7daf-444b-950a-8255e3049e5f';   -- RH
   v_col    uuid := '652e8e47-d3ec-4ef4-90c4-dcfd7c8d3c7f';   -- Solicitações Líderes
   v_etq    uuid := 'e8f5c391-20ab-4b78-bf05-ea39a207563e';   -- Benefícios
-  v_resp   text := '7';                                      -- Victor
+  v_resp   text[] := array['24332', '7'];                    -- Thamires e Victor
   f dp_rh.ferias%rowtype;
   v_nome text; v_uni text; v_dep text; v_por text;
   v_ordem int; v_card uuid; v_titulo text; v_desc text; v_per text;
@@ -343,7 +342,7 @@ begin
   values (v_quadro, v_col, v_titulo, v_desc, v_ordem, nullif(f.atualizado_por, ''))
   returning id into v_card;
   insert into tata_kanban.card_etiquetas(card_id, etiqueta_id) values (v_card, v_etq);
-  insert into tata_kanban.card_responsaveis(card_id, matricula) values (v_card, v_resp);
+  insert into tata_kanban.card_responsaveis(card_id, matricula) select v_card, unnest(v_resp);
   insert into dp_rh.ferias_kanban(matricula, ini_aqui, card_id) values (f.matricula, f.ini_aqui, v_card)
     on conflict (matricula, ini_aqui) do nothing;
   return v_card;
