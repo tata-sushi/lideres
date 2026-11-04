@@ -4,7 +4,7 @@ O Sam fica num **grupo de WhatsApp** e responde perguntas sobre a base do RH qua
 Ex.: "Sam, quantas entrevistas a Jéssica agendou?", "@Sam quem folga sábado no Itaim?".
 
 Decisões do usuário (28/10):
-- **Grupo** (todos do grupo perguntam) e, desde 02/11, **privado só para números cadastrados** (Victor e Tito).
+- **Grupo** (todos do grupo perguntam) e, desde 02/11, **privado só para números cadastrados** (Victor, Tito e Binho).
 - **Todos do grupo podem perguntar**: o controle é o grupo, e grupo novo nasce pendente.
 - **Responde só quando chamado**: "Sam, …", @Sam ou reply a uma mensagem dele.
 - **Instância uazapi do Sam** (`sam`, número 5511939311173). Ela só enviava (resumos, aniversários, pendências)
@@ -59,13 +59,19 @@ Decisões do usuário (28/10):
       responder" quando continua sem cadastro).
 - [x] **Identidade (02/11)**: nas instruções fixas (código): o Sam é o assistente virtual do RH, não uma pessoa, e se reporta
       ao responsável (`responsavel_nome`, Victor) — o que não resolver, alinha com ele. Não anuncia; só diz se perguntarem.
+- [x] **Binho liberado (04/11)**: Fabio Yuzo Shiguematsu (Binho, sócio-chef executivo, matrícula 2, 5511999400971),
+      privado, nível completo. Ele tinha escrito ao Sam antes de ser liberado (avisos #38 "Boa tarde" e #40 "término da
+      experiência do Diogo"); o #40 foi respondido com `libera 40` (16:02) e desde então ele conversa direto com o Sam
+      (sanções, banco de horas, foto de colaborador). Edge v13: no `responde N` o Sam olha o cadastro **atual** — quem foi liberado depois da pergunta
+      recebe "Seu número ainda não estava liberado… Reportei para o Victor e ele já liberou o acesso" e a resposta sai no nível
+      de hoje; a confirmação do `libera N` mostra o nível real (`agente_liberar` devolve o nível e mantém o que já existia).
 - [x] **Estilo sucinto (02/11)**: entrou no código (instruções fixas, com prioridade sobre `prompt_estilo` do banco) — o
       `UPDATE` no banco pedia aprovação do Supabase que não chegava no celular. Responde em 1–3 linhas; só aprofunda quando pedem.
 - [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).
 - [ ] Na 1ª mensagem real, conferir o payload em `agente_webhook_log` (formato da uazapi não confirmado na doc):
       @menção pelo contato (se o Sam usar ID anônimo/LID, cadastrar em `bot_ids`) e reply.
-- [ ] Limpeza (precisa de ok p/ apagar): grupo de teste `000000000000000000-teste@g.us` (inativo); sem uso:
-      `dp_rh.agente_usuarios`, `tata_plus.agente_usuario`, `tata_plus.agente_sql`, `tata_plus.agente_catalogo`,
+- [ ] Limpeza (precisa de ok p/ apagar): conversas de teste em `agente_mensagens`; grupo de teste
+      `000000000000000000-teste@g.us` (inativo); sem uso: `tata_plus.agente_sql`, `tata_plus.agente_catalogo`,
       `tata_plus.agente_segredo()` (sem parâmetro).
 
 ## Fluxo

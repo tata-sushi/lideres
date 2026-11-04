@@ -565,18 +565,22 @@ async function executarComando(verbo: string, a: any, textoManual: string, respo
         p_tipo: a.tipo, p_alvo: a.destino, p_nome: a.tipo === "grupo" ? (a.grupo_nome ?? "") : (a.de ?? "").split(" (")[0], p_nivel: "basico",
       });
       if (!(l as any)?.ok) return confirmar(`⚠️ Não consegui liberar #${a.id}: ${(l as any)?.erro ?? "erro"}.`);
-      liberado = a.tipo === "grupo" ? "grupo liberado (nível básico) e " : "número cadastrado (nível básico) e ";
+      const nivel = (l as any)?.nivel === "completo" ? "completo" : "básico";
+      liberado = a.tipo === "grupo" ? `grupo liberado (nível ${nivel}) e ` : `número liberado (nível ${nivel}) e `;
     }
   }
+  // liberado agora = pelo comando, ou já estava/foi liberado depois que o aviso chegou (vale o nível de hoje)
+  const atual = await situacaoAtual(a);
+  const liberadoAgora = verbo === "libe" || a.registrado === true || atual.liberado;
 
   // responde: a IA responde a pergunta original para a pessoa/grupo (sem novo aviso)
   const local: Local = a.tipo === "grupo" ? { grupo: a.grupo_nome ?? "" } : { privadoCom: a.nome_curto ?? "" };
-  const r = await responder(local, [{ papel: "user", texto: a.pergunta, autor: a.nome_curto }], a.nivel === "completo", "");
+  const r = await responder(local, [{ papel: "user", texto: a.pergunta, autor: a.nome_curto }], (atual.nivel ?? a.nivel) === "completo", "");
   const meta: Record<string, unknown> = { consultas: r.consultas, modelo: r.modelo, tokens: r.uso, aviso_id: a.id };
   await supa.rpc("agente_registrar", {
     p_telefone: a.destino, p_papel: "user", p_texto: a.pergunta, p_msg_id: null, p_meta: { autor_nome: a.nome_curto, aviso_id: a.id },
   });
-  const textoFinal = (await introNaoLiberado(a, verbo)) + r.texto;
+  const textoFinal = (await introNaoLiberado(a, liberadoAgora)) + r.texto;
   const { enviados, textoSemFotos } = await entregar(a.destino, textoFinal, citar, meta);
   await supa.rpc("agente_registrar", { p_telefone: a.destino, p_papel: "assistant", p_texto: textoFinal, p_msg_id: enviados[0] ?? null, p_meta: meta });
   await supa.rpc("agente_aviso_marcar", { p_id: a.id, p_status: verbo === "libe" ? "liberado" : "respondido" });
@@ -585,8 +589,18 @@ async function executarComando(verbo: string, a: any, textoManual: string, respo
   return confirmar(`✅ ${liberado}respondi ${a.de.split(" (")[0]}${meta.fotos ? ` (+${meta.fotos} foto${Number(meta.fotos) > 1 ? "s" : ""})` : ""}:\n${previa}`);
 }
 
+// o número/grupo do aviso já pode falar com o Sam hoje, e com que nível? (pode ter sido liberado depois do aviso)
+async function situacaoAtual(a: any): Promise<{ liberado: boolean; nivel: string | null }> {
+  if (a.tipo === "grupo") {
+    const { data: g } = await supa.rpc("agente_grupo", { p_chat_id: a.destino, p_nome: a.grupo_nome ?? null });
+    return { liberado: (g as any)?.ativo === true, nivel: (g as any)?.ativo ? (g as any)?.nivel ?? null : null };
+  }
+  const { data: u } = await supa.rpc("agente_usuario", { p_telefone: a.destino });
+  return { liberado: !!u, nivel: (u as any)?.nivel ?? null };
+}
+
 // quando a pergunta chegou de quem não estava liberado, a resposta começa explicando (e dizendo que já foi liberado)
-async function introNaoLiberado(a: any, verbo: string): Promise<string> {
+async function introNaoLiberado(a: any, liberadoAgora: boolean): Promise<string> {
   // aviso antigo (sem a marcação nao_liberado): decide pelo motivo
   const naoLiberado = a.registrado === false || a.nao_liberado === true ||
     (a.nao_liberado === undefined && /liberad/i.test(a.motivo ?? ""));
@@ -596,7 +610,6 @@ async function introNaoLiberado(a: any, verbo: string): Promise<string> {
   const saudacao = grupo ? "Oi, pessoal!" : `Oi, ${a.nome_curto || "tudo bem"}!`;
   const quem = grupo ? "Este grupo" : "Seu número";
   const sobre = grupo ? `a pergunta de ${a.nome_curto}` : "a sua pergunta";
-  const liberadoAgora = verbo === "libe" || a.registrado === true;
   return liberadoAgora
     ? `${saudacao} ${quem} ainda não estava liberado para falar comigo quando a mensagem chegou. Reportei para o ${resp} e ele já liberou o acesso. Agora, sobre ${sobre}:\n\n`
     : `${saudacao} ${quem} não está liberado para falar comigo, mas o ${resp} pediu para eu responder ${sobre}:\n\n`;

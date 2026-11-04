@@ -917,3 +917,43 @@ begin
     execute format('grant execute on function %s to service_role', f);
   end loop;
 end $$;
+
+-- ============================================================================
+-- 12) agente_liberar devolve o nível (aplicado como "agente_liberar_devolve_nivel")
+--     Se o número/grupo já existia, mantém o nível que estava e só reativa.
+--     A edge usa o nível devolvido na confirmação do "libera N" e, no
+--     "responde N", consulta a situação ATUAL do cadastro (situacaoAtual):
+--     quem foi liberado depois da pergunta recebe a abertura "não estava
+--     liberado… o Victor já liberou" e a resposta no nível de hoje.
+-- ============================================================================
+create or replace function tata_plus.agente_liberar(p_tipo text, p_alvo text, p_nome text, p_nivel text default 'basico')
+returns jsonb
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare v_tel text; v_nivel text;
+begin
+  if p_tipo = 'grupo' then
+    insert into dp_rh.agente_grupos (chat_id, nome, ativo, nivel) values (p_alvo, nullif(p_nome, ''), true, p_nivel)
+    on conflict (chat_id) do update set ativo = true, nome = coalesce(nullif(excluded.nome, ''), dp_rh.agente_grupos.nome)
+    returning nivel into v_nivel;
+    return jsonb_build_object('ok', true, 'tipo', 'grupo', 'alvo', p_alvo, 'nivel', v_nivel);
+  end if;
+  v_tel := regexp_replace(coalesce(p_alvo, ''), '\D', '', 'g');
+  if length(v_tel) in (10, 11) then v_tel := '55' || v_tel; end if;
+  if v_tel !~ '^55\d{10,11}$' then
+    return jsonb_build_object('ok', false, 'erro', 'sem número de telefone (só o id anônimo do WhatsApp)');
+  end if;
+  insert into dp_rh.agente_usuarios (telefone, nome, nivel, obs) values (v_tel, coalesce(nullif(p_nome, ''), v_tel), p_nivel, 'liberado pelo comando "libera"')
+  on conflict (telefone) do update set ativo = true
+  returning nivel into v_nivel;
+  return jsonb_build_object('ok', true, 'tipo', 'privado', 'alvo', v_tel, 'nivel', v_nivel);
+end $fn$;
+
+revoke execute on function tata_plus.agente_liberar(text,text,text,text) from public, anon, authenticated;
+grant execute on function tata_plus.agente_liberar(text,text,text,text) to service_role;
+
+-- Binho (Fabio Yuzo Shiguematsu, sócio-chef executivo) liberado no privado, nível completo:
+-- insert into dp_rh.agente_usuarios (telefone, nome, matricula, nivel, obs)
+-- values ('5511999400971', 'Fabio Yuzo Shiguematsu', '2', 'completo', 'Binho — Sócio-chef Executivo')
+-- on conflict (telefone) do update set ativo = true, nivel = excluded.nivel, nome = excluded.nome;
