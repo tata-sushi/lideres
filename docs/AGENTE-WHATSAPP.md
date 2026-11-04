@@ -65,6 +65,10 @@ Decisões do usuário (28/10):
       (sanções, banco de horas, foto de colaborador). Edge v13: no `responde N` o Sam olha o cadastro **atual** — quem foi liberado depois da pergunta
       recebe "Seu número ainda não estava liberado… Reportei para o Victor e ele já liberou o acesso" e a resposta sai no nível
       de hoje; a confirmação do `libera N` mostra o nível real (`agente_liberar` devolve o nível e mantém o que já existia).
+- [x] **Cardápio do TATÁ House (04/11)**: o Binho perguntou "o que tem no almoço dos funcionários hoje" (aviso #83) e o Sam
+      não achou — o cardápio fica em `tata_refeicoes`, fora do mapa. Novas visões (§13): `agente.cardapio_dia`,
+      `cardapio_itens`, `cardapio_cozinhas`, `cardapio_avaliacoes`, `restricoes_alimentares`; completo:
+      `agente_restrito.colaborador_restricoes`. Custo/quantidade/insumos ficaram de fora (vazios no banco).
 - [x] **Estilo sucinto (02/11)**: entrou no código (instruções fixas, com prioridade sobre `prompt_estilo` do banco) — o
       `UPDATE` no banco pedia aprovação do Supabase que não chegava no celular. Responde em 1–3 linhas; só aprofunda quando pedem.
 - [ ] **Prompt**: usuário vai passar o jeito de responder + mapa de tabelas → reescrever `prompt_estilo` (e visões, se faltar algo).
@@ -116,15 +120,17 @@ update dp_rh.agente_config set valor = $p$…novo estilo…$p$, atualizado_em = 
 
 Fonte: `docs/mapas/dp_rh.md` (mapa do schema, com as regras de leitura). Cada grupo tem um **nível**:
 
-- **básico** (padrão de grupo novo) — schema `agente`, 38 visões: colaboradores, recrutamento (candidaturas, entrevistas,
+- **básico** (padrão de grupo novo) — schema `agente`, 43 visões: colaboradores, recrutamento (candidaturas, entrevistas,
   testes, vagas, agenda dos líderes), escalas (dias, padrão, horários, controle), ausências, férias, banco de horas,
   feriados, exames, HC programado, cargos, admissões + documentos da admissão, pastinha de documentos + catálogo +
   exceções, demissões, sanções, solicitações, armários + histórico, estoque (sem custo), limpeza (sem fotos), agenda,
-  score de líderes, líderes responsáveis, reconhecimentos, treinamentos, premiações (sem valor), chamados de manutenção.
-- **completo** — + schema `agente_restrito`, 14 visões: atas das reuniões de DP/RH, avaliações (experiência, desempenho,
+  score de líderes, líderes responsáveis, reconhecimentos, treinamentos, premiações (sem valor), chamados de manutenção,
+  **cardápio do TATÁ House** (cardápio do dia por cozinha, itens, cozinha de cada unidade, avaliações anônimas, catálogo de
+  restrições — schema `tata_refeicoes`, desde 04/11).
+- **completo** — + schema `agente_restrito`, 15 visões: atas das reuniões de DP/RH, avaliações (experiência, desempenho,
   liderança — só o consolidado) + legado, salários por cargo, pontos da loja, banco de horas com custo, diárias de teste
   e pretensão, salário das vagas, valores de rescisão, VT, custo de estoque, custo de manutenção, premiações com valor,
-  reclamações trabalhistas.
+  reclamações trabalhistas, restrições alimentares de cada colaborador.
 - **Fora em qualquer nível**: ouvidoria, respostas de clima e de desligamento, CPF/telefone/e-mail, ficha da admissão.
 
 ```sql

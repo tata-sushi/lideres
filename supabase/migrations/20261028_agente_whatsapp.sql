@@ -957,3 +957,60 @@ grant execute on function tata_plus.agente_liberar(text,text,text,text) to servi
 -- insert into dp_rh.agente_usuarios (telefone, nome, matricula, nivel, obs)
 -- values ('5511999400971', 'Fabio Yuzo Shiguematsu', '2', 'completo', 'Binho — Sócio-chef Executivo')
 -- on conflict (telefone) do update set ativo = true, nivel = excluded.nivel, nome = excluded.nome;
+
+-- ============================================================================
+-- 13) Cardápio do TATÁ House (refeição dos funcionários) — schema tata_refeicoes
+--     Básico: cozinhas, cardápio do dia, itens, avaliações (anônimas), catálogo de restrições.
+--     Completo: restrições alimentares de cada colaborador (dado de saúde).
+--     Fora: custo/quantidade dos itens e insumos (vazios no banco).
+-- ============================================================================
+create or replace view agente.cardapio_cozinhas as
+select m.unidade, m.cozinha, k.nome as cozinha_nome
+from tata_refeicoes.cozinha_map m
+left join tata_refeicoes.cozinhas k on k.chave = m.cozinha;
+comment on view agente.cardapio_cozinhas is 'Qual cozinha do TATÁ House faz a refeição de cada unidade (Itaim, Administrativo e Tatá House → cozinha Itaim; Pinheiros e Poke - Pinheiros → cozinha Pinheiros). Para "o que tem no almoço" de alguém: unidade do colaborador → cozinha → cardapio_dia.';
+
+create or replace view agente.cardapio_dia as
+select d.id, d.data_refeicao as data, d.unidade as cozinha, k.nome as cozinha_nome,
+       d.resumo_cardapio as prato_principal, d.status,
+       d.almoco_qtd, d.jantar_qtd, d.marmitas_qtd, d.almoco_servido, d.jantar_servido, d.marmitas_servido,
+       d.kcal, d.porcao_g, d.proteina_g, d.carb_g, d.gordura_g, d.fibra_g, d.indice_saudavel, d.observacao
+from tata_refeicoes.cardapio_dia d
+left join tata_refeicoes.cozinhas k on k.chave = d.unidade;
+comment on view agente.cardapio_dia is 'Cardápio da refeição dos funcionários (almoço, jantar e marmitas) feita pelo TATÁ House: 1 linha por dia e cozinha (Itaim | Pinheiros), planejado semanas antes. "O que tem no almoço hoje" → data = agente.hoje(), junte com cardapio_itens (cardapio_dia_id = id) para o cardápio completo. As duas cozinhas costumam servir o mesmo: se igual, responda uma vez só; se a pessoa é de uma unidade, use a cozinha dela (cardapio_cozinhas). status é o andamento interno — aguardando_aprovacao = planejado e já vale como o cardápio do dia; aguardando_avaliacao/finalizado = dia já servido. *_qtd = previsto, *_servido = servido. kcal e macros (g) por porção (porcao_g).';
+
+create or replace view agente.cardapio_itens as
+select i.id, i.cardapio_dia_id, d.data_refeicao as data, d.unidade as cozinha, i.tipo_prato, i.item,
+       i.restricoes as nao_serve_para
+from tata_refeicoes.cardapio_itens i
+join tata_refeicoes.cardapio_dia d on d.id = i.cardapio_dia_id;
+comment on view agente.cardapio_itens is 'Itens do cardápio de cada dia/cozinha. tipo_prato: principal | guarnicao | salada | sobremesa | bebida (liste nessa ordem). nao_serve_para = restrições que o item NÃO atende (ex.: filé de frango → {Frango,Vegano,Vegetariano}); vazio = serve para todos; null = não classificado. Catálogo em restricoes_alimentares.';
+
+create or replace view agente.cardapio_avaliacoes as
+select a.id, a.cardapio_dia_id, d.data_refeicao as data, d.unidade as cozinha, d.resumo_cardapio as prato_principal,
+       a.unidade as unidade_colaborador, a.fonte,
+       case when a.voto ~ '^[0-9]+$' then a.voto::int end as nota,
+       a.comentario, a.created_at
+from tata_refeicoes.cardapio_avaliacoes a
+left join tata_refeicoes.cardapio_dia d on d.id = a.cardapio_dia_id;
+comment on view agente.cardapio_avaliacoes is 'Avaliações da refeição feitas pelos colaboradores no app (sem identificar quem): nota 1–5 e comentário opcional. Use para média/quantidade por dia, cozinha, prato ou unidade de quem avaliou (unidade_colaborador). Existe desde 27/07/2026.';
+
+create or replace view agente.restricoes_alimentares as
+select id, nome, tipo, descricao, termos, ativo
+from tata_refeicoes.restricoes_alimentares;
+comment on view agente.restricoes_alimentares is 'Catálogo de restrições alimentares (tipo: alergia | preferencia). termos = palavras que identificam um prato que fere a restrição. Quem tem cada restrição: agente_restrito.colaborador_restricoes (só nível completo).';
+
+grant select on all tables in schema agente to agente_leitor;
+
+create or replace view agente_restrito.colaborador_restricoes as
+select coalesce(cr.matricula, pr.matricula) as matricula, p.nome, p.unidade, p.departamento,
+       r.nome as restricao, r.tipo,
+       coalesce(cr.quer_substituicao, pr.quer_substituicao) as quer_substituicao,
+       pr.tem_restricao
+from tata_refeicoes.colaborador_restricoes cr
+full join tata_refeicoes.colaborador_pref_refeicao pr on pr.matricula = cr.matricula
+left join tata_refeicoes.restricoes_alimentares r on r.id = cr.restricao_id
+left join tata_plus.profiles p on p.matricula = coalesce(cr.matricula, pr.matricula);
+comment on view agente_restrito.colaborador_restricoes is 'Restrições alimentares de cada colaborador, informadas no app (dado de saúde: traga só o necessário). 1 linha por pessoa + restrição; restricao null = respondeu o formulário sem restrição cadastrada (tem_restricao diz o que marcou). quer_substituicao = quer prato substituto quando o cardápio fere a restrição (compare com cardapio_itens.nao_serve_para).';
+
+grant select on all tables in schema agente_restrito to agente_leitor_total;
