@@ -328,7 +328,7 @@ table.mini td.nm .dem-nm-wrap { display:inline-flex; align-items:center; }
 .flux-loading { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; padding:14px 2px; }
 .flux-resumo { display:flex; flex-wrap:wrap; align-items:center; gap:7px 12px; margin-bottom:10px; }
 .flux-etapa { font-family:'DM Sans',sans-serif; font-size:12.5px; font-weight:600; color:var(--carbon); }
-.flux-faixadias { margin-left:auto; font-family:'DM Mono',monospace; font-size:9.5px; color:var(--muted); letter-spacing:.3px; }
+.flux-faixadias { font-family:'DM Mono',monospace; font-size:9.5px; color:var(--muted); letter-spacing:.3px; }
 .flux-faixadias strong { color:var(--carbon); font-weight:600; }
 .flux-pill { display:inline-flex; align-items:center; font-family:'DM Sans',sans-serif; font-size:9.5px; font-weight:500; padding:2px 8px; border-radius:100px; letter-spacing:.3px; white-space:nowrap; }
 .fp-carbon { background:var(--carbon); color:var(--citric); } .fp-amber { background:var(--amber-bg); color:var(--amber); }
@@ -2889,31 +2889,51 @@ function _demAtualizaFluxoCell(id){
 // Componente do fluxograma (padrão do portal) a partir de rescisao_linha_do_tempo
 function demFluxoHtml(LT){
   LT = LT || {};
-  var dem = LT.demissao || {}, R = LT.resumo || {}, faixas = LT.faixas || [], marcos = LT.marcos || [], metas = LT.metas || {};
+  var dem = LT.demissao || {}, R = LT.resumo || {}, marcos = LT.marcos || [], metas = LT.metas || {};
   var LANES = [{key:'contabilidade',nome:'Contabilidade',sub:'Cadis',up:true},{key:'rh',nome:'RH',sub:'Tatá Sushi'},{key:'pagamento',nome:'Pagamento',sub:'Financeiro / banco'}];
   function dd(s){ if(!s) return null; var p=String(s).slice(0,10).split('-'); return p.length===3?new Date(+p[0],+p[1]-1,+p[2]):null; }
   function diff(a,b){ return Math.round((b-a)/86400000); }
   var D0 = dd(dem.data_demissao);
   var prazoDia = (R.prazo_legal && D0) ? diff(D0, dd(R.prazo_legal)) : (metas.prazo_legal_dias||10);
   var hojeDia = D0 ? Math.max(0, diff(D0, new Date())) : prazoDia;
+  // --- Faixas (quem está com o processo) derivadas da sequência de marcos ---
+  // Fluxo: o cadastro do RH sobe p/ a contabilidade; volta ao RH quando chega o e-mail (prévia);
+  //        com o OK do RH desce p/ o financeiro.
+  function holderApos(m){
+    switch(m.tipo){
+      case 'cadastro': case 'rh_informou': case 'rh_ajuste': return 'contabilidade';
+      case 'contab_envio': return 'rh';
+      case 'rh_ok': case 'enviado_pagamento': case 'pago': return 'pagamento';
+      case 'desligamento': return 'rh';
+      case 'pergunta': return (m.lado==='rh'?'contabilidade':'rh');
+      default: return null; // homologação / outro: mantém o dono atual
+    }
+  }
+  var ord = marcos.slice().sort(function(a,b){ return (a.dia||0)-(b.dia||0); });
+  var faixas = [], prev = null, pago = false;
+  ord.forEach(function(m){
+    if(m.tipo==='pago') pago = true;
+    var h = holderApos(m); if(h==null) h = prev ? prev.lado : 'rh';
+    if(prev) prev.fim_dia = m.dia;                           // dono anterior segura até este marco
+    if(!prev || prev.lado!==h){ prev = {lado:h, inicio_dia:m.dia, fim_dia:m.dia, aberta:false}; faixas.push(prev); }
+  });
+  if(prev && !pago){ prev.aberta = true; prev.fim_dia = Math.max(prev.fim_dia, hojeDia); }
+  var dLado = {rh:0, contabilidade:0, pagamento:0};
+  faixas.forEach(function(f){ var d=Math.max(0,(f.fim_dia||0)-(f.inicio_dia||0)); if(dLado[f.lado]!=null) dLado[f.lado]+=d; });
+  var diasTotal = dLado.rh + dLado.contabilidade + dLado.pagamento;
   var maxDia = Math.max(prazoDia,
-    marcos.reduce(function(m,e){ return Math.max(m, e.dia||0); }, 0),
-    faixas.reduce(function(m,f){ return Math.max(m, (f.aberta?Math.max(f.fim_dia||0,hojeDia):(f.fim_dia||0))); }, 0)) || 10;
+    ord.reduce(function(m,e){ return Math.max(m, e.dia||0); }, 0),
+    faixas.reduce(function(m,f){ return Math.max(m, f.fim_dia||0); }, 0)) || 10;
   function pct(d){ return ((d + 0.5) / (maxDia + 1)) * 100; }   // centro da célula do dia (em cima da linha do Dn)
   var prazoDate = (R.prazo_legal ? dd(R.prazo_legal) : (D0 ? new Date(D0.getTime()+prazoDia*86400000) : null));
   var prazoFmt = prazoDate ? (('0'+prazoDate.getDate()).slice(-2)+'/'+('0'+(prazoDate.getMonth()+1)).slice(-2)) : ('D+'+prazoDia);
-  function pillSit(sit){ var map={no_prazo:['fp-blue','No prazo'],vence_em_breve:['fp-amber','Vence em breve'],vence_hoje:['fp-amber','Vence hoje'],atrasado:['fp-red','Atrasado'],pago_no_prazo:['fp-carbon','Pago no prazo'],pago_fora_do_prazo:['fp-red','Pago fora do prazo']}; var m=map[sit]||['fp-blue',sit||'—']; return '<span class="flux-pill '+m[0]+'">'+m[1]+'</span>'; }
-  var resumo = '<div class="flux-resumo">'+
-    '<span class="flux-etapa">'+escH(R.etapa_label||'—')+'</span>'+
-    (R.com_quem?'<span class="flux-pill fp-carbon">com '+escH(R.com_quem)+'</span>':'')+
-    (R.situacao_prazo?pillSit(R.situacao_prazo):'')+
-    (R.etapa_atrasada?'<span class="flux-pill fp-red">etapa atrasada</span>':'')+
-    '<span class="flux-faixadias">RH <strong>'+(R.dias_rh||0)+'d</strong> · Contab <strong>'+(R.dias_contabilidade||0)+'d</strong> · Pag <strong>'+(R.dias_pagamento||0)+'d</strong> · total <strong>'+(R.dias_total||0)+'d</strong></span></div>';
+  var resumo = '<div class="flux-resumo"><span class="flux-faixadias">RH <strong>'+dLado.rh+'d</strong> · Contab <strong>'+dLado.contabilidade+'d</strong> · Pag <strong>'+dLado.pagamento+'d</strong> · total <strong>'+diasTotal+'d</strong></span></div>';
   var ticks=''; for(var d=0; d<=maxDia; d++) ticks+='<div class="flux-tick">D'+d+'</div>';
   var html = resumo + '<div class="flux-scroll"><div class="flux-inner"><div class="flux-axis">'+ticks+'</div>';
   LANES.forEach(function(ln, li){
     var segs='', dots='';
     faixas.filter(function(f){ return f.lado===ln.key; }).forEach(function(f){
+      if(!f.aberta && (f.fim_dia||0)<=(f.inicio_dia||0)) return;   // ignora passagem de largura zero
       var ini=f.inicio_dia||0, fim=f.aberta?Math.max(f.fim_dia||0,hojeDia):(f.fim_dia||0);
       segs += '<div class="flux-seg '+(f.aberta?'aberta':'')+'" style="left:'+pct(ini)+'%;width:'+Math.max(1.2,pct(fim)-pct(ini))+'%"></div>';
     });
