@@ -1447,11 +1447,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <button class="adm-close-btn" onclick="closeModalAdmissao()">✕</button>
     </div>
     <div class="adm-modal-body">
-      <div class="form-row">
+      <div class="form-row" id="adm-colab-row">
         <label class="form-label" for="adm-colab">Colaborador</label>
         <select class="form-select" id="adm-colab" onchange="_admSyncDataAdmissao()">
           <option value="">— Selecione —</option>
         </select>
+      </div>
+      <div style="margin:-6px 0 10px;">
+        <button type="button" class="btn-link" id="adm-lote-toggle" onclick="_admToggleLoteMode()">Gerar para vários colaboradores</button>
+      </div>
+      <div id="adm-colab-lote-wrap" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;">
+          <label class="form-label" style="margin:0;">Colaboradores</label>
+          <button type="button" class="btn-link" id="adm-colab-select-all" onclick="_admToggleSelecionarTodosColabs()">Selecionar todos</button>
+        </div>
+        <div class="adm-doc-list" id="adm-colab-lote-list" style="max-height:180px;overflow:auto;"></div>
+        <p style="font-family:'DM Mono',monospace;font-size:9px;color:var(--t3);margin-top:8px;letter-spacing:.04em;line-height:1.5;">No modo em lote só ficam disponíveis os documentos que não exigem dados específicos de cada colaborador (banco, contrato, dependentes, vale transporte etc.) — envie esses individualmente. O PDF em lote vai direto para assinatura digital.</p>
       </div>
       <div class="form-divider">Documentos</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
@@ -3225,6 +3236,10 @@ window.toggleFta = toggleFta;
   var _ORG_URL = 'https://script.google.com/macros/s/AKfycbxUWUoOmv-Cn19-FjUJ18jYTu5G_embOGDaQDsgC4Jd8agVfgqs98Tbu3qlqa9e7tpu/exec';
   var _admColabLoaded = false;
   var _admColabMap = {};
+  var _admLoteMode = false;
+  // Documentos que exigem dados específicos de cada colaborador (banco, contrato,
+  // dependentes etc.) — não entram no fluxo em lote (vários colaboradores de uma vez).
+  var ADM_LOTE_EXCLUIDOS = ['dados_bancarios', 'contribuicao_sindical', 'salario_familia', 'dependentes_ir', 'contrato_experiencia', 'ficha_registro'];
 
   function _admEnriquecerAdmissao() {
     fetch(_ORG_URL)
@@ -3286,7 +3301,12 @@ window.toggleFta = toggleFta;
     if (typeof closeDrawer === 'function') closeDrawer();
     if (typeof setTab === 'function') setTab('sobre');
     _admLoadColaboradores();
-    _admBuildDocList();
+    _admLoteMode = false;
+    document.getElementById('adm-colab-row').style.display = '';
+    document.getElementById('adm-colab-lote-wrap').style.display = 'none';
+    document.getElementById('adm-lote-toggle').textContent = 'Gerar para vários colaboradores';
+    document.getElementById('adm-btn').style.display = '';
+    _admBuildDocList(false);
     document.getElementById('adm-colab').value = '';
     _admSyncDataAdmissao();
     _admSetLoading(false, 'Gerar PDF');
@@ -3319,28 +3339,35 @@ window.toggleFta = toggleFta;
     });
   }
 
-  function _admBuildDocList() {
+  function _admBuildDocList(loteMode) {
     var list = document.getElementById('adm-doc-list');
     list.innerHTML = '';
 
-    // Termo de Vale Transporte — item especial (PDF, preenchido pela RH), não vem do catálogo
-    var vtItem = document.createElement('div');
-    vtItem.className = 'adm-doc-item';
-    vtItem.style.cssText = 'flex-direction:column;align-items:stretch;';
-    vtItem.innerHTML =
-      '<div style="display:flex;align-items:flex-start;gap:10px;">' +
-        '<input type="checkbox" id="admdoc_vale_transporte" value="vale_transporte" onchange="_admToggleVtFields(this.checked)">' +
-        '<label for="admdoc_vale_transporte" style="cursor:pointer;flex:1;"><div class="adm-doc-name">Termo de Vale Transporte</div></label>' +
-      '</div>' +
-      '<div id="admvt-fields" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">' +
-        '<div class="form-row"><label class="form-label" for="admvt-endereco">Endereço residencial</label><input class="form-input" type="text" id="admvt-endereco" placeholder="rua, nº, bairro, cidade/UF, CEP" onclick="event.stopPropagation()"></div>' +
-        '<div class="form-row"><label class="form-label" for="admvt-opcao">Opção do colaborador</label><select class="form-select" id="admvt-opcao" onclick="event.stopPropagation()"><option value="sim">SIM — opto pela utilização do Vale Transporte</option><option value="nao">NÃO — opto pela utilização do Vale Transporte</option></select></div>' +
-        '<div class="form-divider">Casa → Trabalho</div><div id="admvt-ct-rows"></div><button type="button" class="btn btn--primary btn--sm" onclick="event.stopPropagation();_admVtAddRow(\'ct\')">+ linha</button>' +
-        '<div class="form-divider">Trabalho → Casa</div><div id="admvt-tc-rows"></div><button type="button" class="btn btn--primary btn--sm" onclick="event.stopPropagation();_admVtAddRow(\'tc\')">+ linha</button>' +
-      '</div>';
-    list.appendChild(vtItem);
+    if (!loteMode) {
+      // Termo de Vale Transporte — item especial (PDF, preenchido pela RH), não vem do catálogo.
+      // Fora do fluxo em lote (endereço/opção são específicos de cada colaborador).
+      var vtItem = document.createElement('div');
+      vtItem.className = 'adm-doc-item';
+      vtItem.style.cssText = 'flex-direction:column;align-items:stretch;';
+      vtItem.innerHTML =
+        '<div style="display:flex;align-items:flex-start;gap:10px;">' +
+          '<input type="checkbox" id="admdoc_vale_transporte" value="vale_transporte" onchange="_admToggleVtFields(this.checked)">' +
+          '<label for="admdoc_vale_transporte" style="cursor:pointer;flex:1;"><div class="adm-doc-name">Termo de Vale Transporte</div></label>' +
+        '</div>' +
+        '<div id="admvt-fields" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">' +
+          '<div class="form-row"><label class="form-label" for="admvt-endereco">Endereço residencial</label><input class="form-input" type="text" id="admvt-endereco" placeholder="rua, nº, bairro, cidade/UF, CEP" onclick="event.stopPropagation()"></div>' +
+          '<div class="form-row"><label class="form-label" for="admvt-opcao">Opção do colaborador</label><select class="form-select" id="admvt-opcao" onclick="event.stopPropagation()"><option value="sim">SIM — opto pela utilização do Vale Transporte</option><option value="nao">NÃO — opto pela utilização do Vale Transporte</option></select></div>' +
+          '<div class="form-divider">Casa → Trabalho</div><div id="admvt-ct-rows"></div><button type="button" class="btn btn--primary btn--sm" onclick="event.stopPropagation();_admVtAddRow(\'ct\')">+ linha</button>' +
+          '<div class="form-divider">Trabalho → Casa</div><div id="admvt-tc-rows"></div><button type="button" class="btn btn--primary btn--sm" onclick="event.stopPropagation();_admVtAddRow(\'tc\')">+ linha</button>' +
+        '</div>';
+      list.appendChild(vtItem);
+    }
 
-    ADM_DOCS.forEach(function(doc) {
+    var docsParaExibir = loteMode
+      ? ADM_DOCS.filter(function(d) { return d.sectionLabel && ADM_LOTE_EXCLUIDOS.indexOf(d.id) === -1; })
+      : ADM_DOCS;
+
+    docsParaExibir.forEach(function(doc) {
       var hasCa       = doc.id === 'japona_termica' || doc.id === 'luva_termica';
       var hasEpi      = doc.id === 'lista_epis';
       var hasBanco    = doc.id === 'dados_bancarios';
@@ -3599,6 +3626,54 @@ window.toggleFta = toggleFta;
       }
     });
     var btn = document.getElementById('adm-doc-select-all');
+    if (btn) btn.textContent = marcarTodos ? 'Limpar seleção' : 'Selecionar todos';
+  }
+
+  // Liga/desliga o modo "vários colaboradores de uma vez": troca o select único
+  // pela lista de checkboxes e restringe os documentos aos que não dependem de
+  // dados específicos de cada colaborador (ver ADM_LOTE_EXCLUIDOS).
+  function _admToggleLoteMode() {
+    _admLoteMode = !_admLoteMode;
+    var colabRow  = document.getElementById('adm-colab-row');
+    var loteWrap  = document.getElementById('adm-colab-lote-wrap');
+    var toggleBtn = document.getElementById('adm-lote-toggle');
+    var btnPdf    = document.getElementById('adm-btn');
+    if (colabRow)  colabRow.style.display = _admLoteMode ? 'none' : '';
+    if (loteWrap)  loteWrap.style.display = _admLoteMode ? '' : 'none';
+    if (toggleBtn) toggleBtn.textContent = _admLoteMode ? 'Gerar para 1 colaborador' : 'Gerar para vários colaboradores';
+    if (btnPdf)    btnPdf.style.display = _admLoteMode ? 'none' : '';
+    if (_admLoteMode) _admBuildColabLoteList();
+    _admBuildDocList(_admLoteMode);
+    _admShowError('');
+  }
+
+  // Monta a lista de checkboxes de colaboradores do modo em lote, a partir das
+  // mesmas opções já carregadas no select único (#adm-colab).
+  function _admBuildColabLoteList() {
+    var sel  = document.getElementById('adm-colab');
+    var list = document.getElementById('adm-colab-lote-list');
+    if (!sel || !list) return;
+    list.innerHTML = '';
+    Array.from(sel.options).forEach(function(opt, i) {
+      if (!opt.value) return;
+      var id = 'admlote_' + i;
+      var item = document.createElement('div');
+      item.className = 'adm-doc-item';
+      item.innerHTML =
+        '<input type="checkbox" id="' + id + '" value="' + _escHtml(opt.value) + '" class="adm-lote-colab-cb">' +
+        '<label for="' + id + '" style="cursor:pointer;flex:1;"><div class="adm-doc-name">' + _escHtml(opt.textContent) + '</div></label>';
+      list.appendChild(item);
+    });
+    var btn = document.getElementById('adm-colab-select-all');
+    if (btn) btn.textContent = 'Selecionar todos';
+  }
+
+  function _admToggleSelecionarTodosColabs() {
+    var boxes = Array.from(document.querySelectorAll('.adm-lote-colab-cb'));
+    if (!boxes.length) return;
+    var marcarTodos = boxes.some(function(cb) { return !cb.checked; });
+    boxes.forEach(function(cb) { cb.checked = marcarTodos; });
+    var btn = document.getElementById('adm-colab-select-all');
     if (btn) btn.textContent = marcarTodos ? 'Limpar seleção' : 'Selecionar todos';
   }
 
@@ -5457,7 +5532,6 @@ window.toggleFta = toggleFta;
 
   function salvarTermosParaAssinatura() {
     var sel      = document.getElementById('adm-colab');
-    var colabVal = sel.value;
     var checked  = Array.from(document.querySelectorAll('#adm-doc-list input[type=checkbox]:checked'));
     var caNumero = (document.getElementById('adm-ca') || {}).value || '';
     var caLuva   = (document.getElementById('adm-ca-luva') || {}).value || '';
@@ -5482,7 +5556,13 @@ window.toggleFta = toggleFta;
     var fregCampos = _admFregLerCampos();
     var fregDependentes = _admFregDepReadRows();
     _admShowError('');
-    if (!colabVal) { _admShowError('Selecione um colaborador.'); return; }
+
+    var colabCheckboxes = _admLoteMode ? Array.from(document.querySelectorAll('.adm-lote-colab-cb:checked')) : [];
+    if (_admLoteMode) {
+      if (!colabCheckboxes.length) { _admShowError('Selecione ao menos um colaborador.'); return; }
+    } else if (!sel.value) {
+      _admShowError('Selecione um colaborador.'); return;
+    }
 
     var termos = checked.map(function(cb) {
       if (cb.value === 'vale_transporte') return { id:'vale_transporte', nome:'Termo de Vale Transporte', sectionLabel:'Termo de Compromisso e Autorização de Desconto' };
@@ -5491,30 +5571,26 @@ window.toggleFta = toggleFta;
     if (!termos.length) { _admShowError('Selecione ao menos um termo (checklist e lista de EPIs não entram nesse fluxo — só impressão em lote).'); return; }
     if (termos.some(function(d){ return d.id === 'japona_termica'; }) && !caNumero.trim()) { _admShowError('Informe o número do CA da Japona Térmica.'); return; }
     if (termos.some(function(d){ return d.id === 'luva_termica'; }) && !caLuva.trim()) { _admShowError('Informe o número do CA da Luva Térmica.'); return; }
-    if (termos.some(function(d){ return d.id === 'dados_bancarios'; }) && (!banco.trim() || !agencia.trim() || !conta.trim())) { _admShowError('Informe banco, agência e conta.'); return; }
-    if (termos.some(function(d){ return d.id === 'contribuicao_sindical'; }) && !sindicalUnidade) { _admShowError('Selecione a unidade/CNPJ da autorização de desconto sindical.'); return; }
-    if (termos.some(function(d){ return d.id === 'salario_familia'; }) && !salFamFilhos.length) { _admShowError('Informe ao menos um filho (nome e data de nascimento).'); return; }
-    if (termos.some(function(d){ return d.id === 'dependentes_ir'; }) && !depUnidade) { _admShowError('Selecione a unidade/CNPJ da declaração de dependentes.'); return; }
-    if (termos.some(function(d){ return d.id === 'dependentes_ir'; }) && !depDependentes.length) { _admShowError('Informe ao menos um dependente (nome, relação e data de nascimento).'); return; }
-    if (termos.some(function(d){ return d.id === 'contrato_experiencia'; })) {
-      if (!ctrUnidade) { _admShowError('Selecione a unidade/CNPJ do local de trabalho (Contrato de Experiência).'); return; }
-      if (!ctrCtps.trim()) { _admShowError('Informe a CTPS (Contrato de Experiência).'); return; }
-      if (!ctrSalario.trim()) { _admShowError('Informe o salário bruto (Contrato de Experiência).'); return; }
-      if (!ctrHorario) { _admShowError('Selecione o horário de trabalho (Contrato de Experiência).'); return; }
-      if (ctrPrazoTipo === 'outros' && (!ctrDias1.trim() || !ctrDias2.trim())) { _admShowError('Informe os dois períodos do prazo (Contrato de Experiência).'); return; }
-    }
-    if (termos.some(function(d){ return d.id === 'ficha_registro'; }) && !fregUnidade) {
-      _admShowError('Selecione a unidade/CNPJ da Ficha de Registro de Empregados.'); return;
+    // Documentos com campos específicos de colaborador (banco, sindical, filhos, dependentes,
+    // contrato, ficha de registro) nem aparecem na lista em modo lote — ver ADM_LOTE_EXCLUIDOS.
+    if (!_admLoteMode) {
+      if (termos.some(function(d){ return d.id === 'dados_bancarios'; }) && (!banco.trim() || !agencia.trim() || !conta.trim())) { _admShowError('Informe banco, agência e conta.'); return; }
+      if (termos.some(function(d){ return d.id === 'contribuicao_sindical'; }) && !sindicalUnidade) { _admShowError('Selecione a unidade/CNPJ da autorização de desconto sindical.'); return; }
+      if (termos.some(function(d){ return d.id === 'salario_familia'; }) && !salFamFilhos.length) { _admShowError('Informe ao menos um filho (nome e data de nascimento).'); return; }
+      if (termos.some(function(d){ return d.id === 'dependentes_ir'; }) && !depUnidade) { _admShowError('Selecione a unidade/CNPJ da declaração de dependentes.'); return; }
+      if (termos.some(function(d){ return d.id === 'dependentes_ir'; }) && !depDependentes.length) { _admShowError('Informe ao menos um dependente (nome, relação e data de nascimento).'); return; }
+      if (termos.some(function(d){ return d.id === 'contrato_experiencia'; })) {
+        if (!ctrUnidade) { _admShowError('Selecione a unidade/CNPJ do local de trabalho (Contrato de Experiência).'); return; }
+        if (!ctrCtps.trim()) { _admShowError('Informe a CTPS (Contrato de Experiência).'); return; }
+        if (!ctrSalario.trim()) { _admShowError('Informe o salário bruto (Contrato de Experiência).'); return; }
+        if (!ctrHorario) { _admShowError('Selecione o horário de trabalho (Contrato de Experiência).'); return; }
+        if (ctrPrazoTipo === 'outros' && (!ctrDias1.trim() || !ctrDias2.trim())) { _admShowError('Informe os dois períodos do prazo (Contrato de Experiência).'); return; }
+      }
+      if (termos.some(function(d){ return d.id === 'ficha_registro'; }) && !fregUnidade) {
+        _admShowError('Selecione a unidade/CNPJ da Ficha de Registro de Empregados.'); return;
+      }
     }
 
-    var colabNome = sel.options[sel.selectedIndex].text;
-    var colabData = _admColabMap[colabVal] || {};
-    if (!colabData.matricula) { _admShowError('Colaborador sem matrícula cadastrada — não é possível salvar.'); return; }
-    var colabNomeLimpo = colabData.nome || colabNome.split(' — ')[0];
-    var colabUnidade   = colabData.unidade || '';
-    var colabCargo     = colabData.cargo || colabData.departamento || '';
-    var colabDepartamento = colabData.departamento || '';
-    var dataAdmissao   = _admFmtAdmissao(colabData.admissao);
     var _sess = window.__lideresSession || (function(){ try { return JSON.parse(localStorage.getItem('lideres_session')); } catch(e){ return null; } })();
     var usuarioLogado = (_sess && _sess.displayName) ? _sess.displayName : '';
     var now = new Date();
@@ -5524,29 +5600,84 @@ window.toggleFta = toggleFta;
     var _docDateRaw = (document.getElementById('adm-data-doc') || {}).value || '';
     var docDateFmt = _docDateRaw ? _admFmtAdmissao(_docDateRaw) : dataFmt;
 
-    var ctx = Object.assign({
-      colabMatricula: colabData.matricula, colabNomeLimpo: colabNomeLimpo, colabUnidade: colabUnidade,
-      colabCargo: colabCargo, colabDepartamento: colabDepartamento, colabCpf: colabData.cpf, dataAdmissao: dataAdmissao, admissaoIso: colabData.admissao,
-      dataFmt: dataFmt, dateStr: dateStr,
-      docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva, usuarioLogado: usuarioLogado,
-      banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta,
-      sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao,
-      salFamFilhos: salFamFilhos,
-      depUnidade: depUnidade, depDependentes: depDependentes,
-      ctrUnidade: ctrUnidade, ctrCtps: ctrCtps, ctrSalario: ctrSalario,
-      ctrHorario: ctrHorario, ctrPrazoTipo: ctrPrazoTipo, ctrDias1: ctrDias1, ctrDias2: ctrDias2, ctrEstagioAnos: ctrEstagioAnos,
-      fregUnidade: fregUnidade, fregCpf: colabData.cpf, fregDependentes: fregDependentes
-    }, fregCampos);
+    // Monta o ctx de UM colaborador a partir dos campos compartilhados do formulário
+    // (iguais pra todos no lote) + os dados próprios dele (_admColabMap).
+    function montarCtx(colabVal, colabNomeTxt) {
+      var colabData = _admColabMap[colabVal] || {};
+      if (!colabData.matricula) return { erro: true };
+      var colabNomeLimpo = colabData.nome || (colabNomeTxt || '').split(' — ')[0];
+      var colabUnidade   = colabData.unidade || '';
+      var colabCargo     = colabData.cargo || colabData.departamento || '';
+      var colabDepartamento = colabData.departamento || '';
+      var dataAdmissaoColab = _admFmtAdmissao(colabData.admissao);
+      return { ctx: Object.assign({
+        colabMatricula: colabData.matricula, colabNomeLimpo: colabNomeLimpo, colabUnidade: colabUnidade,
+        colabCargo: colabCargo, colabDepartamento: colabDepartamento, colabCpf: colabData.cpf, dataAdmissao: dataAdmissaoColab, admissaoIso: colabData.admissao,
+        dataFmt: dataFmt, dateStr: dateStr,
+        docDateFmt: docDateFmt, caNumero: caNumero, caLuva: caLuva, usuarioLogado: usuarioLogado,
+        banco: banco, agencia: agencia, conta: conta, tipoConta: tipoConta,
+        sindicalUnidade: sindicalUnidade, sindicalOpcao: sindicalOpcao,
+        salFamFilhos: salFamFilhos,
+        depUnidade: depUnidade, depDependentes: depDependentes,
+        ctrUnidade: ctrUnidade, ctrCtps: ctrCtps, ctrSalario: ctrSalario,
+        ctrHorario: ctrHorario, ctrPrazoTipo: ctrPrazoTipo, ctrDias1: ctrDias1, ctrDias2: ctrDias2, ctrEstagioAnos: ctrEstagioAnos,
+        fregUnidade: fregUnidade, fregCpf: colabData.cpf, fregDependentes: fregDependentes
+      }, fregCampos) };
+    }
 
-    _admSetLoadingSalvar(true, 'Enviando…');
+    if (!_admLoteMode) {
+      var colabNome = sel.options[sel.selectedIndex].text;
+      var m = montarCtx(sel.value, colabNome);
+      if (m.erro) { _admShowError('Colaborador sem matrícula cadastrada — não é possível salvar.'); return; }
+
+      _admSetLoadingSalvar(true, 'Enviando…');
+      _admCarregarDocTipos().then(function(mapaTipoId) {
+        return termos.reduce(function(promise, doc) {
+          return promise.then(function() { return _admSalvarUmTermo(doc, m.ctx, mapaTipoId); });
+        }, Promise.resolve());
+      }).then(function() {
+        _admSetLoadingSalvar(false, 'Enviar para Assinatura Digital');
+        closeModalAdmissao();
+        alert(termos.length + ' termo(s) salvo(s) — pendente(s) de assinatura.');
+      }, function(err) {
+        _admSetLoadingSalvar(false, 'Enviar para Assinatura Digital');
+        _admShowError('Erro ao salvar: ' + (err && err.message || err));
+      });
+      return;
+    }
+
+    // ── Modo em lote: processa cada colaborador selecionado, um atrás do outro ──
+    var total = colabCheckboxes.length;
+    var ok = 0;
+    var erros = [];
+    _admSetLoadingSalvar(true, 'Enviando 0/' + total + '…');
     _admCarregarDocTipos().then(function(mapaTipoId) {
-      return termos.reduce(function(promise, doc) {
-        return promise.then(function() { return _admSalvarUmTermo(doc, ctx, mapaTipoId); });
+      return colabCheckboxes.reduce(function(promise, cb, idx) {
+        return promise.then(function() {
+          var colabNomeTxt = cb.closest('.adm-doc-item').querySelector('.adm-doc-name').textContent;
+          var m = montarCtx(cb.value, colabNomeTxt);
+          var passo = m.erro
+            ? Promise.reject(new Error('sem matrícula cadastrada'))
+            : termos.reduce(function(p, doc) {
+                return p.then(function() { return _admSalvarUmTermo(doc, m.ctx, mapaTipoId); });
+              }, Promise.resolve());
+          return passo.then(function() {
+            ok++;
+          }, function(err) {
+            erros.push(colabNomeTxt + ' — ' + (err && err.message || err));
+          }).then(function() {
+            _admSetLoadingSalvar(true, 'Enviando ' + (idx + 1) + '/' + total + '…');
+          });
+        });
       }, Promise.resolve());
     }).then(function() {
       _admSetLoadingSalvar(false, 'Enviar para Assinatura Digital');
-      closeModalAdmissao();
-      alert(termos.length + ' termo(s) salvo(s) — pendente(s) de assinatura.');
+      if (!erros.length) {
+        closeModalAdmissao();
+        alert(ok + ' colaborador(es) processado(s) — ' + termos.length + ' termo(s) cada, pendente(s) de assinatura.');
+      } else {
+        _admShowError(ok + ' de ' + total + ' colaborador(es) processado(s) com sucesso. Falha em: ' + erros.join(' · '));
+      }
     }, function(err) {
       _admSetLoadingSalvar(false, 'Enviar para Assinatura Digital');
       _admShowError('Erro ao salvar: ' + (err && err.message || err));
