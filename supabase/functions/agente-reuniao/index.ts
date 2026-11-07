@@ -3,9 +3,9 @@
 // A página compliance/kpis/rh/sam.html (dentro do app Tatá Plus) ouve pelo microfone e manda
 // trechos de áudio cortados nas pausas. Aqui:
 //   iniciar   → abre a reunião (dp_rh.agente_reunioes) e devolve a saudação falada
-//   trecho    → transcreve (OpenAI) e guarda; avisa se chamaram "Sam, …"
+//   trecho    → transcreve (OpenRouter) e guarda; avisa se chamaram "Sam, …"
 //   perguntar → o Sam de sempre (edge agente-whatsapp ?reuniao=) responde com o contexto dos
-//               últimos minutos; a resposta volta em texto e em voz (OpenAI TTS)
+//               últimos minutos; a resposta volta em texto e em voz (OpenRouter)
 //   encerrar  → fecha e gera em segundo plano (Claude) a ata no formato das atas de RH (grava em
 //               dp_rh.alinhamento_transcricao), o resumo para o grupo DP/RH (agente_config
 //               reuniao_grupo_resumo) e o encerramento falado; ata completa no privado do responsável
@@ -117,7 +117,7 @@ async function minhaReuniao(id: string, u: Usuario): Promise<any> {
   return data;
 }
 
-// ── OpenAI: transcrição e voz ───────────────────────────────────────────────
+// ── áudio (OpenRouter): transcrição e voz ───────────────────────────────────
 const ALUCINACAO = /amara\.org|legendas? (pela|por)|inscreva-se|obrigad[oa] por assistir|^\W*(obrigad[oa]|tchau)\W*$/i;
 
 // formato do áudio para a API (o navegador manda webm/opus; o iPhone, mp4/aac)
