@@ -213,6 +213,7 @@
   .dev-card-alerta { margin: 0 14px 10px; padding: 6px 10px; border-radius: 6px; background: #FFF4DC; color: #7A4A00; font-size: 11px; line-height: 1.4; }
   .dev-card-body { padding: 10px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
   .dev-card-field { display: flex; flex-direction: column; gap: 1px; }
+  .dev-card-field--full { grid-column: 1 / -1; }
   .dev-card-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
   .dev-card-value { font-size: 12px; color: var(--carbon); font-weight: 500; }
   .dev-card-footer { border-top: 1px solid var(--border); padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #FAFAFA; }
@@ -1314,6 +1315,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <label class="mf-label" for="f-direito">Direito (faltas no período)</label>
         <input class="mf-input" id="f-direito" type="text" readonly style="background:var(--bg);color:var(--muted);cursor:default" placeholder="—">
       </div>
+      <div class="mf-field" id="f-previo-wrap" style="display:none">
+        <label class="mf-label" for="f-previo">Já gozado neste período</label>
+        <input class="mf-input" id="f-previo" type="text" readonly style="background:var(--bg);color:var(--muted);cursor:default" placeholder="—">
+      </div>
       <div class="mf-field">
         <label class="mf-label">Venda de férias (abono)?</label>
         <div class="mf-toggle-row">
@@ -1483,7 +1488,8 @@ function _feriasListar() {
             direito_manual: f.direito_manual, direito_motivo: f.direito_motivo,
             situacao: f.situacao, quitado_motivo: f.quitado_motivo,
             pj: !!f.pj,  // contrato PJ: sempre 30 dias, sem desconto por faltas e sem venda
-            dias_susp: f.dias_susp   // dias de suspensão de contrato no aquisitivo (alerta de ciclo)
+            dias_susp: f.dias_susp,  // dias de suspensão de contrato no aquisitivo (alerta de ciclo)
+            gozo_previo: Array.isArray(f.gozo_previo) ? f.gozo_previo : []   // blocos já gozados antes do portal
           };
         });
         resolve({ ok:true, ferias: ferias });
@@ -1591,7 +1597,7 @@ function _estadoPend(p){
   if (_semDireito(p)) return 'sem-direito';
   var hoje = _hojeIso();
   if (!p.pj && (!p.fim_conc || p.fim_conc < hoje)) return 'vencido';
-  var D = _direitoDias(p), menor = p.pj ? D : D - Math.floor(D/3);   // com venda, o descanso é o menor bloco possível
+  var D = _direitoDias(p), menor = _motivoSemVenda(p) ? D : D - Math.floor(D/3);   // com venda, o descanso é o menor bloco possível
   return _datasInicio(_minIniFerias(p.ini_conc), _limiteFim(p), menor).length ? 'pendente' : 'sem-prazo';
 }
 // Na aba Pendências aparecem os pendentes e os "sem direito" (para o RH ver); só os pendentes são agendáveis
@@ -1605,9 +1611,25 @@ function _textoFaltas(p){
 }
 // Afastamento INSS / suspensão de contrato no aquisitivo → o ciclo pode ter mudado na folha
 function _diasAfast(p){ return (+p.dias_inss || 0) + (+p.dias_susp || 0); }
+// Gozo anterior: parte do período já gozada fora do agendamento do portal (veio da folha/recibo).
+// O direito que chega do banco já é o saldo (direito − dias gozados antes).
+function _previo(p){ return (p && Array.isArray(p.gozo_previo)) ? p.gozo_previo : []; }
+function _diasBloco(b){ return +b.dias || _daysBetweenIso(b.ini, b.fim); }
+function _diasPrevio(p){ return _previo(p).reduce(function(s, b){ return s + _diasBloco(b); }, 0); }
+function _textoPrevio(p){
+  return _previo(p).map(function(b){ return _isoToBR(b.ini) + ' a ' + _isoToBR(b.fim) + ' (' + _diasBloco(b) + ' dias)'; }).join(' · ');
+}
+// Venda (abono) não se aplica a PJ nem ao saldo de período que já teve gozo
+function _motivoSemVenda(p){
+  if (!p) return '';
+  if (p.pj) return 'Contrato PJ não prevê venda de férias';
+  if (_diasPrevio(p) > 0) return 'Este período já teve férias gozadas: o saldo é agendado sem venda';
+  return '';
+}
 function _textoDireito(p){
-  var D = _direitoDias(p);
+  var D = _direitoDias(p), prev = _diasPrevio(p);
   var t = D > 0 ? D + ' dias' : 'Sem direito';
+  if (prev > 0) t = D + ' dias de saldo (' + (D + prev) + ' − ' + prev + ' já gozados)';
   if (_temAjusteRH(p)) t += ' · ajuste do RH';
   else if (p.pj) t += ' · contrato PJ';
   else if (p.dias_inss > 180) t += ' · INSS > 6 meses';
@@ -1689,10 +1711,13 @@ function onFPeriodoChange() {
   var mt = document.getElementById('f-colaborador').value;
   var iniAqui = document.getElementById('f-periodo-aquisitivo').value;
   var concEl = document.getElementById('f-periodo-concessivo');
-  _concIni = null; _concFim = null; _dirDias = 30; _pjSel = false;
+  _concIni = null; _concFim = null; _dirDias = 30; _pjSel = false; _semVendaMsg = '';
   _resetAgendamento();
   var p = _feriasCache.filter(function(x){ return x.mt === mt && x.ini_aqui === iniAqui; })[0];
   var dirEl0 = document.getElementById('f-direito'); if (dirEl0) dirEl0.value = '';
+  var prevWrap = document.getElementById('f-previo-wrap');
+  prevWrap.style.display = p && _diasPrevio(p) > 0 ? '' : 'none';
+  document.getElementById('f-previo').value = p ? _textoPrevio(p) : '';
   if (!p) { concEl.value = ''; return; }
   _concIni = p.ini_conc || null;
   _concFim = p.fim_conc ? _limiteFim(p) : null;   // PJ: sem prazo de concessivo
@@ -1704,7 +1729,8 @@ function onFPeriodoChange() {
     ? _textoDireito(p) + ' (sem desconto por faltas e sem venda)'
     : _textoDireito(p) + (p.faltas != null ? ' — ' + _textoFaltas(p) + ' falta(s) no período aquisitivo' : '');
   _pjSel = !!p.pj;
-  if (p.pj) {   // contrato PJ não prevê venda: só "Não"
+  _semVendaMsg = _motivoSemVenda(p);
+  if (_semVendaMsg) {   // PJ ou saldo de período que já teve gozo: só "Não"
     document.getElementById('toggle-abono-sim').style.display = 'none';
     setAbono(false);
   }
@@ -1714,10 +1740,10 @@ function closeFeriasModal() {
   document.getElementById('mf-overlay').classList.remove('open');
 }
 
-var _pjSel = false;
+var _pjSel = false, _semVendaMsg = '';
 function setAbono(sim) {
   if (!_concFim) { showFeriasToast('Escolha o período aquisitivo primeiro', true); return; }
-  if (sim && _pjSel) { showFeriasToast('Contrato PJ não prevê venda de férias', true); return; }
+  if (sim && _semVendaMsg) { showFeriasToast(_semVendaMsg, true); return; }
   document.getElementById('toggle-abono-sim').classList.toggle('active', sim);
   document.getElementById('toggle-abono-nao').classList.toggle('active', !sim);
   var opts = _opcoesFrac(_dirDias, sim);
@@ -2356,6 +2382,9 @@ function devCardHtml(p, i) {
       '<div class="dev-card-field"><span class="dev-card-label">Departamento</span><span class="dev-card-value">' + escH(info.departamento || '—') + '</span></div>' +
       '<div class="dev-card-field"><span class="dev-card-label">Faltas no período</span><span class="dev-card-value">' + escH(_textoFaltas(p)) + '</span></div>' +
       '<div class="dev-card-field"><span class="dev-card-label">Direito</span><span class="dev-card-value">' + escH(_textoDireito(p)) + '</span></div>' +
+      (_diasPrevio(p) > 0
+        ? '<div class="dev-card-field dev-card-field--full"><span class="dev-card-label">Já gozado neste período</span><span class="dev-card-value">' + escH(_textoPrevio(p)) + '</span></div>'
+        : '') +
     '</div>' +
     (_diasAfast(p) > 0
       ? '<div class="dev-card-alerta">⚠ Conferir ciclo na folha: ' + _diasAfast(p) + ' dia(s) de afastamento/suspensão no período</div>'
@@ -2375,6 +2404,7 @@ function abrirAjusteRH(mt, iniAqui) {
     + ' · Faltas: ' + _textoFaltas(p)
     + (p.direito_calc != null ? ' · Pelo cálculo: ' + (p.direito_calc > 0 ? p.direito_calc + ' dias' : 'sem direito') : '')
     + (_temAjusteRH(p) ? ' · Ajuste atual: ' + (+p.direito_manual > 0 ? p.direito_manual + ' dias' : 'sem direito') + (p.direito_motivo ? ' (' + p.direito_motivo + ')' : '') : '');
+  if (_diasPrevio(p) > 0) info += ' · Já gozado: ' + _textoPrevio(p) + ' (o direito abaixo é descontado desses dias)';
   var agendada = !!p.ini1;
   if (agendada) {
     var fimAg = p.fim3 || p.fim2 || p.fim1;
