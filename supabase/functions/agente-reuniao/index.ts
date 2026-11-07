@@ -10,9 +10,10 @@
 //               não viraram texto fica guardado 3 dias para diagnóstico
 //   perguntar → o Sam de sempre (edge agente-whatsapp ?reuniao=) responde com o contexto dos
 //               últimos minutos; a resposta volta em texto e em voz (OpenRouter)
-//   encerrar  → fecha e gera em segundo plano (Claude) a ata no formato das atas de RH (grava em
-//               dp_rh.alinhamento_transcricao), o resumo para o grupo DP/RH (agente_config
-//               reuniao_grupo_resumo) e o encerramento falado; ata completa no privado do responsável
+//   encerrar  → fecha e gera em segundo plano (Claude) a ata no formato das atas de RH, o resumo e o
+//               encerramento falado; ata, resumo e transcrição vão para dp_rh.alinhamento_transcricao
+//               (a tabela das atas de RH) e só o resumo vai para o WhatsApp (agente_config
+//               reuniao_grupo_resumo: o grupo DP/RH, ou o responsável durante os testes)
 //   status    → situação da reunião (a página consulta até a ata ficar pronta)
 //   fala_final→ o Sam fala o encerramento na sala (assuntos, decisões, pendências)
 //   varrer    → (pg_cron, ?k=<portal_secret>) encerra reuniões abandonadas há 20 min
@@ -335,27 +336,32 @@ const INSTRUCOES_ATA = `Você é o Sam, assistente virtual do RH do TATÁ Sushi.
 ===ATA===
 Síntese executiva da reunião
 
-<um parágrafo com os assuntos principais>
+<um parágrafo de abertura, começando com "A reunião concentrou-se em", com os assuntos principais; sem data, horário ou duração>
 
 1. <Tema>
 
-<parágrafos curtos: o que foi discutido, números citados e o que ficou decidido>
+<parágrafos curtos: o que foi discutido, números citados e o que ficou definido ou o próximo passo; quando houver vários itens, uma lista com "- item;" e o último terminando em ponto>
 
 2. <Tema>
+
 ...
 
 Decisões
-• <decisão>
+
+- <decisão>
 
 Pendências
-• <responsável> — <o que fazer> — <prazo, se foi dito>
+
+- <responsável> — <o que fazer> — <prazo, se foi dito>
 ===GRUPO===
-<resumo para o grupo de WhatsApp do DP/RH, até uns 1.200 caracteres: primeira linha "📝 *<título> — <data>*"; a síntese em 2 ou 3 frases; "*Decisões*" com •; "*Pendências*" com • responsável — o quê — prazo; última linha "Ata completa no portal.">
+<resumo para o WhatsApp do DP/RH, até uns 1.200 caracteres: primeira linha "*<título> — <data>*"; a síntese em 2 ou 3 frases; "*Decisões*" com •; "*Pendências*" com • responsável — o quê — prazo; última linha "Ata completa no portal.">
 ===FALADO===
 <o encerramento que você vai FALAR em voz alta na sala: 3 a 5 frases curtas, tom de colega, começando com "Fechando a reunião:"; os assuntos principais, o que ficou decidido e quem ficou com cada pendência; termine dizendo que vai mandar o resumo no grupo do DP. Sem listas, emojis ou asteriscos.>
 
 Regras:
-• Português do Brasil. Ata: texto puro, sem markdown (# ou **), agrupada por tema, não pela ordem da conversa.
+• Português do Brasil, no estilo das atas de RH da empresa: frases completas e impessoais ("foi discutido", "ficou definido", "o próximo passo é"), parágrafos curtos, agrupado por tema e não pela ordem da conversa.
+• Ata em texto puro: sem markdown (# ou **), sem emojis, sem assinatura ou observação sobre quem fez a ata ou como ela foi feita.
+• Resumo do grupo: sem emojis; o asterisco só para o negrito do WhatsApp.
 • Não invente: só o que está na transcrição. Responsável que não ficou claro = "responsável a definir". Se não houver decisões ou pendências, escreva "Nenhuma registrada." na seção.
 • Nomes de pessoas como aparecem; corrija erros óbvios de transcrição só quando o contexto deixar claro.
 • Perguntas ao Sam e respostas dele só entram se viraram decisão ou pendência.
@@ -369,7 +375,7 @@ function blocos(t: string, titulo: string, data: string) {
   };
   const ata = pega("ATA") || t.replace(/===\s*[A-Z]+\s*===/g, "").trim();
   const grupo = pega("GRUPO") ||
-    `📝 *${titulo} — ${data}*\n\n${ata.slice(0, 1100)}${ata.length > 1100 ? "…" : ""}\n\nAta completa no portal.`;
+    `*${titulo} — ${data}*\n\n${ata.slice(0, 1100)}${ata.length > 1100 ? "…" : ""}\n\nAta completa no portal.`;
   const falado = pega("FALADO").replace(/[*•#]/g, "").trim() ||
     "Fechando a reunião. Vou mandar o resumo no grupo do DP, e a ata completa fica no portal.";
   return { ata, grupo, falado };
@@ -384,31 +390,30 @@ async function gerarAta(id: string) {
     const reuniao = r as any;
     const texto = String(transcricao ?? "").trim();
     if (!texto) throw new Error("nenhuma fala foi transcrita");
-    const minutos = Math.round(Number(reuniao.segundos_audio ?? 0) / 60);
     const fim = reuniao.fim ?? new Date().toISOString();
     const resposta = await chamarClaude(INSTRUCOES_ATA,
       `Reunião: ${reuniao.titulo} — ${dia(reuniao.inicio)}, das ${hora(reuniao.inicio)} às ${hora(fim)}.\n\nTRANSCRIÇÃO\n${texto.slice(-150_000)}`);
     const b = blocos(resposta, reuniao.titulo, dia(reuniao.inicio));
-    const ata = `${b.ata}\n\n— Ata feita pelo Sam a partir da gravação da reunião (${dia(reuniao.inicio)}, ${hora(reuniao.inicio)}–${hora(fim)}, ~${minutos} min de fala, ${reuniao.perguntas ?? 0} pergunta(s) ao Sam).`;
+    // ata, resumo e transcrição na tabela das atas de RH (dp_rh.alinhamento_transcricao)
     const { error } = await supa.rpc("agente_reuniao_gravar_ata", {
-      p_id: id, p_ata: ata, p_resumo_grupo: b.grupo, p_resumo_falado: b.falado,
+      p_id: id, p_ata: b.ata, p_resumo_grupo: b.grupo, p_resumo_falado: b.falado,
     });
     if (error) throw new Error(error.message);
+    // no WhatsApp vai só o resumo (a ata completa fica no portal). Vira conversa do Sam: dá para
+    // responder "Sam, detalha a pendência 2". Destino: grupo DP/RH (ou o responsável, nos testes)
     const { responsavel, grupo } = await config();
-    // resumo no grupo do DP (vira conversa do Sam: dá para responder "Sam, detalha…")
-    if (grupo) {
-      const ids = await enviarWhats(grupo, b.grupo);
+    const destino = grupo || responsavel;
+    if (destino) {
+      const ids = await enviarWhats(destino, b.grupo);
       await supa.rpc("agente_registrar", {
-        p_telefone: grupo, p_papel: "assistant", p_texto: b.grupo, p_msg_id: ids[0] ?? null, p_meta: { reuniao_id: id },
+        p_telefone: destino, p_papel: "assistant", p_texto: b.grupo, p_msg_id: ids[0] ?? null, p_meta: { reuniao_id: id },
       });
     }
-    // ata completa para o responsável
-    if (responsavel) await enviarWhats(responsavel, `📝 *Ata da ${reuniao.titulo}* (${dia(reuniao.inicio)}) — salva junto das atas de RH.\n\n${ata}`);
   } catch (err) {
     await supa.rpc("agente_reuniao_status", { p_id: id, p_status: "erro", p_erro: erroTxt(err).slice(0, 500) });
     const { responsavel } = await config();
     if (responsavel) {
-      await enviarWhats(responsavel, `⚠️ Não consegui fazer a ata da reunião (${erroTxt(err).slice(0, 200)}). A transcrição ficou salva; dá para pedir de novo na página do Sam.`)
+      await enviarWhats(responsavel, `Não consegui fazer a ata da reunião (${erroTxt(err).slice(0, 200)}). A transcrição ficou salva; dá para pedir de novo na página do Sam.`)
         .catch(() => {});
     }
   }

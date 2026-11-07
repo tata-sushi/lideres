@@ -205,8 +205,10 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
                → "Sam, …"? → perguntar
       perguntar→ edge agente-whatsapp ?reuniao= (mesmo cérebro: banco + portal + ensinado; contexto dos últimos 10 min)
                → resposta curta para falar → voz OpenRouter (microsoft/mai-voice-2.1-flash, pt-BR-Rafael)
-      encerrar → Claude escreve ATA + RESUMO DO GRUPO + FECHAMENTO FALADO
-               → dp_rh.alinhamento_transcricao (id_externo sam-<id>) · grupo DP/RH · WhatsApp do responsável
+      encerrar → Claude escreve ATA (padrão "Síntese executiva da reunião" das atas de RH, sem ícone nem
+                 assinatura) + RESUMO + FECHAMENTO FALADO
+               → dp_rh.alinhamento_transcricao (id_externo sam-<id>): conteudo = ata, resumo, transcricao,
+                 origem = 'sam' · só o RESUMO vai para o WhatsApp (grupo DP/RH; nos testes, o responsável)
       fala_final → o Sam fala o fechamento na sala
   pg_cron agente-reuniao-varrer (10 min): reunião sem fala há 20 min é encerrada e ganha ata
 ```

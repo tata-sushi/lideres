@@ -279,3 +279,34 @@ grant execute on function tata_plus.agente_reuniao_trecho_log(uuid, text, jsonb,
 
 insert into dp_rh.agente_config (chave, valor) values ('reuniao_diag_audio', '0')
 on conflict (chave) do nothing;
+
+-- ── 4. ata, resumo e transcrição juntos na tabela das atas de RH ────────────
+-- A tabela dp_rh.alinhamento_transcricao (lida na Semanal → Alinhamentos) ganha o resumo que vai
+-- para o WhatsApp, a transcrição completa e a origem ('sam' = feita pelo Sam na reunião).
+-- `conteudo` continua sendo a ata (síntese), como nas atas anteriores.
+alter table dp_rh.alinhamento_transcricao
+  add column if not exists resumo      text,
+  add column if not exists transcricao text,
+  add column if not exists origem      text;
+
+create or replace function tata_plus.agente_reuniao_gravar_ata(p_id uuid, p_ata text, p_resumo_grupo text, p_resumo_falado text)
+returns uuid
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare v_ata uuid;
+begin
+  v_ata := tata_plus.agente_reuniao_concluir(p_id, p_ata);
+  update dp_rh.alinhamento_transcricao
+     set resumo = p_resumo_grupo,
+         transcricao = tata_plus.agente_reuniao_transcricao(p_id, null),
+         origem = 'sam'
+   where id = v_ata;
+  update dp_rh.agente_reunioes
+     set meta = meta || jsonb_build_object('resumo_grupo', p_resumo_grupo, 'resumo_falado', p_resumo_falado)
+   where id = p_id;
+  return v_ata;
+end $fn$;
+
+revoke execute on function tata_plus.agente_reuniao_gravar_ata(uuid, text, text, text) from public, anon, authenticated;
+grant execute on function tata_plus.agente_reuniao_gravar_ata(uuid, text, text, text) to service_role;
