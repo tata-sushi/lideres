@@ -79,7 +79,7 @@
   .kpi-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
   .kpi-sub strong { color: var(--carbon); font-weight: 600; }
   @media (max-width: 767px) { .kpis-wrap .kpi-card:last-child:nth-child(odd) { grid-column: 1 / -1; } }
-  @media (min-width: 768px) { .kpis-wrap { grid-template-columns: repeat(3, 1fr); } }
+  @media (min-width: 768px) { .kpis-wrap { grid-template-columns: repeat(var(--kpi-cols, 3), 1fr); } }
 
   /* GRÁFICO (chart-card + título + "i") */
   .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px 16px; display: flex; flex-direction: column; position: relative; min-width: 0; }
@@ -88,6 +88,12 @@
   .chart-info-btn:hover { color: var(--muted); }
   .chart-wrap { position: relative; height: 220px; overflow-x: auto; overflow-y: hidden; }
   .chart-scroll { position: relative; height: 100%; }
+  /* barra horizontal com muitas categorias: 220px e rolagem vertical por dentro (§3) */
+  .chart-wrap-y { overflow-x: hidden; overflow-y: auto; }
+  .chart-scroll-y { position: relative; height: 100%; }
+  /* VALORES (área de valor "ferias"): 3 gráficos por linha a partir de 1024px, um por linha abaixo */
+  .val-graficos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  @media (min-width: 1024px) { .val-graficos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
   /* TABELA ANALÍTICA (references/tabelas.md: table.mini + organizador: ordenar + dimensionar + "Ver mais") */
   .tbl-scroll { overflow-x: auto; }
@@ -98,6 +104,8 @@
   table.mini tbody tr:hover { background: #FAFAFA; }
   table.mini td.nm { font-weight: 600; }
   table.mini td.c { text-align: center; font-variant-numeric: tabular-nums; }
+  table.mini td.val { font-weight: 800; }
+  .td-sub { color: var(--muted); font-weight: 400; }
   table.mini.tbl-org { table-layout: fixed; }
   table.mini.tbl-org thead th { position: relative; overflow: hidden; cursor: pointer; user-select: none; text-align: center; }
   .tbl-org thead th:hover { color: var(--carbon); }
@@ -127,6 +135,8 @@
     /* no celular o card da tabela some (sem fundo branco, sem "i" e sem título): os cartões ficam no fundo cinza */
     .card-tabela { background: none; border: none; box-shadow: none; padding: 0; }
     .card-tabela > .chart-info-btn, .card-tabela > .chart-title { display: none; }
+    /* duas listas na mesma aba: a de valores mantém o título para não confundir com a agenda */
+    .card-tabela.mostra-titulo > .chart-title { display: block; padding: 4px 0 0; margin-bottom: 10px; text-align: left; }
   }
   @media (min-width: 768px) { .tcards { display: none; } }
   /* conteúdo do "i" */
@@ -447,6 +457,12 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <option value="sem-direito">Sem direito</option>
       </select>
     </div>
+    <div class="filter-group" id="fAno-wrap" style="display:none">
+      <label class="filter-label" for="fAno">Ano</label>
+      <select class="filter-select" id="fAno" onchange="selAno=this.value;selMesVal=null;updateAll()">
+        <option value="Todos">Todos</option>
+      </select>
+    </div>
   </div>
   <div class="filters-actions">
     <button class="btn-link" onclick="clearFeriasFilters()">Limpar filtros</button>
@@ -472,6 +488,34 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="tcards" id="fer-cards"></div>
     <div class="tbl-scroll tem-cartoes"><table class="mini tbl-org" id="tbl-fer" style="min-width:600px"><thead><tr><th data-col="nome" class="th-sort" onclick="doSort('nome')" style="width:270px">Colaborador <span class="sort-arrow" data-sa="nome">↕</span></th><th data-col="ini" class="th-sort" onclick="doSort('ini')" style="width:120px">Início <span class="sort-arrow" data-sa="ini">↑</span></th><th data-col="fim" class="th-sort" onclick="doSort('fim')" style="width:120px">Término <span class="sort-arrow" data-sa="fim">↕</span></th><th data-col="dias" class="th-sort" onclick="doSort('dias')" style="width:90px">Dias <span class="sort-arrow" data-sa="dias">↕</span></th><th class="c" style="width:70px">Ações</th></tr></thead><tbody id="tBody"></tbody></table></div>
     <div class="ver-mais-wrap" id="fer-mais" style="display:none"><button class="btn btn--primary" onclick="loadMore()">Ver mais</button></div>
+  </div>
+
+  <!-- VALORES — área de valor "ferias": o banco só manda os R$ para quem tem a liberação (dp_rh.perm_ver_valores);
+       para os demais esta parte fica escondida (não há nada para mostrar) -->
+  <div class="val-graficos" id="val-graficos" style="display:none">
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('val-mes')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Líquido de férias por mês (R$ mil)</div>
+      <div class="chart-wrap" id="cValMes-wrap"><div class="chart-scroll" id="cValMes-scroll"><canvas id="cValMes"></canvas></div></div>
+    </div>
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('val-uni')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Líquido por unidade (R$ mil)</div>
+      <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y" id="cValUni-scroll"><canvas id="cValUni"></canvas></div></div>
+    </div>
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('val-dep')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Líquido por departamento (R$ mil)</div>
+      <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y" id="cValDep-scroll"><canvas id="cValDep"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="chart-card card-tabela mostra-titulo" id="val-tabela" style="display:none">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('val-analitico')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title" id="vTitle">Analítico de valores</div>
+    <div class="tcards" id="val-cards"></div>
+    <div class="tbl-scroll tem-cartoes"><table class="mini tbl-org" id="tbl-val" style="min-width:1110px"><thead><tr><th data-col="nome" class="th-sort" onclick="TAB_VAL.ordenar('nome')" style="width:230px">Colaborador <span class="sort-arrow" data-sa="nome">↕</span></th><th data-col="unidade" class="th-sort" onclick="TAB_VAL.ordenar('unidade')" style="width:110px">Unidade <span class="sort-arrow" data-sa="unidade">↕</span></th><th data-col="departamento" class="th-sort" onclick="TAB_VAL.ordenar('departamento')" style="width:120px">Departamento <span class="sort-arrow" data-sa="departamento">↕</span></th><th data-col="ini_aqui" class="th-sort" onclick="TAB_VAL.ordenar('ini_aqui')" style="width:190px">Período aquisitivo <span class="sort-arrow" data-sa="ini_aqui">↕</span></th><th data-col="ini_gozo" class="th-sort" onclick="TAB_VAL.ordenar('ini_gozo')" style="width:110px">Início <span class="sort-arrow" data-sa="ini_gozo">↓</span></th><th data-col="fim_gozo" class="th-sort" onclick="TAB_VAL.ordenar('fim_gozo')" style="width:110px">Término <span class="sort-arrow" data-sa="fim_gozo">↕</span></th><th data-col="dias" class="th-sort" onclick="TAB_VAL.ordenar('dias')" style="width:60px">Dias <span class="sort-arrow" data-sa="dias">↕</span></th><th data-col="venda" class="th-sort" onclick="TAB_VAL.ordenar('venda')" style="width:70px">Venda <span class="sort-arrow" data-sa="venda">↕</span></th><th data-col="liquido" class="th-sort" onclick="TAB_VAL.ordenar('liquido')" style="width:120px">Líquido <span class="sort-arrow" data-sa="liquido">↕</span></th></tr></thead><tbody id="vBody"></tbody></table></div>
+    <div class="ver-mais-wrap" id="val-mais" style="display:none"><button class="btn btn--primary" onclick="TAB_VAL.verMais()">Ver mais</button></div>
   </div>
 </div>
 
@@ -1923,6 +1967,8 @@ function clearFeriasFilters() {
   document.getElementById('fUnidade').value = 'Todos';
   document.getElementById('fDepto').value = 'Todos';
   document.getElementById('fStatus').value = 'Todos';
+  selAno = 'Todos'; selMesVal = null;
+  var fA = document.getElementById('fAno'); if (fA) fA.value = 'Todos';
   cfMes = null; cfMesEmp = null;
   document.body.classList.remove('cf-active');
   updateAll();
@@ -1999,10 +2045,17 @@ function updateKPIs() {
       +'<span class="kpi-number">'+val+'</span>'
       +(sub?'<span class="kpi-sub">'+sub+'</span>':'')+'</div>';
   }
-  document.getElementById('kpiRow').innerHTML =
-      card('Pendentes de agendamento', pend.length, null)
+  var kr = document.getElementById('kpiRow');
+  var html = card('Pendentes de agendamento', pend.length, null)
     + card('Vencendo em 60 dias', vencendo, vencidas ? vencidas + (vencidas > 1 ? ' já vencidas' : ' já vencida') : 'concessivo')
     + card('Férias agendadas', agend, 'em andamento e futuras');
+  if (_valores.pode) {   // área de valor "ferias": só para quem tem a liberação
+    var vr = _valoresFiltrados(false), tot = vr.reduce(function(s, r){ return s + (+r.liquido || 0); }, 0);
+    html += card('Líquido pago · R$ mil', vr.length ? _fmtMil(tot) : '—',
+      vr.length ? vr.length + (vr.length > 1 ? ' recibos' : ' recibo') + ' · média ' + _fmtMil(tot / vr.length) + ' mil' : 'sem recibos no filtro');
+  }
+  kr.innerHTML = html;
+  kr.style.setProperty('--kpi-cols', _valores.pode ? 4 : 3);
 }
 
 // Analítico: organizador padrão (ordenar + dimensionar + "Ver mais"); doSort/loadMore continuam sendo os nomes chamados no HTML
@@ -2265,10 +2318,173 @@ function renderChart() {
   });
 }
 
+// === VALORES (área de valor "ferias") ======================================
+// O banco (tata_plus.ferias_valores_listar) só manda os recibos para quem tem a área liberada em
+// dp_rh.perm_ver_valores ('ferias' ou 'geral'); para os demais vem pode_ver=false e a parte some.
+var _valores = { pode: false, rows: [] };
+var selAno = 'Todos', selMesVal = null;   // selMesVal = 'AAAA-MM' clicado no gráfico por mês
+var _chVal = {};
+function _carregarValores() {
+  return new Promise(function(resolve){
+    comSupa(function(supa){
+      supa.schema('tata_plus').rpc('ferias_valores_listar').then(function(r){
+        var d = (r && !r.error && r.data) || {};
+        _valores = { pode: !!d.pode_ver, rows: (Array.isArray(d.recibos) ? d.recibos : []).filter(function(x){
+          return MT_EXCLUIDOS.indexOf(String(x.mt).trim()) === -1 && x.ini_gozo;
+        }) };
+        var anos = Array.from(new Set(_valores.rows.map(function(x){ return String(x.ini_gozo).slice(0, 4); }))).sort().reverse();
+        var fA = document.getElementById('fAno');
+        if (fA) fA.innerHTML = '<option value="Todos">Todos</option>' + anos.map(function(a){ return '<option value="' + a + '">' + a + '</option>'; }).join('');
+        _mostrarFiltroAno();
+        resolve();
+      }, function(){ resolve(); });
+    });
+  });
+}
+function _mostrarFiltroAno() {
+  var w = document.getElementById('fAno-wrap');
+  if (w) w.style.display = (_pageTab === 'kpis' && _valores.pode) ? '' : 'none';
+}
+// recibos com os filtros (unidade, departamento, ano) e, se comMes, o mês clicado no gráfico
+function _valoresFiltrados(semMes) {
+  return _valores.rows.filter(function(r){
+    if (selUni !== 'Todos' && r.unidade !== selUni) return false;
+    if (selDepto !== 'Todos' && r.departamento !== selDepto) return false;
+    if (selAno !== 'Todos' && String(r.ini_gozo).slice(0, 4) !== selAno) return false;
+    if (!semMes && selMesVal && String(r.ini_gozo).slice(0, 7) !== selMesVal) return false;
+    return true;
+  });
+}
+function _fmtMil(v) { return (v / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+function _fmtReais(v) { return v == null ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function _diasTxt(v) { var n = Number(v) || 0; return n ? String(Math.round(n)) : '—'; }
+// rótulo do valor (R$ mil, vírgula) acima da barra vertical ou depois da horizontal — DM Sans 12px/800
+var valorLabelsPlugin = {
+  id: 'valorLabels',
+  afterDatasetsDraw: function(chart) {
+    var meta = chart.getDatasetMeta(0); if (!meta || !meta.data) return;
+    var data = chart.data.datasets[0].data, horiz = chart.options.indexAxis === 'y', ctx = chart.ctx;
+    ctx.save();
+    ctx.fillStyle = '#35383F'; ctx.font = '800 12px "DM Sans", sans-serif';
+    ctx.textAlign = horiz ? 'left' : 'center'; ctx.textBaseline = horiz ? 'middle' : 'bottom';
+    meta.data.forEach(function(bar, i){
+      var v = data[i]; if (!v) return;
+      var t = v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      if (horiz) ctx.fillText(t, bar.x + 6, bar.y); else ctx.fillText(t, bar.x, bar.y - 4);
+    });
+    ctx.restore();
+  }
+};
+function _novoGrafico(id, cfg) {
+  if (_chVal[id]) { _chVal[id].destroy(); _chVal[id] = null; }
+  if (typeof Chart === 'undefined' || !document.getElementById(id)) return;
+  _chVal[id] = new Chart(document.getElementById(id), cfg);
+}
+function _graficoValMes(rows) {
+  var soma = {};
+  rows.forEach(function(r){ var k = String(r.ini_gozo).slice(0, 7); soma[k] = (soma[k] || 0) + (+r.liquido || 0); });
+  var meses = [];
+  if (selAno !== 'Todos') { for (var m = 1; m <= 12; m++) meses.push(selAno + '-' + String(m).padStart(2, '0')); }
+  else {
+    var ks = Object.keys(soma).sort();
+    if (ks.length) {
+      var y = +ks[0].slice(0, 4), mm = +ks[0].slice(5, 7), fimK = ks[ks.length - 1];
+      while (true) { var k = y + '-' + String(mm).padStart(2, '0'); meses.push(k); if (k >= fimK) break; mm++; if (mm > 12) { mm = 1; y++; } }
+    }
+  }
+  var labels = meses.map(function(k){ return k.slice(5, 7) + '/' + k.slice(2, 4); });
+  var dados = meses.map(function(k){ return soma[k] ? Math.round(soma[k] / 100) / 10 : 0; });
+  var cores = meses.map(function(k){ return selMesVal && k !== selMesVal ? 'rgba(53,56,63,0.45)' : '#35383F'; });
+  var sc = document.getElementById('cValMes-scroll'); if (sc) sc.style.minWidth = (meses.length * 46) + 'px';
+  _novoGrafico('cValMes', {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ data: dados, backgroundColor: cores, borderWidth: 0, borderRadius: 5, barPercentage: 0.6, maxBarThickness: 22 }] },
+    plugins: [valorLabelsPlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { top: 18, bottom: 6 } },
+      onClick: function(e, els){ if (!els.length) return; var k = meses[els[0].index]; selMesVal = selMesVal === k ? null : k; setTimeout(updateAll, 0); },   // redesenha depois do clique (o gráfico é recriado)
+      onHover: function(e, els){ if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: "'DM Sans', sans-serif", size: 12, weight: '500' } } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true }
+      }
+    }
+  });
+  // com todos os anos, abre mostrando os meses mais recentes
+  var wr = document.getElementById('cValMes-wrap'); if (wr && !selMesVal) wr.scrollLeft = wr.scrollWidth;
+}
+function _graficoValCat(id, rows, campo) {
+  var soma = {};
+  rows.forEach(function(r){ var k = r[campo] || '—'; soma[k] = (soma[k] || 0) + (+r.liquido || 0); });
+  var ks = Object.keys(soma).sort(function(a, b){ return soma[b] - soma[a]; });
+  var sc = document.getElementById(id + '-scroll'); if (sc) sc.style.height = Math.max(220, ks.length * 30 + 10) + 'px';
+  _novoGrafico(id, {
+    type: 'bar',
+    data: { labels: ks, datasets: [{ data: ks.map(function(k){ return Math.round(soma[k] / 100) / 10; }), backgroundColor: '#35383F', borderWidth: 0, borderRadius: 5, barPercentage: 0.6, maxBarThickness: 22 }] },
+    plugins: [valorLabelsPlugin],
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { right: 48 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true },
+        y: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: "'DM Sans', sans-serif", size: 12, weight: '500' },
+             callback: function(v){ var s = this.getLabelForValue(v), max = Math.min(26, Math.max(8, Math.floor((this.chart.width / 2 - 16) / 7.5)));
+                                    return s.length > max ? s.slice(0, max - 1) + '…' : s; } } }
+      }
+    }
+  });
+}
+var TAB_VAL = new TabelaOrg({
+  tabela: 'tbl-val', corpo: 'vBody', mais: 'val-mais', chave: 'ferias_valores_cols_v1',
+  n: PAGE_SIZE, colspan: 9, vazio: 'Nenhum recibo de férias encontrado',
+  valor: { liquido: function(r){ return +r.liquido || 0; }, dias: function(r){ return +r.dias_gozo || 0; }, venda: function(r){ return +r.dias_abono || 0; } },
+  linha: function(r){
+    return '<tr>' +
+      '<td class="nm" title="' + escH(r.nome) + '">' + escH(r.nome) + (r.ativo ? '' : ' <span class="td-sub">(desligado)</span>') + '</td>' +
+      '<td>' + escH(r.unidade || '—') + '</td>' +
+      '<td>' + escH(r.departamento || '—') + '</td>' +
+      '<td class="c">' + _isoToBR(r.ini_aqui) + ' → ' + (_isoToBR(r.fim_aqui) || '—') + '</td>' +
+      '<td class="c">' + _isoToBR(r.ini_gozo) + '</td>' +
+      '<td class="c">' + (_isoToBR(r.fim_gozo) || '—') + '</td>' +
+      '<td class="c">' + _diasTxt(r.dias_gozo) + '</td>' +
+      '<td class="c">' + _diasTxt(r.dias_abono) + '</td>' +
+      '<td class="c val">' + _fmtReais(r.liquido) + '</td>' +
+      '</tr>';
+  },
+  cartoes: 'val-cards',
+  cartao: function(r){
+    return cartao({ titulo: escH(r.nome), sub: escH([r.unidade, r.departamento].filter(Boolean).join(' · ') || '—') + (r.ativo ? '' : ' · desligado'),
+      campos: [['Período aquisitivo', _isoToBR(r.ini_aqui) + ' → ' + (_isoToBR(r.fim_aqui) || '—')], ['Gozo', _isoToBR(r.ini_gozo) + ' a ' + (_isoToBR(r.fim_gozo) || '—')],
+               ['Dias / venda', _diasTxt(r.dias_gozo) + ' / ' + _diasTxt(r.dias_abono)], ['Líquido', '<b>' + _fmtReais(r.liquido) + '</b>']] });
+  }
+});
+TAB_VAL.col = 'ini_gozo'; TAB_VAL.dir = -1;   // começa pelo recibo mais recente
+function renderValores() {
+  var on = _valores.pode;
+  ['val-graficos', 'val-tabela'].forEach(function(id){ var el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; });
+  if (!on) return;
+  var base = _valoresFiltrados(true), rows = _valoresFiltrados(false);
+  _graficoValMes(base);
+  _graficoValCat('cValUni', rows, 'unidade');
+  _graficoValCat('cValDep', rows, 'departamento');
+  var vt = document.getElementById('vTitle');
+  if (vt) vt.textContent = 'Analítico de valores (' + rows.length + ')' + (selMesVal ? ' · ' + selMesVal.slice(5, 7) + '/' + selMesVal.slice(0, 4) : '');
+  TAB_VAL.todos = false;
+  TAB_VAL.dados(rows);
+}
+
 // === Info dos gráficos (botão "i") ==========================================
 var _INFO_GRAFICOS = {
   meses: '<div class="info-note">Quantos períodos de férias começam em cada um dos próximos 12 meses (mês/ano), com os filtros de unidade e departamento. Clique numa barra para filtrar a tabela por aquele mês (clique de novo para tirar).</div>',
-  analitico: '<div class="info-note">Férias em andamento e futuras: uma linha por período (quem divide as férias aparece mais de uma vez). Clique no cabeçalho para ordenar e arraste a borda da coluna para mudar a largura.</div>'
+  analitico: '<div class="info-note">Férias em andamento e futuras: uma linha por período (quem divide as férias aparece mais de uma vez). Clique no cabeçalho para ordenar e arraste a borda da coluna para mudar a largura.</div>',
+  'val-mes': '<div class="info-note">Soma do valor <b>líquido</b> dos recibos de férias (total de proventos − total de descontos, o "total líquido" do recibo), em <b>R$ mil</b>, pelo mês de início do gozo. Respeita unidade, departamento e ano. Clique numa barra para filtrar a unidade, o departamento e o analítico por aquele mês (clique de novo para tirar).</div>'
+    + '<div class="info-note">O líquido já vem sem os descontos pessoais (INSS, IR, pensão, empréstimo, plano de saúde) e inclui a venda de dias. Férias indenizadas na rescisão não entram. Fonte: recibos da folha (2023 em diante).</div>',
+  'val-uni': '<div class="info-note">Soma do líquido dos recibos de férias por unidade, em R$ mil, com os filtros e o mês clicado. Desligados entram pela unidade do cadastro.</div>',
+  'val-dep': '<div class="info-note">Soma do líquido dos recibos de férias por departamento (somando as unidades), em R$ mil, com os filtros e o mês clicado.</div>',
+  'val-analitico': '<div class="info-note">Um recibo de férias por linha (quem dividiu as férias tem mais de um recibo no mesmo período aquisitivo). Dias = dias de descanso do recibo; Venda = dias vendidos (abono). Líquido = o que o colaborador recebeu no recibo. Clique no cabeçalho para ordenar e arraste a borda da coluna para mudar a largura.</div>'
 };
 function abrirInfoGrafico(key){
   var html = _INFO_GRAFICOS[key]; if (!html) return;
@@ -2285,6 +2501,7 @@ function updateAll() {
     renderChart();
     renderTable(getFilt());
     document.getElementById('chartTitle').textContent = 'Férias dos próximos meses';
+    renderValores();
   } else {
     renderDevolutivas();
   }
@@ -2310,6 +2527,7 @@ function setPageTab(tab) {
   var kr = document.getElementById('kpiRow'); if (kr) kr.style.display = isSobre ? 'none' : '';
   var fb = document.querySelector('.filter-bar'); if (fb) fb.style.display = isSobre ? 'none' : '';
   var fs = document.getElementById('fStatus'); if (fs && fs.parentNode) fs.parentNode.style.display = tab === 'devolutivas' ? '' : 'none';
+  _mostrarFiltroAno();
   document.getElementById('tab-kpis-content').style.display = tab === 'kpis' ? '' : 'none';
   document.getElementById('tab-devolutivas-content').style.display = tab === 'devolutivas' ? '' : 'none';
   if (isSobre) { var lo = document.getElementById('loading-overlay'); if (lo) lo.classList.remove('show'); }
@@ -2494,8 +2712,9 @@ function _tryRender() {
   }
 }
 
-// Fonte única: tata_plus.ferias_listar() alimenta férias + unidades/departamentos
-fetchFeriasOnStart().then(function() {
+// Fonte única: tata_plus.ferias_listar() alimenta férias + unidades/departamentos;
+// tata_plus.ferias_valores_listar() traz os recibos (só para quem tem a área de valor "ferias")
+Promise.all([fetchFeriasOnStart(), _carregarValores()]).then(function() {
   _colabsReady = true;
   _feriasReady = true;
   _tryRender();
