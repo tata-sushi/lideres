@@ -210,6 +210,7 @@
   .s-vencido   { background: #FDEAEA; color: #7A1A1A; }
   .s-sem-direito { background: #EEF0F2; color: #4B5563; }
   .dev-card-acoes { display: flex; gap: 6px; flex-shrink: 0; }
+  .dev-card-alerta { margin: 0 14px 10px; padding: 6px 10px; border-radius: 6px; background: #FFF4DC; color: #7A4A00; font-size: 11px; line-height: 1.4; }
   .dev-card-body { padding: 10px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
   .dev-card-field { display: flex; flex-direction: column; gap: 1px; }
   .dev-card-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
@@ -1367,6 +1368,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <label class="mf-label" for="aj-tipo">O que fazer</label>
         <select class="mf-select" id="aj-tipo"></select>
       </div>
+      <div class="mf-field" id="aj-data-wrap" style="display:none">
+        <label class="mf-label" for="aj-data">Início do novo ciclo</label>
+        <input class="mf-input" id="aj-data" type="date">
+        <div class="mf-label" style="text-transform:none;letter-spacing:0;line-height:1.4;margin-top:6px">Use a data de início do período aberto na folha (ou a volta do afastamento). O período sem gozo que cruza essa data fica quitado; os anteriores continuam valendo; os novos períodos passam a contar a partir dela. Vale para o colaborador, não só para este período.</div>
+      </div>
       <div class="mf-field">
         <label class="mf-label" for="aj-motivo">Motivo</label>
         <textarea class="mf-textarea" id="aj-motivo" placeholder="Ex.: faltas abonadas, pago na rescisão, data errada no agendamento…"></textarea>
@@ -1476,7 +1482,8 @@ function _feriasListar() {
             direito_calc: f.direito_calc, direito_efetivo: f.direito_efetivo,
             direito_manual: f.direito_manual, direito_motivo: f.direito_motivo,
             situacao: f.situacao, quitado_motivo: f.quitado_motivo,
-            pj: !!f.pj   // contrato PJ: sempre 30 dias, sem desconto por faltas e sem venda
+            pj: !!f.pj,  // contrato PJ: sempre 30 dias, sem desconto por faltas e sem venda
+            dias_susp: f.dias_susp   // dias de suspensão de contrato no aquisitivo (alerta de ciclo)
           };
         });
         resolve({ ok:true, ferias: ferias });
@@ -1596,6 +1603,8 @@ function _textoFaltas(p){
   if (p.faltas == null) return '—';
   return p.faltas + (p.faltas_parcial ? ' (registros desde 01/2025)' : '');
 }
+// Afastamento INSS / suspensão de contrato no aquisitivo → o ciclo pode ter mudado na folha
+function _diasAfast(p){ return (+p.dias_inss || 0) + (+p.dias_susp || 0); }
 function _textoDireito(p){
   var D = _direitoDias(p);
   var t = D > 0 ? D + ' dias' : 'Sem direito';
@@ -2348,6 +2357,9 @@ function devCardHtml(p, i) {
       '<div class="dev-card-field"><span class="dev-card-label">Faltas no período</span><span class="dev-card-value">' + escH(_textoFaltas(p)) + '</span></div>' +
       '<div class="dev-card-field"><span class="dev-card-label">Direito</span><span class="dev-card-value">' + escH(_textoDireito(p)) + '</span></div>' +
     '</div>' +
+    (_diasAfast(p) > 0
+      ? '<div class="dev-card-alerta">⚠ Conferir ciclo na folha: ' + _diasAfast(p) + ' dia(s) de afastamento/suspensão no período</div>'
+      : '') +
     '<div class="dev-card-footer">' + pillHtml + '<div class="dev-card-acoes">' + btnHtml + '</div></div>' +
   '</div>';
 }
@@ -2373,11 +2385,17 @@ function abrirAjusteRH(mt, iniAqui) {
     ? [['cancelar_agendamento', 'Cancelar agendamento (volta para pendente para agendar de novo)']]
     : [['automatico', 'Usar o cálculo por faltas'], ['30', 'Direito: 30 dias'], ['24', 'Direito: 24 dias'],
        ['18', 'Direito: 18 dias'], ['12', 'Direito: 12 dias'], ['0', 'Sem direito a férias'],
-       ['quitar', 'Marcar como quitado (pago sem gozo)']];
+       ['quitar', 'Marcar como quitado (pago sem gozo)'],
+       ['ciclo', 'Mudar início do ciclo (afastamento / suspensão)']];
   var sel = document.getElementById('aj-tipo');
   sel.innerHTML = OPC.map(function(o){ return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('');
   sel.value = agendada ? 'cancelar_agendamento' : (_temAjusteRH(p) ? String(p.direito_manual) : 'automatico');
   if (!sel.value) sel.value = 'automatico';
+  if (_diasAfast(p) > 0) info += ' · ⚠ ' + _diasAfast(p) + ' dia(s) de afastamento/suspensão no período';
+  document.getElementById('aj-info').textContent = info;
+  document.getElementById('aj-data').value = '';
+  sel.onchange = function(){ document.getElementById('aj-data-wrap').style.display = sel.value === 'ciclo' ? '' : 'none'; };
+  sel.onchange();
   document.getElementById('aj-motivo').value = '';
   setBtnLoading('aj-salvar', false, 'Salvar');
   document.getElementById('aj-overlay').classList.add('open');
@@ -2392,6 +2410,10 @@ function salvarAjusteRH() {
   if (v === 'automatico') payload.tipo = 'automatico';
   else if (v === 'quitar') { payload.tipo = 'quitar'; payload.motivo = motivo; }
   else if (v === 'cancelar_agendamento') { payload.tipo = 'cancelar_agendamento'; payload.motivo = motivo; }
+  else if (v === 'ciclo') {
+    payload.tipo = 'ciclo'; payload.valor = document.getElementById('aj-data').value; payload.motivo = motivo;
+    if (!payload.valor) { showFeriasToast('Informe a data de início do novo ciclo', true); return; }
+  }
   else { payload.tipo = 'direito'; payload.valor = v; payload.motivo = motivo; }
   if (payload.tipo !== 'automatico' && !motivo) { showFeriasToast('Informe o motivo do ajuste', true); return; }
   var btn = document.getElementById('aj-salvar');
@@ -2400,7 +2422,8 @@ function salvarAjusteRH() {
     setBtnLoading(btn, false, 'Salvar');
     if (!(res && res.ok)) { showFeriasToast('Erro: ' + ((res && res.erro) || 'falha ao salvar'), true); return; }
     fecharAjusteRH();
-    showFeriasToast(v === 'cancelar_agendamento' ? 'Agendamento cancelado — o período voltou para pendente' : 'Ajuste salvo');
+    showFeriasToast(v === 'cancelar_agendamento' ? 'Agendamento cancelado — o período voltou para pendente'
+      : v === 'ciclo' ? 'Ciclo ajustado — os períodos foram refeitos' : 'Ajuste salvo');
     fetchFeriasOnStart().then(function(){ updateAll(); });   // recarrega: o banco recalcula direito e situação
   }).catch(function(){ setBtnLoading(btn, false, 'Salvar'); showFeriasToast('Erro de rede', true); });
 }
