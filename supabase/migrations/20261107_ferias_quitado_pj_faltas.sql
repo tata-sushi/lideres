@@ -17,7 +17,8 @@
 --    usado e as faltas ficam gravados (direito, faltas_agendamento).
 -- 4) Desligados (profiles.status = 'Inativo'): períodos sem gozo → "Rescisão".
 -- 5) Uma vez só: períodos de ativos com concessivo encerrado e sem registro de gozo
---    → "Histórico: concessivo encerrado sem registro de gozo".
+--    → "Histórico: concessivo encerrado sem registro de gozo"; e direito ≠ 30 gravado
+--    direto na base num período pendente vira ajuste do RH (ex.: Alairton = 12).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1) Colunas novas ────────────────────────────────────────────────────────
@@ -446,6 +447,15 @@ end;
 $function$;
 
 -- ── 7) Aplica agora (rotina) + quitação do histórico (uma vez só) ───────────
+-- direito diferente de 30 gravado pelo RH direto na base num período pendente vira
+-- ajuste do RH (senão o cálculo por faltas passaria por cima). Ex.: Alairton = 12.
+update dp_rh.ferias
+   set direito_manual = direito,
+       direito_motivo = 'Definido pelo RH direto na base (antes de 07/11/2026)',
+       direito_por = coalesce(atualizado_por, 'legado'), direito_em = atualizado_em
+ where ini1 is null and quitado_motivo is null and direito_manual is null
+   and direito ~ '^\d+$' and direito <> '30';
+
 select dp_rh.ferias_sincronizar();
 
 update dp_rh.ferias f
