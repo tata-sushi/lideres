@@ -92,8 +92,8 @@
   .chart-wrap-y { overflow-x: hidden; overflow-y: auto; }
   .chart-scroll-y { position: relative; height: 100%; }
   /* VALORES (área de valor "ferias"): 3 gráficos por linha a partir de 1024px, um por linha abaixo */
-  .val-graficos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  @media (min-width: 1024px) { .val-graficos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .val-graficos, .age-graficos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  @media (min-width: 1024px) { .val-graficos, .age-graficos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   .val-graficos .val-largo { grid-column: 1 / -1; }   /* série mensal: linha inteira (mais meses sem rolar) */
 
   /* TABELA ANALÍTICA (references/tabelas.md: table.mini + organizador: ordenar + dimensionar + "Ver mais") */
@@ -479,10 +479,23 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <!-- MAIN -->
 <div class="main">
 
-  <div class="chart-card" id="chartCard">
-    <button class="chart-info-btn" onclick="abrirInfoGrafico('meses')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-    <div class="chart-title" id="chartTitle">Férias dos próximos meses</div>
-    <div class="chart-wrap"><div class="chart-scroll" id="cAniv-scroll"><canvas id="cAniv"></canvas></div></div>
+  <!-- AGENDA: próximos meses + férias por unidade e por departamento (mesma linha a partir de 1024px) -->
+  <div class="age-graficos">
+    <div class="chart-card" id="chartCard">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('meses')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title" id="chartTitle">Férias dos próximos meses</div>
+      <div class="chart-wrap"><div class="chart-scroll" id="cAniv-scroll"><canvas id="cAniv"></canvas></div></div>
+    </div>
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('age-uni')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Férias por unidade</div>
+      <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y" id="cAgeUni-scroll"><canvas id="cAgeUni"></canvas></div></div>
+    </div>
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('age-dep')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Férias por departamento</div>
+      <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y" id="cAgeDep-scroll"><canvas id="cAgeDep"></canvas></div></div>
+    </div>
   </div>
 
 
@@ -2348,7 +2361,7 @@ function renderChart() {
       maintainAspectRatio: false,
       animation: false,
       layout: { padding: { top: 18, bottom: 6 } },
-      onClick: function(e, els) { if (els.length) setCF(indexes[els[0].index]); },
+      onClick: function(e, els) { if (!els.length) return; var k = indexes[els[0].index]; setTimeout(function(){ setCF(k); }, 0); },   // redesenha depois do clique
       onHover: function(e, els) { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       plugins: { legend:{display:false}, tooltip:{enabled:false} },
       scales: {
@@ -2402,7 +2415,8 @@ function _diasTxt(v) { var n = Number(v) || 0; return n ? String(Math.round(n)) 
 // rótulo do valor (R$ mil, vírgula) acima da barra vertical ou depois da horizontal — DM Sans 12px/800
 var valorLabelsPlugin = {
   id: 'valorLabels',
-  afterDatasetsDraw: function(chart) {
+  afterDatasetsDraw: function(chart, args, opts) {
+    var inteiro = opts && opts.inteiro;
     var meta = chart.getDatasetMeta(0); if (!meta || !meta.data) return;
     var data = chart.data.datasets[0].data, horiz = chart.options.indexAxis === 'y', ctx = chart.ctx;
     ctx.save();
@@ -2410,7 +2424,7 @@ var valorLabelsPlugin = {
     ctx.textAlign = horiz ? 'left' : 'center'; ctx.textBaseline = horiz ? 'middle' : 'bottom';
     meta.data.forEach(function(bar, i){
       var v = data[i]; if (!v) return;
-      var t = v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      var t = inteiro ? String(v) : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
       if (horiz) ctx.fillText(t, bar.x + 6, bar.y); else ctx.fillText(t, bar.x, bar.y - 4);
     });
     ctx.restore();
@@ -2517,16 +2531,21 @@ function _graficoValAno() {
 function _graficoValCat(id, rows, campo) {
   var soma = {};
   rows.forEach(function(r){ var k = r[campo] || '—'; soma[k] = (soma[k] || 0) + (+r.liquido || 0); });
-  var ks = Object.keys(soma).sort(function(a, b){ return soma[b] - soma[a]; });
+  Object.keys(soma).forEach(function(k){ soma[k] = Math.round(soma[k] / 100) / 10; });   // R$ mil, 1 casa
+  _graficoHorizontal(id, soma, false);
+}
+// barra horizontal (§3): 220px e rolagem vertical quando tem muitas categorias; inteiro = quantidade
+function _graficoHorizontal(id, soma, inteiro) {
+  var ks = Object.keys(soma).sort(function(a, b){ return soma[b] - soma[a] || a.localeCompare(b, 'pt'); });
   var sc = document.getElementById(id + '-scroll'); if (sc) sc.style.height = Math.max(220, ks.length * 30 + 10) + 'px';
   _novoGrafico(id, {
     type: 'bar',
-    data: { labels: ks, datasets: [{ data: ks.map(function(k){ return Math.round(soma[k] / 100) / 10; }), backgroundColor: '#35383F', borderWidth: 0, borderRadius: 5, barPercentage: 0.6, maxBarThickness: 22 }] },
+    data: { labels: ks, datasets: [{ data: ks.map(function(k){ return soma[k]; }), backgroundColor: '#35383F', borderWidth: 0, borderRadius: 5, barPercentage: 0.6, maxBarThickness: 22 }] },
     plugins: [valorLabelsPlugin],
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
       layout: { padding: { right: 48 } },
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false }, valorLabels: { inteiro: !!inteiro } },
       scales: {
         x: { grid: { display: false }, border: { display: false }, ticks: { display: false }, beginAtZero: true },
         y: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: "'DM Sans', sans-serif", size: 12, weight: '500' },
@@ -2535,6 +2554,16 @@ function _graficoValCat(id, rows, campo) {
       }
     }
   });
+}
+function _graficosAgenda() {
+  var uni = {}, dep = {};
+  getFilt().forEach(function(p){
+    var n = _expandPeriodos(p).length; if (!n) return;
+    var u = p.unidade || '—', d = p.departamento || '—';
+    uni[u] = (uni[u] || 0) + n; dep[d] = (dep[d] || 0) + n;
+  });
+  _graficoHorizontal('cAgeUni', uni, true);
+  _graficoHorizontal('cAgeDep', dep, true);
 }
 function renderValores() {
   var on = _valores.pode;
@@ -2557,6 +2586,8 @@ var _INFO_GRAFICOS = {
     + '<tr><td>3</td><td><span class="status-badge sit-gozada">Gozada</span></td><td>Já terminou (recibo da folha)</td></tr></tbody></table>',
   'val-mes': '<div class="info-note">Soma do valor <b>líquido</b> dos recibos de férias (total de proventos − total de descontos, o "total líquido" do recibo), em <b>R$ mil</b>, pelo mês de início do gozo. Respeita unidade, departamento e ano. Clique numa barra para filtrar os outros gráficos e o analítico por aquele mês (clique de novo para tirar).</div>'
     + '<div class="info-note">O líquido já vem sem os descontos pessoais (INSS, IR, pensão, empréstimo, plano de saúde) e inclui a venda de dias. Férias indenizadas na rescisão não entram. Fonte: recibos da folha (2023 em diante).</div>',
+  'age-uni': '<div class="info-note">Quantos períodos de férias em andamento e futuros em cada unidade (quem divide as férias conta uma vez por período), com os filtros de unidade e departamento e o mês clicado no gráfico dos próximos meses.</div>',
+  'age-dep': '<div class="info-note">Quantos períodos de férias em andamento e futuros em cada departamento (somando as unidades), com os filtros de unidade e departamento e o mês clicado no gráfico dos próximos meses.</div>',
   'val-ano': '<div class="info-note">Por ano do início do gozo: <b>Recibos</b> = quantidade de recibos de férias pagos (quem dividiu as férias tem mais de um) e <b>Líquido</b> = soma do valor líquido, em R$ mil. Respeita unidade e departamento; o filtro Ano não muda este gráfico (o ano escolhido fica em destaque). Clique numa barra para filtrar o ano (clique de novo para tirar).</div>',
   'val-uni': '<div class="info-note">Soma do líquido dos recibos de férias por unidade, em R$ mil, com os filtros e o mês clicado. Desligados entram pela unidade do cadastro.</div>',
   'val-dep': '<div class="info-note">Soma do líquido dos recibos de férias por departamento (somando as unidades), em R$ mil, com os filtros e o mês clicado.</div>',
@@ -2574,6 +2605,7 @@ function updateAll() {
   updateKPIs();
   if (_pageTab === 'kpis') {
     renderChart();
+    _graficosAgenda();
     renderTable(getFilt());
     document.getElementById('chartTitle').textContent = 'Férias dos próximos meses';
     renderValores();
