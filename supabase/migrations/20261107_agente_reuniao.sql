@@ -228,3 +228,54 @@ select cron.schedule(
        headers := '{"Content-Type":"application/json"}'::jsonb,
        timeout_milliseconds := 30000)$c$
 );
+
+-- ── 3. diagnóstico dos trechos ───────────────────────────────────────────────
+-- Cada trecho que a página manda fica registrado: tamanho, nível do microfone medido na
+-- página, resultado da transcrição (ok | vazio | alucinacao | erro). O texto bom continua só em
+-- agente_reuniao_falas; aqui fica o texto apenas quando ele NÃO virou fala. Com
+-- agente_config reuniao_diag_audio = '1', o áudio dos trechos sem texto também fica guardado,
+-- e some sozinho em 3 dias. reuniao_id nulo = teste do microfone (antes de começar).
+create table if not exists dp_rh.agente_reuniao_trechos (
+  id          bigserial primary key,
+  reuniao_id  uuid references dp_rh.agente_reunioes(id) on delete cascade,
+  matricula   text,
+  criado_em   timestamptz not null default now(),
+  bytes       int,
+  segundos    numeric,
+  mime        text,
+  resultado   text,
+  modelo      text,
+  texto       text,
+  ms          int,
+  cliente     jsonb,
+  audio       bytea
+);
+create index if not exists agente_reuniao_trechos_reuniao on dp_rh.agente_reuniao_trechos (reuniao_id, id);
+alter table dp_rh.agente_reuniao_trechos enable row level security;
+revoke all on dp_rh.agente_reuniao_trechos from public, anon, authenticated;
+revoke all on sequence dp_rh.agente_reuniao_trechos_id_seq from public, anon, authenticated;
+
+create or replace function tata_plus.agente_reuniao_trecho_log(p_reuniao uuid, p_matricula text, p_dados jsonb, p_audio text default null)
+returns bigint
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare v bigint;
+begin
+  insert into dp_rh.agente_reuniao_trechos (reuniao_id, matricula, bytes, segundos, mime, resultado, modelo, texto, ms, cliente, audio)
+  values (p_reuniao, p_matricula,
+          (nullif(p_dados->>'bytes', ''))::int, (nullif(p_dados->>'segundos', ''))::numeric, p_dados->>'mime',
+          p_dados->>'resultado', p_dados->>'modelo', left(p_dados->>'texto', 500), (nullif(p_dados->>'ms', ''))::int,
+          p_dados->'cliente', case when p_audio is not null then decode(p_audio, 'base64') end)
+  returning id into v;
+  -- o áudio de diagnóstico não fica guardado: some em 3 dias
+  update dp_rh.agente_reuniao_trechos set audio = null
+   where audio is not null and criado_em < now() - interval '3 days';
+  return v;
+end $fn$;
+
+revoke execute on function tata_plus.agente_reuniao_trecho_log(uuid, text, jsonb, text) from public, anon, authenticated;
+grant execute on function tata_plus.agente_reuniao_trecho_log(uuid, text, jsonb, text) to service_role;
+
+insert into dp_rh.agente_config (chave, valor) values ('reuniao_diag_audio', '0')
+on conflict (chave) do nothing;
