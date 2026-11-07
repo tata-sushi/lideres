@@ -1483,7 +1483,8 @@ function _feriasListar() {
             faltas: f.faltas, dias_inss: f.dias_inss, faltas_parcial: f.faltas_parcial,
             direito_calc: f.direito_calc, direito_efetivo: f.direito_efetivo,
             direito_manual: f.direito_manual, direito_motivo: f.direito_motivo,
-            situacao: f.situacao, quitado_motivo: f.quitado_motivo
+            situacao: f.situacao, quitado_motivo: f.quitado_motivo,
+            pj: !!f.pj   // contrato PJ: sempre 30 dias, sem desconto por faltas e sem venda
           };
         });
         resolve({ ok:true, ferias: ferias });
@@ -1572,6 +1573,8 @@ function _situacao(p){
   return p.direito === 'Não tem direito a férias' ? 'sem_direito' : 'pendente';
 }
 function _semDireito(p){ return !!p && _situacao(p) === 'sem_direito'; }
+// PJ não tem prazo de concessivo (acumula saldo): a lista de datas vai até 12 meses à frente
+function _limiteFim(p){ return p.pj ? _addDias(_minIniFerias(p.ini_conc), 365) : p.fim_conc; }
 // Dias de direito: cálculo por faltas do banco (CLT art. 130) ou ajuste do RH
 function _direitoDias(p){
   if (p && p.direito_efetivo != null) return +p.direito_efetivo;
@@ -1588,15 +1591,16 @@ function _opcoesFrac(D, venda){
 function _estadoPend(p){
   if (_semDireito(p)) return 'sem-direito';
   var hoje = _hojeIso();
-  if (!p.fim_conc || p.fim_conc < hoje) return 'vencido';
-  var D = _direitoDias(p), menor = D - Math.floor(D/3);   // com venda, o descanso é o menor bloco possível
-  return _datasInicio(_minIniFerias(p.ini_conc), p.fim_conc, menor).length ? 'pendente' : 'sem-prazo';
+  if (!p.pj && (!p.fim_conc || p.fim_conc < hoje)) return 'vencido';
+  var D = _direitoDias(p), menor = p.pj ? D : D - Math.floor(D/3);   // com venda, o descanso é o menor bloco possível
+  return _datasInicio(_minIniFerias(p.ini_conc), _limiteFim(p), menor).length ? 'pendente' : 'sem-prazo';
 }
 // Na aba Pendências aparecem os pendentes e os "sem direito" (para o RH ver); só os pendentes são agendáveis
 function _naPendencia(p){ var s = _situacao(p); return s === 'pendente' || s === 'sem_direito'; }
 function _pendentes(){ return _feriasCache.filter(function(p){ return _situacao(p) === 'pendente'; }); }
 function _temAjusteRH(p){ return p.direito_manual != null && p.direito_manual !== ''; }
 function _textoFaltas(p){
+  if (p.pj) return 'Não se aplica (PJ)';
   if (p.faltas == null) return '—';
   return p.faltas + (p.faltas_parcial ? ' (registros desde 01/2025)' : '');
 }
@@ -1604,6 +1608,7 @@ function _textoDireito(p){
   var D = _direitoDias(p);
   var t = D > 0 ? D + ' dias' : 'Sem direito';
   if (_temAjusteRH(p)) t += ' · ajuste do RH';
+  else if (p.pj) t += ' · contrato PJ';
   else if (p.dias_inss > 180) t += ' · INSS > 6 meses';
   return t;
 }
@@ -1625,6 +1630,7 @@ function _isoToBR(iso) {
 }
 
 function _resetAgendamento() {
+  document.getElementById('toggle-abono-sim').style.display = '';
   document.getElementById('toggle-abono-sim').classList.remove('active');
   document.getElementById('toggle-abono-nao').classList.remove('active');
   document.getElementById('f-fracionamento-wrap').style.display = 'none';
@@ -1682,25 +1688,35 @@ function onFPeriodoChange() {
   var mt = document.getElementById('f-colaborador').value;
   var iniAqui = document.getElementById('f-periodo-aquisitivo').value;
   var concEl = document.getElementById('f-periodo-concessivo');
-  _concIni = null; _concFim = null; _dirDias = 30;
+  _concIni = null; _concFim = null; _dirDias = 30; _pjSel = false;
   _resetAgendamento();
   var p = _feriasCache.filter(function(x){ return x.mt === mt && x.ini_aqui === iniAqui; })[0];
   var dirEl0 = document.getElementById('f-direito'); if (dirEl0) dirEl0.value = '';
   if (!p) { concEl.value = ''; return; }
   _concIni = p.ini_conc || null;
-  _concFim = p.fim_conc || null;
+  _concFim = p.fim_conc ? _limiteFim(p) : null;   // PJ: sem prazo de concessivo
   _dirDias = _direitoDias(p);
-  concEl.value = (_concIni && _concFim) ? _isoToBR(_concIni) + ' → ' + _isoToBR(_concFim) : 'Não calculado';
+  concEl.value = p.pj ? 'PJ — sem prazo de concessivo (acumula saldo)'
+    : (_concIni && _concFim) ? _isoToBR(_concIni) + ' → ' + _isoToBR(_concFim) : 'Não calculado';
   var dirEl = document.getElementById('f-direito');
-  if (dirEl) dirEl.value = _textoDireito(p) + (p.faltas != null ? ' — ' + _textoFaltas(p) + ' falta(s) no período aquisitivo' : '');
+  if (dirEl) dirEl.value = p.pj
+    ? _textoDireito(p) + ' (sem desconto por faltas e sem venda)'
+    : _textoDireito(p) + (p.faltas != null ? ' — ' + _textoFaltas(p) + ' falta(s) no período aquisitivo' : '');
+  _pjSel = !!p.pj;
+  if (p.pj) {   // contrato PJ não prevê venda: só "Não"
+    document.getElementById('toggle-abono-sim').style.display = 'none';
+    setAbono(false);
+  }
 }
 
 function closeFeriasModal() {
   document.getElementById('mf-overlay').classList.remove('open');
 }
 
+var _pjSel = false;
 function setAbono(sim) {
   if (!_concFim) { showFeriasToast('Escolha o período aquisitivo primeiro', true); return; }
+  if (sim && _pjSel) { showFeriasToast('Contrato PJ não prevê venda de férias', true); return; }
   document.getElementById('toggle-abono-sim').classList.toggle('active', sim);
   document.getElementById('toggle-abono-nao').classList.toggle('active', !sim);
   var opts = _opcoesFrac(_dirDias, sim);
@@ -1750,7 +1766,8 @@ function onFFracChange() {
     nota.className = 'mf-label';
     nota.style.cssText = 'margin:10px 0 14px;text-transform:none;letter-spacing:0;line-height:1.4';
     nota.textContent = 'Só aparecem as datas permitidas: início do dia 01 ao 04, com ' + FER_ANTECEDENCIA
-      + ' dias de antecedência, fora de feriado e dos 2 dias antes dele, terminando até ' + _isoToBR(_concFim) + '.';
+      + ' dias de antecedência, fora de feriado e dos 2 dias antes dele, '
+      + (_pjSel ? 'nos próximos 12 meses (PJ não tem prazo de concessivo).' : 'terminando até ' + _isoToBR(_concFim) + '.');
     container.appendChild(nota);
     _preencherInicio(1);
   }
@@ -1945,8 +1962,8 @@ function updateKPIs() {
   var hoje = _hojeIso(), d60 = _addDias(hoje, 60);
   var base = _feriasCache.filter(_filtroUniDepto);
   var pend = base.filter(function(p){ return _situacao(p) === 'pendente'; });
-  var vencidas = pend.filter(function(p){ return !p.fim_conc || p.fim_conc < hoje; }).length;
-  var vencendo = pend.filter(function(p){ return p.fim_conc && p.fim_conc >= hoje && p.fim_conc <= d60; }).length;
+  var vencidas = pend.filter(function(p){ return !p.pj && (!p.fim_conc || p.fim_conc < hoje); }).length;
+  var vencendo = pend.filter(function(p){ return !p.pj && p.fim_conc && p.fim_conc >= hoje && p.fim_conc <= d60; }).length;
   var agend = 0;
   base.forEach(function(p){ _periodos(p).forEach(function(x){ if ((x[1] || x[0]) >= hoje) agend++; }); });
 
@@ -2300,7 +2317,7 @@ function devCardHtml(p, i) {
   var badgeHtml = '<span class="dev-status-badge s-' + state + '">' + _ESTADO_ROTULO[state] + '</span>';
 
   var PILL_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
-  var pillTxt = state === 'pendente' ? 'Vence ' + _isoToBR(p.fim_conc)
+  var pillTxt = state === 'pendente' ? (p.pj ? 'PJ · sem prazo de concessivo' : 'Vence ' + _isoToBR(p.fim_conc))
               : state === 'vencido' ? 'Venceu ' + (_isoToBR(p.fim_conc) || '—') + ' · fale com o RH'
               : state === 'sem-direito' ? (p.dias_inss > 180 ? 'Afastamento INSS > 6 meses' : _temAjusteRH(p) ? 'Ajuste do RH' : (p.faltas != null ? p.faltas + ' faltas' : 'Sem direito')) + ' · fale com o RH'
               : 'Prazo curto · fale com o RH';
