@@ -209,6 +209,8 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
                  assinatura) + RESUMO + FECHAMENTO FALADO
                → dp_rh.alinhamento_transcricao (id_externo sam-<id>): conteudo = ata, resumo, transcricao,
                  origem = 'sam' · só o RESUMO vai para o WhatsApp (grupo DP/RH; nos testes, o responsável)
+               → cada pendência vira card em "Pendentes" no quadro "Binho, Cinthia e Victor"
+                 (etiqueta do quadro + responsável quando ficou claro na reunião + prazo, se dito)
       fala_final → o Sam fala o fechamento na sala
   pg_cron agente-reuniao-varrer (10 min): reunião sem fala há 20 min é encerrada e ganha ata
 ```
@@ -223,6 +225,11 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
   esse valor de volta para `reuniao_grupo_resumo`.
 - **Custo** (estimativa, 2 h): transcrição ~US$ 0,54 + respostas ~US$ 0,30–0,60 + voz centavos + ata ~US$ 0,15 ≈ R$ 6–8.
 - **Tabelas**: `dp_rh.agente_reunioes` (status, ata, resumos) e `dp_rh.agente_reuniao_falas` (transcrição bruta, sensível).
+- **Kanban**: `agente_config.reuniao_quadro` (quadro) e `reuniao_responsaveis` (nome/apelido → matrícula, ex.:
+  `{"Binho":"2","Fabio":"2","Cinthia":"1","Victor":"7"}`; só membros do quadro). A IA escolhe a etiqueta entre as do
+  quadro ("Outros" se nenhuma servir) e só põe responsável se a reunião disse quem faz — para o card sair pronto,
+  diga o nome na hora ("Cinthia, você divulga a vaga até sexta?"). Prazo dito vira a data do card. Uma vez por
+  reunião (`dp_rh.agente_reuniao_cards` liga reunião → cards); o resumo do WhatsApp diz quantas demandas foram criadas.
 - **Diagnóstico**: `dp_rh.agente_reuniao_trechos` registra cada trecho (bytes, segundos, formato, resultado
   ok/vazio/alucinacao/erro, modelo, nível do microfone medido na página, navegador). Com `reuniao_diag_audio = '1'` o
   áudio dos trechos que **não** viraram texto fica guardado e some em 3 dias (desligar: `'0'`). Na página, 3 trechos
