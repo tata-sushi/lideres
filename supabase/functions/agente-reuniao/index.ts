@@ -6,9 +6,11 @@
 //   trecho    → transcreve (OpenAI) e guarda; avisa se chamaram "Sam, …"
 //   perguntar → o Sam de sempre (edge agente-whatsapp ?reuniao=) responde com o contexto dos
 //               últimos minutos; a resposta volta em texto e em voz (OpenAI TTS)
-//   encerrar  → fecha e gera a ata em segundo plano (Claude), no formato das atas de RH, grava
-//               em dp_rh.alinhamento_transcricao e manda no WhatsApp do responsável
+//   encerrar  → fecha e gera em segundo plano (Claude) a ata no formato das atas de RH (grava em
+//               dp_rh.alinhamento_transcricao), o resumo para o grupo DP/RH (agente_config
+//               reuniao_grupo_resumo) e o encerramento falado; ata completa no privado do responsável
 //   status    → situação da reunião (a página consulta até a ata ficar pronta)
+//   fala_final→ o Sam fala o encerramento na sala (assuntos, decisões, pendências)
 //   varrer    → (pg_cron, ?k=<portal_secret>) encerra reuniões abandonadas há 20 min
 //
 // Acesso: token do usuário (o mesmo que o portal recebe do Plus) + página
@@ -51,7 +53,7 @@ function cors(req: Request): Record<string, string> {
 }
 
 // ── configuração ────────────────────────────────────────────────────────────
-let cfg: { transcricao: string; voz: string; modeloVoz: string; responsavel: string; em: number } | null = null;
+let cfg: { transcricao: string; voz: string; modeloVoz: string; responsavel: string; grupo: string; em: number } | null = null;
 async function config() {
   if (!cfg || Date.now() - cfg.em > 60_000) {
     const { data } = await supa.rpc("agente_parametros");
@@ -61,6 +63,7 @@ async function config() {
       modeloVoz: d.reuniao_modelo_voz || "microsoft/mai-voice-2.1-flash",
       voz: d.reuniao_voz || "pt-BR-Rafael:MAI-Voice-2.1-Flash",
       responsavel: String(d.responsavel_telefone ?? "").replace(/\D/g, ""),
+      grupo: String(d.reuniao_grupo_resumo ?? ""),
       em: Date.now(),
     };
   }
@@ -277,16 +280,16 @@ async function chamarClaude(sistema: string, usuario: string): Promise<string> {
   throw new Error(ultimo);
 }
 
-const INSTRUCOES_ATA = `Você é o Sam, assistente virtual do RH do TATÁ Sushi. Escreva a ATA da reunião de RH a partir da transcrição automática (ela tem erros de reconhecimento, não identifica quem fala e pode ter trechos soltos).
+const INSTRUCOES_ATA = `Você é o Sam, assistente virtual do RH do TATÁ Sushi. A partir da transcrição automática de uma reunião de RH (ela tem erros de reconhecimento, não identifica quem fala e pode ter trechos soltos), escreva TRÊS textos, cada um depois do seu marcador, em linhas próprias, exatamente assim:
 
-Formato (texto puro, sem markdown, sem # e sem **), igual às atas de RH do TATÁ:
+===ATA===
 Síntese executiva da reunião
 
-<um parágrafo dizendo os assuntos principais>
+<um parágrafo com os assuntos principais>
 
 1. <Tema>
 
-<parágrafos curtos: o que foi discutido, os números citados e o que ficou decidido>
+<parágrafos curtos: o que foi discutido, números citados e o que ficou decidido>
 
 2. <Tema>
 ...
@@ -296,13 +299,31 @@ Decisões
 
 Pendências
 • <responsável> — <o que fazer> — <prazo, se foi dito>
+===GRUPO===
+<resumo para o grupo de WhatsApp do DP/RH, até uns 1.200 caracteres: primeira linha "📝 *<título> — <data>*"; a síntese em 2 ou 3 frases; "*Decisões*" com •; "*Pendências*" com • responsável — o quê — prazo; última linha "Ata completa no portal.">
+===FALADO===
+<o encerramento que você vai FALAR em voz alta na sala: 3 a 5 frases curtas, tom de colega, começando com "Fechando a reunião:"; os assuntos principais, o que ficou decidido e quem ficou com cada pendência; termine dizendo que vai mandar o resumo no grupo do DP. Sem listas, emojis ou asteriscos.>
 
 Regras:
-• Português do Brasil, objetivo, como uma ata executiva. Agrupe por tema, não pela ordem da conversa.
-• Não invente: só o que está na transcrição. Se o responsável de uma pendência não ficou claro, escreva "responsável a definir".
+• Português do Brasil. Ata: texto puro, sem markdown (# ou **), agrupada por tema, não pela ordem da conversa.
+• Não invente: só o que está na transcrição. Responsável que não ficou claro = "responsável a definir". Se não houver decisões ou pendências, escreva "Nenhuma registrada." na seção.
 • Nomes de pessoas como aparecem; corrija erros óbvios de transcrição só quando o contexto deixar claro.
-• Perguntas feitas ao Sam e as respostas dele só entram se viraram decisão ou pendência.
-• Se não houver decisões ou pendências, escreva "Nenhuma registrada." na seção.`;
+• Perguntas ao Sam e respostas dele só entram se viraram decisão ou pendência.
+• No resumo do grupo e no encerramento falado, sem salário individual nem assunto pessoal ou confidencial de colaborador (saúde, sanção, desligamento de alguém): use termos gerais. Isso fica só na ata, que é restrita.`;
+
+// separa os três blocos da resposta (com plano B se o modelo não seguir os marcadores)
+function blocos(t: string, titulo: string, data: string) {
+  const pega = (nome: string) => {
+    const m = new RegExp(`===\\s*${nome}\\s*===\\s*([\\s\\S]*?)(?====\\s*[A-Z]+\\s*===|$)`).exec(t);
+    return m ? m[1].trim() : "";
+  };
+  const ata = pega("ATA") || t.replace(/===\s*[A-Z]+\s*===/g, "").trim();
+  const grupo = pega("GRUPO") ||
+    `📝 *${titulo} — ${data}*\n\n${ata.slice(0, 1100)}${ata.length > 1100 ? "…" : ""}\n\nAta completa no portal.`;
+  const falado = pega("FALADO").replace(/[*•#]/g, "").trim() ||
+    "Fechando a reunião. Vou mandar o resumo no grupo do DP, e a ata completa fica no portal.";
+  return { ata, grupo, falado };
+}
 
 async function gerarAta(id: string) {
   try {
@@ -314,35 +335,57 @@ async function gerarAta(id: string) {
     const texto = String(transcricao ?? "").trim();
     if (!texto) throw new Error("nenhuma fala foi transcrita");
     const minutos = Math.round(Number(reuniao.segundos_audio ?? 0) / 60);
-    const corpo = await chamarClaude(INSTRUCOES_ATA,
-      `Reunião: ${reuniao.titulo} — ${dia(reuniao.inicio)}, das ${hora(reuniao.inicio)} às ${hora(reuniao.fim ?? new Date().toISOString())}.\n\nTRANSCRIÇÃO\n${texto.slice(-150_000)}`);
-    const ata = `${corpo}\n\n— Ata feita pelo Sam a partir da gravação da reunião (${dia(reuniao.inicio)}, ${hora(reuniao.inicio)}–${hora(reuniao.fim ?? new Date().toISOString())}, ~${minutos} min de fala, ${reuniao.perguntas ?? 0} pergunta(s) ao Sam).`;
-    const { error } = await supa.rpc("agente_reuniao_concluir", { p_id: id, p_ata: ata });
+    const fim = reuniao.fim ?? new Date().toISOString();
+    const resposta = await chamarClaude(INSTRUCOES_ATA,
+      `Reunião: ${reuniao.titulo} — ${dia(reuniao.inicio)}, das ${hora(reuniao.inicio)} às ${hora(fim)}.\n\nTRANSCRIÇÃO\n${texto.slice(-150_000)}`);
+    const b = blocos(resposta, reuniao.titulo, dia(reuniao.inicio));
+    const ata = `${b.ata}\n\n— Ata feita pelo Sam a partir da gravação da reunião (${dia(reuniao.inicio)}, ${hora(reuniao.inicio)}–${hora(fim)}, ~${minutos} min de fala, ${reuniao.perguntas ?? 0} pergunta(s) ao Sam).`;
+    const { error } = await supa.rpc("agente_reuniao_gravar_ata", {
+      p_id: id, p_ata: ata, p_resumo_grupo: b.grupo, p_resumo_falado: b.falado,
+    });
     if (error) throw new Error(error.message);
-    await avisarWhats(`📝 *Ata da ${reuniao.titulo}* (${dia(reuniao.inicio)}) — já está salva junto das atas de RH.\n\n${ata}`);
+    const { responsavel, grupo } = await config();
+    // resumo no grupo do DP (vira conversa do Sam: dá para responder "Sam, detalha…")
+    if (grupo) {
+      const ids = await enviarWhats(grupo, b.grupo);
+      await supa.rpc("agente_registrar", {
+        p_telefone: grupo, p_papel: "assistant", p_texto: b.grupo, p_msg_id: ids[0] ?? null, p_meta: { reuniao_id: id },
+      });
+    }
+    // ata completa para o responsável
+    if (responsavel) await enviarWhats(responsavel, `📝 *Ata da ${reuniao.titulo}* (${dia(reuniao.inicio)}) — salva junto das atas de RH.\n\n${ata}`);
   } catch (err) {
     await supa.rpc("agente_reuniao_status", { p_id: id, p_status: "erro", p_erro: erroTxt(err).slice(0, 500) });
-    await avisarWhats(`⚠️ Não consegui fazer a ata da reunião (${erroTxt(err).slice(0, 200)}). A transcrição ficou salva; me peça de novo pela página do Sam.`)
-      .catch(() => {});
+    const { responsavel } = await config();
+    if (responsavel) {
+      await enviarWhats(responsavel, `⚠️ Não consegui fazer a ata da reunião (${erroTxt(err).slice(0, 200)}). A transcrição ficou salva; dá para pedir de novo na página do Sam.`)
+        .catch(() => {});
+    }
   }
 }
 
-async function avisarWhats(texto: string) {
-  const { responsavel } = await config();
+// envia em partes de até ~3500 caracteres (cortando em parágrafo); devolve os ids das mensagens
+async function enviarWhats(destino: string, texto: string): Promise<string[]> {
   const token = Deno.env.get("SAM_UAZAPI_TOKEN") || await segredo("uazapi_token");
-  if (!responsavel || !token) return;
-  // partes de até ~3500 caracteres, cortando em parágrafo
+  if (!destino || !token) return [];
+  const ids: string[] = [];
   let resto = texto;
   while (resto) {
     let corte = resto.length > 3500 ? resto.lastIndexOf("\n\n", 3500) : resto.length;
     if (corte < 1500) corte = Math.min(resto.length, 3500);
-    await fetch(UAZ_BASE + "/send/text", {
+    const r = await fetch(UAZ_BASE + "/send/text", {
       method: "POST",
       headers: { "Content-Type": "application/json", token },
-      body: JSON.stringify({ number: responsavel, text: resto.slice(0, corte).trim(), delay: 0, linkPreview: false }),
+      body: JSON.stringify({ number: destino, text: resto.slice(0, corte).trim(), delay: 0, linkPreview: false }),
     });
+    try {
+      const out = await r.json();
+      const id = out?.messageid ?? out?.id ?? out?.key?.id;
+      if (id) ids.push(String(id));
+    } catch { /* sem JSON */ }
     resto = resto.slice(corte).trim();
   }
+  return ids;
 }
 
 // ── rotas ───────────────────────────────────────────────────────────────────
@@ -358,6 +401,24 @@ Deno.serve(async (req) => {
   if (url.searchParams.has("k")) {
     const k = await segredo("portal_secret");
     if (!k || url.searchParams.get("k") !== k) return json({ ok: false, erro: "nao_autorizado" }, 401);
+    // testes internos (não gravam nem mandam WhatsApp): voz, transcrição e ata
+    const t: any = await req.json().catch(() => ({}));
+    if (t?.acao === "teste_voz") {
+      const t0 = Date.now();
+      const a = await falar(String(t.texto ?? "Oi, pessoal! Teste de voz do Sam."));
+      return json({ ok: !!a, mime: a?.mime, base64: t.devolver ? a?.base64 : undefined, bytes: a ? Math.round(a.base64.length * 0.75) : 0, ms: Date.now() - t0 });
+    }
+    if (t?.acao === "teste_transcricao") {
+      const t0 = Date.now();
+      const bytes = Uint8Array.from(atob(String(t.audio_base64 ?? "")), (c) => c.charCodeAt(0));
+      const texto = await transcrever(new File([bytes], `teste.${t.formato ?? "mp3"}`, { type: String(t.mime ?? "audio/mpeg") }));
+      return json({ ok: true, texto, chamado: chamadoDoSam(texto), ms: Date.now() - t0 });
+    }
+    if (t?.acao === "teste_ata") {
+      const t0 = Date.now();
+      const r = await chamarClaude(INSTRUCOES_ATA, `Reunião: Reunião de RH (teste) — hoje.\n\nTRANSCRIÇÃO\n${String(t.transcricao ?? "")}`);
+      return json({ ok: true, ...blocos(r, "Reunião de RH (teste)", dia(new Date().toISOString())), ms: Date.now() - t0 });
+    }
     const { data: paradas } = await supa.rpc("agente_reunioes_paradas", { p_minutos: 20 });
     for (const id of (paradas ?? []) as string[]) {
       await supa.rpc("agente_reuniao_status", { p_id: id, p_status: "gerando_ata", p_erro: null });
@@ -392,9 +453,15 @@ Deno.serve(async (req) => {
 
     if (acao === "status") {
       return json({
-        ok: true, status: reuniao.status, ata: reuniao.ata, erro: reuniao.erro,
-        perguntas: reuniao.perguntas, segundos: Number(reuniao.segundos_audio ?? 0),
+        ok: true, status: reuniao.status, ata: reuniao.ata, erro: reuniao.erro, resumo_grupo: reuniao.resumo_grupo,
+        resumo_falado: reuniao.resumo_falado, perguntas: reuniao.perguntas, segundos: Number(reuniao.segundos_audio ?? 0),
       });
+    }
+    // encerramento falado na sala (depois que a ata ficou pronta)
+    if (acao === "fala_final") {
+      if (reuniao.status !== "concluida") return json({ ok: false, erro: "a ata ainda não ficou pronta" }, 409);
+      const texto = String(reuniao.resumo_falado ?? "") || "Fechando a reunião. Vou mandar o resumo no grupo do DP.";
+      return json({ ok: true, texto, audio: await falar(texto) });
     }
     if (acao === "encerrar") {
       if (reuniao.status === "gravando" || reuniao.status === "erro") {

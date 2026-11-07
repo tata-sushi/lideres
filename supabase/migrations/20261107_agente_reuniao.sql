@@ -149,3 +149,82 @@ begin
     execute format('grant execute on function %s to service_role', f);
   end loop;
 end $$;
+
+-- ── v2: resumo no grupo do DP, fala de encerramento, reuniões abandonadas ──
+-- resumo da ata vai para o grupo DP/RH TATÁ SUSHI; a ata completa, para o responsável
+insert into dp_rh.agente_config (chave, valor) values ('reuniao_grupo_resumo', '120363040657807495@g.us')
+on conflict (chave) do nothing;
+
+-- nome de quem abriu a reunião (pela matrícula da sessão do portal)
+create or replace function tata_plus.agente_quem_matricula(p_matricula text)
+returns jsonb
+language sql stable security definer
+set search_path = tata_plus, pg_catalog
+as $fn$
+  select jsonb_build_object('nome', p.nome, 'cargo', p.cargo, 'unidade', p.unidade)
+  from tata_plus.profiles p where p.matricula = p_matricula limit 1;
+$fn$;
+
+-- reuniões ainda "gravando" sem fala há N minutos (página fechada sem Encerrar)
+create or replace function tata_plus.agente_reunioes_paradas(p_minutos int default 20)
+returns uuid[]
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select coalesce(array_agg(r.id), '{}')
+  from dp_rh.agente_reunioes r
+  where r.status = 'gravando'
+    and greatest(r.inicio, coalesce((select max(f.criado_em) from dp_rh.agente_reuniao_falas f where f.reuniao_id = r.id), r.inicio))
+        < now() - make_interval(mins => p_minutos);
+$fn$;
+
+-- a página vê também os resumos (o falado toca no fim da reunião)
+create or replace function tata_plus.agente_reuniao_ver(p_id uuid)
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select (to_jsonb(r) - 'meta') || jsonb_build_object(
+           'resumo_grupo', r.meta->>'resumo_grupo', 'resumo_falado', r.meta->>'resumo_falado')
+  from dp_rh.agente_reunioes r where r.id = p_id;
+$fn$;
+
+-- grava a ata (junto das atas de RH) e os resumos (grupo e falado); substitui agente_reuniao_concluir
+create or replace function tata_plus.agente_reuniao_gravar_ata(p_id uuid, p_ata text, p_resumo_grupo text, p_resumo_falado text)
+returns uuid
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare v_ata uuid;
+begin
+  v_ata := tata_plus.agente_reuniao_concluir(p_id, p_ata);
+  update dp_rh.agente_reunioes
+     set meta = meta || jsonb_build_object('resumo_grupo', p_resumo_grupo, 'resumo_falado', p_resumo_falado)
+   where id = p_id;
+  return v_ata;
+end $fn$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'tata_plus.agente_quem_matricula(text)',
+    'tata_plus.agente_reunioes_paradas(integer)',
+    'tata_plus.agente_reuniao_ver(uuid)',
+    'tata_plus.agente_reuniao_gravar_ata(uuid,text,text,text)'
+  ] loop
+    execute format('revoke execute on function %s from public, anon, authenticated', f);
+    execute format('grant execute on function %s to service_role', f);
+  end loop;
+end $$;
+
+-- a cada 10 min: reunião sem fala há 20 min é encerrada e ganha ata (página fechada sem "Encerrar")
+select cron.schedule(
+  'agente-reuniao-varrer',
+  '*/10 * * * *',
+  $c$select net.http_post(
+       url := 'https://aoqsbusfrffapjglpqjk.supabase.co/functions/v1/agente-reuniao?k=' || (select valor from dp_rh.agente_config where chave = 'portal_secret'),
+       body := '{}'::jsonb,
+       headers := '{"Content-Type":"application/json"}'::jsonb,
+       timeout_milliseconds := 30000)$c$
+);
