@@ -8,6 +8,7 @@
 --   • o vínculo período↔card é apagado, então o novo agendamento cria um novo card.
 -- Corrigir = cancelar e agendar de novo (pelo líder ou pelo RH, com as travas normais).
 -- Férias já iniciadas/gozadas não são canceladas aqui (histórico é corrigido na base).
+-- Aplicado em produção em 2026-11-08 pelo SQL Editor (versão com testes embutidos).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 create or replace function tata_plus.ferias_gravar(p_payload jsonb)
