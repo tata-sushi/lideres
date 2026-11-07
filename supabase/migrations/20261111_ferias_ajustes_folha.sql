@@ -7,6 +7,7 @@
 --   • Nadir (24366) 16/08/2025–15/08/2026: folha 20 gozados, saldo 10 → pendente 10
 --   • Andre (24542) 09/06/2025–08/06/2026: não está em aberto na folha → quitado
 -- Myzala (24545) já é coerente (sem direito por faltas; a folha não tem o período em aberto).
+-- Aplicado em produção em 2026-11-08 pelo SQL Editor (com conferência: 35 períodos = folha).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 update dp_rh.ferias
