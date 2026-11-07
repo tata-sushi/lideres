@@ -7,10 +7,12 @@
 --   Carlos Mateus (24174) 01/03/2026 · Ana Cristina (3) 01/02/2026 ·
 --   Victor (7) 01/09/2024 · Cesar (24194) 01/09/2026 · Luan (24145) 13/10/2026 ·
 --   Eduardo (5) 09/02/2026 e Wellington (11) 22/06/2026 = PJ desde a admissão ·
---   Cinthia (1) e Fabio (2) = PJ desde a admissão (informado; contrato não conferido).
+--   Cinthia (1) e Fabio (2) = casos especiais: ciclo por ano civil desde 01/01/2026,
+--   tudo quitado até o fim do aquisitivo 2026 (31/12/2026).
 -- Regra PJ (períodos a partir da data-base): sempre 30 dias, sem desconto por
--- faltas (a regra de faltas é da CLT) e sem venda de dias; o fracionamento continua
--- permitido. O ajuste manual do RH continua valendo por cima.
+-- faltas (a regra de faltas é da CLT), sem venda de dias na página (compra só pelo RH,
+-- no Ajustar) e SEM prazo de concessivo (o PJ acumula saldo). O fracionamento continua
+-- permitido e o ajuste manual do RH continua valendo por cima.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1) Marca quem é PJ + datas dos contratos ────────────────────────────────
@@ -26,8 +28,8 @@ select v.matricula, coalesce(v.data_base, p.data_admissao), v.motivo, v.criado_p
     ('24145', date '2026-10-13', 'Mudança de contrato CLT → PJ (contrato de 13/10/2026)', 'contrato'),
     ('5',     date '2026-02-09', 'PJ desde a admissão (contrato de 09/02/2026)', 'contrato'),
     ('11',    date '2026-06-22', 'PJ desde a admissão (contrato de 22/06/2026)', 'contrato'),
-    ('1',     null::date,        'PJ desde a admissão (informado pelo RH; contrato não conferido)', 'informado'),
-    ('2',     null::date,        'PJ desde a admissão (informado pelo RH; contrato não conferido)', 'informado')
+    ('1',     date '2026-01-01', 'Caso especial: ciclo por ano civil desde 01/01/2026 (férias quitadas até 31/12/2026)', 'rh'),
+    ('2',     date '2026-01-01', 'Caso especial: ciclo por ano civil desde 01/01/2026 (férias quitadas até 31/12/2026)', 'rh')
   ) v(matricula, data_base, motivo, criado_por)
   join tata_plus.profiles p on p.matricula = v.matricula
 on conflict (matricula) do update
@@ -39,6 +41,28 @@ update dp_rh.ferias
    set fim_aqui = '2026-02-28', ini_conc = '2026-03-01', fim_conc = '2027-02-28',
        atualizado_por = 'contrato-pj', atualizado_em = now()
  where matricula = '24174' and ini_aqui = '2025-03-21' and fim_aqui = '2026-01-31';
+
+-- ── 2b) Cinthia e Fabio: quitados até 31/12/2026 (casos especiais) ───────────
+update dp_rh.ferias
+   set quitado_motivo = 'Caso especial PJ: férias quitadas até o fim do aquisitivo 2026',
+       quitado_em = now(), quitado_por = 'rh', atualizado_por = 'rh', atualizado_em = now()
+ where matricula in ('1', '2') and quitado_motivo is null;
+
+insert into dp_rh.ferias (matricula, ini_aqui, fim_aqui, ini_conc, fim_conc, nome_hist,
+                          quitado_motivo, quitado_em, quitado_por, atualizado_por, atualizado_em)
+select p.matricula, date '2026-01-01', date '2026-12-31', date '2027-01-01', date '2027-12-31', p.nome,
+       'Caso especial PJ: férias quitadas até o fim do aquisitivo 2026', now(), 'rh', 'rh', now()
+  from tata_plus.profiles p where p.matricula in ('1', '2')
+on conflict (matricula, ini_aqui) do update
+   set quitado_motivo = excluded.quitado_motivo, quitado_em = now(), quitado_por = 'rh';
+
+-- ── 2c) Victor: ciclo 01/09/2024–31/08/2025 com 5 dias gozados (07–11/04/2025) → saldo 25 ─
+update dp_rh.ferias
+   set quitado_motivo = null, quitado_em = null, quitado_por = null,
+       direito_manual = '25',
+       direito_motivo = 'PJ: 5 dias gozados de 07/04 a 11/04/2025 (controle PJ) — saldo 25',
+       direito_por = 'rh', direito_em = now(), atualizado_por = 'rh', atualizado_em = now()
+ where matricula = '7' and ini_aqui = '2024-09-01' and ini1 is null;
 
 -- ── 3) Regra PJ ─────────────────────────────────────────────────────────────
 create or replace function dp_rh.ferias_eh_pj(p_matricula text, p_ini_aqui date)
@@ -118,7 +142,7 @@ revoke all on function tata_plus.ferias_listar() from public;
 grant execute on function tata_plus.ferias_listar() to authenticated;
 
 
--- ── 5) Gravação: PJ não tem venda de férias ─────────────────────────────────
+-- ── 5) Gravação: PJ não tem venda nem prazo de concessivo ─────────────────────────────────
 create or replace function tata_plus.ferias_gravar(p_payload jsonb)
 returns jsonb
 language plpgsql
@@ -236,7 +260,7 @@ begin
   if f.ini_conc is null or f.fim_conc is null then
     return jsonb_build_object('ok', false, 'erro', 'período concessivo não calculado — fale com o RH');
   end if;
-  if f.fim_conc < current_date then
+  if f.fim_conc < current_date and not dp_rh.ferias_eh_pj(f.matricula, f.ini_aqui) then
     return jsonb_build_object('ok', false, 'erro', 'período concessivo vencido — fale com o RH');
   end if;
   v_faltas := dp_rh.ferias_faltas(f.matricula, f.ini_aqui, f.fim_aqui);
@@ -271,7 +295,7 @@ begin
       return jsonb_build_object('ok', false, 'erro', 'Período ' || n || ': o início é antes do período concessivo ('
         || to_char(f.ini_conc, 'DD/MM/YYYY') || ')');
     end if;
-    if v_fim[n] > f.fim_conc then
+    if v_fim[n] > f.fim_conc and not dp_rh.ferias_eh_pj(f.matricula, f.ini_aqui) then
       return jsonb_build_object('ok', false, 'erro', 'Período ' || n || ': o término passa do fim do período concessivo ('
         || to_char(f.fim_conc, 'DD/MM/YYYY') || ')');
     end if;
