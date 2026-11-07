@@ -13,7 +13,9 @@
 //   encerrar  → fecha e gera em segundo plano (Claude) a ata no formato das atas de RH, o resumo e o
 //               encerramento falado; ata, resumo e transcrição vão para dp_rh.alinhamento_transcricao
 //               (a tabela das atas de RH) e só o resumo vai para o WhatsApp (agente_config
-//               reuniao_grupo_resumo: o grupo DP/RH, ou o responsável durante os testes)
+//               reuniao_grupo_resumo: o grupo DP/RH, ou o responsável durante os testes); cada
+//               pendência vira card em "Pendentes" no kanban (agente_config reuniao_quadro), com
+//               etiqueta do quadro e responsável quando ficou claro na reunião (reuniao_responsaveis)
 //   status    → situação da reunião (a página consulta até a ata ficar pronta)
 //   fala_final→ o Sam fala o encerramento na sala (assuntos, decisões, pendências)
 //   varrer    → (pg_cron, ?k=<portal_secret>) encerra reuniões abandonadas há 20 min
@@ -367,6 +369,26 @@ Regras:
 • Perguntas ao Sam e respostas dele só entram se viraram decisão ou pendência.
 • No resumo do grupo e no encerramento falado, sem salário individual nem assunto pessoal ou confidencial de colaborador (saúde, sanção, desligamento de alguém): use termos gerais. Isso fica só na ata, que é restrita.`;
 
+// 4º bloco: as pendências viram cards no kanban do RH (etiquetas e responsáveis do quadro)
+type Opcoes = { etiquetas: string[]; responsaveis: string[] };
+function instrucoesAta(op: Opcoes): string {
+  if (!op.etiquetas.length) return INSTRUCOES_ATA;
+  return `${INSTRUCOES_ATA}
+
+Depois do FALADO, escreva o quarto bloco:
+===CARDS===
+<uma linha por pendência da ata, em JSON numa linha só, para virar card no quadro de demandas do RH:
+{"titulo": "...", "descricao": "...", "responsavel": "...", "etiqueta": "...", "prazo": "..."}>
+
+Regras dos cards:
+• titulo: curto (até 50 caracteres), no estilo "Tema – ação" (ex.: "Jurídico – recurso", "Confraternização fim de ano").
+• descricao: 1 ou 2 frases com o que fazer e o contexto que ajuda quem vai executar.
+• responsavel: um destes nomes — ${op.responsaveis.join(", ")} — só se ficou claro na reunião quem vai fazer (a pessoa foi chamada pelo nome para a tarefa ou disse que faz). Se não ficou claro, "". Use o mesmo responsável na seção Pendências da ata e do resumo.
+• etiqueta: exatamente uma destas, a que melhor descreve o assunto: ${op.etiquetas.join("; ")}. Se nenhuma servir, "Outros".
+• prazo: AAAA-MM-DD se um prazo foi dito (converta "sexta", "dia 20", "fim do mês" a partir da data da reunião; "semana que vem" = sexta-feira da semana seguinte); senão "".
+• Só pendências de verdade (alguém precisa fazer algo). Sem pendências: escreva só "Nenhum".`;
+}
+
 // separa os três blocos da resposta (com plano B se o modelo não seguir os marcadores)
 function blocos(t: string, titulo: string, data: string) {
   const pega = (nome: string) => {
@@ -378,8 +400,28 @@ function blocos(t: string, titulo: string, data: string) {
     `*${titulo} — ${data}*\n\n${ata.slice(0, 1100)}${ata.length > 1100 ? "…" : ""}\n\nAta completa no portal.`;
   const falado = pega("FALADO").replace(/[*•#]/g, "").trim() ||
     "Fechando a reunião. Vou mandar o resumo no grupo do DP, e a ata completa fica no portal.";
-  return { ata, grupo, falado };
+  const cards: Array<Record<string, string>> = [];
+  for (const linha of pega("CARDS").split("\n")) {
+    const l = linha.trim().replace(/^[-•]\s*/, "").replace(/,$/, "");
+    if (!l.startsWith("{")) continue;
+    try {
+      const c = JSON.parse(l);
+      if (c && typeof c.titulo === "string" && c.titulo.trim()) cards.push(c);
+    } catch { /* linha que não é JSON: ignora */ }
+  }
+  return { ata, grupo, falado, cards };
 }
+
+async function opcoesKanban(): Promise<Opcoes> {
+  const { data, error } = await supa.rpc("agente_kanban_opcoes");
+  if (error || !data) return { etiquetas: [], responsaveis: [] };
+  const d = data as any;
+  return { etiquetas: (d.etiquetas ?? []).map(String), responsaveis: (d.responsaveis ?? []).map(String) };
+}
+
+// "07/11/2026 (sábado)"
+const diaSemana = (iso: string) =>
+  `${dia(iso)} (${new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long" })})`;
 
 async function gerarAta(id: string) {
   try {
@@ -391,22 +433,31 @@ async function gerarAta(id: string) {
     const texto = String(transcricao ?? "").trim();
     if (!texto) throw new Error("nenhuma fala foi transcrita");
     const fim = reuniao.fim ?? new Date().toISOString();
-    const resposta = await chamarClaude(INSTRUCOES_ATA,
-      `Reunião: ${reuniao.titulo} — ${dia(reuniao.inicio)}, das ${hora(reuniao.inicio)} às ${hora(fim)}.\n\nTRANSCRIÇÃO\n${texto.slice(-150_000)}`);
+    const opcoes = await opcoesKanban();
+    const resposta = await chamarClaude(instrucoesAta(opcoes),
+      `Reunião: ${reuniao.titulo} — ${diaSemana(reuniao.inicio)}, das ${hora(reuniao.inicio)} às ${hora(fim)}.\n\nTRANSCRIÇÃO\n${texto.slice(-150_000)}`);
     const b = blocos(resposta, reuniao.titulo, dia(reuniao.inicio));
     // ata, resumo e transcrição na tabela das atas de RH (dp_rh.alinhamento_transcricao)
     const { error } = await supa.rpc("agente_reuniao_gravar_ata", {
       p_id: id, p_ata: b.ata, p_resumo_grupo: b.grupo, p_resumo_falado: b.falado,
     });
     if (error) throw new Error(error.message);
+    // pendências → cards no kanban (uma vez por reunião; falha aqui não derruba a ata)
+    let nCards = 0;
+    if (b.cards.length) {
+      const { data: n, error: e2 } = await supa.rpc("agente_reuniao_criar_cards", { p_id: id, p_cards: b.cards });
+      if (e2) console.error("cards", e2.message);
+      nCards = Number(n ?? 0);
+    }
     // no WhatsApp vai só o resumo (a ata completa fica no portal). Vira conversa do Sam: dá para
     // responder "Sam, detalha a pendência 2". Destino: grupo DP/RH (ou o responsável, nos testes)
     const { responsavel, grupo } = await config();
     const destino = grupo || responsavel;
+    const msg = b.grupo + (nCards ? `\n${nCards === 1 ? "1 demanda criada" : `${nCards} demandas criadas`} no kanban (Pendentes).` : "");
     if (destino) {
-      const ids = await enviarWhats(destino, b.grupo);
+      const ids = await enviarWhats(destino, msg);
       await supa.rpc("agente_registrar", {
-        p_telefone: destino, p_papel: "assistant", p_texto: b.grupo, p_msg_id: ids[0] ?? null, p_meta: { reuniao_id: id },
+        p_telefone: destino, p_papel: "assistant", p_texto: msg, p_msg_id: ids[0] ?? null, p_meta: { reuniao_id: id },
       });
     }
   } catch (err) {
@@ -471,8 +522,10 @@ Deno.serve(async (req) => {
     }
     if (t?.acao === "teste_ata") {
       const t0 = Date.now();
-      const r = await chamarClaude(INSTRUCOES_ATA, `Reunião: Reunião de RH (teste) — hoje.\n\nTRANSCRIÇÃO\n${String(t.transcricao ?? "")}`);
-      return json({ ok: true, ...blocos(r, "Reunião de RH (teste)", dia(new Date().toISOString())), ms: Date.now() - t0 });
+      const agora = new Date().toISOString();
+      const r = await chamarClaude(instrucoesAta(await opcoesKanban()),
+        `Reunião: Reunião de RH (teste) — ${diaSemana(agora)}.\n\nTRANSCRIÇÃO\n${String(t.transcricao ?? "")}`);
+      return json({ ok: true, ...blocos(r, "Reunião de RH (teste)", dia(agora)), ms: Date.now() - t0 });
     }
     const { data: paradas } = await supa.rpc("agente_reunioes_paradas", { p_minutos: 20 });
     for (const id of (paradas ?? []) as string[]) {

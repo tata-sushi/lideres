@@ -310,3 +310,113 @@ end $fn$;
 
 revoke execute on function tata_plus.agente_reuniao_gravar_ata(uuid, text, text, text) from public, anon, authenticated;
 grant execute on function tata_plus.agente_reuniao_gravar_ata(uuid, text, text, text) to service_role;
+
+-- ── 5. pendências da reunião viram cards no kanban ──────────────────────────
+-- Ao fazer a ata, o Sam cria um card em "Pendentes" no quadro do RH (agente_config reuniao_quadro,
+-- padrão "Binho, Cinthia e Victor") para cada pendência, com etiqueta e responsável. O responsável
+-- só entra se ficou claro na reunião (nome → matrícula em reuniao_responsaveis; precisa ser membro
+-- do quadro); a etiqueta é a do quadro que melhor descreve o assunto ("Outros" se nenhuma servir).
+-- Prazo dito na reunião vai em data_conclusao (a data do card). Uma vez por reunião.
+create table if not exists dp_rh.agente_reuniao_cards (
+  reuniao_id uuid not null references dp_rh.agente_reunioes(id) on delete cascade,
+  card_id    uuid not null,
+  criado_em  timestamptz not null default now(),
+  primary key (reuniao_id, card_id)
+);
+alter table dp_rh.agente_reuniao_cards enable row level security;
+revoke all on dp_rh.agente_reuniao_cards from public, anon, authenticated;
+
+insert into dp_rh.agente_config (chave, valor) values
+  ('reuniao_quadro', 'e7dd1c05-46f5-4167-9ee1-ce9899f8bdbd'),
+  ('reuniao_responsaveis', '{"Binho": "2", "Fabio": "2", "Cinthia": "1", "Victor": "7"}')
+on conflict (chave) do nothing;
+
+-- opções para a IA: etiquetas do quadro e nomes dos responsáveis (apelidos agrupados por matrícula)
+create or replace function tata_plus.agente_kanban_opcoes()
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, tata_kanban, pg_catalog
+as $fn$
+  with cfg as (
+    select (select valor::uuid from dp_rh.agente_config where chave = 'reuniao_quadro') quadro,
+           coalesce((select valor::jsonb from dp_rh.agente_config where chave = 'reuniao_responsaveis'), '{}'::jsonb) resp
+  )
+  select jsonb_build_object(
+    'etiquetas', coalesce((select jsonb_agg(e.nome order by e.nome) from tata_kanban.etiquetas e, cfg where e.quadro_id = cfg.quadro), '[]'::jsonb),
+    'responsaveis', coalesce((select jsonb_agg(nomes order by nomes) from (
+        select string_agg(r.key, '/' order by r.key) nomes
+        from cfg cross join lateral jsonb_each_text(cfg.resp) r
+        join tata_kanban.membros m on m.quadro_id = cfg.quadro and m.matricula = r.value
+        group by r.value) x), '[]'::jsonb));
+$fn$;
+
+-- chave de comparação de nomes: sem acento, minúsculo, "&" = "e", só letras e números
+create or replace function tata_plus.agente_chave(t text)
+returns text
+language sql immutable
+set search_path = pg_catalog
+as $fn$
+  select regexp_replace(replace(tata_plus.agente_norm(coalesce(t, '')), '&', 'e'), '[^a-z0-9]+', '', 'g');
+$fn$;
+
+create or replace function tata_plus.agente_reuniao_criar_cards(p_id uuid, p_cards jsonb)
+returns int
+language plpgsql security definer
+set search_path = dp_rh, tata_kanban, pg_catalog
+as $fn$
+declare
+  v_quadro uuid := (select valor::uuid from dp_rh.agente_config where chave = 'reuniao_quadro');
+  v_resp   jsonb := coalesce((select valor::jsonb from dp_rh.agente_config where chave = 'reuniao_responsaveis'), '{}'::jsonb);
+  v_col uuid; v_autor text; v_data text; v_c jsonb; v_card uuid; v_ordem int;
+  v_mat text; v_etq uuid; v_prazo date; v_titulo text; v_n int := 0;
+begin
+  if v_quadro is null or p_cards is null or jsonb_typeof(p_cards) <> 'array' then return 0; end if;
+  if exists (select 1 from dp_rh.agente_reuniao_cards where reuniao_id = p_id) then return 0; end if;
+  select iniciada_por, to_char(inicio at time zone 'America/Sao_Paulo', 'DD/MM/YYYY')
+    into v_autor, v_data from dp_rh.agente_reunioes where id = p_id;
+  if v_data is null then raise exception 'reunião inexistente'; end if;
+  select id into v_col from tata_kanban.colunas where quadro_id = v_quadro and nome = 'Pendentes' limit 1;
+  if v_col is null then raise exception 'coluna Pendentes não encontrada no quadro'; end if;
+
+  for v_c in select value from jsonb_array_elements(p_cards) loop
+    v_titulo := left(btrim(coalesce(v_c->>'titulo', '')), 120);
+    continue when v_titulo = '';
+    -- responsável: nome ou apelido → matrícula (só membro do quadro)
+    -- aceita "Binho", "Binho/Fabio", "Binho (Fabio)"…
+    select r.value into v_mat from jsonb_each_text(v_resp) r
+     where tata_plus.agente_chave(r.key) in (
+             select tata_plus.agente_chave(x) from regexp_split_to_table(coalesce(v_c->>'responsavel', ''), '[/(),]') x)
+       and exists (select 1 from tata_kanban.membros m where m.quadro_id = v_quadro and m.matricula = r.value)
+     limit 1;
+    select e.id into v_etq from tata_kanban.etiquetas e
+     where e.quadro_id = v_quadro and tata_plus.agente_chave(e.nome) = tata_plus.agente_chave(v_c->>'etiqueta')
+     limit 1;
+    if v_etq is null then
+      select e.id into v_etq from tata_kanban.etiquetas e where e.quadro_id = v_quadro and e.nome = 'Outros' limit 1;
+    end if;
+    v_prazo := case when coalesce(v_c->>'prazo', '') ~ '^\d{4}-\d{2}-\d{2}$' then (v_c->>'prazo')::date end;
+    select coalesce(max(ordem), -1) + 1 into v_ordem from tata_kanban.cards where coluna_id = v_col and not arquivado;
+
+    insert into tata_kanban.cards (quadro_id, coluna_id, titulo, descricao, data_conclusao, ordem, criado_por)
+    values (v_quadro, v_col, v_titulo,
+            concat_ws(E'\n\n', nullif(btrim(coalesce(v_c->>'descricao', '')), ''), 'Reunião de RH de ' || v_data || ' (ata no portal).'),
+            v_prazo, v_ordem, v_autor)
+    returning id into v_card;
+    if v_etq is not null then
+      insert into tata_kanban.card_etiquetas (card_id, etiqueta_id) values (v_card, v_etq) on conflict do nothing;
+    end if;
+    if v_mat is not null then
+      insert into tata_kanban.card_responsaveis (card_id, matricula) values (v_card, v_mat) on conflict do nothing;
+    end if;
+    insert into tata_kanban.atividade (quadro_id, card_id, matricula, acao, detalhe)
+    values (v_quadro, v_card, v_autor, 'cartao_criado', v_titulo);
+    insert into dp_rh.agente_reuniao_cards (reuniao_id, card_id) values (p_id, v_card);
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
+end $fn$;
+
+revoke execute on function tata_plus.agente_kanban_opcoes() from public, anon, authenticated;
+grant execute on function tata_plus.agente_kanban_opcoes() to service_role;
+revoke execute on function tata_plus.agente_reuniao_criar_cards(uuid, jsonb) from public, anon, authenticated;
+grant execute on function tata_plus.agente_reuniao_criar_cards(uuid, jsonb) to service_role;
