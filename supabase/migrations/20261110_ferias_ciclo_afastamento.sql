@@ -15,6 +15,7 @@
 -- dias de INSS (dias_inss); a página avisa "conferir ciclo na folha".
 -- Correção junto: Luis Carlos (24090) ciclo 19/10 e Gustavo Reis (24120) ciclo 05/05,
 -- conforme a Programação de Férias da folha de 06/11/2026.
+-- Aplicado em produção em 2026-11-08 pelo SQL Editor (versão com testes embutidos).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1) Dias de suspensão de contrato no período ─────────────────────────────
