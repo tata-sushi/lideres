@@ -216,6 +216,9 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
 - **Acesso**: admins veem a página; os demais, liberados em Auditoria de páginas. Só quem abriu a reunião mexe nela.
 - **Configuração** (`dp_rh.agente_config`): `reuniao_modelo_transcricao`, `reuniao_modelo_voz`, `reuniao_voz` (outras vozes
   pt-BR: Pedro, Caio, Luana, Harper — `pt-BR-<Nome>:MAI-Voice-2.1-Flash`), `reuniao_grupo_resumo` (chat do grupo).
+  **Em teste (desde 07/11):** `reuniao_grupo_resumo` aponta para o telefone do responsável, então o resumo vai para o
+  privado dele e não para o grupo. O grupo DP/RH está guardado em `reuniao_grupo_resumo_oficial`; para valer, copiar
+  esse valor de volta para `reuniao_grupo_resumo`.
 - **Custo** (estimativa, 2 h): transcrição ~US$ 0,54 + respostas ~US$ 0,30–0,60 + voz centavos + ata ~US$ 0,15 ≈ R$ 6–8.
 - **Tabelas**: `dp_rh.agente_reunioes` (status, ata, resumos) e `dp_rh.agente_reuniao_falas` (transcrição bruta, sensível).
 - **Diagnóstico**: `dp_rh.agente_reuniao_trechos` registra cada trecho (bytes, segundos, formato, resultado
