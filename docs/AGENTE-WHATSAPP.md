@@ -65,6 +65,12 @@ Decisões do usuário (28/10):
       (sanções, banco de horas, foto de colaborador). Edge v13: no `responde N` o Sam olha o cadastro **atual** — quem foi liberado depois da pergunta
       recebe "Seu número ainda não estava liberado… Reportei para o Victor e ele já liberou o acesso" e a resposta sai no nível
       de hoje; a confirmação do `libera N` mostra o nível real (`agente_liberar` devolve o nível e mantém o que já existia).
+- [x] **Sam na reunião (07/11)**: página `compliance/kpis/rh/sam.html` (Governança › RH › Sam — Reunião). Ouve a reunião
+      presencial pelo microfone, responde por voz quando chamam "Sam, …" (ou pelo botão) e, ao encerrar, faz a ata (junto das
+      atas de RH), manda o resumo no grupo DP/RH TATÁ SUSHI, a ata completa ao responsável e fala o fechamento na sala.
+      Áudio pelo OpenRouter, mesma chave do Sam. Testes: voz → transcrição de volta idêntica (0,7 s); áudio gravado pelo
+      navegador (webm/opus) transcrito igual; pergunta falada → "dezessete vagas… seis de sushiman"; ata de exemplo com
+      resumo do grupo e fechamento; página no navegador com microfone simulado (sem erros). Ver seção *Reunião*.
 - [x] **Conhecimento do Portal Líderes (07/11)**: o Sam lê o portal e age pelos valores do TATÁ — ver seção
       *Conhecimento*. Base `dp_rh.agente_conhecimento` (57 páginas → 220 trechos, 26 arquivos, Código de Ética e
       Uniformes/EPIs transcritos → 56 trechos), edge `agente-portal` (leitura diária 05h41 + "atualiza portal"),
@@ -185,6 +191,36 @@ processos, conduta, identidade). O Sam usa os dois:
   cargos e salários), `portal_sincronizado_em` / `portal_sincronizado_resumo` (última leitura).
 - **Conferir**: `select tata_plus.agente_conhecimento_buscar('plano de saúde', true, 6);` ·
   `select tata_plus.agente_conhecimento_sempre(true);` · `select tata_plus.agente_conhecimento_catalogo(true);`
+
+## Reunião presencial (Sam ao vivo) — 07/11
+
+```
+Página sam.html (celular/notebook na mesa, dentro do app Plus)
+  microfone → trechos cortados nas pausas (silêncio não é enviado)
+  → edge agente-reuniao (token do portal + acesso à página governanca-kpis-rh-sam)
+      trecho   → transcrição OpenRouter (openai/gpt-transcribe) → dp_rh.agente_reuniao_falas
+               → "Sam, …"? → perguntar
+      perguntar→ edge agente-whatsapp ?reuniao= (mesmo cérebro: banco + portal + ensinado; contexto dos últimos 10 min)
+               → resposta curta para falar → voz OpenRouter (microsoft/mai-voice-2.1-flash, pt-BR-Rafael)
+      encerrar → Claude escreve ATA + RESUMO DO GRUPO + FECHAMENTO FALADO
+               → dp_rh.alinhamento_transcricao (id_externo sam-<id>) · grupo DP/RH · WhatsApp do responsável
+      fala_final → o Sam fala o fechamento na sala
+  pg_cron agente-reuniao-varrer (10 min): reunião sem fala há 20 min é encerrada e ganha ata
+```
+
+- **Uso**: abrir a página, aparelho no meio da mesa, carregando e com a tela ligada; "Começar reunião" (o Sam avisa em voz
+  alta que está anotando); perguntar com "Sam, …" ou o botão; "Encerrar e gerar ata".
+- **Acesso**: admins veem a página; os demais, liberados em Auditoria de páginas. Só quem abriu a reunião mexe nela.
+- **Configuração** (`dp_rh.agente_config`): `reuniao_modelo_transcricao`, `reuniao_modelo_voz`, `reuniao_voz` (outras vozes
+  pt-BR: Pedro, Caio, Luana, Harper — `pt-BR-<Nome>:MAI-Voice-2.1-Flash`), `reuniao_grupo_resumo` (chat do grupo).
+- **Custo** (estimativa, 2 h): transcrição ~US$ 0,54 + respostas ~US$ 0,30–0,60 + voz centavos + ata ~US$ 0,15 ≈ R$ 6–8.
+- **Tabelas**: `dp_rh.agente_reunioes` (status, ata, resumos) e `dp_rh.agente_reuniao_falas` (transcrição bruta, sensível).
+- **Testes internos** (sem gravar nem mandar WhatsApp): `POST …/agente-reuniao?k=<portal_secret>` com
+  `{"acao":"teste_voz","texto":"…"}`, `{"acao":"teste_transcricao","audio_base64":"…","formato":"webm"}` ou
+  `{"acao":"teste_ata","transcricao":"…"}`.
+- **Limites conhecidos**: sem identificação de quem fala (a ata infere pelos nomes citados); com a tela apagada ou o app em
+  segundo plano o navegador para o microfone (a página avisa e tem "Retomar"); a página não aparece na barra lateral do app
+  Plus no computador (lista fixa no repositório `plus`) — entra pelo menu RH do portal.
 
 ## Ligar
 
