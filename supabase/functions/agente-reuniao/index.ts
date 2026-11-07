@@ -15,18 +15,19 @@
 // governanca-kpis-rh-sam liberada para ele (tata_plus.gov_meus_acessos). Só quem abriu a
 // reunião mexe nela. verify_jwt = false porque a conferência é feita aqui (e o pg_cron chama
 // "varrer" com a senha interna).
-// Segredos: OPENAI_API_KEY (Supabase → Edge Functions → Secrets), LLM_API_KEY (OpenRouter, já
-// existe). Modelos e voz em dp_rh.agente_config: reuniao_modelo_transcricao, reuniao_modelo_voz,
-// reuniao_voz.
+// Áudio e IA pelo OpenRouter, com a mesma chave do Sam (LLM_API_KEY): transcrição em
+// /audio/transcriptions (padrão openai/gpt-transcribe) e voz em /audio/speech (padrão
+// microsoft/mai-voice-2.1-flash, voz brasileira pt-BR-Rafael). Modelos e voz em dp_rh.agente_config:
+// reuniao_modelo_transcricao, reuniao_modelo_voz, reuniao_voz.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 
 const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
-const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
 const LLM_URL = Deno.env.get("LLM_API_URL") || "https://openrouter.ai/api/v1/chat/completions";
 const LLM_KEY = Deno.env.get("LLM_API_KEY") ?? "";
+const AUDIO_BASE = LLM_URL.replace(/\/chat\/completions\/?$/, ""); // https://openrouter.ai/api/v1
 const MODELOS_ATA = [...new Set([Deno.env.get("AGENTE_LLM_MODEL") || "anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5"])];
 const UAZ_BASE = (Deno.env.get("SAM_UAZAPI_URL") || "https://tatasushi.uazapi.com").replace(/\/+$/, "");
 const PAGINA = "governanca-kpis-rh-sam";
@@ -56,9 +57,9 @@ async function config() {
     const { data } = await supa.rpc("agente_parametros");
     const d = (data ?? {}) as Record<string, string>;
     cfg = {
-      transcricao: d.reuniao_modelo_transcricao || "gpt-4o-mini-transcribe",
-      modeloVoz: d.reuniao_modelo_voz || "gpt-4o-mini-tts",
-      voz: d.reuniao_voz || "ash",
+      transcricao: d.reuniao_modelo_transcricao || "openai/gpt-transcribe",
+      modeloVoz: d.reuniao_modelo_voz || "microsoft/mai-voice-2.1-flash",
+      voz: d.reuniao_voz || "pt-BR-Rafael:MAI-Voice-2.1-Flash",
       responsavel: String(d.responsavel_telefone ?? "").replace(/\D/g, ""),
       em: Date.now(),
     };
@@ -116,20 +117,37 @@ async function minhaReuniao(id: string, u: Usuario): Promise<any> {
 // ── OpenAI: transcrição e voz ───────────────────────────────────────────────
 const ALUCINACAO = /amara\.org|legendas? (pela|por)|inscreva-se|obrigad[oa] por assistir|^\W*(obrigad[oa]|tchau)\W*$/i;
 
+// formato do áudio para a API (o navegador manda webm/opus; o iPhone, mp4/aac)
+function formatoDe(audio: File): string {
+  const t = `${audio.type} ${audio.name}`.toLowerCase();
+  if (t.includes("webm")) return "webm";
+  if (t.includes("ogg")) return "ogg";
+  if (t.includes("mp4") || t.includes("m4a") || t.includes("aac")) return "m4a";
+  if (t.includes("mpeg") || t.includes("mp3")) return "mp3";
+  if (t.includes("wav")) return "wav";
+  return "webm";
+}
+
+const VOCABULARIO = "Reunião de RH do TATÁ Sushi, em português do Brasil. O assistente virtual se chama Sam: \"Sam, quantas vagas…\".";
+
 async function transcrever(audio: File): Promise<string> {
-  if (!OPENAI_KEY) throw new Error("falta_chave_openai");
+  if (!LLM_KEY) throw new Error("sem chave do OpenRouter (LLM_API_KEY)");
   const { transcricao } = await config();
-  const modelos = [...new Set([transcricao, "gpt-4o-mini-transcribe", "whisper-1"])];
+  const dados = base64(new Uint8Array(await audio.arrayBuffer()));
+  const modelos = [...new Set([transcricao, "openai/gpt-transcribe", "openai/whisper-large-v3-turbo"])];
   let ultimo = "";
   for (const modelo of modelos) {
-    const fd = new FormData();
-    fd.append("file", audio, audio.name || "trecho.webm");
-    fd.append("model", modelo);
-    fd.append("language", "pt");
-    fd.append("response_format", "json");
-    fd.append("prompt", "Reunião de RH do TATÁ Sushi, em português do Brasil. O assistente virtual se chama Sam: \"Sam, quantas vagas…\".");
-    const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-      method: "POST", headers: { Authorization: `Bearer ${OPENAI_KEY}` }, body: fd, signal: AbortSignal.timeout(60_000),
+    const r = await fetch(`${AUDIO_BASE}/audio/transcriptions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${LLM_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: modelo,
+        input_audio: { data: dados, format: formatoDe(audio) },
+        language: "pt",
+        temperature: 0,
+        provider: { options: { openai: { prompt: VOCABULARIO }, groq: { prompt: VOCABULARIO } } },
+      }),
+      signal: AbortSignal.timeout(60_000),
     });
     const txt = await r.text();
     if (r.ok) {
@@ -137,7 +155,7 @@ async function transcrever(audio: File): Promise<string> {
       return ALUCINACAO.test(t) && t.length < 80 ? "" : t;
     }
     ultimo = `transcrição ${r.status} (${modelo}): ${txt.slice(0, 200)}`;
-    if (!(r.status === 400 || r.status === 404) || !/model/i.test(txt)) break;
+    if (r.status === 401 || r.status === 402) break; // chave/crédito: não adianta trocar de modelo
   }
   throw new Error(ultimo);
 }
@@ -148,25 +166,44 @@ function base64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-// texto → mp3 (base64); null se não houver chave ou der erro (a página mostra o texto)
-async function falar(texto: string): Promise<string | null> {
-  if (!OPENAI_KEY || !texto.trim()) return null;
+// pcm 16 bits mono → wav (para o navegador tocar)
+function wav(pcm: Uint8Array, taxa = 24000): Uint8Array {
+  const h = new DataView(new ArrayBuffer(44));
+  const txt = (o: number, t: string) => { for (let i = 0; i < t.length; i++) h.setUint8(o + i, t.charCodeAt(i)); };
+  txt(0, "RIFF"); h.setUint32(4, 36 + pcm.length, true); txt(8, "WAVE"); txt(12, "fmt ");
+  h.setUint32(16, 16, true); h.setUint16(20, 1, true); h.setUint16(22, 1, true); h.setUint32(24, taxa, true);
+  h.setUint32(28, taxa * 2, true); h.setUint16(32, 2, true); h.setUint16(34, 16, true); txt(36, "data");
+  h.setUint32(40, pcm.length, true);
+  const out = new Uint8Array(44 + pcm.length);
+  out.set(new Uint8Array(h.buffer), 0);
+  out.set(pcm, 44);
+  return out;
+}
+
+// texto → áudio { mime, base64 }; null se der erro (a página mostra o texto)
+type Audio = { mime: string; base64: string };
+async function falar(texto: string): Promise<Audio | null> {
+  if (!LLM_KEY || !texto.trim()) return null;
   const { modeloVoz, voz } = await config();
-  for (const modelo of [...new Set([modeloVoz, "tts-1"])]) {
-    const corpo: Record<string, unknown> = { model: modelo, voice: voz, input: texto.slice(0, 1500), response_format: "mp3" };
-    if (/gpt-4o/.test(modelo)) {
-      corpo.instructions = "Fale em português do Brasil, com sotaque brasileiro, tom calmo e cordial de colega de trabalho, ritmo natural.";
-    }
-    const r = await fetch("https://api.openai.com/v1/audio/speech", {
+  const tentativas: Array<{ model: string; voice: string; formato: "mp3" | "pcm" }> = [
+    { model: modeloVoz, voice: voz, formato: /gemini|heygen/.test(modeloVoz) ? "pcm" : "mp3" },
+    { model: "google/gemini-3.8-flash-tts", voice: "Charon", formato: "pcm" },
+  ];
+  for (const t of tentativas) {
+    const corpo: Record<string, unknown> = { model: t.model, voice: t.voice, input: texto.slice(0, 1500), response_format: t.formato };
+    if (/gemini/.test(t.model)) corpo.instructions = "Fale em português do Brasil, tom calmo e cordial de colega de trabalho, ritmo natural.";
+    const r = await fetch(`${AUDIO_BASE}/audio/speech`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${OPENAI_KEY}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${LLM_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify(corpo),
       signal: AbortSignal.timeout(30_000),
     });
-    if (r.ok) return base64(new Uint8Array(await r.arrayBuffer()));
-    const txt = await r.text().catch(() => "");
-    if (!(r.status === 400 || r.status === 404)) break;
-    console.error("voz", r.status, modelo, txt.slice(0, 200));
+    if (r.ok) {
+      const bytes = new Uint8Array(await r.arrayBuffer());
+      return t.formato === "mp3" ? { mime: "audio/mpeg", base64: base64(bytes) } : { mime: "audio/wav", base64: base64(wav(bytes)) };
+    }
+    console.error("voz", r.status, t.model, (await r.text().catch(() => "")).slice(0, 200));
+    if (r.status === 401 || r.status === 402) break;
   }
   return null;
 }
@@ -348,7 +385,7 @@ Deno.serve(async (req) => {
         falar(`Oi, pessoal! Vou acompanhar a reunião e anotar tudo para a ata. Se precisarem de alguma informação, é só dizer: Sam, e a pergunta.`),
         falar("Deixa eu ver."),
       ]);
-      return json({ ok: true, id, usuario: primeiro, saudacao, espera, voz: !!OPENAI_KEY });
+      return json({ ok: true, id, usuario: primeiro, saudacao, espera });
     }
 
     const reuniao = await minhaReuniao(String(corpo.reuniao ?? ""), u);
@@ -388,7 +425,6 @@ Deno.serve(async (req) => {
     }
     return json({ ok: false, erro: "ação desconhecida" }, 400);
   } catch (err) {
-    const e = erroTxt(err);
-    return json({ ok: false, erro: e }, e === "falta_chave_openai" ? 503 : 400);
+    return json({ ok: false, erro: erroTxt(err) }, 400);
   }
 });

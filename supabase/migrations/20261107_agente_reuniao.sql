@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Sam no modo reunião (07/11) — reunião de RH presencial
 -- A página compliance/kpis/rh/sam.html ouve pelo microfone, manda trechos de áudio
--- (cortados nas pausas) para a edge agente-reuniao, que transcreve (OpenAI), guarda
+-- (cortados nas pausas) para a edge agente-reuniao, que transcreve (OpenRouter), guarda
 -- aqui, responde quando chamam "Sam, …" (resposta falada) e, ao encerrar, escreve a
 -- ata no formato das atas de RH e grava em dp_rh.alinhamento_transcricao.
 -- Tudo só por RPC (service_role); a edge confere o acesso do usuário à página
@@ -38,11 +38,12 @@ revoke all on dp_rh.agente_reunioes, dp_rh.agente_reuniao_falas from public, ano
 comment on table dp_rh.agente_reunioes is 'Reuniões ouvidas pelo Sam (página compliance/kpis/rh/sam.html): status, ata e ligação com dp_rh.alinhamento_transcricao.';
 comment on table dp_rh.agente_reuniao_falas is 'Transcrição bruta das reuniões ouvidas pelo Sam (trechos), perguntas feitas a ele e respostas. Sensível.';
 
+-- áudio pelo OpenRouter (mesma chave do Sam): transcrição GPT Transcribe; voz Microsoft MAI-Voice pt-BR
 insert into dp_rh.agente_config (chave, valor) values
-  ('reuniao_modelo_transcricao', 'gpt-4o-mini-transcribe'),
-  ('reuniao_modelo_voz', 'gpt-4o-mini-tts'),
-  ('reuniao_voz', 'ash')
-on conflict (chave) do nothing;
+  ('reuniao_modelo_transcricao', 'openai/gpt-transcribe'),
+  ('reuniao_modelo_voz', 'microsoft/mai-voice-2.1-flash'),
+  ('reuniao_voz', 'pt-BR-Rafael:MAI-Voice-2.1-Flash')
+on conflict (chave) do update set valor = excluded.valor, atualizado_em = now();
 
 -- página no catálogo de acessos da Governança (admins veem; os demais, quando liberados)
 insert into tata_plus.governanca_paginas (pagina_id, label, url, secao, sub, ordem, ativo)
