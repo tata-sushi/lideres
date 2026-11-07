@@ -382,8 +382,10 @@ begin
     v_titulo := left(btrim(coalesce(v_c->>'titulo', '')), 120);
     continue when v_titulo = '';
     -- responsável: nome ou apelido → matrícula (só membro do quadro)
+    -- aceita "Binho", "Binho/Fabio", "Binho (Fabio)"…
     select r.value into v_mat from jsonb_each_text(v_resp) r
-     where tata_plus.agente_chave(r.key) = tata_plus.agente_chave(v_c->>'responsavel')
+     where tata_plus.agente_chave(r.key) in (
+             select tata_plus.agente_chave(x) from regexp_split_to_table(coalesce(v_c->>'responsavel', ''), '[/(),]') x)
        and exists (select 1 from tata_kanban.membros m where m.quadro_id = v_quadro and m.matricula = r.value)
      limit 1;
     select e.id into v_etq from tata_kanban.etiquetas e
