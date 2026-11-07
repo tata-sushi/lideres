@@ -5,7 +5,7 @@
 -- "a cada 12 meses de prestação de serviços, o CONTRATADO poderá suspender os
 -- serviços pelo prazo de 30 dias, fazendo jus à remuneração mensal pelo período"):
 --   Carlos Mateus (24174) 01/03/2026 · Ana Cristina (3) 01/02/2026 ·
---   Victor (7) 01/09/2024 · Cesar (24194) 01/09/2026 ·
+--   Victor (7) 01/09/2024 · Cesar (24194) 01/09/2026 · Luan (24145) 13/10/2026 ·
 --   Eduardo (5) 09/02/2026 e Wellington (11) 22/06/2026 = PJ desde a admissão ·
 --   Cinthia (1) e Fabio (2) = PJ desde a admissão (informado; contrato não conferido).
 -- Regra PJ (períodos a partir da data-base): sempre 30 dias, sem desconto por
@@ -23,6 +23,7 @@ select v.matricula, coalesce(v.data_base, p.data_admissao), v.motivo, v.criado_p
     ('3',     date '2026-02-01', 'Mudança de contrato CLT → PJ (contrato de 01/02/2026)', 'contrato'),
     ('7',     date '2024-09-01', 'Mudança de contrato CLT → PJ (contrato de 01/09/2024)', 'contrato'),
     ('24194', date '2026-09-01', 'Mudança de contrato CLT → PJ (contrato de 01/09/2026)', 'contrato'),
+    ('24145', date '2026-10-13', 'Mudança de contrato CLT → PJ (contrato de 13/10/2026)', 'contrato'),
     ('5',     date '2026-02-09', 'PJ desde a admissão (contrato de 09/02/2026)', 'contrato'),
     ('11',    date '2026-06-22', 'PJ desde a admissão (contrato de 22/06/2026)', 'contrato'),
     ('1',     null::date,        'PJ desde a admissão (informado pelo RH; contrato não conferido)', 'informado'),
