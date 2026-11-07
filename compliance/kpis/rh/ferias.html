@@ -1483,7 +1483,8 @@ function _feriasListar() {
             faltas: f.faltas, dias_inss: f.dias_inss, faltas_parcial: f.faltas_parcial,
             direito_calc: f.direito_calc, direito_efetivo: f.direito_efetivo,
             direito_manual: f.direito_manual, direito_motivo: f.direito_motivo,
-            situacao: f.situacao, quitado_motivo: f.quitado_motivo
+            situacao: f.situacao, quitado_motivo: f.quitado_motivo,
+            pj: !!f.pj   // contrato PJ: sempre 30 dias, sem desconto por faltas e sem venda
           };
         });
         resolve({ ok:true, ferias: ferias });
@@ -1597,6 +1598,7 @@ function _naPendencia(p){ var s = _situacao(p); return s === 'pendente' || s ===
 function _pendentes(){ return _feriasCache.filter(function(p){ return _situacao(p) === 'pendente'; }); }
 function _temAjusteRH(p){ return p.direito_manual != null && p.direito_manual !== ''; }
 function _textoFaltas(p){
+  if (p.pj) return 'Não se aplica (PJ)';
   if (p.faltas == null) return '—';
   return p.faltas + (p.faltas_parcial ? ' (registros desde 01/2025)' : '');
 }
@@ -1604,6 +1606,7 @@ function _textoDireito(p){
   var D = _direitoDias(p);
   var t = D > 0 ? D + ' dias' : 'Sem direito';
   if (_temAjusteRH(p)) t += ' · ajuste do RH';
+  else if (p.pj) t += ' · contrato PJ';
   else if (p.dias_inss > 180) t += ' · INSS > 6 meses';
   return t;
 }
@@ -1625,6 +1628,7 @@ function _isoToBR(iso) {
 }
 
 function _resetAgendamento() {
+  document.getElementById('toggle-abono-sim').style.display = '';
   document.getElementById('toggle-abono-sim').classList.remove('active');
   document.getElementById('toggle-abono-nao').classList.remove('active');
   document.getElementById('f-fracionamento-wrap').style.display = 'none';
@@ -1682,7 +1686,7 @@ function onFPeriodoChange() {
   var mt = document.getElementById('f-colaborador').value;
   var iniAqui = document.getElementById('f-periodo-aquisitivo').value;
   var concEl = document.getElementById('f-periodo-concessivo');
-  _concIni = null; _concFim = null; _dirDias = 30;
+  _concIni = null; _concFim = null; _dirDias = 30; _pjSel = false;
   _resetAgendamento();
   var p = _feriasCache.filter(function(x){ return x.mt === mt && x.ini_aqui === iniAqui; })[0];
   var dirEl0 = document.getElementById('f-direito'); if (dirEl0) dirEl0.value = '';
@@ -1692,15 +1696,24 @@ function onFPeriodoChange() {
   _dirDias = _direitoDias(p);
   concEl.value = (_concIni && _concFim) ? _isoToBR(_concIni) + ' → ' + _isoToBR(_concFim) : 'Não calculado';
   var dirEl = document.getElementById('f-direito');
-  if (dirEl) dirEl.value = _textoDireito(p) + (p.faltas != null ? ' — ' + _textoFaltas(p) + ' falta(s) no período aquisitivo' : '');
+  if (dirEl) dirEl.value = p.pj
+    ? _textoDireito(p) + ' (sem desconto por faltas e sem venda)'
+    : _textoDireito(p) + (p.faltas != null ? ' — ' + _textoFaltas(p) + ' falta(s) no período aquisitivo' : '');
+  _pjSel = !!p.pj;
+  if (p.pj) {   // contrato PJ não prevê venda: só "Não"
+    document.getElementById('toggle-abono-sim').style.display = 'none';
+    setAbono(false);
+  }
 }
 
 function closeFeriasModal() {
   document.getElementById('mf-overlay').classList.remove('open');
 }
 
+var _pjSel = false;
 function setAbono(sim) {
   if (!_concFim) { showFeriasToast('Escolha o período aquisitivo primeiro', true); return; }
+  if (sim && _pjSel) { showFeriasToast('Contrato PJ não prevê venda de férias', true); return; }
   document.getElementById('toggle-abono-sim').classList.toggle('active', sim);
   document.getElementById('toggle-abono-nao').classList.toggle('active', !sim);
   var opts = _opcoesFrac(_dirDias, sim);
