@@ -13,6 +13,7 @@
 -- faltas (a regra de faltas é da CLT), sem venda de dias na página (compra só pelo RH,
 -- no Ajustar) e SEM prazo de concessivo (o PJ acumula saldo). O fracionamento continua
 -- permitido e o ajuste manual do RH continua valendo por cima.
+-- Aplicado em produção em 2026-11-08 pelo SQL Editor (versão com testes embutidos).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1) Marca quem é PJ + datas dos contratos ────────────────────────────────
