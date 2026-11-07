@@ -1,0 +1,394 @@
+// agente-reuniao — Sam no modo reunião (reunião de RH presencial).
+//
+// A página compliance/kpis/rh/sam.html (dentro do app Tatá Plus) ouve pelo microfone e manda
+// trechos de áudio cortados nas pausas. Aqui:
+//   iniciar   → abre a reunião (dp_rh.agente_reunioes) e devolve a saudação falada
+//   trecho    → transcreve (OpenAI) e guarda; avisa se chamaram "Sam, …"
+//   perguntar → o Sam de sempre (edge agente-whatsapp ?reuniao=) responde com o contexto dos
+//               últimos minutos; a resposta volta em texto e em voz (OpenAI TTS)
+//   encerrar  → fecha e gera a ata em segundo plano (Claude), no formato das atas de RH, grava
+//               em dp_rh.alinhamento_transcricao e manda no WhatsApp do responsável
+//   status    → situação da reunião (a página consulta até a ata ficar pronta)
+//   varrer    → (pg_cron, ?k=<portal_secret>) encerra reuniões abandonadas há 20 min
+//
+// Acesso: token do usuário (o mesmo que o portal recebe do Plus) + página
+// governanca-kpis-rh-sam liberada para ele (tata_plus.gov_meus_acessos). Só quem abriu a
+// reunião mexe nela. verify_jwt = false porque a conferência é feita aqui (e o pg_cron chama
+// "varrer" com a senha interna).
+// Segredos: OPENAI_API_KEY (Supabase → Edge Functions → Secrets), LLM_API_KEY (OpenRouter, já
+// existe). Modelos e voz em dp_rh.agente_config: reuniao_modelo_transcricao, reuniao_modelo_voz,
+// reuniao_voz.
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
+
+const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
+const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
+const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
+const LLM_URL = Deno.env.get("LLM_API_URL") || "https://openrouter.ai/api/v1/chat/completions";
+const LLM_KEY = Deno.env.get("LLM_API_KEY") ?? "";
+const MODELOS_ATA = [...new Set([Deno.env.get("AGENTE_LLM_MODEL") || "anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5"])];
+const UAZ_BASE = (Deno.env.get("SAM_UAZAPI_URL") || "https://tatasushi.uazapi.com").replace(/\/+$/, "");
+const PAGINA = "governanca-kpis-rh-sam";
+const ORIGENS = ["https://lideres.tatasushi.tech", "https://plus.tatasushi.tech"];
+
+const supa = createClient(SUPA_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+  auth: { persistSession: false },
+  db: { schema: "tata_plus" },
+});
+
+const erroTxt = (err: unknown) => String((err as Error)?.message ?? err);
+
+function cors(req: Request): Record<string, string> {
+  const o = req.headers.get("Origin") ?? "";
+  return {
+    "Access-Control-Allow-Origin": ORIGENS.includes(o) ? o : ORIGENS[0],
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    Vary: "Origin",
+  };
+}
+
+// ── configuração ────────────────────────────────────────────────────────────
+let cfg: { transcricao: string; voz: string; modeloVoz: string; responsavel: string; em: number } | null = null;
+async function config() {
+  if (!cfg || Date.now() - cfg.em > 60_000) {
+    const { data } = await supa.rpc("agente_parametros");
+    const d = (data ?? {}) as Record<string, string>;
+    cfg = {
+      transcricao: d.reuniao_modelo_transcricao || "gpt-4o-mini-transcribe",
+      modeloVoz: d.reuniao_modelo_voz || "gpt-4o-mini-tts",
+      voz: d.reuniao_voz || "ash",
+      responsavel: String(d.responsavel_telefone ?? "").replace(/\D/g, ""),
+      em: Date.now(),
+    };
+  }
+  return cfg;
+}
+const segredos: Record<string, string> = {};
+async function segredo(chave: string): Promise<string> {
+  if (segredos[chave] === undefined) {
+    const { data } = await supa.rpc("agente_segredo", { p_chave: chave });
+    segredos[chave] = String(data ?? "");
+  }
+  return segredos[chave];
+}
+
+// ── quem está pedindo (token do portal) ─────────────────────────────────────
+type Usuario = { matricula: string; nome: string };
+const usuarios = new Map<string, { u: Usuario | null; em: number }>();
+
+async function usuarioDe(req: Request): Promise<Usuario | null> {
+  const auth = req.headers.get("Authorization") ?? "";
+  const token = auth.replace(/^Bearer\s+/i, "");
+  if (!token || token === ANON) return null;
+  const c = usuarios.get(token);
+  if (c && Date.now() - c.em < 300_000) return c.u;
+  const cli = createClient(SUPA_URL, ANON, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false },
+    db: { schema: "tata_plus" },
+  });
+  const [{ data: acessos, error }, { data: mat }] = await Promise.all([
+    cli.rpc("gov_meus_acessos"),
+    cli.rpc("minha_matricula"),
+  ]);
+  let u: Usuario | null = null;
+  if (!error && ((acessos ?? []) as any[]).some((a) => a.pagina_id === PAGINA)) {
+    const matricula = String(mat ?? "");
+    const { data: q } = matricula ? await supa.rpc("agente_quem_matricula", { p_matricula: matricula }) : { data: null };
+    u = { matricula, nome: String((q as any)?.nome ?? "") };
+  }
+  usuarios.set(token, { u, em: Date.now() });
+  return u;
+}
+
+// a reunião é de quem abriu e ainda está aberta?
+async function minhaReuniao(id: string, u: Usuario): Promise<any> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("reunião inválida");
+  const { data, error } = await supa.rpc("agente_reuniao_ver", { p_id: id });
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("reunião não encontrada");
+  if ((data as any).iniciada_por !== u.matricula) throw new Error("esta reunião foi aberta por outra pessoa");
+  return data;
+}
+
+// ── OpenAI: transcrição e voz ───────────────────────────────────────────────
+const ALUCINACAO = /amara\.org|legendas? (pela|por)|inscreva-se|obrigad[oa] por assistir|^\W*(obrigad[oa]|tchau)\W*$/i;
+
+async function transcrever(audio: File): Promise<string> {
+  if (!OPENAI_KEY) throw new Error("falta_chave_openai");
+  const { transcricao } = await config();
+  const modelos = [...new Set([transcricao, "gpt-4o-mini-transcribe", "whisper-1"])];
+  let ultimo = "";
+  for (const modelo of modelos) {
+    const fd = new FormData();
+    fd.append("file", audio, audio.name || "trecho.webm");
+    fd.append("model", modelo);
+    fd.append("language", "pt");
+    fd.append("response_format", "json");
+    fd.append("prompt", "Reunião de RH do TATÁ Sushi, em português do Brasil. O assistente virtual se chama Sam: \"Sam, quantas vagas…\".");
+    const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST", headers: { Authorization: `Bearer ${OPENAI_KEY}` }, body: fd, signal: AbortSignal.timeout(60_000),
+    });
+    const txt = await r.text();
+    if (r.ok) {
+      const t = String(JSON.parse(txt)?.text ?? "").replace(/\s+/g, " ").trim();
+      return ALUCINACAO.test(t) && t.length < 80 ? "" : t;
+    }
+    ultimo = `transcrição ${r.status} (${modelo}): ${txt.slice(0, 200)}`;
+    if (!(r.status === 400 || r.status === 404) || !/model/i.test(txt)) break;
+  }
+  throw new Error(ultimo);
+}
+
+function base64(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+// texto → mp3 (base64); null se não houver chave ou der erro (a página mostra o texto)
+async function falar(texto: string): Promise<string | null> {
+  if (!OPENAI_KEY || !texto.trim()) return null;
+  const { modeloVoz, voz } = await config();
+  for (const modelo of [...new Set([modeloVoz, "tts-1"])]) {
+    const corpo: Record<string, unknown> = { model: modelo, voice: voz, input: texto.slice(0, 1500), response_format: "mp3" };
+    if (/gpt-4o/.test(modelo)) {
+      corpo.instructions = "Fale em português do Brasil, com sotaque brasileiro, tom calmo e cordial de colega de trabalho, ritmo natural.";
+    }
+    const r = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${OPENAI_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify(corpo),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (r.ok) return base64(new Uint8Array(await r.arrayBuffer()));
+    const txt = await r.text().catch(() => "");
+    if (!(r.status === 400 || r.status === 404)) break;
+    console.error("voz", r.status, modelo, txt.slice(0, 200));
+  }
+  return null;
+}
+
+// para falar: sem markdown, links, emojis e marcadores
+function paraVoz(t: string): string {
+  return t
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[*_~`#>]/g, "")
+    .replace(/^\s*[•\-–]\s*/gm, "")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, "")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+}
+
+// "Sam, …" / "ô Sam …" → a pergunta (string vazia = chamou sem perguntar ainda)
+const CHAMADO_RE = /(?:^|[.!?…]\s*|\b(?:ô|ó|oi|ei|e aí|fala|hey)\s*,?\s*)\bsam\b[\s,:;!.?-]*/i;
+function chamadoDoSam(t: string): string | null {
+  const m = CHAMADO_RE.exec(t);
+  if (!m) return null;
+  return t.slice(m.index + m[0].length).trim();
+}
+
+// ── o Sam responde (mesmo cérebro do WhatsApp, em modo reunião) ─────────────
+async function responderSam(reuniao: any, pergunta: string, u: Usuario) {
+  const [{ data: contexto }, k] = await Promise.all([
+    supa.rpc("agente_reuniao_transcricao", { p_id: reuniao.id, p_minutos: 10 }),
+    segredo("portal_secret"),
+  ]);
+  await supa.rpc("agente_reuniao_fala", { p_id: reuniao.id, p_tipo: "pergunta", p_texto: pergunta, p_segundos: null });
+  const r = await fetch(`${SUPA_URL}/functions/v1/agente-whatsapp?reuniao=${encodeURIComponent(k)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ texto: pergunta, contexto: String(contexto ?? ""), nome: u.nome.split(" ")[0], titulo: reuniao.titulo }),
+    signal: AbortSignal.timeout(120_000),
+  });
+  const out = await r.json().catch(() => ({})) as any;
+  const texto = out?.ok ? paraVoz(String(out.texto ?? "")) : "Tive um problema para consultar agora. Pode repetir daqui a pouco?";
+  await supa.rpc("agente_reuniao_fala", { p_id: reuniao.id, p_tipo: "resposta", p_texto: texto || "(sem resposta)", p_segundos: null });
+  return { texto, audio: await falar(texto), consultas: out?.consultas ?? [], erro: out?.ok ? null : (out?.erro ?? `HTTP ${r.status}`) };
+}
+
+// ── ata ─────────────────────────────────────────────────────────────────────
+const hora = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }) : "";
+const dia = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+
+async function chamarClaude(sistema: string, usuario: string): Promise<string> {
+  let ultimo = "";
+  for (const modelo of MODELOS_ATA) {
+    const r = await fetch(LLM_URL, {
+      method: "POST",
+      signal: AbortSignal.timeout(180_000),
+      headers: {
+        Authorization: `Bearer ${LLM_KEY}`, "Content-Type": "application/json",
+        "HTTP-Referer": "https://lideres.tatasushi.tech", "X-Title": "Tata Agente RH - ata",
+      },
+      body: JSON.stringify({
+        model: modelo, temperature: 0.2, max_tokens: 5000,
+        messages: [{ role: "system", content: sistema }, { role: "user", content: usuario }],
+      }),
+    });
+    const txt = await r.text();
+    if (r.ok) {
+      const c = JSON.parse(txt)?.choices?.[0]?.message?.content;
+      if (c) return String(c).trim();
+    }
+    ultimo = `LLM ${r.status} (${modelo}): ${txt.slice(0, 200)}`;
+    if (!(r.status === 400 || r.status === 404) || !/model/i.test(txt)) break;
+  }
+  throw new Error(ultimo);
+}
+
+const INSTRUCOES_ATA = `Você é o Sam, assistente virtual do RH do TATÁ Sushi. Escreva a ATA da reunião de RH a partir da transcrição automática (ela tem erros de reconhecimento, não identifica quem fala e pode ter trechos soltos).
+
+Formato (texto puro, sem markdown, sem # e sem **), igual às atas de RH do TATÁ:
+Síntese executiva da reunião
+
+<um parágrafo dizendo os assuntos principais>
+
+1. <Tema>
+
+<parágrafos curtos: o que foi discutido, os números citados e o que ficou decidido>
+
+2. <Tema>
+...
+
+Decisões
+• <decisão>
+
+Pendências
+• <responsável> — <o que fazer> — <prazo, se foi dito>
+
+Regras:
+• Português do Brasil, objetivo, como uma ata executiva. Agrupe por tema, não pela ordem da conversa.
+• Não invente: só o que está na transcrição. Se o responsável de uma pendência não ficou claro, escreva "responsável a definir".
+• Nomes de pessoas como aparecem; corrija erros óbvios de transcrição só quando o contexto deixar claro.
+• Perguntas feitas ao Sam e as respostas dele só entram se viraram decisão ou pendência.
+• Se não houver decisões ou pendências, escreva "Nenhuma registrada." na seção.`;
+
+async function gerarAta(id: string) {
+  try {
+    const [{ data: r }, { data: transcricao }] = await Promise.all([
+      supa.rpc("agente_reuniao_ver", { p_id: id }),
+      supa.rpc("agente_reuniao_transcricao", { p_id: id, p_minutos: null }),
+    ]);
+    const reuniao = r as any;
+    const texto = String(transcricao ?? "").trim();
+    if (!texto) throw new Error("nenhuma fala foi transcrita");
+    const minutos = Math.round(Number(reuniao.segundos_audio ?? 0) / 60);
+    const corpo = await chamarClaude(INSTRUCOES_ATA,
+      `Reunião: ${reuniao.titulo} — ${dia(reuniao.inicio)}, das ${hora(reuniao.inicio)} às ${hora(reuniao.fim ?? new Date().toISOString())}.\n\nTRANSCRIÇÃO\n${texto.slice(-150_000)}`);
+    const ata = `${corpo}\n\n— Ata feita pelo Sam a partir da gravação da reunião (${dia(reuniao.inicio)}, ${hora(reuniao.inicio)}–${hora(reuniao.fim ?? new Date().toISOString())}, ~${minutos} min de fala, ${reuniao.perguntas ?? 0} pergunta(s) ao Sam).`;
+    const { error } = await supa.rpc("agente_reuniao_concluir", { p_id: id, p_ata: ata });
+    if (error) throw new Error(error.message);
+    await avisarWhats(`📝 *Ata da ${reuniao.titulo}* (${dia(reuniao.inicio)}) — já está salva junto das atas de RH.\n\n${ata}`);
+  } catch (err) {
+    await supa.rpc("agente_reuniao_status", { p_id: id, p_status: "erro", p_erro: erroTxt(err).slice(0, 500) });
+    await avisarWhats(`⚠️ Não consegui fazer a ata da reunião (${erroTxt(err).slice(0, 200)}). A transcrição ficou salva; me peça de novo pela página do Sam.`)
+      .catch(() => {});
+  }
+}
+
+async function avisarWhats(texto: string) {
+  const { responsavel } = await config();
+  const token = Deno.env.get("SAM_UAZAPI_TOKEN") || await segredo("uazapi_token");
+  if (!responsavel || !token) return;
+  // partes de até ~3500 caracteres, cortando em parágrafo
+  let resto = texto;
+  while (resto) {
+    let corte = resto.length > 3500 ? resto.lastIndexOf("\n\n", 3500) : resto.length;
+    if (corte < 1500) corte = Math.min(resto.length, 3500);
+    await fetch(UAZ_BASE + "/send/text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", token },
+      body: JSON.stringify({ number: responsavel, text: resto.slice(0, corte).trim(), delay: 0, linkPreview: false }),
+    });
+    resto = resto.slice(corte).trim();
+  }
+}
+
+// ── rotas ───────────────────────────────────────────────────────────────────
+Deno.serve(async (req) => {
+  const h = cors(req);
+  const json = (b: unknown, status = 200) =>
+    new Response(JSON.stringify(b), { status, headers: { ...h, "Content-Type": "application/json" } });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: h });
+  if (req.method !== "POST") return json({ ok: false, erro: "use POST" }, 405);
+
+  const url = new URL(req.url);
+  // pg_cron: encerra reuniões abandonadas (página fechada sem "Encerrar")
+  if (url.searchParams.has("k")) {
+    const k = await segredo("portal_secret");
+    if (!k || url.searchParams.get("k") !== k) return json({ ok: false, erro: "nao_autorizado" }, 401);
+    const { data: paradas } = await supa.rpc("agente_reunioes_paradas", { p_minutos: 20 });
+    for (const id of (paradas ?? []) as string[]) {
+      await supa.rpc("agente_reuniao_status", { p_id: id, p_status: "gerando_ata", p_erro: null });
+      EdgeRuntime.waitUntil(gerarAta(id));
+    }
+    return json({ ok: true, encerradas: (paradas ?? []).length });
+  }
+
+  const u = await usuarioDe(req);
+  if (!u) return json({ ok: false, erro: "sem_acesso" }, 403);
+
+  try {
+    const multipart = (req.headers.get("Content-Type") ?? "").includes("multipart/form-data");
+    const form = multipart ? await req.formData() : null;
+    const corpo: any = multipart ? Object.fromEntries([...form!.entries()].filter(([, v]) => typeof v === "string")) : await req.json();
+    const acao = String(corpo.acao ?? "");
+
+    if (acao === "iniciar") {
+      const { data: id, error } = await supa.rpc("agente_reuniao_iniciar", {
+        p_matricula: u.matricula, p_nome: u.nome, p_titulo: String(corpo.titulo ?? "") || null,
+      });
+      if (error) throw new Error(error.message);
+      const primeiro = u.nome.split(" ")[0];
+      const [saudacao, espera] = await Promise.all([
+        falar(`Oi, pessoal! Vou acompanhar a reunião e anotar tudo para a ata. Se precisarem de alguma informação, é só dizer: Sam, e a pergunta.`),
+        falar("Deixa eu ver."),
+      ]);
+      return json({ ok: true, id, usuario: primeiro, saudacao, espera, voz: !!OPENAI_KEY });
+    }
+
+    const reuniao = await minhaReuniao(String(corpo.reuniao ?? ""), u);
+
+    if (acao === "status") {
+      return json({
+        ok: true, status: reuniao.status, ata: reuniao.ata, erro: reuniao.erro,
+        perguntas: reuniao.perguntas, segundos: Number(reuniao.segundos_audio ?? 0),
+      });
+    }
+    if (acao === "encerrar") {
+      if (reuniao.status === "gravando" || reuniao.status === "erro") {
+        await supa.rpc("agente_reuniao_status", { p_id: reuniao.id, p_status: "gerando_ata", p_erro: null });
+        EdgeRuntime.waitUntil(gerarAta(reuniao.id));
+      }
+      return json({ ok: true, status: "gerando_ata" });
+    }
+    if (reuniao.status !== "gravando") return json({ ok: false, erro: "reunião já encerrada" }, 409);
+
+    if (acao === "trecho") {
+      const audio = form?.get("audio");
+      if (!(audio instanceof File) || audio.size < 1000) return json({ ok: true, texto: "" });
+      if (audio.size > 8_000_000) return json({ ok: false, erro: "trecho grande demais" }, 413);
+      const segundos = Number(corpo.segundos) || null;
+      const texto = await transcrever(audio);
+      if (!texto) return json({ ok: true, texto: "" });
+      // pergunta pelo botão (ou depois de só "Sam"): o trecho inteiro é a pergunta
+      if (corpo.pergunta === "1") return json({ ok: true, texto, pergunta: texto });
+      await supa.rpc("agente_reuniao_fala", { p_id: reuniao.id, p_tipo: "fala", p_texto: texto, p_segundos: segundos });
+      const chamado = chamadoDoSam(texto);
+      return json({ ok: true, texto, chamado: chamado !== null, pergunta: chamado || null });
+    }
+    if (acao === "perguntar") {
+      const pergunta = String(corpo.pergunta ?? "").trim();
+      if (!pergunta) return json({ ok: false, erro: "pergunta vazia" }, 400);
+      return json({ ok: true, ...(await responderSam(reuniao, pergunta.slice(0, 1000), u)) });
+    }
+    return json({ ok: false, erro: "ação desconhecida" }, 400);
+  } catch (err) {
+    const e = erroTxt(err);
+    return json({ ok: false, erro: e }, e === "falta_chave_openai" ? 503 : 400);
+  }
+});

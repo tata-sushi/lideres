@@ -34,6 +34,9 @@
 //   AGENTE_LLM_MODEL       (opcional) padrão anthropic/claude-sonnet-5.5
 // (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY são injetados.)
 //
+// Reunião (07/11): POST …?reuniao=<portal_secret> {texto, contexto, nome, titulo} → resposta curta para ser
+// falada na sala (usada pela edge agente-reuniao; página compliance/kpis/rh/sam.html).
+//
 // Teste sem WhatsApp: POST …?teste=<teste_secret> com {"texto":"…"} → devolve a
 // resposta no corpo, não envia nada. Senha separada porque a URL do webhook
 // fica visível no n8n/uazapi.
@@ -313,8 +316,8 @@ function agoraSP(): string {
   }).format(new Date());
 }
 
-// onde a conversa acontece: grupo (todos leem) ou privado (só a pessoa)
-type Local = { grupo: string } | { privadoCom: string };
+// onde a conversa acontece: grupo (todos leem), privado (só a pessoa) ou reunião presencial (resposta falada)
+type Local = { grupo: string } | { privadoCom: string } | { reuniao: string };
 
 // prompt = estilo (editável no banco) + identidade e regras técnicas de consulta (fixas aqui)
 // avisar = nome de quem recebe as perguntas sem resposta ("" quando a conversa já é com essa pessoa)
@@ -325,9 +328,21 @@ function sistema(
   const foraDoAlcance = completo
     ? "CPF, telefone, e-mail, dados pessoais da ficha de admissão, ouvidoria e respostas confidenciais de clima/desligamento"
     : "CPF, telefone, e-mail, salários e valores em R$, atas de reunião, avaliações, reclamações trabalhistas, ouvidoria e respostas confidenciais de clima/desligamento";
-  const onde = "grupo" in local
+  const onde = "reuniao" in local
+    ? ` Você está numa REUNIÃO presencial de RH (${local.reuniao}), ouvindo pelo microfone; a sua resposta vai ser FALADA em voz alta para todos na sala (ignore a menção a WhatsApp/grupo no estilo).`
+    : "grupo" in local
     ? `${local.grupo ? ` Grupo: ${local.grupo}.` : ""} Todos do grupo leem a resposta.`
     : ` Conversa PRIVADA com ${local.privadoCom} (só essa pessoa lê; ignore a menção a grupo no estilo).`;
+  const falada = "reuniao" in local
+    ? `
+
+RESPOSTA FALADA (reunião — vale mais que as regras de formato)
+• Fale como um colega na mesa: 1 a 3 frases curtas. Nada de listas, emojis, asteriscos, links, tabelas ou fotos.
+• Números e datas do jeito que se fala ("doze vagas", "trinta de novembro").
+• A pergunta vem de transcrição automática: se uma palavra parecer errada, entenda pelo contexto; se não der para entender, peça para repetirem.
+• A transcrição recente vem junto só como contexto (do que estão falando, quem disse o quê). Não leia nem resuma a transcrição se não pedirem.
+• Se pedirem detalhe longo (lista de nomes, tabela), diga o principal e ofereça mandar o resto no WhatsApp.`
+    : "";
   const tecnico = `Agora: ${agoraSP()} (horário de São Paulo).${onde}
 
 QUEM VOCÊ É (não anuncie — use só se perguntarem)
@@ -339,7 +354,7 @@ SEJA SUCINTO (vale mais que qualquer orientação de estilo acima)
 • Responda só o que foi perguntado, em 1 a 3 linhas: o número ou a informação principal.
 • Não explique o critério, não detalhe e não ofereça "se quiser, separo por…". Exceção: se a pergunta for ambígua de verdade, diga em poucas palavras o que considerou.
 • Só se aprofunde quando pedirem ("detalha", "explica", "lista", "quem são", "por unidade", "em tópicos" etc.). Aí pode trazer listas e quebras.
-• Assunto longo (ex.: pautas de reunião): poucos tópicos curtos; a íntegra só se pedirem.
+• Assunto longo (ex.: pautas de reunião): poucos tópicos curtos; a íntegra só se pedirem.${falada}
 
 COMO AGIR (os valores do TATÁ, na prática)
 • Ética: não invente nem chute. Se não achou o dado ou a regra, diga que não encontrou${avisar ? " e avise o responsável (sem_resposta)" : ""}.
@@ -858,6 +873,22 @@ Deno.serve(async (req) => {
       const local: Local = payload?.privado === true ? { privadoCom: autor } : { grupo: String(payload?.grupo ?? "Teste") };
       const r = await responder(local, fala, payload?.completo === true, (await parametros()).responsavel.nome);
       return json({ ok: true, ...r, ...separarFotos(r.texto) });
+    } catch (err) {
+      return json({ ok: false, erro: erroTxt(err) }, 500);
+    }
+  }
+
+  // modo reunião (chamado pela edge agente-reuniao, senha interna): resposta para ser falada na sala
+  if (url.searchParams.has("reuniao")) {
+    const s = await segredo("portal_secret");
+    if (!s || url.searchParams.get("reuniao") !== s) return json({ ok: false, erro: "nao_autorizado" }, 401);
+    try {
+      const contexto = String(payload?.contexto ?? "").slice(-12_000);
+      const texto = (contexto ? `Transcrição recente da reunião (automática, pode ter erros):\n${contexto}\n\n` : "") +
+        `Pergunta feita agora ao Sam: ${String(payload?.texto ?? "")}`;
+      const r = await responder({ reuniao: String(payload?.titulo ?? "Reunião de RH") },
+        [{ papel: "user", texto, autor: String(payload?.nome ?? "") || null }], true, "");
+      return json({ ok: true, texto: r.texto, consultas: r.consultas, modelo: r.modelo, uso: r.uso });
     } catch (err) {
       return json({ ok: false, erro: erroTxt(err) }, 500);
     }
