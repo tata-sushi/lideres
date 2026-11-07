@@ -1292,3 +1292,18 @@ select cron.schedule(
        headers := '{"Content-Type":"application/json"}'::jsonb,
        timeout_milliseconds := 120000)$c$
 );
+
+-- ── 15. recibos de férias (valor pago) ───────────────────────────────────────
+-- dp_rh.ferias_recibos (recibos da folha desde 2023 + PDFs): 1 linha por recibo/fração de gozo,
+-- com o valor líquido pago. Valor de pessoa = dado restrito (só nível completo).
+create or replace view agente_restrito.ferias_recibos as
+select r.matricula, coalesce(p.nome, initcap(lower(f.nome_hist))) as nome,
+       r.unidade_folha as unidade, r.departamento_folha as departamento,
+       r.ini_aqui, r.ini_gozo, r.fim_gozo, r.dias_gozo, r.dias_abono, r.valor_liquido, r.origem, r.criado_em
+from dp_rh.ferias_recibos r
+left join tata_plus.profiles p on p.matricula = r.matricula
+left join dp_rh.ferias f on f.matricula = r.matricula and f.ini_aqui = r.ini_aqui;
+comment on view agente_restrito.ferias_recibos is 'Recibos de férias pagos (folha, desde jan/2023): 1 linha por recibo — cada fração de gozo tem o seu. ini_gozo/fim_gozo = período de gozo; dias_gozo e dias_abono (abono pecuniário = dias vendidos); valor_liquido = valor líquido pago em R$. ini_aqui liga ao período aquisitivo em agente.ferias. "Quanto recebeu de férias" = valor_liquido dos recibos da pessoa; "gasto com férias no mês" = soma de valor_liquido dos recibos com ini_gozo no mês. unidade/departamento = os da folha na época.';
+grant select on agente_restrito.ferias_recibos to agente_leitor_total;
+
+comment on view agente.ferias is 'Férias por colaborador: período aquisitivo (ini_aqui/fim_aqui), concessivo (ini_conc/fim_conc) e até 3 frações de gozo (ini1/fim1…ini3/fim3). Valor pago (recibo, valor líquido) em agente_restrito.ferias_recibos (só nível completo); sem nível completo, diga que o valor é restrito.';

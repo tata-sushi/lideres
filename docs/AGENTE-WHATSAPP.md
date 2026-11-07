@@ -140,10 +140,11 @@ Fonte: `docs/mapas/dp_rh.md` (mapa do schema, com as regras de leitura). Cada gr
   score de líderes, líderes responsáveis, reconhecimentos, treinamentos, premiações (sem valor), chamados de manutenção,
   **cardápio do TATÁ House** (cardápio do dia por cozinha, itens, cozinha de cada unidade, avaliações anônimas, catálogo de
   restrições — schema `tata_refeicoes`, desde 04/11).
-- **completo** — + schema `agente_restrito`, 15 visões: atas das reuniões de DP/RH, avaliações (experiência, desempenho,
+- **completo** — + schema `agente_restrito`, 16 visões: atas das reuniões de DP/RH, avaliações (experiência, desempenho,
   liderança — só o consolidado) + legado, salários por cargo, pontos da loja, banco de horas com custo, diárias de teste
   e pretensão, salário das vagas, valores de rescisão, VT, custo de estoque, custo de manutenção, premiações com valor,
-  reclamações trabalhistas, restrições alimentares de cada colaborador.
+  reclamações trabalhistas, restrições alimentares de cada colaborador, **recibos de férias com valor líquido pago**
+  (`ferias_recibos`, desde jan/2023, 07/11).
 - **Fora em qualquer nível**: ouvidoria, respostas de clima e de desligamento, CPF/telefone/e-mail, ficha da admissão.
 
 ```sql
