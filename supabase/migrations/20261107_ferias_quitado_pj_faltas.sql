@@ -19,6 +19,7 @@
 -- 5) Uma vez só: períodos de ativos com concessivo encerrado e sem registro de gozo
 --    → "Histórico: concessivo encerrado sem registro de gozo"; e direito ≠ 30 gravado
 --    direto na base num período pendente vira ajuste do RH (ex.: Alairton = 12).
+-- Aplicado em produção em 2026-11-07 pelo SQL Editor (versão com testes embutidos).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1) Colunas novas ────────────────────────────────────────────────────────
