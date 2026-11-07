@@ -18,6 +18,11 @@
 // liberado, a IA chamou `sem_resposta`, ou erro. Ele resolve no privado com o
 // Sam: "responde 27", "libera 27", "27: texto", "ignora 27".
 //
+// Conhecimento (07/11): além do banco, o Sam lê o Portal Líderes — dp_rh.agente_conhecimento,
+// alimentada pela edge agente-portal (diário + "atualiza portal"). Identidade do TATÁ e o que o
+// responsável ensinou ("aprende: …" / "esquece 12") vão sempre nas instruções; o resto ele busca
+// com a ferramenta `buscar_portal` (regras, benefícios, Código de Ética, EPIs, manuais, logos).
+//
 // Banco (dp_rh.agente_config): webhook_secret (URL ?k=), teste_secret (modo
 // teste), uazapi_token (instância do Sam), prompt_estilo (persona/jeito de
 // responder — editável sem publicar), bot_ids (número e LID do Sam p/
@@ -181,10 +186,13 @@ async function enviar(destino: string, texto: string, citarId: string | null): P
   return ids;
 }
 
-// fotos: linhas "Nome: <link do avatar>" na resposta viram imagem no WhatsApp (até 10)
+// fotos: linhas "Nome: <link>" na resposta viram imagem no WhatsApp (até 10) — avatar do app
+// ou imagem publicada no portal (logos, comunicados)
 const AVATAR_RE = new RegExp(
-  (Deno.env.get("SUPABASE_URL") ?? "").replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") +
-    "/storage/v1/object/public/avatares/[^\\s)>\\]]+",
+  "(?:" + (Deno.env.get("SUPABASE_URL") ?? "").replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") +
+    "/storage/v1/object/public/avatares/[^\\s)>\\]]+" +
+    "|https://lideres\\.tatasushi\\.tech/[^\\s)>\\]]+\\.(?:png|jpe?g|webp))",
+  "i",
 );
 type Foto = { url: string; legenda: string };
 
@@ -220,7 +228,7 @@ async function enviarImagem(destino: string, foto: Foto): Promise<string | null>
 // ── configuração no banco ───────────────────────────────────────────────────
 const segredos: Record<string, string> = {};
 
-async function segredo(chave: "webhook_secret" | "teste_secret" | "uazapi_token"): Promise<string> {
+async function segredo(chave: "webhook_secret" | "teste_secret" | "uazapi_token" | "portal_secret"): Promise<string> {
   if (segredos[chave] === undefined) {
     const { data, error } = await supa.rpc("agente_segredo", { p_chave: chave });
     if (error) throw new Error("segredo: " + error.message);
@@ -265,6 +273,39 @@ async function catalogo(completo: boolean): Promise<string> {
   return mapas[k].texto;
 }
 
+// base de conhecimento (dp_rh.agente_conhecimento): o que vai SEMPRE nas instruções — identidade do
+// TATÁ (página idconceitual do portal) e o que o responsável ensinou ("aprende: …") — e o catálogo do
+// que dá para buscar (páginas, documentos, arquivos). Relido a cada 10 min; "aprende"/"esquece" limpam.
+const saberes: Record<string, { texto: string; em: number }> = {};
+const esquecerSaberes = () => { for (const k of Object.keys(saberes)) delete saberes[k]; };
+
+async function conhecimento(completo: boolean): Promise<string> {
+  const k = completo ? "completo" : "basico";
+  if (!saberes[k] || Date.now() - saberes[k].em > 600_000) {
+    const [{ data: sempre, error: e1 }, { data: cat, error: e2 }] = await Promise.all([
+      supa.rpc("agente_conhecimento_sempre", { p_completo: completo }),
+      supa.rpc("agente_conhecimento_catalogo", { p_completo: completo }),
+    ]);
+    if (e1 || e2) throw new Error("conhecimento: " + (e1 ?? e2)!.message);
+    const itens = (sempre ?? []) as any[];
+    const identidade = itens.filter((i) => i.fonte !== "victor").map((i) => i.texto).join("\n\n");
+    const ensinado = itens.filter((i) => i.fonte === "victor").map((i) => `• [${i.id}, ${i.em}] ${i.texto}`).join("\n");
+    const c = (cat ?? {}) as any;
+    const paginas = ((c.paginas ?? []) as any[]).map((p) => p.titulo).filter(Boolean).join(" · ");
+    const docs = ((c.pdfs ?? []) as string[]).join(" · ");
+    const arquivos = ((c.arquivos ?? []) as any[]).map((a) => `${a.nome}: ${a.url}`).join("\n");
+    const texto = [
+      identidade && `IDENTIDADE DO TATÁ (do Portal Líderes — é a base do seu jeito de agir)\n${identidade}`,
+      `O QUE O RESPONSÁVEL TE ENSINOU (vale mais que o portal e que qualquer suposição)\n${ensinado || "• (nada ainda)"}`,
+      `PORTAL DOS LÍDERES — conteúdo escrito que você encontra com buscar_portal\n• Páginas: ${paginas || "(nenhuma)"}` +
+        (docs ? `\n• Documentos: ${docs}` : "") +
+        (arquivos ? `\n• Arquivos publicados (para mandar, use o link):\n${arquivos}` : ""),
+    ].filter(Boolean).join("\n\n");
+    saberes[k] = { texto, em: Date.now() };
+  }
+  return saberes[k].texto;
+}
+
 function agoraSP(): string {
   return new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Sao_Paulo", weekday: "long", day: "2-digit", month: "2-digit", year: "numeric",
@@ -278,7 +319,9 @@ type Local = { grupo: string } | { privadoCom: string };
 // prompt = estilo (editável no banco) + identidade e regras técnicas de consulta (fixas aqui)
 // avisar = nome de quem recebe as perguntas sem resposta ("" quando a conversa já é com essa pessoa)
 // chefe = a quem o Sam se reporta (responsável do RH)
-function sistema(estilo: string, local: Local, mapa: string, completo: boolean, avisar: string, chefe: string): any[] {
+function sistema(
+  estilo: string, local: Local, mapa: string, completo: boolean, avisar: string, chefe: string, saber: string,
+): any[] {
   const foraDoAlcance = completo
     ? "CPF, telefone, e-mail, dados pessoais da ficha de admissão, ouvidoria e respostas confidenciais de clima/desligamento"
     : "CPF, telefone, e-mail, salários e valores em R$, atas de reunião, avaliações, reclamações trabalhistas, ouvidoria e respostas confidenciais de clima/desligamento";
@@ -298,8 +341,19 @@ SEJA SUCINTO (vale mais que qualquer orientação de estilo acima)
 • Só se aprofunde quando pedirem ("detalha", "explica", "lista", "quem são", "por unidade", "em tópicos" etc.). Aí pode trazer listas e quebras.
 • Assunto longo (ex.: pautas de reunião): poucos tópicos curtos; a íntegra só se pedirem.
 
-FONTE DOS DADOS
-Responda SEMPRE consultando o banco com a ferramenta consultar_banco. Nunca invente número, nome ou data: se não achou, diga que não achou.
+COMO AGIR (os valores do TATÁ, na prática)
+• Ética: não invente nem chute. Se não achou o dado ou a regra, diga que não encontrou${avisar ? " e avise o responsável (sem_resposta)" : ""}.
+• Respeito pelos colaboradores: fale das pessoas com respeito, sem julgamento; não exponha ninguém além do necessário para a pergunta (o Código de Ética veda passar dados pessoais de colegas).
+• Excelência e bons resultados: confira o número antes de responder; prefira a fonte oficial (banco ou portal) ao "acho que".
+• Harmonia entre equipes: tom cordial e calmo; em conflito ou reclamação entre pessoas, oriente a procurar a liderança imediata ou o RH.
+• Não desperdício: resposta curta, sem rodeios.
+
+FONTES
+• Números, nomes, datas e situação das pessoas (escala, férias, faltas, vagas, sanções…) → banco, com consultar_banco.
+• Como o TATÁ funciona (regras, políticas, benefícios e quem tem direito, processos, prazos, conduta, Código de Ética, uniformes/EPIs, conceitos, manuais, identidade, logos e documentos) → buscar_portal, e responda com o que o portal diz. Busque com palavras-chave e sinônimos (ex.: "plano de saúde assistência médica elegibilidade"); se não vier, tente outras palavras.
+• O que o responsável te ensinou (abaixo) vale primeiro. Pergunta que mistura regra e dado (ex.: "quando acaba a experiência do Diogo") → regra (ensinado/portal) + data (banco).
+• Nunca use "padrão de mercado" ou regra genérica de CLT no lugar da regra do TATÁ. Se a regra do TATÁ não estiver no que foi ensinado nem no portal, diga que não encontrou a regra${avisar ? " e chame sem_resposta" : ""}. Nunca invente número, nome, data ou regra.
+• Pode mandar o link da página ou do documento quando ajudar. Para mandar uma imagem do portal (ex.: logo), escreva numa linha "Nome: <link>" — vira imagem.
 
 COMO CONSULTAR
 • Só existem as visões listadas abaixo — escreva o nome com o schema (agente.x${completo ? " ou agente_restrito.x" : ""}). Uma consulta por chamada, só SELECT/WITH, sem ponto e vírgula e sem comentários.
@@ -310,7 +364,9 @@ COMO CONSULTAR
 • Se der erro, corrija a consulta e tente de novo. Se a pergunta for ambígua (período, unidade), assuma o mais provável.
 • Você só lê dados. Se pedirem para alterar algo, explique que isso é feito no portal.
 • Fora do seu alcance nesta conversa (${foraDoAlcance}): diga que não tem acesso.${avisar ? `
-• Se não der para responder de verdade (o dado não existe no mapa, está fora do seu alcance, ou a pergunta pede ação/decisão de alguém do RH), chame a ferramenta sem_resposta com o motivo em poucas palavras e diga à pessoa que passou para ${avisar}. Não chame quando conseguiu responder.` : ""}
+• Se não der para responder de verdade (o dado não existe no mapa nem no portal, está fora do seu alcance, ou a pergunta pede ação/decisão de alguém do RH), chame a ferramenta sem_resposta com o motivo em poucas palavras e diga à pessoa que passou para ${avisar}. Não chame quando conseguiu responder.` : ""}
+
+${saber}
 
 MAPA DO BANCO (visões disponíveis)
 ${mapa}`;
@@ -330,7 +386,38 @@ const FERRAMENTAS = [{
       required: ["sql"],
     },
   },
+}, {
+  type: "function",
+  function: {
+    name: "buscar_portal",
+    description: "Busca no conteúdo escrito do Portal Líderes (regras, políticas, benefícios, processos, Código de Ética, " +
+      "uniformes/EPIs, conceitos, manuais, identidade do TATÁ) e nos arquivos publicados. Devolve os trechos mais " +
+      "relevantes, com a página e o link.",
+    parameters: {
+      type: "object",
+      properties: {
+        busca: { type: "string", description: "Palavras-chave e sinônimos. Ex.: \"plano de saúde assistência médica elegibilidade\"" },
+      },
+      required: ["busca"],
+    },
+  },
 }];
+
+async function buscarPortal(busca: string, completo: boolean): Promise<{ conteudo: string; reg: Consulta }> {
+  const t0 = Date.now();
+  const { data, error } = await supa.rpc("agente_conhecimento_buscar", { p_busca: busca, p_completo: completo, p_limite: 6 });
+  const ms = Date.now() - t0;
+  const reg: Consulta = { sql: "portal: " + busca, ms };
+  if (error) return { conteudo: "ERRO: " + error.message, reg: { ...reg, erro: error.message } };
+  const itens = (data ?? []) as any[];
+  reg.linhas = itens.length;
+  if (!itens.length) return { conteudo: "Nada encontrado no portal com essas palavras. Tente sinônimos.", reg };
+  let conteudo = itens.map((i) =>
+    `### ${[i.pagina, i.secao].filter(Boolean).join(" › ")}${i.url ? `\nLink: ${i.url}` : ""}\n${i.texto}`
+  ).join("\n\n");
+  if (conteudo.length > 14_000) conteudo = conteudo.slice(0, 14_000) + "… (cortado)";
+  return { conteudo, reg };
+}
 
 const SEM_RESPOSTA = {
   type: "function",
@@ -395,7 +482,8 @@ type Fala = { papel: string; texto: string; autor?: string | null };
 
 async function responder(local: Local, historico: Fala[], completo: boolean, avisar: string) {
   const { estilo, responsavel } = await parametros();
-  const messages: any[] = sistema(estilo, local, await catalogo(completo), completo, avisar, responsavel.nome);
+  const [mapa, saber] = await Promise.all([catalogo(completo), conhecimento(completo)]);
+  const messages: any[] = sistema(estilo, local, mapa, completo, avisar, responsavel.nome, saber);
   const tools = avisar ? [...FERRAMENTAS, SEM_RESPOSTA] : FERRAMENTAS;
   const semResposta: string[] = [];
   // a conversa precisa começar por mensagem de usuário
@@ -429,7 +517,9 @@ async function responder(local: Local, historico: Fala[], completo: boolean, avi
         messages.push({ role: "tool", tool_call_id: tc.id, content: `Ok, ${avisar} vai ser avisado. Agora responda à pessoa.` });
         continue;
       }
-      const { conteudo, reg } = await consultar(String(args.sql ?? ""), completo);
+      const { conteudo, reg } = tc.function?.name === "buscar_portal"
+        ? await buscarPortal(String(args.busca ?? ""), completo)
+        : await consultar(String(args.sql ?? ""), completo);
       consultas.push(reg);
       messages.push({ role: "tool", tool_call_id: tc.id, content: conteudo });
     }
@@ -514,7 +604,60 @@ async function avisarResponsavel(a: Aviso, limitarOrigem?: string) {
 const CMD_RE = /^\s*(responde|responder|libera|liberar|ignora|ignorar)\s*#?(\d+)?\s*[.!]?\s*$/i;
 const MANUAL_RE = /^\s*#?(\d+)\s*:\s*([\s\S]+)$/;
 
-async function comandoResponsavel(e: Entrada, responsavel: { telefone: string }): Promise<boolean> {
+// ensinar o Sam (vale em todas as conversas, sempre nas instruções):
+//   aprende: <texto> · esquece 12 · atualiza portal (relê o Portal Líderes agora)
+const APRENDE_RE = /^\s*(?:sam[,:]?\s*)?aprend[ae](?:\s*[:\-–]\s*|\s+)([\s\S]{3,})$/i;
+const ESQUECE_RE = /^\s*(?:sam[,:]?\s*)?esquecer?\s*#?(\d+)\s*[.!]?\s*$/i;
+const ATUALIZA_RE = /^\s*(?:sam[,:]?\s*)?atualiz[ae]r?\s+(?:o\s+)?portal\s*[.!]?\s*$/i;
+
+async function comandoSaber(e: Entrada, responsavel: { telefone: string; nome?: string }): Promise<boolean> {
+  const aprende = e.texto.match(APRENDE_RE);
+  const esquece = aprende ? null : e.texto.match(ESQUECE_RE);
+  const atualiza = aprende || esquece ? null : ATUALIZA_RE.test(e.texto);
+  if (!aprende && !esquece && !atualiza) return false;
+  const tel = responsavel.telefone;
+  const dizer = async (t: string, meta: Record<string, unknown>) => {
+    const ids = await enviar(tel, t, null);
+    await supa.rpc("agente_registrar", { p_telefone: tel, p_papel: "assistant", p_texto: t, p_msg_id: ids[0] ?? null, p_meta: meta });
+  };
+  const trabalho = (async () => {
+    if (aprende) {
+      const texto = aprende[1].trim().replace(/^que\s+/i, "");
+      const { data: id, error } = await supa.rpc("agente_aprender", { p_texto: texto, p_autor: responsavel.nome ?? null });
+      if (error) throw new Error(error.message);
+      esquecerSaberes();
+      await dizer(`📚 Aprendi (#${id}): ${texto}\nVale a partir de agora, em todas as conversas. Para apagar: *esquece ${id}*`,
+        { comando: "aprende", conhecimento_id: id });
+    } else if (esquece) {
+      const { data, error } = await supa.rpc("agente_esquecer", { p_id: Number(esquece[1]) });
+      if (error) throw new Error(error.message);
+      esquecerSaberes();
+      await dizer((data as any)?.ok
+        ? `🗑️ Esqueci o #${esquece[1]}: ${(data as any).texto}`
+        : `Não achei o #${esquece[1]} entre o que você me ensinou.`, { comando: "esquece", conhecimento_id: Number(esquece[1]) });
+    } else {
+      await enviar(tel, "🔄 Lendo o Portal Líderes de novo… te aviso quando terminar.", null);
+      const k = await segredo("portal_secret");
+      const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/agente-portal?k=${encodeURIComponent(k)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(140_000),
+      });
+      const out = await r.json().catch(() => ({})) as any;
+      if (!r.ok || !out?.ok) throw new Error(out?.erro ?? `HTTP ${r.status}`);
+      const s = out.resumo ?? {};
+      esquecerSaberes();
+      await dizer(out.continua
+        ? `🔄 Portal: ${s.processadas ?? 0} de ${s.paginas ?? "?"} páginas lidas; o resto termina em seguida.`
+        : `✅ Portal atualizado: ${s.processadas ?? 0} páginas (${s.pedacos ?? 0} trechos), ${s.documentos ?? 0} trechos de documentos ` +
+          `e ${s.arquivos ?? 0} arquivos.${s.erros?.length ? `\n⚠️ ${s.erros.length} com erro: ${s.erros.slice(0, 3).join("; ")}` : ""}`,
+        { comando: "atualiza_portal", resumo: s });
+    }
+  })();
+  EdgeRuntime.waitUntil(trabalho.catch((err) => enviar(tel, `Não consegui: ${erroTxt(err).slice(0, 200)}`, null)));
+  return true;
+}
+
+async function comandoResponsavel(e: Entrada, responsavel: { telefone: string; nome?: string }): Promise<boolean> {
+  if (await comandoSaber(e, responsavel)) return true;
   const cmd = e.texto.match(CMD_RE);
   const manual = cmd ? null : e.texto.match(MANUAL_RE);
   if (!cmd && !manual) return false;
