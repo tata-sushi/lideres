@@ -208,6 +208,8 @@
   .s-pendente  { background: #FFF4DC; color: #7A4A00; }
   .s-sem-prazo { background: #FDEAEA; color: #7A1A1A; }
   .s-vencido   { background: #FDEAEA; color: #7A1A1A; }
+  .s-sem-direito { background: #EEF0F2; color: #4B5563; }
+  .dev-card-acoes { display: flex; gap: 6px; flex-shrink: 0; }
   .dev-card-body { padding: 10px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
   .dev-card-field { display: flex; flex-direction: column; gap: 1px; }
   .dev-card-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
@@ -440,6 +442,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <option value="pendente">Aguardando agendamento</option>
         <option value="sem-prazo">Sem data possível</option>
         <option value="vencido">Concessivo vencido</option>
+        <option value="sem-direito">Sem direito</option>
       </select>
     </div>
   </div>
@@ -1307,6 +1310,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <input class="mf-input" id="f-periodo-concessivo" type="text" readonly style="background:var(--bg);color:var(--muted);cursor:default" placeholder="—">
       </div>
       <div class="mf-field">
+        <label class="mf-label" for="f-direito">Direito (faltas no período)</label>
+        <input class="mf-input" id="f-direito" type="text" readonly style="background:var(--bg);color:var(--muted);cursor:default" placeholder="—">
+      </div>
+      <div class="mf-field">
         <label class="mf-label">Venda de férias (abono)?</label>
         <div class="mf-toggle-row">
           <button class="mf-toggle" id="toggle-abono-nao" onclick="setAbono(false)">Não</button>
@@ -1343,6 +1350,40 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <button class="mf-close" onclick="closeInfoGrafico()" aria-label="Fechar">×</button>
     </div>
     <div class="mf-body" id="info-body" style="padding-top:0"></div>
+  </div>
+</div>
+<!-- AJUSTE DO RH: direito na mão, quitar ou voltar ao cálculo por faltas -->
+<div class="mf-overlay" id="aj-overlay">
+  <div class="mf-modal" style="max-width:480px">
+    <div class="mf-handle"></div>
+    <div class="mf-header">
+      <div><div class="mf-title">Ajuste do RH</div></div>
+      <button class="mf-close" onclick="fecharAjusteRH()" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="mf-body">
+      <div id="aj-nome" style="font-size:15px;font-weight:700;color:var(--carbon);text-transform:uppercase;letter-spacing:-.1px;margin-bottom:6px"></div>
+      <div id="aj-info" style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:14px"></div>
+      <div class="mf-field">
+        <label class="mf-label" for="aj-tipo">O que fazer</label>
+        <select class="mf-select" id="aj-tipo">
+          <option value="automatico">Usar o cálculo por faltas</option>
+          <option value="30">Direito: 30 dias</option>
+          <option value="24">Direito: 24 dias</option>
+          <option value="18">Direito: 18 dias</option>
+          <option value="12">Direito: 12 dias</option>
+          <option value="0">Sem direito a férias</option>
+          <option value="quitar">Marcar como quitado (pago sem gozo)</option>
+        </select>
+      </div>
+      <div class="mf-field">
+        <label class="mf-label" for="aj-motivo">Motivo</label>
+        <textarea class="mf-textarea" id="aj-motivo" placeholder="Ex.: faltas abonadas, pago na rescisão, mudança para PJ…"></textarea>
+      </div>
+    </div>
+    <div class="mf-footer">
+      <button class="btn btn--primary" onclick="fecharAjusteRH()">Cancelar</button>
+      <button class="btn btn--primary" id="aj-salvar" onclick="salvarAjusteRH()"><span class="btn-spin"></span><span class="btn-label">Salvar</span></button>
+    </div>
   </div>
 </div>
 <div class="mf-toast" id="mf-toast"></div>
@@ -1437,7 +1478,12 @@ function _feriasListar() {
             direito: f.direito, frac: f.frac,
             ini1: f.ini1, ini2: f.ini2, ini3: f.ini3,
             fim1: f.fim1, fim2: f.fim2, fim3: f.fim3,
-            abono: f.abono, aprovado: f.aprovado, obs: f.obs
+            abono: f.abono, aprovado: f.aprovado, obs: f.obs,
+            // faltas × direito e situação (banco a partir de 07/11/2026; ausentes no banco antigo)
+            faltas: f.faltas, dias_inss: f.dias_inss, faltas_parcial: f.faltas_parcial,
+            direito_calc: f.direito_calc, direito_efetivo: f.direito_efetivo,
+            direito_manual: f.direito_manual, direito_motivo: f.direito_motivo,
+            situacao: f.situacao, quitado_motivo: f.quitado_motivo
           };
         });
         resolve({ ok:true, ferias: ferias });
@@ -1519,16 +1565,48 @@ function _datasInicio(minIso, fimConc, dias){
   }
   return out;
 }
-function _semDireito(p){ return !!p && p.direito === 'Não tem direito a férias'; }
-function _direitoDias(p){ var s = String((p && p.direito) || '').trim(); return /^\d+$/.test(s) && +s > 0 ? +s : 30; }
-// Situação de um período ainda não agendado: pendente | sem-prazo | vencido
+// Situação do período (vem do banco: pendente · agendada · gozada · quitada · sem_direito)
+function _situacao(p){
+  if (p.situacao) return p.situacao;
+  if (p.ini1) { var f = p.fim3 || p.fim2 || p.fim1 || p.ini1; return f < _hojeIso() ? 'gozada' : 'agendada'; }
+  return p.direito === 'Não tem direito a férias' ? 'sem_direito' : 'pendente';
+}
+function _semDireito(p){ return !!p && _situacao(p) === 'sem_direito'; }
+// Dias de direito: cálculo por faltas do banco (CLT art. 130) ou ajuste do RH
+function _direitoDias(p){
+  if (p && p.direito_efetivo != null) return +p.direito_efetivo;
+  var s = String((p && p.direito) || '').trim(); return /^\d+$/.test(s) && +s > 0 ? +s : 30;
+}
+// Fracionamento possível para D dias (até 3 períodos; um com 14+ dias e os demais com 5+; venda = 1/3)
+function _opcoesFrac(D, venda){
+  if (venda) { var v = Math.floor(D / 3); return [(D - v) + ' + ' + v]; }
+  if (D === 30) return ['30','15+15','20+10','20+5+5','15+10+5','14+10+6','14+8+8'];
+  if (D === 24) return ['24','19+5','14+10','14+5+5'];
+  return [String(D)];   // 18 e 12 dias: só inteiro (não dá um bloco de 14 e outro de 5)
+}
+// Estado na aba Pendências: pendente | sem-prazo | vencido | sem-direito
 function _estadoPend(p){
+  if (_semDireito(p)) return 'sem-direito';
   var hoje = _hojeIso();
   if (!p.fim_conc || p.fim_conc < hoje) return 'vencido';
   var D = _direitoDias(p), menor = D - Math.floor(D/3);   // com venda, o descanso é o menor bloco possível
   return _datasInicio(_minIniFerias(p.ini_conc), p.fim_conc, menor).length ? 'pendente' : 'sem-prazo';
 }
-function _pendentes(){ return _feriasCache.filter(function(p){ return !p.ini1 && !_semDireito(p); }); }
+// Na aba Pendências aparecem os pendentes e os "sem direito" (para o RH ver); só os pendentes são agendáveis
+function _naPendencia(p){ var s = _situacao(p); return s === 'pendente' || s === 'sem_direito'; }
+function _pendentes(){ return _feriasCache.filter(function(p){ return _situacao(p) === 'pendente'; }); }
+function _temAjusteRH(p){ return p.direito_manual != null && p.direito_manual !== ''; }
+function _textoFaltas(p){
+  if (p.faltas == null) return '—';
+  return p.faltas + (p.faltas_parcial ? ' (registros desde 01/2025)' : '');
+}
+function _textoDireito(p){
+  var D = _direitoDias(p);
+  var t = D > 0 ? D + ' dias' : 'Sem direito';
+  if (_temAjusteRH(p)) t += ' · ajuste do RH';
+  else if (p.dias_inss > 180) t += ' · INSS > 6 meses';
+  return t;
+}
 var _DIA_SEM = ['dom','seg','ter','qua','qui','sex','sáb'];
 function _rotuloData(iso){ return _isoToBR(iso) + ' (' + _DIA_SEM[_dt(iso).getDay()] + ')'; }
 
@@ -1607,11 +1685,14 @@ function onFPeriodoChange() {
   _concIni = null; _concFim = null; _dirDias = 30;
   _resetAgendamento();
   var p = _feriasCache.filter(function(x){ return x.mt === mt && x.ini_aqui === iniAqui; })[0];
+  var dirEl0 = document.getElementById('f-direito'); if (dirEl0) dirEl0.value = '';
   if (!p) { concEl.value = ''; return; }
   _concIni = p.ini_conc || null;
   _concFim = p.fim_conc || null;
   _dirDias = _direitoDias(p);
   concEl.value = (_concIni && _concFim) ? _isoToBR(_concIni) + ' → ' + _isoToBR(_concFim) : 'Não calculado';
+  var dirEl = document.getElementById('f-direito');
+  if (dirEl) dirEl.value = _textoDireito(p) + (p.faltas != null ? ' — ' + _textoFaltas(p) + ' falta(s) no período aquisitivo' : '');
 }
 
 function closeFeriasModal() {
@@ -1622,10 +1703,7 @@ function setAbono(sim) {
   if (!_concFim) { showFeriasToast('Escolha o período aquisitivo primeiro', true); return; }
   document.getElementById('toggle-abono-sim').classList.toggle('active', sim);
   document.getElementById('toggle-abono-nao').classList.toggle('active', !sim);
-  var D = _dirDias, venda = Math.floor(D / 3);
-  var opts = sim
-    ? [(D - venda) + ' + ' + venda]
-    : (D === 30 ? ['30','15+15','20+10','20+5+5','15+10+5','14+10+6','14+8+8'] : [String(D)]);
+  var opts = _opcoesFrac(_dirDias, sim);
   var selFrac = document.getElementById('f-fracionamento');
   selFrac.innerHTML = '<option value="">Selecionar…</option>' + opts.map(function(v){
     return '<option value="' + v + '">' + v + (sim ? ' (dias de descanso + dias vendidos)' : '') + '</option>';
@@ -1737,6 +1815,7 @@ function enviarFerias() {
       var p = _feriasCache.filter(function(x){ return x.mt === mt && x.ini_aqui === iniAqui; })[0];
       if (p) {
         p.frac = res.frac || frac; p.abono = payload.abono; p.obs = obs || null; p.aprovado = 'Sim';
+        p.situacao = 'agendada'; p.direito = String(res.direito || _dirDias);
         for (var k = 1; k <= 3; k++) { p['ini' + k] = payload['ini' + k] || null; p['fim' + k] = payload['fim' + k] || null; }
       }
       closeFeriasModal();
@@ -1865,7 +1944,7 @@ function clearCF() {
 function updateKPIs() {
   var hoje = _hojeIso(), d60 = _addDias(hoje, 60);
   var base = _feriasCache.filter(_filtroUniDepto);
-  var pend = base.filter(function(p){ return !p.ini1 && !_semDireito(p); });
+  var pend = base.filter(function(p){ return _situacao(p) === 'pendente'; });
   var vencidas = pend.filter(function(p){ return !p.fim_conc || p.fim_conc < hoje; }).length;
   var vencendo = pend.filter(function(p){ return p.fim_conc && p.fim_conc >= hoje && p.fim_conc <= d60; }).length;
   var agend = 0;
@@ -2192,10 +2271,10 @@ function escH(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-var _ESTADO_ROTULO = { pendente: 'Aguardando agendamento', 'sem-prazo': 'Sem data possível', vencido: 'Concessivo vencido' };
+var _ESTADO_ROTULO = { pendente: 'Aguardando agendamento', 'sem-prazo': 'Sem data possível', vencido: 'Concessivo vencido', 'sem-direito': 'Sem direito' };
 
 function renderDevolutivas() {
-  var pendentes = _pendentes().filter(function(p) {
+  var pendentes = _feriasCache.filter(_naPendencia).filter(function(p) {
     if (!_filtroUniDepto(p)) return false;
     p._estado = _estadoPend(p);
     return selStatus === 'Todos' || p._estado === selStatus;
@@ -2223,6 +2302,7 @@ function devCardHtml(p, i) {
   var PILL_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
   var pillTxt = state === 'pendente' ? 'Vence ' + _isoToBR(p.fim_conc)
               : state === 'vencido' ? 'Venceu ' + (_isoToBR(p.fim_conc) || '—') + ' · fale com o RH'
+              : state === 'sem-direito' ? (p.dias_inss > 180 ? 'Afastamento INSS > 6 meses' : _temAjusteRH(p) ? 'Ajuste do RH' : (p.faltas != null ? p.faltas + ' faltas' : 'Sem direito')) + ' · fale com o RH'
               : 'Prazo curto · fale com o RH';
   var pillHtml = '<div class="dev-meta-pill">' + PILL_SVG + ' ' + pillTxt + '</div>';
 
@@ -2236,6 +2316,10 @@ function devCardHtml(p, i) {
   var btnHtml = par('openFeriasModalForMt(\'' + mt + '\',\'' + iniAqui + '\')', 'Agendar Férias',
     '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
     state === 'pendente' ? '' : 'Fale com o RH').replace(/<button /g, '<button data-aba-id="governanca-kpis-rh-ferias::agendar-ferias" ');
+  // RH: ajustar o direito na mão ou quitar o período (oculto para quem não tem o botão liberado)
+  btnHtml += par('abrirAjusteRH(\'' + mt + '\',\'' + iniAqui + '\')', 'Ajustar',
+    '<svg viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>',
+    '').replace(/<button (?!data-aba-id)/g, '<button data-aba-id="governanca-kpis-rh-ferias::ajustar-ferias" ');
 
   return '<div class="dev-card" id="dev-card-' + i + '">' +
     '<div class="dev-card-header">' +
@@ -2247,9 +2331,50 @@ function devCardHtml(p, i) {
       '<div class="dev-card-field"><span class="dev-card-label">Concessivo até</span><span class="dev-card-value">' + (_isoToBR(p.fim_conc) || '—') + '</span></div>' +
       '<div class="dev-card-field"><span class="dev-card-label">Unidade</span><span class="dev-card-value">' + escH(info.unidade || '—') + '</span></div>' +
       '<div class="dev-card-field"><span class="dev-card-label">Departamento</span><span class="dev-card-value">' + escH(info.departamento || '—') + '</span></div>' +
+      '<div class="dev-card-field"><span class="dev-card-label">Faltas no período</span><span class="dev-card-value">' + escH(_textoFaltas(p)) + '</span></div>' +
+      '<div class="dev-card-field"><span class="dev-card-label">Direito</span><span class="dev-card-value">' + escH(_textoDireito(p)) + '</span></div>' +
     '</div>' +
-    '<div class="dev-card-footer">' + pillHtml + btnHtml + '</div>' +
+    '<div class="dev-card-footer">' + pillHtml + '<div class="dev-card-acoes">' + btnHtml + '</div></div>' +
   '</div>';
+}
+
+// ── AJUSTE DO RH ─────────────────────────────────────────────────────
+var _ajData = null;
+function abrirAjusteRH(mt, iniAqui) {
+  var p = _feriasCache.filter(function(x){ return x.mt === String(mt) && x.ini_aqui === iniAqui; })[0];
+  if (!p) return;
+  _ajData = { mt: p.mt, ini_aqui: p.ini_aqui };
+  document.getElementById('aj-nome').textContent = p.nome || ('MT ' + p.mt);
+  var info = 'Período aquisitivo ' + _isoToBR(p.ini_aqui) + ' → ' + _isoToBR(p.fim_aqui)
+    + ' · Faltas: ' + _textoFaltas(p)
+    + (p.direito_calc != null ? ' · Pelo cálculo: ' + (p.direito_calc > 0 ? p.direito_calc + ' dias' : 'sem direito') : '')
+    + (_temAjusteRH(p) ? ' · Ajuste atual: ' + (+p.direito_manual > 0 ? p.direito_manual + ' dias' : 'sem direito') + (p.direito_motivo ? ' (' + p.direito_motivo + ')' : '') : '');
+  document.getElementById('aj-info').textContent = info;
+  document.getElementById('aj-tipo').value = _temAjusteRH(p) ? String(p.direito_manual) : 'automatico';
+  document.getElementById('aj-motivo').value = '';
+  setBtnLoading('aj-salvar', false, 'Salvar');
+  document.getElementById('aj-overlay').classList.add('open');
+}
+function fecharAjusteRH() { document.getElementById('aj-overlay').classList.remove('open'); _ajData = null; }
+document.addEventListener('keydown', function(e){ var o = document.getElementById('aj-overlay'); if (e.key === 'Escape' && o && o.classList.contains('open')) fecharAjusteRH(); });
+function salvarAjusteRH() {
+  if (!_ajData) return;
+  var v = document.getElementById('aj-tipo').value;
+  var motivo = (document.getElementById('aj-motivo').value || '').trim();
+  var payload = { action: 'ajuste_rh', mt: _ajData.mt, ini_aqui: _ajData.ini_aqui };
+  if (v === 'automatico') payload.tipo = 'automatico';
+  else if (v === 'quitar') { payload.tipo = 'quitar'; payload.motivo = motivo; }
+  else { payload.tipo = 'direito'; payload.valor = v; payload.motivo = motivo; }
+  if (payload.tipo !== 'automatico' && !motivo) { showFeriasToast('Informe o motivo do ajuste', true); return; }
+  var btn = document.getElementById('aj-salvar');
+  setBtnLoading(btn, true, 'Salvando…');
+  _postFerias(payload).then(function(res){
+    setBtnLoading(btn, false, 'Salvar');
+    if (!(res && res.ok)) { showFeriasToast('Erro: ' + ((res && res.erro) || 'falha ao salvar'), true); return; }
+    fecharAjusteRH();
+    showFeriasToast('Ajuste salvo');
+    fetchFeriasOnStart().then(function(){ updateAll(); });   // recarrega: o banco recalcula direito e situação
+  }).catch(function(){ setBtnLoading(btn, false, 'Salvar'); showFeriasToast('Erro de rede', true); });
 }
 
 function fetchFeriasOnStart() {
