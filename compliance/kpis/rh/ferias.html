@@ -94,6 +94,7 @@
   /* VALORES (área de valor "ferias"): 3 gráficos por linha a partir de 1024px, um por linha abaixo */
   .val-graficos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
   @media (min-width: 1024px) { .val-graficos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .val-graficos .val-largo { grid-column: 1 / -1; }   /* série mensal: linha inteira (mais meses sem rolar) */
 
   /* TABELA ANALÍTICA (references/tabelas.md: table.mini + organizador: ordenar + dimensionar + "Ver mais") */
   .tbl-scroll { overflow-x: auto; }
@@ -493,10 +494,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <!-- VALORES — área de valor "ferias": o banco só manda os R$ para quem tem a liberação (dp_rh.perm_ver_valores);
        para os demais esta parte fica escondida (não há nada para mostrar) -->
   <div class="val-graficos" id="val-graficos" style="display:none">
-    <div class="chart-card">
+    <div class="chart-card val-largo">
       <button class="chart-info-btn" onclick="abrirInfoGrafico('val-mes')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
       <div class="chart-title">Líquido de férias por mês (R$ mil)</div>
       <div class="chart-wrap" id="cValMes-wrap"><div class="chart-scroll" id="cValMes-scroll"><canvas id="cValMes"></canvas></div></div>
+    </div>
+    <div class="chart-card">
+      <button class="chart-info-btn" onclick="abrirInfoGrafico('val-ano')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      <div class="chart-title">Recibos e líquido por ano</div>
+      <div class="chart-wrap"><div class="chart-scroll" id="cValAno-scroll"><canvas id="cValAno"></canvas></div></div>
     </div>
     <div class="chart-card">
       <button class="chart-info-btn" onclick="abrirInfoGrafico('val-uni')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
@@ -2415,6 +2421,64 @@ function _graficoValMes(rows) {
   // com todos os anos, abre mostrando os meses mais recentes
   var wr = document.getElementById('cValMes-wrap'); if (wr && !selMesVal) wr.scrollLeft = wr.scrollWidth;
 }
+// rótulos das duas séries do gráfico por ano: líquido (R$ mil, 1 casa) e recibos (inteiro)
+var anoLabelsPlugin = {
+  id: 'anoLabels',
+  afterDatasetsDraw: function(chart) {
+    var ctx = chart.ctx;
+    ctx.save();
+    ctx.fillStyle = '#35383F'; ctx.font = '800 12px "DM Sans", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    chart.data.datasets.forEach(function(ds, di){
+      var meta = chart.getDatasetMeta(di); if (!meta || meta.hidden) return;
+      meta.data.forEach(function(bar, i){
+        var v = ds.data[i]; if (!v) return;
+        ctx.fillText(di === 0 ? v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : String(v), bar.x, bar.y - 4);
+      });
+    });
+    ctx.restore();
+  }
+};
+function _graficoValAno() {
+  // ignora o filtro Ano e o mês clicado (o ano escolhido fica em destaque); respeita unidade e departamento
+  var rows = _valores.rows.filter(function(r){
+    return (selUni === 'Todos' || r.unidade === selUni) && (selDepto === 'Todos' || r.departamento === selDepto);
+  });
+  var soma = {}, qtd = {};
+  rows.forEach(function(r){ var a = String(r.ini_gozo).slice(0, 4); soma[a] = (soma[a] || 0) + (+r.liquido || 0); qtd[a] = (qtd[a] || 0) + 1; });
+  var anos = Object.keys(soma).sort();
+  function cor(a, forte){ var on = selAno === 'Todos' || selAno === a; return forte ? (on ? '#35383F' : 'rgba(53,56,63,0.25)') : (on ? 'rgba(53,56,63,0.45)' : 'rgba(53,56,63,0.15)'); }
+  var sc = document.getElementById('cValAno-scroll'); if (sc) sc.style.minWidth = (anos.length * 92) + 'px';
+  _novoGrafico('cValAno', {
+    type: 'bar',
+    data: { labels: anos, datasets: [
+      { label: 'Líquido (R$ mil)', data: anos.map(function(a){ return Math.round(soma[a] / 100) / 10; }), yAxisID: 'y',
+        backgroundColor: anos.map(function(a){ return cor(a, true); }), borderWidth: 0, borderRadius: 5, barPercentage: 0.8, categoryPercentage: 0.6, maxBarThickness: 22 },
+      { label: 'Recibos (qtd)', data: anos.map(function(a){ return qtd[a]; }), yAxisID: 'y1',
+        backgroundColor: anos.map(function(a){ return cor(a, false); }), borderWidth: 0, borderRadius: 5, barPercentage: 0.8, categoryPercentage: 0.6, maxBarThickness: 22 }
+    ] },
+    plugins: [anoLabelsPlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { top: 18 } },
+      onClick: function(e, els){ if (!els.length) return; var a = anos[els[0].index]; selAno = selAno === a ? 'Todos' : a; selMesVal = null;
+        var fA = document.getElementById('fAno'); if (fA) fA.value = selAno; setTimeout(updateAll, 0); },
+      onHover: function(e, els){ if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      plugins: {
+        legend: { display: true, position: 'bottom', onClick: function(){},
+                  labels: { color: '#35383F', font: { family: "'DM Sans', sans-serif", size: 12, weight: '500' }, boxWidth: 12, padding: 12,
+                            // cor fixa por série (a barra do ano não escolhido fica esmaecida, a legenda não)
+                            generateLabels: function(chart){ return chart.data.datasets.map(function(ds, i){
+                              return { text: ds.label, fillStyle: i ? 'rgba(53,56,63,0.45)' : '#35383F', strokeStyle: 'rgba(0,0,0,0)', lineWidth: 0, fontColor: '#35383F', datasetIndex: i }; }); } } },
+        tooltip: { enabled: false }
+      },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#35383F', font: { family: "'DM Sans', sans-serif", size: 12, weight: '500' } } },
+        y: { display: false, beginAtZero: true, grace: '12%' },
+        y1: { display: false, beginAtZero: true, grace: '12%' }
+      }
+    }
+  });
+}
 function _graficoValCat(id, rows, campo) {
   var soma = {};
   rows.forEach(function(r){ var k = r[campo] || '—'; soma[k] = (soma[k] || 0) + (+r.liquido || 0); });
@@ -2468,6 +2532,7 @@ function renderValores() {
   if (!on) return;
   var base = _valoresFiltrados(true), rows = _valoresFiltrados(false);
   _graficoValMes(base);
+  _graficoValAno();
   _graficoValCat('cValUni', rows, 'unidade');
   _graficoValCat('cValDep', rows, 'departamento');
   var vt = document.getElementById('vTitle');
@@ -2482,6 +2547,7 @@ var _INFO_GRAFICOS = {
   analitico: '<div class="info-note">Férias em andamento e futuras: uma linha por período (quem divide as férias aparece mais de uma vez). Clique no cabeçalho para ordenar e arraste a borda da coluna para mudar a largura.</div>',
   'val-mes': '<div class="info-note">Soma do valor <b>líquido</b> dos recibos de férias (total de proventos − total de descontos, o "total líquido" do recibo), em <b>R$ mil</b>, pelo mês de início do gozo. Respeita unidade, departamento e ano. Clique numa barra para filtrar a unidade, o departamento e o analítico por aquele mês (clique de novo para tirar).</div>'
     + '<div class="info-note">O líquido já vem sem os descontos pessoais (INSS, IR, pensão, empréstimo, plano de saúde) e inclui a venda de dias. Férias indenizadas na rescisão não entram. Fonte: recibos da folha (2023 em diante).</div>',
+  'val-ano': '<div class="info-note">Por ano do início do gozo: <b>Recibos</b> = quantidade de recibos de férias pagos (quem dividiu as férias tem mais de um) e <b>Líquido</b> = soma do valor líquido, em R$ mil. Respeita unidade e departamento; o filtro Ano não muda este gráfico (o ano escolhido fica em destaque). Clique numa barra para filtrar o ano (clique de novo para tirar).</div>',
   'val-uni': '<div class="info-note">Soma do líquido dos recibos de férias por unidade, em R$ mil, com os filtros e o mês clicado. Desligados entram pela unidade do cadastro.</div>',
   'val-dep': '<div class="info-note">Soma do líquido dos recibos de férias por departamento (somando as unidades), em R$ mil, com os filtros e o mês clicado.</div>',
   'val-analitico': '<div class="info-note">Um recibo de férias por linha (quem dividiu as férias tem mais de um recibo no mesmo período aquisitivo). Dias = dias de descanso do recibo; Venda = dias vendidos (abono). Líquido = o que o colaborador recebeu no recibo. Clique no cabeçalho para ordenar e arraste a borda da coluna para mudar a largura.</div>'
