@@ -491,6 +491,9 @@ body[data-view="sobre"] #view-sobre, body[data-view="reuniao"] #view-reuniao { d
 .reu-trans span { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-right: 6px; }
 .reu-vazio { font-size: 12.5px; color: var(--muted); }
 .reu-texto { font-size: 13px; color: var(--mid); line-height: 1.6; margin: 0; }
+.reu-teste { font-size: 13px; color: var(--text); line-height: 1.5; background: var(--bg); border-radius: 6px; padding: 10px 12px; }
+.reu-teste[hidden], .reu-nivel[hidden] { display: none; }
+.reu-trans div.is-vazio { color: var(--muted); font-style: italic; }
 .reu-ata { white-space: pre-wrap; font-size: 13px; color: var(--text); line-height: 1.6; background: var(--bg); border-radius: 6px; padding: 12px; max-height: 420px; overflow-y: auto; }
 #reu-resultado[hidden] { display: none; }
 </style>
@@ -606,6 +609,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="sobre-bloco">
     <ul class="sobre-lista">
       <li>Deixe o aparelho no meio da mesa, <strong>carregando e com a tela ligada</strong>. Se a tela apagar ou você trocar de aplicativo, o Sam para de ouvir.</li>
+      <li>Antes de começar, toque em <strong>"Testar o microfone"</strong> e fale uma frase: o Sam mostra o que entendeu. Se ele não entender, chegue o aparelho mais perto de quem fala.</li>
       <li>Fale normalmente; ele grava em trechos curtos, cortados nas pausas.</li>
       <li>Para a pergunta sair certa, faça uma de cada vez e espere a resposta.</li>
     </ul>
@@ -634,8 +638,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <label class="form-label" for="reu-titulo">Nome da reunião</label>
     <input class="form-input" id="reu-titulo" placeholder="Reunião de RH" maxlength="80">
-    <button class="btn btn--primary btn--block" id="btn-comecar" onclick="comecarReuniao()"><span class="btn-spin"></span><span class="btn-label">Começar reunião</span></button>
+    <div class="reu-nivel" id="reu-nivel-teste-box" hidden><i id="reu-nivel-teste"></i></div>
+    <div class="reu-teste" id="reu-teste" hidden></div>
+    <div class="reu-botoes">
+      <button class="btn btn--primary" id="btn-testar" onclick="testarMicrofone()"><span class="btn-spin"></span><span class="btn-label">Testar o microfone</span></button>
+      <button class="btn btn--primary" id="btn-comecar" onclick="comecarReuniao()"><span class="btn-spin"></span><span class="btn-label">Começar reunião</span></button>
+    </div>
     <ul class="reu-dicas">
+      <li>Antes, toque em "Testar o microfone" e fale uma frase: o Sam mostra o que entendeu.</li>
       <li>Deixe o aparelho no meio da mesa, carregando e com a tela ligada.</li>
       <li>Para perguntar, diga "Sam," e a pergunta.</li>
       <li>No fim, toque em "Encerrar e gerar ata".</li>
@@ -817,7 +827,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closeDrawer(
 var SAM_FN = 'agente-reuniao';
 var R = {
   id: null, gravando: false, stream: null, ctx: null, analisador: null, rec: null,
-  inicio: 0, relogio: null, laco: null, ruido: 0.004,
+  inicio: 0, relogio: null, laco: null, ruido: 0.002, hist: [], vazios: 0,
   fila: [], enviando: false, aguardando: false,     // aguardando = disse só "Sam" (próximo trecho é a pergunta)
   modoPergunta: false, perguntas: [], respondendo: false,
   player: null, falando: false, espera: null, encerrando: false, wakeLock: null, erros: 0
@@ -865,7 +875,10 @@ function tocar(audio) {
     var fim = function () {
       p.onended = p.onerror = null;
       R.falando = false;
-      if (R.rec) R.rec._sujo = true;        // o trecho em andamento ainda tem o fim da fala
+      if (R.rec) {
+        R.rec._sujo = true;                 // o trecho em andamento ainda tem o fim da fala: descarta
+        if (R.gravando && !R.modoPergunta && !R.encerrando) cortar();   // e começa um limpo já
+      }
       statusOuvindo(); ok();
     };
     p.onended = fim; p.onerror = fim;
@@ -890,10 +903,26 @@ function tipoGravacao() {
 }
 function extensao(mime) { return /mp4/.test(mime) ? 'm4a' : /ogg/.test(mime) ? 'ogg' : 'webm'; }
 
+/* Microfone "cru" (sem o cancelamento de eco e o filtro de ruído de chamada): no Android, ligar
+   esses filtros põe o microfone no modo de ligação, que corta a voz de quem está longe do aparelho
+   e abaixa o som do Sam. A transcrição lida bem com ruído; e o que o microfone pega enquanto o
+   Sam fala é descartado (trecho "sujo"), então o eco não entra na ata. */
+var MIC = { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 };
+
+/* nível do som (RMS) no analisador; e a largura da barrinha em escala de dB (-60 dB a -10 dB) */
+function rmsDe(analisador) {
+  var buf = new Float32Array(analisador.fftSize);
+  analisador.getFloatTimeDomainData(buf);
+  var s = 0; for (var i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+  return Math.sqrt(s / buf.length);
+}
+function larguraNivel(rms) {
+  var db = 20 * Math.log10(Math.max(rms, 1e-6));
+  return Math.max(0, Math.min(100, Math.round((db + 60) * 2))) + '%';
+}
+
 async function abrirMicrofone() {
-  R.stream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
-  });
+  R.stream = await navigator.mediaDevices.getUserMedia({ audio: MIC });
   R.stream.getAudioTracks().forEach(function (t) {
     t.onended = function () { if (R.gravando) microfoneCaiu(); };
   });
@@ -910,12 +939,15 @@ function novoTrecho() {
   var rec = new MediaRecorder(R.stream, tipo ? { mimeType: tipo, audioBitsPerSecond: 32000 } : undefined);
   var partes = [];
   rec._ini = Date.now(); rec._ultimaVoz = Date.now(); rec._voz = false; rec._sujo = R.falando;
+  rec._rmsMax = 0; rec._vozMs = 0;
   rec.ondataavailable = function (e) { if (e.data && e.data.size) partes.push(e.data); };
   rec.onstop = function () {
     var mime = rec.mimeType || tipo || 'audio/webm';
-    var trecho = { blob: new Blob(partes, { type: mime }), mime: mime, seg: (Date.now() - rec._ini) / 1000, pergunta: !!rec._pergunta };
+    var trecho = { blob: new Blob(partes, { type: mime }), mime: mime, seg: (Date.now() - rec._ini) / 1000, pergunta: !!rec._pergunta,
+                   rmsMax: rec._rmsMax, vozMs: rec._vozMs };
     if (R.gravando && !R.encerrando) novoTrecho();
-    if (rec._pergunta || (rec._voz && !rec._sujo)) { R.fila.push(trecho); enviarFila(); }
+    // manda se teve pelo menos 0,3 s de voz (um estalo ou batida na mesa sozinho não vale)
+    if (rec._pergunta || (rec._vozMs >= 300 && !rec._sujo)) { R.fila.push(trecho); enviarFila(); }
     else if (rec._final) enviarFila();
   };
   rec.start();
@@ -930,17 +962,18 @@ function cortar(opcoes) {
   rec.stop();
 }
 
+/* a cada 100 ms: nível do som. O ruído de fundo é o mínimo dos últimos 5 s (sempre há pausas
+   na fala); voz = 3x o ruído (no mínimo -46 dB, para pegar quem está do outro lado da mesa). */
 function medir() {
   if (!R.analisador || !R.rec || R.rec.state !== 'recording') return;
-  var buf = new Float32Array(R.analisador.fftSize);
-  R.analisador.getFloatTimeDomainData(buf);
-  var s = 0; for (var i = 0; i < buf.length; i++) s += buf[i] * buf[i];
-  var rms = Math.sqrt(s / buf.length);
-  var barra = el('reu-nivel'); if (barra) barra.style.width = Math.min(100, Math.round(rms * 900)) + '%';
-  var limiar = Math.max(0.012, R.ruido * 3);
+  var rms = rmsDe(R.analisador);
+  var barra = el('reu-nivel'); if (barra) barra.style.width = larguraNivel(rms);
+  R.hist.push(rms); if (R.hist.length > 50) R.hist.shift();
+  R.ruido = R.ruido * 0.95 + Math.min.apply(null, R.hist) * 0.05;
+  var limiar = Math.max(0.005, R.ruido * 3);
   var agora = Date.now(), rec = R.rec;
-  if (rms > limiar) { rec._voz = true; rec._ultimaVoz = agora; }
-  else R.ruido = R.ruido * 0.99 + rms * 0.01;
+  if (rms > rec._rmsMax) rec._rmsMax = rms;
+  if (rms > limiar) { rec._voz = true; rec._ultimaVoz = agora; rec._vozMs += 100; }
   var dur = agora - rec._ini, silencio = agora - rec._ultimaVoz;
   if (R.modoPergunta) {
     if ((rec._voz && silencio > 1400 && dur > 1500) || dur > 30000) terminarPergunta();
@@ -962,10 +995,19 @@ async function enviarFila() {
       fd.append('reuniao', R.id);
       fd.append('segundos', String(Math.round(t.seg)));
       if (ehPergunta) fd.append('pergunta', '1');
+      fd.append('rms_max', t.rmsMax.toFixed(4));
+      fd.append('voz_ms', String(t.vozMs));
+      fd.append('ruido', R.ruido.toFixed(4));
+      fd.append('ua', navigator.userAgent.slice(0, 200));
       fd.append('audio', t.blob, 'trecho.' + extensao(t.mime));
       var r = await samChamar(fd);
-      R.erros = 0; aviso('');
-      if (r.texto) mostrarFala(r.texto);
+      R.erros = 0;
+      if (r.texto) { R.vazios = 0; aviso(''); mostrarFala(r.texto); }
+      else {
+        R.vazios++;
+        mostrarFala(null);
+        if (R.vazios >= 3) aviso('O Sam está ouvindo som, mas não está entendendo as palavras. Chegue o aparelho mais perto de quem fala; para perguntar, use o botão "Perguntar ao Sam".');
+      }
       if (ehPergunta) {
         R.aguardando = false;
         if (r.pergunta) perguntar(r.pergunta);
@@ -986,11 +1028,12 @@ async function enviarFila() {
   if (R.encerrando && R._depoisDaFila) { var f = R._depoisDaFila; R._depoisDaFila = null; f(); }
 }
 
-function mostrarFala(texto) {
+function mostrarFala(texto) {          // texto nulo = trecho que chegou mas não virou texto
   var box = el('reu-transcricao'); if (!box) return;
   var v = box.querySelector('.reu-vazio'); if (v) v.remove();
   var d = document.createElement('div');
-  d.innerHTML = '<span>' + hora() + '</span>' + esc(texto);
+  if (texto == null) d.className = 'is-vazio';
+  d.innerHTML = '<span>' + hora() + '</span>' + (texto == null ? '(som sem fala que eu entendesse)' : esc(texto));
   box.appendChild(d);
   while (box.children.length > 40) box.removeChild(box.firstChild);
   box.scrollTop = box.scrollHeight;
@@ -1083,6 +1126,65 @@ async function retomar() {
   } catch (e) { aviso('Não consegui abrir o microfone: ' + e.message); }
 }
 
+/* ── teste do microfone (antes de começar): grava 5 s e mostra o que o Sam entendeu ──────── */
+async function testarMicrofone() {
+  var out = el('reu-teste'), caixa = el('reu-nivel-teste-box'), barra = el('reu-nivel-teste');
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    out.textContent = 'Este aparelho não permite gravar áudio pelo navegador.'; out.hidden = false; return;
+  }
+  setBtnLoading('btn-testar', true, 'Ouvindo…');
+  el('btn-comecar').disabled = true;
+  out.hidden = false; out.textContent = 'Fale uma frase agora, do jeito que vai falar na reunião (5 segundos)…';
+  var stream = null, ctx = null, laco = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: MIC });
+    var AC = window.AudioContext || window.webkitAudioContext;
+    ctx = new AC();
+    var an = ctx.createAnalyser(); an.fftSize = 2048;
+    ctx.createMediaStreamSource(stream).connect(an);
+    var tipo = tipoGravacao();
+    var rec = new MediaRecorder(stream, tipo ? { mimeType: tipo, audioBitsPerSecond: 32000 } : undefined);
+    var partes = [], rmsMax = 0, vozMs = 0;
+    rec.ondataavailable = function (e) { if (e.data && e.data.size) partes.push(e.data); };
+    var parou = new Promise(function (ok) { rec.onstop = ok; });
+    caixa.hidden = false;
+    laco = setInterval(function () {
+      var rms = rmsDe(an);
+      barra.style.width = larguraNivel(rms);
+      if (rms > rmsMax) rmsMax = rms;
+      if (rms > 0.005) vozMs += 100;
+    }, 100);
+    rec.start();
+    await new Promise(function (ok) { setTimeout(ok, 5000); });
+    rec.stop(); await parou;
+    clearInterval(laco); laco = null; caixa.hidden = true;
+    setBtnLoading('btn-testar', true, 'Conferindo…');
+    var mime = rec.mimeType || tipo || 'audio/webm';
+    var fd = new FormData();
+    fd.append('acao', 'teste_mic');
+    fd.append('segundos', '5');
+    fd.append('rms_max', rmsMax.toFixed(4));
+    fd.append('voz_ms', String(vozMs));
+    fd.append('ua', navigator.userAgent.slice(0, 200));
+    fd.append('audio', new Blob(partes, { type: mime }), 'teste.' + extensao(mime));
+    var r = await samChamar(fd);
+    if (r.texto) out.textContent = 'O Sam entendeu: "' + r.texto.replace(/[.!?…]+$/, '') + '". Se está certo, pode começar.';
+    else if (rmsMax < 0.005) out.textContent = 'Não chegou som do microfone. Confira se o app tem permissão de usar o microfone e tente de novo.';
+    else out.textContent = 'Chegou som, mas o Sam não entendeu as palavras. Fale mais perto do aparelho e tente de novo.';
+  } catch (e) {
+    out.textContent = /Permission|NotAllowed/i.test(e.name + e.message)
+      ? 'O microfone foi bloqueado. Libere o microfone para o app e tente de novo.'
+      : 'Não consegui testar: ' + e.message;
+  } finally {
+    if (laco) clearInterval(laco);
+    caixa.hidden = true;
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    try { if (ctx) ctx.close(); } catch (e) {}
+    setBtnLoading('btn-testar', false, 'Testar o microfone');
+    el('btn-comecar').disabled = false;
+  }
+}
+
 /* ── começar / encerrar ───────────────────────────────────────────────────── */
 async function comecarReuniao() {
   var erro = el('reu-erro-inicio'); erro.hidden = true;
@@ -1090,6 +1192,7 @@ async function comecarReuniao() {
     erro.textContent = 'Este aparelho não permite gravar áudio pelo navegador.'; erro.hidden = false; return;
   }
   setBtnLoading('btn-comecar', true, 'Começando…');
+  el('btn-testar').disabled = true;
   destravarAudio();
   try {
     await abrirMicrofone();
@@ -1115,6 +1218,7 @@ async function comecarReuniao() {
     erro.hidden = false;
   } finally {
     setBtnLoading('btn-comecar', false, 'Começar reunião');
+    el('btn-testar').disabled = false;
   }
 }
 

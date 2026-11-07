@@ -196,9 +196,12 @@ processos, conduta, identidade). O Sam usa os dois:
 
 ```
 Página sam.html (celular/notebook na mesa, dentro do app Plus)
-  microfone → trechos cortados nas pausas (silêncio não é enviado)
+  "Testar o microfone" (5 s) → teste_mic → mostra o que o Sam entendeu
+  microfone "cru" (sem filtro de chamada) → trechos cortados nas pausas (só vai o que tem ≥ 0,3 s de voz;
+  o que o microfone pega enquanto o Sam fala é descartado)
   → edge agente-reuniao (token do portal + acesso à página governanca-kpis-rh-sam)
-      trecho   → transcrição OpenRouter (openai/gpt-transcribe) → dp_rh.agente_reuniao_falas
+      trecho   → transcrição OpenRouter (openai/gpt-transcribe; se vier vazia, whisper-large-v3-turbo)
+               → dp_rh.agente_reuniao_falas · registro de cada trecho em dp_rh.agente_reuniao_trechos
                → "Sam, …"? → perguntar
       perguntar→ edge agente-whatsapp ?reuniao= (mesmo cérebro: banco + portal + ensinado; contexto dos últimos 10 min)
                → resposta curta para falar → voz OpenRouter (microsoft/mai-voice-2.1-flash, pt-BR-Rafael)
@@ -213,8 +216,19 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
 - **Acesso**: admins veem a página; os demais, liberados em Auditoria de páginas. Só quem abriu a reunião mexe nela.
 - **Configuração** (`dp_rh.agente_config`): `reuniao_modelo_transcricao`, `reuniao_modelo_voz`, `reuniao_voz` (outras vozes
   pt-BR: Pedro, Caio, Luana, Harper — `pt-BR-<Nome>:MAI-Voice-2.1-Flash`), `reuniao_grupo_resumo` (chat do grupo).
+  **Em teste (desde 07/11):** `reuniao_grupo_resumo` aponta para o telefone do responsável, então o resumo vai para o
+  privado dele e não para o grupo. O grupo DP/RH está guardado em `reuniao_grupo_resumo_oficial`; para valer, copiar
+  esse valor de volta para `reuniao_grupo_resumo`.
 - **Custo** (estimativa, 2 h): transcrição ~US$ 0,54 + respostas ~US$ 0,30–0,60 + voz centavos + ata ~US$ 0,15 ≈ R$ 6–8.
 - **Tabelas**: `dp_rh.agente_reunioes` (status, ata, resumos) e `dp_rh.agente_reuniao_falas` (transcrição bruta, sensível).
+- **Diagnóstico**: `dp_rh.agente_reuniao_trechos` registra cada trecho (bytes, segundos, formato, resultado
+  ok/vazio/alucinacao/erro, modelo, nível do microfone medido na página, navegador). Com `reuniao_diag_audio = '1'` o
+  áudio dos trechos que **não** viraram texto fica guardado e some em 3 dias (desligar: `'0'`). Na página, 3 trechos
+  seguidos sem texto mostram um aviso para chegar o aparelho mais perto.
+  ```sql
+  select id, criado_em, bytes, segundos, resultado, modelo, cliente->>'rms_max' rms, cliente->>'voz_ms' voz, texto
+  from dp_rh.agente_reuniao_trechos order by id desc limit 30;
+  ```
 - **Testes internos** (sem gravar nem mandar WhatsApp): `POST …/agente-reuniao?k=<portal_secret>` com
   `{"acao":"teste_voz","texto":"…"}`, `{"acao":"teste_transcricao","audio_base64":"…","formato":"webm"}` ou
   `{"acao":"teste_ata","transcricao":"…"}`.

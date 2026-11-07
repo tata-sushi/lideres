@@ -3,7 +3,11 @@
 // A página compliance/kpis/rh/sam.html (dentro do app Tatá Plus) ouve pelo microfone e manda
 // trechos de áudio cortados nas pausas. Aqui:
 //   iniciar   → abre a reunião (dp_rh.agente_reunioes) e devolve a saudação falada
+//   teste_mic → (antes de começar) transcreve 5 s de fala para o líder conferir o microfone
 //   trecho    → transcreve (OpenRouter) e guarda; avisa se chamaram "Sam, …"
+//               cada trecho fica registrado em dp_rh.agente_reuniao_trechos (tamanho, nível do
+//               microfone, resultado); com agente_config reuniao_diag_audio = '1', o áudio dos que
+//               não viraram texto fica guardado 3 dias para diagnóstico
 //   perguntar → o Sam de sempre (edge agente-whatsapp ?reuniao=) responde com o contexto dos
 //               últimos minutos; a resposta volta em texto e em voz (OpenRouter)
 //   encerrar  → fecha e gera em segundo plano (Claude) a ata no formato das atas de RH (grava em
@@ -53,7 +57,7 @@ function cors(req: Request): Record<string, string> {
 }
 
 // ── configuração ────────────────────────────────────────────────────────────
-let cfg: { transcricao: string; voz: string; modeloVoz: string; responsavel: string; grupo: string; em: number } | null = null;
+let cfg: { transcricao: string; voz: string; modeloVoz: string; responsavel: string; grupo: string; diag: boolean; em: number } | null = null;
 async function config() {
   if (!cfg || Date.now() - cfg.em > 60_000) {
     const { data } = await supa.rpc("agente_parametros");
@@ -64,6 +68,7 @@ async function config() {
       voz: d.reuniao_voz || "pt-BR-Rafael:MAI-Voice-2.1-Flash",
       responsavel: String(d.responsavel_telefone ?? "").replace(/\D/g, ""),
       grupo: String(d.reuniao_grupo_resumo ?? ""),
+      diag: String(d.reuniao_diag_audio ?? "") === "1",
       em: Date.now(),
     };
   }
@@ -133,12 +138,17 @@ function formatoDe(audio: File): string {
 
 const VOCABULARIO = "Reunião de RH do TATÁ Sushi, em português do Brasil. O assistente virtual se chama Sam: \"Sam, quantas vagas…\".";
 
-async function transcrever(audio: File): Promise<string> {
+type Transcricao = { texto: string; resultado: "ok" | "vazio" | "alucinacao" | "erro"; modelo: string; bruto: string };
+
+// transcreve um trecho; se o primeiro modelo devolver texto vazio, tenta o próximo
+// (outro reconhecedor às vezes pega o que o primeiro perdeu)
+async function transcrever(audio: File): Promise<Transcricao> {
   if (!LLM_KEY) throw new Error("sem chave do OpenRouter (LLM_API_KEY)");
   const { transcricao } = await config();
   const dados = base64(new Uint8Array(await audio.arrayBuffer()));
   const modelos = [...new Set([transcricao, "openai/gpt-transcribe", "openai/whisper-large-v3-turbo"])];
   let ultimo = "";
+  let semTexto: Transcricao | null = null;
   for (const modelo of modelos) {
     const r = await fetch(`${AUDIO_BASE}/audio/transcriptions`, {
       method: "POST",
@@ -154,13 +164,53 @@ async function transcrever(audio: File): Promise<string> {
     });
     const txt = await r.text();
     if (r.ok) {
-      const t = String(JSON.parse(txt)?.text ?? "").replace(/\s+/g, " ").trim();
-      return ALUCINACAO.test(t) && t.length < 80 ? "" : t;
+      let bruto = "";
+      try { bruto = String(JSON.parse(txt)?.text ?? ""); } catch { bruto = ""; }
+      bruto = bruto.replace(/\s+/g, " ").trim();
+      const alucinacao = !!bruto && ALUCINACAO.test(bruto) && bruto.length < 80;
+      if (bruto && !alucinacao) return { texto: bruto, resultado: "ok", modelo, bruto };
+      semTexto ??= { texto: "", resultado: alucinacao ? "alucinacao" : "vazio", modelo, bruto: bruto || txt.slice(0, 300) };
+      if (alucinacao || audio.size < 4000) return semTexto; // silêncio de verdade: não insiste
+      continue;
     }
     ultimo = `transcrição ${r.status} (${modelo}): ${txt.slice(0, 200)}`;
     if (r.status === 401 || r.status === 402) break; // chave/crédito: não adianta trocar de modelo
   }
+  if (semTexto) return semTexto;
   throw new Error(ultimo);
+}
+
+// transcreve e registra o trecho (dp_rh.agente_reuniao_trechos): tamanho, nível do microfone
+// que a página mediu, resultado e, no modo diagnóstico, o áudio dos que não viraram texto
+async function ouvir(audio: File, reuniaoId: string | null, u: Usuario, corpo: any): Promise<Transcricao> {
+  const t0 = Date.now();
+  const n = (v: unknown) => (Number.isFinite(Number(v)) && String(v ?? "") !== "" ? Number(v) : null);
+  const cliente = { rms_max: n(corpo.rms_max), voz_ms: n(corpo.voz_ms), ruido: n(corpo.ruido), ua: String(corpo.ua ?? "").slice(0, 200) || null };
+  let t: Transcricao;
+  try {
+    t = await transcrever(audio);
+  } catch (err) {
+    t = { texto: "", resultado: "erro", modelo: "", bruto: erroTxt(err) };
+  }
+  const ms = Date.now() - t0;
+  console.log("trecho", JSON.stringify({ reuniao: reuniaoId, bytes: audio.size, mime: audio.type, resultado: t.resultado, modelo: t.modelo, letras: t.texto.length, ms, ...cliente }));
+  try {
+    const { diag } = await config();
+    const { error } = await supa.rpc("agente_reuniao_trecho_log", {
+      p_reuniao: reuniaoId,
+      p_matricula: u.matricula,
+      p_dados: {
+        bytes: audio.size, segundos: n(corpo.segundos), mime: audio.type || null, resultado: t.resultado,
+        modelo: t.modelo || null, texto: t.resultado === "ok" ? null : t.bruto, ms, cliente,
+      },
+      p_audio: diag && t.resultado !== "ok" ? base64(new Uint8Array(await audio.arrayBuffer())) : null,
+    });
+    if (error) console.error("trecho_log", error.message);
+  } catch (err) {
+    console.error("trecho_log", erroTxt(err));
+  }
+  if (t.resultado === "erro") throw new Error(t.bruto);
+  return t;
 }
 
 function base64(bytes: Uint8Array): string {
@@ -411,8 +461,8 @@ Deno.serve(async (req) => {
     if (t?.acao === "teste_transcricao") {
       const t0 = Date.now();
       const bytes = Uint8Array.from(atob(String(t.audio_base64 ?? "")), (c) => c.charCodeAt(0));
-      const texto = await transcrever(new File([bytes], `teste.${t.formato ?? "mp3"}`, { type: String(t.mime ?? "audio/mpeg") }));
-      return json({ ok: true, texto, chamado: chamadoDoSam(texto), ms: Date.now() - t0 });
+      const r = await transcrever(new File([bytes], `teste.${t.formato ?? "mp3"}`, { type: String(t.mime ?? "audio/mpeg") }));
+      return json({ ok: true, ...r, chamado: chamadoDoSam(r.texto), ms: Date.now() - t0 });
     }
     if (t?.acao === "teste_ata") {
       const t0 = Date.now();
@@ -449,6 +499,15 @@ Deno.serve(async (req) => {
       return json({ ok: true, id, usuario: primeiro, saudacao, espera });
     }
 
+    // teste do microfone antes de começar: só transcreve e devolve o que o Sam entendeu
+    if (acao === "teste_mic") {
+      const audio = form?.get("audio");
+      if (!(audio instanceof File) || audio.size < 1000) return json({ ok: true, texto: "", motivo: "pequeno" });
+      if (audio.size > 8_000_000) return json({ ok: false, erro: "áudio grande demais" }, 413);
+      const t = await ouvir(audio, null, u, corpo);
+      return json({ ok: true, texto: t.texto, motivo: t.resultado });
+    }
+
     const reuniao = await minhaReuniao(String(corpo.reuniao ?? ""), u);
 
     if (acao === "status") {
@@ -474,11 +533,12 @@ Deno.serve(async (req) => {
 
     if (acao === "trecho") {
       const audio = form?.get("audio");
-      if (!(audio instanceof File) || audio.size < 1000) return json({ ok: true, texto: "" });
+      if (!(audio instanceof File) || audio.size < 1000) return json({ ok: true, texto: "", motivo: "pequeno" });
       if (audio.size > 8_000_000) return json({ ok: false, erro: "trecho grande demais" }, 413);
       const segundos = Number(corpo.segundos) || null;
-      const texto = await transcrever(audio);
-      if (!texto) return json({ ok: true, texto: "" });
+      const t = await ouvir(audio, reuniao.id, u, corpo);
+      const texto = t.texto;
+      if (!texto) return json({ ok: true, texto: "", motivo: t.resultado });
       // pergunta pelo botão (ou depois de só "Sam"): o trecho inteiro é a pergunta
       if (corpo.pergunta === "1") return json({ ok: true, texto, pergunta: texto });
       await supa.rpc("agente_reuniao_fala", { p_id: reuniao.id, p_tipo: "fala", p_texto: texto, p_segundos: segundos });
