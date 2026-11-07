@@ -89,7 +89,7 @@ export function extrair(html: string, urlPagina: string): Pagina {
 
   const capturando = () => pular === 0 && (!temSobre || dentroSobre > 0);
   const fecharLinha = () => {
-    const t = linha.replace(/[ \t ]+/g, " ").trim();
+    const t = linha.replace(/[ \t\u00a0]+/g, " ").trim();
     linha = "";
     if (!t || RUIDO.test(t)) return;
     const sec = secoes[secoes.length - 1];
@@ -272,4 +272,47 @@ export function paginasCitadas(html: string, urlPagina: string, prefixo: string)
     if (u && u.startsWith(prefixo)) achadas.add(u.split("#")[0].split("?")[0]);
   }
   return [...achadas];
+}
+
+// documentos transcritos (docs/conhecimento/*.md): "# título", "> Link: …" no cabeçalho,
+// uma seção por "## "; "### " vira subtítulo no texto. Seções pequenas vizinhas são juntadas.
+export function extrairMarkdown(md: string): { titulo: string; url: string | null; pedacos: Pedaco[] } {
+  let titulo = "";
+  let url: string | null = null;
+  const secoes: Array<{ nome: string; linhas: string[] }> = [];
+  let atual = { nome: "", linhas: [] as string[] };
+  for (const bruta of md.replace(/\r/g, "").split("\n")) {
+    const l = bruta.trim();
+    if (!titulo && /^#\s+/.test(l)) { titulo = l.replace(/^#\s+/, ""); continue; }
+    if (l.startsWith(">")) { const m = /Link:\s*(https?:\/\/\S+)/.exec(l); if (m) url = m[1]; continue; }
+    if (/^##\s+/.test(l)) {
+      if (atual.linhas.length) secoes.push(atual);
+      atual = { nome: l.replace(/^##\s+/, ""), linhas: [] };
+      continue;
+    }
+    if (/^###\s+/.test(l)) { atual.linhas.push(`${l.replace(/^###\s+/, "")}:`); continue; }
+    if (l) atual.linhas.push(l.replace(/^[-*]\s+/, "• "));
+  }
+  if (atual.linhas.length) secoes.push(atual);
+
+  const MAX = 1800, PEQUENA = 450;
+  const pedacos: Pedaco[] = [];
+  let ult: Pedaco | null = null;
+  for (const s of secoes) {
+    let texto = s.linhas.join("\n");
+    if (ult && ult.texto.length < PEQUENA && texto.length < PEQUENA) {
+      ult.secao += ` · ${s.nome}`;
+      ult.texto += `\n\n${s.nome}:\n${texto}`;
+      continue;
+    }
+    while (texto.length > MAX) {
+      let corte = texto.lastIndexOf("\n", MAX);
+      if (corte < MAX / 2) corte = MAX;
+      pedacos.push({ secao: s.nome, texto: texto.slice(0, corte).trim() });
+      texto = texto.slice(corte).trim();
+    }
+    ult = { secao: s.nome, texto };
+    pedacos.push(ult);
+  }
+  return { titulo, url, pedacos: pedacos.filter((p) => p.texto.length >= 20) };
 }
