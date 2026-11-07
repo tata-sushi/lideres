@@ -1014,3 +1014,281 @@ left join tata_plus.profiles p on p.matricula = coalesce(cr.matricula, pr.matric
 comment on view agente_restrito.colaborador_restricoes is 'Restrições alimentares de cada colaborador, informadas no app (dado de saúde: traga só o necessário). 1 linha por pessoa + restrição; restricao null = respondeu o formulário sem restrição cadastrada (tem_restricao diz o que marcou). quer_substituicao = quer prato substituto quando o cardápio fere a restrição (compare com cardapio_itens.nao_serve_para).';
 
 grant select on all tables in schema agente_restrito to agente_leitor_total;
+
+-- ============================================================================
+-- 14) Base de conhecimento do Sam (04–07/11)
+--     O que o banco não tem e está escrito no Portal Líderes: identidade (conceito, missão,
+--     visão, valores), benefícios, políticas e processos das abas "Sobre", conceitos (5S,
+--     Kanban, Governança), manuais (Tatá House) e os arquivos publicados (PDF, logos,
+--     timbrado). Mais o que o responsável ensina pelo WhatsApp ("aprende: …").
+--     fonte: portal  = pedaços das páginas, regravados pela edge agente-portal (diário + "atualiza portal")
+--            arquivo = lista de arquivos publicados (link), regravada pela mesma edge
+--            pdf     = texto extraído dos PDFs (carga manual, ver docs/AGENTE-WHATSAPP.md)
+--            victor  = ensinado pelo responsável ("aprende: …"); vai sempre nas instruções
+--     sempre = true → entra sempre nas instruções do Sam (identidade + o que foi ensinado);
+--     o resto o Sam busca quando precisa (ferramenta buscar_portal).
+-- ============================================================================
+create or replace function tata_plus.agente_norm(t text)
+returns text
+language sql immutable parallel safe
+as $fn$
+  select translate(lower(coalesce(t, '')),
+    'áàâãäéèêëíìîïóòôõöúùûüçñ',
+    'aaaaaeeeeiiiiooooouuuucn');
+$fn$;
+
+create table if not exists dp_rh.agente_conhecimento (
+  id            bigint generated always as identity primary key,
+  fonte         text not null check (fonte in ('portal', 'arquivo', 'pdf', 'victor')),
+  pagina        text,
+  titulo        text,
+  secao         text,
+  texto         text not null,
+  url           text,
+  ordem         int  not null default 0,
+  nivel         text not null default 'basico' check (nivel in ('basico', 'completo')),
+  sempre        boolean not null default false,
+  ativo         boolean not null default true,
+  autor         text,
+  criado_em     timestamptz not null default now(),
+  atualizado_em timestamptz not null default now(),
+  busca tsvector generated always as (
+    setweight(to_tsvector('portuguese', tata_plus.agente_norm(coalesce(titulo, '') || ' ' || coalesce(secao, ''))), 'A') ||
+    setweight(to_tsvector('portuguese', tata_plus.agente_norm(texto)), 'B')
+  ) stored
+);
+create index if not exists agente_conhecimento_busca_idx on dp_rh.agente_conhecimento using gin (busca);
+create unique index if not exists agente_conhecimento_chave_idx on dp_rh.agente_conhecimento (fonte, pagina, ordem);
+alter table dp_rh.agente_conhecimento enable row level security;
+revoke all on dp_rh.agente_conhecimento from public, anon, authenticated;
+comment on table dp_rh.agente_conhecimento is 'Base de conhecimento do Sam (agente WhatsApp): textos do Portal Líderes, arquivos, PDFs e o que o responsável ensinou. Lida só pelas RPCs tata_plus.agente_conhecimento_*.';
+
+insert into dp_rh.agente_config (chave, valor) values
+  ('portal_secret', replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')),
+  ('conhecimento_sempre_paginas', 'compliance/areas/institucional/idconceitual.html'),
+  ('conhecimento_paginas_completo', 'compliance/kpis/rh/folha.html,compliance/kpis/rh/reclamacoes.html,compliance/kpis/rh/ces.html')
+on conflict (chave) do nothing;
+
+create or replace function tata_plus.agente_segredo(p_chave text)
+returns text
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select valor from dp_rh.agente_config
+  where chave = p_chave and p_chave in ('webhook_secret', 'teste_secret', 'uazapi_token', 'portal_secret');
+$fn$;
+
+create or replace function tata_plus.agente_config_lista(p_chave text)
+returns text[]
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select coalesce(array(select btrim(x) from unnest(string_to_array(
+    (select valor from dp_rh.agente_config where chave = p_chave), ',')) x where btrim(x) <> ''), '{}');
+$fn$;
+
+-- grava (substitui) os pedaços de uma página do portal
+create or replace function tata_plus.agente_portal_gravar(p_pagina text, p_titulo text, p_url text, p_pedacos jsonb)
+returns int
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare v_n int; v_ordens int[]; v_completo text[]; v_sempre text[];
+begin
+  v_completo := tata_plus.agente_config_lista('conhecimento_paginas_completo');
+  v_sempre   := tata_plus.agente_config_lista('conhecimento_sempre_paginas');
+  -- regrava por (página, ordem); pedaços que sobraram de versões maiores ficam inativos (nada é apagado)
+  with ins as (
+  insert into dp_rh.agente_conhecimento as k (fonte, pagina, titulo, secao, texto, url, ordem, nivel, sempre, ativo, atualizado_em)
+  select 'portal', p_pagina, nullif(btrim(p_titulo), ''), nullif(btrim(x->>'secao'), ''), btrim(x->>'texto'), p_url, o::int,
+         case when p_pagina = any(v_completo) then 'completo' else 'basico' end,
+         p_pagina = any(v_sempre), true, now()
+  from jsonb_array_elements(coalesce(p_pedacos, '[]'::jsonb)) with ordinality as t(x, o)
+  where length(btrim(coalesce(x->>'texto', ''))) >= 20
+  on conflict (fonte, pagina, ordem) do update
+    set titulo = excluded.titulo, secao = excluded.secao, texto = excluded.texto, url = excluded.url,
+        nivel = excluded.nivel, sempre = excluded.sempre, ativo = true, atualizado_em = now()
+  returning ordem)
+  select count(*), coalesce(array_agg(ordem), '{}') into v_n, v_ordens from ins;
+  update dp_rh.agente_conhecimento set ativo = false, atualizado_em = now()
+   where fonte = 'portal' and pagina = p_pagina and ativo and not (ordem = any(v_ordens));
+  return v_n;
+end $fn$;
+
+create or replace function tata_plus.agente_portal_arquivos(p_itens jsonb)
+returns int
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare v_n int; v_caminhos text[];
+begin
+  select coalesce(array_agg(x->>'caminho'), '{}') into v_caminhos
+  from jsonb_array_elements(coalesce(p_itens, '[]'::jsonb)) x where coalesce(x->>'url', '') <> '';
+  insert into dp_rh.agente_conhecimento as k (fonte, pagina, titulo, secao, texto, url, ordem, ativo, atualizado_em)
+  select 'arquivo', x->>'caminho', x->>'nome', x->>'pasta',
+         'Arquivo publicado no portal: ' || (x->>'nome') || ' (pasta ' || (x->>'pasta') || '). Link: ' || (x->>'url'),
+         x->>'url', 0, true, now()
+  from jsonb_array_elements(coalesce(p_itens, '[]'::jsonb)) x
+  where coalesce(x->>'url', '') <> ''
+  on conflict (fonte, pagina, ordem) do update
+    set titulo = excluded.titulo, secao = excluded.secao, texto = excluded.texto, url = excluded.url, ativo = true, atualizado_em = now();
+  get diagnostics v_n = row_count;
+  update dp_rh.agente_conhecimento set ativo = false, atualizado_em = now()
+   where fonte = 'arquivo' and ativo and not (pagina = any(v_caminhos));
+  return v_n;
+end $fn$;
+
+-- fim da sincronização: desativa páginas que não existem mais e registra quando rodou
+create or replace function tata_plus.agente_portal_fim(p_paginas text[], p_resumo jsonb default '{}'::jsonb)
+returns int
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare v_n int;
+begin
+  update dp_rh.agente_conhecimento set ativo = false, atualizado_em = now()
+   where fonte = 'portal' and ativo and not (pagina = any(coalesce(p_paginas, '{}')));
+  get diagnostics v_n = row_count;
+  insert into dp_rh.agente_config (chave, valor) values
+    ('portal_sincronizado_em', to_char(now() at time zone 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI')),
+    ('portal_sincronizado_resumo', coalesce(p_resumo, '{}'::jsonb)::text)
+  on conflict (chave) do update set valor = excluded.valor, atualizado_em = now();
+  return v_n;
+end $fn$;
+
+-- busca: OU entre as palavras, ranqueado (título/seção pesam mais)
+create or replace function tata_plus.agente_conhecimento_buscar(p_busca text, p_completo boolean default false, p_limite int default 6)
+returns jsonb
+language plpgsql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare q tsquery; v jsonb; t text;
+begin
+  t := replace(plainto_tsquery('portuguese', tata_plus.agente_norm(p_busca))::text, ' & ', ' | ');
+  if coalesce(t, '') = '' then return '[]'::jsonb; end if;
+  q := t::tsquery;
+  select coalesce(jsonb_agg(jsonb_build_object('id', r.id, 'fonte', r.fonte, 'pagina', r.titulo, 'secao', r.secao,
+                                               'url', r.url, 'texto', r.texto) order by r.rk desc), '[]'::jsonb)
+    into v
+  from (
+    select id, fonte, titulo, secao, url, texto, ts_rank_cd(busca, q, 1) as rk
+    from dp_rh.agente_conhecimento
+    where ativo and busca @@ q and (nivel = 'basico' or p_completo)
+    order by ts_rank_cd(busca, q, 1) desc, id
+    limit least(greatest(coalesce(p_limite, 6), 1), 10)
+  ) r;
+  return v;
+end $fn$;
+
+-- o que vai sempre nas instruções (identidade + ensinado pelo responsável)
+create or replace function tata_plus.agente_conhecimento_sempre(p_completo boolean default false)
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select coalesce(jsonb_agg(jsonb_build_object('id', id, 'fonte', fonte, 'titulo', titulo, 'secao', secao, 'texto', texto,
+                                               'url', url, 'em', to_char(criado_em at time zone 'America/Sao_Paulo', 'DD/MM'))
+                            order by (fonte = 'victor'), pagina, ordem, id), '[]'::jsonb)
+  from dp_rh.agente_conhecimento
+  where ativo and sempre and (nivel = 'basico' or p_completo);
+$fn$;
+
+-- catálogo para as instruções: páginas e arquivos que existem
+create or replace function tata_plus.agente_conhecimento_catalogo(p_completo boolean default false)
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select jsonb_build_object(
+    'paginas', (select coalesce(jsonb_agg(jsonb_build_object('titulo', titulo, 'url', url) order by pagina), '[]'::jsonb)
+                from (select pagina, max(titulo) as titulo, max(url) as url from dp_rh.agente_conhecimento
+                      where fonte = 'portal' and ativo and (nivel = 'basico' or p_completo) group by pagina) x),
+    'arquivos', (select coalesce(jsonb_agg(jsonb_build_object('nome', titulo, 'pasta', secao, 'url', url) order by pagina), '[]'::jsonb)
+                 from dp_rh.agente_conhecimento where fonte = 'arquivo' and ativo),
+    'pdfs', (select coalesce(jsonb_agg(distinct titulo), '[]'::jsonb) from dp_rh.agente_conhecimento where fonte = 'pdf' and ativo),
+    'sincronizado_em', (select valor from dp_rh.agente_config where chave = 'portal_sincronizado_em'));
+$fn$;
+
+-- ensinado pelo responsável pelo WhatsApp
+create or replace function tata_plus.agente_aprender(p_texto text, p_autor text default null)
+returns bigint
+language sql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  insert into dp_rh.agente_conhecimento (fonte, titulo, texto, sempre, autor)
+  values ('victor', 'Ensinado por ' || coalesce(nullif(p_autor, ''), 'responsável'), btrim(p_texto), true, p_autor)
+  returning id;
+$fn$;
+
+create or replace function tata_plus.agente_esquecer(p_id bigint)
+returns jsonb
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare v text;
+begin
+  update dp_rh.agente_conhecimento set ativo = false, atualizado_em = now()
+   where id = p_id and fonte in ('victor', 'pdf') and ativo
+  returning texto into v;
+  return jsonb_build_object('ok', v is not null, 'texto', v);
+end $fn$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'tata_plus.agente_config_lista(text)',
+    'tata_plus.agente_portal_gravar(text,text,text,jsonb)',
+    'tata_plus.agente_portal_arquivos(jsonb)',
+    'tata_plus.agente_portal_fim(text[],jsonb)',
+    'tata_plus.agente_conhecimento_buscar(text,boolean,integer)',
+    'tata_plus.agente_conhecimento_sempre(boolean)',
+    'tata_plus.agente_conhecimento_catalogo(boolean)',
+    'tata_plus.agente_aprender(text,text)',
+    'tata_plus.agente_esquecer(bigint)',
+    'tata_plus.agente_segredo(text)'
+  ] loop
+    execute format('revoke execute on function %s from public, anon, authenticated', f);
+    execute format('grant execute on function %s to service_role', f);
+  end loop;
+end $$;
+
+-- documentos transcritos (docs/conhecimento/*.md → fonte 'pdf'), gravados pela edge agente-portal
+create or replace function tata_plus.agente_conhecimento_gravar(p_fonte text, p_pagina text, p_titulo text, p_url text, p_pedacos jsonb, p_nivel text default 'basico')
+returns int
+language plpgsql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+declare v_n int; v_ordens int[];
+begin
+  if p_fonte is distinct from 'pdf' then raise exception 'fonte não permitida: %', p_fonte; end if;
+  if p_nivel not in ('basico', 'completo') then raise exception 'nível inválido: %', p_nivel; end if;
+  with ins as (
+  insert into dp_rh.agente_conhecimento as k (fonte, pagina, titulo, secao, texto, url, ordem, nivel, sempre, ativo, atualizado_em)
+  select p_fonte, p_pagina, nullif(btrim(p_titulo), ''), nullif(btrim(x->>'secao'), ''), btrim(x->>'texto'), p_url, o::int,
+         p_nivel, false, true, now()
+  from jsonb_array_elements(coalesce(p_pedacos, '[]'::jsonb)) with ordinality as t(x, o)
+  where length(btrim(coalesce(x->>'texto', ''))) >= 20
+  on conflict (fonte, pagina, ordem) do update
+    set titulo = excluded.titulo, secao = excluded.secao, texto = excluded.texto, url = excluded.url,
+        nivel = excluded.nivel, ativo = true, atualizado_em = now()
+  returning ordem)
+  select count(*), coalesce(array_agg(ordem), '{}') into v_n, v_ordens from ins;
+  update dp_rh.agente_conhecimento set ativo = false, atualizado_em = now()
+   where fonte = p_fonte and pagina = p_pagina and ativo and not (ordem = any(v_ordens));
+  return v_n;
+end $fn$;
+
+revoke execute on function tata_plus.agente_conhecimento_gravar(text,text,text,text,jsonb,text) from public, anon, authenticated;
+grant execute on function tata_plus.agente_conhecimento_gravar(text,text,text,text,jsonb,text) to service_role;
+
+-- leitura diária do portal (05h41 em São Paulo = 08h41 UTC)
+select cron.schedule(
+  'agente-portal-diario',
+  '41 8 * * *',
+  $c$select net.http_post(
+       url := 'https://aoqsbusfrffapjglpqjk.supabase.co/functions/v1/agente-portal?k=' || (select valor from dp_rh.agente_config where chave = 'portal_secret'),
+       body := '{}'::jsonb,
+       headers := '{"Content-Type":"application/json"}'::jsonb,
+       timeout_milliseconds := 120000)$c$
+);

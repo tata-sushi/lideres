@@ -65,6 +65,13 @@ Decisões do usuário (28/10):
       (sanções, banco de horas, foto de colaborador). Edge v13: no `responde N` o Sam olha o cadastro **atual** — quem foi liberado depois da pergunta
       recebe "Seu número ainda não estava liberado… Reportei para o Victor e ele já liberou o acesso" e a resposta sai no nível
       de hoje; a confirmação do `libera N` mostra o nível real (`agente_liberar` devolve o nível e mantém o que já existia).
+- [x] **Conhecimento do Portal Líderes (07/11)**: o Sam lê o portal e age pelos valores do TATÁ — ver seção
+      *Conhecimento*. Base `dp_rh.agente_conhecimento` (57 páginas → 220 trechos, 26 arquivos, Código de Ética e
+      Uniformes/EPIs transcritos → 56 trechos), edge `agente-portal` (leitura diária 05h41 + "atualiza portal"),
+      ferramenta `buscar_portal`, identidade + "o que o responsável ensinou" sempre nas instruções, comandos
+      `aprende:` / `esquece N` / `atualiza portal`, logos do portal enviados como imagem. Testes (modo teste, Sam v14):
+      plano de saúde (6 meses, CLT, desconto em folha + link), missão, EPIs do sushibar, celular no expediente (Código de
+      Ética), logo do Poke (3 imagens), fim da experiência do Diogo (30/11, sem "45+45 de mercado").
 - [x] **Cardápio do TATÁ House (04/11)**: o Binho perguntou "o que tem no almoço dos funcionários hoje" (aviso #83) e o Sam
       não achou — o cardápio fica em `tata_refeicoes`, fora do mapa. Novas visões (§13): `agente.cardapio_dia`,
       `cardapio_itens`, `cardapio_cozinhas`, `cardapio_avaliacoes`, `restricoes_alimentares`; completo:
@@ -143,6 +150,41 @@ Consultas passam por `tata_plus.agente_consultar` (filtro de texto + SET ROLE `a
 transação read-only + timeout 8s + 200 linhas).
 
 Arquivos: `supabase/migrations/20261028_agente_whatsapp.sql`, `supabase/functions/agente-whatsapp/index.ts`.
+
+## Conhecimento (Portal Líderes) — 07/11
+
+O banco diz **o que aconteceu** (números, datas, pessoas); o portal diz **como o TATÁ funciona** (regras, benefícios,
+processos, conduta, identidade). O Sam usa os dois:
+
+| Camada | Onde fica | Como o Sam usa |
+|---|---|---|
+| Dados | visões `agente`/`agente_restrito` | `consultar_banco` |
+| Conteúdo escrito do portal | `dp_rh.agente_conhecimento` (fonte `portal`) | `buscar_portal` (busca por palavras, 6 trechos) |
+| Documentos (PDF em imagem/tabela) | `docs/conhecimento/*.md` → fonte `pdf` | `buscar_portal` |
+| Arquivos (PDF, DOCX, logos) | fonte `arquivo` (nome + link) | manda o link; imagem do portal vira imagem no WhatsApp |
+| Identidade (conceito, missão, visão, valores) | página `idconceitual` (`conhecimento_sempre_paginas`) | **sempre** nas instruções |
+| Ensinado pelo responsável | fonte `victor` (`aprende: …`) | **sempre** nas instruções, vale mais que o portal |
+
+- **Leitura do portal**: edge `agente-portal` lista páginas/arquivos pela API pública do GitHub (`main`, a mesma que o
+  menu usa), baixa o publicado em `lideres.tatasushi.tech`, extrai o texto escrito (aba **Sobre** dos dashboards; corpo
+  das páginas institucionais/conceitos) e grava por seção. Roda todo dia às **05h41** (pg_cron `agente-portal-diario`)
+  e quando o responsável manda **`atualiza portal`**. Nada é apagado: trecho que sumiu fica inativo.
+- **Documentos**: PDF que é imagem ou tabela (Código de Ética, livrete de EPIs) é transcrito para
+  `docs/conhecimento/<nome>.md` (`# título`, `> Link: <pdf>`, uma seção por `## `). Depois do merge no `main`, a leitura
+  diária pega sozinha. A apólice do seguro ficou só como link (dois subgrupos de capital, não dá para afirmar o valor de
+  ninguém). A apresentação (`APRES TATA SUSHI.pdf`, 47 páginas em imagem) ainda não foi transcrita.
+- **Valores na prática** (instruções fixas, `COMO AGIR`): Ética = não chuta, diz que não achou e avisa; Respeito = não
+  expõe colegas; Excelência = confere o número, prefere a fonte oficial; Harmonia = tom cordial, conflito → liderança/RH;
+  Não desperdício = curto. E: nunca usar "padrão de mercado"/CLT genérica no lugar da regra do TATÁ.
+- **Ensinar pelo WhatsApp** (privado do responsável com o Sam):
+  - `aprende: o período de experiência é 14 + 46 dias (60 no total)` → grava e responde com o número (#id);
+  - `esquece 12` → desativa o que foi ensinado;
+  - `atualiza portal` → relê o portal agora e responde com o resumo.
+- **Configuração** (`dp_rh.agente_config`): `portal_secret` (senha da edge), `conhecimento_sempre_paginas` (páginas que
+  vão sempre nas instruções), `conhecimento_paginas_completo` (páginas só para nível completo: folha, reclamações,
+  cargos e salários), `portal_sincronizado_em` / `portal_sincronizado_resumo` (última leitura).
+- **Conferir**: `select tata_plus.agente_conhecimento_buscar('plano de saúde', true, 6);` ·
+  `select tata_plus.agente_conhecimento_sempre(true);` · `select tata_plus.agente_conhecimento_catalogo(true);`
 
 ## Ligar
 
