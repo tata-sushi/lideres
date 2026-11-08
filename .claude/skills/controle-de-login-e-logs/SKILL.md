@@ -1,8 +1,8 @@
 ---
-name: gate-login-e-registro
+name: controle-de-login-e-logs
 description: >-
-  Login e registro do Portal Líderes: o gate.js (compliance/gate.js) diz QUEM é
-  a pessoa e garante que toda mudança no banco fique registrada (quando e quem
+  Controle de login e logs do Portal Líderes: o gate.js (compliance/gate.js) diz
+  QUEM é a pessoa e garante que toda mudança no banco fique registrada (quando e quem
   fez). A página abre só dentro do app Tatá Plus (iframe); fora dele mostra
   "Disponível pelo aplicativo". O app entrega o login por postMessage
   (gov-ready → gov-session com as duas chaves, acesso ~1h e renovação, origem
@@ -24,7 +24,7 @@ description: >-
   autenticação, fraude, registro ou "sem login".
 ---
 
-# Gate: login e registro
+# Controle de login e logs
 
 O `gate.js` responde **quem é a pessoa**, e o banco guarda **quem fez cada mudança**. Esta skill é a
 fonte única desses dois assuntos. **O que a pessoa pode abrir e ver** (página, abas, botões, valores,
