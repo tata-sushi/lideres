@@ -50,6 +50,11 @@ revoke all on function tata_plus.pode_ver_contato(text) from public, anon;
 grant execute on function tata_plus.pode_ver_contato(text) to authenticated;
 
 -- ── 3) Catálogo: uma área de Contato para cada área que já tem Valor ────────
+-- o check de tipo só conhecia aba/botao/valor
+alter table tata_plus.governanca_abas drop constraint if exists governanca_abas_tipo_check;
+alter table tata_plus.governanca_abas add constraint governanca_abas_tipo_check
+  check (tipo = any (array['aba'::text, 'botao'::text, 'valor'::text, 'contato'::text]));
+
 insert into tata_plus.governanca_abas (aba_id, pagina_id, label, tipo, ordem, ativo)
 select 'contato-' || v.aba_id, v.pagina_id, 'Contato (e-mail e telefone)', 'contato', coalesce(v.ordem, 0) + 1, true
   from tata_plus.governanca_abas v
