@@ -3363,11 +3363,29 @@ window.toggleFta = toggleFta;
       if (!a || !b) return null;
       return Math.round((b - a) / 86400000) + 1;
     }
+    // Dias vendidos (abono pecuniário). Ordem:
+    // 1) dias_abono vindo dos recibos (mais confiável);
+    // 2) campo abono se já for número;
+    // 3) último número após o " + " no campo frac (ex: "20 + 10" → 10),
+    //    só se p.abono sinalizar que houve venda.
+    function _rfDiasVendidos(p){
+      if (p.dias_abono != null && !isNaN(+p.dias_abono)) return +p.dias_abono;
+      if (typeof p.abono === 'number' && p.abono > 0) return p.abono;
+      var ab = String(p.abono||'').trim();
+      if (/^\d+$/.test(ab) && +ab > 0) return +ab;
+      var vendeu = /^(sim|s|true|1|y|yes)$/i.test(ab);
+      if (!vendeu) return 0;
+      var frac = String(p.frac||'').trim();
+      var parts = frac.split('+').map(function(s){ return parseInt(s.trim(),10); }).filter(function(n){ return !isNaN(n); });
+      if (parts.length >= 2) return parts[parts.length-1];
+      return null;
+    }
 
     var rowsHtml = lista.map(function(p){
       var blocos = _rfBlocos(p);
       if (!blocos.length) blocos = [{ini:null, fim:null}];
-      var abonoTxt = p.abono ? String(Number(p.abono)) : '—';
+      var vendidos = _rfDiasVendidos(p);
+      var vendidosTxt = vendidos != null ? String(vendidos) : '—';
       var baseCols =
         '<td>'+_rfEsc(p.mt||'—')+'</td>'+
         '<td>'+_rfEsc(p.nome||'—')+'</td>'+
@@ -3383,7 +3401,7 @@ window.toggleFta = toggleFta;
           baseCols+
           '<td class="num">'+_rfPeriodoFmt(b.ini, b.fim)+'</td>'+
           '<td class="c">'+(dias!=null ? dias : '—')+'</td>'+
-          '<td class="c">'+(isFirst ? abonoTxt : '')+'</td>'+
+          '<td class="c">'+(isFirst ? vendidosTxt : '')+'</td>'+
           '<td>'+_rfEsc(p.situacao||'—')+'</td>'+
         '</tr>';
       }).join('');
@@ -3444,7 +3462,7 @@ window.toggleFta = toggleFta;
           '<th>Concessivo</th>'+
           '<th class="c">Direito</th>'+
           '<th>Período de Gozo</th>'+
-          '<th class="c">Dias Desfrute</th>'+
+          '<th class="c">Dias Desfrutados</th>'+
           '<th class="c">Dias Vendidos</th>'+
           '<th>Situação</th>'+
         '</tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
