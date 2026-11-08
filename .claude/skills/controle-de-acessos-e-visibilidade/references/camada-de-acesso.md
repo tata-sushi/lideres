@@ -82,7 +82,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display: none; }
 ```
 
 **Toda** página passa pelo gate e pela camada de acesso. Não existe página aberta sem login. O
-`organograma2.html` era a única exceção e vai ser apagado (decisão do dono, 08/11/2026).
+`organograma2.html` era a única exceção e foi apagado em 08/11/2026.
 
 ---
 

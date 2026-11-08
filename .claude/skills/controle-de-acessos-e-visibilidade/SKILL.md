@@ -337,7 +337,7 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
   tabela liberada para `anon`, nenhuma função `*_sandbox_*` em uso e nenhuma matrícula de teste.
 - O `gate.js` só roda embarcado no Plus; fora do app mostra "Disponível pelo aplicativo".
 - **Sem exceção:** toda página tem `GOV_PAGE_ID` e passa pelo gate e pela camada de acesso. O
-  `compliance/areas/organograma2.html` (antiga exceção aberta) vai ser apagado (decisão do dono, 08/11/2026).
+  `compliance/areas/organograma2.html` (antiga exceção aberta) foi apagado em 08/11/2026.
 
 ---
 
