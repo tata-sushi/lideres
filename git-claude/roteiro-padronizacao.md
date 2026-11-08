@@ -57,7 +57,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 | `kpis/rh/comunicacao.html` | `governanca-kpis-rh-comunicacao` | 2 | 2 | 1 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
 | **2. Dashboards operacionais (compras, estoque, limpeza, manutenção, Tatá House, parceiros)** | | | | | | | | | | |
 | `kpis/compras/abastecimento.html` | `governanca-kpis-compras-abastecimento` | 6 | 15 | 0 | ⏸ item 3 (cliente próprio) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/estoque/estoque_semanal.html` | `governanca-kpis-estoque-semanal` | 3 | 5 | 0 | ⏸ item 3 (cliente próprio) | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/estoque/estoque_semanal.html` | `governanca-kpis-estoque-semanal` | 3 | 5 | 6 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/limpeza/checklist-limpeza.html` | `governanca-kpis-limpeza-checklist` | 2 | 3 | 4 | ⏸ item 3 (cliente próprio) | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/manutencao/index.html` | `governanca-kpis-manutencao` | 3 | 7 | 4 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/tatahouse/cardapio.html` | `governanca-kpis-tatahouse-cardapio` | 5 | 11 | 15 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
@@ -100,6 +100,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Histórico
 
+- 08/11/2026 — Estoque semanal pelo servidor (migration 20261202): sem cliente próprio, catálogo e estoque mínimo por função com porta da página, cadastro/contagem/pedido automático por função com porta do botão e autor do login.
 - 08/11/2026 — Decisões do dono: menus só depois da skill do gate; Abastecimento, Estoque semanal, Checklist e Papelaria corrigir (sem Apps Script); Organograma é exceção ao nível Linha; números do drawer não mexer. Papelaria corrigida (migration 20261201).
 - 08/11/2026 — Grupo 5 conferido (só página): sete páginas ✅; Papelaria aguarda o item 3.
 - 08/11/2026 — Auditoria de páginas, Auditoria de documentos e Organograma (grupo 3) para a skill de acessos (migration 20261130): porta da página e do botão no servidor, nascimento não sai mais do servidor, nada para anon.
