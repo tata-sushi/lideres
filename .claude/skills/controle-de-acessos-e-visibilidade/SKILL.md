@@ -123,7 +123,7 @@ liga/desliga:
 | **Aba** | `tab-btn` (abas de navegação da página) | `data-aba-id` | `aba` | **VISÍVEL** — some só se bloquear (denylist) | liga/desliga por aba |
 | **Botão** | **qualquer botão de ação** (drawer **ou** dentro da página) | `data-aba-id` **ou** `data-botao-id` | `botao` | **OCULTO** — aparece só se liberar (allowlist) | libera por botão |
 | **Valor** | **R$** (salário, recibos…), **CPF**, **data de nascimento** e **saúde** (atestados, exames) | — (área, máscara no servidor) | `valor` | **mascarado** no servidor | libera por pessoa e área |
-| **Contato** | **e-mail** e **telefone** | — (área, máscara no servidor) | `contato` (a criar) | **mascarado** no servidor | libera por pessoa e área, separado do Valor |
+| **Contato** | **e-mail** e **telefone** | — (área, máscara no servidor) | `contato` | **mascarado** no servidor | libera por pessoa e área, separado do Valor |
 | **Linha** | quais registros (linhas de dado) aparecem | — (corte na função) | — (sem catálogo) | **só os próprios + a subárvore** | nada — vem do organograma |
 
 Regras dos níveis:
@@ -372,7 +372,8 @@ padrão, liberado por pessoa e área. Diferenças em relação a aba/botão:
 ## Nível Contato (e-mail e telefone)
 
 **E-mail** e **telefone** têm interruptor **próprio**, separado do Valor (decisão do dono, 08/11/2026):
-quem vê R$ e CPF não vê contato automaticamente, e vice-versa. Mesma mecânica do Valor, **a criar**:
+quem vê R$ e CPF não vê contato automaticamente, e vice-versa. Mesma mecânica do Valor (migration
+`supabase/migrations/20261125_nivel_contato.sql`):
 
 - catálogo `tipo='contato'`, uma linha por área, com `aba_id = 'contato-<área>'` (para não colidir com o id da
   área de Valor);
