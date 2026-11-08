@@ -41,7 +41,7 @@ drop function if exists public.rec_entrevista_sandbox_salvar(uuid, uuid, date, t
 drop function if exists public.rec_processos_sandbox_salvar(uuid, text, text, text);
 drop function if exists public.rec_referencias_sandbox_salvar(uuid, text, text, text, text, text);
 drop function if exists public.rec_status_final_sandbox_salvar(uuid, text, text);
-drop function if exists public.rec_teste_sandbox_salvar(uuid, text, text, text, text, text, uuid, date, text, numeric, text, text, text, boolean, text, text);
+drop function if exists public.rec_teste_sandbox_salvar(uuid, text, text, text, text, text, uuid, date, text, numeric, text, text, text, text, boolean, text);
 drop function if exists public.vagas_sandbox_excluir(uuid);
 drop function if exists public.vagas_sandbox_listar(text);
 drop function if exists public.vagas_sandbox_salvar(uuid, text, text, text, text, text, text, text, numeric, numeric, text, text, text, text, text);
