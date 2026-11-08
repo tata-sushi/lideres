@@ -59,9 +59,9 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 | `kpis/compras/abastecimento.html` | `governanca-kpis-compras-abastecimento` | 6 | 15 | 0 | ⏸ item 3 (cliente próprio) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/estoque/estoque_semanal.html` | `governanca-kpis-estoque-semanal` | 3 | 5 | 0 | ⏸ item 3 (cliente próprio) | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/limpeza/checklist-limpeza.html` | `governanca-kpis-limpeza-checklist` | 2 | 3 | 4 | ⏸ item 3 (cliente próprio) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/manutencao/index.html` | `governanca-kpis-manutencao` | 3 | 7 | 4 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/manutencao/index.html` | `governanca-kpis-manutencao` | 3 | 7 | 4 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/tatahouse/cardapio.html` | `governanca-kpis-tatahouse-cardapio` | 5 | 11 | 15 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `ps.html` | `governanca-parceiros-sistemas` | 3 | 7 | 3 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `ps.html` | `governanca-parceiros-sistemas` | 3 | 7 | 3 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | **3. Auditoria e organograma** | | | | | | | | | | |
 | `auditoria/paginas.html` | `governanca-auditoria-paginas` | 2 | 3 | 2 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `auditoria/docsrh.html` | `governanca-auditoria-docsrh` | 2 | 3 | 2 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
@@ -90,7 +90,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Ordem sugerida para a skill de acessos
 
-1. **Grupo 1** (RH): primeiro as páginas com ação e dado sensível — Sanções, Documentos, Recrutamento, Desligamentos, Cargos e Salários, Folha, Benefícios, Medicina, Performance — depois as demais.
+1. **Grupo 1** (RH) fica por último: só quando o dono pedir (decisão de 08/11/2026). Dentro dele, primeiro as páginas com ação e dado sensível — Sanções, Documentos, Recrutamento, Desligamentos, Cargos e Salários, Folha, Benefícios, Medicina, Performance — depois as demais.
 2. **Grupo 2**: Manutenção e Parceiros & Sistemas agora; Abastecimento, Estoque semanal e Checklist de limpeza só depois do item 3 (cliente próprio) ser liberado pelo dono.
 3. **Grupo 3**: Auditoria e Organograma.
 4. **Grupo 4**: todos os menus de uma vez, junto com a camada de acesso (Etapa 2+3, aguardando o dono).
@@ -98,4 +98,5 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Histórico
 
+- 08/11/2026 — Manutenção e Parceiros & Sistemas (grupo 2) concluídos para a skill de acessos (migrations 20261128 e 20261129).
 - 08/11/2026 — Férias (piloto do nível Linha), Cardápio Tatá House e ouvidoria-qrcode concluídos para a skill de acessos. Etapas 1 e 5 (código morto; identidade e fim do sandbox) aplicadas em todas as páginas — por isso várias estão "parcial": falta a passagem página a página de botão, Linha e máscaras.
