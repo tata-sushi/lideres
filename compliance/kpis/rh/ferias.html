@@ -3572,16 +3572,16 @@ window.toggleFta = toggleFta;
     _avCarregarColabs().then(function(map){
       _avColabMap = map;
       var sel = document.getElementById('av-colab');
-      // só mostra quem tem bloco de gozo cadastrado
+      // só mostra quem tem férias agendadas (situação "agendada" — mesma lógica de _situacao() usada no resto da página)
       var cache = (typeof _feriasCache !== 'undefined' && Array.isArray(_feriasCache)) ? _feriasCache : [];
-      var comGozo = {};
+      var comAgendada = {};
       cache.forEach(function(p){
-        if (p.ini1||p.fim1||p.ini2||p.fim2||p.ini3||p.fim3) comGozo[String(p.mt)] = p.nome;
+        if (typeof _situacao === 'function' && _situacao(p) === 'agendada') comAgendada[String(p.mt)] = p.nome;
       });
-      var opts = Object.keys(comGozo).map(function(mt){ return { mt:mt, nome: (map[mt] && map[mt].nome) || comGozo[mt] }; });
+      var opts = Object.keys(comAgendada).map(function(mt){ return { mt:mt, nome: (map[mt] && map[mt].nome) || comAgendada[mt] }; });
       opts.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
       sel.innerHTML = '<option value="">— Selecione —</option>' + opts.map(function(o){
-        return '<option value="'+_avEsc(o.mt)+'">'+_avEsc(o.nome)+' · '+_avEsc(o.mt)+'</option>';
+        return '<option value="'+_avEsc(o.mt)+'">'+_avEsc(o.nome)+'</option>';
       }).join('');
       document.getElementById('mf-aviso-overlay').classList.add('open');
     });
@@ -3799,13 +3799,14 @@ window.toggleFta = toggleFta;
 
     var pageHtml = _avMontarBody(f.colab, f.bloco, f.dataEmit, f.cidade, _avAgora());
     var nome = (f.colab.nome || '').toUpperCase();
+    var periodoTxt = _avFmtData(f.bloco.ini) + ' a ' + _avFmtData(f.bloco.fim);
 
     setBtnLoading('av-btn-assinar', true, 'Enviando…');
     _avCarregarTipoId().then(function(tipoId) {
       if (!tipoId) throw new Error('Tipo "Aviso de Gozo de Férias" não encontrado no catálogo (dp_rh.doc_tipos).');
       return _avHtmlParaPdfBlob(pageHtml).then(function(blob) {
         var arquivoPath = 'docs/' + _avUuid() + '.pdf';
-        var nomeArquivo = (nome || f.colab.matricula) + ' - Aviso de Gozo de Férias.pdf';
+        var nomeArquivo = (nome || f.colab.matricula) + ' - Aviso de Gozo de Férias - ' + periodoTxt + '.pdf';
         return _avComSupaPromise().then(function(supa) {
           return supa.storage.from('assinaturas').upload(arquivoPath, blob, { upsert: true, contentType: 'application/pdf' }).then(function(rUp) {
             if (rUp.error) throw rUp.error;
@@ -3816,7 +3817,7 @@ window.toggleFta = toggleFta;
           }).then(function(rRow) {
             if (rRow.error) throw rRow.error;
             var linha = rRow.data;
-            var tituloVersionado = 'Aviso de Gozo de Férias' + (linha.versao > 1 ? ' (v' + linha.versao + ')' : '');
+            var tituloVersionado = 'Aviso de Gozo de Férias — ' + periodoTxt + (linha.versao > 1 ? ' (v' + linha.versao + ')' : '');
             return supa.schema('tata_plus').rpc('docs_enviar_para_assinatura', {
               p_matricula: f.colab.matricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
               p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
