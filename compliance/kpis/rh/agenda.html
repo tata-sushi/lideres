@@ -1178,7 +1178,7 @@ function _certCarregarTipos() {
   if (_certTipos) return Promise.resolve(_certTipos);
   return new Promise(function(resolve, reject) {
     comSupa(function(supa) {
-      supa.rpc('doc_tipos_sandbox_listar').then(function(r) {
+      supa.rpc('doc_tipos_listar').then(function(r) {
         if (r.error) { reject(r.error); return; }
         _certTipos = (r.data || []).filter(function(t) { return t.categoria === CERT_CATEGORIA; });
         resolve(_certTipos);
@@ -1202,9 +1202,9 @@ function _certResolverTipoId(nome, criadoPor) {
   if (achado) return Promise.resolve(achado.id);
   return new Promise(function(resolve, reject) {
     comSupa(function(supa) {
-      supa.rpc('doc_tipo_sandbox_criar', {
+      supa.rpc('doc_tipo_criar', {
         p_categoria: CERT_CATEGORIA, p_nome: nome.trim(), p_periodicidade: 'unico', p_intervalo_meses: null,
-        p_obrigatorio: false, p_aplica_somente_inativo: false, p_criado_por: criadoPor, p_requer_assinatura: false
+        p_obrigatorio: false, p_aplica_somente_inativo: false, p_requer_assinatura: false
       }).then(function(r) {
         if (r.error) { reject(r.error); return; }
         _certTipos.push(r.data);
@@ -1304,10 +1304,10 @@ function _certEnviarUmArquivo(item, tipoId, nomeCertificado, dataBR, dataISO, em
       var nomeArquivo = (item.nome || item.matricula) + ' - ' + nomeCertificado + ' - ' + dataBR + '.' + ext;
       supa.storage.from('dp-documentos').upload(path, item.file, { upsert: true, contentType: item.file.type || 'application/octet-stream' }).then(function(rUp) {
         if (rUp.error) throw rUp.error;
-        return supa.rpc('colaborador_documentos_sandbox_salvar', {
+        return supa.rpc('colaborador_documentos_salvar', {
           p_matricula: item.matricula, p_tipo_id: tipoId, p_competencia: null,
           p_nome_arquivo: nomeArquivo, p_link: path, p_mime: item.file.type || 'application/octet-stream',
-          p_tamanho: item.file.size, p_enviado_por: emitidoPor, p_observacao: 'Emitido em ' + dataBR
+          p_tamanho: item.file.size, p_observacao: 'Emitido em ' + dataBR
         });
       }).then(function(rRow) {
         if (rRow.error) throw rRow.error;
@@ -1336,8 +1336,7 @@ function enviarCertificadosLote() {
   var validos = _certArquivos.filter(function(i) { return i.status === 'ok'; });
   if (!validos.length) { errBox.style.display = 'block'; errBox.textContent = 'Anexe ao menos um arquivo reconhecido.'; return; }
 
-  var _sess = window.__lideresSession || (function() { try { return JSON.parse(localStorage.getItem('lideres_session')); } catch (e) { return null; } })();
-  var emitidoPor = (_sess && _sess.displayName) ? _sess.displayName : '—';
+  var emitidoPor = window.__lideresUser || '—';
 
   _certEnviando = true;
   var btn = document.getElementById('cert-btn');
@@ -1382,7 +1381,7 @@ function enviarCertificadosLote() {
    dp_rh.agenda_eventos não tinha nenhuma RPC de criação até aqui — só
    listagem (agenda_rh_eventos_listar) e o toggle "mostrar no app"
    (agenda_evento_app_set, restrito a categoria='evento'). RPC nova:
-   tata_plus.agenda_evento_sandbox_criar. */
+   tata_plus.agenda_evento_criar (autor = quem está logado, no servidor). */
 var _nevtSalvando = false;
 
 function _nevtPreencherCategorias() {
@@ -1437,23 +1436,19 @@ function salvarNovoEvento() {
   if (!titulo) { errBox.style.display = 'block'; errBox.textContent = 'Informe o título do evento.'; return; }
   if (!data) { errBox.style.display = 'block'; errBox.textContent = 'Informe a data do evento.'; return; }
 
-  var _sess = window.__lideresSession || (function() { try { return JSON.parse(localStorage.getItem('lideres_session')); } catch (e) { return null; } })();
-  var criadoPor = (_sess && _sess.displayName) ? _sess.displayName : '—';
-
   _nevtSalvando = true;
   var btn = document.getElementById('nevt-btn');
   setBtnLoading(btn, true, 'Salvando…');
 
   comSupa(function(supa) {
-    supa.schema('tata_plus').rpc('agenda_evento_sandbox_criar', {
+    supa.schema('tata_plus').rpc('agenda_evento_criar', {
       p_titulo: titulo, p_data: data, p_categoria: categoria,
       p_hora_inicio: document.getElementById('nevt-hora-inicio').value || null,
       p_hora_fim: document.getElementById('nevt-hora-fim').value || null,
       p_local: document.getElementById('nevt-local').value || null,
       p_responsavel: document.getElementById('nevt-responsavel').value || null,
       p_descricao: document.getElementById('nevt-descricao').value || null,
-      p_mostrar_no_app: document.getElementById('nevt-mostrar-app').checked,
-      p_criado_por: criadoPor
+      p_mostrar_no_app: document.getElementById('nevt-mostrar-app').checked
     }).then(function(r) {
       _nevtSalvando = false;
       setBtnLoading(btn, false, 'Salvar');

@@ -1827,7 +1827,7 @@ function _cpCarregarTipoId(){
   if (_cpTipoId) return Promise.resolve(_cpTipoId);
   return new Promise(function(resolve, reject){
     comSupa(function(supa){
-      supa.rpc('doc_tipos_sandbox_listar').then(function(r){
+      supa.rpc('doc_tipos_listar').then(function(r){
         if (r.error) { reject(r.error); return; }
         var t = (r.data||[]).find(function(x){ return x.nome === CP_TIPO_NOME && x.categoria === CP_TIPO_NOME; });
         if (!t) { reject(new Error('Tipo de documento "'+CP_TIPO_NOME+'" não encontrado no catálogo (dp_rh.doc_tipos).')); return; }
@@ -1951,9 +1951,9 @@ function _cpEnviarUmArquivo(item, tipoId, competencia, periodoLabel, emitidoPor)
       var arquivoPath = 'docs/'+_cpUuid()+'.pdf';
       supa.storage.from('assinaturas').upload(arquivoPath, item.file, { upsert:true, contentType:'application/pdf' }).then(function(rUp){
         if (rUp.error) throw rUp.error;
-        return supa.rpc('colaborador_documento_pendente_assinatura_sandbox_salvar', {
+        return supa.rpc('colaborador_documento_pendente_assinatura_salvar', {
           p_matricula: item.matricula, p_tipo_id: tipoId, p_nome_arquivo: item.file.name, p_link: arquivoPath,
-          p_mime: 'application/pdf', p_tamanho: item.file.size, p_enviado_por: emitidoPor,
+          p_mime: 'application/pdf', p_tamanho: item.file.size,
           p_link_bucket: 'assinaturas', p_competencia: competencia
         });
       }).then(function(rRow){
@@ -1963,13 +1963,12 @@ function _cpEnviarUmArquivo(item, tipoId, competencia, periodoLabel, emitidoPor)
         return TP().rpc('docs_enviar_para_assinatura', {
           p_matricula: item.matricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
           p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
-          p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true,
-          p_atribuido_por: emitidoPor
+          p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true
         }).then(function(rEnvio){
           if (rEnvio.error) throw rEnvio.error;
           var envio = rEnvio.data;
           if (!envio || !envio.ok) throw new Error((envio && envio.erro) || 'Falha ao enviar pra assinatura.');
-          return supa.rpc('colaborador_documento_definir_atribuicao_sandbox', {
+          return supa.rpc('colaborador_documento_definir_atribuicao', {
             p_id: linha.id, p_assinatura_atribuicao_id: envio.atribuicao_id
           });
         });
@@ -1994,8 +1993,7 @@ function enviarCartaoPontoLote(){
   var validos = _cpArquivos.filter(function(i){ return i.status === 'ok'; });
   if (!validos.length) { errBox.style.display='block'; errBox.textContent='Anexe ao menos um arquivo reconhecido.'; return; }
 
-  var _sess = window.__lideresSession || (function(){ try { return JSON.parse(localStorage.getItem('lideres_session')); } catch(e){ return null; } })();
-  var emitidoPor = (_sess && _sess.displayName) ? _sess.displayName : '—';
+  var emitidoPor = window.__lideresUser || '—';
 
   _cpEnviando = true;
   var btn = document.getElementById('cp-btn');

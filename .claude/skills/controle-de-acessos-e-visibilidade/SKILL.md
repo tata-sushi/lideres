@@ -282,7 +282,7 @@ direto, sem passar pela página. Toda função chamada por página:
 
 - confere a **página** (`gov_tenho_acesso('<GOV_PAGE_ID>')`) e, se for ação, o **botão** (`pode_botao('<chave>')`);
 - corta a **Linha** e mascara **Valor** e **Contato** na própria função;
-- pega o **autor do login** (`minha_matricula()`), nunca da página;
+- pega o **autor do login** (`minha_matricula()` para a matrícula, `meu_nome()` para o nome), nunca da página;
 - é a única porta: `security definer`, sem acesso para `anon`, tabela sem leitura direta;
 - não é "sandbox" e não depende de identidade vinda do navegador.
 

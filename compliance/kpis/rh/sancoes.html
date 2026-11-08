@@ -1810,30 +1810,26 @@ function openDrawer() {
   }
   document.addEventListener('keydown',function(e){if(e.key==='Escape')closeDrawer();});
 
-  /* ── PREENCHIMENTO AUTOMÁTICO COM SESSÃO ── */
+  /* ── PREENCHIMENTO AUTOMÁTICO COM O NOME DE QUEM ESTÁ LOGADO (gate.js) ── */
   (function() {
-    var session = window.__lideresSession;
-    if (!session) {
-      try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-    }
-    if (!session || !session.displayName) return;
+    var nome = window.__lideresUser || '';
+    if (!nome) return;
 
     function applySession() {
       var lider = document.getElementById('f-lider');
       if (lider) {
-        lider.value = session.displayName;
+        lider.value = nome;
         lider.setAttribute('readonly', 'readonly');
       }
       var cargoEl = document.getElementById('f-cargo');
       if (cargoEl) {
-        if (session.cargo) cargoEl.value = session.cargo;
         // Cargo do líder pode não vir na sessão → busca no perfil do Supabase.
         _supaReady().then(function(supa){ return supa.schema('tata_plus').rpc('colaborador_logado'); })
           .then(function(res){
             var p = (res && !res.error && res.data && res.data[0]) ? res.data[0] : null;
             if (p && p.cargo) { if (!cargoEl.value) cargoEl.value = p.cargo; return; }
             return carregarColaboradores().then(function(colabs){
-              var eu = (colabs || []).find(function(c){ return c.nome === session.displayName; });
+              var eu = (colabs || []).find(function(c){ return c.nome === nome; });
               if (eu && eu.cargo && !cargoEl.value) cargoEl.value = eu.cargo;
             });
           }).catch(function(){});
@@ -1868,7 +1864,6 @@ function openDrawer() {
         p_tipo:            dados.tipoSancao || '',
         p_dias:            dados.diasSuspensao ? parseInt(dados.diasSuspensao, 10) : null,
         p_descricao:       dados.descricao || '',
-        p_lider:           dados.lider || '',
         p_cargo_lider:     dados.cargoLider || ''
       }).then(function(res){
         if (res && res.error) console.warn('[sancoes] falha ao registrar:', res.error);
@@ -1936,20 +1931,19 @@ function openDrawer() {
     document.getElementById('form-modal').classList.add('open');
     document.body.style.overflow = 'hidden';
     // garante que o líder e unidade fiquem preenchidos mesmo se o usuário tiver limpado
-    var session = window.__lideresSession;
-    if (session && session.displayName) {
+    var nome = window.__lideresUser || '';
+    if (nome) {
       var lider = document.getElementById('f-lider');
-      if (lider) { lider.value = session.displayName; lider.setAttribute('readonly', 'readonly'); }
+      if (lider) { lider.value = nome; lider.setAttribute('readonly', 'readonly'); }
       var cargoEl = document.getElementById('f-cargo');
       if (cargoEl) {
-        if (session.cargo) cargoEl.value = session.cargo;
         // Cargo do líder pode não vir na sessão → busca no perfil do Supabase.
         _supaReady().then(function(supa){ return supa.schema('tata_plus').rpc('colaborador_logado'); })
           .then(function(res){
             var p = (res && !res.error && res.data && res.data[0]) ? res.data[0] : null;
             if (p && p.cargo) { if (!cargoEl.value) cargoEl.value = p.cargo; return; }
             return carregarColaboradores().then(function(colabs){
-              var eu = (colabs || []).find(function(c){ return c.nome === session.displayName; });
+              var eu = (colabs || []).find(function(c){ return c.nome === nome; });
               if (eu && eu.cargo && !cargoEl.value) cargoEl.value = eu.cargo;
             });
           }).catch(function(){});
@@ -2291,8 +2285,8 @@ function openDrawer() {
 
   /* ── sessão / rate limit / log ── */
   function aiGetSession() {
-    try { return JSON.parse(localStorage.getItem('lideres_session')); }
-    catch(e) { return null; }
+    // Sessão do modelo novo: o gate.js publica o nome em window.__lideresUser (não há expiresAt).
+    return window.__lideresUser ? { displayName: window.__lideresUser } : null;
   }
   function aiCheckRate() {
     var now = Date.now();
@@ -2344,9 +2338,9 @@ function openDrawer() {
 
     // 1. valida sessão
     var session = aiGetSession();
-    if (!session || !session.displayName || !session.expiresAt || session.expiresAt < Date.now()) {
+    if (!session || !session.displayName) {
       resultEl.className = 'ai-result';
-      resultEl.textContent = 'Sessão expirada. Faça login novamente no portal antes de gerar o texto.';
+      resultEl.textContent = 'Sessão não identificada. Abra a página pelo aplicativo e tente de novo.';
       return;
     }
 

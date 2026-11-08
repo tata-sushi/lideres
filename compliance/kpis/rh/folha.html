@@ -1063,7 +1063,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
      Documento externo (já pronto, vindo da folha) — não gera PDF aqui, só sobe
      o arquivo tal como está. Sem assinatura: não passa pelo pipeline de
      docs_enviar_para_assinatura, só grava direto como "entregue"
-     (colaborador_documentos_sandbox_salvar — mesmo caminho de anexo manual do
+     (colaborador_documentos_salvar — mesmo caminho de anexo manual do
      doc.html). Casa cada arquivo com um colaborador pela matrícula no começo
      do nome (padrão fixo da folha: "MATRICULA_NOME_id.pdf"). ── -->
 <div class="modal-overlay" id="hol-overlay" onclick="if(event.target===this)fecharModalHolerite()">
@@ -1244,7 +1244,7 @@ document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close
    colaborador pela matrícula no começo do nome (padrão fixo da folha:
    "MATRICULA_NOME_id.pdf"), igual ao Cartão de Ponto em escalas.html. A
    diferença é o pipeline de gravação: aqui é upload direto pro bucket
-   dp-documentos + colaborador_documentos_sandbox_salvar (mesmo caminho do
+   dp-documentos + colaborador_documentos_salvar (mesmo caminho do
    anexo manual em doc.html), sem passar pelo pendência+assinatura do app —
    holerite não exige rubrica/selfie. */
 function comSupa(cb) {
@@ -1292,7 +1292,7 @@ function _holCarregarTipoId() {
   if (_holTipoId) return Promise.resolve(_holTipoId);
   return new Promise(function(resolve, reject) {
     comSupa(function(supa) {
-      supa.rpc('doc_tipos_sandbox_listar').then(function(r) {
+      supa.rpc('doc_tipos_listar').then(function(r) {
         if (r.error) { reject(r.error); return; }
         var t = (r.data || []).find(function(x) { return x.nome === HOL_TIPO_NOME; });
         if (!t) { reject(new Error('Tipo de documento "' + HOL_TIPO_NOME + '" não encontrado no catálogo (dp_rh.doc_tipos).')); return; }
@@ -1451,10 +1451,10 @@ function _holEnviarUmArquivo(item, tipoId, competencia, tipoPagamento, emitidoPo
         var nomeArquivo = (item.nome || item.matricula) + ' - Holerite ' + tipoLabel + ' ' + competencia + '.' + ext;
         supa.storage.from('dp-documentos').upload(path, blobCriptografado, { upsert: true, contentType: 'application/pdf' }).then(function(rUp) {
           if (rUp.error) throw rUp.error;
-          return supa.rpc('colaborador_documentos_sandbox_salvar', {
+          return supa.rpc('colaborador_documentos_salvar', {
             p_matricula: item.matricula, p_tipo_id: tipoId, p_competencia: competenciaChave,
             p_nome_arquivo: nomeArquivo, p_link: path, p_mime: 'application/pdf',
-            p_tamanho: blobCriptografado.size, p_enviado_por: emitidoPor
+            p_tamanho: blobCriptografado.size
           });
         }).then(function(rRow) {
           if (rRow.error) throw rRow.error;
@@ -1475,8 +1475,7 @@ function enviarHoleritesLote() {
   var validos = _holArquivos.filter(function(i) { return i.status === 'ok'; });
   if (!validos.length) { erroBox.style.display = 'block'; erroBox.textContent = 'Anexe ao menos um arquivo reconhecido.'; return; }
 
-  var _sess = window.__lideresSession || (function() { try { return JSON.parse(localStorage.getItem('lideres_session')); } catch (e) { return null; } })();
-  var emitidoPor = (_sess && _sess.displayName) ? _sess.displayName : '—';
+  var emitidoPor = window.__lideresUser || '—';
 
   _holEnviando = true;
   var btn = document.getElementById('hol-btn');
