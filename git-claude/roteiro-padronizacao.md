@@ -29,7 +29,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 | `kpis/rh/ferias.html` | `governanca-kpis-rh-ferias` | 3 | 6 | 4 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | — | ⏳ |
 | `kpis/rh/recrutamento.html` | `governanca-kpis-rh-recrutamento` | 7 | 21 | 17 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/doc.html` | `governanca-kpis-rh-doc` | 4 | 13 | 22 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/admissao.html` | `governanca-kpis-rh-admissao` | 3 | 15 | 18 | ⏸ item 3 (cliente próprio) | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/admissao.html` | `governanca-kpis-rh-admissao` | 3 | 15 | 18 | 🔶 08/11 (sem cliente próprio; resto na passagem do RH) | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/rh/desligamentos.html` | `governanca-kpis-rh-desligamentos` | 3 | 11 | 13 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/sancoes.html` | `governanca-kpis-rh-sancoes` | 2 | 6 | 6 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/ces.html` | `governanca-kpis-rh-ces` | 2 | 6 | 4 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
@@ -100,6 +100,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Histórico
 
+- 08/11/2026 — Admissão: removido o bloco morto de inventário/estoque com cliente próprio (decisão do dono: só isso agora; o resto da página fica para a passagem do RH). Abre caminho para fechar as tabelas do esquema de abastecimento para anon.
 - 08/11/2026 — Abastecimento pelo servidor (migration 20261204): sem cliente próprio nem Apps Script; leituras com porta da página, cada estágio (pedido, processamento, recebimento, conferência, anexos) com porta do botão e autor do login; upload de anexo só logado e com o botão. **Pendente:** depois que Estoque semanal, Checklist e Abastecimento estiverem publicados, uma migration fecha as tabelas do esquema de abastecimento para anon.
 - 08/11/2026 — Checklist de limpeza pelo servidor (migration 20261203): removido o cliente próprio e o bloco morto de inventário/estoque (sem aba nem botão); KPIs conferem a página, relatório confere o botão; lista de colaboradores fecha para anon.
 - 08/11/2026 — Estoque semanal pelo servidor (migration 20261202): sem cliente próprio, catálogo e estoque mínimo por função com porta da página, cadastro/contagem/pedido automático por função com porta do botão e autor do login.
