@@ -780,27 +780,9 @@ function initApp() {
   }
   if (!session || !session.displayName) { window.addEventListener('lideres:sessao', initApp, { once: true }); return; }
 
-  var parts = session.displayName.trim().split(/\s+/);
-  currentUser = {
-    name:     session.displayName,
-    short:    parts.length > 1 ? parts[0] : parts[0],
-    initials: parts.map(function(p){return p[0];}).join('').slice(0,2).toUpperCase(),
-    type:     (session.perfil || 'admin').toLowerCase(),
-    unit:     session.unidade || null
-  };
-
-  var _hu = document.getElementById('header-user'); if (_hu) _hu.textContent = currentUser.short;
-
-  // Se líder, restringir tabs à unidade
-  if (currentUser.type === 'lider' && currentUser.unit) {
-    document.querySelectorAll('#unit-tabs .tab-btn').forEach(function(btn) {
-      var txt = btn.textContent.trim();
-      if (txt !== 'Geral' && txt !== currentUser.unit) btn.style.display = 'none';
-    });
-    setUnitFilter(currentUser.unit, null);
-    var unidSel = document.getElementById('f-unidade');
-    if (unidSel) { unidSel.value = currentUser.unit; }
-  }
+  // Só o nome é usado (responsável das gravações). Quem decide o que a pessoa vê e faz é a
+  // camada de acesso (data-aba-id) e o servidor (armario_pode_gerir); a sessão não tem unidade.
+  currentUser = { name: session.displayName };
 
   // Revelar app
   document.getElementById('app').classList.add('visible');
@@ -1095,9 +1077,6 @@ function onTipoChange() {
   armField.style.display = '';
   armRow.style.gridTemplateColumns = '';
 
-  var isLider = currentUser && currentUser.type === 'lider' && currentUser.unit;
-  var isAdmin = currentUser && currentUser.type === 'admin';
-
   // Unidade vem pré-preenchida (do líder, ou do colaborador selecionado), mas sempre
   // editável — trava impedia trocar/atribuir armário quando a unidade do colaborador
   // não batia certinho com a base, ou quando era preciso escolher outra unidade.
@@ -1108,28 +1087,28 @@ function onTipoChange() {
     // Mantém a linha (com unidade), esconde só o campo do armário
     armField.style.display           = 'none';
     armRow.style.gridTemplateColumns = '1fr';
-    unidSel.value    = isLider ? currentUser.unit : '';
+    unidSel.value    = '';
   } else if (tipo === 'excluir') {
     rowColab.style.display   = 'none';
     rowNovo.style.display    = 'none';
     rowNovoNum.style.display = 'none';
-    unidSel.value    = isLider ? currentUser.unit : '';
+    unidSel.value    = '';
   } else if (tipo === 'manut' || tipo === 'liberar_manut') {
     rowColab.style.display   = 'none';
     rowNovo.style.display    = 'none';
     rowNovoNum.style.display = 'none';
-    unidSel.value = isLider ? currentUser.unit : '';
+    unidSel.value = '';
   } else if (tipo === 'trocar') {
     rowColab.style.display   = 'grid';
     rowNovo.style.display    = 'grid';
     rowNovoNum.style.display = 'none';
-    unidSel.value = isLider ? currentUser.unit : '';
+    unidSel.value = '';
   } else {
     // atribuir/recolher
     rowColab.style.display   = 'grid';
     rowNovo.style.display    = 'none';
     rowNovoNum.style.display = 'none';
-    unidSel.value = isLider ? currentUser.unit : '';
+    unidSel.value = '';
   }
   unidSel.disabled = false;
 
@@ -1291,11 +1270,9 @@ function bgCloseInfo(e) {
    ════════════════════════════════════════════════ */
 function carregarColaboradores() {
   if (__colabCache) return Promise.resolve(__colabCache);
-  var isAdmin = currentUser && (currentUser.type === 'admin' || currentUser.type === 'analista-rh');
-  var unit = (!isAdmin && currentUser && currentUser.unit) ? currentUser.unit : '';
   return new Promise(function(resolve){
     comSupa(function(supa){
-      supa.schema('tata_plus').rpc('armario_colaboradores', { p_unidade: unit || null }).then(function(res){
+      supa.schema('tata_plus').rpc('armario_colaboradores', { p_unidade: null }).then(function(res){
         __colabCache = (!res.error && Array.isArray(res.data)) ? res.data : [];
         resolve(__colabCache);
       }, function(){ __colabCache = []; resolve(__colabCache); });
@@ -1316,10 +1293,9 @@ function onColabInput() {
   var v     = document.getElementById('f-colab').value;
   var match = __colabCache.find(function(c){ return c.nome === v; });
   var unidSel = document.getElementById('f-unidade');
-  var isLider = currentUser && currentUser.type === 'lider' && currentUser.unit;
   if (match) {
     document.getElementById('f-matricula').value = match.matricula || '';
-    if (!isLider && match.unidade) {
+    if (match.unidade) {
       var unidNorm = __UNIT_NORM[match.unidade.trim()] || match.unidade.trim();
       unidSel.value = unidNorm;
     }

@@ -21,7 +21,6 @@ Exemplos canônicos (estado atual):
 | `compliance/kpis/rh/ouvidoria.html` | Ouvidoria |
 | `testes/abastecimento.html` | Abastecimento |
 | `testes/checklistcaixa.html` | Caixa |
-| `testes/extras.html` | Extras |
 
 Páginas de **menu** e **institucionais** (`compliance/menucompliance.html`, `compliance/areas/institucional/*`, `compliance/kpis/index.html`, etc.) seguem outro padrão — visual em `CLAUDE.md` §2.2–5 e acesso na skill `controle-de-acessos-e-visibilidade`.
 
