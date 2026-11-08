@@ -56,7 +56,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 | `kpis/rh/ted.html` | `governanca-kpis-rh-ted` | 2 | 2 | 1 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
 | `kpis/rh/comunicacao.html` | `governanca-kpis-rh-comunicacao` | 2 | 2 | 1 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
 | **2. Dashboards operacionais (compras, estoque, limpeza, manutenção, Tatá House, parceiros)** | | | | | | | | | | |
-| `kpis/compras/abastecimento.html` | `governanca-kpis-compras-abastecimento` | 6 | 15 | 0 | ⏸ item 3 (cliente próprio) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/compras/abastecimento.html` | `governanca-kpis-compras-abastecimento` | 6 | 15 | 10 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/estoque/estoque_semanal.html` | `governanca-kpis-estoque-semanal` | 3 | 5 | 6 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/limpeza/checklist-limpeza.html` | `governanca-kpis-limpeza-checklist` | 2 | 3 | 4 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/manutencao/index.html` | `governanca-kpis-manutencao` | 3 | 7 | 4 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
@@ -100,6 +100,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Histórico
 
+- 08/11/2026 — Abastecimento pelo servidor (migration 20261204): sem cliente próprio nem Apps Script; leituras com porta da página, cada estágio (pedido, processamento, recebimento, conferência, anexos) com porta do botão e autor do login; upload de anexo só logado e com o botão. **Pendente:** depois que Estoque semanal, Checklist e Abastecimento estiverem publicados, uma migration fecha as tabelas do esquema de abastecimento para anon.
 - 08/11/2026 — Checklist de limpeza pelo servidor (migration 20261203): removido o cliente próprio e o bloco morto de inventário/estoque (sem aba nem botão); KPIs conferem a página, relatório confere o botão; lista de colaboradores fecha para anon.
 - 08/11/2026 — Estoque semanal pelo servidor (migration 20261202): sem cliente próprio, catálogo e estoque mínimo por função com porta da página, cadastro/contagem/pedido automático por função com porta do botão e autor do login.
 - 08/11/2026 — Decisões do dono: menus só depois da skill do gate; Abastecimento, Estoque semanal, Checklist e Papelaria corrigir (sem Apps Script); Organograma é exceção ao nível Linha; números do drawer não mexer. Papelaria corrigida (migration 20261201).
