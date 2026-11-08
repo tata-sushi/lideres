@@ -169,7 +169,9 @@ O registro precisa ligar a uma **matrícula** para entrar no corte.
   `tata_plus.minha_subarvore()` e troca o corte de `ferias_listar`, `ferias_valores_listar` e
   `ferias_gravar` de 1 nível (`id_superior = meu id_pessoa`, sem o próprio) para **subárvore + o
   próprio**, com página (`gov_tenho_acesso`) e botão (`pode_botao` em `::agendar-ferias` e
-  `::ajustar-ferias`). Confira no banco se ela já foi aplicada (`pg_proc`: `minha_subarvore`).
+  `::ajustar-ferias`). **Aplicada em 08/11/2026.** A pendência "Férias pendente" do líder no app
+  (`minhas_pendencias`, tipo `ferias_lider`) usa a mesma subárvore (migration `20261119`); os demais
+  tipos de pendência de líder seguem em 1 nível até cada página adotar o nível Linha.
 - Nenhuma outra página corta por hierarquia no servidor.
 - `dp_rh.ferias`, `dp_rh.ferias_recibos` e as views `agente.*` não são legíveis por `anon` nem
   por `authenticated`: a RPC é a única porta. `tata_plus.profiles` só deixa ler a própria linha.
