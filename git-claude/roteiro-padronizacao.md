@@ -100,8 +100,9 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Histórico
 
+- 08/11/2026 — Esquema de abastecimento fechado (migration 20261205, aplicada depois do deploy das quatro páginas): sem políticas abertas, sem acesso direto de anon/authenticated; tudo pelas funções do servidor. Testado: admin lista pelas funções; leitura direta e anon negados.
 - 08/11/2026 — Admissão: removido o bloco morto de inventário/estoque com cliente próprio (decisão do dono: só isso agora; o resto da página fica para a passagem do RH). Abre caminho para fechar as tabelas do esquema de abastecimento para anon.
-- 08/11/2026 — Abastecimento pelo servidor (migration 20261204): sem cliente próprio nem Apps Script; leituras com porta da página, cada estágio (pedido, processamento, recebimento, conferência, anexos) com porta do botão e autor do login; upload de anexo só logado e com o botão. **Pendente:** depois que Estoque semanal, Checklist e Abastecimento estiverem publicados, uma migration fecha as tabelas do esquema de abastecimento para anon.
+- 08/11/2026 — Abastecimento pelo servidor (migration 20261204): sem cliente próprio nem Apps Script; leituras com porta da página, cada estágio (pedido, processamento, recebimento, conferência, anexos) com porta do botão e autor do login; upload de anexo só logado e com o botão.
 - 08/11/2026 — Checklist de limpeza pelo servidor (migration 20261203): removido o cliente próprio e o bloco morto de inventário/estoque (sem aba nem botão); KPIs conferem a página, relatório confere o botão; lista de colaboradores fecha para anon.
 - 08/11/2026 — Estoque semanal pelo servidor (migration 20261202): sem cliente próprio, catálogo e estoque mínimo por função com porta da página, cadastro/contagem/pedido automático por função com porta do botão e autor do login.
 - 08/11/2026 — Decisões do dono: menus só depois da skill do gate; Abastecimento, Estoque semanal, Checklist e Papelaria corrigir (sem Apps Script); Organograma é exceção ao nível Linha; números do drawer não mexer. Papelaria corrigida (migration 20261201).
