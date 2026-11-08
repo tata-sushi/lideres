@@ -774,15 +774,12 @@ var ARMARIOS_CONFIG = {
    INIT
    ════════════════════════════════════════════════ */
 function initApp() {
-  var session = window.__lideresSession || null;
-  if (!session) {
-    try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-  }
-  if (!session || !session.displayName) { window.addEventListener('lideres:sessao', initApp, { once: true }); return; }
+  var nome = window.__lideresUser || '';
+  if (!nome) { window.addEventListener('lideres:sessao', initApp, { once: true }); return; }
 
-  // Só o nome é usado (responsável das gravações). Quem decide o que a pessoa vê e faz é a
-  // camada de acesso (data-aba-id) e o servidor (armario_pode_gerir); a sessão não tem unidade.
-  currentUser = { name: session.displayName };
+  // Só o nome é usado (mostrar/imprimir). Quem decide o que a pessoa vê e faz é a camada de
+  // acesso (data-aba-id) e o servidor (armario_pode_gerir); o autor das gravações vem do login.
+  currentUser = { name: nome };
 
   // Revelar app
   document.getElementById('app').classList.add('visible');
@@ -1381,7 +1378,6 @@ function doSubmit() {
       colaborador: '',
       matricula:   '',
       obs:         document.getElementById('f-obs').value.trim(),
-      responsavel: currentUser ? currentUser.name : '',
       data:        document.getElementById('f-data').value,
       timestamp:   new Date().toISOString()
     };
@@ -1419,7 +1415,6 @@ function doSubmit() {
       colaborador: armDel.colaborador || '',
       matricula:   armDel.matricula || '',
       obs:         document.getElementById('f-obs').value.trim(),
-      responsavel: currentUser ? currentUser.name : '',
       data:        document.getElementById('f-data').value,
       timestamp:   new Date().toISOString()
     };
@@ -1475,7 +1470,6 @@ function doSubmit() {
     colaborador: (tipo === 'atribuir') ? colab : '',
     matricula:   (tipo === 'atribuir') ? mat   : '',
     obs:         document.getElementById('f-obs').value.trim(),
-    responsavel: currentUser ? currentUser.name : '',
     data:        document.getElementById('f-data').value,
     timestamp:   new Date().toISOString()
   };
@@ -1690,7 +1684,7 @@ function _armCarregarTipoArmario() {
   if (_armDocTipoIdCache) return Promise.resolve(_armDocTipoIdCache);
   return new Promise(function(resolve, reject) {
     comSupa(function(supa) {
-      supa.rpc('doc_tipos_sandbox_listar').then(function(r) {
+      supa.rpc('doc_tipos_listar').then(function(r) {
         if (r.error) { reject(r.error); return; }
         var t = (r.data || []).find(function(x) { return x.nome === 'Termo de Resp. Armário e Vestiário'; });
         if (!t) { reject(new Error('Tipo "Termo de Resp. Armário e Vestiário" não encontrado no catálogo (dp_rh.doc_tipos).')); return; }
@@ -1720,9 +1714,9 @@ function _armEnviarTermoDigital(p, arm) {
         comSupa(function(supa) {
           supa.storage.from('assinaturas').upload(arquivoPath, blob, { upsert: true, contentType: 'application/pdf' }).then(function(rUp) {
             if (rUp.error) throw rUp.error;
-            return supa.rpc('colaborador_documento_pendente_assinatura_sandbox_salvar', {
+            return supa.rpc('colaborador_documento_pendente_assinatura_salvar', {
               p_matricula: p.matricula, p_tipo_id: tipoId, p_nome_arquivo: nomeArquivo, p_link: arquivoPath,
-              p_mime: 'application/pdf', p_tamanho: blob.size, p_enviado_por: currentUser ? currentUser.name : p.matricula,
+              p_mime: 'application/pdf', p_tamanho: blob.size,
               p_link_bucket: 'assinaturas'
             });
           }).then(function(rRow) {
@@ -1732,13 +1726,12 @@ function _armEnviarTermoDigital(p, arm) {
             return supa.schema('tata_plus').rpc('docs_enviar_para_assinatura', {
               p_matricula: p.matricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
               p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
-              p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true,
-              p_atribuido_por: currentUser ? currentUser.name : p.matricula
+              p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true
             }).then(function(rEnvio) {
               if (rEnvio.error) throw rEnvio.error;
               var envio = rEnvio.data;
               if (!envio || !envio.ok) throw new Error((envio && envio.erro) || 'Falha ao enviar pra assinatura.');
-              return supa.rpc('colaborador_documento_definir_atribuicao_sandbox', {
+              return supa.rpc('colaborador_documento_definir_atribuicao', {
                 p_id: linha.id, p_assinatura_atribuicao_id: envio.atribuicao_id
               });
             });

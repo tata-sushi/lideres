@@ -56,7 +56,8 @@ tabela de liberação usa a mesma área do Valor.
 - `pode_botao(p_aba_id)` — também na função da ação; já confere a página e libera admin.
 - `pode_ver_valores(p_area)` — Valor; olha a área ou `geral`, sem bypass de admin.
 - `pode_ver_contato(p_area)` — Contato, **a criar**, mesma regra do Valor.
-- `minha_matricula()` — quem é a pessoa (autor de toda ação); `minha_subarvore()` — Linha, a criar.
+- `minha_matricula()` / `meu_nome()` — quem é a pessoa (autor de toda ação: matrícula e nome); `minha_subarvore()` — Linha;
+  `gov_tenho_alguma(...)` — a pessoa abre alguma das páginas (função compartilhada por várias páginas).
 
 **Consumidas pelo painel admin** (`AdminGovernanca.jsx`, restritas a admin):
 - Catálogo: `gov_catalogo`, `gov_catalogo_abas`, `gov_admin_pessoas`.

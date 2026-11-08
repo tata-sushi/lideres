@@ -18,7 +18,9 @@ Por isso **toda função chamada por uma página** repete, no banco, as checagen
 4. **Valor e Contato:** a própria função mascara. Valor (R$, CPF, nascimento e saúde) com
    `pode_ver_valores('<área>')`; Contato (e-mail e telefone) com `pode_ver_contato('<área>')`, a criar.
    Sem permissão, a função devolve `null` e a página mostra `R$ •••` / `•••`.
-5. **Quem fez vem do login:** o autor é sempre `tata_plus.minha_matricula()`. Nunca aceite nome ou matrícula
+5. **Quem fez vem do login:** o autor é sempre quem está logado — a **matrícula** com `tata_plus.minha_matricula()`
+   e o **nome** com `tata_plus.meu_nome()` (decisão do dono, 08/11/2026: nas colunas de autor que guardam nome —
+   `lider`, `solicitante`, `enviado_por`, `responsavel`, `*_por` de texto — grava-se o nome). Nunca aceite nome ou matrícula
    de quem faz vindo da página (`p_por`, `p_lider`, `p_criado_por`, `enviado_por`, `p_matricula`…). O
    registro das movimentações é do gate; a função só não pode aceitar autor de fora.
 6. **A função é a única porta:** `security definer` + `search_path` fixo +
@@ -47,6 +49,7 @@ set search_path to 'tata_plus', 'public'
 as $$
 declare
   v_mt      text    := tata_plus.minha_matricula();
+  -- função usada por mais de uma página: tata_plus.gov_tenho_alguma('<pagina_a>', '<pagina_b>') no lugar de gov_tenho_acesso
   v_todas   boolean := dp_rh.ferias_eh_rh(v_mt);               -- admin ou RH: todas as linhas
   v_sub     text[]  := tata_plus.minha_subarvore();            -- a criar (references/hierarquia.md)
   v_valor   boolean := tata_plus.pode_ver_valores('<área>');   -- R$, CPF, nascimento, saúde
@@ -84,7 +87,8 @@ security definer
 set search_path to 'tata_plus', 'dp_rh', 'public'
 as $$
 declare
-  v_mt text := tata_plus.minha_matricula();                    -- quem fez: sempre do login
+  v_mt   text := tata_plus.minha_matricula();                  -- quem fez: sempre do login (matrícula)
+  v_nome text := tata_plus.meu_nome();                         -- quem fez: nome, para colunas de autor em texto
 begin
   if v_mt is null then
     return jsonb_build_object('ok', false, 'erro', 'sem login');
@@ -95,8 +99,8 @@ begin
   if not dp_rh.ferias_eh_rh(v_mt) and not (p_alvo = any(tata_plus.minha_subarvore())) then
     return jsonb_build_object('ok', false, 'erro', 'colaborador fora da sua equipe');
   end if;
-  -- grava, sempre com o autor do login:
-  -- update dp_rh.<tabela> set …, atualizado_por = v_mt, atualizado_em = now() where matricula = p_alvo;
+  -- grava, sempre com o autor do login (matrícula em criado_por/atualizado_por; nome em enviado_por/responsavel…):
+  -- update dp_rh.<tabela> set …, atualizado_por = v_mt, responsavel = coalesce(v_nome, v_mt), atualizado_em = now() where matricula = p_alvo;
   return jsonb_build_object('ok', true);
 end $$;
 revoke all on function tata_plus.<pagina>_<acao>(text, jsonb) from public, anon;
