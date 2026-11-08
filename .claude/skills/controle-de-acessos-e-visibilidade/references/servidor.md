@@ -16,7 +16,7 @@ Por isso **toda função chamada por uma página** repete, no banco, as checagen
 3. **Linha:** dado de pessoa passa pelo corte da hierarquia (`minha_subarvore()`; admin e RH veem todas)
    → `references/hierarquia.md`.
 4. **Valor e Contato:** a própria função mascara. Valor (R$, CPF, nascimento e saúde) com
-   `pode_ver_valores('<área>')`; Contato (e-mail e telefone) com `pode_ver_contato('<área>')`, a criar.
+   `pode_ver_valores('<área>')`; Contato (e-mail e telefone) com `pode_ver_contato('<área>')`.
    Sem permissão, a função devolve `null` e a página mostra `R$ •••` / `•••`.
 5. **Quem fez vem do login:** o autor é sempre quem está logado — a **matrícula** com `tata_plus.minha_matricula()`
    e o **nome** com `tata_plus.meu_nome()` (decisão do dono, 08/11/2026: nas colunas de autor que guardam nome —
@@ -51,9 +51,9 @@ declare
   v_mt      text    := tata_plus.minha_matricula();
   -- função usada por mais de uma página: tata_plus.gov_tenho_alguma('<pagina_a>', '<pagina_b>') no lugar de gov_tenho_acesso
   v_todas   boolean := dp_rh.ferias_eh_rh(v_mt);               -- admin ou RH: todas as linhas
-  v_sub     text[]  := tata_plus.minha_subarvore();            -- a criar (references/hierarquia.md)
+  v_sub     text[]  := tata_plus.minha_subarvore();            -- references/hierarquia.md
   v_valor   boolean := tata_plus.pode_ver_valores('<área>');   -- R$, CPF, nascimento, saúde
-  v_contato boolean := tata_plus.pode_ver_contato('<área>');   -- e-mail, telefone (a criar)
+  v_contato boolean := tata_plus.pode_ver_contato('<área>');   -- e-mail, telefone
 begin
   if not tata_plus.gov_tenho_acesso('<GOV_PAGE_ID>') then
     raise exception 'sem acesso a esta página';
