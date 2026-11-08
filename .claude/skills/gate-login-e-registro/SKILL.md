@@ -9,9 +9,10 @@ description: >-
   conferida) e reenvia a cada renovação, então a página aguenta horas aberta. O
   gate cria o único cliente logado (window.__lideresSupa, evento lideres:supa) e
   publica a identidade só para mostrar (__lideresUser, __lideresSession), nunca
-  para decidir nada. Registro: toda tabela tem atualizado_em e atualizado_por,
-  preenchidos no servidor por gatilho a partir do login (meu_nome()), nunca pela
-  página. Nada sem login: nenhuma página fora do gate, nenhum cliente próprio ou
+  para decidir nada. Registro, tudo por gatilho a partir do login e nunca pela
+  página: toda tabela tem atualizado_em e atualizado_por, e toda movimentação
+  (criação, alteração, exclusão) entra no log geral registro.movimentacoes (o
+  que mudou, quem, quando; só admin lê; guarda 6 meses). Nada sem login: nenhuma página fora do gate, nenhum cliente próprio ou
   chave pública sem login, nenhuma API pública com dado do portal, nada sensível
   escrito no HTML (o repo é público). Mensagens entre app e página só com origem
   conferida. NÃO decide acesso (página, aba, botão, valor, contato, linha → skill
@@ -94,20 +95,25 @@ passam muito tempo numa página. Regras:
 
 ---
 
-## 4. Registro: toda tabela diz quando e quem (decisão do dono, 08/11/2026)
+## 4. Registro: quem fez cada mudança (decisões do dono, 08/11/2026)
 
-**Toda tabela** tem duas colunas, preenchidas **pelo servidor** em todo insert e update:
+Duas camadas, as duas preenchidas **pelo banco, por gatilho**, a partir do login:
 
-| Coluna | Valor |
-|---|---|
-| `atualizado_em` (`timestamptz`) | data e hora da última mudança |
-| `atualizado_por` (`text`) | **nome** de quem fez, pelo login (`meu_nome()`); `sistema` quando a mudança vem de integração, sem login |
+| Camada | Onde | O que guarda |
+|---|---|---|
+| **Última mudança** | em cada tabela: `atualizado_em` (`timestamptz`) e `atualizado_por` (`text`) | quando e quem fez a última mudança naquela linha |
+| **Log geral** | `registro.movimentacoes` (schema `registro`, fora da API) | **toda movimentação** (criação, alteração, exclusão, limpeza de tabela), com histórico: quando, tabela, linha, quem (nome e matrícula) e **o que mudou** (na alteração, só os campos alterados, antes → depois; na criação e na exclusão, a linha inteira) |
 
-- Quem preenche é um **gatilho no banco**, não a função nem a página. Valor mandado pela página é
-  sobrescrito, então ninguém grava em nome de outra pessoa.
-- As colunas de autor que já existem (`criado_por`, `autor`, `responsavel`…) continuam. As duas novas
-  entram em todas as tabelas.
-- Molde do gatilho, ordem de aplicação e como conferir → `references/registro.md`.
+- **Quem fez** é o nome de quem está logado (`meu_nome()`). Sem login, aparece `sistema` (integração),
+  `sem login` ou `login sem cadastro ativo`.
+- **Ninguém registra em nome de outra pessoa:** a página e a função não preenchem nada, e o gatilho
+  sobrescreve qualquer valor mandado.
+- Alteração que não muda nada não entra no log.
+- **Quem lê o log:** só admin, pela função `tata_plus.registro_listar`. Valor (R$, CPF, nascimento, saúde) e
+  Contato (e-mail, telefone) ficam mascarados para quem não tem a liberação, como no resto do portal.
+- **Prazo:** 6 meses. O banco apaga sozinho, todo dia, o que passar disso (`pg_cron`).
+- As colunas de autor que já existem (`criado_por`, `autor`, `responsavel`…) continuam.
+- Molde completo (testado), ordem de aplicação e como conferir → `references/registro.md`.
 
 ---
 
@@ -164,8 +170,8 @@ passam muito tempo numa página. Regras:
 
 - O gate diz **quem é**; quem decide **o que pode** é a skill de acesso, no servidor.
 - **Um só cliente logado** por página: `window.__lideresSupa`.
-- **Autor sempre pelo login**, nunca pela página. Toda tabela tem `atualizado_em` e `atualizado_por`,
-  preenchidos por gatilho.
+- **Autor sempre pelo login**, nunca pela página. Toda tabela tem `atualizado_em` e `atualizado_por`, e toda
+  movimentação vai para o log geral. Tudo por gatilho.
 - **Nenhuma página sem login**, nenhum cliente próprio, nenhuma API pública com dado do portal.
 - **Nada sensível no HTML, no JS nem no repo**: o repositório vai inteiro para o GitHub Pages.
 - **Origem conferida** em toda mensagem entre app e página; nunca `'*'`.
@@ -174,7 +180,7 @@ passam muito tempo numa página. Regras:
 ## Limites (o que o gate não garante)
 
 - **O HTML é público:** o gate esconde a tela, mas não o código. A proteção dos dados é o servidor.
-- **Apagar uma linha** não deixa registro de quem apagou: as colunas somem junto com a linha.
-- **Ações que não mudam o banco** (gerar PDF, imprimir, exportar) não ficam registradas.
-- **`atualizado_por` guarda o nome**, como decidido: duas pessoas com o mesmo nome não se distinguem.
-- **Só a última mudança fica**, sem histórico do que mudou antes.
+- **Ações que não mudam o banco** (gerar PDF, imprimir, exportar) não ficam registradas (ok do dono).
+- **O log guarda 6 meses**; depois disso a movimentação some.
+- **A máscara do log é pelo nome do campo:** campo sensível novo, com outro nome, precisa entrar na lista de
+  `registro.mascarar`.
