@@ -1,21 +1,27 @@
 ---
 name: controle-acesso-abas-botoes
 description: >-
-  Padroniza e orienta os IDs de controle de acesso das páginas de Governança,
-  em 4 níveis: PÁGINA (window.GOV_PAGE_ID), ABA (data-aba-id, tipo aba — visível
-  por padrão, denylist via gate.js), BOTÃO (data-aba-id ou data-botao-id, tipo
-  botao — oculto por padrão, allowlist; botão do drawer e da página são o mesmo
-  nível; botões de navegação do header NÃO têm id) e VALOR (tipo valor, mascara
-  R$ no servidor). Dois repos: lideres (HTML onde vivem os ids) e plus (app onde
-  o admin escolhe, por pessoa, quem acessa cada página/aba/botão/valor via o
-  catálogo governanca_abas). Chave = <GOV_PAGE_ID>::<slug> (kebab-case, PT). Use
-  SEMPRE que for adicionar, editar, renomear, esconder, liberar ou PADRONIZAR uma
-  aba (tab-btn), um botão de ação (drawer-sam-btn, btn-avaliar, btn-copia-card,
-  btn-registrar…) ou a visualização de valores; ao mexer em data-aba-id,
-  data-botao-id, GOV_PAGE_ID, gate.js, GOV_BOTOES/aplicarBotoes ou no catálogo
-  governanca_abas; e quando o pedido falar em "aba-id", "botão-id", "quem vê o
-  quê", controle de acesso, permissão por líder/perfil, ou configurar o que o
-  admin libera. Não invente ids nem troque o nível/modelo sem checar aqui.
+  Padroniza e orienta o controle de acesso das páginas de Governança, em 5
+  níveis. Quatro com id, que o admin configura por pessoa: PÁGINA
+  (window.GOV_PAGE_ID), ABA (data-aba-id, tipo aba — visível por padrão,
+  denylist via gate.js), BOTÃO (data-aba-id ou data-botao-id, tipo botao —
+  oculto por padrão, allowlist; botão do drawer e da página são o mesmo nível;
+  botões de navegação do header NÃO têm id) e VALOR (tipo valor, mascara R$ no
+  servidor). E um automático, sem id: LINHA (quais registros cada pessoa vê,
+  pelo organograma — o líder vê os próprios + toda a subárvore abaixo, admin e
+  RH veem tudo; corte no servidor com tata_plus.minha_subarvore()). Dois repos:
+  lideres (HTML onde vivem os ids) e plus (app onde o admin escolhe, por pessoa,
+  quem acessa cada página/aba/botão/valor via o catálogo governanca_abas). Chave
+  = <GOV_PAGE_ID>::<slug> (kebab-case, PT). Use SEMPRE que for adicionar,
+  editar, renomear, esconder, liberar ou PADRONIZAR uma aba (tab-btn), um botão
+  de ação (drawer-sam-btn, btn-avaliar, btn-copia-card, btn-registrar…) ou a
+  visualização de valores; ao mexer em data-aba-id, data-botao-id, GOV_PAGE_ID,
+  gate.js, GOV_BOTOES/aplicarBotoes ou no catálogo governanca_abas; quando uma
+  página mostrar dados de pessoas (férias, vagas, ausências…) e o líder só
+  puder ver a equipe dele; e quando o pedido falar em "aba-id", "botão-id",
+  "quem vê o quê", controle de acesso, permissão por líder/perfil, hierarquia,
+  subárvore, liderados, "equipe abaixo", ou configurar o que o admin libera.
+  Não invente ids nem troque o nível/modelo sem checar aqui.
 ---
 
 # Controle de acesso por níveis de id (Governança)
@@ -25,6 +31,9 @@ Além do acesso à página inteira, cada página controla **por pessoa** o que a
 dentro dela. Todo esse controle é feito por **IDs** — atributos `data-*` no HTML que
 casam com um catálogo no Supabase. **A skill existe para manter esses IDs corretos e
 padronizados** entre as ~30 páginas, pra facilitar o trabalho toda vez que for invocada.
+
+A exceção é o nível **Linha** (de quem são os registros que aparecem): não tem id nem
+interruptor no admin, sai sozinho do organograma. Ver §"Nível Linha (hierarquia)".
 
 **Dois repositórios, dois papéis:**
 
@@ -44,6 +53,9 @@ Referências (leia conforme a tarefa):
 - **`references/backend-supabase.md`** — catálogo, tabelas, RPCs, painel admin do Plus,
   registrar chave, replicar config entre pessoas. Antes de mexer no Supabase/painel.
 - **`references/padronizacao.md`** — vocabulário canônico de slugs e como migrar com segurança.
+- **`references/hierarquia.md`** — nível Linha: quem vê quais registros pelo organograma, a função
+  `minha_subarvore()`, os moldes de RPC (leitura e escrita), o eixo de cada página e o estado atual.
+  Antes de mexer em página que mostra dado de pessoa.
 - **`scripts/auditar-acessos.py`** — varre `compliance/**/*.html`, aponta problemas e
   inconsistências e imprime o vocabulário de slugs. **Rode antes de criar uma chave nova**:
   ```bash
@@ -76,10 +88,11 @@ Referências (leia conforme a tarefa):
 
 ---
 
-## Os 4 níveis de id
+## Os 5 níveis
 
-Todo controle cai em **um de quatro níveis**. Identificar o nível define o atributo, o
-default e onde o admin liga/desliga:
+Todo controle cai em **um de cinco níveis**: quatro com id, que o admin liga/desliga por
+pessoa, e a **Linha**, automática pelo organograma. Identificar o nível define o atributo, o
+default e onde (ou se) o admin liga/desliga:
 
 | Nível | O que é / onde no HTML | id no HTML | `tipo` no catálogo | Default (quem não é admin) | Admin controla… |
 |---|---|---|---|---|---|
@@ -87,6 +100,7 @@ default e onde o admin liga/desliga:
 | **Aba** | `tab-btn` (abas de navegação da página) | `data-aba-id` | `aba` | **VISÍVEL** — some só se bloquear (denylist) | liga/desliga por aba |
 | **Botão** | **qualquer botão de ação** (drawer **ou** dentro da página) | `data-aba-id` **ou** `data-botao-id` | `botao` | **OCULTO** — aparece só se liberar (allowlist) | libera por botão |
 | **Valor** | valores em R$ (salário etc.) | — (área, server-side) | `valor` | **OCULTO/mascarado** no servidor | libera ver valor, por área |
+| **Linha** | quais registros (linhas de dado) aparecem | — (corte na RPC) | — (sem catálogo) | **só os próprios + a subárvore** | nada — vem do organograma |
 
 Regras dos níveis:
 
@@ -97,10 +111,14 @@ Regras dos níveis:
   não recebem `data-aba-id`/`data-botao-id`.
 - **Admin (`perfil='admin'`) vê tudo** nos níveis Página/Aba/Botão. **Valor não:** `pode_ver_valores` só olha
   `dp_rh.perm_ver_valores` (área pedida ou `geral`), sem bypass de admin. (Outra exceção: as features
-  da seção "App" do Plus — Kanban/Escala/Limpeza — não têm bypass de admin.)
+  da seção "App" do Plus — Kanban/Escala/Limpeza — não têm bypass de admin.) Na **Linha**, admin e RH
+  veem todas as linhas.
 
 O nível **Valor** é diferente dos outros: não é atributo num elemento, é uma **área**
 mascarada no servidor. Detalhe no fim e em `references/backend-supabase.md`.
+
+O nível **Linha** também não é atributo: é um corte nas RPCs, decidido pelo organograma.
+Resumo no fim e detalhe em `references/hierarquia.md`.
 
 ---
 
@@ -251,7 +269,7 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 
 ## Regras de ouro
 
-- **Identifique o nível primeiro** (página/aba/botão/valor) — ele define atributo e default.
+- **Identifique o nível primeiro** (página/aba/botão/valor/linha) — ele define atributo e default.
 - **Botões do header não recebem id** — vêm com o acesso à página.
 - **Aba = visível por padrão; Botão/Valor = ocultos por padrão.** Não inverta.
 - **O prefixo tem que ser o `GOV_PAGE_ID` da página**, senão o admin liga um interruptor
@@ -264,7 +282,9 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 - **`data-aba-id` não pede JS; `data-botao-id` pede** (`GOV_BOTOES` + `aplicarBotoes` +
   checar `GOV_BTN_OK` na ação).
 - **Cadastrar no catálogo é obrigatório** — o atributo sozinho não cria o interruptor.
-- **Admin vê tudo** em Página/Aba/Botão (não em Valor: precisa da área ou de `geral`).
+- **Admin vê tudo** em Página/Aba/Botão (não em Valor: precisa da área ou de `geral`). Em Linha, admin e RH veem todas.
+- **Dado de pessoa só sai por RPC escopada** (nível Linha): o servidor corta pela hierarquia.
+  Filtro no navegador não protege nada.
 - O `gate.js` só roda embarcado no Plus; fora do app mostra "Disponível pelo aplicativo".
 - **Exceção aberta de propósito:** `compliance/areas/organograma2.html` fica **sem `GOV_PAGE_ID` e sem gate**
   (decisão do dono, 04/10/2026). Não "corrija"; o `estado-acessos.py` já não a lista em `semId`.
@@ -293,3 +313,24 @@ padrão, liberado por pessoa/área. Diferenças em relação a aba/botão:
 - Não é atributo num elemento; o mascaramento é **server-side** (não some por CSS).
 - O `aba_id` **é a própria área** (ex.: `recrutamento`), **sem** o prefixo `pagina_id::`.
 - Liberação por pessoa fica em `dp_rh.perm_ver_valores`. Detalhes em `references/backend-supabase.md`.
+
+---
+
+## Nível Linha (hierarquia)
+
+Decide **de quem são os registros** que aparecem numa página (as férias de quem, as vagas de
+quem). Não tem id nem catálogo: **sai do organograma** (`tata_plus.profiles`,
+`id_superior → id_pessoa`), e o admin não configura nada.
+
+- **Líder** vê os próprios registros + os de toda a subárvore abaixo dele (N níveis).
+- **Sem equipe** vê só os próprios. **Admin e RH** veem todos.
+- **Quem vê, grava**, inclusive o próprio registro. Se o botão da ação aparece é o nível Botão.
+- **Corte no servidor**, na RPC, com `tata_plus.minha_subarvore()`. O navegador nunca recebe
+  linha de fora da equipe.
+- **Não filtra** o Sobre (aba e drawer) nem conteúdo institucional. KPIs e gráficos saem das
+  linhas já filtradas.
+- **Valor (R$)** continua com a trava própria **e** passa pelo corte de linha.
+- **Visibilidade errada = organograma errado:** a correção é no RHID, não no portal.
+
+Função, moldes de leitura e escrita, eixo por página, estado atual e teste em
+`references/hierarquia.md`.
