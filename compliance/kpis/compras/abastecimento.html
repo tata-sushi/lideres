@@ -1285,45 +1285,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="toast" id="toast"></div>
 
 <script>
-// ── CONFIG GAS / SHEET ────────────────────────────────────────────────────────
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbze41DuQ9r3M9933ILYc99VC3BtvkFhdjtRYU1xPO147r6U25bbNb7y_pgKT5kveunoUA/exec';
-
-// ── CONFIG SUPABASE ───────────────────────────────────────────────────────────
-var SUPA_URL = 'https://aoqsbusfrffapjglpqjk.supabase.co';
-var SUPA_KEY = 'sb_publishable_X3pKD_F1QLAyxbxFU32HqQ_pRp9p6JQ';
-var supa = window.supabase ? window.supabase.createClient(SUPA_URL, SUPA_KEY, { db: { schema: 'tata_abastecimento' } }) : null;
+// ── SUPABASE ──────────────────────────────────────────────────────────────────
+// O cliente logado é o do gate.js (window.__lideresSupa). Todo dado desta página sai por função do
+// servidor (tata_plus.abast_*), que confere a página e o botão e grava o autor pelo login.
+var supa = window.__lideresSupa || null;
+window.addEventListener('lideres:supa', function() { supa = window.__lideresSupa || supa; });
+function rpc(fn, args) { return supa.schema('tata_plus').rpc(fn, args || {}); }
 
 // Unidade e departamento do usuário logado — populados em carregarUsuario()
 var UNIDADE = '';
 var DEPARTAMENTO = '';
 var DEPTOS_DISPONIVEIS = [];
 
-async function gasGet(params) {
-  if (!GAS_URL) return null;
-  var qs  = new URLSearchParams(Object.assign({ t: Date.now() }, params)).toString();
-  var res = await fetch(GAS_URL + '?' + qs);
-  var text = await res.text();
-  var data;
-  try { data = JSON.parse(text); } catch(_) {
-    throw new Error('Resposta inválida do servidor (HTTP ' + res.status + '). Verifique se o Apps Script está publicado como Web App pública.');
-  }
-  if (!data.ok) throw new Error(data.error || 'Erro desconhecido');
-  return data;
-}
-
-async function gasPost(body) {
-  if (!GAS_URL) return null;
-  var res  = await fetch(GAS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(body)
-  });
-  var data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'Erro desconhecido');
-  return data;
-}
-
-// Catálogo é carregado integralmente da planilha via carregarCatalogo()
+// Catálogo é carregado integralmente do servidor via carregarCatalogo()
 var CATALOGO = {};
 
 function getFotoProduto(nome) {
@@ -1397,7 +1371,7 @@ async function carregarCatalogo() {
   catalogoErro = null;
   if (!supa) { catalogoErro = 'Supabase não inicializado'; popularSelectCategorias(); return; }
   try {
-    var res = await supa.from('catalogo').select('*').eq('ativo', true).order('categoria').order('produto_nome');
+    var res = await rpc('abast_catalogo_listar');
     if (res.error) throw new Error(res.error.message);
     var rows = res.data || [];
     if (rows.length === 0) { catalogoErro = 'Catálogo vazio no Supabase'; popularSelectCategorias(); return; }
@@ -1501,9 +1475,7 @@ async function carregarPedidos() {
   showLoading();
   if (!supa) { carregando = false; hideLoading(); renderAll(); updateKPIs(); return; }
   try {
-    var res = await supa.from('abastecimento').select('*')
-      .order('data_solicitacao', {ascending: false})
-      .order('created_at', {ascending: false});
+    var res = await rpc('abast_pedidos_listar');
     if (res.error) throw new Error(res.error.message);
     var rows = res.data || [];
     var groups = {}, orderList = [];
@@ -1798,16 +1770,13 @@ async function carregarUsuario(session) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-// A sessão vem do gate (painel admin) via window.__lideresSession, com fallback
-// pro localStorage antigo (não regride quem já tinha a chave). O gate resolve o
-// acesso de forma assíncrona (o token chega depois), então iniciamos tanto no
-// DOMContentLoaded quanto no evento 'lideres:sessao'. Abas e botões são 100%
-// controlados pelo painel (data-aba-id), então NÃO escondemos mais nada por
-// perfil aqui — isso é config antiga.
+// A identidade vem do gate (window.__lideresUser, evento 'lideres:sessao') e serve só para mostrar;
+// o autor dos registros é o login, no servidor. Abas e botões são da camada de acesso (data-aba-id).
 var _appIniciado = false;
 async function iniciarApp(session) {
   if (_appIniciado || !session || !session.displayName) return;
   _appIniciado = true;
+  supa = window.__lideresSupa || supa;
   var userName = session.displayName;
   currentUser = { name: userName };
   var initials = userName.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase();
@@ -1820,8 +1789,7 @@ async function iniciarApp(session) {
   carregarRecebedores();
 }
 function obterSessao() {
-  if (window.__lideresSession && window.__lideresSession.displayName) return window.__lideresSession;
-  try { return JSON.parse(localStorage.getItem('lideres_session')); } catch(e) { return null; }
+  return window.__lideresUser ? { displayName: window.__lideresUser } : null;
 }
 document.addEventListener('DOMContentLoaded', function() {
   var s = obterSessao();
@@ -2394,7 +2362,7 @@ async function abrirModalView(id) {
   // Anexos do recebimento
   if (supa) {
     try {
-      var res = await supa.from('conferencia_anexos').select('*').eq('id_display', order.id).order('created_at');
+      var res = await rpc('abast_anexos_listar', { p_id_display: order.id });
       if (!res.error && res.data && res.data.length) {
         html += '<div class="view-section"><div class="view-section-label">Anexos do Recebimento</div>';
         html += '<div class="anexo-list">';
@@ -2551,27 +2519,7 @@ function fecharModalProc() { document.getElementById('modal-proc').classList.rem
 // Gera o id_display de um "pedido-filho" a partir do pedido atual: mesma raiz +
 // sufixo "-N" incremental (ex.: #Pinh0008 → #Pinh0008-2 → #Pinh0008-3). A raiz é
 // o id sem qualquer sufixo "-N" já existente, para não empilhar "-2-2".
-async function gerarIdFilho(idAtual) {
-  var root = String(idAtual || '').replace(/-\d+$/, '');
-  var maxN = 1; // a raiz conta como "parte 1"
-  if (supa) {
-    try {
-      var res = await supa.from('abastecimento').select('id_display');
-      if (!res.error && res.data) {
-        var seen = {};
-        res.data.forEach(function(r){
-          var id = r.id_display || '';
-          if (seen[id]) return; seen[id] = 1;
-          if (id.indexOf(root + '-') === 0) {
-            var suf = id.slice(root.length + 1);
-            if (/^\d+$/.test(suf)) { var n = parseInt(suf, 10); if (n > maxN) maxN = n; }
-          }
-        });
-      }
-    } catch(e) { /* usa maxN=1 */ }
-  }
-  return root + '-' + (maxN + 1);
-}
+// O pedido-filho da compra parcial (raiz-N) é gerado no servidor por abast_processar.
 
 // Preenche o select de produtos do modal de compra a partir do catálogo.
 function popularProdSelectProc() {
@@ -2610,22 +2558,10 @@ async function adicionarItemAoPedido() {
   if (!prod) { alert('Produto não encontrado no catálogo.'); return; }
   if (!supa) { alert('Supabase não inicializado.'); return; }
   try {
-    var novaLinha = {
-      id_display:       order.id,
-      unidade:          (order.raw && order.raw.unidade) || null,
-      departamento:     (order.raw && order.raw.departamento) || null,
-      solicitante:      (order.raw && order.raw.solicitante) || null,
-      data_solicitacao: (order.raw && order.raw.dataSolicitacao) || null,
-      categoria:        catKey || null,
-      subcategoria:     prod.subcategoria || null,
-      produto_nome:     prod.nome,
-      unidade_medida:   prod.un || null,
-      qtd_solicitada:   qty,
-      valor_inicial:    Number(prod.valorUnitario) || null,
-      status:           'solicitado',
-      atualizado_por:   (currentUser && currentUser.name) || null
-    };
-    var res = await supa.from('abastecimento').insert(novaLinha).select('id').single();
+    var res = await rpc('abast_item_adicionar', { p_id_display: order.id, p_item: {
+      categoria: catKey || null, subcategoria: prod.subcategoria || null, produto_nome: prod.nome,
+      unidade_medida: prod.un || null, qtd: qty, valor_inicial: Number(prod.valorUnitario) || null
+    } });
     if (res.error) throw new Error(res.error.message);
     var novoItem = {
       cat: (CATALOGO[catKey] && CATALOGO[catKey].label) || catKey, nome: prod.nome, un: prod.un || '',
@@ -2699,8 +2635,6 @@ async function confirmarPedido(modo) {
     // ou zerado) vai para um pedido-filho mantendo 'solicitado', para comprar depois.
     var algumCompradoP = linhas.some(function(l){ return l.comprou; });
     if (!algumCompradoP) { alert('Para processar parcialmente, preencha a quantidade e a data de entrega em ao menos um item.'); return; }
-    var haPendentes = linhas.some(function(l){ return !l.splitKey && !l.comprou; });
-    if (haPendentes) { childId = await gerarIdFilho(order.id); }
   }
 
   if (!reprocessandoForn) {
@@ -2719,92 +2653,35 @@ async function confirmarPedido(modo) {
 
   if (supa) {
     try {
-      var comprador = (currentUser && currentUser.name) || '—';
-      var dataCompraISO = new Date().toISOString().split('T')[0];
-
-      var updatesPromises = [];
-      var novasLinhas = [];
-      linhas.forEach(function(linha){
+      var payload = linhas.map(function(linha){
         var d = linha.d;
-        var comprou = linha.comprou; // quantidade (+ data, na parcial)
-
-        // Divisão entre fornecedores: só gera linha nova quando há quantidade comprada.
-        if (linha.splitKey) {
-          if (!comprou) return;
-          var catKeySplit = '';
-          Object.keys(CATALOGO).forEach(function(k){
-            (CATALOGO[k].produtos||[]).forEach(function(p){ if (!catKeySplit && p.nome === linha.item.nome) catKeySplit = k; });
-          });
-          novasLinhas.push({
-            id_display:       order.id,
-            unidade:          (order.raw && order.raw.unidade) || null,
-            departamento:     (order.raw && order.raw.departamento) || null,
-            solicitante:      (order.raw && order.raw.solicitante) || null,
-            data_solicitacao: (order.raw && order.raw.dataSolicitacao) || null,
-            categoria:        catKeySplit || null,
-            produto_nome:     linha.item.nome,
-            unidade_medida:   linha.item.un || null,
-            qtd_solicitada:   0,
-            valor_inicial:    linha.item.vlPedido || null,
-            qtd_comprada:     d.conf,
-            valor_compra:     d.conf * (d.vl || 0),
-            fornecedor:       d.forn !== '—' ? d.forn : null,
-            data_compra:      dataCompraISO,
-            data_entrega:     d.entregaISO || null,
-            comprador:        comprador,
-            obs_compras:      obsCompras || null,
-            status:           'comprado',
-            atualizado_por:   comprador
-          });
-          return;
-        }
-
-        var item = linha.item;
-
-        // Item NÃO comprado numa compra PARCIAL: move para o pedido-filho e mantém 'solicitado'
-        // (não grava dados de compra) — ele volta para a fila de Processamento.
-        if (!comprou && parcial && childId) {
-          var mv = { id_display: childId, atualizado_por: comprador };
-          updatesPromises.push(
-            item._supaId
-              ? supa.from('abastecimento').update(mv).eq('id', item._supaId)
-              : supa.from('abastecimento').update(mv).eq('id_display', order.id).eq('produto_nome', item.nome)
-          );
-          return;
-        }
-
-        // Comprado (comprou) OU não comprado numa finalização (vira 'nao_realizado').
-        var dadosComuns = {
-          qtd_comprada:  d.conf,
-          valor_compra:  d.conf * (d.vl || 0),
-          fornecedor:    d.forn !== '—' ? d.forn : null,
-          data_compra:   dataCompraISO,
-          data_entrega:  d.entregaISO || null,
-          comprador:     comprador,
-          obs_compras:   obsCompras || null,
-          status:        comprou ? 'comprado' : 'nao_realizado',
-          atualizado_por: comprador
+        var catKey = '';
+        Object.keys(CATALOGO).forEach(function(k){
+          (CATALOGO[k].produtos||[]).forEach(function(p){ if (!catKey && p.nome === linha.item.nome) catKey = k; });
+        });
+        return {
+          id:             linha.splitKey ? null : (linha.item._supaId || null),
+          produto_nome:   linha.item.nome,
+          unidade_medida: linha.item.un || null,
+          categoria:      catKey || null,
+          split:          !!linha.splitKey,
+          comprou:        !!linha.comprou,
+          conf:           d.conf,
+          vl:             d.vl || 0,
+          vl_novo:        !!d.vlNovo,
+          fornecedor:     d.forn !== '—' ? d.forn : null,
+          data_entrega:   d.entregaISO || null,
+          valor_inicial:  linha.item.vlPedido || null
         };
-        if (d.vlNovo) dadosComuns.valor_inicial = d.vl; // só sobrescreve se usuário digitou
-        updatesPromises.push(
-          item._supaId
-            ? supa.from('abastecimento').update(dadosComuns).eq('id', item._supaId)
-            : supa.from('abastecimento').update(dadosComuns).eq('id_display', order.id).eq('produto_nome', item.nome)
-        );
       });
-
-      var results = await Promise.all(updatesPromises);
-      var erros = results.filter(function(r) { return r.error; });
-      if (erros.length) throw new Error(erros[0].error.message);
-
-      if (novasLinhas.length) {
-        var insRes = await supa.from('abastecimento').insert(novasLinhas);
-        if (insRes.error) throw new Error('divisão de fornecedor: ' + insRes.error.message);
-      }
+      // O servidor grava compras e divisões, cria o pedido-filho da parcial e registra o comprador pelo login.
+      var res = await rpc('abast_processar', { p_id_display: order.id, p_parcial: parcial, p_obs_compras: obsCompras || null, p_linhas: payload });
+      if (res.error) throw new Error(res.error.message);
+      childId = (res.data && res.data.child_id) || null;
 
       if (!reprocessandoForn) {
         var algumComprado = linhas.some(function(linha){ return linha.d.conf > 0; });
-        if (order.raw) { order.raw.status = algumComprado ? 'comprado' : 'nao_realizado'; order.raw.comprador = comprador; }
+        if (order.raw) { order.raw.status = algumComprado ? 'comprado' : 'nao_realizado'; }
       }
       if (parcial && childId) {
         alert('Compra parcial salva. Os itens não comprados foram para o pedido ' + childId + ' (Processamento), para finalizar depois.');
@@ -2928,49 +2805,7 @@ function removeCategoria(tagId) {
   var el=document.getElementById(secId); if(el)el.remove();
 }
 
-// ── GERAÇÃO DE ID POR UNIDADE ─────────────────────────────────────────────────
-function unidadeParaPrefix(unidade) {
-  var u = (unidade || '').trim().toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g,'');
-  var temHouse = (u.indexOf('tata') !== -1 || u.indexOf('house') !== -1);
-  if (temHouse && u.indexOf('itaim') !== -1)               return 'TTHi';
-  if (temHouse && u.indexOf('pinh')  !== -1)               return 'TTHp';
-  if (u.indexOf('itaim') !== -1)                           return 'Itaim';
-  if ((u.indexOf('poke') !== -1 || u.indexOf('pok') !== -1) && u.indexOf('pinh') !== -1) return 'PokP';
-  if (temHouse)                                            return 'TTH';
-  if (u.indexOf('pinh') !== -1)                            return 'Pinh';
-  if (u.indexOf('adm') !== -1)                             return 'Adm';
-  return (unidade || 'P').replace(/[^a-zA-Z]/g,'').slice(0,4) || 'P';
-}
-
-async function gerarIdDisplay(unidade) {
-  var prefix = unidadeParaPrefix(unidade);
-  var next = 1;
-  if (supa) {
-    try {
-      var res = await supa.from('abastecimento')
-        .select('id_display')
-        .eq('unidade', unidade);
-      if (!res.error && res.data && res.data.length > 0) {
-        var maxNum = 0;
-        var seen = {};
-        res.data.forEach(function(row) {
-          var id = row.id_display;
-          if (!id || seen[id]) return;
-          seen[id] = 1;
-          // Pedidos-filho (desmembramento, sufixo "-N") não contam na sequência.
-          if (/-\d+$/.test(id)) return;
-          // Aceita o sufixo 'c' (pedidos vindos da contagem semanal de estoque)
-          // ao ler o número, para a sequência da unidade continuar contínua.
-          var m = id.match(/(\d+)c?$/i);
-          if (m) { var n = parseInt(m[1], 10); if (n > maxNum) maxNum = n; }
-        });
-        next = maxNum + 1;
-      }
-    } catch(e) { /* fallback 1 */ }
-  }
-  return '#' + prefix + String(next).padStart(4, '0');
-}
+// O número do pedido (prefixo da unidade + sequência) é gerado no servidor por abast_pedido_enviar.
 
 // ── ENVIAR (Estágio 1 — Solicitante) ─────────────────────────────────────────
 async function enviarPedido() {
@@ -3006,30 +2841,24 @@ async function enviarPedido() {
   var dataISO=now.toISOString().split('T')[0];
   var obsVal=document.getElementById('modal-obs').value.trim();
   var deptoSel = (document.getElementById('pedido-depto')||{}).value || DEPARTAMENTO;
-  var newIdDisplay = await gerarIdDisplay(UNIDADE);
+  if (!supa) { alert('Sessão não carregada. Tente novamente.'); return; }
+  var newIdDisplay = null;
+  try {
+    // O servidor numera o pedido, grava as linhas e registra o solicitante pelo login.
+    var res = await rpc('abast_pedido_enviar', { p_unidade: UNIDADE || null, p_departamento: deptoSel || null, p_obs: obsVal || null, p_itens: rowsToInsert });
+    if (res.error) throw new Error(res.error.message);
+    newIdDisplay = res.data.id_display;
+    (res.data.itens || []).forEach(function(row){
+      var item=itensList.find(function(it){return it.nome===row.produto_nome;});
+      if(item) item._supaId=row.id;
+    });
+  } catch(e) {
+    toast('Erro ao salvar pedido: '+e.message, true);
+    return;
+  }
   var cats=activeCats.map(function(k){var key=k.split('::')[0]; return (CATALOGO[key]&&CATALOGO[key].label||key).split(' ')[0];});
   var newOrder={id:newIdDisplay,idDisplay:newIdDisplay,status:'b-enviado',label:'Aguardando compra',cats:cats,data:dataStr,entrega:'—',obs:obsVal,aba:'processamento',itensList:itensList,raw:{unidade:UNIDADE,departamento:deptoSel,dataSolicitacao:dataISO,status:'solicitado',obsSolicitante:obsVal}};
-
-  if (supa) {
-    try {
-      var nomeSolicitante=(currentUser&&currentUser.name)||'Líder';
-      var commonFields={id_display:newIdDisplay,unidade:UNIDADE||null,departamento:deptoSel||null,solicitante:nomeSolicitante,data_solicitacao:dataISO,status:'solicitado',obs_solicitante:obsVal||null,atualizado_por:nomeSolicitante};
-      var insertRows=rowsToInsert.map(function(r){return Object.assign({},r,commonFields);});
-      var res=await supa.from('abastecimento').insert(insertRows).select('id, produto_nome');
-      if(res.error) throw new Error(res.error.message);
-      if(res.data){
-        res.data.forEach(function(row){
-          var item=newOrder.itensList.find(function(it){return it.nome===row.produto_nome;});
-          if(item) item._supaId=row.id;
-        });
-      }
-      alert('Pedido '+newIdDisplay+' enviado.');
-    } catch(e) {
-      toast('Erro ao salvar pedido: '+e.message, true);
-    }
-  } else {
-    alert('Pedido '+newIdDisplay+' gerado! '+itensList.length+' itens.');
-  }
+  alert('Pedido '+newIdDisplay+' enviado.');
 
   ORDERS.unshift(newOrder);
   fecharModalPedido();
@@ -3955,10 +3784,9 @@ async function nfUploadAnexos(idDisplay, quem, numeroNf, fornNome) {
       console.log('[anexo] up.data:', JSON.stringify(up.data), 'up.error:', JSON.stringify(up.error));
       if (up.error) throw new Error('storage ' + (up.error.status || up.error.statusCode || '?') + ': ' + up.error.message);
       var pub = supa.storage.from('conferencias').getPublicUrl(path);
-      var ins = await supa.from('conferencia_anexos').insert({
-        id_display: idDisplay, arquivo_nome: file.name,
-        arquivo_url: pub.data.publicUrl, arquivo_tipo: file.type || null, enviado_por: quem || null,
-        numero_nf: numeroNf || null, fornecedor: fornNome || null
+      var ins = await rpc('abast_anexo_registrar', {
+        p_id_display: idDisplay, p_arquivo_nome: file.name, p_arquivo_url: pub.data.publicUrl,
+        p_arquivo_tipo: file.type || null, p_numero_nf: numeroNf || null, p_fornecedor: fornNome || null
       });
       console.log('[anexo] ins.error:', JSON.stringify(ins.error));
       if (ins.error) throw new Error('db ' + (ins.error.code || '?') + ': ' + ins.error.message);
@@ -4178,12 +4006,12 @@ async function abrirModalConferencia(orderId, fornIdx, readonly) {
   wrapAnexos.style.display = 'none';
   listAnexos.innerHTML = '';
   if (supa) {
-    var qAnex = supa.from('conferencia_anexos').select('*').eq('id_display', orderId);
+    var anexArgs = { p_id_display: orderId };
     if (forn) {
-      if (forn.notaFiscal) qAnex = qAnex.eq('numero_nf', forn.notaFiscal);
-      else qAnex = qAnex.eq('fornecedor', forn.nome);
+      if (forn.notaFiscal) anexArgs.p_numero_nf = forn.notaFiscal;
+      else anexArgs.p_fornecedor = forn.nome;
     }
-    qAnex.order('created_at')
+    rpc('abast_anexos_listar', anexArgs)
       .then(function(res) {
         if (!res.error && res.data && res.data.length) {
           listAnexos.innerHTML = res.data.map(function(a) {
@@ -4284,6 +4112,22 @@ function _coletarDadosConferencia() {
   };
 }
 
+// Argumentos da conferência para o servidor (abast_conferencia_salvar): cabeçalho + itens; o conferente é o login.
+function _confArgs(dados, forn, confirmar) {
+  return {
+    p_id_display: confOrderId,
+    p_fornecedor: forn ? forn.nome : null,
+    p_numero_nf:  (forn && forn.notaFiscal) ? forn.notaFiscal : null,
+    p_dados: {
+      fornecedor: dados.fornecedor || null, numero_nf: dados.notaFiscal || null,
+      data_recebimento: dados.dataRecebimento || null, data_vencimento: dados.dataVencimento || null,
+      recebedor: dados.recebidoPor || null, obs_conferente: dados.obsEstoque || null
+    },
+    p_itens: dados.itens.map(function(it){ return { id: it._supaId || null, produto_nome: it.produtoNome, qtd_recebida: it.qtdRecebida, vl_unitario: it.vlUnitario }; }),
+    p_confirmar: !!confirmar
+  };
+}
+
 async function salvarConferencia() {
   var dados = _coletarDadosConferencia();
   if (!dados) { alert('Erro ao coletar dados.'); return; }
@@ -4296,27 +4140,8 @@ async function salvarConferencia() {
   if (supa) {
     try {
       var forn = (confFornIdx != null && order && order.fornecedores) ? order.fornecedores[confFornIdx] : null;
-      var q = supa.from('abastecimento').update({
-        fornecedor:             dados.fornecedor || null,
-        numero_nf:              dados.notaFiscal || null,
-        data_recebimento:       dados.dataRecebimento || null,
-        data_vencimento_boleto: dados.dataVencimento || null,
-        recebedor:              dados.recebidoPor || null,
-        obs_conferente:         dados.obsEstoque || null,
-        atualizado_por:         nome
-      }).eq('id_display', confOrderId);
-      if (forn) { q = q.eq('fornecedor', forn.nome); if (forn.notaFiscal) q = q.eq('numero_nf', forn.notaFiscal); }
-      var commonUpd = await q;
-      if (commonUpd.error) throw new Error(commonUpd.error.message);
-      var itemUpdates = dados.itens.map(function(it) {
-        var upd = { qtd_recebida: it.qtdRecebida, valor_recebimento: it.qtdRecebida * it.vlUnitario, atualizado_por: nome };
-        return it._supaId
-          ? supa.from('abastecimento').update(upd).eq('id', it._supaId)
-          : supa.from('abastecimento').update(upd).eq('id_display', confOrderId).eq('produto_nome', it.produtoNome);
-      });
-      var results = await Promise.all(itemUpdates);
-      var erros = results.filter(function(r) { return r.error; });
-      if (erros.length) throw new Error(erros[0].error.message);
+      var res = await rpc('abast_conferencia_salvar', _confArgs(dados, forn, false));
+      if (res.error) throw new Error(res.error.message);
       if (order && order.raw) {
         order.raw.recebidoPor = dados.recebidoPor; order.raw.obsConferente = dados.obsEstoque;
         if (!forn) { order.raw.fornecedor = dados.fornecedor; order.raw.notaFiscal = dados.notaFiscal; order.raw.dataRecebimento = dados.dataRecebimento; order.raw.dataVencimento = dados.dataVencimento; }
@@ -4353,30 +4178,9 @@ async function confirmarConferencia() {
   if (supa) {
     try {
       var forn = (confFornIdx != null && order && order.fornecedores) ? order.fornecedores[confFornIdx] : null;
-      var q = supa.from('abastecimento').update({
-        fornecedor:             dados.fornecedor || null,
-        numero_nf:              dados.notaFiscal || null,
-        data_recebimento:       dados.dataRecebimento || null,
-        data_vencimento_boleto: dados.dataVencimento || null,
-        recebedor:              dados.recebidoPor || null,
-        obs_conferente:         dados.obsEstoque || null,
-        conferente:             nome,
-        check_conferente:       true,
-        status:                 'conferido',
-        atualizado_por:         nome
-      }).eq('id_display', confOrderId);
-      if (forn) { q = q.eq('fornecedor', forn.nome); if (forn.notaFiscal) q = q.eq('numero_nf', forn.notaFiscal); }
-      var commonUpd = await q;
-      if (commonUpd.error) throw new Error(commonUpd.error.message);
-      var itemUpdates = dados.itens.map(function(it) {
-        var upd = { qtd_recebida: it.qtdRecebida, valor_recebimento: it.qtdRecebida * it.vlUnitario, atualizado_por: nome };
-        return it._supaId
-          ? supa.from('abastecimento').update(upd).eq('id', it._supaId)
-          : supa.from('abastecimento').update(upd).eq('id_display', confOrderId).eq('produto_nome', it.produtoNome);
-      });
-      var results = await Promise.all(itemUpdates);
-      var erros = results.filter(function(r) { return r.error; });
-      if (erros.length) throw new Error(erros[0].error.message);
+      var res = await rpc('abast_conferencia_salvar', _confArgs(dados, forn, true));
+      if (res.error) throw new Error(res.error.message);
+      if (res.data && res.data.conferente) nome = res.data.conferente;
       if (order) {
         if (forn) {
           forn.status = 'b-conferido'; forn.label = 'Conferido';
@@ -4503,78 +4307,34 @@ async function confirmarBaixaNF() {
   // Sincroniza com o Supabase
   if (supa && order) {
     try {
-      // Status é calculado só com os itens DESTE fornecedor/NF — não mexe nas linhas dos outros fornecedores do mesmo pedido
-      var newStatus = (itensApi.length > 0 && itensApi.every(function(it){ return it.qtdRecebida >= it.qtdComprada; }))
-        ? 'recebido' : 'comprado';
-      var itemUpdates = itensApi.map(function(it) {
-        var upd = {
-          qtd_recebida:           it.qtdRecebida,
-          valor_recebimento:      it.qtdRecebida * it.vlUnit,
-          numero_nf:              dadosNF.numero || null,
-          data_emissao_nf:        dEm || null,
-          data_recebimento:       dRec || null,
-          data_vencimento_boleto: dVenc || null,
-          recebedor:              dadosNF.quem || null,
-          obs_recebimento:        dadosNF.obs || null,
-          atualizado_por:         (currentUser && currentUser.name) || dadosNF.quem || null,
-          status:                 newStatus
-        };
-        return it._supaId
-          ? supa.from('abastecimento').update(upd).eq('id', it._supaId)
-          : supa.from('abastecimento').update(upd).eq('id_display', order.id).eq('produto_nome', it.produtoNome);
+      // O servidor calcula o status só com os itens DESTE fornecedor/NF, grava as linhas, insere as
+      // bonificações e registra quem baixou pelo login.
+      var res = await rpc('abast_baixa_nf', {
+        p_id_display: order.id,
+        p_fornecedor: (forn && forn.nome) || null,
+        p_nf: { numero: dadosNF.numero || null, data_emissao: dEm || null, data_recebimento: dRec || null, data_vencimento: dVenc || null, quem: dadosNF.quem || null, obs: dadosNF.obs || null },
+        p_itens: itensApi.map(function(it){ return { id: it._supaId || null, produto_nome: it.produtoNome, qtd_comprada: it.qtdComprada, qtd_recebida: it.qtdRecebida, vl_unit: it.vlUnit }; }),
+        p_bonus: itensBonus
       });
-      var results = await Promise.all(itemUpdates);
-      var erros = results.filter(function(r) { return r.error; });
-      if (erros.length) throw new Error(erros[0].error.message);
-      // INSERT itens bonificados
-      if (itensBonus.length) {
-        var bonRows = itensBonus.map(function(bon) {
-          return {
-            id_display:             order.id,
-            unidade:                (order.raw && order.raw.unidade) || null,
-            departamento:           (order.raw && order.raw.departamento) || null,
-            solicitante:            (order.raw && order.raw.solicitante) || null,
-            data_solicitacao:       (order.raw && order.raw.dataSolicitacao) || null,
-            data_compra:            (order.raw && order.raw.dataCompraProc) || null,
-            data_entrega:           (order.raw && order.raw.dataEntregaPrevista) || null,
-            comprador:              (order.raw && order.raw.comprador) || null,
-            categoria:              'bonificacao',
-            produto_nome:           bon.nome,
-            unidade_medida:         bon.un || null,
-            fornecedor:             (forn && forn.nome) || null,
-            qtd_solicitada:         0,
-            qtd_recebida:           bon.qty,
-            valor_recebimento:      0,
-            numero_nf:              dadosNF.numero || null,
-            data_emissao_nf:        dEm || null,
-            data_recebimento:       dRec || null,
-            data_vencimento_boleto: dVenc || null,
-            recebedor:              dadosNF.quem || null,
-            obs_recebimento:        dadosNF.obs || null,
-            status:                 newStatus,
-            atualizado_por:         (currentUser && currentUser.name) || dadosNF.quem || null
-          };
+      if (res.error) throw new Error(res.error.message);
+      var newStatus = (res.data && res.data.status) || 'comprado';
+      // Atualiza estado local para aparecer no modal de conferência sem refresh
+      itensBonus.forEach(function(bon) {
+        var inserted = res.data && res.data.bonus && res.data.bonus.find(function(r){ return r.produto_nome === bon.nome; });
+        var supaId = inserted ? inserted.id : null;
+        order.itensList.push({
+          cat: 'bonificacao', nome: bon.nome, un: bon.un, qty: 0,
+          vlPedido: 0, vlCompra: 0, fornecedor: (forn && forn.nome) || '',
+          qtdComprada: 0, qtdRecebida: bon.qty, _supaId: supaId, isBonus: true
         });
-        var bonRes = await supa.from('abastecimento').insert(bonRows).select('id, produto_nome');
-        if (bonRes.error) throw new Error('bonificação: ' + bonRes.error.message);
-        // Atualiza estado local para aparecer no modal de conferência sem refresh
-        itensBonus.forEach(function(bon) {
-          var inserted = bonRes.data && bonRes.data.find(function(r){ return r.produto_nome === bon.nome; });
-          var supaId = inserted ? inserted.id : null;
-          order.itensList.push({
-            cat: 'bonificacao', nome: bon.nome, un: bon.un, qty: 0,
-            vlPedido: 0, vlCompra: 0, fornecedor: (forn && forn.nome) || '',
-            qtdComprada: 0, qtdRecebida: bon.qty, _supaId: supaId, isBonus: true
+        if (order.raw && order.raw.itens) {
+          order.raw.itens.push({
+            produtoNome: bon.nome, categoriaKey: 'bonificacao', unidade: bon.un,
+            qtdSolicitada: 0, qtdComprada: 0, qtdRecebida: bon.qty,
+            fornecedor: (forn && forn.nome) || '', _supaId: supaId, isBonus: true
           });
-          if (order.raw && order.raw.itens) {
-            order.raw.itens.push({
-              produtoNome: bon.nome, categoriaKey: 'bonificacao', unidade: bon.un,
-              qtdSolicitada: 0, qtdComprada: 0, qtdRecebida: bon.qty,
-              fornecedor: (forn && forn.nome) || '', _supaId: supaId, isBonus: true
-            });
-          }
-        });
-      }
+        }
+      });
       if (order.raw) { order.raw.status = newStatus; order.raw.dataRecebimento = dRec; }
     } catch(e) {
       toast('Erro ao registrar recebimento: ' + e.message);
@@ -4609,21 +4369,12 @@ async function marcarNaoRecebido() {
 
   if (supa) {
     try {
-      var updates = itens.map(function(it) {
-        var upd = {
-          status:          'nao_recebido',
-          qtd_recebida:    0,
-          recebedor:       quem,
-          obs_recebimento: obs,
-          atualizado_por:  (currentUser && currentUser.name) || quem
-        };
-        return it._supaId
-          ? supa.from('abastecimento').update(upd).eq('id', it._supaId)
-          : supa.from('abastecimento').update(upd).eq('id_display', order.id).eq('produto_nome', it.nome);
+      var res = await rpc('abast_nao_recebido', {
+        p_id_display: order.id,
+        p_itens: itens.map(function(it){ return { id: it._supaId || null, produto_nome: it.nome }; }),
+        p_quem: quem, p_obs: obs
       });
-      var results = await Promise.all(updates);
-      var erros = results.filter(function(r) { return r.error; });
-      if (erros.length) throw new Error(erros[0].error.message);
+      if (res.error) throw new Error(res.error.message);
     } catch(e) {
       toast('Erro ao marcar como não recebido: ' + e.message, true);
       return;
