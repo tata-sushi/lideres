@@ -678,6 +678,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <span class="modal-section-title">Tipo de documento</span>
         <select class="modal-select" id="dl-tipo"></select>
       </div>
+      <div style="margin:-4px 0 2px;">
+        <button type="button" class="btn-link" id="dl-modo-toggle" onclick="_dlToggleModoUnico()">Enviar pra um colaborador só</button>
+      </div>
+      <div class="ev-field" id="dl-unico-wrap" style="display:none;">
+        <span class="modal-section-title">Colaborador</span>
+        <select class="modal-select" id="dl-unico-colab"></select>
+      </div>
       <div class="ev-field">
         <span class="modal-section-title">Competência / Período</span>
         <div class="dl-periodo-row">
@@ -686,7 +693,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <input type="date" class="modal-input" id="dl-periodo-fim">
         </div>
       </div>
-      <div class="ev-field">
+      <div class="ev-field" id="dl-lote-wrap">
         <span class="modal-section-title">Arquivos (PDF, um por colaborador)</span>
         <div class="cp-drop" id="dl-drop" ondragover="_dlDragOver(event)" ondragleave="_dlDragLeave(event)" ondrop="_dlDrop(event)">
           <div class="cp-drop-label">Arraste os PDFs aqui ou</div>
@@ -694,6 +701,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <div class="cp-drop-sub">Nome do arquivo precisa começar com a matrícula (ex.: 7_NOME_id.pdf ou 24416 – NOME.pdf)</div>
         </div>
         <input type="file" id="dl-files" accept="application/pdf" multiple style="display:none;" onchange="_dlOnFilesSelected(this.files)">
+      </div>
+      <div class="ev-field" id="dl-unico-arquivo-wrap" style="display:none;">
+        <span class="modal-section-title">Arquivo (PDF)</span>
+        <input type="file" class="modal-input" id="dl-unico-arquivo" accept="application/pdf">
       </div>
       <div class="cp-summary" id="dl-summary" style="display:none;"></div>
       <div class="cp-file-list" id="dl-file-list"></div>
@@ -2692,6 +2703,7 @@ function enviarDocumentoAssinatura() {
 // docColaboradores/docTipos já carregados por loadAllData() — sem RPC extra.
 var _dlArquivos = [];
 var _dlEnviando = false;
+var _dlModoUnico = false;
 
 function _dlUuid() {
   if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -2709,11 +2721,17 @@ function abrirDocLote() {
   closeDrawer();
   _dlArquivos = [];
   _dlEnviando = false;
+  _dlModoUnico = false;
   document.getElementById('dl-files').value = '';
   document.getElementById('dl-file-list').innerHTML = '';
   document.getElementById('dl-summary').style.display = 'none';
   document.getElementById('dl-progress').style.display = 'none';
   document.getElementById('dl-erro').style.display = 'none';
+  document.getElementById('dl-unico-wrap').style.display = 'none';
+  document.getElementById('dl-unico-arquivo-wrap').style.display = 'none';
+  document.getElementById('dl-unico-arquivo').value = '';
+  document.getElementById('dl-lote-wrap').style.display = '';
+  document.getElementById('dl-modo-toggle').textContent = 'Enviar pra um colaborador só';
   var btn = document.getElementById('dl-btn');
   setBtnLoading(btn, false, 'Enviar para Assinatura Digital');
 
@@ -2722,6 +2740,12 @@ function abrirDocLote() {
     .slice().sort(function (a, b) { return (a.nome || '').localeCompare(b.nome || ''); });
   tipoSel.innerHTML = '<option value="">Selecione</option>' +
     tipos.map(function (t) { return '<option value="' + escH(t.id) + '">' + escH(t.nome) + '</option>'; }).join('');
+
+  var colabSel = document.getElementById('dl-unico-colab');
+  colabSel.innerHTML = '<option value="">Selecione</option>' +
+    (docColaboradores || []).filter(function (c) { return c.status === 'Ativo'; })
+      .slice().sort(function (a, b) { return (a.nome || '').localeCompare(b.nome || '', 'pt-BR'); })
+      .map(function (c) { return '<option value="' + escH(c.matricula) + '">' + escH(c.nome || c.matricula) + '</option>'; }).join('');
 
   var ini = document.getElementById('dl-periodo-ini');
   var fim = document.getElementById('dl-periodo-fim');
@@ -2743,6 +2767,25 @@ function fecharDocLote() {
   if (_dlEnviando) return; // não deixa fechar no meio do envio em lote
   document.getElementById('dl-overlay').classList.remove('active');
   document.body.style.overflow = '';
+}
+
+// Alterna entre o modo "lote" (vários PDFs casados pela matrícula no nome do
+// arquivo — bom pra volume grande, tipo Holerite/Cartão de Ponto) e o modo
+// "1 colaborador" (um <select> + 1 PDF qualquer, sem precisar renomear nada
+// — bom pra um documento avulso, tipo um Recibo de Férias de uma pessoa só).
+function _dlToggleModoUnico() {
+  _dlModoUnico = !_dlModoUnico;
+  document.getElementById('dl-unico-wrap').style.display = _dlModoUnico ? '' : 'none';
+  document.getElementById('dl-unico-arquivo-wrap').style.display = _dlModoUnico ? '' : 'none';
+  document.getElementById('dl-lote-wrap').style.display = _dlModoUnico ? 'none' : '';
+  document.getElementById('dl-modo-toggle').textContent = _dlModoUnico ? 'Enviar em lote (vários colaboradores)' : 'Enviar pra um colaborador só';
+  document.getElementById('dl-erro').style.display = 'none';
+  // trocar de modo some com o que já tinha sido anexado no outro
+  _dlArquivos = [];
+  document.getElementById('dl-files').value = '';
+  document.getElementById('dl-file-list').innerHTML = '';
+  document.getElementById('dl-summary').style.display = 'none';
+  document.getElementById('dl-unico-arquivo').value = '';
 }
 
 function _dlColabPorMatricula() {
@@ -2869,8 +2912,23 @@ function enviarLoteDocumentos() {
   if (periodoFim < periodoIni) { errBox.style.display = 'block'; errBox.textContent = 'O período final não pode ser antes do inicial.'; return; }
   var competencia = periodoIni + '_' + periodoFim; // chave de versionamento — período exato
   var periodoLabel = _dlFmtDataBR(periodoIni) + ' a ' + _dlFmtDataBR(periodoFim);
-  var validos = _dlArquivos.filter(function (i) { return i.status === 'ok'; });
-  if (!validos.length) { errBox.style.display = 'block'; errBox.textContent = 'Anexe ao menos um arquivo reconhecido.'; return; }
+
+  var validos;
+  if (_dlModoUnico) {
+    // Modo "1 colaborador": sem casamento por nome de arquivo — o colaborador
+    // vem do <select>, o PDF pode ter qualquer nome.
+    var matricula = (document.getElementById('dl-unico-colab') || {}).value || '';
+    var colabSel = document.getElementById('dl-unico-colab');
+    var nomeColab = matricula && colabSel.selectedOptions.length ? colabSel.selectedOptions[0].textContent : '';
+    var arquivoInput = document.getElementById('dl-unico-arquivo');
+    var arquivo = arquivoInput && arquivoInput.files && arquivoInput.files[0];
+    if (!matricula) { errBox.style.display = 'block'; errBox.textContent = 'Selecione o colaborador.'; return; }
+    if (!arquivo) { errBox.style.display = 'block'; errBox.textContent = 'Anexe o PDF do documento.'; return; }
+    validos = [{ file: arquivo, matricula: matricula, nome: nomeColab, status: 'ok', motivo: '' }];
+  } else {
+    validos = _dlArquivos.filter(function (i) { return i.status === 'ok'; });
+    if (!validos.length) { errBox.style.display = 'block'; errBox.textContent = 'Anexe ao menos um arquivo reconhecido.'; return; }
+  }
 
   var emitidoPor = _usuarioLogadoNome() || '—';
 
