@@ -1909,11 +1909,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <!-- TAB: KPIs (Avaliações, Pratos, Restrições, Reclamações) — fonte: app -->
 <div id="tab-kpis" class="tab-pane">
   <div class="filters-wrap">
-    <div class="filters-row" style="display:flex;gap:10px;flex-wrap:wrap">
-      <div class="filter-group"><label class="filter-label">Cozinha</label>
-        <select class="filter-select" id="kpi-cozinha"><option value="">Todas</option><option value="Itaim">Itaim</option><option value="Pinheiros">Pinheiros</option></select></div>
-      <div class="filter-group"><label class="filter-label">De</label><input class="filter-select" type="date" id="kpi-de"></div>
-      <div class="filter-group"><label class="filter-label">Até</label><input class="filter-select" type="date" id="kpi-ate"></div>
+    <div class="filters-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="filter-group"><label class="filter-label">De</label><input class="filter-select" type="date" id="kpi-de" style="background-image:none;padding:8px 12px"></div>
+      <div class="filter-group"><label class="filter-label">Até</label><input class="filter-select" type="date" id="kpi-ate" style="background-image:none;padding:8px 12px"></div>
     </div>
     <div class="filters-actions" style="display:flex;justify-content:space-between;align-items:center">
       <button class="btn-link" id="kpi-limpar">Limpar filtros</button>
@@ -2373,7 +2371,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   var _kpiCharts={}; var _kpiLoaded=false;
   function _kpiDestroy(id){ if(_kpiCharts[id]){ try{_kpiCharts[id].destroy();}catch(e){} _kpiCharts[id]=null; } }
   function _kpiDataBR(iso){ var s=String(iso||''); var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m? (m[3]+'/'+m[2]+'/'+m[1]) : (s||'—'); }
-  function _kpiFiltros(){ return { cozinha:(document.getElementById('kpi-cozinha')||{}).value||'', de:(document.getElementById('kpi-de')||{}).value||'', ate:(document.getElementById('kpi-ate')||{}).value||'' }; }
+  function _kpiFiltros(){ return { de:(document.getElementById('kpi-de')||{}).value||'', ate:(document.getElementById('kpi-ate')||{}).value||'' }; }
   function _kpiNum(n){ return Number(n||0).toLocaleString('pt-BR'); }
   function _kpiMedia(x){ return x==null?'—':('★ '+Number(x).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})); }
   function _kpiDist(p){ // mini barra empilhada 5→1 (verde=bom, vermelho=ruim)
@@ -2385,7 +2383,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   function renderKpisTab(){
     comSupa(function(supa){
       var f=_kpiFiltros(); var tp=supa.schema('tata_plus');
-      tp.rpc('cardapio_kpis_avaliacoes',{ p_cozinha:f.cozinha||null, p_de:f.de||null, p_ate:f.ate||null }).then(function(res){
+      tp.rpc('cardapio_kpis_avaliacoes',{ p_cozinha:null, p_de:f.de||null, p_ate:f.ate||null }).then(function(res){
         if(res.error){ return; } var d=res.data||{}; _kpiRenderAval(d);
       });
       tp.rpc('cardapio_kpis_restricoes').then(function(res){ if(res.error){ return; } _kpiRenderRestr(res.data||{}); });
@@ -2425,7 +2423,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     var cv=document.getElementById('kpi-restr-chart');
     if(cv && typeof Chart!=='undefined'){
       var wrap=document.getElementById('kpi-restr-wrap'); if(wrap) wrap.style.height=Math.max(140,rank.length*30+20)+'px';
-      var labels=rank.map(function(e){ return (e.icone?e.icone+' ':'')+e.restricao; }), data=rank.map(function(e){ return e.n; });
+      var labels=rank.map(function(e){ return e.restricao; }), data=rank.map(function(e){ return e.n; });
       var plug={ id:'kpiRestrLbl', afterDatasetsDraw:function(ch){ var meta=ch.getDatasetMeta(0),ds=ch.data.datasets[0],ctx=ch.ctx; if(!meta) return; ctx.save(); ctx.fillStyle='#35383F'; ctx.font='800 12px "DM Sans", sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle'; meta.data.forEach(function(b,i){ var v=ds.data[i]; if(v==null) return; ctx.fillText(_kpiNum(v), b.x+5, b.y); }); ctx.restore(); } };
       _kpiCharts['kpi-restr-chart']=new Chart(cv,{ type:'bar',
         data:{ labels:labels, datasets:[{ data:data, backgroundColor:'#35383F', borderWidth:0, borderRadius:5, barPercentage:0.65, maxBarThickness:22 }] },
@@ -3023,8 +3021,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   document.addEventListener('DOMContentLoaded', function() {
     var tabBtns=document.querySelectorAll('.tab-btn');
     tabBtns.forEach(function(btn){ btn.addEventListener('click', function(){ tabBtns.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var target=btn.dataset.tab; document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); }); var pane=document.getElementById('tab-'+target); if(pane) pane.classList.add('active'); if(target==='processamento'){ carregarProcessamento(); } if(target==='relatorios'){ renderRelatorios(); } if(target==='kpis'){ renderKpisTab(); } }); });
-    ['kpi-cozinha','kpi-de','kpi-ate'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('change', renderKpisTab); });
-    var _kl=document.getElementById('kpi-limpar'); if(_kl) _kl.addEventListener('click', function(){ ['kpi-cozinha','kpi-de','kpi-ate'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; }); renderKpisTab(); });
+    ['kpi-de','kpi-ate'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('change', renderKpisTab); });
+    var _kl=document.getElementById('kpi-limpar'); if(_kl) _kl.addEventListener('click', function(){ ['kpi-de','kpi-ate'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; }); renderKpisTab(); });
     document.getElementById('btnPrevWeek').addEventListener('click', function(){ currentWeekOffset--; elabFilter.refeicao='Todas'; carregarSemana(); });
     document.getElementById('btnNextWeek').addEventListener('click', function(){ currentWeekOffset++; elabFilter.refeicao='Todas'; carregarSemana(); });
     var _efr=document.getElementById('ef-ref'); if(_efr) _efr.addEventListener('change', function(){ elabFilter.refeicao=this.value; renderGrid(); });
