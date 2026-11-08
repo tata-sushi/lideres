@@ -1331,6 +1331,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
       <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-ferias::relatorio-ferias" onclick="closeDrawer();abrirModalRelFerias()">Relatório de Férias</button>
+      <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-ferias::aviso-gozo-ferias" onclick="closeDrawer();abrirModalAvisoFerias()" style="margin-top:8px;">Aviso de Gozo de Férias</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -3471,6 +3472,182 @@ window.toggleFta = toggleFta;
     w.focus();
     fecharModalRelFerias();
     setTimeout(function(){ w.print(); }, 400);
+  };
+})();
+</script>
+
+<!-- Modal Aviso de Gozo de Férias -->
+<div class="mf-overlay" id="mf-aviso-overlay">
+  <div class="mf-modal">
+    <div class="mf-handle"></div>
+    <div class="mf-header">
+      <div>
+        <div class="mf-title">Aviso de Gozo de Férias</div>
+      </div>
+      <button class="mf-close" onclick="fecharModalAvisoFerias()">&times;</button>
+    </div>
+    <div class="mf-body">
+      <div class="mf-field">
+        <label class="mf-label">Colaborador</label>
+        <select class="mf-select" id="av-colab" onchange="_avColabChange()"><option value="">— Selecione —</option></select>
+      </div>
+      <div class="mf-field">
+        <label class="mf-label">Qual período de gozo?</label>
+        <select class="mf-select" id="av-bloco"><option value="">— Selecione o colaborador acima —</option></select>
+      </div>
+      <div class="mf-field">
+        <label class="mf-label">Data de emissão</label>
+        <input class="mf-select" type="date" id="av-data">
+      </div>
+      <div class="mf-field">
+        <label class="mf-label">Cidade</label>
+        <input class="mf-select" type="text" id="av-cidade" value="São Paulo">
+      </div>
+      <div id="av-err" style="color:#C0392B;font-size:11px;min-height:14px;"></div>
+    </div>
+    <div class="mf-footer" style="display:flex;gap:8px;padding:12px 20px 20px;border-top:1px solid var(--border);">
+      <button class="btn btn--primary" onclick="fecharModalAvisoFerias()" style="flex:1;">Cancelar</button>
+      <button class="btn btn--primary" onclick="gerarAvisoFeriasPDF()" style="flex:1;">Gerar PDF</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Aviso de Gozo de Férias — PDF A4 retrato (CLT art. 135) ──────────────
+(function(){
+  var _avColabMap = {};  // mt -> { cpf, data_admissao, nome }
+
+  function _avEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function _avFmtData(iso){ if(!iso) return '—'; var s=String(iso); if(/^\d{4}-\d{2}-\d{2}/.test(s)){ var p=s.slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; } return s; }
+  function _avFmtDataExt(iso){
+    if(!iso) return '—';
+    var s=String(iso); var d;
+    if(/^\d{4}-\d{2}-\d{2}/.test(s)){ var p=s.slice(0,10).split('-'); d=new Date(+p[0], +p[1]-1, +p[2]); }
+    else { d=new Date(s); if(isNaN(d)) return '—'; }
+    var meses=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    return d.getDate()+' de '+meses[d.getMonth()]+' de '+d.getFullYear();
+  }
+
+  function _avCarregarColabs(){
+    return new Promise(function(resolve){
+      comSupa(function(supa){
+        supa.schema('tata_plus').rpc('colaboradores_listar').then(function(r){
+          if (r.error || !r.data) { resolve({}); return; }
+          var map = {};
+          r.data.forEach(function(c){ if (c.matricula) map[String(c.matricula)] = c; });
+          resolve(map);
+        }).catch(function(){ resolve({}); });
+      });
+    });
+  }
+
+  window._avColabChange = function(){
+    var mt = document.getElementById('av-colab').value;
+    var bloco = document.getElementById('av-bloco');
+    bloco.innerHTML = '';
+    if (!mt) { bloco.innerHTML = '<option value="">— Selecione o colaborador acima —</option>'; return; }
+    var cache = (typeof _feriasCache !== 'undefined' && Array.isArray(_feriasCache)) ? _feriasCache : [];
+    // lista TODOS os blocos de gozo do colaborador, ordenados pelo início
+    var opts = [];
+    cache.filter(function(p){ return String(p.mt) === mt; }).forEach(function(p){
+      [[p.ini1,p.fim1],[p.ini2,p.fim2],[p.ini3,p.fim3]].forEach(function(b){
+        if (b[0] || b[1]) opts.push({ ini_aqui:p.ini_aqui, fim_aqui:p.fim_aqui, ini:b[0], fim:b[1] });
+      });
+    });
+    opts.sort(function(a,b){ return String(a.ini||'').localeCompare(String(b.ini||'')); });
+    if (!opts.length) { bloco.innerHTML = '<option value="">Sem gozo cadastrado</option>'; return; }
+    bloco.innerHTML = opts.map(function(o, i){
+      var val = JSON.stringify(o);
+      return '<option value="'+_avEsc(val)+'">'+_avFmtData(o.ini)+' – '+_avFmtData(o.fim)+' (aquisitivo '+_avFmtData(o.ini_aqui)+'–'+_avFmtData(o.fim_aqui)+')</option>';
+    }).join('');
+  };
+
+  window.abrirModalAvisoFerias = function(){
+    var err = document.getElementById('av-err'); err.textContent = '';
+    document.getElementById('av-data').value = new Date().toISOString().slice(0,10);
+    document.getElementById('av-bloco').innerHTML = '<option value="">— Selecione o colaborador acima —</option>';
+    _avCarregarColabs().then(function(map){
+      _avColabMap = map;
+      var sel = document.getElementById('av-colab');
+      // só mostra quem tem bloco de gozo cadastrado
+      var cache = (typeof _feriasCache !== 'undefined' && Array.isArray(_feriasCache)) ? _feriasCache : [];
+      var comGozo = {};
+      cache.forEach(function(p){
+        if (p.ini1||p.fim1||p.ini2||p.fim2||p.ini3||p.fim3) comGozo[String(p.mt)] = p.nome;
+      });
+      var opts = Object.keys(comGozo).map(function(mt){ return { mt:mt, nome: (map[mt] && map[mt].nome) || comGozo[mt] }; });
+      opts.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
+      sel.innerHTML = '<option value="">— Selecione —</option>' + opts.map(function(o){
+        return '<option value="'+_avEsc(o.mt)+'">'+_avEsc(o.nome)+' · '+_avEsc(o.mt)+'</option>';
+      }).join('');
+      document.getElementById('mf-aviso-overlay').classList.add('open');
+    });
+  };
+  window.fecharModalAvisoFerias = function(){
+    document.getElementById('mf-aviso-overlay').classList.remove('open');
+  };
+
+  window.gerarAvisoFeriasPDF = function(){
+    var mt = document.getElementById('av-colab').value;
+    var blocoRaw = document.getElementById('av-bloco').value;
+    var dataEmit = document.getElementById('av-data').value;
+    var cidade = (document.getElementById('av-cidade').value||'').trim() || 'São Paulo';
+    var err = document.getElementById('av-err'); err.textContent = '';
+    if (!mt) { err.textContent = 'Selecione o colaborador.'; return; }
+    if (!blocoRaw) { err.textContent = 'Selecione o período de gozo.'; return; }
+    if (!dataEmit) { err.textContent = 'Informe a data de emissão.'; return; }
+    var bloco; try { bloco = JSON.parse(blocoRaw); } catch(e){ err.textContent='Período inválido.'; return; }
+
+    var colab = _avColabMap[mt] || {};
+    var nome = (colab.nome || '').toUpperCase();
+    var cpf  = colab.cpf || '';
+    var admissao = colab.data_admissao || '';
+
+    var logoSrc = (document.querySelector('.logo-img')||{}).src || '';
+
+    var CSS =
+      '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}'+
+      'body{background:#CBD5E1;font-family:"DM Sans","Helvetica Neue",Arial,sans-serif;padding:32px 16px 64px;display:flex;flex-direction:column;align-items:center;gap:32px;color:#111;}'+
+      '.page{width:100%;max-width:760px;background:#fff;padding:52px 60px 60px;box-shadow:0 4px 32px rgba(0,0,0,.18);font-size:12px;line-height:1.7;color:#222;}'+
+      '.av-title{font-size:22px;font-weight:600;text-align:center;color:#111;text-decoration:underline;text-underline-offset:6px;margin-bottom:34px;}'+
+      '.av-logo{width:52px;height:52px;object-fit:contain;display:block;margin:0 auto 18px;}'+
+      '.av-dados{display:flex;flex-direction:column;gap:6px;margin-bottom:28px;}'+
+      '.av-dados div{font-size:12px;color:#222;}'+
+      '.av-dados strong{color:#111;font-weight:500;}'+
+      '.av-p{font-size:12px;color:#222;line-height:1.75;text-align:justify;margin-bottom:12px;}'+
+      '.av-cidade{font-size:12px;margin-top:40px;color:#222;}'+
+      '@media print{body{background:#fff;padding:0;}.page{box-shadow:none;max-width:100%;padding:48px 56px;}@page{size:A4 portrait;margin:0;}}';
+
+    var body =
+      (logoSrc ? '<img class="av-logo" src="'+logoSrc+'" alt="TATÁ Sushi">' : '')+
+      '<div class="av-title">Aviso de Gozo de Férias</div>'+
+      '<div class="av-dados">'+
+        '<div>Nome do Empregado : '+_avEsc(nome||'—')+'</div>'+
+        '<div>CPF : '+_avEsc(cpf||'—')+'</div>'+
+        '<div>Data de Admissão : '+_avFmtData(admissao)+'</div>'+
+        '<div>Início de Gozo das Férias : '+_avFmtData(bloco.ini)+'</div>'+
+        '<div>Período aquisitivo : '+_avFmtData(bloco.ini_aqui)+' à '+_avFmtData(bloco.fim_aqui)+'</div>'+
+      '</div>'+
+      '<p class="av-p">O empregador, através do presente documento, e em conformidade com o art. 135 da CLT, vem notificar o empregado, com antecedência de 30 (trinta) dias, a concessão de suas férias, cujo período de gozo terá inicio em '+_avFmtData(bloco.ini)+'.</p>'+
+      '<p class="av-p">Em concordância com a manifestação expressa do colaborador e com o art. 134 as férias poderão ser usufruidas em até três períodos, sendo que um não poderá ser inferior a quatorze dias corridos e os demais não poderão ser inferiores a cinco dias corridos, cada um.</p>'+
+      '<p class="av-p">As férias serão remuneradas com o acréscimo de 1/3 constitucional, se for o caso, ao abono pecuniário e ao adiantamento do 13° salário de acordo com o art. 7º, XVII da Constituição da República, e será pago até 2 (dois) dias antes do início do respectivo gozo de férias.</p>'+
+      '<div class="av-cidade">'+_avEsc(cidade)+', '+_avFmtDataExt(dataEmit)+'.</div>';
+
+    var html = '<!DOCTYPE html><html lang="pt-BR"><head>'+
+      '<meta charset="UTF-8">'+
+      '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+      '<title>Aviso de Gozo de Férias · '+_avEsc(nome||'—')+' · TATÁ Sushi</title>'+
+      '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">'+
+      '<style>'+CSS+'</style>'+
+      '</head><body><div class="page">'+body+'</div></body></html>';
+
+    var w = window.open('', '_blank');
+    if (!w){ err.textContent = 'Permita pop-ups para gerar o PDF.'; return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    fecharModalAvisoFerias();
+    setTimeout(function(){ w.print(); }, 500);
   };
 })();
 </script>
