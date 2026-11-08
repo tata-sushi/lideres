@@ -3505,9 +3505,16 @@ window.toggleFta = toggleFta;
       </div>
       <div id="av-err" style="color:#C0392B;font-size:11px;min-height:14px;"></div>
     </div>
-    <div class="mf-footer" style="display:flex;gap:8px;padding:12px 20px 20px;border-top:1px solid var(--border);">
-      <button class="btn btn--primary" onclick="fecharModalAvisoFerias()" style="flex:1;">Cancelar</button>
-      <button class="btn btn--primary" onclick="gerarAvisoFeriasPDF()" style="flex:1;">Gerar PDF</button>
+    <div class="mf-footer" style="display:flex;flex-direction:column;gap:8px;padding:12px 20px 20px;border-top:1px solid var(--border);">
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn--primary" onclick="fecharModalAvisoFerias()" style="flex:1;">Cancelar</button>
+        <button class="btn btn--primary" id="av-btn-pdf" onclick="gerarAvisoFeriasPDF()" style="flex:1;">
+          <span class="btn-spin"></span><span class="btn-label">Gerar PDF</span>
+        </button>
+      </div>
+      <button class="btn btn--primary btn--block" id="av-btn-assinar" onclick="enviarAvisoFeriasParaAssinatura()">
+        <span class="btn-spin"></span><span class="btn-label">Enviar para Assinatura Digital</span>
+      </button>
     </div>
   </div>
 </div>
@@ -3587,67 +3594,259 @@ window.toggleFta = toggleFta;
     document.getElementById('mf-aviso-overlay').classList.remove('open');
   };
 
-  window.gerarAvisoFeriasPDF = function(){
+  // CSS no mesmo padrão .rp-* dos demais termos do portal (admissao.html/doc.html
+  // — ver docs/INTEGRACAO-DOCUMENTOS.md), cópia independente (não compartilhada,
+  // mesma decisão já tomada pra doc.html).
+  var AV_RP_CSS =
+    '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}'+
+    'body{background:#CBD5E1;font-family:"DM Sans","Helvetica Neue",Arial,sans-serif;padding:32px 16px 64px;display:flex;flex-direction:column;align-items:center;gap:32px;color:#111;}'+
+    '.page{width:100%;max-width:760px;background:#fff;padding:34px 46px 44px;box-shadow:0 4px 32px rgba(0,0,0,.18);font-size:10px;line-height:1.55;color:#222;}'+
+    '.rp-header{display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:1.5px solid #111;margin-bottom:18px;}'+
+    '.rp-logo{width:42px;height:42px;flex-shrink:0;object-fit:contain;}'+
+    '.rp-header-title{flex:1;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#111;line-height:1.25;}'+
+    '.rp-header-right{flex-shrink:0;text-align:right;font-size:9px;color:#555;line-height:1.65;}'+
+    '.rp-header-right strong{color:#111;font-weight:700;}'+
+    '.rp-intro{display:flex;align-items:stretch;gap:10px;margin-bottom:18px;flex-wrap:wrap;}'+
+    '.rp-intro-field{display:flex;flex-direction:column;gap:4px;min-width:0;}'+
+    '.rp-intro-field.grow{flex:1;min-width:0;}'+
+    '.rp-intro-label{font-family:"DM Mono",monospace;font-size:8px;text-transform:uppercase;letter-spacing:.6px;color:#888;white-space:nowrap;}'+
+    '.rp-intro-value{background:#F4F4F4;padding:7px 12px;font-size:10.5px;font-weight:700;color:#111;border-radius:3px;}'+
+    '.rp-section{margin-bottom:16px;}'+
+    '.rp-section-label{font-family:"DM Mono",monospace;font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#34373F;padding-bottom:5px;margin-bottom:8px;border-bottom:1px solid #ddd;}'+
+    '.rp-p{font-size:10px;color:#222;line-height:1.6;text-align:justify;margin-bottom:6px;}'+
+    '.rp-p:last-child{margin-bottom:0;}'+
+    '.rp-ass-declaro{font-size:11px;font-weight:700;color:#111;margin:12px 0 4px;}'+
+    '.rp-cidade-data{font-size:11px;text-align:right;margin:20px 0 24px;color:#222;}'+
+    '@media print{'+
+    'body{background:#fff;padding:0;}'+
+    '.page{box-shadow:none;width:100%;max-width:100%;padding:24px 36px 36px;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}'+
+    '.rp-intro-value,.rp-section-label{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}'+
+    '@page{size:A4 portrait;margin:0;}'+
+    '}';
+
+  // Monta o conteúdo do .page (mesmo HTML usado tanto pra "Gerar PDF" quanto
+  // pra "Enviar para Assinatura Digital" — uma única fonte, sem duplicar texto).
+  function _avMontarBody(colab, bloco, dataEmit, cidade, dateStr) {
+    var esc = _avEsc;
+    function linha(label, valor) {
+      return '<p class="rp-p"><strong>'+esc(label)+':</strong> '+(valor ? esc(valor) : '—')+'</p>';
+    }
+    var nome = (colab.nome || '').toUpperCase();
+    var logoSrc = (document.querySelector('.logo-img')||{}).src || '';
+    return (
+      '<div class="page">' +
+        '<div class="rp-header">' +
+          (logoSrc ? '<img class="rp-logo" src="'+esc(logoSrc)+'" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' : '') +
+          '<div class="rp-header-title">Aviso de Gozo de Férias</div>' +
+          '<div class="rp-header-right">Emitido em <strong>'+esc(dateStr)+'</strong></div>' +
+        '</div>' +
+        '<div class="rp-intro">' +
+          '<div class="rp-intro-field grow">' +
+            '<span class="rp-intro-label">Colaborador</span>' +
+            '<span class="rp-intro-value">'+esc(nome||'—')+'</span>' +
+          '</div>' +
+          (colab.matricula ? (
+            '<div class="rp-intro-field">' +
+              '<span class="rp-intro-label">Matrícula</span>' +
+              '<span class="rp-intro-value">'+esc(colab.matricula)+'</span>' +
+            '</div>'
+          ) : '') +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Cargo</span>' +
+            '<span class="rp-intro-value">'+esc(colab.cargo || '—')+'</span>' +
+          '</div>' +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Unidade</span>' +
+            '<span class="rp-intro-value">'+esc(colab.unidade || '—')+'</span>' +
+          '</div>' +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Admissão</span>' +
+            '<span class="rp-intro-value">'+_avFmtData(colab.data_admissao)+'</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="rp-section">' +
+          '<div class="rp-section-label">Aviso de Gozo de Férias — CLT art. 135</div>' +
+          '<div class="rp-section-body">' +
+            linha('CPF', colab.cpf) +
+            linha('Início de Gozo das Férias', _avFmtData(bloco.ini)) +
+            linha('Período aquisitivo', _avFmtData(bloco.ini_aqui) + ' a ' + _avFmtData(bloco.fim_aqui)) +
+            '<p class="rp-p">O empregador, através do presente documento, e em conformidade com o art. 135 da CLT, vem notificar o empregado, com antecedência de 30 (trinta) dias, a concessão de suas férias, cujo período de gozo terá início em '+esc(_avFmtData(bloco.ini))+'.</p>' +
+            '<p class="rp-p">Em concordância com a manifestação expressa do colaborador e com o art. 134, as férias poderão ser usufruídas em até três períodos, sendo que um não poderá ser inferior a quatorze dias corridos e os demais não poderão ser inferiores a cinco dias corridos, cada um.</p>' +
+            '<p class="rp-p">As férias serão remuneradas com o acréscimo de 1/3 constitucional, se for o caso, ao abono pecuniário e ao adiantamento do 13º salário de acordo com o art. 7º, XVII da Constituição da República, e será pago até 2 (dois) dias antes do início do respectivo gozo de férias.</p>' +
+          '</div>' +
+        '</div>' +
+        '<p class="rp-ass-declaro">Declaro estar ciente da concessão de férias e do período de gozo informado acima.</p>' +
+        '<div class="rp-cidade-data">'+esc(cidade)+', '+esc(_avFmtDataExt(dataEmit))+'.</div>' +
+      '</div>'
+    );
+  }
+
+  function _avAgora() {
+    var now = new Date();
+    var pad = function(n){ return String(n).padStart(2,'0'); };
+    return pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear()+', '+pad(now.getHours())+':'+pad(now.getMinutes());
+  }
+
+  function _avLerFormulario() {
     var mt = document.getElementById('av-colab').value;
     var blocoRaw = document.getElementById('av-bloco').value;
     var dataEmit = document.getElementById('av-data').value;
     var cidade = (document.getElementById('av-cidade').value||'').trim() || 'São Paulo';
     var err = document.getElementById('av-err'); err.textContent = '';
-    if (!mt) { err.textContent = 'Selecione o colaborador.'; return; }
-    if (!blocoRaw) { err.textContent = 'Selecione o período de gozo.'; return; }
-    if (!dataEmit) { err.textContent = 'Informe a data de emissão.'; return; }
-    var bloco; try { bloco = JSON.parse(blocoRaw); } catch(e){ err.textContent='Período inválido.'; return; }
-
+    if (!mt) { err.textContent = 'Selecione o colaborador.'; return null; }
+    if (!blocoRaw) { err.textContent = 'Selecione o período de gozo.'; return null; }
+    if (!dataEmit) { err.textContent = 'Informe a data de emissão.'; return null; }
+    var bloco; try { bloco = JSON.parse(blocoRaw); } catch(e){ err.textContent='Período inválido.'; return null; }
     var colab = _avColabMap[mt] || {};
-    var nome = (colab.nome || '').toUpperCase();
-    var cpf  = colab.cpf || '';
-    var admissao = colab.data_admissao || '';
+    return { colab: colab, bloco: bloco, dataEmit: dataEmit, cidade: cidade, err: err };
+  }
 
-    var logoSrc = (document.querySelector('.logo-img')||{}).src || '';
-
-    var CSS =
-      '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}'+
-      'body{background:#CBD5E1;font-family:"DM Sans","Helvetica Neue",Arial,sans-serif;padding:32px 16px 64px;display:flex;flex-direction:column;align-items:center;gap:32px;color:#111;}'+
-      '.page{width:100%;max-width:760px;background:#fff;padding:52px 60px 60px;box-shadow:0 4px 32px rgba(0,0,0,.18);font-size:12px;line-height:1.7;color:#222;}'+
-      '.av-title{font-size:22px;font-weight:600;text-align:center;color:#111;text-decoration:underline;text-underline-offset:6px;margin-bottom:34px;}'+
-      '.av-logo{width:52px;height:52px;object-fit:contain;display:block;margin:0 auto 18px;}'+
-      '.av-dados{display:flex;flex-direction:column;gap:6px;margin-bottom:28px;}'+
-      '.av-dados div{font-size:12px;color:#222;}'+
-      '.av-dados strong{color:#111;font-weight:500;}'+
-      '.av-p{font-size:12px;color:#222;line-height:1.75;text-align:justify;margin-bottom:12px;}'+
-      '.av-cidade{font-size:12px;margin-top:40px;color:#222;}'+
-      '@media print{body{background:#fff;padding:0;}.page{box-shadow:none;max-width:100%;padding:48px 56px;}@page{size:A4 portrait;margin:0;}}';
-
-    var body =
-      (logoSrc ? '<img class="av-logo" src="'+logoSrc+'" alt="TATÁ Sushi">' : '')+
-      '<div class="av-title">Aviso de Gozo de Férias</div>'+
-      '<div class="av-dados">'+
-        '<div>Nome do Empregado : '+_avEsc(nome||'—')+'</div>'+
-        '<div>CPF : '+_avEsc(cpf||'—')+'</div>'+
-        '<div>Data de Admissão : '+_avFmtData(admissao)+'</div>'+
-        '<div>Início de Gozo das Férias : '+_avFmtData(bloco.ini)+'</div>'+
-        '<div>Período aquisitivo : '+_avFmtData(bloco.ini_aqui)+' à '+_avFmtData(bloco.fim_aqui)+'</div>'+
-      '</div>'+
-      '<p class="av-p">O empregador, através do presente documento, e em conformidade com o art. 135 da CLT, vem notificar o empregado, com antecedência de 30 (trinta) dias, a concessão de suas férias, cujo período de gozo terá inicio em '+_avFmtData(bloco.ini)+'.</p>'+
-      '<p class="av-p">Em concordância com a manifestação expressa do colaborador e com o art. 134 as férias poderão ser usufruidas em até três períodos, sendo que um não poderá ser inferior a quatorze dias corridos e os demais não poderão ser inferiores a cinco dias corridos, cada um.</p>'+
-      '<p class="av-p">As férias serão remuneradas com o acréscimo de 1/3 constitucional, se for o caso, ao abono pecuniário e ao adiantamento do 13° salário de acordo com o art. 7º, XVII da Constituição da República, e será pago até 2 (dois) dias antes do início do respectivo gozo de férias.</p>'+
-      '<div class="av-cidade">'+_avEsc(cidade)+', '+_avFmtDataExt(dataEmit)+'.</div>';
+  window.gerarAvisoFeriasPDF = function(){
+    var f = _avLerFormulario();
+    if (!f) return;
+    var nome = (f.colab.nome || '').toUpperCase();
+    var pageHtml = _avMontarBody(f.colab, f.bloco, f.dataEmit, f.cidade, _avAgora());
 
     var html = '<!DOCTYPE html><html lang="pt-BR"><head>'+
       '<meta charset="UTF-8">'+
       '<meta name="viewport" content="width=device-width,initial-scale=1">'+
       '<title>Aviso de Gozo de Férias · '+_avEsc(nome||'—')+' · TATÁ Sushi</title>'+
-      '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">'+
-      '<style>'+CSS+'</style>'+
-      '</head><body><div class="page">'+body+'</div></body></html>';
+      '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">'+
+      '<style>'+AV_RP_CSS+'</style>'+
+      '</head><body>'+pageHtml+'</body></html>';
 
     var w = window.open('', '_blank');
-    if (!w){ err.textContent = 'Permita pop-ups para gerar o PDF.'; return; }
+    if (!w){ f.err.textContent = 'Permita pop-ups para gerar o PDF.'; return; }
     w.document.write(html);
     w.document.close();
     w.focus();
     fecharModalAvisoFerias();
     setTimeout(function(){ w.print(); }, 500);
+  };
+
+  // ─── Envio pro fluxo de assinatura digital do app (tata_plus.docs_*) ──────
+  // Mesmo pipeline de 3 RPCs usado por admissao.html/doc.html/beneficios.html
+  // (ver docs/INTEGRACAO-DOCUMENTOS.md): upload pro bucket assinaturas/docs/ ->
+  // pendência no portal -> docs_enviar_para_assinatura -> vínculo de volta.
+  function _avComSupaPromise() { return new Promise(function(resolve){ comSupa(resolve); }); }
+
+  function _avUuid() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  var _avTipoIdCache = null;
+  function _avCarregarTipoId() {
+    if (_avTipoIdCache) return Promise.resolve(_avTipoIdCache);
+    return _avComSupaPromise().then(function(supa) {
+      return supa.rpc('doc_tipos_listar').then(function(r) {
+        if (r.error) throw r.error;
+        var tipo = (r.data || []).find(function(t) { return t.nome === 'Aviso de Gozo de Férias'; });
+        _avTipoIdCache = tipo ? tipo.id : null;
+        return _avTipoIdCache;
+      });
+    });
+  }
+
+  // Renderiza a página num iframe isolado e converte pra Blob PDF — mesma técnica
+  // de admissao.html (_admHtmlParaPdfBlob): html2pdf precisa rodar na mesma
+  // realm do elemento que rasteriza, por isso o script é carregado dentro do
+  // próprio iframe, não na página principal.
+  function _avHtmlParaPdfBlob(pageHtml) {
+    return new Promise(function(resolve, reject) {
+      var iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:1131px;border:0;';
+      document.body.appendChild(iframe);
+      var terminado = false;
+      function cleanup() { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }
+      function terminar(fn, arg) { if (terminado) return; terminado = true; fn(arg); setTimeout(cleanup, 30000); }
+      function rasterizar(tentativas) {
+        try {
+          var win = iframe.contentWindow;
+          if (!win || !win.html2pdf) {
+            if (tentativas > 0) { setTimeout(function() { rasterizar(tentativas - 1); }, 150); return; }
+            terminar(reject, new Error('Falha ao carregar biblioteca de geração de PDF.')); return;
+          }
+          var el = iframe.contentDocument.querySelector('.page');
+          if (!el) { terminar(reject, new Error('Falha ao montar o documento.')); return; }
+          win.html2pdf().set({
+            margin: 0,
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+          }).from(el).outputPdf('blob').then(function(blob) {
+            terminar(resolve, blob);
+          }).catch(function(err) { terminar(reject, err); });
+        } catch (err) { terminar(reject, err); }
+      }
+      iframe.onload = function() { setTimeout(function() { rasterizar(20); }, 150); };
+      setTimeout(function() { terminar(reject, new Error('Tempo esgotado ao montar o documento.')); }, 15000);
+      // CSS "de tela" tem sombra/cartão flutuante pensados pro preview no navegador —
+      // pro PDF achata pro equivalente do @media print (mesmo pdfOverrides de admissao.html).
+      var pdfOverrides = '.page{box-shadow:none;max-width:100%;padding:24px 36px 36px;}'+
+        '.rp-p,.rp-intro,.rp-section{break-inside:avoid;page-break-inside:avoid;}';
+      var htmlDoc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'+
+        '<style>'+AV_RP_CSS+pdfOverrides+'body{padding:0;background:#fff;}</style></head><body>'+pageHtml+
+        '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>'+
+        '</body></html>';
+      iframe.srcdoc = htmlDoc;
+    });
+  }
+
+  window.enviarAvisoFeriasParaAssinatura = function(){
+    var f = _avLerFormulario();
+    if (!f) return;
+    if (!f.colab.matricula) { f.err.textContent = 'Colaborador sem matrícula cadastrada — não é possível enviar.'; return; }
+
+    var pageHtml = _avMontarBody(f.colab, f.bloco, f.dataEmit, f.cidade, _avAgora());
+    var nome = (f.colab.nome || '').toUpperCase();
+
+    setBtnLoading('av-btn-assinar', true, 'Enviando…');
+    _avCarregarTipoId().then(function(tipoId) {
+      if (!tipoId) throw new Error('Tipo "Aviso de Gozo de Férias" não encontrado no catálogo (dp_rh.doc_tipos).');
+      return _avHtmlParaPdfBlob(pageHtml).then(function(blob) {
+        var arquivoPath = 'docs/' + _avUuid() + '.pdf';
+        var nomeArquivo = (nome || f.colab.matricula) + ' - Aviso de Gozo de Férias.pdf';
+        return _avComSupaPromise().then(function(supa) {
+          return supa.storage.from('assinaturas').upload(arquivoPath, blob, { upsert: true, contentType: 'application/pdf' }).then(function(rUp) {
+            if (rUp.error) throw rUp.error;
+            return supa.rpc('colaborador_documento_pendente_assinatura_salvar', {
+              p_matricula: f.colab.matricula, p_tipo_id: tipoId, p_nome_arquivo: nomeArquivo, p_link: arquivoPath,
+              p_mime: 'application/pdf', p_tamanho: blob.size, p_link_bucket: 'assinaturas'
+            });
+          }).then(function(rRow) {
+            if (rRow.error) throw rRow.error;
+            var linha = rRow.data;
+            var tituloVersionado = 'Aviso de Gozo de Férias' + (linha.versao > 1 ? ' (v' + linha.versao + ')' : '');
+            return supa.schema('tata_plus').rpc('docs_enviar_para_assinatura', {
+              p_matricula: f.colab.matricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
+              p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
+              p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true
+            }).then(function(rEnvio) {
+              if (rEnvio.error) throw rEnvio.error;
+              var envio = rEnvio.data;
+              if (!envio || !envio.ok) throw new Error((envio && envio.erro) || 'Falha ao enviar pra assinatura.');
+              return supa.rpc('colaborador_documento_definir_atribuicao', {
+                p_id: linha.id, p_assinatura_atribuicao_id: envio.atribuicao_id
+              }).then(function(rLink) {
+                if (rLink.error) throw rLink.error;
+                return rLink.data;
+              });
+            });
+          });
+        });
+      });
+    }).then(function() {
+      setBtnLoading('av-btn-assinar', false, 'Enviar para Assinatura Digital');
+      fecharModalAvisoFerias();
+      alert('Aviso de Gozo de Férias enviado — pendente de assinatura.');
+    }, function(err2) {
+      setBtnLoading('av-btn-assinar', false, 'Enviar para Assinatura Digital');
+      f.err.textContent = 'Erro ao enviar: ' + (err2 && err2.message || err2);
+    });
   };
 })();
 </script>
