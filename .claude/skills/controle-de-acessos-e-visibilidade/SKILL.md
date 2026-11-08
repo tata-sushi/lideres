@@ -31,7 +31,8 @@ description: >-
 
 **Esta é a fonte única** de tudo o que é acesso e visibilidade no portal: quem abre cada página, o que vê
 e faz dentro dela, que dado sensível aparece e de quem são os registros. Os guias antigos
-(`git-claude/readmeauth.md`, `readmemenu.md`, `CLAUDE.md` §1 e §3) estão superados por esta skill.
+(`git-claude/readmeauth.md`, `readmemenu.md` e o modelo antigo do `CLAUDE.md` §1 e §3) foram apagados em
+08/11/2026; o que ainda valia está aqui.
 
 As páginas de `compliance/**` abrem **só embarcadas no app Tatá Plus** (num iframe). Cada página
 controla **por pessoa** o que aparece dentro dela, por **IDs** — atributos `data-*` no HTML que casam
