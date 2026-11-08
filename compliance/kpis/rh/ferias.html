@@ -63,6 +63,8 @@
   .filter-label { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); }
   .filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); width: 100%; cursor: pointer; }
   .filter-select:focus { outline: none; border-color: var(--carbon); }
+  input[type="date"].filter-select { background-image: none; padding: 8px 12px; min-height: 38px; }
+  @media (min-width: 768px) { body[data-tab="kpis"] .filters-row { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   .filters-actions { display: flex; align-items: center; justify-content: space-between; padding-top: 2px; }
   .results-count { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; color: var(--muted); }
   .results-count span { color: var(--carbon); font-weight: 500; }
@@ -460,11 +462,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <option value="sem-direito">Sem direito</option>
       </select>
     </div>
-    <div class="filter-group" id="fAno-wrap" style="display:none">
-      <label class="filter-label" for="fAno">Ano</label>
-      <select class="filter-select" id="fAno" onchange="selAno=this.value;selMesVal=null;updateAll()">
-        <option value="Todos">Todos</option>
-      </select>
+    <div class="filter-group fper" style="display:none">
+      <label class="filter-label" for="fDe">De</label>
+      <input class="filter-select" id="fDe" type="date" onchange="selDe=this.value;selMesVal=null;updateAll()">
+    </div>
+    <div class="filter-group fper" style="display:none">
+      <label class="filter-label" for="fAte">Até</label>
+      <input class="filter-select" id="fAte" type="date" onchange="selAte=this.value;selMesVal=null;updateAll()">
     </div>
   </div>
   <div class="filters-actions">
@@ -1973,8 +1977,8 @@ function clearFeriasFilters() {
   document.getElementById('fUnidade').value = 'Todos';
   document.getElementById('fDepto').value = 'Todos';
   document.getElementById('fStatus').value = 'Todos';
-  selAno = 'Todos'; selMesVal = null;
-  var fA = document.getElementById('fAno'); if (fA) fA.value = 'Todos';
+  selDe = ''; selAte = ''; selMesVal = null;
+  ['fDe', 'fAte'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
   cfMes = null; cfMesEmp = null;
   document.body.classList.remove('cf-active');
   updateAll();
@@ -2021,7 +2025,7 @@ function getFilt() {
   var hoje = _hojeIso(), cf = _cfMesAno();
   return _feriasCache.filter(function(p) {
     if (!_filtroUniDepto(p)) return false;
-    return _periodos(p).some(function(x){ return (x[1] || x[0]) >= hoje && _noMes(x[0], cf); });
+    return _periodos(p).some(function(x){ return (x[1] || x[0]) >= hoje && _noMes(x[0], cf) && _noPeriodo(x[0]); });
   });
 }
 
@@ -2094,7 +2098,7 @@ function _expandPeriodos(d) {
   var out = [];
   pares.forEach(function(p, i) {
     var ini = d[p[0]], fim = d[p[1]];
-    if (!ini || (fim || ini) < hoje || !_noMes(ini, cf)) return;
+    if (!ini || (fim || ini) < hoje || !_noMes(ini, cf) || !_noPeriodo(ini)) return;
     out.push({ nome: d.nome, mt: d.mt, ini_aqui: d.ini_aqui, ini: ini, fim: fim, dias: _daysBetweenIso(ini, fim) || nums[i] });
   });
   return out;
@@ -2211,7 +2215,7 @@ function loadMore() { TAB_FER.verMais(); }
 function _situacaoBloco(ini, fim){ var h = _hojeIso(); return ini > h ? 'agendada' : ((fim || ini) >= h ? 'em-gozo' : 'gozada'); }
 function renderTable(filt) {
   var cf = _cfMesAno(), mapa = {}, linhas = [];
-  function noFiltroValor(ini){ return (selAno === 'Todos' || String(ini).slice(0, 4) === selAno) && (!selMesVal || String(ini).slice(0, 7) === selMesVal); }
+  function noFiltroValor(ini){ return _noPeriodo(ini) && (!selMesVal || String(ini).slice(0, 7) === selMesVal); }
   filt.forEach(function(p){
     var nums = p.frac ? String(p.frac).split('+').map(function(x){ return parseInt(x.trim(), 10) || 0; }) : [];
     var venda = p.abono === 'Sim' && nums.length > 1 ? nums[nums.length - 1] : 0;
@@ -2314,7 +2318,7 @@ function renderChart() {
     var cnt = 0;
     srcRows.forEach(function(p) {
       ['ini1','ini2','ini3'].forEach(function(k){
-        if (!p[k]) return;
+        if (!p[k] || !_noPeriodo(p[k])) return;
         var pd = new Date(p[k] + 'T00:00:00');
         if (pd.getMonth() === m && pd.getFullYear() === y) cnt++;
       });
@@ -2365,7 +2369,9 @@ function renderChart() {
 // O banco (tata_plus.ferias_valores_listar) só manda os recibos para quem tem a área liberada em
 // dp_rh.perm_ver_valores ('ferias' ou 'geral'); para os demais vem pode_ver=false e a parte some.
 var _valores = { pode: false, rows: [] };
-var selAno = 'Todos', selMesVal = null;   // selMesVal = 'AAAA-MM' clicado no gráfico por mês
+var selDe = '', selAte = '', selMesVal = null;   // período do gozo (AAAA-MM-DD); selMesVal = 'AAAA-MM' clicado no gráfico por mês
+// data de início do gozo dentro do filtro De / Até
+function _noPeriodo(iso) { iso = String(iso || '').slice(0, 10); return !!iso && (!selDe || iso >= selDe) && (!selAte || iso <= selAte); }
 var _chVal = {};
 function _carregarValores() {
   return new Promise(function(resolve){
@@ -2375,25 +2381,21 @@ function _carregarValores() {
         _valores = { pode: !!d.pode_ver, rows: (Array.isArray(d.recibos) ? d.recibos : []).filter(function(x){
           return MT_EXCLUIDOS.indexOf(String(x.mt).trim()) === -1 && x.ini_gozo;
         }) };
-        var anos = Array.from(new Set(_valores.rows.map(function(x){ return String(x.ini_gozo).slice(0, 4); }))).sort().reverse();
-        var fA = document.getElementById('fAno');
-        if (fA) fA.innerHTML = '<option value="Todos">Todos</option>' + anos.map(function(a){ return '<option value="' + a + '">' + a + '</option>'; }).join('');
-        _mostrarFiltroAno();
+        _mostrarFiltroPeriodo();
         resolve();
       }, function(){ resolve(); });
     });
   });
 }
-function _mostrarFiltroAno() {
-  var w = document.getElementById('fAno-wrap');
-  if (w) w.style.display = (_pageTab === 'kpis' && _valores.pode) ? '' : 'none';
+function _mostrarFiltroPeriodo() {
+  Array.prototype.forEach.call(document.querySelectorAll('.fper'), function(w){ w.style.display = _pageTab === 'kpis' ? '' : 'none'; });
 }
-// recibos com os filtros (unidade, departamento, ano) e, se comMes, o mês clicado no gráfico
+// recibos com os filtros (unidade, departamento, De/Até) e, se não semMes, o mês clicado no gráfico
 function _valoresFiltrados(semMes) {
   return _valores.rows.filter(function(r){
     if (selUni !== 'Todos' && r.unidade !== selUni) return false;
     if (selDepto !== 'Todos' && r.departamento !== selDepto) return false;
-    if (selAno !== 'Todos' && String(r.ini_gozo).slice(0, 4) !== selAno) return false;
+    if (!_noPeriodo(r.ini_gozo)) return false;
     if (!semMes && selMesVal && String(r.ini_gozo).slice(0, 7) !== selMesVal) return false;
     return true;
   });
@@ -2429,13 +2431,12 @@ function _graficoValMes(rows) {
   var soma = {}, qtd = {};
   rows.forEach(function(r){ var k = String(r.ini_gozo).slice(0, 7); soma[k] = (soma[k] || 0) + (+r.liquido || 0); qtd[k] = (qtd[k] || 0) + 1; });
   var meses = [];
-  if (selAno !== 'Todos') { for (var m = 1; m <= 12; m++) meses.push(selAno + '-' + String(m).padStart(2, '0')); }
-  else {
-    var ks = Object.keys(soma).sort();
-    if (ks.length) {
-      var y = +ks[0].slice(0, 4), mm = +ks[0].slice(5, 7), fimK = ks[ks.length - 1];
-      while (true) { var k = y + '-' + String(mm).padStart(2, '0'); meses.push(k); if (k >= fimK) break; mm++; if (mm > 12) { mm = 1; y++; } }
-    }
+  // do início ao fim do filtro De/Até (ou do 1º ao último mês com recibo), um mês por barra
+  var ks = Object.keys(soma).sort();
+  var iniK = selDe ? selDe.slice(0, 7) : ks[0], fimK = selAte ? selAte.slice(0, 7) : ks[ks.length - 1];
+  if (iniK && fimK && iniK <= fimK) {
+    var y = +iniK.slice(0, 4), mm = +iniK.slice(5, 7), guarda = 0;
+    while (guarda++ < 240) { var k = y + '-' + String(mm).padStart(2, '0'); meses.push(k); if (k >= fimK) break; mm++; if (mm > 12) { mm = 1; y++; } }
   }
   var labels = meses.map(function(k){ return k.slice(5, 7) + '/' + k.slice(2, 4); });
   var dados = meses.map(function(k){ return soma[k] ? Math.round(soma[k]) : 0; });
@@ -2475,10 +2476,8 @@ var anoLabelsPlugin = {
   }
 };
 function _graficoValAno() {
-  // ignora o filtro Ano e o mês clicado (o ano escolhido fica em destaque); respeita unidade e departamento
-  var rows = _valores.rows.filter(function(r){
-    return (selUni === 'Todos' || r.unidade === selUni) && (selDepto === 'Todos' || r.departamento === selDepto);
-  });
+  // respeita unidade, departamento e De/Até (ignora o mês clicado)
+  var rows = _valoresFiltrados(true);
   var soma = {}, qtd = {};
   rows.forEach(function(r){ var a = String(r.ini_gozo).slice(0, 4); soma[a] = (soma[a] || 0) + (+r.liquido || 0); qtd[a] = (qtd[a] || 0) + 1; });
   var anos = Object.keys(soma).sort();
@@ -2488,15 +2487,16 @@ function _graficoValAno() {
     data: { labels: anos, datasets: [{
       data: anos.map(function(a){ return Math.round(soma[a]); }),
       rotulos: anos.map(function(a){ return qtd[a] + ' (' + _brlK(soma[a]) + ')'; }),
-      backgroundColor: anos.map(function(a){ return selAno === 'Todos' || selAno === a ? '#35383F' : 'rgba(53,56,63,0.45)'; }),
+      backgroundColor: '#35383F',
       borderWidth: 0, borderRadius: 5, barPercentage: 0.6, maxBarThickness: 22 }] },
     plugins: [anoLabelsPlugin],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       indexAxis: 'y',
       layout: { padding: { right: 104 } },   // espaço para "56 (R$ 170,1k)" no fim da barra
-      onClick: function(e, els){ if (!els.length) return; var a = anos[els[0].index]; selAno = selAno === a ? 'Todos' : a; selMesVal = null;
-        var fA = document.getElementById('fAno'); if (fA) fA.value = selAno; setTimeout(updateAll, 0); },
+      onClick: function(e, els){ if (!els.length) return; var a = anos[els[0].index], ja = selDe === a + '-01-01' && selAte === a + '-12-31';
+        selDe = ja ? '' : a + '-01-01'; selAte = ja ? '' : a + '-12-31'; selMesVal = null;   // clicar num ano = De/Até daquele ano (de novo = tira)
+        document.getElementById('fDe').value = selDe; document.getElementById('fAte').value = selAte; setTimeout(updateAll, 0); },
       onHover: function(e, els){ if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
       scales: {
@@ -2609,7 +2609,7 @@ function setPageTab(tab) {
   var kr = document.getElementById('kpiRow'); if (kr) kr.style.display = isSobre ? 'none' : '';
   var fb = document.querySelector('.filter-bar'); if (fb) fb.style.display = isSobre ? 'none' : '';
   var fs = document.getElementById('fStatus'); if (fs && fs.parentNode) fs.parentNode.style.display = tab === 'devolutivas' ? '' : 'none';
-  _mostrarFiltroAno();
+  _mostrarFiltroPeriodo();
   document.getElementById('tab-kpis-content').style.display = tab === 'kpis' ? '' : 'none';
   document.getElementById('tab-devolutivas-content').style.display = tab === 'devolutivas' ? '' : 'none';
   if (isSobre) { var lo = document.getElementById('loading-overlay'); if (lo) lo.classList.remove('show'); }
