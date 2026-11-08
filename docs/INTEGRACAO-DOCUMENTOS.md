@@ -2232,4 +2232,34 @@ bate com o esperado. "Gerar PDF" (impressão) não foi alterado no
 comportamento, só passou a reaproveitar `_avMontarBody` em vez de montar o
 HTML duas vezes.
 
-_Última atualização: 2026-11-08._
+**Bug encontrado (2026-11-09) e corrigido: aba Pendências (`doc.html`) escondia
+pendências reais de assinatura quando a mesma pessoa tinha mais de uma do
+mesmo tipo.** Usuário reportou vendo 3 "Termo de Ciência — Saúde Preventiva"
+pendentes no app (tela do colaborador, cada um com seu próprio status
+"Pendente") mas só 1 na tabela "Pendentes de Assinatura" do portal. Causa:
+`_pendItens()` agrupava por `matricula + tipo_id + competencia`, mantendo só
+a linha de maior `versao` — pensado originalmente pra imitar o "mostra só a
+versão mais recente" que `doc.html` já faz na pasta do colaborador (ver
+decisão de 2026-08-22, "gerar de novo não sobrescreve — vira versão nova").
+Mas essa regra faz sentido só na pasta por pessoa (histórico de um tipo de
+documento recorrente); na aba Pendências — visão agregada de TODO mundo com
+assinatura em aberto — cada linha com `status='pendente_assinatura'` é uma
+cobrança de assinatura de verdade, ainda pendente no app, e precisa
+aparecer: esconder a v1/v2 só porque existe uma v3 mais nova dava a entender
+(errado) que só restava 1 pendência, quando na real continuavam 3 abertas
+(a decisão já documentada é clara: gerar de novo nunca cancela a anterior,
+"a antiga fica pendente pra sempre se ele não assinar").
+
+Corrigido: `_pendItens()` agora lista uma linha por documento com
+`status='pendente_assinatura'` (sem agrupar por colaborador+tipo+competência),
+usando o `id` de cada linha pra "Ver"/"Excluir" continuarem agindo na
+pendência certa. Versão maior que 1 aparece no nome do documento ("... (v2)",
+"... (v3)") só pra diferenciar visualmente linhas com o mesmo nome na
+tabela.
+
+Testado com Playwright (mock de `colaboradorDocumentos` com 3 pendências do
+mesmo tipo/colaborador em versões diferentes + 1 linha já `entregue` do
+mesmo tipo): as 3 pendências aparecem como 3 linhas separadas (v1 sem
+sufixo, v2 e v3 com sufixo), e a linha assinada não entra na lista.
+
+_Última atualização: 2026-11-09._
