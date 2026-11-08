@@ -20,8 +20,9 @@ configura pessoa a pessoa. O nível **Linha** decide **de quem são os registros
 
 - **O nível Linha só filtra.** Nunca abre página, aba ou botão. Quem não tem a página liberada
   (nível Página) não chega a ver linha nenhuma, mesmo sendo RH.
-- **Valor (R$) tem as duas travas:** precisa da área liberada (`pode_ver_valores`, sem bypass
-  de admin) **e** passa pelo corte de linha. Admin sem a área não vê R$, mesmo vendo todas as linhas.
+- **Valor e Contato têm as duas travas:** precisam da área liberada (`pode_ver_valores` /
+  `pode_ver_contato`, sem bypass de admin) **e** passam pelo corte de linha. Admin sem a área não vê R$,
+  CPF, nascimento, saúde, e-mail nem telefone, mesmo vendo todas as linhas.
 - **Quem vê, grava.** Se a pessoa vê a linha, pode agir nela (agendar, editar…), inclusive na
   própria. **Se o botão da ação aparece** é decisão do nível Botão, não deste.
 
@@ -33,7 +34,8 @@ configura pessoa a pessoa. O nível **Linha** decide **de quem são os registros
 |---|---|---|
 | Institucional | aba Sobre, drawer Sobre (versão, "o que é", números do portal, responsável), textos de ajuda | nenhum: igual para todos que abrem a página |
 | Dado de pessoa | lista, kanban, ficha do colaborador e os **KPIs e gráficos calculados a partir dessas linhas** | nível Linha |
-| Valores em R$ | recibos, líquido, salário | nível Valor **e** nível Linha |
+| Valor | R$ (recibos, líquido, salário), CPF, data de nascimento, saúde (atestados, exames) | nível Valor **e** nível Linha |
+| Contato | e-mail, telefone | nível Contato **e** nível Linha |
 
 Os KPIs e gráficos não precisam de nada a mais: são calculados no navegador a partir das
 linhas que a RPC devolveu, então já saem só da equipe.
@@ -107,7 +109,9 @@ select …
 ```
 
 - **Calcule a subárvore uma vez** (no `with eu`), não por linha.
-- `security definer` + `search_path` fixo + `revoke … from public` e `grant … to authenticated`,
+- A função também confere a **página** (`gov_tenho_acesso`) e mascara **Valor** e **Contato**: molde
+  completo em `references/servidor.md`.
+- `security definer` + `search_path` fixo + `revoke … from public, anon` e `grant … to authenticated`,
   o mesmo padrão das migrations de Férias.
 - **A RPC não recebe "quem sou eu".** O servidor descobre pelo JWT. Nunca aceite matrícula do
   líder vinda do navegador.
@@ -127,7 +131,8 @@ if not dp_rh.ferias_eh_rh(v_mt) and not (v_alvo = any(tata_plus.minha_subarvore(
 end if;
 ```
 
-Ações que são só do RH (ajustar direito, quitar, cancelar agendamento…) continuam só do RH.
+Ações que são só do RH (ajustar direito, quitar, cancelar agendamento…) continuam só do RH. O molde
+completo da escrita (botão com `pode_botao` + linha + autor do login) está em `references/servidor.md`.
 
 ---
 
@@ -151,9 +156,10 @@ O registro precisa ligar a uma **matrícula** para entrar no corte.
 - **Sem id e sem catálogo.** O nível Linha não aparece no painel do admin nem na Auditoria de páginas.
 - **Estado vazio:** "sem equipe" pode ver só a própria linha, ou nenhuma. A página precisa de uma
   mensagem de vazio, e o Sobre continua lá.
-- Os filtros de equipe que já existem no front (`_liderMatchVaga` em `recrutamento.html`,
-  `session.unidade` em `admissao.html`) **não protegem nada** e dependem de campos que a sessão do
-  `gate.js` não tem. Quando a página entrar no nível Linha, troque por RPC escopada.
+- Filtros de equipe no navegador **não protegem nada** e dependem de campos que a sessão do `gate.js`
+  não tem. Mapeamento de 08/11/2026: só o `_liderMatchVaga` do `recrutamento.html` ainda age (o líder vê
+  0 vagas ou todas, conforme o caminho); os filtros por unidade de Armários e Sanções já não fazem nada.
+  Tire cada um **só junto** com o corte de linha no servidor, senão o líder passa a ver mais.
 
 ---
 
@@ -196,9 +202,11 @@ select count(*) as na_subarvore,
 ## Checklist
 
 - [ ] A página lê dado de pessoa **só** por RPC `security definer`, sem parâmetro de identidade.
+- [ ] A função confere a página (`gov_tenho_acesso`) e, se for ação, o botão (`pode_botao`).
 - [ ] A RPC calcula `minha_subarvore()` uma vez e filtra `todas or matricula = any(sub)`.
 - [ ] A escrita faz a mesma checagem antes de gravar.
-- [ ] Admin/RH pela regra de `ferias_eh_rh`; Valor continua exigindo `pode_ver_valores`.
+- [ ] Admin/RH pela regra de `ferias_eh_rh`; Valor e Contato continuam exigindo `pode_ver_valores` /
+  `pode_ver_contato`.
 - [ ] Tabela e view do dado com `revoke … from anon, authenticated` (a RPC é a única porta).
 - [ ] O Sobre não passa pelo corte; KPIs e gráficos saem das linhas já filtradas.
 - [ ] Estado vazio tratado ("sem equipe").
