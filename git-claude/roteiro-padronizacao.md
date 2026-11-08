@@ -63,9 +63,9 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 | `kpis/tatahouse/cardapio.html` | `governanca-kpis-tatahouse-cardapio` | 5 | 11 | 15 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `ps.html` | `governanca-parceiros-sistemas` | 3 | 7 | 3 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | **3. Auditoria e organograma** | | | | | | | | | | |
-| `auditoria/paginas.html` | `governanca-auditoria-paginas` | 2 | 3 | 2 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `auditoria/docsrh.html` | `governanca-auditoria-docsrh` | 2 | 3 | 2 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `areas/organograma.html` | `governanca-areas-organograma` | 0 | 1 | 5 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `auditoria/paginas.html` | `governanca-auditoria-paginas` | 2 | 3 | 2 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `auditoria/docsrh.html` | `governanca-auditoria-docsrh` | 2 | 3 | 2 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `areas/organograma.html` | `governanca-areas-organograma` | 0 | 1 | 5 | 🔶 08/11 (página, botão, Valor; Linha ⏸ dono) | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | **4. Menus (cards com data-access-id) — entram juntos na Etapa 2+3** | | | | | | | | | | |
 | `areas/institucional/index.html` | `governanca-institucional` | 0 | 0 | 0 | ⏸ Etapa 2+3 | ⏳ | ⏳ | ⏳ | — | — |
 | `auditoria/index.html` | `governanca-auditoria` | 0 | 0 | 0 | ⏸ Etapa 2+3 | ⏳ | ⏳ | ⏳ | — | — |
@@ -78,25 +78,30 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 | `kpis/tatahouse/index.html` | `governanca-kpis-tatahouse` | 0 | 0 | 0 | ⏸ Etapa 2+3 | ⏳ | ⏳ | ⏳ | — | — |
 | `menucompliance.html` | `governanca-menu` | 0 | 0 | 0 | ⏸ Etapa 2+3 | ⏳ | ⏳ | ⏳ | — | — |
 | **5. Conteúdo institucional e conceitos (só nível Página; sem função de dado)** | | | | | | | | | | |
-| `areas/institucional/idconceitual.html` | `governanca-institucional-idconceitual` | 0 | 0 | 0 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
-| `areas/institucional/idvisual.html` | `governanca-institucional-idvisual` | 0 | 0 | 0 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
-| `areas/institucional/papelaria.html` | `governanca-institucional-papelaria` | 0 | 1 | 0 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `areas/rh/papeis.html` | `governanca-areas-rh-papeis` | 0 | 0 | 0 | ⏳ | ⏳ | ⏳ | — | — | — |
+| `areas/institucional/idconceitual.html` | `governanca-institucional-idconceitual` | 0 | 0 | 0 | ✅ 08/11 (só página) | ⏳ | ⏳ | ⏳ | — | — |
+| `areas/institucional/idvisual.html` | `governanca-institucional-idvisual` | 0 | 0 | 0 | ✅ 08/11 (só página) | ⏳ | ⏳ | ⏳ | — | — |
+| `areas/institucional/papelaria.html` | `governanca-institucional-papelaria` | 0 | 1 | 0 | ⏸ item 3 (lê planilha publicada com dado de pessoa, fora do servidor) | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `areas/rh/papeis.html` | `governanca-areas-rh-papeis` | 0 | 0 | 0 | ✅ 08/11 (só página) | ⏳ | ⏳ | — | — | — |
 | `areas/rh/ouvidoria-qrcode.html` | `governanca-areas-rh-ouvidoria-qrcode` | 0 | 0 | 0 | ✅ 08/11 (só página) | ⏳ | ⏳ | — | — | — |
-| `areas/tatahouse/papeis.html` | `governanca-areas-tatahouse-papeis` | 0 | 0 | 0 | ⏳ | ⏳ | ⏳ | — | — | — |
-| `conceitos/5s.html` | `governanca-conceitos-5s` | 0 | 0 | 0 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
-| `conceitos/governanca.html` | `governanca-conceitos-governanca` | 0 | 0 | 0 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
-| `conceitos/kanban.html` | `governanca-conceitos-kanban` | 0 | 0 | 0 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
+| `areas/tatahouse/papeis.html` | `governanca-areas-tatahouse-papeis` | 0 | 0 | 0 | ✅ 08/11 (só página) | ⏳ | ⏳ | — | — | — |
+| `conceitos/5s.html` | `governanca-conceitos-5s` | 0 | 0 | 0 | ✅ 08/11 (só página) | ⏳ | ⏳ | ⏳ | — | — |
+| `conceitos/governanca.html` | `governanca-conceitos-governanca` | 0 | 0 | 0 | ✅ 08/11 (só página) | ⏳ | ⏳ | ⏳ | — | — |
+| `conceitos/kanban.html` | `governanca-conceitos-kanban` | 0 | 0 | 0 | ✅ 08/11 (só página) | ⏳ | ⏳ | ⏳ | — | — |
 
 ## Ordem sugerida para a skill de acessos
 
 1. **Grupo 1** (RH) fica por último: só quando o dono pedir (decisão de 08/11/2026). Dentro dele, primeiro as páginas com ação e dado sensível — Sanções, Documentos, Recrutamento, Desligamentos, Cargos e Salários, Folha, Benefícios, Medicina, Performance — depois as demais.
 2. **Grupo 2**: Manutenção e Parceiros & Sistemas agora; Abastecimento, Estoque semanal e Checklist de limpeza só depois do item 3 (cliente próprio) ser liberado pelo dono.
-3. **Grupo 3**: Auditoria e Organograma.
+3. **Grupo 3**: Auditoria e Organograma — feito em 08/11 (migration 20261130). Pendências do Organograma: (a) **Linha**: hoje a árvore inteira aparece para quem abre a página; cortar para a subárvore do líder muda o produto, então fica para o dono decidir; (b) a máscara de **saúde** (próximo exame) é da função compartilhada com Medicina e entra na passagem dessa página (grupo 1); (c) os números do drawer leem uma view direto, não por função — organizar quando a skill `drawer-sobre` passar por lá.
 4. **Grupo 4**: todos os menus de uma vez, junto com a camada de acesso (Etapa 2+3, aguardando o dono).
-5. **Grupo 5**: só conferir página e gate; não têm função de dado.
+5. **Grupo 5**: só conferir página e gate; não têm função de dado — conferido em 08/11 (gate, `GOV_PAGE_ID` e catálogo ok nas oito). Exceção: a Papelaria monta documentos lendo uma planilha publicada com nome, matrícula, cargo e unidade, sem login — mesmo caso do item 3 (cliente próprio), aguarda o dono.
+
+**Item transversal (todas as páginas com drawer Sobre):** os "Números" do drawer leem uma view direto, não por função. Trocar por uma função do servidor é uma passagem única em todas as páginas, junto com a skill `drawer-sobre`.
 
 ## Histórico
+
+- 08/11/2026 — Grupo 5 conferido (só página): sete páginas ✅; Papelaria aguarda o item 3.
+- 08/11/2026 — Auditoria de páginas, Auditoria de documentos e Organograma (grupo 3) para a skill de acessos (migration 20261130): porta da página e do botão no servidor, nascimento não sai mais do servidor, nada para anon.
 
 - 08/11/2026 — Manutenção e Parceiros & Sistemas (grupo 2) concluídos para a skill de acessos (migrations 20261128 e 20261129).
 - 08/11/2026 — Férias (piloto do nível Linha), Cardápio Tatá House e ouvidoria-qrcode concluídos para a skill de acessos. Etapas 1 e 5 (código morto; identidade e fim do sandbox) aplicadas em todas as páginas — por isso várias estão "parcial": falta a passagem página a página de botão, Linha e máscaras.
