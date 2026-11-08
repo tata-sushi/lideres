@@ -8,7 +8,7 @@ chaves existentes, veja "Como migrar" no fim (renomear tem custo).
 Para levantar o estado atual e achar divergências, rode:
 
 ```bash
-python3 .claude/skills/controle-acesso-abas-botoes/scripts/auditar-acessos.py
+python3 .claude/skills/controle-de-acessos-e-visibilidade/scripts/auditar-acessos.py
 ```
 
 ## 1. Formato (revisão)

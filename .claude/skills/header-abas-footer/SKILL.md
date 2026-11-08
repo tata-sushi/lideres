@@ -14,7 +14,7 @@ description: >-
   página de dashboard; e quando o pedido falar em "header", "cabeçalho",
   "topo", "abas", "seletor de abas", "tabs", "rodapé", "footer", "zoom",
   "atualizar", "barra de ferramentas". NÃO cobre os IDs de acesso das abas
-  (skill controle-acesso-abas-botoes) nem os gráficos/cards internos nem as
+  (skill controle-de-acessos-e-visibilidade) nem os gráficos/cards internos nem as
   sub-abas .dash-subtabs (skill dashboards-kpi-graficos) — complementa as duas.
 ---
 
@@ -25,7 +25,7 @@ Chrome padrão das páginas **dashboard** (`compliance/kpis/**`). **Referência 
 > ⚠️ Os readmes antigos `readmehefdash.md` / `CLAUDE.md §2` descreviam um header com **`.header-title` + chip de usuário** — esse padrão foi **superado**. O header atual é a **barra de ferramentas** (sem título, sem chip). Siga o recrutamento / este documento.
 
 ## Relação com as outras skills
-- **`controle-acesso-abas-botoes`** — os `data-aba-id`/`data-botao-id` (quem vê cada aba/botão). Esta skill cuida do **visual/estrutura**; a outra, do **acesso**.
+- **`controle-de-acessos-e-visibilidade`** — os `data-aba-id`/`data-botao-id` (quem vê cada aba/botão). Esta skill cuida do **visual/estrutura**; a outra, do **acesso**.
 - **`dashboards-kpi-graficos`** — o que vai **dentro** das abas (KPIs, gráficos, tabelas) **e as sub-abas `.dash-subtabs`** (não fazem parte desta skill).
 
 ---
@@ -224,7 +224,7 @@ Barra horizontal **rolável** (sem scrollbar visível). Cada aba ocupa o mínimo
 </div>
 ```
 
-**Mecânica** (`setTab`): seta `document.body.dataset.view = tab`, tira `.active` de todas e coloca em `#tab-<tab>`; o conteúdo aparece/some por `body[data-view="…"]`. Cada aba tem `id="tab-<slug>"` + `data-aba-id="<GOV_PAGE_ID>::<slug>"` (acesso → skill `controle-acesso-abas-botoes`).
+**Mecânica** (`setTab`): seta `document.body.dataset.view = tab`, tira `.active` de todas e coloca em `#tab-<tab>`; o conteúdo aparece/some por `body[data-view="…"]`. Cada aba tem `id="tab-<slug>"` + `data-aba-id="<GOV_PAGE_ID>::<slug>"` (acesso → skill `controle-de-acessos-e-visibilidade`).
 
 ```javascript
 function setTab(tab){

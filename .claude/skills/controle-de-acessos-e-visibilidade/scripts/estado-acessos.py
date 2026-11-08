@@ -10,7 +10,7 @@ catalogo.txt, valores.txt — os SQLs estão no topo daquele script) e lê os id
 ⚠️ O estado.json tem nomes de pessoas: gere no scratchpad, nunca no repo.
 
 Uso:
-    python3 .claude/skills/controle-acesso-abas-botoes/scripts/estado-acessos.py <pasta_dump> <saida.json> [raiz]
+    python3 .claude/skills/controle-de-acessos-e-visibilidade/scripts/estado-acessos.py <pasta_dump> <saida.json> [raiz]
 
 [raiz] = pasta que contém `compliance/` (padrão: o repo). Use uma cópia do main
 (`git archive origin/main compliance | tar -x -C <pasta>`) quando o repo tiver edições em andamento.

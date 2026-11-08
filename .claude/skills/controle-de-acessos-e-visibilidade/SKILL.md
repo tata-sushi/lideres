@@ -1,8 +1,8 @@
 ---
-name: controle-acesso-abas-botoes
+name: controle-de-acessos-e-visibilidade
 description: >-
-  Padroniza e orienta o controle de acesso das páginas de Governança, em 5
-  níveis. Quatro com id, que o admin configura por pessoa: PÁGINA
+  Padroniza e orienta o controle de acessos e a visibilidade das páginas de
+  Governança, em 5 níveis. Quatro com id, que o admin configura por pessoa: PÁGINA
   (window.GOV_PAGE_ID), ABA (data-aba-id, tipo aba — visível por padrão,
   denylist via gate.js), BOTÃO (data-aba-id ou data-botao-id, tipo botao —
   oculto por padrão, allowlist; botão do drawer e da página são o mesmo nível;
@@ -24,7 +24,7 @@ description: >-
   Não invente ids nem troque o nível/modelo sem checar aqui.
 ---
 
-# Controle de acesso por níveis de id (Governança)
+# Controle de acessos e visibilidade (Governança)
 
 As páginas de `compliance/**` abrem **só embarcadas no app Tatá Plus** (num iframe).
 Além do acesso à página inteira, cada página controla **por pessoa** o que aparece
@@ -59,7 +59,7 @@ Referências (leia conforme a tarefa):
 - **`scripts/auditar-acessos.py`** — varre `compliance/**/*.html`, aponta problemas e
   inconsistências e imprime o vocabulário de slugs. **Rode antes de criar uma chave nova**:
   ```bash
-  python3 .claude/skills/controle-acesso-abas-botoes/scripts/auditar-acessos.py
+  python3 .claude/skills/controle-de-acessos-e-visibilidade/scripts/auditar-acessos.py
   ```
 - **`scripts/relatorio-acessos.py`** — quando o dono pedir **"quais ids temos e quem vê o quê"**:
   cruza os ids do HTML com o banco e gera uma página com a visão **por página** (cada aba/botão
@@ -69,7 +69,7 @@ Referências (leia conforme a tarefa):
   mostrar. ⚠️ **Tem nome de pessoas: gere no scratchpad e entregue como arquivo — nunca commite
   nem publique** (o repo vai inteiro para o GitHub Pages).
   ```bash
-  python3 .claude/skills/controle-acesso-abas-botoes/scripts/relatorio-acessos.py <pasta_dump> <saida.html>
+  python3 .claude/skills/controle-de-acessos-e-visibilidade/scripts/relatorio-acessos.py <pasta_dump> <saida.html>
   ```
 - **`assets/matriz-acessos.html` + `scripts/estado-acessos.py`** — a **tabela de acessos** onde o dono clica
   para incluir/tirar pessoas (por página, por pessoa, ids das páginas, grade páginas × pessoas).
@@ -295,7 +295,7 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 
 1. Rode a auditoria — veja PROBLEMAS/AVISOS da página e o vocabulário de slugs do repo:
    ```bash
-   python3 .claude/skills/controle-acesso-abas-botoes/scripts/auditar-acessos.py
+   python3 .claude/skills/controle-de-acessos-e-visibilidade/scripts/auditar-acessos.py
    ```
 2. Antes de criar chave nova, **reuse o slug canônico** do mesmo conceito (ex.: aba de
    KPIs = `dashboard`, não `kpis`). Ver `references/padronizacao.md`.

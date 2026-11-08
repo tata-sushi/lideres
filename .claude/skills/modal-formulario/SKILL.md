@@ -18,7 +18,7 @@ description: >-
   registro", "nova entrada", "cadastro", "campo", "input", "select", "salvar",
   "overlay", "popup". NÃO cobre o drawer "Sobre" de navegação (ver
   git-claude/readmedrawer.md) nem os IDs de acesso dos botões (skill
-  controle-acesso-abas-botoes).
+  controle-de-acessos-e-visibilidade).
 ---
 
 # Modal & Formulário de Registro — Portal Líderes
@@ -27,7 +27,7 @@ Modal padrão (bottom-sheet no mobile, centralizado no desktop) usado para **reg
 
 ## Relação com as outras skills
 - **`header-abas-footer`** — o botão que **abre** o modal (o `+`/Menu do header, `openDrawer`/FAB).
-- **`controle-acesso-abas-botoes`** — o `data-botao-id` que controla **quem vê** o botão que abre o modal.
+- **`controle-de-acessos-e-visibilidade`** — o `data-botao-id` que controla **quem vê** o botão que abre o modal.
 - **`dashboards-kpi-graficos`** — os cards/gráficos por trás do modal.
 - Não confundir com o **drawer "Sobre"** (painel lateral de navegação) — esse é o `readmedrawer.md`.
 

@@ -17,7 +17,7 @@ description: >-
   "drawer", "menu lateral", "painel Sobre", "botão Sobre", "ações do menu",
   "sidebar". NÃO cobre o header/abas/footer (skill header-abas-footer), o
   modal/formulário (skill modal-formulario) nem os IDs de acesso dos botões de
-  Ações (skill controle-acesso-abas-botoes).
+  Ações (skill controle-de-acessos-e-visibilidade).
 ---
 
 # Drawer "Sobre" — Portal Líderes
@@ -26,7 +26,7 @@ Painel lateral deslizante (da direita) aberto pelo **botão Menu do header** (`o
 
 ## Relação com as outras skills
 - **`header-abas-footer`** — o botão Menu (`openDrawer`) que **abre** este drawer.
-- **`controle-acesso-abas-botoes`** — o `data-botao-id`/`data-aba-id` dos botões de **Ações** (`.drawer-sam-btn`), que controla quem os vê.
+- **`controle-de-acessos-e-visibilidade`** — o `data-botao-id`/`data-aba-id` dos botões de **Ações** (`.drawer-sam-btn`), que controla quem os vê.
 - **`modal-formulario`** — os modais/formulários que os botões de Ações abrem.
 
 Tokens: padrão do portal (`--surface #FFF`, `--carbon #35383F`, `--citric #CFFF00`, `--bg #F4F4F4`, `--border #E2E2E2`, `--muted #999`, `--mid #555`, `--radius 8px`). Fontes: **DM Sans** na maior parte (título, rótulos de seção/footer, versão-valor, números, avatar, nome, cargo). **DM Mono** só em: rótulo "Portal" da versão, rótulo/sub dos cards de Números e botões de Ação.
@@ -126,7 +126,7 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
 **Ações (OPCIONAL — a única parte que varia por página)** — botões `.drawer-sam-btn` full-width; cada botão fecha o drawer e abre um modal/ação. **Todos iguais: carbon, texto branco — sem variante clara** (`.secondary` saiu do padrão em 05/10/2026: o "Janelas de homologação" claro destoava; todas as Ações têm o mesmo peso).
 - **Só `.drawer-sam-btn`** — nada de `.drawer-cta-btn` ou outras classes.
 - **Página sem ação → sem a seção** (nunca deixar o rótulo "Ações" vazio).
-- **Acesso:** o botão leva `data-aba-id` (padrão, o `gate.js` esconde) ou `data-botao-id` (quando a ação precisa ser travada) com a chave `<GOV_PAGE_ID>::<slug>` — regras na skill `controle-acesso-abas-botoes`. **Não renomeie** chave existente (é contrato com o catálogo).
+- **Acesso:** o botão leva `data-aba-id` (padrão, o `gate.js` esconde) ou `data-botao-id` (quando a ação precisa ser travada) com a chave `<GOV_PAGE_ID>::<slug>` — regras na skill `controle-de-acessos-e-visibilidade`. **Não renomeie** chave existente (é contrato com o catálogo).
 ```css
 .drawer-sam-btn { display: flex; align-items: center; justify-content: center; width: 100%; padding: 10px 14px; background: var(--carbon); border: none; border-radius: 4px; font-family: "DM Mono", monospace; font-size: 10px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #fff; cursor: pointer; transition: opacity .15s; }
 .drawer-sam-btn:hover { opacity: .85; }

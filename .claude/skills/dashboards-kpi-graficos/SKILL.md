@@ -36,7 +36,7 @@ Aprofundamento de gráficos (plugins, multi-série, tabela-info, scroll) →
 **Escopo:** esta skill cobre o **miolo do dashboard** — cards de KPI, gráficos, status
 e painéis. **Fora do escopo:**
 - **Header e rodapé** → `README-HEADER-FOOTER-DASHBOARD.md` (logo, título, chip do líder).
-- **Auth gate e acesso por aba/botão** → skill `controle-acesso-abas-botoes`.
+- **Auth gate e acesso por aba/botão** → skill `controle-de-acessos-e-visibilidade`.
 
 ---
 
