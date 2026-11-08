@@ -4,9 +4,9 @@
 > A página nunca decide acesso sozinha.
 
 Decisão do dono (08/11/2026): o `gate.js` fica só com **login e registro**. Tudo o que é **acesso e
-visibilidade** é desta skill e sai dele para uma **camada de acesso** própria. O ajuste do `gate.js` é um
-trabalho separado, feito depois desta skill. Até lá, a camada de acesso continua morando dentro do
-`gate.js`, e esta página descreve o alvo.
+visibilidade** é desta skill e sai dele para uma **camada de acesso** própria. O lado do login e do
+registro está na skill `controle-de-login-e-logs`. Até a separação ser aplicada, a camada de acesso continua
+morando dentro do `gate.js`, e esta página descreve o alvo.
 
 ---
 
@@ -35,7 +35,7 @@ No servidor, as mesmas regras valem dentro das funções do banco → `reference
 
 **Fica no `gate.js`:** a conversa com o app (`gov-ready`, `gov-session`, `gov-ok`, `gov-denied`), o
 `setSession` e o cliente logado (`window.__lideresSupa`, evento `lideres:supa`), a identidade
-(`window.__lideresUser`, nome e perfil), a tela "Disponível pelo aplicativo" e o registro de quem fez cada ação.
+(`window.__lideresUser`, nome e perfil), a tela "Disponível pelo aplicativo" e o registro de quem fez cada ação (skill `controle-de-login-e-logs`).
 
 ---
 

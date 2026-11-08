@@ -50,8 +50,8 @@ Dois tipos de nível não têm atributo no HTML: **Valor** e **Contato** (másca
 | Cuida de | abrir só dentro do app, token, cliente logado, identidade, registro de quem fez cada ação | página, abas, botões, cards dos menus, Valor, Contato e Linha — no navegador **e** no servidor |
 
 Hoje o `gate.js` ainda faz partes de acesso (libera a página, esconde abas e botões, trava os cards).
-**Elas são desta skill** e saem dele para a **camada de acesso** (decisão do dono, 08/11/2026). O ajuste
-do `gate.js` é um trabalho separado, depois desta skill. O que sai, o contrato entre os dois, o overlay
+**Elas são desta skill** e saem dele para a **camada de acesso** (decisão do dono, 08/11/2026). Login e
+registro têm skill própria: **`controle-de-login-e-logs`**. O que sai, o contrato entre os dois, o overlay
 `#auth-gate`, os cards dos menus e o que não pode existir na página → `references/camada-de-acesso.md`.
 
 **Dois repositórios, dois papéis:**

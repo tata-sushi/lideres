@@ -22,7 +22,8 @@ Por isso **toda função chamada por uma página** repete, no banco, as checagen
    e o **nome** com `tata_plus.meu_nome()` (decisão do dono, 08/11/2026: nas colunas de autor que guardam nome —
    `lider`, `solicitante`, `enviado_por`, `responsavel`, `*_por` de texto — grava-se o nome). Nunca aceite nome ou matrícula
    de quem faz vindo da página (`p_por`, `p_lider`, `p_criado_por`, `enviado_por`, `p_matricula`…). O
-   registro das movimentações é do gate; a função só não pode aceitar autor de fora.
+   registro das movimentações (`atualizado_em` / `atualizado_por` em toda tabela e o log geral
+   `registro.movimentacoes`, por gatilho) é da skill `controle-de-login-e-logs`; a função só não pode aceitar autor de fora.
 6. **A função é a única porta:** `security definer` + `search_path` fixo +
    `revoke all on function … from public, anon` + `grant execute … to authenticated`. Nas tabelas e views:
    RLS ligado e `revoke all … from anon, authenticated`.
