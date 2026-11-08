@@ -51,7 +51,9 @@ linhas que a RPC devolveu, então já saem só da equipe.
 - **Quem está logado:** `tata_plus.minha_matricula()` (e-mail do JWT → matrícula, só
   `status = 'Ativo'`). Inativo não tem matrícula e não vê nada.
 - **Visibilidade errada = organograma errado.** Chefe errado no RHID muda quem vê; a correção é
-  lá, nunca no portal. Quem fica sem chefe só aparece para admin, RH e para a própria pessoa.
+  lá, nunca no portal.
+- **A página do organograma é exceção:** mostra a árvore inteira para quem a abre (decisão do dono,
+  08/11/2026). O nível Linha vale para as páginas de dado (férias, vagas, documentos…), não para ela. Quem fica sem chefe só aparece para admin, RH e para a própria pessoa.
 
 ---
 

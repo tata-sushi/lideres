@@ -338,6 +338,11 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 - O `gate.js` só roda embarcado no Plus; fora do app mostra "Disponível pelo aplicativo".
 - **Sem exceção:** toda página tem `GOV_PAGE_ID` e passa pelo gate e pela camada de acesso. O
   `compliance/areas/organograma2.html` (antiga exceção aberta) foi apagado em 08/11/2026.
+- **Exceção ao nível Linha (decisão do dono, 08/11/2026):** `compliance/areas/organograma.html` mostra a
+  árvore inteira para quem abre a página — é a função dela. Página, botão e Valor valem normalmente;
+  o corte por subárvore **não** se aplica ali. Não mexer.
+- **Números do drawer Sobre** (colaboradores, unidades, departamentos) continuam saindo da leitura direta
+  que já existe nas páginas; o dono decidiu não mexer (08/11/2026).
 
 ---
 
