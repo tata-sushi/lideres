@@ -1328,6 +1328,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         </div>
       </div>
     </div>
+    <div class="drawer-section">
+      <div class="drawer-section-label">Ações</div>
+      <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-ferias::relatorio-ferias" onclick="closeDrawer();abrirModalRelFerias()">Relatório de Férias</button>
+    </div>
   </div>
   <div class="drawer-footer">
     <div class="drawer-footer-label">Responsável</div>
@@ -3212,6 +3216,272 @@ window.toggleFta = toggleFta;
   }
   if (document.readyState === 'complete') restaurar();
   else window.addEventListener('load', restaurar);
+})();
+</script>
+
+<!-- Modal Relatório de Férias -->
+<div class="mf-overlay" id="mf-rel-overlay">
+  <div class="mf-modal">
+    <div class="mf-handle"></div>
+    <div class="mf-header">
+      <div>
+        <div class="mf-title">Relatório de Férias</div>
+      </div>
+      <button class="mf-close" onclick="fecharModalRelFerias()">&times;</button>
+    </div>
+    <div class="mf-body">
+      <div class="mf-field">
+        <label class="mf-label">Tipo de período</label>
+        <select class="mf-select" id="rf-tipo">
+          <option value="aqui">Período aquisitivo</option>
+          <option value="conc">Período concessivo</option>
+          <option value="gozo">Período de gozo</option>
+        </select>
+      </div>
+      <div class="mf-field" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label class="mf-label">De</label>
+          <input class="mf-select" type="date" id="rf-de">
+        </div>
+        <div>
+          <label class="mf-label">Até</label>
+          <input class="mf-select" type="date" id="rf-ate">
+        </div>
+      </div>
+      <div class="mf-field">
+        <label class="mf-label">Unidade</label>
+        <select class="mf-select" id="rf-uni"><option value="">Todas</option></select>
+      </div>
+      <div class="mf-field">
+        <label class="mf-label">Departamento</label>
+        <select class="mf-select" id="rf-depto"><option value="">Todos</option></select>
+      </div>
+      <div id="rf-err" style="color:#C0392B;font-size:11px;min-height:14px;"></div>
+    </div>
+    <div class="mf-footer" style="display:flex;gap:8px;padding:12px 20px 20px;border-top:1px solid var(--border);">
+      <button class="btn btn--primary" onclick="fecharModalRelFerias()" style="flex:1;">Cancelar</button>
+      <button class="btn btn--primary" onclick="gerarRelatorioFeriasPDF()" style="flex:1;">Gerar PDF</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Relatório de Férias — PDF paisagem com filtros (aquisitivo/concessivo/gozo) ───
+(function(){
+  function _rfEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function _rfFmt(iso){ if(!iso) return '—'; var s=String(iso); if(/^\d{4}-\d{2}-\d{2}/.test(s)){ var p=s.slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; } return s; }
+  function _rfParse(iso){ if(!iso) return null; var s=String(iso); if(/^\d{4}-\d{2}-\d{2}/.test(s)){ var p=s.slice(0,10).split('-'); return new Date(+p[0], +p[1]-1, +p[2]); } var d=new Date(s); return isNaN(d)?null:new Date(d.getFullYear(),d.getMonth(),d.getDate()); }
+  function _rfIntersect(ini, fim, de, ate){
+    var a = _rfParse(ini), b = _rfParse(fim);
+    if (!a && !b) return false;
+    if (!a) a = b; if (!b) b = a;
+    return a <= ate && b >= de;
+  }
+  function _rfUniqueSort(arr){ var s={}, o=[]; arr.forEach(function(v){ if(v && !s[v]){ s[v]=1; o.push(v); } }); return o.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); }); }
+  function _rfPeriodoFmt(ini,fim){
+    if(!ini && !fim) return '—';
+    return _rfFmt(ini)+' – '+_rfFmt(fim);
+  }
+  function _rfGozosFmt(p){
+    var out = [];
+    if (p.ini1 || p.fim1) out.push(_rfPeriodoFmt(p.ini1, p.fim1));
+    if (p.ini2 || p.fim2) out.push(_rfPeriodoFmt(p.ini2, p.fim2));
+    if (p.ini3 || p.fim3) out.push(_rfPeriodoFmt(p.ini3, p.fim3));
+    return out.length ? out : ['—'];
+  }
+
+  window.abrirModalRelFerias = function(){
+    // popula unidade/departamento a partir do cache
+    var cache = (typeof _feriasCache !== 'undefined' && Array.isArray(_feriasCache)) ? _feriasCache : [];
+    var unis = _rfUniqueSort(cache.map(function(p){ return p.unidade; }));
+    var deptos = _rfUniqueSort(cache.map(function(p){ return p.departamento; }));
+    var selU = document.getElementById('rf-uni');
+    var selD = document.getElementById('rf-depto');
+    selU.innerHTML = '<option value="">Todas</option>' + unis.map(function(u){ return '<option value="'+_rfEsc(u)+'">'+_rfEsc(u)+'</option>'; }).join('');
+    selD.innerHTML = '<option value="">Todos</option>' + deptos.map(function(d){ return '<option value="'+_rfEsc(d)+'">'+_rfEsc(d)+'</option>'; }).join('');
+
+    // default: ano corrente completo
+    var now = new Date();
+    document.getElementById('rf-de').value  = now.getFullYear()+'-01-01';
+    document.getElementById('rf-ate').value = now.getFullYear()+'-12-31';
+    document.getElementById('rf-err').textContent = '';
+    document.getElementById('mf-rel-overlay').classList.add('open');
+  };
+  window.fecharModalRelFerias = function(){
+    document.getElementById('mf-rel-overlay').classList.remove('open');
+  };
+
+  window.gerarRelatorioFeriasPDF = function(){
+    var tipo = document.getElementById('rf-tipo').value;
+    var de   = _rfParse(document.getElementById('rf-de').value);
+    var ate  = _rfParse(document.getElementById('rf-ate').value);
+    var uni  = document.getElementById('rf-uni').value;
+    var dep  = document.getElementById('rf-depto').value;
+    var err  = document.getElementById('rf-err');
+    err.textContent = '';
+    if (!de || !ate) { err.textContent = 'Informe o período.'; return; }
+    if (de > ate) { err.textContent = 'Data inicial maior que a final.'; return; }
+
+    var cache = (typeof _feriasCache !== 'undefined' && Array.isArray(_feriasCache)) ? _feriasCache : [];
+    var lista = cache.filter(function(p){
+      if (uni && p.unidade !== uni) return false;
+      if (dep && p.departamento !== dep) return false;
+      if (tipo === 'aqui') return _rfIntersect(p.ini_aqui, p.fim_aqui, de, ate);
+      if (tipo === 'conc') return _rfIntersect(p.ini_conc, p.fim_conc, de, ate);
+      if (tipo === 'gozo') {
+        return _rfIntersect(p.ini1, p.fim1, de, ate) ||
+               _rfIntersect(p.ini2, p.fim2, de, ate) ||
+               _rfIntersect(p.ini3, p.fim3, de, ate);
+      }
+      return false;
+    });
+    lista.sort(function(a,b){
+      var ua = (a.unidade||'').localeCompare(b.unidade||'','pt-BR'); if (ua) return ua;
+      var da = (a.departamento||'').localeCompare(b.departamento||'','pt-BR'); if (da) return da;
+      return (a.nome||'').localeCompare(b.nome||'','pt-BR');
+    });
+
+    if (!lista.length) { err.textContent = 'Nenhum registro encontrado com esses filtros.'; return; }
+
+    var tipoTxt = tipo==='aqui' ? 'Período aquisitivo' : tipo==='conc' ? 'Período concessivo' : 'Período de gozo';
+    var periodoTxt = _rfFmt(document.getElementById('rf-de').value)+' – '+_rfFmt(document.getElementById('rf-ate').value);
+    var uniTxt = uni || 'Todas';
+    var depTxt = dep || 'Todos';
+    var sess = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'));}catch(e){return null;}})();
+    var solic = (sess && sess.displayName) ? sess.displayName : '—';
+    var hoje = new Date().toLocaleString('pt-BR');
+
+    function _rfBlocos(p){
+      var out = [];
+      [[p.ini1,p.fim1],[p.ini2,p.fim2],[p.ini3,p.fim3]].forEach(function(b){
+        if (b[0] || b[1]) out.push({ ini:b[0], fim:b[1] });
+      });
+      return out;
+    }
+    function _rfDiasBloco(ini, fim){
+      var a = _rfParse(ini), b = _rfParse(fim);
+      if (!a || !b) return null;
+      return Math.round((b - a) / 86400000) + 1;
+    }
+    // Dias vendidos (abono pecuniário). Ordem:
+    // 1) dias_abono vindo dos recibos (mais confiável);
+    // 2) campo abono se já for número;
+    // 3) último número após o " + " no campo frac (ex: "20 + 10" → 10),
+    //    só se p.abono sinalizar que houve venda.
+    function _rfDiasVendidos(p){
+      if (p.dias_abono != null && !isNaN(+p.dias_abono)) return +p.dias_abono;
+      if (typeof p.abono === 'number' && p.abono > 0) return p.abono;
+      var ab = String(p.abono||'').trim();
+      if (/^\d+$/.test(ab) && +ab > 0) return +ab;
+      var vendeu = /^(sim|s|true|1|y|yes)$/i.test(ab);
+      if (!vendeu) return 0;
+      var frac = String(p.frac||'').trim();
+      var parts = frac.split('+').map(function(s){ return parseInt(s.trim(),10); }).filter(function(n){ return !isNaN(n); });
+      if (parts.length >= 2) return parts[parts.length-1];
+      return null;
+    }
+
+    var rowsHtml = lista.map(function(p){
+      var blocos = _rfBlocos(p);
+      if (!blocos.length) blocos = [{ini:null, fim:null}];
+      var vendidos = _rfDiasVendidos(p);
+      var vendidosTxt = vendidos != null ? String(vendidos) : '—';
+      var baseCols =
+        '<td>'+_rfEsc(p.mt||'—')+'</td>'+
+        '<td>'+_rfEsc(p.nome||'—')+'</td>'+
+        '<td>'+_rfEsc(p.unidade||'—')+'</td>'+
+        '<td>'+_rfEsc(p.departamento||'—')+'</td>'+
+        '<td class="num">'+_rfPeriodoFmt(p.ini_aqui, p.fim_aqui)+'</td>'+
+        '<td class="num">'+_rfPeriodoFmt(p.ini_conc, p.fim_conc)+'</td>'+
+        '<td class="c">'+(p.direito_efetivo!=null ? p.direito_efetivo : (p.direito!=null ? p.direito : '—'))+'</td>';
+      return blocos.map(function(b, i){
+        var dias = _rfDiasBloco(b.ini, b.fim);
+        var isFirst = i === 0;
+        return '<tr>'+
+          baseCols+
+          '<td class="num">'+_rfPeriodoFmt(b.ini, b.fim)+'</td>'+
+          '<td class="c">'+(dias!=null ? dias : '—')+'</td>'+
+          '<td class="c">'+(isFirst ? vendidosTxt : '')+'</td>'+
+          '<td>'+_rfEsc(p.situacao||'—')+'</td>'+
+        '</tr>';
+      }).join('');
+    }).join('');
+
+    var CSS =
+      '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}'+
+      'html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+      'body{font-family:"DM Sans","Helvetica Neue",Arial,sans-serif;color:#000;padding:14px 20px;max-width:none;margin:0;font-size:11px;-webkit-font-smoothing:antialiased;}'+
+      '@page{size:A4 landscape;margin:12mm;}'+
+      '.rp-header{display:flex;align-items:center;gap:14px;padding-bottom:12px;border-bottom:2px solid #111;margin-bottom:14px;}'+
+      '.rp-logo{width:44px;height:44px;object-fit:contain;flex-shrink:0;}'+
+      '.rp-header-center{flex:1;}'+
+      '.rp-title-main{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}'+
+      '.rp-subtitle{font-size:10px;color:#555;font-family:"DM Mono",monospace;text-transform:uppercase;letter-spacing:.4px;margin-top:3px;}'+
+      '.rp-header-right{text-align:right;font-size:10px;color:#444;line-height:1.7;flex-shrink:0;}'+
+      '.rp-header-right strong{color:#111;}'+
+      '.rp-section{font-size:9px;font-family:"DM Mono",monospace;text-transform:uppercase;letter-spacing:.6px;color:#888;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #ddd;}'+
+      '.rp-table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:10px;}'+
+      '.rp-table thead tr{background:#35383F;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+      '.rp-table th{padding:8px 7px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;color:#fff;}'+
+      '.rp-table th.c,.rp-table td.c{text-align:center;}'+
+      '.rp-table td{padding:7px 7px;border-bottom:1px solid #eee;font-size:10px;vertical-align:top;}'+
+      '.rp-table td.num{font-family:"DM Mono",monospace;white-space:nowrap;}'+
+      '.rp-table tbody tr:nth-child(even){background:#f9f9f9;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+      '.rp-totais{margin:12px 0 6px;padding:8px 12px;border:1px solid #ddd;border-radius:4px;display:flex;flex-wrap:wrap;gap:16px;background:#fafafa;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:10px;color:#333;}'+
+      '.rp-totais strong{color:#111;}';
+
+    var logoSrc = (document.querySelector('.logo-img')||{}).src || '';
+
+    var html = '<!DOCTYPE html><html lang="pt-BR"><head>'+
+      '<meta charset="UTF-8">'+
+      '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+      '<title>Relatório de Férias · TATÁ Sushi</title>'+
+      '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">'+
+      '<style>'+CSS+'</style>'+
+      '</head><body>'+
+        '<div class="rp-header">'+
+          (logoSrc ? '<img class="rp-logo" src="'+logoSrc+'" alt="TATÁ Sushi">' : '')+
+          '<div class="rp-header-center">'+
+            '<div class="rp-title-main">Relatório de Férias</div>'+
+            '<div class="rp-subtitle">'+_rfEsc(tipoTxt)+' · '+periodoTxt+'</div>'+
+          '</div>'+
+          '<div class="rp-header-right">'+
+            '<div><strong>Unidade:</strong> '+_rfEsc(uniTxt)+'</div>'+
+            '<div><strong>Departamento:</strong> '+_rfEsc(depTxt)+'</div>'+
+            '<div><strong>Solicitante:</strong> '+_rfEsc(solic)+'</div>'+
+            '<div><strong>Emitido em:</strong> '+hoje+'</div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="rp-section">'+_rfEsc(tipoTxt)+' · '+lista.length+' registro'+(lista.length!==1?'s':'')+'</div>'+
+        '<table class="rp-table"><thead><tr>'+
+          '<th>Mat.</th>'+
+          '<th>Nome</th>'+
+          '<th>Unidade</th>'+
+          '<th>Departamento</th>'+
+          '<th>Aquisitivo</th>'+
+          '<th>Concessivo</th>'+
+          '<th class="c">Direito</th>'+
+          '<th>Período de Gozo</th>'+
+          '<th class="c">Dias Desfrutados</th>'+
+          '<th class="c">Dias Vendidos</th>'+
+          '<th>Situação</th>'+
+        '</tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+        '<div class="rp-totais">'+
+          '<span><strong>Total de registros:</strong> '+lista.length+'</span>'+
+          '<span><strong>Colaboradores únicos:</strong> '+_rfUniqueSort(lista.map(function(x){return x.mt;})).length+'</span>'+
+          '<span><strong>Unidades:</strong> '+_rfUniqueSort(lista.map(function(x){return x.unidade;})).length+'</span>'+
+          '<span><strong>Departamentos:</strong> '+_rfUniqueSort(lista.map(function(x){return x.departamento;})).length+'</span>'+
+        '</div>'+
+      '</body></html>';
+
+    var w = window.open('', '_blank');
+    if (!w){ err.textContent = 'Permita pop-ups para gerar o PDF.'; return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    fecharModalRelFerias();
+    setTimeout(function(){ w.print(); }, 400);
+  };
 })();
 </script>
 </body>

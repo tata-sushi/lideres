@@ -510,7 +510,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <div class="dashboard" id="dashboard">
-<!-- linha A: quantidade de demissões — fonte: tabela demissoes -->
+<!-- quantidade de demissões + custo de rescisão combinados (N (R$ Xk)) — fonte: tabela demissoes -->
 <div class="cost-row">
   <div class="chart-card">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('dem-unidade')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
@@ -526,25 +526,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <button class="chart-info-btn" onclick="abrirInfoGrafico('val-qtd-mes')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Demissões por competência</div>
     <div class="chart-wrap"><div class="chart-scroll" id="v-qtd-mes-scroll"><canvas id="v-qtd-mes"></canvas></div></div>
-  </div>
-</div>
-
-<!-- linha B: custo de rescisão (verbas) -->
-<div class="cost-row" style="margin-top:12px">
-  <div class="chart-card">
-    <button class="chart-info-btn" onclick="abrirInfoGrafico('val-unidade')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-    <div class="chart-title">Custo por unidade</div>
-    <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="v-unidade"></canvas></div></div>
-  </div>
-  <div class="chart-card">
-    <button class="chart-info-btn" onclick="abrirInfoGrafico('val-depto')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-    <div class="chart-title">Custo por departamento</div>
-    <div class="chart-wrap chart-wrap-y"><div class="chart-scroll-y"><canvas id="v-depto"></canvas></div></div>
-  </div>
-  <div class="chart-card">
-    <button class="chart-info-btn" onclick="abrirInfoGrafico('val-mes')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-    <div class="chart-title">Custo por competência</div>
-    <div class="chart-wrap"><div class="chart-scroll" id="v-mes-scroll"><canvas id="v-mes"></canvas></div></div>
   </div>
 </div>
 
@@ -2294,6 +2275,8 @@ function renderValAno(){
     return '<tr><td class="nm">'+a+'</td><td style="'+NUM+'">'+_intBR(o.n)+'</td><td style="'+NUM+'">'+_brlFull(o.sd)+'</td><td style="'+NUM+'">'+_brlFull(med)+'</td><td style="'+NUM+'">'+_brlFull(o.s)+'</td>'+vcell+'</tr>'; }).join('');
 }
 function _barValLabels(fmt){ return { id:'bvl', afterDatasetsDraw:function(chart){ var ctx=chart.ctx; var horiz=chart.options&&chart.options.indexAxis==='y'; chart.data.datasets.forEach(function(ds,di){ var meta=chart.getDatasetMeta(di); meta.data.forEach(function(bar,i){ var val=ds.data[i]; if(val==null||val===0) return; ctx.save(); ctx.fillStyle='#35383F'; ctx.font='800 12px "DM Sans", sans-serif'; var txt=fmt(val); if(horiz){ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(txt,bar.x+5,bar.y);}else{ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(txt,bar.x,bar.y-4);} ctx.restore(); }); }); } }; }
+// rótulo combinado "N (R$ Xk)" por barra — labels[i] casado 1:1 com a ordem das barras (igual ao print de Férias)
+function _barComboLabels(labels){ return { id:'bcl', afterDatasetsDraw:function(chart){ var ctx=chart.ctx; var horiz=chart.options&&chart.options.indexAxis==='y'; var meta=chart.getDatasetMeta(0); if(!meta) return; meta.data.forEach(function(bar,i){ var txt=labels[i]; if(txt==null||txt==='') return; ctx.save(); ctx.fillStyle='#35383F'; ctx.font='800 12px "DM Sans", sans-serif'; if(horiz){ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(txt,bar.x+5,bar.y);}else{ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(txt,bar.x,bar.y-4);} ctx.restore(); }); } }; }
 function _demDashFiltradas(){
   var fu=_demVal('f-unidade'), fd=_demVal('f-departamento'), fde=_demVal('f-de'), fate=_demVal('f-ate');
   var ft=_demVal('f-tipo'); // 4 tipos (código) -> demissões filtram pelo tipo exato
@@ -2308,7 +2291,7 @@ function _demDashFiltradas(){
   });
 }
 function _intBR(v){ return Number(v||0).toLocaleString('pt-BR'); }
-function _renderValBarV(canvasId, scrollId, entries, fmt){
+function _renderValBarV(canvasId, scrollId, entries, fmt, comboLabels){
   fmt=fmt||_brlK;
   destroyChart(canvasId);
   var canvas=document.getElementById(canvasId); if(!canvas||typeof Chart==='undefined') return;
@@ -2316,14 +2299,14 @@ function _renderValBarV(canvasId, scrollId, entries, fmt){
   var sc=document.getElementById(scrollId); if(sc) sc.style.minWidth=Math.max(entries.length*46,10)+'px';
   _charts[canvasId]=new Chart(canvas,{ type:'bar',
     data:{labels:labels,datasets:[{data:data,backgroundColor:'#35383F',borderWidth:0,borderRadius:5,barPercentage:0.6,maxBarThickness:22}]},
-    plugins:[_barValLabels(fmt)],
+    plugins:[comboLabels?_barComboLabels(comboLabels):_barValLabels(fmt)],
     options:{ responsive:true,maintainAspectRatio:false,animation:false,devicePixelRatio:CHART_DPR,
       layout:{padding:{top:20}},
       plugins:{legend:{display:false},tooltip:{enabled:false}},
       scales:{ x:{grid:{display:false},border:{display:false},ticks:{color:'#35383F',font:{family:"'DM Sans', sans-serif",size:12,weight:'500'}}},
                y:{grid:{display:false},border:{display:false},ticks:{display:false},beginAtZero:true} } } });
 }
-function _renderValBarH(canvasId, entries, fmt){
+function _renderValBarH(canvasId, entries, fmt, comboLabels){
   fmt=fmt||_brlK;
   destroyChart(canvasId);
   var canvas=document.getElementById(canvasId); if(!canvas||typeof Chart==='undefined') return;
@@ -2331,9 +2314,9 @@ function _renderValBarH(canvasId, entries, fmt){
   if(canvas.parentElement) canvas.parentElement.style.height=Math.max(220,labels.length*30+10)+'px';
   _charts[canvasId]=new Chart(canvas,{ type:'bar',
     data:{labels:labels,datasets:[{data:data,backgroundColor:'#35383F',borderWidth:0,borderRadius:5,barPercentage:0.6,maxBarThickness:22}]},
-    plugins:[_barValLabels(fmt)],
+    plugins:[comboLabels?_barComboLabels(comboLabels):_barValLabels(fmt)],
     options:{ indexAxis:'y', responsive:true,maintainAspectRatio:false,animation:false,devicePixelRatio:CHART_DPR,
-      layout:{padding:{right:56}},
+      layout:{padding:{right:96}},
       plugins:{legend:{display:false},tooltip:{enabled:false}},
       scales:{ x:{grid:{display:false},border:{display:false},ticks:{display:false},beginAtZero:true},
                y:{grid:{display:false},border:{display:false},ticks:{color:'#35383F',font:{family:"'DM Sans', sans-serif",size:12,weight:'500'},
@@ -2351,26 +2334,26 @@ function renderValores(){
   var rows=_demDashFiltradas();
   renderKpisValores(rows);
   if(typeof Chart==='undefined') return;
-  // 1) custo por mês (soma de verbas)
-  var m={}; rows.forEach(function(r){ var d=String(r.data_demissao||'').slice(0,7); var v=Number(r.valor_rescisao)||0; if(d.length===7 && v>0) m[d]=(m[d]||0)+v; });
-  var mesEntries=Object.keys(m).sort().map(function(k){ var p=k.split('-'); return [p[1]+'/'+p[0].slice(2), m[k]]; });
-  _renderValBarV('v-mes','v-mes-scroll',mesEntries);
-  // 1b) quantidade de rescisões por mês (contagem)
-  var qm={}; rows.forEach(function(r){ var d=String(r.data_demissao||'').slice(0,7); if(d.length===7) qm[d]=(qm[d]||0)+1; });
-  var qmEntries=Object.keys(qm).sort().map(function(k){ var p=k.split('-'); return [p[1]+'/'+p[0].slice(2), qm[k]]; });
-  _renderValBarV('v-qtd-mes','v-qtd-mes-scroll',qmEntries,_intBR);
-  // 2) custo por unidade (soma de verbas)
-  var u={}; rows.forEach(function(r){ var v=Number(r.valor_rescisao)||0; if(v>0){ var k=r.unidade||'—'; u[k]=(u[k]||0)+v; } });
-  _renderValBarH('v-unidade', Object.keys(u).map(function(k){return [k,Math.round(u[k])];}).sort(function(a,b){return b[1]-a[1];}));
-  // 2b) custo por departamento (soma de verbas)
-  var dp={}; rows.forEach(function(r){ var v=Number(r.valor_rescisao)||0; if(v>0){ var k=r.departamento||'—'; dp[k]=(dp[k]||0)+v; } });
-  _renderValBarH('v-depto', Object.keys(dp).map(function(k){return [k,Math.round(dp[k])];}).sort(function(a,b){return b[1]-a[1];}));
-  // 3) demissões por unidade (contagem)
-  var du={}; rows.forEach(function(r){ var k=r.unidade||'—'; du[k]=(du[k]||0)+1; });
-  _renderValBarH('v-dem-unidade', Object.keys(du).map(function(k){return [k,du[k]];}).sort(function(a,b){return b[1]-a[1];}), _intBR);
-  // 3b) demissões por departamento (contagem)
-  var dd={}; rows.forEach(function(r){ var k=r.departamento||'—'; dd[k]=(dd[k]||0)+1; });
-  _renderValBarH('v-dem-depto', Object.keys(dd).map(function(k){return [k,dd[k]];}).sort(function(a,b){return b[1]-a[1];}), _intBR);
+  // gráficos combinados: barra dimensionada pela QUANTIDADE, rótulo "N (R$ Xk)" juntando quantidade + custo (padrão Férias)
+  // helper: dado um mapa chave->{n,v}, devolve {entries:[[label,count]...], combo:["N (R$ Xk)"...]} ordenado por quantidade desc
+  function _combo(map, keyToLabel){
+    var ks=Object.keys(map).sort(function(a,b){ return map[b].n-map[a].n; });
+    return { entries: ks.map(function(k){ return [keyToLabel?keyToLabel(k):k, map[k].n]; }),
+             combo:   ks.map(function(k){ var o=map[k]; return _intBR(o.n)+(o.v>0?' ('+_brlK(Math.round(o.v))+')':''); }) };
+  }
+  function _add(map,k,v){ if(!map[k]) map[k]={n:0,v:0}; map[k].n++; var x=Number(v)||0; if(x>0) map[k].v+=x; }
+  // 1) competência (mês): quantidade + custo — eixo vertical, ordenado cronologicamente
+  var mm={}; rows.forEach(function(r){ var d=String(r.data_demissao||'').slice(0,7); if(d.length===7) _add(mm,d,r.valor_rescisao); });
+  var mesKeys=Object.keys(mm).sort();
+  var mesEntries=mesKeys.map(function(k){ var p=k.split('-'); return [p[1]+'/'+p[0].slice(2), mm[k].n]; });
+  var mesCombo=mesKeys.map(function(k){ var o=mm[k]; return _intBR(o.n)+(o.v>0?' ('+_brlK(Math.round(o.v))+')':''); });
+  _renderValBarV('v-qtd-mes','v-qtd-mes-scroll',mesEntries,_intBR,mesCombo);
+  // 2) por unidade: quantidade + custo — eixo horizontal, ordenado por quantidade desc
+  var uu={}; rows.forEach(function(r){ _add(uu, r.unidade||'—', r.valor_rescisao); });
+  var cu=_combo(uu); _renderValBarH('v-dem-unidade', cu.entries, _intBR, cu.combo);
+  // 3) por departamento: quantidade + custo — eixo horizontal, ordenado por quantidade desc
+  var dpd={}; rows.forEach(function(r){ _add(dpd, r.departamento||'—', r.valor_rescisao); });
+  var cd=_combo(dpd); _renderValBarH('v-dem-depto', cd.entries, _intBR, cd.combo);
   // 4) resumo por ano (tabela): nº rescisões, montante, saldo devedor, média
   renderValAno();
 }
@@ -2600,11 +2583,11 @@ var INFO_NOTAS = '<div class="info-note">Cada linha é um tema da entrevista de 
   + '</tbody></table>';
 var _INFO_GRAFICOS = {
   'val-mes': '<div class="info-note">Soma das <b>verbas rescisórias</b> (R$) por mês do desligamento. Fonte: tabela de demissões. Respeita os filtros de unidade, departamento e período. Só entram registros com verba lançada (&gt; 0). Valores abreviados (ex.: R$ 12k = R$ 12 mil).</div>',
-  'val-qtd-mes': '<div class="info-note"><b>Quantidade</b> de rescisões por mês do desligamento (nº de pessoas). Fonte: tabela de demissões. Respeita os filtros de unidade, departamento e período.</div>',
+  'val-qtd-mes': '<div class="info-note"><b>Quantidade</b> de demissões por mês do desligamento (a barra representa o nº de pessoas); entre parênteses, o <b>custo</b> — soma das verbas rescisórias (R$) do mês, só registros com verba lançada (&gt; 0). Fonte: tabela de demissões. Respeita os filtros de unidade, departamento e período. Valores abreviados (ex.: R$ 12k = R$ 12 mil).</div>',
   'val-unidade': '<div class="info-note">Soma das <b>verbas rescisórias</b> (R$) por unidade. Mostra onde o custo de rescisão se concentra. Só entram registros com verba lançada (&gt; 0). Respeita os filtros do topo.</div>',
   'val-depto': '<div class="info-note">Soma das <b>verbas rescisórias</b> (R$) por departamento. Só entram registros com verba lançada (&gt; 0). Respeita os filtros do topo.</div>',
-  'dem-unidade': '<div class="info-note"><b>Quantidade</b> de demissões por unidade (nº de desligamentos). Fonte: tabela de demissões. Respeita os filtros do topo.</div>',
-  'dem-depto': '<div class="info-note"><b>Quantidade</b> de demissões por departamento (nº de desligamentos). Fonte: tabela de demissões. Respeita os filtros do topo.</div>',
+  'dem-unidade': '<div class="info-note"><b>Quantidade</b> de demissões por unidade (a barra representa o nº de desligamentos); entre parênteses, o <b>custo</b> — soma das verbas rescisórias (R$) da unidade, só registros com verba lançada (&gt; 0). Fonte: tabela de demissões. Respeita os filtros do topo. Valores abreviados (ex.: R$ 12k = R$ 12 mil).</div>',
+  'dem-depto': '<div class="info-note"><b>Quantidade</b> de demissões por departamento (a barra representa o nº de desligamentos); entre parênteses, o <b>custo</b> — soma das verbas rescisórias (R$) do departamento, só registros com verba lançada (&gt; 0). Fonte: tabela de demissões. Respeita os filtros do topo. Valores abreviados (ex.: R$ 12k = R$ 12 mil).</div>',
   'val-ano': '<div class="info-note">Resumo por ano: <b>Rescisões</b> = nº de desligamentos; <b>Saldo devedor</b> = soma dos saldos devedores (R$); <b>Média</b> = montante ÷ rescisões; <b>Montante</b> = soma das verbas (R$); <b>Variação ano anterior</b> = variação % do montante em relação ao ano anterior (+ subiu / − caiu; "—" quando não há ano anterior na base). Respeita os filtros do topo.</div>',
   'val-tipo': '<div class="info-note"><b>Custo médio</b> de verbas rescisórias (R$) por tipo de desligamento (Acordo Mútuo / Desligamento empresa / Pedido de demissão / Término do contrato de experiência). Média calculada só sobre registros com verba lançada (&gt; 0). Respeita os filtros do topo.</div>',
   tipo: '<div class="info-note">Tipos de desligamento das entrevistas de saída respondidas: quem pediu demissão e quem foi desligado(a).</div>',
