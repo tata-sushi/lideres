@@ -1111,6 +1111,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <button data-aba-id="governanca-kpis-tatahouse-cardapio::cardapio" class="tab-btn" data-tab="cardapio">Elaboração</button>
   <button data-aba-id="governanca-kpis-tatahouse-cardapio::processamento" class="tab-btn" data-tab="processamento">Processamento</button>
   <button data-aba-id="governanca-kpis-tatahouse-cardapio::relatorios" class="tab-btn" data-tab="relatorios">Relatórios</button>
+  <button data-aba-id="governanca-kpis-tatahouse-cardapio::dashboard" class="tab-btn" data-tab="kpis">KPIs</button>
 </div>
 
 <!-- TAB: SOBRE (Manual do Sistema) -->
@@ -1905,6 +1906,57 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 
+<!-- TAB: KPIs (Avaliações, Pratos, Restrições, Reclamações) — fonte: app -->
+<div id="tab-kpis" class="tab-pane">
+  <div class="filters-wrap">
+    <div class="filters-row" style="display:flex;gap:10px;flex-wrap:wrap">
+      <div class="filter-group"><label class="filter-label">Cozinha</label>
+        <select class="filter-select" id="kpi-cozinha"><option value="">Todas</option><option value="Itaim">Itaim</option><option value="Pinheiros">Pinheiros</option></select></div>
+      <div class="filter-group"><label class="filter-label">De</label><input class="filter-select" type="date" id="kpi-de"></div>
+      <div class="filter-group"><label class="filter-label">Até</label><input class="filter-select" type="date" id="kpi-ate"></div>
+    </div>
+    <div class="filters-actions" style="display:flex;justify-content:space-between;align-items:center">
+      <button class="btn-link" id="kpi-limpar">Limpar filtros</button>
+      <span class="results-count"><span id="kpi-count">0</span> avaliações</span>
+    </div>
+  </div>
+  <div class="kpis-wrap">
+    <div class="kpi-card"><span class="kpi-label">Avaliações</span><span class="kpi-number" id="kpi-n-votos">—</span><span class="kpi-sub"><strong id="kpi-n-comentarios">0</strong> c/ comentário</span></div>
+    <div class="kpi-card"><span class="kpi-label">Nota média</span><span class="kpi-number" id="kpi-media">—</span><span class="kpi-sub">★ geral (1–5)</span></div>
+    <div class="kpi-card"><span class="kpi-label">Pratos avaliados</span><span class="kpi-number" id="kpi-n-pratos">—</span><span class="kpi-sub">com voto</span></div>
+    <div class="kpi-card"><span class="kpi-label">Negativas</span><span class="kpi-number" id="kpi-negativas">—</span><span class="kpi-sub"><strong id="kpi-pct-neg">0%</strong> do total · ★1–2</span></div>
+  </div>
+  <div class="dashboard">
+    <!-- Restrições -->
+    <div class="chart-card">
+      <div class="chart-title">Restrições — maior volume</div>
+      <div class="chart-wrap" id="kpi-restr-wrap" style="height:220px;overflow:hidden"><canvas id="kpi-restr-chart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Restrições por pessoa — <span id="kpi-restr-tot">0</span> pessoa(s)</div>
+      <div class="rel-table-wrap"><table class="rel-table"><thead><tr><th>Pessoa</th><th>Unidade</th><th>Restrições</th></tr></thead><tbody id="kpi-restr-body"><tr><td colspan="3"><p class="empty-msg">Carregando…</p></td></tr></tbody></table></div>
+    </div>
+    <!-- Avaliação por prato -->
+    <div class="chart-card">
+      <div class="chart-title">Pratos mais bem avaliados <span style="font-weight:400;text-transform:none;letter-spacing:0">(mín. 3 votos)</span></div>
+      <div class="status-table" id="kpi-melhores"><p class="empty-msg">Carregando…</p></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Pratos mais negativos <span style="font-weight:400;text-transform:none;letter-spacing:0">(nº de notas ★1–2)</span></div>
+      <div class="status-table" id="kpi-piores"><p class="empty-msg">Carregando…</p></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Analítico — avaliações por prato</div>
+      <div class="rel-table-wrap"><table class="rel-table"><thead><tr><th>Prato</th><th class="num">Votos</th><th class="num">Média</th><th class="num">★1–2</th><th>Distribuição</th></tr></thead><tbody id="kpi-pratos-body"><tr><td colspan="5"><p class="empty-msg">Carregando…</p></td></tr></tbody></table></div>
+    </div>
+    <!-- Reclamações -->
+    <div class="chart-card">
+      <div class="chart-title">Analítico de reclamações <span style="font-weight:400;text-transform:none;letter-spacing:0">(★1–2 e comentários)</span></div>
+      <div class="rel-table-wrap"><table class="rel-table"><thead><tr><th>Data</th><th>Cozinha</th><th>Unidade</th><th>Prato</th><th class="num">Nota</th><th>Comentário</th></tr></thead><tbody id="kpi-reclam-body"><tr><td colspan="6"><p class="empty-msg">Carregando…</p></td></tr></tbody></table></div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL GERAR IA -->
 <div class="modal-overlay" id="modal-ia">
   <div class="modal">
@@ -2317,6 +2369,79 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       }, function(){ wrap.innerHTML='<p class="empty-msg">Erro ao carregar.</p>'; hideLoading(); });
     });
   }
+  // ===== Aba KPIs: avaliações por prato, compilado, restrições, reclamações (fonte: app) =====
+  var _kpiCharts={}; var _kpiLoaded=false;
+  function _kpiDestroy(id){ if(_kpiCharts[id]){ try{_kpiCharts[id].destroy();}catch(e){} _kpiCharts[id]=null; } }
+  function _kpiDataBR(iso){ var s=String(iso||''); var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m? (m[3]+'/'+m[2]+'/'+m[1]) : (s||'—'); }
+  function _kpiFiltros(){ return { cozinha:(document.getElementById('kpi-cozinha')||{}).value||'', de:(document.getElementById('kpi-de')||{}).value||'', ate:(document.getElementById('kpi-ate')||{}).value||'' }; }
+  function _kpiNum(n){ return Number(n||0).toLocaleString('pt-BR'); }
+  function _kpiMedia(x){ return x==null?'—':('★ '+Number(x).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})); }
+  function _kpiDist(p){ // mini barra empilhada 5→1 (verde=bom, vermelho=ruim)
+    var cores={5:'#2E7D32',4:'#7CB342',3:'#C9A227',2:'#EF6C00',1:'#C62828'};
+    var tot=(p.n5||0)+(p.n4||0)+(p.n3||0)+(p.n2||0)+(p.n1||0); if(!tot) return '<span style="color:var(--muted)">—</span>';
+    var seg=function(n,k){ var c=p['n'+n]||0; if(!c) return ''; return '<span title="★'+n+': '+c+'" style="display:inline-block;height:10px;width:'+(100*c/tot)+'%;background:'+k+'"></span>'; };
+    return '<span style="display:flex;width:90px;border-radius:3px;overflow:hidden">'+seg(5,cores[5])+seg(4,cores[4])+seg(3,cores[3])+seg(2,cores[2])+seg(1,cores[1])+'</span>';
+  }
+  function renderKpisTab(){
+    comSupa(function(supa){
+      var f=_kpiFiltros(); var tp=supa.schema('tata_plus');
+      tp.rpc('cardapio_kpis_avaliacoes',{ p_cozinha:f.cozinha||null, p_de:f.de||null, p_ate:f.ate||null }).then(function(res){
+        if(res.error){ return; } var d=res.data||{}; _kpiRenderAval(d);
+      });
+      tp.rpc('cardapio_kpis_restricoes').then(function(res){ if(res.error){ return; } _kpiRenderRestr(res.data||{}); });
+    });
+  }
+  function _kpiRenderAval(d){
+    var r=d.resumo||{};
+    _setTxtKpi('kpi-n-votos', r.n_votos!=null?_kpiNum(r.n_votos):'—');
+    _setTxtKpi('kpi-count', r.n_votos!=null?_kpiNum(r.n_votos):'0');
+    _setTxtKpi('kpi-n-comentarios', _kpiNum(r.n_comentarios));
+    _setTxtKpi('kpi-media', r.media!=null?Number(r.media).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1}):'—');
+    _setTxtKpi('kpi-n-pratos', r.n_pratos!=null?_kpiNum(r.n_pratos):'—');
+    _setTxtKpi('kpi-negativas', r.negativas!=null?_kpiNum(r.negativas):'—');
+    _setTxtKpi('kpi-pct-neg', (r.n_votos? Math.round(100*(r.negativas||0)/r.n_votos):0)+'%');
+    var pratos=d.pratos||[];
+    // melhores (mín. 3 votos, maior média)
+    var mel=pratos.filter(function(p){ return (p.n_votos||0)>=3; }).slice(0,8);
+    var elM=document.getElementById('kpi-melhores');
+    if(elM) elM.innerHTML = mel.length? mel.map(function(p){ return '<div class="status-row"><span class="status-name">'+esc(p.prato)+'</span><span class="status-count">'+_kpiMedia(p.media)+' <span style="color:var(--muted);font-weight:400">('+_kpiNum(p.n_votos)+')</span></span></div>'; }).join('') : '<p class="empty-msg">Sem pratos com 3+ votos</p>';
+    // piores (mais notas negativas)
+    var pio=pratos.filter(function(p){ return (p.negativas||0)>0; }).sort(function(a,b){ return (b.negativas||0)-(a.negativas||0) || (a.media-b.media); }).slice(0,8);
+    var elP=document.getElementById('kpi-piores');
+    if(elP) elP.innerHTML = pio.length? pio.map(function(p){ return '<div class="status-row"><span class="status-name">'+esc(p.prato)+'</span><span class="status-count" style="color:#C62828">'+_kpiNum(p.negativas)+' <span style="color:var(--muted);font-weight:400">de '+_kpiNum(p.n_votos)+' · '+_kpiMedia(p.media)+'</span></span></div>'; }).join('') : '<p class="empty-msg">Nenhuma nota ★1–2 🎉</p>';
+    // analítico por prato (todos, já ordenado por média desc)
+    var elT=document.getElementById('kpi-pratos-body');
+    if(elT) elT.innerHTML = pratos.length? pratos.map(function(p){ return '<tr><td>'+esc(p.prato)+'</td><td class="num">'+_kpiNum(p.n_votos)+'</td><td class="num">'+_kpiMedia(p.media)+'</td><td class="num"'+((p.negativas||0)>0?' style="color:#C62828"':'')+'>'+_kpiNum(p.negativas)+'</td><td>'+_kpiDist(p)+'</td></tr>'; }).join('') : '<tr><td colspan="5"><p class="empty-msg">Sem avaliações no período</p></td></tr>';
+    // reclamações
+    var rec=d.reclamacoes||[];
+    var elR=document.getElementById('kpi-reclam-body');
+    if(elR) elR.innerHTML = rec.length? rec.map(function(x){ var neg=(x.voto!=null&&x.voto<=2); return '<tr><td>'+_kpiDataBR(x.data)+'</td><td>'+esc(x.cozinha||'—')+'</td><td>'+esc(x.unidade||'—')+'</td><td>'+esc(x.prato||'—')+'</td><td class="num"'+(neg?' style="color:#C62828;font-weight:800"':'')+'>'+(x.voto!=null?('★'+x.voto):'—')+'</td><td>'+(x.comentario?esc(x.comentario):'<span style="color:var(--muted)">—</span>')+'</td></tr>'; }).join('') : '<tr><td colspan="6"><p class="empty-msg">Sem reclamações no período</p></td></tr>';
+  }
+  function _kpiRenderRestr(d){
+    _setTxtKpi('kpi-restr-tot', _kpiNum(d.total_pessoas));
+    var rank=d.ranking||[];
+    // gráfico horizontal (nº de pessoas por restrição)
+    _kpiDestroy('kpi-restr-chart');
+    var cv=document.getElementById('kpi-restr-chart');
+    if(cv && typeof Chart!=='undefined'){
+      var wrap=document.getElementById('kpi-restr-wrap'); if(wrap) wrap.style.height=Math.max(140,rank.length*30+20)+'px';
+      var labels=rank.map(function(e){ return (e.icone?e.icone+' ':'')+e.restricao; }), data=rank.map(function(e){ return e.n; });
+      var plug={ id:'kpiRestrLbl', afterDatasetsDraw:function(ch){ var meta=ch.getDatasetMeta(0),ds=ch.data.datasets[0],ctx=ch.ctx; if(!meta) return; ctx.save(); ctx.fillStyle='#35383F'; ctx.font='800 12px "DM Sans", sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle'; meta.data.forEach(function(b,i){ var v=ds.data[i]; if(v==null) return; ctx.fillText(_kpiNum(v), b.x+5, b.y); }); ctx.restore(); } };
+      _kpiCharts['kpi-restr-chart']=new Chart(cv,{ type:'bar',
+        data:{ labels:labels, datasets:[{ data:data, backgroundColor:'#35383F', borderWidth:0, borderRadius:5, barPercentage:0.65, maxBarThickness:22 }] },
+        plugins:[plug],
+        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, animation:false, devicePixelRatio:Math.max(2,window.devicePixelRatio||1),
+          layout:{ padding:{ right:28 } },
+          plugins:{ legend:{ display:false }, tooltip:{ enabled:false } },
+          scales:{ x:{ grid:{ display:false }, border:{ display:false }, ticks:{ display:false }, beginAtZero:true },
+                   y:{ grid:{ display:false }, border:{ display:false }, ticks:{ color:'#35383F', font:{ family:"'DM Sans', sans-serif", size:12, weight:'500' } } } } }
+      });
+    }
+    var el=document.getElementById('kpi-restr-body'); var ppl=d.pessoas||[];
+    if(el) el.innerHTML = ppl.length? ppl.map(function(p){ var itens=(p.itens||[]).join(', '); return '<tr><td>'+esc(p.pessoa)+'</td><td>'+esc(p.unidade||'—')+'</td><td>'+esc(itens)+'</td></tr>'; }).join('') : '<tr><td colspan="3"><p class="empty-msg">Ninguém com restrição cadastrada</p></td></tr>';
+  }
+  function _setTxtKpi(id,t){ var e=document.getElementById(id); if(e) e.textContent=t; }
+
   function renderRelatorios(){
     carregarRelatorioTabela();
     if(relChartInst || typeof Chart==='undefined') return;
@@ -2897,7 +3022,9 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   document.addEventListener('DOMContentLoaded', function() {
     var tabBtns=document.querySelectorAll('.tab-btn');
-    tabBtns.forEach(function(btn){ btn.addEventListener('click', function(){ tabBtns.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var target=btn.dataset.tab; document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); }); var pane=document.getElementById('tab-'+target); if(pane) pane.classList.add('active'); if(target==='processamento'){ carregarProcessamento(); } if(target==='relatorios'){ renderRelatorios(); } }); });
+    tabBtns.forEach(function(btn){ btn.addEventListener('click', function(){ tabBtns.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var target=btn.dataset.tab; document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); }); var pane=document.getElementById('tab-'+target); if(pane) pane.classList.add('active'); if(target==='processamento'){ carregarProcessamento(); } if(target==='relatorios'){ renderRelatorios(); } if(target==='kpis'){ renderKpisTab(); } }); });
+    ['kpi-cozinha','kpi-de','kpi-ate'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('change', renderKpisTab); });
+    var _kl=document.getElementById('kpi-limpar'); if(_kl) _kl.addEventListener('click', function(){ ['kpi-cozinha','kpi-de','kpi-ate'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; }); renderKpisTab(); });
     document.getElementById('btnPrevWeek').addEventListener('click', function(){ currentWeekOffset--; elabFilter.refeicao='Todas'; carregarSemana(); });
     document.getElementById('btnNextWeek').addEventListener('click', function(){ currentWeekOffset++; elabFilter.refeicao='Todas'; carregarSemana(); });
     var _efr=document.getElementById('ef-ref'); if(_efr) _efr.addEventListener('change', function(){ elabFilter.refeicao=this.value; renderGrid(); });
