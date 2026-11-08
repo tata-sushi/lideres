@@ -2174,4 +2174,62 @@ Testado com Playwright (RPC mockada devolvendo os dois formatos,
 confirmado que colaborador migrado usa `dp-documentos` e colaborador
 não migrado continua usando `admissao-docs`, sem regressão.
 
-_Última atualização: 2026-10-07._
+**Feito (2026-11-08): `ferias.html` — "Aviso de Gozo de Férias" entrou no
+fluxo de assinatura digital.** Esse termo já existia (botão no drawer "Sobre",
+modal próprio com colaborador/período de gozo/data/cidade), mas só tinha
+"Gerar PDF" (`window.open` + `window.print()`) — nenhum caminho pra
+assinatura, e o visual era inteiramente próprio (`.av-*`, fora do padrão
+`.rp-*` usado em todo o resto do portal). Corrigido nas duas frentes, a
+pedido do usuário:
+
+- **Visual refeito no padrão `.rp-*`** (cópia independente, mesma decisão já
+  tomada pra `doc.html`/`beneficios.html` — `AV_RP_CSS`): cabeçalho com logo +
+  título + "Emitido em", caixas Colaborador/Matrícula/Cargo/Unidade/Admissão
+  (`.rp-intro`, dados vindos de `tata_plus.colaboradores_listar` — já expõe
+  `cargo`/`unidade`, não precisou de RPC nova), corpo com CPF/Início de
+  Gozo/Período aquisitivo + os 3 parágrafos do aviso (texto legal idêntico ao
+  anterior, só reorganizado), declaração final (`.rp-ass-declaro` — "Declaro
+  estar ciente da concessão de férias...", mesmo padrão dos outros termos,
+  sem linha de assinatura física) e cidade/data. O HTML do `.page` passou a
+  vir de uma única função (`_avMontarBody`), reaproveitada tanto por "Gerar
+  PDF" quanto por "Enviar para Assinatura Digital" — sem duplicar o texto em
+  dois lugares.
+- **Fluxo de assinatura digital**: novo botão "Enviar para Assinatura
+  Digital" ao lado de "Gerar PDF" (coexistem, mesma decisão de 2026-08-22).
+  Mesmo pipeline de sempre — `_avHtmlParaPdfBlob` (iframe + `html2pdf.js` via
+  CDN, com `pdfOverrides` achatando o CSS de tela, igual
+  `_admHtmlParaPdfBlob`) → upload em `assinaturas/docs/` →
+  `colaborador_documento_pendente_assinatura_salvar` →
+  `tata_plus.docs_enviar_para_assinatura` →
+  `colaborador_documento_definir_atribuicao`.
+- **Catálogo**: novo `doc_tipos` "Aviso de Gozo de Férias" (categoria
+  "Férias" — já existia por causa do "Recibo de Férias", órfão, criado numa
+  sessão anterior e nunca usado por nenhuma página; `ordem=2`,
+  `categoria_ordem=7`, `periodicidade='unico'`, `requer_assinatura=true`).
+- **Nome da RPC do catálogo mudou enquanto isso:** ao conferir o nome certo
+  pra chamar, `doc_tipos_sandbox_listar` (a que `admissao.html` usava até
+  então, documentada em todo o resto deste arquivo) não existia mais no
+  banco — foi substituída por `doc_tipos_listar` (mesma função, agora com
+  `perform public.docs_porta()` no corpo — checagem de acesso, não mais
+  "sandbox"). `admissao.html` já tinha sido atualizado pra esse nome novo por
+  outra sessão/time antes desta mudança (confirmado lendo o arquivo depois
+  do `git pull`) — `ferias.html` já nasceu usando `doc_tipos_listar`. Vale de
+  alerta pra quem for copiar esse pipeline de novo: conferir o nome atual da
+  RPC via `pg_proc` antes de assumir que ainda é `_sandbox_`.
+
+Testado com Playwright: `page.route()` interceptando o CDN do `html2pdf.js`
+com uma implementação fake (mesma técnica usada antes pro JSZip, já que o
+proxy da sandbox bloqueia o domínio real — ver limitação já documentada
+acima pra `doc.html`) pra exercitar o pipeline completo sem depender de rede
+real. Confirmado: upload com `contentType`/path corretos,
+`colaborador_documento_pendente_assinatura_salvar` recebendo
+`p_tipo_id`/`p_matricula`/`p_link_bucket='assinaturas'` certos,
+`docs_enviar_para_assinatura` com o título versionado (`(v2)` quando
+`linha.versao > 1`), vínculo final de atribuição, e modal fechando só depois
+do lote inteiro. Conteúdo do `.page` capturado e conferido campo a campo
+(cabeçalho, caixas do `.rp-intro`, CPF, datas, declaração, cidade/data) —
+bate com o esperado. "Gerar PDF" (impressão) não foi alterado no
+comportamento, só passou a reaproveitar `_avMontarBody` em vez de montar o
+HTML duas vezes.
+
+_Última atualização: 2026-11-08._
