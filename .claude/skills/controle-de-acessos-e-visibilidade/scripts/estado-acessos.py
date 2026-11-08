@@ -10,7 +10,7 @@ catalogo.txt, valores.txt — os SQLs estão no topo daquele script) e lê os id
 ⚠️ O estado.json tem nomes de pessoas: gere no scratchpad, nunca no repo.
 
 Uso:
-    python3 .claude/skills/controle-acesso-abas-botoes/scripts/estado-acessos.py <pasta_dump> <saida.json> [raiz]
+    python3 .claude/skills/controle-de-acessos-e-visibilidade/scripts/estado-acessos.py <pasta_dump> <saida.json> [raiz]
 
 [raiz] = pasta que contém `compliance/` (padrão: o repo). Use uma cópia do main
 (`git archive origin/main compliance | tar -x -C <pasta>`) quando o repo tiver edições em andamento.
@@ -94,7 +94,7 @@ def main():
 
     # páginas do repo fora do controle: sem GOV_PAGE_ID (abrem sem gate) e com id mas sem cadastro no banco.
     # ABERTAS_DE_PROPOSITO não entram em semId: ficam sem gate por decisão do dono.
-    ABERTAS_DE_PROPOSITO = {'compliance/areas/organograma2.html'}   # 04/10/2026
+    ABERTAS_DE_PROPOSITO = set()   # sem exceção desde 08/11/2026 (organograma2.html foi apagado)
     no_banco = {p['id'] for p in paginas} | {f[0] for f in rel.ler(pasta, 'paginas.txt', 7)}
     sem_id = []
     for base, _, arqs in os.walk(os.path.join(raiz_repo, 'compliance')):

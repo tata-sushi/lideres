@@ -17,7 +17,7 @@ description: >-
   "drawer", "menu lateral", "painel Sobre", "botão Sobre", "ações do menu",
   "sidebar". NÃO cobre o header/abas/footer (skill header-abas-footer), o
   modal/formulário (skill modal-formulario) nem os IDs de acesso dos botões de
-  Ações (skill controle-acesso-abas-botoes).
+  Ações (skill controle-de-acessos-e-visibilidade).
 ---
 
 # Drawer "Sobre" — Portal Líderes
@@ -26,7 +26,7 @@ Painel lateral deslizante (da direita) aberto pelo **botão Menu do header** (`o
 
 ## Relação com as outras skills
 - **`header-abas-footer`** — o botão Menu (`openDrawer`) que **abre** este drawer.
-- **`controle-acesso-abas-botoes`** — o `data-botao-id`/`data-aba-id` dos botões de **Ações** (`.drawer-sam-btn`), que controla quem os vê.
+- **`controle-de-acessos-e-visibilidade`** — o `data-botao-id`/`data-aba-id` dos botões de **Ações** (`.drawer-sam-btn`), que controla quem os vê.
 - **`modal-formulario`** — os modais/formulários que os botões de Ações abrem.
 
 Tokens: padrão do portal (`--surface #FFF`, `--carbon #35383F`, `--citric #CFFF00`, `--bg #F4F4F4`, `--border #E2E2E2`, `--muted #999`, `--mid #555`, `--radius 8px`). Fontes: **DM Sans** na maior parte (título, rótulos de seção/footer, versão-valor, números, avatar, nome, cargo). **DM Mono** só em: rótulo "Portal" da versão, rótulo/sub dos cards de Números e botões de Ação.
@@ -106,13 +106,13 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
 
 **Contagem pág / dash** (sub do card Seções — hoje **19 pág / 36 dash**, desde 04/10/2026: saíram as 27 páginas antigas de `areas/**`, Caixa, Gorjeta, Ferramentas, Fornecedores e Matriz D/E/B e entrou a Auditoria de páginas):
 - **dash** = dashboards: todo `.html` em `compliance/kpis/`, **menos os menus** (`index.html` de pasta que tem outras páginas: `kpis/index.html`, `kpis/{estoque,limpeza,rh,tatahouse}/index.html`) — `kpis/manutencao/index.html` é dashboard (pasta com uma página só) — **mais** os dashboards fora de `kpis/` (`DRAWER_DASH_EXTRA`: `compliance/ps.html`, `compliance/auditoria/docsrh.html`, `compliance/auditoria/paginas.html`).
-- **pág** = as demais páginas de `compliance/` que abrem no app (menus, áreas, conceitos, Papéis…). Ficam fora da conta as que não abrem no app (sem `GOV_PAGE_ID`, lista `DRAWER_FORA_APP`: `areas/organograma2.html`, `areas/rh/ouvidoria-qrcode.html`).
+- **pág** = as demais páginas de `compliance/` que abrem no app (menus, áreas, conceitos, Papéis…). Ficam fora da conta as que não abrem no app (sem `GOV_PAGE_ID`, lista `DRAWER_FORA_APP`: `areas/rh/ouvidoria-qrcode.html`).
 - O `loadDrawerMeta` conta na árvore do repositório (API do GitHub) e guarda o resultado **12h no `localStorage`** (`lideres-drawer-meta`), porque a API sem login aceita só 60 consultas/hora por IP. O número **escrito no HTML** é o que aparece antes de carregar ou se a API falhar — mantenha-o **igual à conta atual** em todas as páginas.
 - **Ao criar/apagar página:** atualize o número do HTML em todas (`grep -rl 'id="drawer-kpi-pags"' compliance`). Dashboard novo **fora** de `kpis/` ou página que **não abre no app** → acrescente nas listas `DRAWER_DASH_EXTRA`/`DRAWER_FORA_APP` de **todas** as páginas. Confira a conta (na raiz do repo; tem que dar o número do HTML):
   ```bash
   python3 - <<'PY'
   import glob, os
-  FORA = {'compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'}  # DRAWER_FORA_APP
+  FORA = {'compliance/areas/rh/ouvidoria-qrcode.html'}  # DRAWER_FORA_APP
   EXTRA = {'compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'}  # DRAWER_DASH_EXTRA
   h = [p for p in glob.glob('compliance/**/*.html', recursive=True) if p not in FORA]
   def dash(p):
@@ -126,7 +126,7 @@ Cada seção = `.drawer-section` (margin-bottom 18px) com um `.drawer-section-la
 **Ações (OPCIONAL — a única parte que varia por página)** — botões `.drawer-sam-btn` full-width; cada botão fecha o drawer e abre um modal/ação. **Todos iguais: carbon, texto branco — sem variante clara** (`.secondary` saiu do padrão em 05/10/2026: o "Janelas de homologação" claro destoava; todas as Ações têm o mesmo peso).
 - **Só `.drawer-sam-btn`** — nada de `.drawer-cta-btn` ou outras classes.
 - **Página sem ação → sem a seção** (nunca deixar o rótulo "Ações" vazio).
-- **Acesso:** o botão leva `data-aba-id` (padrão, o `gate.js` esconde) ou `data-botao-id` (quando a ação precisa ser travada) com a chave `<GOV_PAGE_ID>::<slug>` — regras na skill `controle-acesso-abas-botoes`. **Não renomeie** chave existente (é contrato com o catálogo).
+- **Acesso:** o botão leva `data-aba-id` (padrão, a camada de acesso esconde) ou `data-botao-id` (quando a ação precisa ser travada) com a chave `<GOV_PAGE_ID>::<slug>` — regras na skill `controle-de-acessos-e-visibilidade`. **Não renomeie** chave existente (é contrato com o catálogo).
 ```css
 .drawer-sam-btn { display: flex; align-items: center; justify-content: center; width: 100%; padding: 10px 14px; background: var(--carbon); border: none; border-radius: 4px; font-family: "DM Mono", monospace; font-size: 10px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #fff; cursor: pointer; transition: opacity .15s; }
 .drawer-sam-btn:hover { opacity: .85; }
@@ -249,7 +249,7 @@ function loadDrawerKPIs() {
 // Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
 var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'];
-var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
+var DRAWER_FORA_APP = ['compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
 function _pintarDrawerMeta(m) {
   var el = function(id) { return document.getElementById(id); };

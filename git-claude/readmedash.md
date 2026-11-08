@@ -1,6 +1,6 @@
 # readmedash — Configuração de páginas dashboard
 
-Guia operacional para manter o header e o layout das páginas "dashboard" do Portal Líderes TATÁ. Auth gate (entrada da página inteira) está em `readmeauth.md`; drawer lateral em `readmedrawer.md`; menus/cards/chips em `readmemenu.md`; botão voltar em `readmevoltar.md`.
+Guia operacional para manter o header e o layout das páginas "dashboard" do Portal Líderes TATÁ. Acesso (entrada da página, abas, botões e cards dos menus) está na skill `controle-de-acessos-e-visibilidade`; drawer lateral em `readmedrawer.md`; visual dos menus/cards/chips em `CLAUDE.md` §3–5; botão voltar em `readmevoltar.md`.
 
 ## 1. Escopo
 
@@ -23,7 +23,7 @@ Exemplos canônicos (estado atual):
 | `testes/checklistcaixa.html` | Caixa |
 | `testes/extras.html` | Extras |
 
-Páginas de **menu** e **institucionais** (`compliance/menucompliance.html`, `compliance/areas/institucional/*`, `compliance/kpis/index.html`, etc.) seguem outro padrão — cobertas em `readmemenu.md`.
+Páginas de **menu** e **institucionais** (`compliance/menucompliance.html`, `compliance/areas/institucional/*`, `compliance/kpis/index.html`, etc.) seguem outro padrão — visual em `CLAUDE.md` §2.2–5 e acesso na skill `controle-de-acessos-e-visibilidade`.
 
 ## 2. Header — CSS obrigatório
 
@@ -122,8 +122,8 @@ Exemplos proibidos (já foram removidos):
 - [ ] Sem `<div class="header-sub">…</div>`.
 - [ ] `#header-user` presente e sem nome hardcoded.
 - [ ] Nenhuma media query reduz `.header`, `.logo-img`, `.header-title` ou `.header-user`.
-- [ ] Auth gate aplicado (ver `readmeauth.md`).
-- [ ] Se a página é navegada via menu/chip, há card/chip correspondente com `data-access-id`/`data-access-url` (ver `readmemenu.md`).
+- [ ] Acesso aplicado conforme a skill `controle-de-acessos-e-visibilidade` (overlay `#auth-gate`, `GOV_PAGE_ID` + `gate.js`).
+- [ ] Se a página é navegada via menu/chip, há card/chip correspondente com `data-access-id`/`data-access-url` (ver a skill `controle-de-acessos-e-visibilidade`).
 
 ## 7. Histórico das decisões
 

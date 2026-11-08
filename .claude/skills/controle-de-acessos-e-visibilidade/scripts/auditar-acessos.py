@@ -8,7 +8,7 @@ todas as chaves e o `GOV_PAGE_ID` de cada página, e aponta divergências que
 quebram o controle de acesso ou fogem da convenção. Não altera nada — só relata.
 
 Uso:
-    python3 .claude/skills/controle-acesso-abas-botoes/scripts/auditar-acessos.py
+    python3 .claude/skills/controle-de-acessos-e-visibilidade/scripts/auditar-acessos.py
     python3 ...auditar-acessos.py --raiz compliance        # limita a pasta
     python3 ...auditar-acessos.py --vocab                  # só o vocabulário de slugs
 
