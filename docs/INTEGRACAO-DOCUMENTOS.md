@@ -2291,4 +2291,56 @@ todos" + enviar processa cada um com seu próprio período no título/nome do
 arquivo, e o estado vazio ("Nenhum colaborador com férias agendadas nesse
 período") aparece quando não há candidatos no intervalo escolhido.
 
+**Feito (2026-11-09): `admissao.html` — "Declaração para Abertura de Conta
+Salário" no modal de validação (Painel do RH, aba Pendente).** Caso
+diferente de tudo que já existia: esse documento é gerado **antes** da
+pessoa virar `profile`/ganhar matrícula (CPF ainda não migrou pro RHID),
+então não dá pra usar nenhum dos pipelines já existentes (todos dependem
+de matrícula). Puxa direto de `_ficha` (o mesmo objeto carregado por
+`admissao_ficha_get` que já alimenta o modal de validação inteiro):
+`_ficha.admissao` (nome, CPF, cargo) e `_ficha.respostas` (RG —
+`grupo:'pessoais', campo:'rg_numero'` — e endereço — `grupo:'endereco'`,
+mesmo padrão já usado pela Ficha de Registro). Data de admissão e salário
+não existem como campo estruturado nesse ponto do fluxo (salário só
+aparece dentro do texto corrido da Proposta) — por decisão do usuário,
+viraram um mini-formulário que abre junto com o botão, preenchido na hora.
+
+**Só "Gerar PDF" (impressão), sem assinatura digital** — quem assina esse
+documento é o próprio RH (Victor, assinatura manuscrita + carimbo da
+empresa), não o colaborador.
+
+**Assinatura e carimbo como imagem — decisão de segurança importante:**
+diferente do logo da empresa (`ADM_LOGO_B64`, embutido como base64 direto
+no código), uma assinatura manuscrita real e o carimbo oficial da empresa
+**não podem** ir pro código-fonte do jeito que está — este repositório é
+público no GitHub (regra já documentada na skill
+`controle-de-login-e-logs`: "nada sensível escrito no HTML"). As duas
+imagens foram subidas pro bucket **privado** `dp-documentos` (mesmo bucket
+que RH já usa pra outros documentos — `storage.objects` já libera
+INSERT/SELECT pra `anon`/`authenticated` sem checagem de dono, então não
+precisou de policy nova), em `_assets/57.png` (assinatura) e
+`_assets/58.png` (carimbo) — paths escolhidos pelo próprio Storage ao
+subir pela UI do Supabase. Na hora de gerar o PDF, as duas imagens são
+buscadas via `createSignedUrl` (1h de validade) e usadas direto no
+`<img src>` da janela de impressão — nunca ficam no bucket público nem no
+git. Esse é o padrão a seguir pra qualquer documento futuro que precise de
+uma assinatura/carimbo fixo de alguém da empresa (diferente de um logo,
+que pode ser público).
+
+Novo botão "Abertura de Conta" no rodapé do modal de validação, ao lado de
+"Baixar .zip"/"Copiar corpo"/"Enviar para o DP". Visual bespoke (não usa o
+padrão `.rp-*` dos termos — é uma carta de declaração pro banco, replicando
+fielmente o modelo em papel timbrado que o usuário já usava: data por
+extenso no topo, título "AO BANCO ITAÚ" centralizado, campos RG/CPF/
+Endereço/Cargo/Data de Admissão/Salário, assinatura + carimbo, rodapé com
+dados da empresa). Novo `data-aba-id`
+(`governanca-kpis-rh-admissao::gerar-declaracao-conta-salario`) registrado
+no catálogo `tata_plus.governanca_abas`.
+
+Testado com Playwright: mock de `admissao_ficha_get` com uma ficha completa
+(RG, endereço em 4 campos separados) + mock de `createSignedUrl` — confirma
+que o HTML gerado tem todos os campos certos (RG, CPF, endereço composto,
+cargo, data de admissão em DD/MM/AAAA, salário) e que as duas imagens
+apontam pros paths certos do bucket privado.
+
 _Última atualização: 2026-11-09._
