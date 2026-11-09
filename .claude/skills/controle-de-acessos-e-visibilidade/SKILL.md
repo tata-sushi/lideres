@@ -1,37 +1,65 @@
 ---
-name: controle-acesso-abas-botoes
+name: controle-de-acessos-e-visibilidade
 description: >-
-  Padroniza e orienta os IDs de controle de acesso das páginas de Governança,
-  em 4 níveis: PÁGINA (window.GOV_PAGE_ID), ABA (data-aba-id, tipo aba — visível
-  por padrão, denylist via gate.js), BOTÃO (data-aba-id ou data-botao-id, tipo
-  botao — oculto por padrão, allowlist; botão do drawer e da página são o mesmo
-  nível; botões de navegação do header NÃO têm id) e VALOR (tipo valor, mascara
-  R$ no servidor). Dois repos: lideres (HTML onde vivem os ids) e plus (app onde
-  o admin escolhe, por pessoa, quem acessa cada página/aba/botão/valor via o
-  catálogo governanca_abas). Chave = <GOV_PAGE_ID>::<slug> (kebab-case, PT). Use
-  SEMPRE que for adicionar, editar, renomear, esconder, liberar ou PADRONIZAR uma
-  aba (tab-btn), um botão de ação (drawer-sam-btn, btn-avaliar, btn-copia-card,
-  btn-registrar…) ou a visualização de valores; ao mexer em data-aba-id,
-  data-botao-id, GOV_PAGE_ID, gate.js, GOV_BOTOES/aplicarBotoes ou no catálogo
-  governanca_abas; e quando o pedido falar em "aba-id", "botão-id", "quem vê o
-  quê", controle de acesso, permissão por líder/perfil, ou configurar o que o
-  admin libera. Não invente ids nem troque o nível/modelo sem checar aqui.
+  Fonte ÚNICA do controle de acesso e visibilidade do Portal Líderes (páginas de
+  Governança): quem abre cada página, o que vê e faz nela, que dado sensível vê e
+  de quem são os registros. 6 níveis: PÁGINA (window.GOV_PAGE_ID), ABA
+  (data-aba-id, visível por padrão, denylist), BOTÃO (data-aba-id ou
+  data-botao-id; toda ação; oculto por padrão, allowlist; header sem id), VALOR
+  (máscara no servidor: R$, CPF, nascimento e saúde; sem bypass de admin),
+  CONTATO (máscara no servidor: e-mail e telefone; separado do Valor) e LINHA
+  (organograma: o líder vê os próprios + toda a subárvore; admin e RH tudo). O
+  servidor é a porta: toda função de página confere a página (gov_tenho_acesso),
+  toda ação o botão (pode_botao), corta a linha, mascara Valor/Contato e pega o
+  autor do login; nada sem login, nada de sandbox. No navegador, a camada de
+  acesso (hoje dentro do gate.js, que fica só com login e registro) aplica
+  página, abas, botões e cards; a página não decide acesso (sem checar perfil,
+  sem filtro de equipe, sem trava própria de card). Chave =
+  <GOV_PAGE_ID>::<slug>; o admin libera por pessoa no app plus (catálogo
+  governanca_abas). Use SEMPRE que for criar, editar, esconder ou liberar página,
+  aba, botão de ação, card de menu, valor ou dado sensível (CPF, e-mail,
+  telefone, nascimento, saúde); ao mexer em data-aba-id, data-botao-id,
+  data-access-id, GOV_PAGE_ID, gate.js, aplicarBotoes ou governanca_abas; ao
+  criar ou alterar função do banco usada por página; quando a página mostrar
+  dado de pessoa e o líder só puder ver a equipe; e quando o pedido falar em
+  acesso, permissão, visibilidade, "quem vê o quê", perfil, hierarquia,
+  subárvore, liderados, dado sensível ou LGPD. Não invente ids nem mude o
+  modelo sem checar aqui.
 ---
 
-# Controle de acesso por níveis de id (Governança)
+# Controle de acessos e visibilidade (Governança)
 
-As páginas de `compliance/**` abrem **só embarcadas no app Tatá Plus** (num iframe).
-Além do acesso à página inteira, cada página controla **por pessoa** o que aparece
-dentro dela. Todo esse controle é feito por **IDs** — atributos `data-*` no HTML que
-casam com um catálogo no Supabase. **A skill existe para manter esses IDs corretos e
-padronizados** entre as ~30 páginas, pra facilitar o trabalho toda vez que for invocada.
+**Esta é a fonte única** de tudo o que é acesso e visibilidade no portal: quem abre cada página, o que vê
+e faz dentro dela, que dado sensível aparece e de quem são os registros. Os guias antigos
+(`git-claude/readmeauth.md`, `readmemenu.md` e o modelo antigo do `CLAUDE.md` §1 e §3) foram apagados em
+08/11/2026; o que ainda valia está aqui.
+
+As páginas de `compliance/**` abrem **só embarcadas no app Tatá Plus** (num iframe). Cada página
+controla **por pessoa** o que aparece dentro dela, por **IDs** — atributos `data-*` no HTML que casam
+com um catálogo no Supabase — e o **servidor** repete as mesmas checagens dentro das funções do banco.
+**A skill existe para manter isso correto e padronizado** em todas as páginas.
+
+Dois tipos de nível não têm atributo no HTML: **Valor** e **Contato** (máscara no servidor) e **Linha**
+(de quem são os registros, sai sozinho do organograma).
+
+## Acesso × login (o `gate.js`)
+
+| | `gate.js` — login e registro | Esta skill — acesso e visibilidade |
+|---|---|---|
+| Responde | quem é a pessoa? | o que ela pode abrir, ver e fazer? |
+| Cuida de | abrir só dentro do app, token, cliente logado, identidade, registro de quem fez cada ação | página, abas, botões, cards dos menus, Valor, Contato e Linha — no navegador **e** no servidor |
+
+Hoje o `gate.js` ainda faz partes de acesso (libera a página, esconde abas e botões, trava os cards).
+**Elas são desta skill** e saem dele para a **camada de acesso** (decisão do dono, 08/11/2026). Login e
+registro têm skill própria: **`controle-de-login-e-logs`**. O que sai, o contrato entre os dois, o overlay
+`#auth-gate`, os cards dos menus e o que não pode existir na página → `references/camada-de-acesso.md`.
 
 **Dois repositórios, dois papéis:**
 
 - **`lideres`** (este repo) — o **HTML** das páginas (`compliance/**`). É onde os IDs
-  vivem: você **cria/edita/padroniza** os ids de página, aba, botão e valor aqui.
+  vivem: você **cria/edita/padroniza** os ids de página, aba, botão, valor e contato aqui.
 - **`tata-sushi/plus`** — o **app** onde o **admin escolhe, por pessoa, quem acessa**
-  cada página/aba/botão/valor. Ele lê os ids do HTML pelo catálogo no Supabase
+  cada página/aba/botão/valor/contato. Ele lê os ids do HTML pelo catálogo no Supabase
   (`schema tata_plus`, tabela `governanca_abas`) e mostra um liga/desliga por pessoa.
 
 > **A fonte da verdade é o HTML.** O catálogo e o painel só ligam/desligam as chaves
@@ -41,13 +69,20 @@ padronizados** entre as ~30 páginas, pra facilitar o trabalho toda vez que for 
 
 Referências (leia conforme a tarefa):
 
+- **`references/camada-de-acesso.md`** — o que sai do `gate.js`, o contrato gate × acesso, o overlay
+  `#auth-gate`, os cards dos menus e **o que não pode existir na página**. Antes de mexer no HTML.
+- **`references/servidor.md`** — o servidor é a porta: as 8 regras e os moldes de função (leitura e
+  escrita) com página, botão, linha, máscaras e autor do login. Antes de criar ou alterar função do banco.
 - **`references/backend-supabase.md`** — catálogo, tabelas, RPCs, painel admin do Plus,
   registrar chave, replicar config entre pessoas. Antes de mexer no Supabase/painel.
 - **`references/padronizacao.md`** — vocabulário canônico de slugs e como migrar com segurança.
+- **`references/hierarquia.md`** — nível Linha: quem vê quais registros pelo organograma, a função
+  `minha_subarvore()`, os moldes de RPC (leitura e escrita), o eixo de cada página e o estado atual.
+  Antes de mexer em página que mostra dado de pessoa.
 - **`scripts/auditar-acessos.py`** — varre `compliance/**/*.html`, aponta problemas e
   inconsistências e imprime o vocabulário de slugs. **Rode antes de criar uma chave nova**:
   ```bash
-  python3 .claude/skills/controle-acesso-abas-botoes/scripts/auditar-acessos.py
+  python3 .claude/skills/controle-de-acessos-e-visibilidade/scripts/auditar-acessos.py
   ```
 - **`scripts/relatorio-acessos.py`** — quando o dono pedir **"quais ids temos e quem vê o quê"**:
   cruza os ids do HTML com o banco e gera uma página com a visão **por página** (cada aba/botão
@@ -57,7 +92,7 @@ Referências (leia conforme a tarefa):
   mostrar. ⚠️ **Tem nome de pessoas: gere no scratchpad e entregue como arquivo — nunca commite
   nem publique** (o repo vai inteiro para o GitHub Pages).
   ```bash
-  python3 .claude/skills/controle-acesso-abas-botoes/scripts/relatorio-acessos.py <pasta_dump> <saida.html>
+  python3 .claude/skills/controle-de-acessos-e-visibilidade/scripts/relatorio-acessos.py <pasta_dump> <saida.html>
   ```
 - **`assets/matriz-acessos.html` + `scripts/estado-acessos.py`** — a **tabela de acessos** onde o dono clica
   para incluir/tirar pessoas (por página, por pessoa, ids das páginas, grade páginas × pessoas).
@@ -76,17 +111,20 @@ Referências (leia conforme a tarefa):
 
 ---
 
-## Os 4 níveis de id
+## Os 6 níveis
 
-Todo controle cai em **um de quatro níveis**. Identificar o nível define o atributo, o
-default e onde o admin liga/desliga:
+Todo controle cai em **um de seis níveis**: cinco que o admin liga/desliga por pessoa e a **Linha**,
+automática pelo organograma. Identificar o nível define o atributo, o default e onde (ou se) o admin
+liga/desliga:
 
 | Nível | O que é / onde no HTML | id no HTML | `tipo` no catálogo | Default (quem não é admin) | Admin controla… |
 |---|---|---|---|---|---|
 | **Página** | a página inteira | `window.GOV_PAGE_ID` | (`governanca_paginas`) | **oculto** — precisa ser concedido | acesso à página |
 | **Aba** | `tab-btn` (abas de navegação da página) | `data-aba-id` | `aba` | **VISÍVEL** — some só se bloquear (denylist) | liga/desliga por aba |
 | **Botão** | **qualquer botão de ação** (drawer **ou** dentro da página) | `data-aba-id` **ou** `data-botao-id` | `botao` | **OCULTO** — aparece só se liberar (allowlist) | libera por botão |
-| **Valor** | valores em R$ (salário etc.) | — (área, server-side) | `valor` | **OCULTO/mascarado** no servidor | libera ver valor, por área |
+| **Valor** | **R$** (salário, recibos…), **CPF**, **data de nascimento** e **saúde** (atestados, exames) | — (área, máscara no servidor) | `valor` | **mascarado** no servidor | libera por pessoa e área |
+| **Contato** | **e-mail** e **telefone** | — (área, máscara no servidor) | `contato` | **mascarado** no servidor | libera por pessoa e área, separado do Valor |
+| **Linha** | quais registros (linhas de dado) aparecem | — (corte na função) | — (sem catálogo) | **só os próprios + a subárvore** | nada — vem do organograma |
 
 Regras dos níveis:
 
@@ -95,12 +133,13 @@ Regras dos níveis:
 - **Botões de navegação do header NÃO têm id.** Zoom, fixar no menu, abrir o drawer, o
   "+" etc. entram **junto com o acesso à página** — não precisam de controle próprio,
   não recebem `data-aba-id`/`data-botao-id`.
-- **Admin (`perfil='admin'`) vê tudo** nos níveis Página/Aba/Botão. **Valor não:** `pode_ver_valores` só olha
-  `dp_rh.perm_ver_valores` (área pedida ou `geral`), sem bypass de admin. (Outra exceção: as features
-  da seção "App" do Plus — Kanban/Escala/Limpeza — não têm bypass de admin.)
+- **Admin (`perfil='admin'`) vê tudo** nos níveis Página/Aba/Botão. **Valor e Contato não:** só com a
+  liberação da área (ou `geral`), sem bypass de admin. (Outra exceção: as features da seção "App" do
+  Plus — Kanban/Escala/Limpeza — não têm bypass de admin.) Na **Linha**, admin e RH veem todas as linhas.
 
-O nível **Valor** é diferente dos outros: não é atributo num elemento, é uma **área**
-mascarada no servidor. Detalhe no fim e em `references/backend-supabase.md`.
+**Valor** e **Contato** não são atributo num elemento: são **áreas** mascaradas no servidor (detalhe no
+fim e em `references/backend-supabase.md`). A **Linha** é um corte nas funções do banco, decidido pelo
+organograma (resumo no fim e detalhe em `references/hierarquia.md`).
 
 ---
 
@@ -145,6 +184,9 @@ governanca-kpis-rh-recrutamento :: nova-vaga
 <script src="/compliance/gate.js"></script>
 ```
 
+Antes desses scripts vem o overlay `#auth-gate`. Quando a camada de acesso sair do `gate.js`, entra
+uma linha a mais, logo depois dele (`references/camada-de-acesso.md`).
+
 Um mesmo slug **pode se repetir** em vários elementos (ex.: "Editar candidato" na lista
 e no modal): um único interruptor no admin controla todas as instâncias.
 
@@ -152,28 +194,31 @@ e no modal): um único interruptor no admin controla todas as instâncias.
 
 ## Como cada nível é aplicado (aba e botão)
 
-- **Aba → sempre `data-aba-id`.** O `gate.js` (central, no `<head>`) esconde por CSS as
-  abas que a RPC `gov_minhas_abas_bloqueadas` mandar. Visível por padrão. **Nenhum JS**
-  na página; se a aba ativa cair no bloqueio, o gate ativa a primeira visível.
+- **Aba → sempre `data-aba-id`.** A camada de acesso (hoje dentro do `gate.js`) esconde por CSS
+  as abas que a RPC `gov_minhas_abas_bloqueadas` mandar. Visível por padrão. **Nenhum JS**
+  na página; se a aba ativa cair no bloqueio, ela ativa a primeira visível.
 
 - **Botão → dois jeitos de implementar o mesmo nível** (ambos `tipo='botao'`, oculto por
   padrão). Escolher o errado não muda o nível, muda o *como*:
 
   | | `data-aba-id` (via gate.js) | `data-botao-id` (via `pode_botao`) |
   |---|---|---|
-  | Quem aplica | `gate.js`, central | JS da própria página (`aplicarBotoes`) |
+  | Quem aplica | camada de acesso (hoje no `gate.js`) | JS da própria página (`aplicarBotoes`) |
   | Como resolve | servidor devolve como "a esconder" até liberar | `pode_botao` por botão devolve `true`/`false` |
   | O que trava | **esconde** o botão (CSS) | **esconde E bloqueia a ação** (via `GOV_BTN_OK`) |
   | Trabalho na página | nenhum — só o atributo | atributo **+** `GOV_BOTOES` **+** checar `GOV_BTN_OK` na ação |
   | Exemplo | `recrutamento.html` | `escalas.html` |
 
   **Qual usar num botão:**
-  - Padrão → **`data-aba-id` + `tipo='botao'`**. Menos código, o gate.js cuida. Serve
+  - Padrão → **`data-aba-id` + `tipo='botao'`**. Menos código, a camada de acesso cuida. Serve
     quando **esconder o botão basta**.
   - **`data-botao-id`** → só quando **a AÇÃO precisa ser travada, não só escondida**: uma
     ação com mais de um ponto de entrada. Ex.: em `escalas.html`, "Editar semana" abre
     pelo botão (mobile) **e** clicando no nome (desktop) — esconder o botão não impediria
     o desktop. Guarda o `pode_botao` em `GOV_BTN_OK` e a função da ação consulta antes de rodar.
+
+  **Nos dois jeitos, a função do banco da ação confere `pode_botao('<chave>')`**
+  (`references/servidor.md`). Esconder o botão não impede quem chama a função direto.
 
 ---
 
@@ -192,7 +237,7 @@ e no modal): um único interruptor no admin controla todas as instâncias.
            data-aba-id="governanca-kpis-rh-recrutamento::nova-vaga"
            onclick="closeDrawer(); openNewVaga()">Abrir Vaga</button>
    ```
-3. **Sem JS na página** — o `gate.js` já cuida.
+3. **Sem JS na página** — a camada de acesso já cuida.
 4. Cadastre a chave em `governanca_abas` com o `tipo` certo (`aba` p/ abas, `botao` p/
    ações). Sem isso o admin não tem o que ligar/desligar → `references/backend-supabase.md`.
 
@@ -224,8 +269,24 @@ e no modal): um único interruptor no admin controla todas as instâncias.
      });
    }
    ```
-3. **Trave a ação, não só o botão:** cheque `GOV_BTN_OK[id]` na função da ação.
+3. **Trave a ação, não só o botão:** cheque `GOV_BTN_OK[id]` na função da ação (navegador) e
+   `pode_botao` na função do banco (servidor).
 4. Cadastre a chave no catálogo com `tipo='botao'`.
+
+---
+
+## O servidor é a porta
+
+Tudo o que a página esconde, a função do banco tem que negar: quem tem login no app chama a função
+direto, sem passar pela página. Toda função chamada por página:
+
+- confere a **página** (`gov_tenho_acesso('<GOV_PAGE_ID>')`) e, se for ação, o **botão** (`pode_botao('<chave>')`);
+- corta a **Linha** e mascara **Valor** e **Contato** na própria função;
+- pega o **autor do login** (`minha_matricula()` para a matrícula, `meu_nome()` para o nome), nunca da página;
+- é a única porta: `security definer`, sem acesso para `anon`, tabela sem leitura direta;
+- não é "sandbox" e não depende de identidade vinda do navegador.
+
+Moldes de leitura e escrita, checklist e como conferir as funções de uma página → `references/servidor.md`.
 
 ---
 
@@ -251,9 +312,9 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 
 ## Regras de ouro
 
-- **Identifique o nível primeiro** (página/aba/botão/valor) — ele define atributo e default.
+- **Identifique o nível primeiro** (página/aba/botão/valor/contato/linha) — ele define atributo e default.
 - **Botões do header não recebem id** — vêm com o acesso à página.
-- **Aba = visível por padrão; Botão/Valor = ocultos por padrão.** Não inverta.
+- **Aba = visível por padrão; Botão/Valor/Contato = ocultos por padrão.** Não inverta.
 - **O prefixo tem que ser o `GOV_PAGE_ID` da página**, senão o admin liga um interruptor
   que não existe.
 - **Slug é contrato.** Não renomeie sem atualizar o catálogo; renomear zera a config.
@@ -264,10 +325,24 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 - **`data-aba-id` não pede JS; `data-botao-id` pede** (`GOV_BOTOES` + `aplicarBotoes` +
   checar `GOV_BTN_OK` na ação).
 - **Cadastrar no catálogo é obrigatório** — o atributo sozinho não cria o interruptor.
-- **Admin vê tudo** em Página/Aba/Botão (não em Valor: precisa da área ou de `geral`).
+- **Admin vê tudo** em Página/Aba/Botão (não em Valor nem Contato: precisa da área ou de `geral`). Em Linha,
+  admin e RH veem todas.
+- **Dado de pessoa só sai por função escopada** (nível Linha): o servidor corta pela hierarquia.
+  Filtro no navegador não protege nada.
+- **O servidor é a porta:** toda função de página confere página/botão, corta a linha, mascara Valor e
+  Contato e pega o autor do login (`references/servidor.md`).
+- **A página não decide acesso:** nada de checar perfil, filtro de equipe, trava própria de card ou ler
+  `lideres_session` (lista completa em `references/camada-de-acesso.md`).
+- **Nada sem login e nada de sandbox:** nenhuma página com a chave pública sem login, nenhuma função ou
+  tabela liberada para `anon`, nenhuma função `*_sandbox_*` em uso e nenhuma matrícula de teste.
 - O `gate.js` só roda embarcado no Plus; fora do app mostra "Disponível pelo aplicativo".
-- **Exceção aberta de propósito:** `compliance/areas/organograma2.html` fica **sem `GOV_PAGE_ID` e sem gate**
-  (decisão do dono, 04/10/2026). Não "corrija"; o `estado-acessos.py` já não a lista em `semId`.
+- **Sem exceção:** toda página tem `GOV_PAGE_ID` e passa pelo gate e pela camada de acesso. O
+  `compliance/areas/organograma2.html` (antiga exceção aberta) foi apagado em 08/11/2026.
+- **Exceção ao nível Linha (decisão do dono, 08/11/2026):** `compliance/areas/organograma.html` mostra a
+  árvore inteira para quem abre a página — é a função dela. Página, botão e Valor valem normalmente;
+  o corte por subárvore **não** se aplica ali. Não mexer.
+- **Números do drawer Sobre** (colaboradores, unidades, departamentos) continuam saindo da leitura direta
+  que já existe nas páginas; o dono decidiu não mexer (08/11/2026).
 
 ---
 
@@ -275,7 +350,7 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 
 1. Rode a auditoria — veja PROBLEMAS/AVISOS da página e o vocabulário de slugs do repo:
    ```bash
-   python3 .claude/skills/controle-acesso-abas-botoes/scripts/auditar-acessos.py
+   python3 .claude/skills/controle-de-acessos-e-visibilidade/scripts/auditar-acessos.py
    ```
 2. Antes de criar chave nova, **reuse o slug canônico** do mesmo conceito (ex.: aba de
    KPIs = `dashboard`, não `kpis`). Ver `references/padronizacao.md`.
@@ -285,11 +360,51 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 
 ---
 
-## Nível Valor (visualização de R$)
+## Nível Valor (R$ e dados sensíveis)
 
-O catálogo tem `tipo='valor'` para **mascarar valores em R$** (salário etc.) — oculto por
-padrão, liberado por pessoa/área. Diferenças em relação a aba/botão:
+O catálogo tem `tipo='valor'` para **mascarar no servidor**: valores em **R$** (salário, recibos, líquido…),
+**CPF**, **data de nascimento** e **saúde** (atestados, exames) — decisão do dono, 08/11/2026. Oculto por
+padrão, liberado por pessoa e área. Diferenças em relação a aba/botão:
 
-- Não é atributo num elemento; o mascaramento é **server-side** (não some por CSS).
+- Não é atributo num elemento; o mascaramento é **na função do banco** (`pode_ver_valores('<área>')`),
+  que devolve `null` sem permissão. A página só mostra o marcador (`R$ •••`, `•••`). Nunca mascarar só por CSS.
 - O `aba_id` **é a própria área** (ex.: `recrutamento`), **sem** o prefixo `pagina_id::`.
-- Liberação por pessoa fica em `dp_rh.perm_ver_valores`. Detalhes em `references/backend-supabase.md`.
+- Liberação por pessoa fica em `dp_rh.perm_ver_valores`; `geral` libera todas as áreas. **Sem bypass de
+  admin.** Detalhes em `references/backend-supabase.md`.
+
+---
+
+## Nível Contato (e-mail e telefone)
+
+**E-mail** e **telefone** têm interruptor **próprio**, separado do Valor (decisão do dono, 08/11/2026):
+quem vê R$ e CPF não vê contato automaticamente, e vice-versa. Mesma mecânica do Valor (migration
+`supabase/migrations/20261125_nivel_contato.sql`):
+
+- catálogo `tipo='contato'`, uma linha por área, com `aba_id = 'contato-<área>'` (para não colidir com o id da
+  área de Valor);
+- liberação por pessoa e área em `dp_rh.perm_ver_contato` (`matricula`, `area`, `liberado`); `geral` libera
+  todas as áreas;
+- `tata_plus.pode_ver_contato('<área>')` na função do banco, que devolve `null` sem permissão; **sem bypass de
+  admin**;
+- interruptor no painel do app plus e na Auditoria de páginas, ao lado do Valor.
+
+---
+
+## Nível Linha (hierarquia)
+
+Decide **de quem são os registros** que aparecem numa página (as férias de quem, as vagas de
+quem). Não tem id nem catálogo: **sai do organograma** (`tata_plus.profiles`,
+`id_superior → id_pessoa`), e o admin não configura nada.
+
+- **Líder** vê os próprios registros + os de toda a subárvore abaixo dele (N níveis).
+- **Sem equipe** vê só os próprios. **Admin e RH** veem todos.
+- **Quem vê, grava**, inclusive o próprio registro. Se o botão da ação aparece é o nível Botão.
+- **Corte no servidor**, na RPC, com `tata_plus.minha_subarvore()`. O navegador nunca recebe
+  linha de fora da equipe.
+- **Não filtra** o Sobre (aba e drawer) nem conteúdo institucional. KPIs e gráficos saem das
+  linhas já filtradas.
+- **Valor e Contato** continuam com a trava própria **e** passam pelo corte de linha.
+- **Visibilidade errada = organograma errado:** a correção é no RHID, não no portal.
+
+Função, moldes de leitura e escrita, eixo por página, estado atual e teste em
+`references/hierarquia.md`.

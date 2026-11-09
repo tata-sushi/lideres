@@ -13,7 +13,7 @@ inativa com acesso, liberação sem efeito…).
 commite: tudo que entra no repo é publicado no GitHub Pages.
 
 Uso:
-    python3 .claude/skills/controle-acesso-abas-botoes/scripts/relatorio-acessos.py <pasta_dump> <saida.html>
+    python3 .claude/skills/controle-de-acessos-e-visibilidade/scripts/relatorio-acessos.py <pasta_dump> <saida.html>
 
 <pasta_dump> tem 4 arquivos texto, uma linha por registro, campos separados por "|"
 (listas de matrícula separadas por vírgula). Gere cada um com o SQL abaixo (MCP do

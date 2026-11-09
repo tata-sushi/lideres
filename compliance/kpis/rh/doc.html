@@ -678,6 +678,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <span class="modal-section-title">Tipo de documento</span>
         <select class="modal-select" id="dl-tipo"></select>
       </div>
+      <div style="margin:-4px 0 2px;">
+        <button type="button" class="btn-link" id="dl-modo-toggle" onclick="_dlToggleModoUnico()">Enviar pra um colaborador só</button>
+      </div>
+      <div class="ev-field" id="dl-unico-wrap" style="display:none;">
+        <span class="modal-section-title">Colaborador</span>
+        <select class="modal-select" id="dl-unico-colab"></select>
+      </div>
       <div class="ev-field">
         <span class="modal-section-title">Competência / Período</span>
         <div class="dl-periodo-row">
@@ -686,7 +693,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <input type="date" class="modal-input" id="dl-periodo-fim">
         </div>
       </div>
-      <div class="ev-field">
+      <div class="ev-field" id="dl-lote-wrap">
         <span class="modal-section-title">Arquivos (PDF, um por colaborador)</span>
         <div class="cp-drop" id="dl-drop" ondragover="_dlDragOver(event)" ondragleave="_dlDragLeave(event)" ondrop="_dlDrop(event)">
           <div class="cp-drop-label">Arraste os PDFs aqui ou</div>
@@ -694,6 +701,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
           <div class="cp-drop-sub">Nome do arquivo precisa começar com a matrícula (ex.: 7_NOME_id.pdf ou 24416 – NOME.pdf)</div>
         </div>
         <input type="file" id="dl-files" accept="application/pdf" multiple style="display:none;" onchange="_dlOnFilesSelected(this.files)">
+      </div>
+      <div class="ev-field" id="dl-unico-arquivo-wrap" style="display:none;">
+        <span class="modal-section-title">Arquivo (PDF)</span>
+        <input type="file" class="modal-input" id="dl-unico-arquivo" accept="application/pdf">
       </div>
       <div class="cp-summary" id="dl-summary" style="display:none;"></div>
       <div class="cp-file-list" id="dl-file-list"></div>
@@ -793,30 +804,24 @@ var state = {
   error: null
 };
 
-// ─── Permissão de ver valores (sandbox: matrícula DEV via localStorage) ───
-function _sandboxMatricula() {
-  try { return localStorage.getItem('sandbox_matricula') || null; } catch (e) { return null; }
-}
-// Nome do usuário logado (mesma fonte do "solicitante" da Nova Solicitação)
-function _usuarioLogadoNome() {
-  var s = window.__lideresSession || (function(){ try { return JSON.parse(localStorage.getItem('lideres_session')); } catch (e) { return null; } })();
-  return (s && s.displayName) ? s.displayName : '';
-}
-// ─── Dados vêm do Supabase (RPCs públicos + RLS) ───
+// Nome do usuário logado (publicado pelo gate.js). Só para mostrar/imprimir: o autor das
+// gravações é resolvido no servidor pelo login (tata_plus.meu_nome()).
+function _usuarioLogadoNome() { return window.__lideresUser || ''; }
+// ─── Dados vêm do Supabase (RPCs autenticadas; página conferida no servidor) ───
 function loadAllData() {
   state.loading = true; state.error = null;
   showLoading();
   var SB = window.__lideresSupa;
   if (!SB) { window.addEventListener('lideres:supa', loadAllData, { once: true }); return; }
   Promise.all([
-    SB.rpc('doc_tipos_sandbox_listar'),                    // catálogo de documentos (aba Analítico)
-    SB.rpc('colaborador_documentos_sandbox_listar_todos'), // documentos já anexados (aba Analítico)
-    SB.rpc('doc_colaboradores_sandbox_listar'),            // roster (tata_plus.profiles, status=Ativo)
-    SB.rpc('doc_cargos_sandbox_listar'),                   // lista de cargos p/ tela de classificação
-    SB.rpc('doc_tipos_cargo_excecoes_sandbox_listar'),     // regra "esse cargo (não) precisa desse tipo"
-    SB.rpc('colaborador_doc_excecoes_sandbox_listar'),     // exceção por pessoa (sobrepõe a regra de cargo)
-    SB.rpc('doc_eventos_sandbox_listar'),                  // ausência/sanção que exigem documento (últimos 60 dias — fase de teste)
-    SB.rpc('doc_eventos_cortes_sandbox_listar')             // quebras manuais de período dentro de um evento
+    SB.rpc('doc_tipos_listar'),                    // catálogo de documentos (aba Analítico)
+    SB.rpc('colaborador_documentos_listar_todos'), // documentos já anexados (aba Analítico)
+    SB.rpc('doc_colaboradores_listar'),            // roster (tata_plus.profiles, Ativo e Inativo)
+    SB.rpc('doc_cargos_listar'),                   // lista de cargos p/ tela de classificação
+    SB.rpc('doc_tipos_cargo_excecoes_listar'),     // regra "esse cargo (não) precisa desse tipo"
+    SB.rpc('colaborador_doc_excecoes_listar'),     // exceção por pessoa (sobrepõe a regra de cargo)
+    SB.rpc('doc_eventos_listar'),                  // ausência/sanção que exigem documento (últimos 60 dias)
+    SB.rpc('doc_eventos_cortes_listar')             // quebras manuais de período dentro de um evento
   ]).then(function (results) {
     var dtres = results[0], cdres = results[1], colres = results[2];
     var cgres = results[3], dcres = results[4], ceres = results[5], evres = results[6], ecres = results[7];
@@ -1035,7 +1040,7 @@ function _docCompetenciaCobre(rowCompetencia, mesAlvo) {
 }
 
 // Todas as versões de um termo (mais recente primeiro) — cada geração cria uma linha nova,
-// nunca sobrescreve (ver colaborador_documento_pendente_assinatura_sandbox_salvar).
+// nunca sobrescreve (ver colaborador_documento_pendente_assinatura_salvar).
 function _docVersoes(matricula, tipoId, competencia) {
   return (colaboradorDocumentos || []).filter(function (d) {
     return d.matricula === matricula && d.tipo_id === tipoId && _docCompetenciaCobre(d.competencia, competencia);
@@ -1250,9 +1255,8 @@ function _docConfirmarQuebraPeriodo(matricula, origem, eventoId) {
   if (!dataCorte || dataCorte <= evento.data_inicio || dataCorte > evento.data_fim) { alert('Escolha uma data dentro do período, depois do início.'); return; }
   var SB = window.__lideresSupa;
   if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
-  SB.rpc('doc_eventos_corte_sandbox_salvar', {
-    p_matricula: matricula, p_nome_documento: evento.nome_documento, p_data_corte: dataCorte,
-    p_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido'
+  SB.rpc('doc_eventos_corte_salvar', {
+    p_matricula: matricula, p_nome_documento: evento.nome_documento, p_data_corte: dataCorte
   }).then(function (r) {
     if (r.error) { alert('Erro ao quebrar período:\n' + r.error.message); return; }
     _docQuebraAberta = null;
@@ -1263,7 +1267,7 @@ function _docConfirmarQuebraPeriodo(matricula, origem, eventoId) {
 function _docDesfazerQuebraPeriodo(matricula, corteId) {
   var SB = window.__lideresSupa;
   if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
-  SB.rpc('doc_eventos_corte_sandbox_excluir', { p_id: corteId }).then(function (r) {
+  SB.rpc('doc_eventos_corte_excluir', { p_id: corteId }).then(function (r) {
     if (r.error) { alert('Erro ao desfazer quebra:\n' + r.error.message); return; }
     return _docRecarregarEventos(matricula);
   }, function (err) { alert('Erro de conexão:\n' + (err && err.message || err)); });
@@ -1273,8 +1277,8 @@ function _docRecarregarEventos(matricula) {
   var SB = window.__lideresSupa;
   if (!SB) return;
   return Promise.all([
-    SB.rpc('doc_eventos_sandbox_listar'),
-    SB.rpc('doc_eventos_cortes_sandbox_listar')
+    SB.rpc('doc_eventos_listar'),
+    SB.rpc('doc_eventos_cortes_listar')
   ]).then(function (results) {
     var evres = results[0], ecres = results[1];
     docEventos = (evres && !evres.error && Array.isArray(evres.data)) ? evres.data : [];
@@ -1307,10 +1311,9 @@ function _docFileSelecionadoEvento(ev) {
   var nomeArquivo = (col ? col.nome : ctx.matricula) + ' - ' + (evento ? evento.nome_documento : 'Documento') + (evento ? ' ' + _docFmtPeriodo(evento) : '') + '.' + ext;
   SB.storage.from('dp-documentos').upload(path, file, { upsert: true }).then(function (r) {
     if (r.error) { alert('Erro ao enviar arquivo:\n' + r.error.message); return; }
-    return SB.rpc('colaborador_documento_evento_sandbox_salvar', {
+    return SB.rpc('colaborador_documento_evento_salvar', {
       p_matricula: ctx.matricula, p_evento_origem: ctx.origem, p_evento_id: ctx.eventoId,
-      p_nome_arquivo: nomeArquivo, p_link: path, p_mime: file.type || null, p_tamanho: file.size || null,
-      p_enviado_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido'
+      p_nome_arquivo: nomeArquivo, p_link: path, p_mime: file.type || null, p_tamanho: file.size || null
     });
   }).then(function (r) {
     if (!r) return;
@@ -1366,10 +1369,9 @@ function _docFileSelecionado(ev) {
     (ctx.competencia ? ' ' + _docFmtCompetencia(ctx.competencia) : '') + '.' + ext;
   SB.storage.from('dp-documentos').upload(path, file, { upsert: true }).then(function (r) {
     if (r.error) { alert('Erro ao enviar arquivo:\n' + r.error.message); return; }
-    return SB.rpc('colaborador_documentos_sandbox_salvar', {
+    return SB.rpc('colaborador_documentos_salvar', {
       p_matricula: ctx.matricula, p_tipo_id: ctx.tipoId, p_competencia: ctx.competencia,
-      p_nome_arquivo: nomeArquivo, p_link: path, p_mime: file.type || null, p_tamanho: file.size || null,
-      p_enviado_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido'
+      p_nome_arquivo: nomeArquivo, p_link: path, p_mime: file.type || null, p_tamanho: file.size || null
     });
   }).then(function (r) {
     if (!r) return;
@@ -1398,9 +1400,8 @@ function _docAbrirArquivo(path, bucket) {
 function _docToggleExcecaoPessoa(matricula, tipoId, novoAplica) {
   var SB = window.__lideresSupa;
   if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
-  SB.rpc('colaborador_doc_excecao_sandbox_salvar', {
-    p_matricula: matricula, p_tipo_id: tipoId, p_aplica: novoAplica,
-    p_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido'
+  SB.rpc('colaborador_doc_excecao_salvar', {
+    p_matricula: matricula, p_tipo_id: tipoId, p_aplica: novoAplica
   }).then(function (r) {
     if (r.error) { alert('Erro ao salvar exceção:\n' + r.error.message); return; }
     docColabExcecoes = (docColabExcecoes || []).filter(function (e) { return !(e.matricula === matricula && e.tipo_id === tipoId); });
@@ -1413,7 +1414,7 @@ function _docToggleExcecaoPessoa(matricula, tipoId, novoAplica) {
 function _docRemoverExcecaoPessoa(matricula, tipoId) {
   var SB = window.__lideresSupa;
   if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
-  SB.rpc('colaborador_doc_excecao_sandbox_excluir', { p_matricula: matricula, p_tipo_id: tipoId }).then(function (r) {
+  SB.rpc('colaborador_doc_excecao_excluir', { p_matricula: matricula, p_tipo_id: tipoId }).then(function (r) {
     if (r.error) { alert('Erro ao remover exceção:\n' + r.error.message); return; }
     docColabExcecoes = (docColabExcecoes || []).filter(function (e) { return !(e.matricula === matricula && e.tipo_id === tipoId); });
     document.getElementById('doc-colab-body').innerHTML = _docRenderSecoes(matricula);
@@ -1428,7 +1429,7 @@ function _docLimparExcecoesPessoa(matricula) {
   var minhas = (docColabExcecoes || []).filter(function (e) { return e.matricula === matricula; });
   if (!minhas.length) return;
   Promise.all(minhas.map(function (e) {
-    return SB.rpc('colaborador_doc_excecao_sandbox_excluir', { p_matricula: matricula, p_tipo_id: e.tipo_id });
+    return SB.rpc('colaborador_doc_excecao_excluir', { p_matricula: matricula, p_tipo_id: e.tipo_id });
   })).then(function (results) {
     var erro = results.filter(Boolean).find(function (r) { return r.error; });
     if (erro) { alert('Erro ao remover exceções:\n' + erro.error.message); return; }
@@ -1505,14 +1506,13 @@ function _docTipoNovoSalvar() {
 
   var SB = window.__lideresSupa;
   if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
-  SB.rpc('doc_tipo_sandbox_criar', {
+  SB.rpc('doc_tipo_criar', {
     p_categoria: categoria, p_nome: nome, p_periodicidade: periodicidade, p_intervalo_meses: intervalo,
     p_obrigatorio: obrigatorio, p_aplica_somente_inativo: somenteInativo,
-    p_criado_por: _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido',
     p_requer_assinatura: requerAssinatura
   }).then(function (r) {
     if (r.error) { alert('Erro ao cadastrar documento:\n' + r.error.message); return; }
-    return SB.rpc('doc_tipos_sandbox_listar');
+    return SB.rpc('doc_tipos_listar');
   }).then(function (r) {
     if (!r) return;
     if (!r.error && Array.isArray(r.data)) docTipos = r.data;
@@ -2254,9 +2254,9 @@ function _dgSalvarUmTermo(doc, tipoId, ctx, emitidoPor) {
     var nomeArquivo = (ctx.colabNomeLimpo || ctx.colabMatricula) + ' - ' + (doc.sectionLabel || doc.nome) + '.pdf';
     return SB.storage.from('assinaturas').upload(arquivoPath, blob, { upsert: true, contentType: 'application/pdf' }).then(function (rUp) {
       if (rUp.error) throw rUp.error;
-      return SB.rpc('colaborador_documento_pendente_assinatura_sandbox_salvar', {
+      return SB.rpc('colaborador_documento_pendente_assinatura_salvar', {
         p_matricula: ctx.colabMatricula, p_tipo_id: tipoId, p_nome_arquivo: nomeArquivo, p_link: arquivoPath,
-        p_mime: 'application/pdf', p_tamanho: blob.size, p_enviado_por: emitidoPor,
+        p_mime: 'application/pdf', p_tamanho: blob.size,
         p_link_bucket: 'assinaturas'
       });
     }).then(function (rRow) {
@@ -2266,13 +2266,12 @@ function _dgSalvarUmTermo(doc, tipoId, ctx, emitidoPor) {
       return SB.schema('tata_plus').rpc('docs_enviar_para_assinatura', {
         p_matricula: ctx.colabMatricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
         p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
-        p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true,
-        p_atribuido_por: emitidoPor
+        p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true
       }).then(function (rEnvio) {
         if (rEnvio.error) throw rEnvio.error;
         var envio = rEnvio.data;
         if (!envio || !envio.ok) throw new Error((envio && envio.erro) || 'Falha ao enviar pra assinatura.');
-        return SB.rpc('colaborador_documento_definir_atribuicao_sandbox', {
+        return SB.rpc('colaborador_documento_definir_atribuicao', {
           p_id: linha.id, p_assinatura_atribuicao_id: envio.atribuicao_id
         });
       });
@@ -2367,7 +2366,7 @@ function _dgToggleUtensilios(checked) {
 }
 
 // CPF por matrícula — RPC própria (tata_plus.colaboradores_listar, authenticated
-// only), NÃO a doc_colaboradores_sandbox_listar (essa é public+anon, não dá
+// only), NÃO a doc_colaboradores_listar (essa não devolve CPF, não dá
 // pra colocar CPF nela sem vazar dado sensível pra sessão anônima). Cache
 // client-side, mesmo padrão dos outros lookups desse arquivo.
 var _dgColaboradoresCpfCache = null;
@@ -2673,7 +2672,7 @@ function enviarDocumentoAssinatura() {
     return;
   }
 
-  var emitidoPor = _usuarioLogadoNome() || _sandboxMatricula() || '—';
+  var emitidoPor = _usuarioLogadoNome() || '—';
   window._dgProcessando = true;
   var btn = document.getElementById('dg-btn-assinar');
   setBtnLoading(btn, true, 'Enviando…');
@@ -2704,6 +2703,7 @@ function enviarDocumentoAssinatura() {
 // docColaboradores/docTipos já carregados por loadAllData() — sem RPC extra.
 var _dlArquivos = [];
 var _dlEnviando = false;
+var _dlModoUnico = false;
 
 function _dlUuid() {
   if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -2721,11 +2721,17 @@ function abrirDocLote() {
   closeDrawer();
   _dlArquivos = [];
   _dlEnviando = false;
+  _dlModoUnico = false;
   document.getElementById('dl-files').value = '';
   document.getElementById('dl-file-list').innerHTML = '';
   document.getElementById('dl-summary').style.display = 'none';
   document.getElementById('dl-progress').style.display = 'none';
   document.getElementById('dl-erro').style.display = 'none';
+  document.getElementById('dl-unico-wrap').style.display = 'none';
+  document.getElementById('dl-unico-arquivo-wrap').style.display = 'none';
+  document.getElementById('dl-unico-arquivo').value = '';
+  document.getElementById('dl-lote-wrap').style.display = '';
+  document.getElementById('dl-modo-toggle').textContent = 'Enviar pra um colaborador só';
   var btn = document.getElementById('dl-btn');
   setBtnLoading(btn, false, 'Enviar para Assinatura Digital');
 
@@ -2734,6 +2740,12 @@ function abrirDocLote() {
     .slice().sort(function (a, b) { return (a.nome || '').localeCompare(b.nome || ''); });
   tipoSel.innerHTML = '<option value="">Selecione</option>' +
     tipos.map(function (t) { return '<option value="' + escH(t.id) + '">' + escH(t.nome) + '</option>'; }).join('');
+
+  var colabSel = document.getElementById('dl-unico-colab');
+  colabSel.innerHTML = '<option value="">Selecione</option>' +
+    (docColaboradores || []).filter(function (c) { return c.status === 'Ativo'; })
+      .slice().sort(function (a, b) { return (a.nome || '').localeCompare(b.nome || '', 'pt-BR'); })
+      .map(function (c) { return '<option value="' + escH(c.matricula) + '">' + escH(c.nome || c.matricula) + '</option>'; }).join('');
 
   var ini = document.getElementById('dl-periodo-ini');
   var fim = document.getElementById('dl-periodo-fim');
@@ -2755,6 +2767,25 @@ function fecharDocLote() {
   if (_dlEnviando) return; // não deixa fechar no meio do envio em lote
   document.getElementById('dl-overlay').classList.remove('active');
   document.body.style.overflow = '';
+}
+
+// Alterna entre o modo "lote" (vários PDFs casados pela matrícula no nome do
+// arquivo — bom pra volume grande, tipo Holerite/Cartão de Ponto) e o modo
+// "1 colaborador" (um <select> + 1 PDF qualquer, sem precisar renomear nada
+// — bom pra um documento avulso, tipo um Recibo de Férias de uma pessoa só).
+function _dlToggleModoUnico() {
+  _dlModoUnico = !_dlModoUnico;
+  document.getElementById('dl-unico-wrap').style.display = _dlModoUnico ? '' : 'none';
+  document.getElementById('dl-unico-arquivo-wrap').style.display = _dlModoUnico ? '' : 'none';
+  document.getElementById('dl-lote-wrap').style.display = _dlModoUnico ? 'none' : '';
+  document.getElementById('dl-modo-toggle').textContent = _dlModoUnico ? 'Enviar em lote (vários colaboradores)' : 'Enviar pra um colaborador só';
+  document.getElementById('dl-erro').style.display = 'none';
+  // trocar de modo some com o que já tinha sido anexado no outro
+  _dlArquivos = [];
+  document.getElementById('dl-files').value = '';
+  document.getElementById('dl-file-list').innerHTML = '';
+  document.getElementById('dl-summary').style.display = 'none';
+  document.getElementById('dl-unico-arquivo').value = '';
 }
 
 function _dlColabPorMatricula() {
@@ -2839,9 +2870,9 @@ function _dlEnviarUmArquivo(item, tipoId, tipoNome, competencia, periodoLabel, e
     var arquivoPath = 'docs/' + _dlUuid() + '.pdf';
     SB.storage.from('assinaturas').upload(arquivoPath, item.file, { upsert: true, contentType: 'application/pdf' }).then(function (rUp) {
       if (rUp.error) throw rUp.error;
-      return SB.rpc('colaborador_documento_pendente_assinatura_sandbox_salvar', {
+      return SB.rpc('colaborador_documento_pendente_assinatura_salvar', {
         p_matricula: item.matricula, p_tipo_id: tipoId, p_nome_arquivo: item.file.name, p_link: arquivoPath,
-        p_mime: 'application/pdf', p_tamanho: item.file.size, p_enviado_por: emitidoPor,
+        p_mime: 'application/pdf', p_tamanho: item.file.size,
         p_link_bucket: 'assinaturas', p_competencia: competencia
       });
     }).then(function (rRow) {
@@ -2851,13 +2882,12 @@ function _dlEnviarUmArquivo(item, tipoId, tipoNome, competencia, periodoLabel, e
       return SB.schema('tata_plus').rpc('docs_enviar_para_assinatura', {
         p_matricula: item.matricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
         p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
-        p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true,
-        p_atribuido_por: emitidoPor
+        p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true
       }).then(function (rEnvio) {
         if (rEnvio.error) throw rEnvio.error;
         var envio = rEnvio.data;
         if (!envio || !envio.ok) throw new Error((envio && envio.erro) || 'Falha ao enviar pra assinatura.');
-        return SB.rpc('colaborador_documento_definir_atribuicao_sandbox', {
+        return SB.rpc('colaborador_documento_definir_atribuicao', {
           p_id: linha.id, p_assinatura_atribuicao_id: envio.atribuicao_id
         });
       });
@@ -2882,10 +2912,25 @@ function enviarLoteDocumentos() {
   if (periodoFim < periodoIni) { errBox.style.display = 'block'; errBox.textContent = 'O período final não pode ser antes do inicial.'; return; }
   var competencia = periodoIni + '_' + periodoFim; // chave de versionamento — período exato
   var periodoLabel = _dlFmtDataBR(periodoIni) + ' a ' + _dlFmtDataBR(periodoFim);
-  var validos = _dlArquivos.filter(function (i) { return i.status === 'ok'; });
-  if (!validos.length) { errBox.style.display = 'block'; errBox.textContent = 'Anexe ao menos um arquivo reconhecido.'; return; }
 
-  var emitidoPor = _usuarioLogadoNome() || _sandboxMatricula() || '—';
+  var validos;
+  if (_dlModoUnico) {
+    // Modo "1 colaborador": sem casamento por nome de arquivo — o colaborador
+    // vem do <select>, o PDF pode ter qualquer nome.
+    var matricula = (document.getElementById('dl-unico-colab') || {}).value || '';
+    var colabSel = document.getElementById('dl-unico-colab');
+    var nomeColab = matricula && colabSel.selectedOptions.length ? colabSel.selectedOptions[0].textContent : '';
+    var arquivoInput = document.getElementById('dl-unico-arquivo');
+    var arquivo = arquivoInput && arquivoInput.files && arquivoInput.files[0];
+    if (!matricula) { errBox.style.display = 'block'; errBox.textContent = 'Selecione o colaborador.'; return; }
+    if (!arquivo) { errBox.style.display = 'block'; errBox.textContent = 'Anexe o PDF do documento.'; return; }
+    validos = [{ file: arquivo, matricula: matricula, nome: nomeColab, status: 'ok', motivo: '' }];
+  } else {
+    validos = _dlArquivos.filter(function (i) { return i.status === 'ok'; });
+    if (!validos.length) { errBox.style.display = 'block'; errBox.textContent = 'Anexe ao menos um arquivo reconhecido.'; return; }
+  }
+
+  var emitidoPor = _usuarioLogadoNome() || '—';
 
   _dlEnviando = true;
   var btn = document.getElementById('dl-btn');
@@ -2941,11 +2986,10 @@ function _docCargoChanged(cargo) {
 function _docCargoToggle(cargo, tipoId, aplica) {
   var SB = window.__lideresSupa;
   if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
-  var por = _usuarioLogadoNome() || _sandboxMatricula() || 'desconhecido';
   // aplica=true (voltou a marcar) = volta ao padrão, então só precisa remover a exceção salva antes.
   var call = aplica
-    ? SB.rpc('doc_tipos_cargo_excecao_sandbox_excluir', { p_tipo_id: tipoId, p_cargo: cargo })
-    : SB.rpc('doc_tipos_cargo_excecao_sandbox_salvar', { p_tipo_id: tipoId, p_cargo: cargo, p_aplica: false, p_por: por });
+    ? SB.rpc('doc_tipos_cargo_excecao_excluir', { p_tipo_id: tipoId, p_cargo: cargo })
+    : SB.rpc('doc_tipos_cargo_excecao_salvar', { p_tipo_id: tipoId, p_cargo: cargo, p_aplica: false });
   call.then(function (r) {
     if (r.error) { alert('Erro ao salvar:\n' + r.error.message); return; }
     docCargoExcecoes = (docCargoExcecoes || []).filter(function (e) { return !(e.cargo === cargo && e.tipo_id === tipoId); });
@@ -3210,17 +3254,18 @@ function setPendUnidadeFiltro(v) { state.pendUnidadeFiltro = v; state.pendDepart
 function setPendDepartamentoFiltro(v) { state.pendDepartamentoFiltro = v; renderDocPendencias(); }
 function clearPendFiltros() { state.pendUnidadeFiltro = 'Todos'; state.pendDepartamentoFiltro = 'Todos'; state.pendBusca = ''; renderDocPendencias(); }
 
-// Monta a lista de pendentes de assinatura (uma linha por colaborador+tipo+compet\u00eancia, vers\u00e3o mais recente).
+// Monta a lista de pendentes de assinatura \u2014 uma linha por documento pendente
+// de verdade (um por colaborador+tipo+compet\u00eancia+vers\u00e3o), n\u00e3o uma por
+// colaborador+tipo+compet\u00eancia s\u00f3. "Gerar de novo n\u00e3o sobrescreve" (ver
+// docs/INTEGRACAO-DOCUMENTOS.md): cada gera\u00e7\u00e3o cria uma pend\u00eancia nova no
+// app, e a antiga continua pendente at\u00e9 ser assinada ou exclu\u00edda \u2014 ent\u00e3o
+// todas t\u00eam que aparecer aqui, sen\u00e3o o RH n\u00e3o enxerga que ainda h\u00e1 N
+// cobran\u00e7as de assinatura em aberto pra mesma pessoa/tipo (s\u00f3 a mais
+// recente ficava vis\u00edvel, escondendo as outras \u2014 bug reportado 2026-11-09).
 function _pendItens() {
-  var mapa = {};
-  (colaboradorDocumentos || []).forEach(function (d) {
-    if (d.status !== 'pendente_assinatura') return;
-    var k = d.matricula + '|' + d.tipo_id + '|' + (d.competencia || '');
-    var cur = mapa[k];
-    if (!cur || (d.versao || 1) > (cur.versao || 1)) mapa[k] = d;
-  });
-  return Object.keys(mapa).map(function (k) {
-    var d = mapa[k];
+  return (colaboradorDocumentos || []).filter(function (d) {
+    return d.status === 'pendente_assinatura';
+  }).map(function (d) {
     var c = _docColaborador(d.matricula) || {};
     var t = (docTipos || []).find(function (x) { return x.id === d.tipo_id; }) || {};
     var docNome = t.nome || '\u2014';
@@ -3228,6 +3273,7 @@ function _pendItens() {
       if (d.competencia.indexOf('_') > -1) docNome += ' \u2014 ' + _docFmtCompetenciaPeriodo(d.competencia);
       else if (_docCompetenciaMesDoHolerite(d.competencia)) docNome += ' \u2014 ' + d.competencia;
     }
+    if ((d.versao || 1) > 1) docNome += ' (v' + d.versao + ')';
     return {
       id: d.id,
       nome: c.nome || d.matricula,
@@ -3422,7 +3468,7 @@ function abrirInfoGrafico(key){
 function closeInfoGrafico(){ document.getElementById('info-overlay').classList.remove('active'); document.body.style.overflow = ''; }
 
 // Exclui um documento AINDA NÃO assinado (status pendente_assinatura). A RPC
-// (colaborador_documento_pendente_sandbox_excluir) confere de novo no banco
+// (colaborador_documento_pendente_excluir) confere de novo no banco
 // que não existe nenhum tata_plus.assinatura_registros pra essa atribuição
 // antes de apagar — nunca confia só no status já carregado na tela, que pode
 // estar desatualizado. Também limpa a atribuição/documento do lado do app
@@ -3434,7 +3480,7 @@ function _pendExcluir(id, btn) {
   var SB = window.__lideresSupa;
   if (!SB) { alert('Conexão indisponível, tenta de novo.'); return; }
   btn.disabled = true;
-  SB.rpc('colaborador_documento_pendente_sandbox_excluir', { p_id: id }).then(function (r) {
+  SB.rpc('colaborador_documento_pendente_excluir', { p_id: id }).then(function (r) {
     if (r.error) {
       btn.disabled = false;
       alert('Erro ao excluir: ' + r.error.message);
@@ -3610,7 +3656,7 @@ function loadDrawerKPIs() {
 // Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
 var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'];
-var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
+var DRAWER_FORA_APP = ['compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
 function _pintarDrawerMeta(m) {
   var el = function(id) { return document.getElementById(id); };
@@ -3739,14 +3785,6 @@ function hardRefresh() {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 _restaurarAba();
 loadAllData();
-(function(){
-  var s = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'))}catch(e){return null}})();
-  if (s && s.displayName) {
-    var parts = s.displayName.trim().split(/\s+/);
-    var short = parts.length > 1 ? parts[0] : parts[0];
-    var hu = document.getElementById('header-user'); if (hu) hu.textContent = short;
-  }
-})();
 
 </script>
 

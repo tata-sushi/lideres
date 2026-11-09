@@ -494,18 +494,25 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="toast" id="toast"></div>
 
 <script>
-// ── CONFIG SUPABASE ───────────────────────────────────────────────────────────
-var SUPA_URL = 'https://aoqsbusfrffapjglpqjk.supabase.co';
-var SUPA_KEY = 'sb_publishable_X3pKD_F1QLAyxbxFU32HqQ_pRp9p6JQ';
-var supa = window.supabase ? window.supabase.createClient(SUPA_URL, SUPA_KEY, { db: { schema: 'tata_abastecimento' } }) : null;
+// ── SUPABASE ──────────────────────────────────────────────────────────────────
+// O cliente logado é o do gate.js (window.__lideresSupa). Todo dado desta página sai por função do
+// servidor (tata_plus.*), que confere a página e o botão e grava o autor pelo login.
+function supaPronto() {
+  return new Promise(function(resolve) {
+    if (window.__lideresSupa) { resolve(window.__lideresSupa); return; }
+    window.addEventListener('lideres:supa', function() { resolve(window.__lideresSupa); }, { once: true });
+  });
+}
+async function rpc(fn, args) {
+  var s = await supaPronto();
+  return s.schema('tata_plus').rpc(fn, args || {});
+}
 
-// Unidade e departamento do usuário logado — populados em carregarUsuario()
+// Unidade e departamento selecionados — populados em carregarUsuario()
 var UNIDADE = '';
 var DEPARTAMENTO = '';
 var DEPTOS_DISPONIVEIS = [];
 var UNIDADES_DISPONIVEIS = [];
-var PERFIL = '';
-var currentUser = null;
 
 // Catálogo é carregado integralmente do Supabase via carregarCatalogo()
 var CATALOGO = {};
@@ -513,9 +520,8 @@ var catalogoErro = null;
 
 async function carregarCatalogo() {
   catalogoErro = null;
-  if (!supa) { catalogoErro = 'Supabase não inicializado'; return; }
   try {
-    var res = await supa.from('catalogo').select('*').eq('ativo', true).order('categoria').order('produto_nome');
+    var res = await rpc('abast_catalogo_listar');
     if (res.error) throw new Error(res.error.message);
     var rows = res.data || [];
     if (rows.length === 0) { catalogoErro = 'Catálogo vazio no Supabase'; return; }
@@ -550,60 +556,7 @@ async function carregarUsuario(session) {
   await carregarColabPairs();
 }
 
-// ── PEDIDO AUTOMÁTICO (gerado quando a contagem fica abaixo do mínimo) ─────────
-function unidadeParaPrefix(unidade) {
-  var u = (unidade || '').trim().toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g,'');
-  var temHouse = (u.indexOf('tata') !== -1 || u.indexOf('house') !== -1);
-  if (temHouse && u.indexOf('itaim') !== -1)               return 'TTHi';
-  if (temHouse && u.indexOf('pinh')  !== -1)               return 'TTHp';
-  if (u.indexOf('itaim') !== -1)                           return 'Itaim';
-  if ((u.indexOf('poke') !== -1 || u.indexOf('pok') !== -1) && u.indexOf('pinh') !== -1) return 'PokP';
-  if (temHouse)                                            return 'TTH';
-  if (u.indexOf('pinh') !== -1)                            return 'Pinh';
-  if (u.indexOf('adm') !== -1)                             return 'Adm';
-  return (unidade || 'P').replace(/[^a-zA-Z]/g,'').slice(0,4) || 'P';
-}
-
-async function gerarIdDisplay(unidade) {
-  // Continuidade da numeração: reaproveitamos o PREFIXO do último pedido que já
-  // existe na base de abastecimento para essa unidade (o de maior número) — a
-  // mesma base alimentada pelo abastecimento e pela aprovação do cardápio. Não
-  // inventamos prefixo: só quando a unidade não tem NENHUM pedido é que caímos
-  // no unidadeParaPrefix (a mesma semente que o abastecimento usa).
-  var prefix = null;
-  var maxNum = 0;
-  if (supa) {
-    try {
-      var res = await supa.from('abastecimento')
-        .select('id_display')
-        .eq('unidade', unidade);
-      if (!res.error && res.data && res.data.length > 0) {
-        var seen = {};
-        res.data.forEach(function(row) {
-          var id = row.id_display;
-          if (!id || seen[id]) return;
-          seen[id] = 1;
-          // Pedidos-filho (desmembramento no abastecimento, sufixo "-N") não contam.
-          if (/-\d+$/.test(id)) return;
-          // Ex.: "#Pinh0007" ou "#Pinh0007c" → prefixo "#Pinh", número 7.
-          // O 'c' (contagem) é ignorado só na leitura do número.
-          var m = String(id).match(/^(.*?)(\d+)c?$/i);
-          if (m) {
-            var n = parseInt(m[2], 10);
-            if (n > maxNum) { maxNum = n; prefix = m[1]; }
-          }
-        });
-      }
-    } catch(e) { /* usa a semente abaixo */ }
-  }
-  // Sem nenhum pedido para a unidade: usa o mesmo gerador do abastecimento.
-  if (!prefix) prefix = '#' + unidadeParaPrefix(unidade);
-  var next = maxNum + 1;
-  // Sufixo 'c' identifica que o pedido nasceu da contagem semanal de estoque;
-  // o número continua a sequência do último pedido existente (+1).
-  return prefix + String(next).padStart(4, '0') + 'c';
-}
+// ── PEDIDO AUTOMÁTICO: gerado no servidor por inventario_contagem_registrar (prefixo e numeração da unidade). ──
 
 // ── ESTOQUE (inventário / estoque mínimo / contagem semanal) ────────────────────
 function esc(v) {
@@ -624,14 +577,6 @@ var TODOS = 'Todos';
 
 function chaveInventario(unidade, depto, nome, un) {
   return (unidade || '').trim().toLowerCase() + '::' + (depto || '').trim().toLowerCase() + '::' + (nome || '').trim().toLowerCase() + '::' + (un || '').trim().toLowerCase();
-}
-
-function dataLocalISO(d) {
-  d = d || new Date();
-  var y = d.getFullYear();
-  var m = String(d.getMonth() + 1).padStart(2, '0');
-  var dd = String(d.getDate()).padStart(2, '0');
-  return y + '-' + m + '-' + dd;
 }
 
 // Um item único por produto+unidade de medida (o catálogo tem uma linha por fornecedor).
@@ -662,10 +607,9 @@ function getItensCatalogoUnicos() {
 async function carregarInventarioMinimo() {
   INVENTARIO_MINIMO_MAP = {};
   INVENTARIO_MINIMO_ROWS = [];
-  if (!supa) return;
   try {
     // Carrega todas as unidades — a lista filtra no cliente (permite "Todos").
-    var res = await supa.from('inventario_minimo').select('*');
+    var res = await rpc('inventario_minimo_listar');
     if (res.error) throw new Error(res.error.message);
     INVENTARIO_MINIMO_ROWS = res.data || [];
     INVENTARIO_MINIMO_ROWS.forEach(function(r) {
@@ -916,7 +860,7 @@ function fecharModalCadastro() {
 var COLAB_PAIRS = null;
 async function carregarColabPairs() {
   if (COLAB_PAIRS) return COLAB_PAIRS;
-  var client = window.__lideresSupa || supa;
+  var client = await supaPronto();
   if (!client || !client.schema) return (COLAB_PAIRS = []);
   try {
     var res = await client.schema('tata_plus').from('colaboradores_publicos').select('unidade, departamento');
@@ -1005,7 +949,7 @@ function renderCadastroAtuais() {
 }
 
 async function salvarMinimoCadastrado(id) {
-  if (!id || !supa) return;
+  if (!id) return;
   var inp = document.getElementById('cadedit-min-' + id);
   if (!inp) return;
   var raw = inp.value.trim();
@@ -1013,9 +957,7 @@ async function salvarMinimoCadastrado(id) {
   var val = parseFloat(raw);
   if (isNaN(val) || val < 0) { toast('Valor inválido.', true); return; }
   try {
-    var res = await supa.from('inventario_minimo')
-      .update({ estoque_minimo: val, atualizado_por: (currentUser && currentUser.name) || null, updated_at: new Date().toISOString() })
-      .eq('id', id).select('*');
+    var res = await rpc('inventario_minimo_atualizar', { p_id: id, p_estoque_minimo: val });
     if (res.error) throw new Error(res.error.message);
     if (!res.data || !res.data.length) { toast('Não foi possível salvar (sem permissão no banco).', true); return; }
     await carregarInventarioMinimo();
@@ -1026,15 +968,13 @@ async function salvarMinimoCadastrado(id) {
 }
 
 async function excluirItemCadastrado(id) {
-  if (!id || !supa) return;
+  if (!id) return;
   if (!confirm('Excluir este item do estoque mínimo?')) return;
   try {
-    // .select() faz o Supabase retornar as linhas realmente apagadas. Se a RLS
-    // bloquear o delete, ele volta vazio SEM erro — por isso conferimos o length
-    // em vez de assumir sucesso (evita o toast "excluído" quando nada foi apagado).
-    var res = await supa.from('inventario_minimo').delete().eq('id', id).select('id');
+    // A função devolve quantas linhas apagou (0 = nada apagado).
+    var res = await rpc('inventario_minimo_excluir', { p_id: id });
     if (res.error) throw new Error(res.error.message);
-    if (!res.data || !res.data.length) { toast('Não foi possível excluir (sem permissão no banco).', true); return; }
+    if (!res.data) { toast('Não foi possível excluir (sem permissão no banco).', true); return; }
     // Sem toast de sucesso: o item some da lista na hora (feedback suficiente).
     await carregarInventarioMinimo();
     renderCadastroAtuais();
@@ -1093,9 +1033,7 @@ function removerItemCadastro(idx) {
 }
 
 async function salvarCadastro() {
-  if (!supa) { alert('Supabase não inicializado.'); return; }
   if (!UNIDADE || !ESTOQUE_DEPTO) { alert('Selecione a unidade e o departamento.'); return; }
-  var nome = (currentUser && currentUser.name) || null;
   var rows = [];
   var vistos = {};
   function chaveProd(n, u) { return (n || '').trim().toLowerCase() + '||' + (u || '').trim().toLowerCase(); }
@@ -1113,8 +1051,7 @@ async function salvarCadastro() {
     addRow({
       unidade: UNIDADE, departamento: ESTOQUE_DEPTO, produto_nome: it.nome,
       categoria: it.catKey, subcategoria: it.subcategoria || null,
-      unidade_medida: it.un || '', estoque_minimo: val,
-      atualizado_por: nome, updated_at: new Date().toISOString()
+      unidade_medida: it.un || '', estoque_minimo: val
     });
   });
 
@@ -1130,14 +1067,12 @@ async function salvarCadastro() {
     addRow({
       unidade: UNIDADE, departamento: ESTOQUE_DEPTO, produto_nome: it.nome,
       categoria: it.catKey, subcategoria: it.subcategoria || null,
-      unidade_medida: it.un || '', estoque_minimo: val,
-      atualizado_por: nome, updated_at: new Date().toISOString()
+      unidade_medida: it.un || '', estoque_minimo: val
     });
   });
   if (!rows.length) { alert('Informe o mínimo de ao menos um item.'); return; }
   try {
-    var res = await supa.from('inventario_minimo')
-      .upsert(rows, { onConflict: 'unidade,departamento,produto_nome,unidade_medida' });
+    var res = await rpc('inventario_minimo_salvar', { p_itens: rows });
     if (res.error) throw new Error(res.error.message);
     alert(rows.length + ' item(ns) cadastrado(s) para ' + ESTOQUE_DEPTO + '.');
     fecharModalCadastro();
@@ -1327,7 +1262,7 @@ function renderEstoqueContagemHTML(itens) {
 async function salvarEstoqueMinimo(idx) {
   var it = ESTOQUE_ITENS[idx];
   var inp = document.getElementById('est-min-inp-' + idx);
-  if (!it || !inp || !supa) return;
+  if (!it || !inp) return;
   var raw = inp.value.trim();
   if (raw === '') return;
   var val = parseFloat(raw);
@@ -1342,26 +1277,20 @@ async function salvarEstoqueMinimo(idx) {
       categoria: it.catKey,
       subcategoria: it.subcategoria || null,
       unidade_medida: it.un || '',
-      estoque_minimo: val,
-      atualizado_por: (currentUser && currentUser.name) || null,
-      updated_at: new Date().toISOString()
+      estoque_minimo: val
     };
-    var res = await supa.from('inventario_minimo')
-      .upsert(row, { onConflict: 'unidade,departamento,produto_nome,unidade_medida' })
-      .select('*').single();
+    var res = await rpc('inventario_minimo_salvar', { p_itens: [row] });
     if (res.error) throw new Error(res.error.message);
+    if (!res.data || !res.data.length) throw new Error('nada salvo');
     it.estoqueMinimo = val;
-    INVENTARIO_MINIMO_MAP[chaveInventario(uni, dep, it.nome, it.un)] = res.data;
+    INVENTARIO_MINIMO_MAP[chaveInventario(uni, dep, it.nome, it.un)] = res.data[0];
     toast('Estoque mínimo salvo.');
   } catch(e) { toast('Erro ao salvar: ' + e.message, true); }
 }
 
 async function registrarContagem() {
   if (!CONTAGEM_ITENS || !CONTAGEM_ITENS.length) return;
-  if (!supa) { alert('Supabase não inicializado.'); return; }
   if (!UNIDADE || !ESTOQUE_DEPTO) { alert('Selecione a unidade e o departamento.'); return; }
-  var dataISO = dataLocalISO();
-  var nomeContador = (currentUser && currentUser.name) || 'Líder';
   var linhas = [];
   var deficits = [];
   CONTAGEM_ITENS.forEach(function(it) {
@@ -1380,9 +1309,7 @@ async function registrarContagem() {
       subcategoria: it.subcategoria || null,
       unidade_medida: it.un || null,
       inventario_minimo_id: it.id || null,
-      estoque_atual: atual,
-      data_contagem: dataISO,
-      contado_por: nomeContador
+      estoque_atual: atual
     });
     if (minimo != null && atual < minimo) {
       deficits.push({
@@ -1397,61 +1324,20 @@ async function registrarContagem() {
   });
   if (!linhas.length) { alert('Informe ao menos uma quantidade de estoque atual.'); return; }
   try {
-    var res = await supa.from('inventario_contagem').insert(linhas).select('id');
+    // O servidor grava a contagem, gera o pedido automático (se houver déficit) e liga os dois.
+    var res = await rpc('inventario_contagem_registrar', { p_linhas: linhas, p_deficits: deficits });
     if (res.error) throw new Error(res.error.message);
-    var ids = (res.data || []).map(function(r) { return r.id; });
-    var msg = 'Contagem registrada: ' + linhas.length + ' itens.';
+    var d = res.data || {};
+    var msg = 'Contagem registrada: ' + (d.itens || linhas.length) + ' itens.';
     if (deficits.length) {
-      var idPedido = await criarPedidoAutomaticoEstoque(deficits);
-      if (idPedido) {
-        msg += ' ' + deficits.length + ' item(ns) abaixo do mínimo — pedido ' + idPedido + ' gerado automaticamente.';
-        if (ids.length) await supa.from('inventario_contagem').update({ pedido_gerado_id: idPedido }).in('id', ids);
-      } else {
-        msg += ' ' + deficits.length + ' item(ns) abaixo do mínimo, mas houve erro ao gerar o pedido automático.';
-      }
+      if (d.pedido) msg += ' ' + deficits.length + ' item(ns) abaixo do mínimo — pedido ' + d.pedido + ' gerado automaticamente.';
+      else msg += ' ' + deficits.length + ' item(ns) abaixo do mínimo, mas houve erro ao gerar o pedido automático.';
     } else {
       msg += ' Nenhum item abaixo do mínimo.';
     }
     alert(msg);
     fecharModalContagem();
   } catch(e) { toast('Erro ao registrar contagem: ' + e.message, true); }
-}
-
-async function criarPedidoAutomaticoEstoque(deficits) {
-  if (!supa || !deficits.length) return null;
-  try {
-    var newIdDisplay = await gerarIdDisplay(UNIDADE);
-    var nomeSolicitante = (currentUser && currentUser.name) || 'Líder';
-    var now = new Date();
-    var dataISO = dataLocalISO(now);
-    var commonFields = {
-      id_display: newIdDisplay,
-      unidade: UNIDADE || null,
-      departamento: ESTOQUE_DEPTO || null,
-      solicitante: nomeSolicitante,
-      data_solicitacao: dataISO,
-      status: 'solicitado',
-      obs_solicitante: 'Gerado automaticamente pela contagem semanal de estoque (abaixo do mínimo).',
-      atualizado_por: nomeSolicitante
-    };
-    var rowsToInsert = deficits.map(function(d) {
-      return Object.assign({
-        categoria: d.catKey,
-        subcategoria: d.subcategoria || null,
-        produto_nome: d.nome,
-        unidade_medida: d.un || null,
-        qtd_solicitada: d.qtdSugerida,
-        fornecedor: null,
-        valor_inicial: d.valorUnitario || null
-      }, commonFields);
-    });
-    var res = await supa.from('abastecimento').insert(rowsToInsert).select('id, produto_nome');
-    if (res.error) throw new Error(res.error.message);
-    return newIdDisplay;
-  } catch(e) {
-    toast('Erro ao gerar pedido automático: ' + e.message, true);
-    return null;
-  }
 }
 
 // ── TOAST ─────────────────────────────────────────────────────────────────────
@@ -1467,19 +1353,12 @@ function toast(msg, isErr) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-// O gate.js não escreve mais em localStorage: ele publica window.__lideresSession
-// (às vezes já disponível na hora do DOMContentLoaded, via cache) e dispara o
-// evento 'lideres:sessao' quando resolve pela rede (dentro do iframe do Tatá
-// Plus). Ainda checamos o localStorage antigo como fallback de compatibilidade.
+// O gate.js publica a identidade em window.__lideresUser e dispara 'lideres:sessao' quando resolve.
+// O autor dos registros vem do login, no servidor.
 var _sessaoIniciada = false;
-async function iniciarComSessao(displayName, perfil) {
+async function iniciarComSessao(displayName) {
   if (_sessaoIniciada || !displayName) return;
   _sessaoIniciada = true;
-  currentUser = { name: displayName };
-  PERFIL = String(perfil || '').toLowerCase();
-  var headerUserName = displayName;
-  var parts = headerUserName.trim().split(/\s+/);
-  if (parts.length > 1) headerUserName = parts[0] + ' ' + parts[parts.length - 1];
 
   // Renderiza já (usa dados do Supabase); a identificação do usuário/colaboradores
   // roda em background pra não travar o carregamento inicial.
@@ -1498,15 +1377,7 @@ async function iniciarComSessao(displayName, perfil) {
 }
 
 function tentarIniciarSessao() {
-  if (window.__lideresSession && window.__lideresSession.displayName) {
-    iniciarComSessao(window.__lideresSession.displayName, window.__lideresSession.perfil);
-    return true;
-  }
-  var session; try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-  if (session && session.displayName) {
-    iniciarComSessao(session.displayName, session.perfil);
-    return true;
-  }
+  if (window.__lideresUser) { iniciarComSessao(window.__lideresUser); return true; }
   return false;
 }
 
@@ -1627,7 +1498,7 @@ function loadDrawerKPIs() {
 // Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
 var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'];
-var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
+var DRAWER_FORA_APP = ['compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
 function _pintarDrawerMeta(m) {
   var el = function(id) { return document.getElementById(id); };

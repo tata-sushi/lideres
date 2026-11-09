@@ -46,7 +46,7 @@ Conjunto canônico de botões (base `.btn` + modificadores). **Catálogo visual:
 - **`drawer-sobre`** — `.drawer-sam-btn` (ações do drawer) fica lá; é **diferente** do `.btn` (carbon + **branco**, raio 4px, full-width, peso 500) — no catálogo aparece na **seção 7** só pra referência.
 - **Cards de menu / submenu** (`.ac-dept-chip`) — navegação entre as páginas de uma seção (padrão de menu, `CLAUDE.md §3–5`); é a **única exceção de card clicável** da regra de clique — no catálogo aparece na **seção 8** só pra referência.
 - **`modal-formulario`** — o `.btn-gerar` do modal é a aplicação do `.btn.btn--primary.btn--block` aqui.
-- **`controle-acesso-abas-botoes`** — o `data-botao-id` (quem vê o botão) é ortogonal ao visual.
+- **`controle-de-acessos-e-visibilidade`** — o `data-botao-id` (quem vê o botão) é ortogonal ao visual.
 - **Pílulas** (raio 100px, ex.: "Ver mais"/"Voltar ao Portal") **ainda não fazem parte desta skill** — serão definidas depois.
 
 Tokens: padrão do portal (`--carbon #35383F`, `--citric #CFFF00`, `--surface #FFF`, `--bg #F4F4F4`, `--border #E2E2E2`, `--mid #555`, `--muted #999`, `--red #7A1A1A`, `--red-bg #FDEAEA`). Fonte do botão = **DM Mono** uppercase; corpo = DM Sans.

@@ -2,17 +2,12 @@
 
 Esse documento descreve o padrão que DEVE ser aplicado em toda página nova e em cada novo card de menu.
 
-## 1. Autenticação em páginas novas
+## 1. Acesso e login em páginas novas
 
-Toda página protegida deve conter, no topo do `<body>`, o **auth gate** copiado de uma página já funcionando (ex.: `compliance/kpis/rh/sancoes.html` ou `compliance/areas/institucional/index.html`).
-
-Essencial:
-- `PORTAL_URL = 'https://lideres.tatasushi.tech/'`
-- `PAGE_ID` único da página (ex.: `compliance-areas-institucional`)
-- `PAGE_URL_FRAG = '/compliance'` (ou o fragmento certo)
-- Lê `localStorage.lideres_session`, redireciona para o portal se inválido/expirado
-- Mostra tela "Sem acesso" se o perfil não tem permissão
-- Seta `window.__lideresUser` e `window.__lideresSession`
+Tudo o que é acesso e visibilidade (o overlay `#auth-gate`, `window.GOV_PAGE_ID` + `gate.js`, abas, botões,
+cards dos menus, dados sensíveis e corte por hierarquia) está na skill **`controle-de-acessos-e-visibilidade`**,
+a fonte única. Copie o include de uma página que funciona (ex.: `compliance/kpis/rh/cei.html`). O modelo
+antigo (`PAGE_URL_FRAG`, `localStorage.lideres_session`, tela "Sem acesso" própria) não se usa mais.
 
 ## 2. Header padrão
 
@@ -62,17 +57,11 @@ Headers de menu mantêm o padrão de menu (logo do compliance em `.header-left` 
 
 ## 3. Cards de menu (ex.: `compliance/menucompliance.html`)
 
-Ao adicionar um novo card:
-
-- Remover classe `building` e badge de alerta quando a página existir
-- Adicionar `onclick` para navegar
-- Adicionar `data-access-id="<mesmo-id-do-PAGE_ID>"`
-- Adicionar `data-access-url="<fragmento-url-específico>"` (ex.: `/compliance/areas/institucional`)
-- Incluir slot `<span class="access-badge open"></span>` no final do card
-
-Na página existe um IIFE no `<script>` final que percorre todos os cards com `data-access-id` e:
-- Verifica acesso com regra **estrita** (só `id` ou `url` específico — **sem** fallback genérico `compliance`)
-- Se sem acesso: adiciona `.locked`, remove `onclick`, troca badge pelo SVG do cadeado
+Ao adicionar um novo card: tire a classe `building` e o badge de alerta quando a página existir, ponha o
+`onclick` para navegar e mantenha o slot do badge (`<span class="access-badge open"></span>` nos cards
+escuros), onde aparece o cadeado. O **acesso** do card (`data-access-id`, `data-access-url`, quem trava e o
+cadeado) é da skill **`controle-de-acessos-e-visibilidade`** (`references/camada-de-acesso.md`, "Cards dos
+menus"). **Não** crie trava própria na página: o script que lia a sessão e trancava os cards brigava com o gate.
 
 ## 4. Visual dos estados
 

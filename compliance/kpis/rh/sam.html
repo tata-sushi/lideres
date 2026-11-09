@@ -600,7 +600,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <ul class="sobre-lista">
       <li><strong>Ata:</strong> fica salva junto das atas de RH, no formato de síntese executiva, com temas, decisões e pendências (responsável e prazo).</li>
       <li><strong>Grupo DP/RH:</strong> o resumo (síntese, decisões e pendências) vai para o grupo DP/RH TATÁ SUSHI. Dá para responder a mensagem com "Sam, detalha a pendência 2".</li>
-      <li><strong>Responsável do RH:</strong> recebe a ata completa no WhatsApp.</li>
+      <li><strong>Kanban:</strong> cada pendência vira um card em "Pendentes" no quadro do RH, com etiqueta, responsável e prazo quando ficaram claros na reunião.</li>
+      <li><strong>Quem falou o quê:</strong> a ata e a transcrição dizem quem falou cada coisa, pelas vozes cadastradas na rodada de nomes.</li>
       <li><strong>Esqueceu de encerrar:</strong> 20 minutos sem fala, a reunião é encerrada e a ata é feita do mesmo jeito.</li>
     </ul>
   </div>
@@ -612,6 +613,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <li>Antes de começar, toque em <strong>"Testar o microfone"</strong> e fale uma frase: o Sam mostra o que entendeu. Se ele não entender, chegue o aparelho mais perto de quem fala.</li>
       <li>Fale normalmente; ele grava em trechos curtos, cortados nas pausas.</li>
       <li>Para a pergunta sair certa, faça uma de cada vez e espere a resposta.</li>
+      <li><strong>Rodada de nomes:</strong> na primeira reunião o Sam pede que cada um diga "aqui é o/a <nome>" e uma frase. Daí em diante ele reconhece as vozes sozinho. Chegou alguém novo? Toque em "Rodada de nomes" e a pessoa se apresenta.</li>
+      <li>Para a demanda sair pronta no kanban, diga quem faz e até quando ("Cinthia, você divulga a vaga até sexta?").</li>
     </ul>
   </div>
 
@@ -620,6 +623,8 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <ul class="sobre-lista">
       <li>Todos na sala ficam sabendo: o Sam avisa em voz alta, no começo, que está anotando a reunião.</li>
       <li>A transcrição completa fica guardada só para o RH; o resumo do grupo e o fechamento falado não citam salário individual nem assunto pessoal de colaborador.</li>
+      <li>A gravação de áudio da reunião serve só para separar as vozes e é apagada assim que a ata fica pronta.</li>
+      <li>Da rodada de nomes fica guardado um trecho de até 12 segundos da voz de cada pessoa, só para reconhecer quem fala. Quem se apresenta na rodada concorda com isso; para apagar a sua voz, peça ao RH.</li>
       <li>Só quem tem acesso a esta página pode abrir uma reunião, e só quem abriu pode encerrá-la.</li>
     </ul>
   </div>
@@ -661,8 +666,10 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="reu-nivel"><i id="reu-nivel"></i></div>
     <div class="reu-aviso" id="reu-aviso" hidden></div>
+    <p class="reu-texto" id="reu-vozes" hidden></p>
     <div class="reu-botoes">
       <button class="btn btn--primary" id="btn-perguntar" onclick="alternarPergunta()"><span class="btn-label">Perguntar ao Sam</span></button>
+      <button class="btn btn--primary" id="btn-rodada" onclick="alternarRodada()"><span class="btn-spin"></span><span class="btn-label">Rodada de nomes</span></button>
       <button class="btn btn--danger" id="btn-encerrar" onclick="encerrarReuniao()"><span class="btn-spin"></span><span class="btn-label">Encerrar e gerar ata</span></button>
     </div>
     <div class="reu-sec">Perguntas ao Sam</div>
@@ -776,7 +783,7 @@ function loadDrawerKPIs() {
 // Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
 var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'];
-var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
+var DRAWER_FORA_APP = ['compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
 function _pintarDrawerMeta(m) {
   var el = function(id) { return document.getElementById(id); };
@@ -830,7 +837,8 @@ var R = {
   inicio: 0, relogio: null, laco: null, ruido: 0.002, hist: [], vazios: 0,
   fila: [], enviando: false, aguardando: false,     // aguardando = disse só "Sam" (próximo trecho é a pergunta)
   modoPergunta: false, perguntas: [], respondendo: false,
-  player: null, falando: false, espera: null, encerrando: false, wakeLock: null, erros: 0
+  player: null, falando: false, espera: null, encerrando: false, wakeLock: null, erros: 0,
+  grav: null, samFalas: [], samIni: null, rodadas: [], rodadaIni: null
 };
 
 function comSupa(cb) {
@@ -859,6 +867,7 @@ function hora() { var d = new Date(); return String(d.getHours()).padStart(2, '0
 function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function statusOuvindo() {
   if (R.falando) return status('falando', 'Sam falando');
+  if (R.rodadaIni != null) return status('pergunta', 'Rodada de nomes');
   if (R.respondendo) return status('pensando', 'Sam pensando');
   if (R.modoPergunta) return status('pergunta', 'Gravando a pergunta');
   if (R.aguardando) return status('pergunta', 'Pode perguntar');
@@ -871,10 +880,12 @@ function tocar(audio) {
     if (!audio || !audio.base64) return ok();
     var p = R.player || (R.player = new Audio());
     R.falando = true; statusOuvindo();
+    if (R.gravando && R.samIni == null) R.samIni = Date.now() - R.inicio;
     if (R.rec) R.rec._sujo = true;          // o que o microfone pegar agora é a voz do Sam: descarta
     var fim = function () {
       p.onended = p.onerror = null;
       R.falando = false;
+      if (R.samIni != null) { R.samFalas.push([R.samIni, Date.now() - R.inicio]); R.samIni = null; }
       if (R.rec) {
         R.rec._sujo = true;                 // o trecho em andamento ainda tem o fim da fala: descarta
         if (R.gravando && !R.modoPergunta && !R.encerrando) cortar();   // e começa um limpo já
@@ -980,6 +991,123 @@ function medir() {
     return;
   }
   if ((rec._voz && silencio > 900 && dur > 2500) || dur > 25000) cortar();
+}
+
+/* ── gravação contínua (para a ata dizer quem falou o quê) ─────────────────────
+   Além dos trechos (transcrição ao vivo), a reunião inteira é gravada em áudio leve (μ-law 8 kHz,
+   ~29 MB por hora) e vai para o servidor em pedaços de 1 minuto. No fim, o servidor separa as
+   vozes e reconhece as cadastradas na rodada de nomes; depois da ata, a gravação é apagada. */
+var GRAV_TAXA = 8000, GRAV_PEDACO = GRAV_TAXA * (window.__samPedacoSeg || 60);   // 1 min (o teste encurta)
+var GRAV_WORKLET = [
+  "class G extends AudioWorkletProcessor{",
+  "constructor(o){super();this.passo=sampleRate/o.processorOptions.taxa;this.t=0;this.a=0;this.n=0;this.b=new Uint8Array(4000);this.k=0}",
+  "process(e){var c=e[0]&&e[0][0];if(!c)return true;for(var j=0;j<c.length;j++){this.a+=c[j];this.n++;this.t+=1;",
+  "if(this.t>=this.passo){this.t-=this.passo;this.b[this.k++]=u(this.a/this.n);this.a=0;this.n=0;",
+  "if(this.k===this.b.length){this.port.postMessage(this.b,[this.b.buffer]);this.b=new Uint8Array(4000);this.k=0}}}return true}}",
+  "function u(x){var s=Math.max(-32635,Math.min(32635,Math.round(x*32768)));var g=s<0?128:0;if(s<0)s=-s;s+=132;var e=7;",
+  "for(var m=16384;(s&m)===0&&e>0;m>>=1)e--;return ~(g|(e<<4)|((s>>(e+3))&15))&255}",
+  "registerProcessor('sam-gravador',G);"
+].join('');
+function ulaw(x) {
+  var s = Math.max(-32635, Math.min(32635, Math.round(x * 32768))), g = s < 0 ? 128 : 0;
+  if (s < 0) s = -s;
+  s += 132;
+  var e = 7;
+  for (var m = 16384; (s & m) === 0 && e > 0; m >>= 1) e--;
+  return ~(g | (e << 4) | ((s >> (e + 3)) & 15)) & 255;
+}
+async function gravacaoComecar() {
+  var g = R.grav || (R.grav = { parte: 0, fila: [], enviando: false, erros: 0 });
+  g.ms0 = Date.now() - R.inicio; g.bytes = 0; g.buf = []; g.tam = 0; g.ativa = true;
+  var receber = function (b) { if (!g.ativa) return; g.buf.push(b); g.tam += b.length; if (g.tam >= GRAV_PEDACO) gravacaoCortar(); };
+  var fonte = g.fonte = R.ctx.createMediaStreamSource(R.stream);
+  var mudo = R.ctx.createGain(); mudo.gain.value = 0; mudo.connect(R.ctx.destination);
+  try {
+    if (!R.ctx.audioWorklet || !window.AudioWorkletNode) throw new Error('sem worklet');
+    await R.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([GRAV_WORKLET], { type: 'application/javascript' })));
+    var no = new AudioWorkletNode(R.ctx, 'sam-gravador', { processorOptions: { taxa: GRAV_TAXA } });
+    no.port.onmessage = function (e) { receber(new Uint8Array(e.data)); };
+    fonte.connect(no); no.connect(mudo); g.no = no;
+  } catch (e) {                               // navegador antigo
+    var sp = R.ctx.createScriptProcessor(4096, 1, 1), passo = R.ctx.sampleRate / GRAV_TAXA, t = 0, a = 0, n = 0;
+    sp.onaudioprocess = function (ev) {
+      var c = ev.inputBuffer.getChannelData(0), out = new Uint8Array(Math.ceil(c.length / passo) + 1), k = 0;
+      for (var j = 0; j < c.length; j++) { a += c[j]; n++; t += 1; if (t >= passo) { t -= passo; out[k++] = ulaw(a / n); a = 0; n = 0; } }
+      if (k) receber(out.slice(0, k));
+    };
+    fonte.connect(sp); sp.connect(mudo); g.no = sp;
+  }
+}
+function gravacaoCortar() {
+  var g = R.grav; if (!g || !g.tam) return;
+  g.fila.push({ parte: g.parte++, ms: g.ms0 + Math.round(g.bytes / GRAV_TAXA * 1000), blob: new Blob(g.buf, { type: 'application/octet-stream' }) });
+  g.bytes += g.tam; g.buf = []; g.tam = 0;
+  gravacaoEnviar();
+}
+function gravacaoParar() {
+  var g = R.grav; if (!g) return;
+  g.ativa = false;
+  try { if (g.fonte) g.fonte.disconnect(); } catch (e) {}
+  try { if (g.no) { if (g.no.port) g.no.port.onmessage = null; g.no.disconnect(); } } catch (e) {}
+  g.fonte = null; g.no = null;
+}
+async function gravacaoEnviar() {
+  var g = R.grav; if (!g || g.enviando) return;
+  g.enviando = true;
+  while (g.fila.length) {
+    var p = g.fila[0];
+    try {
+      var fd = new FormData();
+      fd.append('acao', 'gravacao'); fd.append('reuniao', R.id);
+      fd.append('parte', String(p.parte)); fd.append('ms', String(p.ms));
+      fd.append('audio', p.blob, 'parte.ulaw');
+      await samChamar(fd);
+      g.fila.shift(); g.erros = 0;
+    } catch (e) {
+      // 3 falhas seguidas: desiste do pedaço (nesse minuto a ata usa a transcrição ao vivo)
+      if (++g.erros >= 3) { g.fila.shift(); g.erros = 0; }
+      else await new Promise(function (ok) { setTimeout(ok, 3000); });
+    }
+  }
+  g.enviando = false;
+  if (g.aoEsvaziar) { var f = g.aoEsvaziar; g.aoEsvaziar = null; f(); }
+}
+
+/* rodada de nomes: o Sam pede, cada um diz "aqui é o/a <nome>"; no fim o servidor guarda a voz de cada um */
+function mostrarVozes(nomes) {
+  var v = el('reu-vozes'); if (!v) return;
+  v.textContent = nomes && nomes.length ? 'Vozes conhecidas: ' + nomes.join(', ') + '.' : '';
+  v.hidden = !(nomes && nomes.length);
+}
+async function rodadaComecar(audio) {
+  if (!R.gravando || R.rodadaIni != null) return;
+  await tocar(audio);
+  if (!R.gravando) return;
+  R.rodadaIni = Date.now() - R.inicio;
+  el('btn-rodada').querySelector('.btn-label').textContent = 'Terminar rodada';
+  aviso('Rodada de nomes: um de cada vez, diga "aqui é o/a" + seu nome + uma frase. Toque em "Terminar rodada" quando todos falarem.');
+  statusOuvindo();
+  clearTimeout(R._tRodada);
+  R._tRodada = setTimeout(rodadaTerminar, 120000);
+}
+function rodadaTerminar() {
+  if (R.rodadaIni == null) return;
+  clearTimeout(R._tRodada);
+  R.rodadas.push([R.rodadaIni, Date.now() - R.inicio]);
+  R.rodadaIni = null;
+  el('btn-rodada').querySelector('.btn-label').textContent = 'Rodada de nomes';
+  aviso('');
+  var v = el('reu-vozes');
+  if (v) { v.textContent = 'Rodada anotada: as vozes ficam cadastradas quando a ata for feita.'; v.hidden = false; }
+  statusOuvindo();
+}
+function alternarRodada() {
+  if (!R.gravando) return;
+  if (R.rodadaIni != null) return rodadaTerminar();
+  setBtnLoading('btn-rodada', true, 'Chamando…');
+  samChamar({ acao: 'rodada_audio', reuniao: R.id })
+    .then(function (r) { return r.audio; }, function () { return null; })
+    .then(function (audio) { setBtnLoading('btn-rodada', false, 'Rodada de nomes'); return rodadaComecar(audio); });
 }
 
 /* fila: um trecho por vez, na ordem (a transcrição fica em sequência) */
@@ -1106,6 +1234,7 @@ document.addEventListener('visibilitychange', function () {
 });
 
 function microfoneCaiu() {
+  gravacaoCortar(); gravacaoParar();
   aviso('O microfone parou (a tela apagou ou outro app usou o microfone). Toque em "Retomar" para continuar a mesma reunião.');
   status('parado', 'Parado');
   var a = el('reu-aviso');
@@ -1121,6 +1250,7 @@ async function retomar() {
     destravarAudio();
     await abrirMicrofone();
     novoTrecho();
+    gravacaoComecar().catch(function () {});
     aviso('');
     statusOuvindo();
   } catch (e) { aviso('Não consegui abrir o microfone: ' + e.message); }
@@ -1206,10 +1336,13 @@ async function comecarReuniao() {
         String(Math.floor(s / 60) % 60).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
     }, 1000);
     novoTrecho();
+    gravacaoComecar().catch(function () {});
     R.laco = setInterval(medir, 100);
+    mostrarVozes(r.vozes);
     if (!(await manterTela())) aviso('Deixe a tela ligada (sem bloquear) durante a reunião: com a tela apagada o Sam para de ouvir.');
     statusOuvindo();
     await tocar(r.saudacao);
+    if (r.rodada) await rodadaComecar(r.rodada);   // primeira reunião: ninguém cadastrado ainda
   } catch (e) {
     if (R.stream) R.stream.getTracks().forEach(function (t) { t.stop(); });
     erro.textContent = /Permission|NotAllowed/i.test(e.name + e.message)
@@ -1227,14 +1360,20 @@ function encerrarReuniao() {
   if (!confirm('Encerrar a reunião e gerar a ata?')) return;
   R.encerrando = true;
   setBtnLoading('btn-encerrar', true, 'Encerrando…');
-  el('btn-perguntar').disabled = true;
+  el('btn-perguntar').disabled = true; el('btn-rodada').disabled = true;
   R.modoPergunta = false;
+  if (R.rodadaIni != null) rodadaTerminar();
   var depois = function () {
+    gravacaoCortar(); gravacaoParar();
     R.gravando = false;
     clearInterval(R.laco); clearInterval(R.relogio);
     if (R.stream) R.stream.getTracks().forEach(function (t) { t.stop(); });
     try { if (R.wakeLock) R.wakeLock.release(); } catch (e) {}
-    samChamar({ acao: 'encerrar', reuniao: R.id }).then(function () {
+    var g = R.grav;
+    if (g && (g.enviando || g.fila.length)) { g.aoEsvaziar = enviarEncerrar; gravacaoEnviar(); } else enviarEncerrar();
+  };
+  var enviarEncerrar = function () {
+    samChamar({ acao: 'encerrar', reuniao: R.id, sam: R.samFalas, rodadas: R.rodadas }).then(function () {
       el('reu-ao-vivo').hidden = true; el('reu-fim').hidden = false;
       el('reu-tempo-fim').textContent = el('reu-tempo').textContent;
       esperarAta(0);

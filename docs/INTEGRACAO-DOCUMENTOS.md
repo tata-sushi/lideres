@@ -2174,4 +2174,121 @@ Testado com Playwright (RPC mockada devolvendo os dois formatos,
 confirmado que colaborador migrado usa `dp-documentos` e colaborador
 não migrado continua usando `admissao-docs`, sem regressão.
 
-_Última atualização: 2026-10-07._
+**Feito (2026-11-08): `ferias.html` — "Aviso de Gozo de Férias" entrou no
+fluxo de assinatura digital.** Esse termo já existia (botão no drawer "Sobre",
+modal próprio com colaborador/período de gozo/data/cidade), mas só tinha
+"Gerar PDF" (`window.open` + `window.print()`) — nenhum caminho pra
+assinatura, e o visual era inteiramente próprio (`.av-*`, fora do padrão
+`.rp-*` usado em todo o resto do portal). Corrigido nas duas frentes, a
+pedido do usuário:
+
+- **Visual refeito no padrão `.rp-*`** (cópia independente, mesma decisão já
+  tomada pra `doc.html`/`beneficios.html` — `AV_RP_CSS`): cabeçalho com logo +
+  título + "Emitido em", caixas Colaborador/Matrícula/Cargo/Unidade/Admissão
+  (`.rp-intro`, dados vindos de `tata_plus.colaboradores_listar` — já expõe
+  `cargo`/`unidade`, não precisou de RPC nova), corpo com CPF/Início de
+  Gozo/Período aquisitivo + os 3 parágrafos do aviso (texto legal idêntico ao
+  anterior, só reorganizado), declaração final (`.rp-ass-declaro` — "Declaro
+  estar ciente da concessão de férias...", mesmo padrão dos outros termos,
+  sem linha de assinatura física) e cidade/data. O HTML do `.page` passou a
+  vir de uma única função (`_avMontarBody`), reaproveitada tanto por "Gerar
+  PDF" quanto por "Enviar para Assinatura Digital" — sem duplicar o texto em
+  dois lugares.
+- **Fluxo de assinatura digital**: novo botão "Enviar para Assinatura
+  Digital" ao lado de "Gerar PDF" (coexistem, mesma decisão de 2026-08-22).
+  Mesmo pipeline de sempre — `_avHtmlParaPdfBlob` (iframe + `html2pdf.js` via
+  CDN, com `pdfOverrides` achatando o CSS de tela, igual
+  `_admHtmlParaPdfBlob`) → upload em `assinaturas/docs/` →
+  `colaborador_documento_pendente_assinatura_salvar` →
+  `tata_plus.docs_enviar_para_assinatura` →
+  `colaborador_documento_definir_atribuicao`.
+- **Catálogo**: novo `doc_tipos` "Aviso de Gozo de Férias" (categoria
+  "Férias" — já existia por causa do "Recibo de Férias", órfão, criado numa
+  sessão anterior e nunca usado por nenhuma página; `ordem=2`,
+  `categoria_ordem=7`, `periodicidade='unico'`, `requer_assinatura=true`).
+- **Nome da RPC do catálogo mudou enquanto isso:** ao conferir o nome certo
+  pra chamar, `doc_tipos_sandbox_listar` (a que `admissao.html` usava até
+  então, documentada em todo o resto deste arquivo) não existia mais no
+  banco — foi substituída por `doc_tipos_listar` (mesma função, agora com
+  `perform public.docs_porta()` no corpo — checagem de acesso, não mais
+  "sandbox"). `admissao.html` já tinha sido atualizado pra esse nome novo por
+  outra sessão/time antes desta mudança (confirmado lendo o arquivo depois
+  do `git pull`) — `ferias.html` já nasceu usando `doc_tipos_listar`. Vale de
+  alerta pra quem for copiar esse pipeline de novo: conferir o nome atual da
+  RPC via `pg_proc` antes de assumir que ainda é `_sandbox_`.
+
+Testado com Playwright: `page.route()` interceptando o CDN do `html2pdf.js`
+com uma implementação fake (mesma técnica usada antes pro JSZip, já que o
+proxy da sandbox bloqueia o domínio real — ver limitação já documentada
+acima pra `doc.html`) pra exercitar o pipeline completo sem depender de rede
+real. Confirmado: upload com `contentType`/path corretos,
+`colaborador_documento_pendente_assinatura_salvar` recebendo
+`p_tipo_id`/`p_matricula`/`p_link_bucket='assinaturas'` certos,
+`docs_enviar_para_assinatura` com o título versionado (`(v2)` quando
+`linha.versao > 1`), vínculo final de atribuição, e modal fechando só depois
+do lote inteiro. Conteúdo do `.page` capturado e conferido campo a campo
+(cabeçalho, caixas do `.rp-intro`, CPF, datas, declaração, cidade/data) —
+bate com o esperado. "Gerar PDF" (impressão) não foi alterado no
+comportamento, só passou a reaproveitar `_avMontarBody` em vez de montar o
+HTML duas vezes.
+
+**Bug encontrado (2026-11-09) e corrigido: aba Pendências (`doc.html`) escondia
+pendências reais de assinatura quando a mesma pessoa tinha mais de uma do
+mesmo tipo.** Usuário reportou vendo 3 "Termo de Ciência — Saúde Preventiva"
+pendentes no app (tela do colaborador, cada um com seu próprio status
+"Pendente") mas só 1 na tabela "Pendentes de Assinatura" do portal. Causa:
+`_pendItens()` agrupava por `matricula + tipo_id + competencia`, mantendo só
+a linha de maior `versao` — pensado originalmente pra imitar o "mostra só a
+versão mais recente" que `doc.html` já faz na pasta do colaborador (ver
+decisão de 2026-08-22, "gerar de novo não sobrescreve — vira versão nova").
+Mas essa regra faz sentido só na pasta por pessoa (histórico de um tipo de
+documento recorrente); na aba Pendências — visão agregada de TODO mundo com
+assinatura em aberto — cada linha com `status='pendente_assinatura'` é uma
+cobrança de assinatura de verdade, ainda pendente no app, e precisa
+aparecer: esconder a v1/v2 só porque existe uma v3 mais nova dava a entender
+(errado) que só restava 1 pendência, quando na real continuavam 3 abertas
+(a decisão já documentada é clara: gerar de novo nunca cancela a anterior,
+"a antiga fica pendente pra sempre se ele não assinar").
+
+Corrigido: `_pendItens()` agora lista uma linha por documento com
+`status='pendente_assinatura'` (sem agrupar por colaborador+tipo+competência),
+usando o `id` de cada linha pra "Ver"/"Excluir" continuarem agindo na
+pendência certa. Versão maior que 1 aparece no nome do documento ("... (v2)",
+"... (v3)") só pra diferenciar visualmente linhas com o mesmo nome na
+tabela.
+
+Testado com Playwright (mock de `colaboradorDocumentos` com 3 pendências do
+mesmo tipo/colaborador em versões diferentes + 1 linha já `entregue` do
+mesmo tipo): as 3 pendências aparecem como 3 linhas separadas (v1 sem
+sufixo, v2 e v3 com sufixo), e a linha assinada não entra na lista.
+
+**Feito (2026-11-09): `ferias.html` — modo em lote no "Aviso de Gozo de
+Férias".** Mesmo mecanismo de "vários colaboradores de uma vez" já usado em
+`admissao.html` (link que troca o select único por uma lista de
+checkboxes), adaptado pro caso de uso daqui: em vez de um "selecionar
+todos" genérico, o RH escolhe um **período de gozo entre** (data inicial e
+final) e a lista mostra só quem tem um bloco de gozo com situação
+"agendada" cujo início cai dentro desse período — cada linha já mostra o
+período de gozo daquela pessoa (pode ser diferente dia a dia dentro do
+mesmo período escolhido). "Selecionar todos" marca só os candidatos
+filtrados.
+
+Cada colaborador selecionado usa o **próprio** bloco de gozo (guardado no
+`data-bloco` do checkbox, igual ao que `_avColabChange` já monta pro modo
+de 1 colaborador) — não um período compartilhado entre todos. O núcleo de
+envio (`_avEnviarUmAviso`) foi extraído do fluxo de 1 colaborador pra ser
+reaproveitado pelos dois modos, sem duplicar a cadeia de upload + 3 RPCs.
+Processamento sequencial (reduce, não paralelo) com progresso "Enviando
+N/total…" e resumo final de sucesso/falha — mesmo padrão de
+`salvarTermosParaAssinatura` em `admissao.html`. "Gerar PDF" (impressão
+local via pop-up) some no modo lote, pelo mesmo motivo já documentado lá:
+não dá pra abrir N pop-ups de impressão de uma vez.
+
+Testado com Playwright (CDN do `html2pdf.js` interceptado com stub, mesma
+técnica já usada acima): período de dezembro filtra corretamente quem tem
+gozo começando em dezembro (excluindo quem tem gozo em janeiro), "Selecionar
+todos" + enviar processa cada um com seu próprio período no título/nome do
+arquivo, e o estado vazio ("Nenhum colaborador com férias agendadas nesse
+período") aparece quando não há candidatos no intervalo escolhido.
+
+_Última atualização: 2026-11-09._

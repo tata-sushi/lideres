@@ -17,7 +17,8 @@ controles de uma página: abas, botões e valores") e `src/components/AdminGover
 | `governanca_abas` | catálogo dos controles internos — **`aba_id` (PK)**, `pagina_id`, `label`, `tipo`, `ordem`, `ativo` |
 | `governanca_abas_bloqueios` | denylist por pessoa das **abas** (`tipo='aba'`) |
 | `governanca_abas_liberacoes` | allowlist por pessoa dos **botões** (`tipo='botao'`) |
-| `dp_rh.perm_ver_valores` | liberação de **valores** em R$ por área (`area`, `liberado`) |
+| `dp_rh.perm_ver_valores` | liberação do nível **Valor** (R$, CPF, nascimento, saúde) por área (`area`, `liberado`) |
+| `dp_rh.perm_ver_contato` | liberação do nível **Contato** (e-mail, telefone) por área, separada do Valor (migration `20261125`) |
 
 O `aba_id` de `governanca_abas` **tem que ser idêntico** ao `data-aba-id`/`data-botao-id`
 do HTML. Se divergir, o interruptor do painel não controla nada.
@@ -28,36 +29,48 @@ do HTML. Se divergir, o interruptor do painel não controla nada.
 |---|---|---|---|
 | `aba`   | **visível** (denylist / opt-out) | `governanca_abas_bloqueios`  | **esconde** aquela aba pra pessoa |
 | `botao` | **oculto** (allowlist / opt-in)  | `governanca_abas_liberacoes` | **libera** aquele botão pra pessoa |
-| `valor` | **oculto** (opt-in, por área)    | `dp_rh.perm_ver_valores`     | libera ver o valor (`liberado=true`) |
+| `valor` | **oculto** (opt-in, por área)    | `dp_rh.perm_ver_valores`     | libera ver R$, CPF, nascimento e saúde (`liberado=true`) |
+| `contato` | **oculto** (opt-in, por área) | `dp_rh.perm_ver_contato` | libera ver e-mail e telefone (`liberado=true`) |
 
 O `tipo` sai da classe do elemento no HTML: `tab-btn` → `aba`; botões de ação
 (`drawer-sam-btn`, `btn-avaliar`, `btn-copia-card`, `btn-registrar`…) → `botao`.
 
 Em `tipo='valor'` o `aba_id` **é a própria área** (ex.: `recrutamento`), **sem** o
-prefixo `pagina_id::`; o valor é mascarado no servidor (salário etc.), não por CSS.
+prefixo `pagina_id::`; o valor é mascarado no servidor (salário, CPF etc.), não por CSS. Em
+`tipo='contato'` o `aba_id` é `contato-<área>`, para não colidir com o id da área de Valor; a
+tabela de liberação usa a mesma área do Valor.
 
 ## RPCs
 
 **Consumidas pela página** (schema `tata_plus`, via `window.__lideresSupa`):
-- `gov_meus_acessos` — páginas que a pessoa vê (resolve o gate + destrava cards do menu).
+- `gov_meus_acessos` — páginas que a pessoa vê (libera a página + destrava cards do menu). Hoje chamada
+  pelo `gate.js`; alvo: a camada de acesso (`references/camada-de-acesso.md`).
 - `gov_minhas_abas_bloqueadas` — lista de `aba_id` a **esconder** para a pessoa; é o que
-  o `gate.js` aplica sobre todo `[data-aba-id]`. (O servidor já dobra os `tipo='botao'`
+  a camada de acesso (hoje no `gate.js`) aplica sobre todo `[data-aba-id]`. (O servidor já dobra os `tipo='botao'`
   aqui: eles voltam como "a esconder" até existir a liberação.)
 - `pode_botao({ p_aba_id })` — usada pelo modelo `data-botao-id` (ex.: `escalas.html`);
   devolve `true`/`false` por botão. Guarde em `GOV_BTN_OK` e **cheque na ação**.
 
+**Consumidas pelas funções do banco** (o servidor é a porta → `references/servidor.md`):
+- `gov_tenho_acesso(p_pagina_id)` — a pessoa abre a página? (admin passa).
+- `pode_botao(p_aba_id)` — também na função da ação; já confere a página e libera admin.
+- `pode_ver_valores(p_area)` — Valor; olha a área ou `geral`, sem bypass de admin.
+- `pode_ver_contato(p_area)` — Contato, mesma regra do Valor (a tabela guarda a área sem o prefixo `contato-`).
+- `minha_matricula()` / `meu_nome()` — quem é a pessoa (autor de toda ação: matrícula e nome); `minha_subarvore()` — Linha;
+  `gov_tenho_alguma(...)` — a pessoa abre alguma das páginas (função compartilhada por várias páginas).
+
 **Consumidas pelo painel admin** (`AdminGovernanca.jsx`, restritas a admin):
 - Catálogo: `gov_catalogo`, `gov_catalogo_abas`, `gov_admin_pessoas`.
 - Leitura por pessoa: `gov_admin_acessos`, `gov_admin_abas_bloqueios`,
-  `gov_admin_botoes_liberados`, `perm_valores_areas`.
+  `gov_admin_botoes_liberados`, `perm_valores_areas`, `perm_contato_areas`.
 - Escrita por pessoa: `gov_admin_set`, `gov_admin_abas_set`, `gov_admin_botoes_set`,
-  `perm_valores_sync`.
+  `perm_valores_sync`, `perm_contato_sync`.
 - Outras: `gov_admin_zerar_acessos` (zera tudo da pessoa), `admin_resetar_senha`.
 
 **Consumidas pela página Auditoria de páginas** (`compliance/auditoria/paginas.html`, só admin — `pode_publicar()`):
 - `gov_auditoria_acessos()` → `jsonb` com tudo de uma vez: `pessoas` (ativas: m, nome, cargo, unidade, admin),
-  `paginas` (ativas), `itens` (catálogo **ativo**), `acessos`, `bloqueios`, `liberacoes`, `valores` (pares
-  `[matricula, id]`).
+  `paginas` (ativas), `itens` (catálogo **ativo**), `acessos`, `bloqueios`, `liberacoes`, `valores` e `contatos` (pares
+  `[matricula, id]`; em `contatos` o id já vem como `contato-<área>`).
 - `gov_auditoria_salvar(p_tipo, p_item, p_incluir[], p_tirar[])` → grava uma linha (SQL na §"Página Auditoria de páginas").
 
 ## Registrar/atualizar os controles de uma página
@@ -79,6 +92,7 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 
 - **Admin (`perfil='admin'`) vê tudo** — não precisa de liberação em `aba`/`botao`. **Valor é exceção:**
   `pode_ver_valores(area)` só olha `dp_rh.perm_ver_valores` (a área ou `geral`); admin sem linha lá não vê R$.
+  **Contato** segue a mesma regra, com liberação separada (`dp_rh.perm_ver_contato`; painel: `perm_contato_areas` / `perm_contato_sync`).
   (Exceção: as features da seção **App** — Kanban/Escala/Limpeza — **não têm bypass de
   admin**; até admin precisa do grant.)
 - **Os setters `gov_admin_*_set` fazem REPLACE TOTAL por pessoa**: apagam **todos** os
@@ -105,7 +119,7 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
   join tata_plus.profiles p on p.matricula=g.matricula and p.status='Ativo' and coalesce(p.perfil,'')<>'admin'
   on conflict do nothing;
   ```
-- **`gate.js` busca sempre a lista do que esconder** (desde 04/10/2026): botões montados depois pelo JS (linha,
+- **A camada de acesso (hoje no `gate.js`) busca sempre a lista do que esconder** (desde 04/10/2026): botões montados depois pelo JS (linha,
   cartão, ficha) também podem levar `data-aba-id`.
 
 ## Tabela de acessos (o dono clica, o Claude aplica)
@@ -133,7 +147,8 @@ Cada clique grava um documento na coleção `mudancas` da página — nada vai p
 2. **Publicar:** `Artifact` com `file_path` = `assets/matriz-acessos.html`, `files: {"estado.json": <scratchpad>/estado.json}`,
    `capabilities: {db: {}}`. ⚠️ O estado.json tem nomes — fica no scratchpad, nunca no repo.
 3. **Quando o dono disser que terminou:** `ArtifactData list` da coleção `mudancas`. Cada documento tem
-   `tipo` (`pagina`/`aba`/`botao`/`valor`), `item`, `pagina`, `matricula` e `acao` (`incluir`/`tirar`).
+   `tipo` (`pagina`/`aba`/`botao`/`valor`; `contato` entra quando o nível for criado), `item`, `pagina`,
+   `matricula` e `acao` (`incluir`/`tirar`).
    Mostre o resumo ao dono e aplique **direto nas tabelas** (nunca os setters `gov_admin_*_set`):
 
    | tipo | incluir | tirar |

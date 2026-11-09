@@ -1029,11 +1029,17 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
     /* cards com respiro lateral (12px celular / 24px desktop), 12px entre eles */
     #view-dashboard .dashboard { padding: 14px 12px 44px; }
-    .dash-row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .dash-row { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
+    #view-dashboard .dashboard > .dash-row:first-child { margin-top: 0; }
     .dash-stack { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
     @media (min-width: 768px) {
       #view-dashboard .dashboard { padding-left: 24px; padding-right: 24px; }
       .dash-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      /* linha 2 (Média de Avaliações × Feedback): o Média abre todas as perguntas e DEFINE a
+         altura; o Feedback recebe essa mesma altura via JS (_syncL2) e rola internamente */
+      .dash-row.l2 { align-items: start; }
+      #card-cl-fb { overflow: hidden; }
+      #card-cl-fb .tbl-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
     }
 
     /* RADAR + NUVEM (mesma altura de card, legendas alinhadas) */
@@ -1089,6 +1095,32 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 }
 @media (min-width: 768px) { .tcards { display: none; } }
 .ver-mais-wrap { text-align: center; padding: 12px 0 2px; }
+
+/* Registro de reclamações/feedback ao RH: modal + formulário (padrão modal-formulario) */
+.reg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.reg-head .chart-title { margin: 0; text-align: left; }
+.reg-del { background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; line-height: 0; border-radius: 6px; }
+.reg-del:hover { color: var(--red); background: var(--bg); }
+.reg-tipo-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 100px; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.reg-tipo-rec { background: #FDEAEA; color: #7A1A1A; }
+.reg-tipo-fb { background: #E8F0FA; color: #1A3A5C; }
+.reg-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 400; display: none; align-items: center; justify-content: center; padding: 20px; }
+.reg-modal-overlay.active { display: flex; }
+.reg-modal { background: var(--surface); border-radius: 12px; width: 100%; max-width: 520px; max-height: 92vh; overflow: hidden; display: flex; flex-direction: column; }
+.reg-modal-header { padding: 14px 20px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.reg-modal-eyebrow { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.reg-modal-title { font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 700; color: var(--carbon); }
+.reg-modal-close { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 4px; }
+.reg-modal-body { padding: 14px 20px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.reg-modal-footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; }
+.reg-modal-footer .btn { flex: 1; }
+.reg-fg { display: flex; flex-direction: column; gap: 5px; }
+.reg-fg-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--carbon); }
+.reg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.reg-input, .reg-select, .reg-textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); background: var(--bg); outline: none; }
+.reg-input:focus, .reg-select:focus, .reg-textarea:focus { border-color: var(--carbon); }
+.reg-textarea { resize: vertical; min-height: 84px; }
+.reg-err { display: none; background: var(--red-bg, #FDEAEA); color: var(--red); border: 1px solid #F5C2C2; border-radius: var(--radius); padding: 9px 12px; font-size: 12px; }
 
 /* Info do gráfico (botão "i") — modal padrão da skill; classes .ginfo-* para não colidir com os modais da página */
 .ginfo-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
@@ -1168,18 +1200,32 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
           </div>
         </div>
       </div>
-      <div class="dash-stack">
-        <div class="chart-card card-tabela">
+      <div class="dash-row l2">
+        <div class="chart-card card-tabela" id="card-cl-perg">
           <button class="chart-info-btn" onclick="abrirInfoGrafico('analitico')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-          <div class="chart-title" id="cl-perg-titulo">Analítico</div>
+          <div class="chart-title" id="cl-perg-titulo">Média de Avaliações</div>
           <div class="tcards" id="cl-perg-cards"></div><div class="tbl-scroll tem-cartoes"><table class="mini tbl-org" id="tbl-cl-perg" style="min-width:640px"><thead><tr><th data-col="tema" class="th-sort" onclick="TAB_CL_PERG.ordenar('tema')" style="width:180px">Tema <span class="sort-arrow" data-sa="tema">↕</span></th><th data-col="texto" class="th-sort" onclick="TAB_CL_PERG.ordenar('texto')">Pergunta <span class="sort-arrow" data-sa="texto">↕</span></th><th data-col="media" class="th-sort" onclick="TAB_CL_PERG.ordenar('media')" style="width:100px">Média <span class="sort-arrow" data-sa="media">↕</span></th></tr></thead><tbody id="cl-perguntas"></tbody></table></div>
           <div class="ver-mais-wrap" id="cl-perg-mais" style="display:none"><button class="btn btn--primary" onclick="TAB_CL_PERG.verMais()">Ver mais</button></div>
         </div>
-        <div class="chart-card card-tabela">
+        <div class="chart-card card-tabela" id="card-cl-fb">
           <button class="chart-info-btn" onclick="abrirInfoGrafico('feedback')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
           <div class="chart-title">Feedback</div>
           <div class="tcards" id="cl-fb-cards"></div><div class="tbl-scroll tem-cartoes"><table class="mini tbl-org" id="tbl-cl-fb" style="min-width:860px"><thead><tr><th data-col="data" class="th-sort" onclick="TAB_CL_FB.ordenar('data')" style="width:110px">Data <span class="sort-arrow" data-sa="data">↕</span></th><th data-col="uni" class="th-sort" onclick="TAB_CL_FB.ordenar('uni')" style="width:160px">Unidade <span class="sort-arrow" data-sa="uni">↕</span></th><th data-col="user" class="th-sort" onclick="TAB_CL_FB.ordenar('user')" style="width:170px">Usuário <span class="sort-arrow" data-sa="user">↕</span></th><th data-col="txt" class="th-sort" onclick="TAB_CL_FB.ordenar('txt')">Comentário <span class="sort-arrow" data-sa="txt">↕</span></th></tr></thead><tbody id="cl-coments"></tbody></table></div>
           <div class="ver-mais-wrap" id="cl-fb-mais" style="display:none"><button class="btn btn--primary" onclick="TAB_CL_FB.verMais()">Ver mais</button></div>
+        </div>
+      </div>
+      <!-- Feedback ao RH (registro manual por diferentes canais) -->
+      <div class="dash-stack">
+        <div class="chart-card" id="card-rh-reg">
+          <div class="chart-title">Feedback ao RH</div>
+          <div class="tbl-scroll"><table class="mini" id="tbl-rh-reg" style="min-width:860px">
+            <thead><tr>
+              <th style="width:96px">Data</th><th style="width:108px">Tipo</th>
+              <th style="width:150px">Unidade</th><th style="width:140px">Departamento</th>
+              <th style="width:118px">Recebido por</th><th>Reclamação / Feedback</th><th style="width:40px"></th>
+            </tr></thead>
+            <tbody id="rh-reg-body"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:18px">Carregando…</td></tr></tbody>
+          </table></div>
         </div>
       </div>
     </main>
@@ -1197,6 +1243,33 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
   </div>
 </div>
 
+<!-- MODAL: registrar reclamação/feedback ao RH -->
+<div class="reg-modal-overlay" id="reg-modal-overlay" onclick="if(event.target===this)fecharModalReg()">
+  <div class="reg-modal">
+    <div class="reg-modal-header">
+      <div><div class="reg-modal-eyebrow">RH · Registro</div><div class="reg-modal-title" id="reg-modal-titulo">Nova reclamação/feedback</div></div>
+      <button class="reg-modal-close" onclick="fecharModalReg()" aria-label="Fechar">✕</button>
+    </div>
+    <div class="reg-modal-body">
+      <div class="reg-err" id="reg-err"></div>
+      <div class="reg-row">
+        <div class="reg-fg"><label class="reg-fg-label">Tipo</label><select class="reg-select" id="reg-tipo"><option>Reclamação</option><option>Feedback</option></select></div>
+        <div class="reg-fg"><label class="reg-fg-label">Recebido por</label><select class="reg-select" id="reg-meio"><option value="">—</option><option>WhatsApp</option><option>Pessoalmente</option><option>Ligação / telefone</option><option>Outro</option></select></div>
+      </div>
+      <div class="reg-fg"><label class="reg-fg-label">Reclamação / Feedback</label><textarea class="reg-textarea" id="reg-texto" rows="4" placeholder="Descreva o ponto trazido ao RH…"></textarea></div>
+      <div class="reg-row">
+        <div class="reg-fg"><label class="reg-fg-label">Unidade</label><select class="reg-select" id="reg-unidade"><option value="">—</option></select></div>
+        <div class="reg-fg"><label class="reg-fg-label">Departamento</label><select class="reg-select" id="reg-departamento"><option value="">—</option></select></div>
+      </div>
+      <div class="reg-fg"><label class="reg-fg-label">Data</label><input class="reg-input" type="date" id="reg-data"></div>
+    </div>
+    <div class="reg-modal-footer">
+      <button class="btn" onclick="fecharModalReg()" style="background:var(--bg);border:1px solid var(--border);color:var(--text)">Cancelar</button>
+      <button class="btn btn--primary" id="reg-salvar" onclick="salvarReg()"><span class="btn-spin"></span><span class="btn-label">Salvar</span></button>
+    </div>
+  </div>
+</div>
+
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
   <div class="drawer-header">
@@ -1206,6 +1279,10 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
     </button>
   </div>
   <div class="drawer-body">
+    <div class="drawer-section">
+      <div class="drawer-section-label">Ações</div>
+      <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-cei::registrar-reclamacao" onclick="closeDrawer(); abrirModalReg(null);">Registrar reclamação/feedback</button>
+    </div>
     <div class="drawer-section">
       <div class="drawer-section-label">Versão atual</div>
       <div class="drawer-version">
@@ -1276,7 +1353,7 @@ function loadDrawerKPIs() {
 // Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
 var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'];
-var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
+var DRAWER_FORA_APP = ['compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
 function _pintarDrawerMeta(m) {
   var el = function(id) { return document.getElementById(id); };
@@ -1325,13 +1402,6 @@ function closeDrawer() {
 }
 document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDrawer(); });
 
-(function() {
-  var s = window.__lideresSession || (function(){ try { return JSON.parse(localStorage.getItem('lideres_session')); } catch(e) { return null; } })();
-  if (s && s.displayName) {
-    var parts = s.displayName.trim().split(/\s+/);
-    var short = parts.length > 1 ? parts[0] : parts[0];
-  }
-})();
 
 var FT_CAT_SVG = {
   'Automação & IA':               '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>',
@@ -1917,7 +1987,7 @@ function closeInfoGrafico(){ document.getElementById('ginfo-overlay').classList.
   }
   function _nota(m){ return m!=null ? m.toFixed(2).replace('.',',') : '—'; }
   window.TAB_CL_PERG = new TabelaOrg({ tabela: 'tbl-cl-perg', corpo: 'cl-perguntas', mais: 'cl-perg-mais', chave: 'cei_perg_cols_v1',
-    n: 10, colspan: 3, vazio: 'Sem respostas no filtro atual',
+    n: 999, colspan: 3, vazio: 'Sem respostas no filtro atual',
     valor: { media: function(r){ return r.media == null ? -1 : r.media; } },
     linha: function(r){ return '<tr><td>'+esc(r.tema)+'</td><td class="txt">'+esc(r.texto)+'</td><td class="tbl-nota" style="text-align:center">'+_nota(r.media)+'</td></tr>'; },
     cartoes: 'cl-perg-cards',
@@ -1955,7 +2025,7 @@ function closeInfoGrafico(){ document.getElementById('ginfo-overlay').classList.
              user: String(c.autor || c.usuario || c.user || c.colaborador || c.matricula || '—'), txt: String(txt) };
   }
   window.TAB_CL_FB = new TabelaOrg({ tabela: 'tbl-cl-fb', corpo: 'cl-coments', mais: 'cl-fb-mais', chave: 'cei_fb_cols_v1',
-    n: 10, colspan: 4, vazio: 'Sem comentários para este filtro',
+    n: 999, colspan: 4, vazio: 'Sem comentários para este filtro',
     linha: function(r){ return '<tr><td style="text-align:center">'+esc(r.dataTxt)+'</td><td>'+esc(r.uni)+'</td><td class="nm">'+esc(r.user)+'</td><td class="txt">'+esc(r.txt)+'</td></tr>'; },
     cartoes: 'cl-fb-cards',
     cartao: function(r){ return cartao({ titulo: esc(r.user), campos: [['Data', esc(r.dataTxt)], ['Unidade', esc(r.uni)]], texto: esc(r.txt) }); } });
@@ -2066,7 +2136,7 @@ function closeInfoGrafico(){ document.getElementById('ginfo-overlay').classList.
       // .then(_arr) ANTES do .catch: o builder do supabase-js é thenable mas não
       // tem .catch próprio — só vira Promise real depois do .then.
       var rLider = supa.schema('tata_plus').rpc('av_clima_resumo_grupo',{p_grupo:'lider',p_desde:null,p_min_n:0}).then(_arr).catch(function(){ return []; });
-      var rCom   = supa.schema('tata_plus').rpc('av_clima_comentarios',{p_desde:null,p_limite:50}).then(_arr).catch(function(){ return []; });
+      var rCom   = supa.schema('tata_plus').rpc('av_clima_feedback',{p_desde:null,p_limite:50}).then(_arr).catch(function(){ return []; });
       // Nuvem de Palavras: mesma fonte da página de Clima/Brainstorm
       supa.schema('tata_plus').rpc('brainstorm_palavras', { p_sessao: 'Brainstorm Geral' })
         .then(_arr)
@@ -2199,6 +2269,114 @@ function hardRefresh() {
   }
   if (document.readyState === 'complete') restaurar();
   else window.addEventListener('load', restaurar);
+})();
+</script>
+
+<!-- Linha 2 (Média de Avaliações × Feedback): iguala a altura do Feedback à do Média -->
+<script>
+(function(){
+  function _syncL2(){
+    var med=document.getElementById('card-cl-perg'), fb=document.getElementById('card-cl-fb');
+    if(!med||!fb) return;
+    fb.style.height='';                               // volta ao natural p/ medir o Média
+    if(window.innerWidth<768) return;                 // no celular cada card é natural (vira cartões)
+    var h=med.getBoundingClientRect().height;
+    if(h>120) fb.style.height=h+'px';                 // Feedback acompanha a altura do Média e rola por dentro
+  }
+  var _t; function _sync(){ clearTimeout(_t); _t=setTimeout(_syncL2, 60); }
+  window.addEventListener('resize', _sync);
+  ['cl-perguntas','cl-coments'].forEach(function(id){
+    var el=document.getElementById(id); if(el) new MutationObserver(_sync).observe(el, { childList:true });
+  });
+  setTimeout(_sync, 900);
+})();
+</script>
+
+<!-- Registro de reclamações/feedback ao RH (tabela + modal) -->
+<script>
+(function(){
+  var REG_ALL=[];
+  function _regSupa(cb){ if(window.__lideresSupa){ cb(window.__lideresSupa); } else { window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, {once:true}); } }
+  function _regEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function _regData(iso){ var s=String(iso||''); var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m? m[3]+'/'+m[2]+'/'+m[1] : '—'; }
+  function _regToday(){ var d=new Date(), p=function(n){return n<10?'0'+n:n;}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
+  function _regFill(id, arr){ var e=document.getElementById(id); if(!e) return; var cur=e.value; e.innerHTML='<option value="">—</option>'+arr.map(function(v){return '<option>'+_regEsc(v)+'</option>';}).join(''); e.value=cur; }
+  function carregarOpcoesReg(){
+    _regSupa(function(supa){
+      supa.schema('tata_plus').from('colaboradores_publicos').select('unidade, departamento').then(function(r){
+        if(r.error||!Array.isArray(r.data)) return;
+        var us={}, ds={};
+        r.data.forEach(function(c){ if(c.unidade) us[c.unidade]=1; if(c.departamento) ds[c.departamento]=1; });
+        _regFill('reg-unidade', Object.keys(us).sort(function(a,b){return a.localeCompare(b,'pt-BR');}));
+        _regFill('reg-departamento', Object.keys(ds).sort(function(a,b){return a.localeCompare(b,'pt-BR');}));
+      });
+    });
+  }
+  window.carregarRegistros=function(){
+    _regSupa(function(supa){
+      supa.schema('tata_plus').rpc('rh_registros_listar').then(function(r){
+        var body=document.getElementById('rh-reg-body'); if(!body) return;
+        REG_ALL=(r&&!r.error&&Array.isArray(r.data))?r.data:[];
+        if(!REG_ALL.length){ body.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:18px">Nenhum registro ainda</td></tr>'; return; }
+        body.innerHTML=REG_ALL.map(function(x){
+          var fb=(String(x.tipo||'').toLowerCase().indexOf('feed')>=0);
+          return '<tr>'+
+            '<td style="white-space:nowrap">'+_regData(x.data)+'</td>'+
+            '<td><span class="reg-tipo-pill '+(fb?'reg-tipo-fb':'reg-tipo-rec')+'">'+_regEsc(x.tipo||'—')+'</span></td>'+
+            '<td>'+_regEsc(x.unidade||'—')+'</td>'+
+            '<td>'+_regEsc(x.departamento||'—')+'</td>'+
+            '<td>'+_regEsc(x.meio||'—')+'</td>'+
+            '<td>'+_regEsc(x.texto||'')+'</td>'+
+            '<td><button class="reg-del" data-aba-id="governanca-kpis-rh-cei::excluir-reclamacao" title="Excluir" onclick="excluirReg(\''+x.id+'\')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></td>'+
+          '</tr>';
+        }).join('');
+      });
+    });
+  };
+  window.abrirModalReg=function(id){
+    var err=document.getElementById('reg-err'); if(err) err.style.display='none';
+    document.getElementById('reg-modal-titulo').textContent = id? 'Editar registro' : 'Nova reclamação/feedback';
+    var r = id? (REG_ALL.filter(function(x){return x.id===id;})[0]||null) : null;
+    document.getElementById('reg-tipo').value = r? (r.tipo||'Reclamação') : 'Reclamação';
+    document.getElementById('reg-meio').value = r&&r.meio? r.meio : '';
+    document.getElementById('reg-texto').value = r? (r.texto||'') : '';
+    document.getElementById('reg-unidade').value = r&&r.unidade? r.unidade : '';
+    document.getElementById('reg-departamento').value = r&&r.departamento? r.departamento : '';
+    document.getElementById('reg-data').value = r? String(r.data).slice(0,10) : _regToday();
+    document.getElementById('reg-salvar').dataset.id = id||'';
+    document.getElementById('reg-modal-overlay').classList.add('active');
+    document.body.style.overflow='hidden';
+  };
+  window.fecharModalReg=function(){ document.getElementById('reg-modal-overlay').classList.remove('active'); document.body.style.overflow=''; };
+  function _regLoad(btn,on){ if(!btn) return; btn.disabled=on; var l=btn.querySelector('.btn-label'); if(l) l.textContent=on?'Salvando…':'Salvar'; }
+  window.salvarReg=function(){
+    var btn=document.getElementById('reg-salvar'), err=document.getElementById('reg-err');
+    var texto=document.getElementById('reg-texto').value.trim();
+    if(!texto){ err.textContent='Escreva a reclamação/feedback.'; err.style.display='block'; return; }
+    if(!window.__lideresSupa){ err.textContent='Sessão não carregada. Recarregue a página.'; err.style.display='block'; return; }
+    err.style.display='none'; _regLoad(btn,true);
+    var args={ p_tipo:document.getElementById('reg-tipo').value,
+      p_texto:texto,
+      p_unidade:document.getElementById('reg-unidade').value||null,
+      p_departamento:document.getElementById('reg-departamento').value||null,
+      p_data:document.getElementById('reg-data').value||null,
+      p_meio:document.getElementById('reg-meio').value||null,
+      p_id:document.getElementById('reg-salvar').dataset.id||null };
+    window.__lideresSupa.schema('tata_plus').rpc('rh_registro_salvar', args).then(function(r){
+      _regLoad(btn,false);
+      if(r.error){ err.textContent='Erro ao salvar: '+(r.error.message||'tente de novo'); err.style.display='block'; return; }
+      fecharModalReg(); carregarRegistros();
+    }, function(){ _regLoad(btn,false); err.textContent='Erro ao salvar.'; err.style.display='block'; });
+  };
+  window.excluirReg=function(id){
+    if(!id || !window.__lideresSupa) return;
+    if(!window.confirm('Excluir este registro?')) return;
+    window.__lideresSupa.schema('tata_plus').rpc('rh_registro_excluir',{p_id:id}).then(function(r){
+      if(r.error){ window.alert('Erro ao excluir: '+(r.error.message||'')); return; }
+      carregarRegistros();
+    });
+  };
+  carregarOpcoesReg(); carregarRegistros();
 })();
 </script>
 </body>

@@ -1331,6 +1331,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="drawer-section">
       <div class="drawer-section-label">Ações</div>
       <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-ferias::relatorio-ferias" onclick="closeDrawer();abrirModalRelFerias()">Relatório de Férias</button>
+      <button class="drawer-sam-btn" data-aba-id="governanca-kpis-rh-ferias::aviso-gozo-ferias" onclick="closeDrawer();abrirModalAvisoFerias()" style="margin-top:8px;">Aviso de Gozo de Férias</button>
     </div>
   </div>
   <div class="drawer-footer">
@@ -1488,7 +1489,7 @@ function loadDrawerKPIs() {
 // Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
 var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'];
-var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
+var DRAWER_FORA_APP = ['compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
 function _pintarDrawerMeta(m) {
   var el = function(id) { return document.getElementById(id); };
@@ -2594,8 +2595,9 @@ function updateAll() {
 }
 
 // ── PENDÊNCIAS ─────────────────────────────────────────────────────
-// Sem validação nem aprovação: o período aparece aqui quando o aquisitivo fecha (só para o
-// líder imediato; o RH vê todos — filtro feito no banco, em ferias_listar). O líder agenda,
+// Sem validação nem aprovação: o período aparece aqui quando o aquisitivo fecha (o líder vê
+// os próprios e os de toda a sua subárvore; admin e RH veem todos — corte feito no banco, em
+// ferias_listar, nível Linha da skill controle-de-acessos-e-visibilidade). O líder agenda,
 // o agendamento já vale e vira card no Kanban do RH (trigger trg_ferias_para_kanban).
 var _pageTab = 'sobre';
 var _devCache = [];
@@ -2809,16 +2811,6 @@ Promise.all([fetchFeriasOnStart(), _carregarValores()]).then(function() {
   _tryRender();
 });
 
-(function(){
-  var s = window.__lideresSession ||
-    (function(){ try{ return JSON.parse(localStorage.getItem('lideres_session')); }catch(e){ return null; } })();
-  if (s && s.displayName) {
-    var parts = s.displayName.trim().split(/\s+/);
-    var short = parts.length > 1 ? parts[0] : parts[0];
-    var hu = document.getElementById('header-user');
-    if (hu) hu.textContent = short;
-  }
-})();
 function hardRefresh() {
   var btn = document.getElementById('btn-hard-refresh');
   if (btn) btn.classList.add('is-loading');
@@ -3347,8 +3339,7 @@ window.toggleFta = toggleFta;
     var periodoTxt = _rfFmt(document.getElementById('rf-de').value)+' – '+_rfFmt(document.getElementById('rf-ate').value);
     var uniTxt = uni || 'Todas';
     var depTxt = dep || 'Todos';
-    var sess = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'));}catch(e){return null;}})();
-    var solic = (sess && sess.displayName) ? sess.displayName : '—';
+    var solic = window.__lideresUser || '—';
     var hoje = new Date().toLocaleString('pt-BR');
 
     function _rfBlocos(p){
@@ -3482,6 +3473,533 @@ window.toggleFta = toggleFta;
     fecharModalRelFerias();
     setTimeout(function(){ w.print(); }, 400);
   };
+})();
+</script>
+
+<!-- Modal Aviso de Gozo de Férias -->
+<div class="mf-overlay" id="mf-aviso-overlay">
+  <div class="mf-modal">
+    <div class="mf-handle"></div>
+    <div class="mf-header">
+      <div>
+        <div class="mf-title">Aviso de Gozo de Férias</div>
+      </div>
+      <button class="mf-close" onclick="fecharModalAvisoFerias()">&times;</button>
+    </div>
+    <div class="mf-body">
+      <div class="mf-field" id="av-colab-row">
+        <label class="mf-label">Colaborador</label>
+        <select class="mf-select" id="av-colab" onchange="_avColabChange()"><option value="">— Selecione —</option></select>
+      </div>
+      <div class="mf-field" id="av-bloco-row">
+        <label class="mf-label">Qual período de gozo?</label>
+        <select class="mf-select" id="av-bloco"><option value="">— Selecione o colaborador acima —</option></select>
+      </div>
+      <div style="margin:-6px 0 4px;">
+        <button type="button" class="btn-link" id="av-lote-toggle" onclick="_avToggleLoteMode()">Enviar em lote (vários colaboradores)</button>
+      </div>
+      <div id="av-lote-wrap" style="display:none;">
+        <div class="mf-field">
+          <label class="mf-label">Período de gozo entre</label>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input class="mf-select" type="date" id="av-lote-periodo-ini" onchange="_avLoteAtualizarCandidatos()">
+            <span>&rarr;</span>
+            <input class="mf-select" type="date" id="av-lote-periodo-fim" onchange="_avLoteAtualizarCandidatos()">
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;">
+          <label class="mf-label" style="margin:0;">Colaboradores</label>
+          <button type="button" class="btn-link" id="av-lote-select-all" onclick="_avToggleSelecionarTodosLote()">Selecionar todos</button>
+        </div>
+        <div id="av-lote-list" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto;"></div>
+        <p id="av-lote-vazio" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:6px;display:none;">Nenhum colaborador com férias agendadas nesse período.</p>
+      </div>
+      <div class="mf-field">
+        <label class="mf-label">Data de emissão</label>
+        <input class="mf-select" type="date" id="av-data">
+      </div>
+      <div id="av-err" style="color:#C0392B;font-size:11px;min-height:14px;"></div>
+    </div>
+    <div class="mf-footer" style="display:flex;flex-direction:column;gap:8px;padding:12px 20px 20px;border-top:1px solid var(--border);">
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn--primary" onclick="fecharModalAvisoFerias()" style="flex:1;">Cancelar</button>
+        <button class="btn btn--primary" id="av-btn-pdf" onclick="gerarAvisoFeriasPDF()" style="flex:1;">
+          <span class="btn-spin"></span><span class="btn-label">Gerar PDF</span>
+        </button>
+      </div>
+      <button class="btn btn--primary btn--block" id="av-btn-assinar" onclick="enviarAvisoFeriasParaAssinatura()">
+        <span class="btn-spin"></span><span class="btn-label">Enviar para Assinatura Digital</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Aviso de Gozo de Férias — PDF A4 retrato (CLT art. 135) ──────────────
+(function(){
+  var _avColabMap = {};  // mt -> { cpf, data_admissao, nome }
+
+  function _avEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function _avFmtData(iso){ if(!iso) return '—'; var s=String(iso); if(/^\d{4}-\d{2}-\d{2}/.test(s)){ var p=s.slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; } return s; }
+  function _avFmtDataExt(iso){
+    if(!iso) return '—';
+    var s=String(iso); var d;
+    if(/^\d{4}-\d{2}-\d{2}/.test(s)){ var p=s.slice(0,10).split('-'); d=new Date(+p[0], +p[1]-1, +p[2]); }
+    else { d=new Date(s); if(isNaN(d)) return '—'; }
+    var meses=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    return d.getDate()+' de '+meses[d.getMonth()]+' de '+d.getFullYear();
+  }
+
+  function _avCarregarColabs(){
+    return new Promise(function(resolve){
+      comSupa(function(supa){
+        supa.schema('tata_plus').rpc('colaboradores_listar').then(function(r){
+          if (r.error || !r.data) { resolve({}); return; }
+          var map = {};
+          r.data.forEach(function(c){ if (c.matricula) map[String(c.matricula)] = c; });
+          resolve(map);
+        }).catch(function(){ resolve({}); });
+      });
+    });
+  }
+
+  window._avColabChange = function(){
+    var mt = document.getElementById('av-colab').value;
+    var bloco = document.getElementById('av-bloco');
+    bloco.innerHTML = '';
+    if (!mt) { bloco.innerHTML = '<option value="">— Selecione o colaborador acima —</option>'; return; }
+    var cache = (typeof _feriasCache !== 'undefined' && Array.isArray(_feriasCache)) ? _feriasCache : [];
+    // lista TODOS os blocos de gozo do colaborador, ordenados pelo início
+    var opts = [];
+    cache.filter(function(p){ return String(p.mt) === mt; }).forEach(function(p){
+      [[p.ini1,p.fim1],[p.ini2,p.fim2],[p.ini3,p.fim3]].forEach(function(b){
+        if (b[0] || b[1]) opts.push({ ini_aqui:p.ini_aqui, fim_aqui:p.fim_aqui, ini:b[0], fim:b[1] });
+      });
+    });
+    opts.sort(function(a,b){ return String(a.ini||'').localeCompare(String(b.ini||'')); });
+    if (!opts.length) { bloco.innerHTML = '<option value="">Sem gozo cadastrado</option>'; return; }
+    bloco.innerHTML = opts.map(function(o, i){
+      var val = JSON.stringify(o);
+      return '<option value="'+_avEsc(val)+'">'+_avFmtData(o.ini)+' – '+_avFmtData(o.fim)+' (aquisitivo '+_avFmtData(o.ini_aqui)+'–'+_avFmtData(o.fim_aqui)+')</option>';
+    }).join('');
+  };
+
+  window.abrirModalAvisoFerias = function(){
+    var err = document.getElementById('av-err'); err.textContent = '';
+    document.getElementById('av-data').value = new Date().toISOString().slice(0,10);
+    document.getElementById('av-bloco').innerHTML = '<option value="">— Selecione o colaborador acima —</option>';
+    _avLoteMode = false;
+    document.getElementById('av-colab-row').style.display = '';
+    document.getElementById('av-bloco-row').style.display = '';
+    document.getElementById('av-lote-wrap').style.display = 'none';
+    document.getElementById('av-lote-toggle').textContent = 'Enviar em lote (vários colaboradores)';
+    document.getElementById('av-lote-list').innerHTML = '';
+    document.getElementById('av-lote-periodo-ini').value = '';
+    document.getElementById('av-lote-periodo-fim').value = '';
+    var btnPdf = document.getElementById('av-btn-pdf');
+    if (btnPdf) btnPdf.style.display = '';
+    _avCarregarColabs().then(function(map){
+      _avColabMap = map;
+      var sel = document.getElementById('av-colab');
+      // só mostra quem tem férias agendadas (situação "agendada" — mesma lógica de _situacao() usada no resto da página)
+      var cache = (typeof _feriasCache !== 'undefined' && Array.isArray(_feriasCache)) ? _feriasCache : [];
+      var comAgendada = {};
+      cache.forEach(function(p){
+        if (typeof _situacao === 'function' && _situacao(p) === 'agendada') comAgendada[String(p.mt)] = p.nome;
+      });
+      var opts = Object.keys(comAgendada).map(function(mt){ return { mt:mt, nome: (map[mt] && map[mt].nome) || comAgendada[mt] }; });
+      opts.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
+      sel.innerHTML = '<option value="">— Selecione —</option>' + opts.map(function(o){
+        return '<option value="'+_avEsc(o.mt)+'">'+_avEsc(o.nome)+'</option>';
+      }).join('');
+      document.getElementById('mf-aviso-overlay').classList.add('open');
+    });
+  };
+  window.fecharModalAvisoFerias = function(){
+    document.getElementById('mf-aviso-overlay').classList.remove('open');
+  };
+
+  // ─── Modo em lote: vários colaboradores de uma vez, pelo período de gozo ──
+  var _avLoteMode = false;
+
+  window._avToggleLoteMode = function(){
+    _avLoteMode = !_avLoteMode;
+    document.getElementById('av-colab-row').style.display = _avLoteMode ? 'none' : '';
+    document.getElementById('av-bloco-row').style.display = _avLoteMode ? 'none' : '';
+    document.getElementById('av-lote-wrap').style.display = _avLoteMode ? '' : 'none';
+    document.getElementById('av-lote-toggle').textContent = _avLoteMode ? 'Enviar pra 1 colaborador' : 'Enviar em lote (vários colaboradores)';
+    var btnPdf = document.getElementById('av-btn-pdf');
+    if (btnPdf) btnPdf.style.display = _avLoteMode ? 'none' : '';
+    document.getElementById('av-err').textContent = '';
+    if (_avLoteMode) _avLoteAtualizarCandidatos();
+  };
+
+  // Lista quem tem um bloco de gozo "agendada" com início dentro do período
+  // escolhido — um bloco por colaborador (o primeiro que casar no período).
+  function _avCandidatosLote(periodoIni, periodoFim) {
+    var cache = (typeof _feriasCache !== 'undefined' && Array.isArray(_feriasCache)) ? _feriasCache : [];
+    var porMt = {};
+    cache.forEach(function(p){
+      [[p.ini1,p.fim1],[p.ini2,p.fim2],[p.ini3,p.fim3]].forEach(function(b){
+        if (!b[0] || porMt[String(p.mt)]) return;
+        if (periodoIni && b[0] < periodoIni) return;
+        if (periodoFim && b[0] > periodoFim) return;
+        if (typeof _situacaoBloco === 'function' && _situacaoBloco(b[0], b[1]) !== 'agendada') return;
+        porMt[String(p.mt)] = {
+          mt: String(p.mt), nome: p.nome,
+          bloco: { ini_aqui: p.ini_aqui, fim_aqui: p.fim_aqui, ini: b[0], fim: b[1] }
+        };
+      });
+    });
+    return Object.keys(porMt).map(function(mt){ return porMt[mt]; })
+      .sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); });
+  }
+
+  window._avLoteAtualizarCandidatos = function(){
+    var ini = document.getElementById('av-lote-periodo-ini').value;
+    var fim = document.getElementById('av-lote-periodo-fim').value;
+    var cands = _avCandidatosLote(ini, fim);
+    var list = document.getElementById('av-lote-list');
+    var vazio = document.getElementById('av-lote-vazio');
+    if (!cands.length) {
+      list.innerHTML = '';
+      vazio.style.display = 'block';
+    } else {
+      vazio.style.display = 'none';
+      list.innerHTML = cands.map(function(c, i){
+        var id = 'av-lote-cb-' + i;
+        return '<label for="'+id+'" style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;">'+
+          '<input type="checkbox" id="'+id+'" class="av-lote-cb" value="'+_avEsc(c.mt)+'" data-bloco="'+_avEsc(JSON.stringify(c.bloco))+'" style="margin-top:2px;">'+
+          '<span><span style="display:block;font-size:13px;font-weight:600;color:var(--text);">'+_avEsc(c.nome)+'</span>'+
+          '<span style="display:block;font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted);margin-top:2px;">'+_avFmtData(c.bloco.ini)+' – '+_avFmtData(c.bloco.fim)+'</span></span>'+
+        '</label>';
+      }).join('');
+    }
+    var btn = document.getElementById('av-lote-select-all');
+    if (btn) btn.textContent = 'Selecionar todos';
+  };
+
+  window._avToggleSelecionarTodosLote = function(){
+    var boxes = Array.from(document.querySelectorAll('.av-lote-cb'));
+    if (!boxes.length) return;
+    var marcarTodos = boxes.some(function(cb){ return !cb.checked; });
+    boxes.forEach(function(cb){ cb.checked = marcarTodos; });
+    var btn = document.getElementById('av-lote-select-all');
+    if (btn) btn.textContent = marcarTodos ? 'Limpar seleção' : 'Selecionar todos';
+  };
+
+  // CSS no mesmo padrão .rp-* dos demais termos do portal (admissao.html/doc.html
+  // — ver docs/INTEGRACAO-DOCUMENTOS.md), cópia independente (não compartilhada,
+  // mesma decisão já tomada pra doc.html).
+  var AV_RP_CSS =
+    '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}'+
+    'body{background:#CBD5E1;font-family:"DM Sans","Helvetica Neue",Arial,sans-serif;padding:32px 16px 64px;display:flex;flex-direction:column;align-items:center;gap:32px;color:#111;}'+
+    '.page{width:100%;max-width:760px;background:#fff;padding:34px 46px 44px;box-shadow:0 4px 32px rgba(0,0,0,.18);font-size:10px;line-height:1.55;color:#222;}'+
+    '.rp-header{display:flex;align-items:center;gap:16px;padding-bottom:14px;border-bottom:1.5px solid #111;margin-bottom:18px;}'+
+    '.rp-logo{width:42px;height:42px;flex-shrink:0;object-fit:contain;}'+
+    '.rp-header-title{flex:1;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#111;line-height:1.25;}'+
+    '.rp-header-right{flex-shrink:0;text-align:right;font-size:9px;color:#555;line-height:1.65;}'+
+    '.rp-header-right strong{color:#111;font-weight:700;}'+
+    '.rp-intro{display:flex;align-items:stretch;gap:10px;margin-bottom:18px;flex-wrap:wrap;}'+
+    '.rp-intro-field{display:flex;flex-direction:column;gap:4px;min-width:0;}'+
+    '.rp-intro-field.grow{flex:1;min-width:0;}'+
+    '.rp-intro-label{font-family:"DM Mono",monospace;font-size:8px;text-transform:uppercase;letter-spacing:.6px;color:#888;white-space:nowrap;}'+
+    '.rp-intro-value{background:#F4F4F4;padding:7px 12px;font-size:10.5px;font-weight:700;color:#111;border-radius:3px;}'+
+    '.rp-section{margin-bottom:16px;}'+
+    '.rp-section-label{font-family:"DM Mono",monospace;font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#34373F;padding-bottom:5px;margin-bottom:8px;border-bottom:1px solid #ddd;}'+
+    '.rp-p{font-size:10px;color:#222;line-height:1.6;text-align:justify;margin-bottom:6px;}'+
+    '.rp-p:last-child{margin-bottom:0;}'+
+    '.rp-ass-declaro{font-size:11px;font-weight:700;color:#111;margin:12px 0 4px;}'+
+    '.rp-cidade-data{font-size:11px;text-align:right;margin:20px 0 24px;color:#222;}'+
+    '@media print{'+
+    'body{background:#fff;padding:0;}'+
+    '.page{box-shadow:none;width:100%;max-width:100%;padding:24px 36px 36px;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}'+
+    '.rp-intro-value,.rp-section-label{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}'+
+    '@page{size:A4 portrait;margin:0;}'+
+    '}';
+
+  // Monta o conteúdo do .page (mesmo HTML usado tanto pra "Gerar PDF" quanto
+  // pra "Enviar para Assinatura Digital" — uma única fonte, sem duplicar texto).
+  function _avMontarBody(colab, bloco, dataEmit, cidade, dateStr) {
+    var esc = _avEsc;
+    function linha(label, valor) {
+      return '<p class="rp-p"><strong>'+esc(label)+':</strong> '+(valor ? esc(valor) : '—')+'</p>';
+    }
+    var nome = (colab.nome || '').toUpperCase();
+    var logoSrc = (document.querySelector('.logo-img')||{}).src || '';
+    return (
+      '<div class="page">' +
+        '<div class="rp-header">' +
+          (logoSrc ? '<img class="rp-logo" src="'+esc(logoSrc)+'" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' : '') +
+          '<div class="rp-header-title">Aviso de Gozo de Férias</div>' +
+          '<div class="rp-header-right">Emitido em <strong>'+esc(dateStr)+'</strong></div>' +
+        '</div>' +
+        '<div class="rp-intro">' +
+          '<div class="rp-intro-field grow">' +
+            '<span class="rp-intro-label">Colaborador</span>' +
+            '<span class="rp-intro-value">'+esc(nome||'—')+'</span>' +
+          '</div>' +
+          (colab.matricula ? (
+            '<div class="rp-intro-field">' +
+              '<span class="rp-intro-label">Matrícula</span>' +
+              '<span class="rp-intro-value">'+esc(colab.matricula)+'</span>' +
+            '</div>'
+          ) : '') +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Cargo</span>' +
+            '<span class="rp-intro-value">'+esc(colab.cargo || '—')+'</span>' +
+          '</div>' +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Unidade</span>' +
+            '<span class="rp-intro-value">'+esc(colab.unidade || '—')+'</span>' +
+          '</div>' +
+          '<div class="rp-intro-field">' +
+            '<span class="rp-intro-label">Admissão</span>' +
+            '<span class="rp-intro-value">'+_avFmtData(colab.data_admissao)+'</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="rp-section">' +
+          '<div class="rp-section-label">Aviso de Gozo de Férias — CLT art. 135</div>' +
+          '<div class="rp-section-body">' +
+            linha('CPF', colab.cpf) +
+            linha('Período aquisitivo', _avFmtData(bloco.ini_aqui) + ' a ' + _avFmtData(bloco.fim_aqui)) +
+            linha('Período de Gozo', _avFmtData(bloco.ini) + ' a ' + _avFmtData(bloco.fim)) +
+            '<p class="rp-p">O empregador, através do presente documento, e em conformidade com o art. 135 da CLT, vem notificar o empregado, com antecedência de 30 (trinta) dias, a concessão de suas férias, cujo período de gozo terá início em '+esc(_avFmtData(bloco.ini))+'.</p>' +
+            '<p class="rp-p">Em concordância com a manifestação expressa do colaborador e com o art. 134, as férias poderão ser usufruídas em até três períodos, sendo que um não poderá ser inferior a quatorze dias corridos e os demais não poderão ser inferiores a cinco dias corridos, cada um.</p>' +
+            '<p class="rp-p">As férias serão remuneradas com o acréscimo de 1/3 constitucional, se for o caso, ao abono pecuniário e ao adiantamento do 13º salário de acordo com o art. 7º, XVII da Constituição da República, e será pago até 2 (dois) dias antes do início do respectivo gozo de férias.</p>' +
+          '</div>' +
+        '</div>' +
+        '<p class="rp-ass-declaro">Declaro estar ciente da concessão de férias e do período de gozo informado acima.</p>' +
+        '<div class="rp-cidade-data">'+esc(cidade)+', '+esc(_avFmtDataExt(dataEmit))+'.</div>' +
+      '</div>'
+    );
+  }
+
+  function _avAgora() {
+    var now = new Date();
+    var pad = function(n){ return String(n).padStart(2,'0'); };
+    return pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear()+', '+pad(now.getHours())+':'+pad(now.getMinutes());
+  }
+
+  function _avLerFormulario() {
+    var mt = document.getElementById('av-colab').value;
+    var blocoRaw = document.getElementById('av-bloco').value;
+    var dataEmit = document.getElementById('av-data').value;
+    var cidade = 'São Paulo';
+    var err = document.getElementById('av-err'); err.textContent = '';
+    if (!mt) { err.textContent = 'Selecione o colaborador.'; return null; }
+    if (!blocoRaw) { err.textContent = 'Selecione o período de gozo.'; return null; }
+    if (!dataEmit) { err.textContent = 'Informe a data de emissão.'; return null; }
+    var bloco; try { bloco = JSON.parse(blocoRaw); } catch(e){ err.textContent='Período inválido.'; return null; }
+    var colab = _avColabMap[mt] || {};
+    return { colab: colab, bloco: bloco, dataEmit: dataEmit, cidade: cidade, err: err };
+  }
+
+  window.gerarAvisoFeriasPDF = function(){
+    var f = _avLerFormulario();
+    if (!f) return;
+    var nome = (f.colab.nome || '').toUpperCase();
+    var pageHtml = _avMontarBody(f.colab, f.bloco, f.dataEmit, f.cidade, _avAgora());
+
+    var html = '<!DOCTYPE html><html lang="pt-BR"><head>'+
+      '<meta charset="UTF-8">'+
+      '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+      '<title>Aviso de Gozo de Férias · '+_avEsc(nome||'—')+' · TATÁ Sushi</title>'+
+      '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">'+
+      '<style>'+AV_RP_CSS+'</style>'+
+      '</head><body>'+pageHtml+'</body></html>';
+
+    var w = window.open('', '_blank');
+    if (!w){ f.err.textContent = 'Permita pop-ups para gerar o PDF.'; return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    fecharModalAvisoFerias();
+    setTimeout(function(){ w.print(); }, 500);
+  };
+
+  // ─── Envio pro fluxo de assinatura digital do app (tata_plus.docs_*) ──────
+  // Mesmo pipeline de 3 RPCs usado por admissao.html/doc.html/beneficios.html
+  // (ver docs/INTEGRACAO-DOCUMENTOS.md): upload pro bucket assinaturas/docs/ ->
+  // pendência no portal -> docs_enviar_para_assinatura -> vínculo de volta.
+  function _avComSupaPromise() { return new Promise(function(resolve){ comSupa(resolve); }); }
+
+  function _avUuid() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  var _avTipoIdCache = null;
+  function _avCarregarTipoId() {
+    if (_avTipoIdCache) return Promise.resolve(_avTipoIdCache);
+    return _avComSupaPromise().then(function(supa) {
+      return supa.rpc('doc_tipos_listar').then(function(r) {
+        if (r.error) throw r.error;
+        var tipo = (r.data || []).find(function(t) { return t.nome === 'Aviso de Gozo de Férias'; });
+        _avTipoIdCache = tipo ? tipo.id : null;
+        return _avTipoIdCache;
+      });
+    });
+  }
+
+  // Renderiza a página num iframe isolado e converte pra Blob PDF — mesma técnica
+  // de admissao.html (_admHtmlParaPdfBlob): html2pdf precisa rodar na mesma
+  // realm do elemento que rasteriza, por isso o script é carregado dentro do
+  // próprio iframe, não na página principal.
+  function _avHtmlParaPdfBlob(pageHtml) {
+    return new Promise(function(resolve, reject) {
+      var iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:1131px;border:0;';
+      document.body.appendChild(iframe);
+      var terminado = false;
+      function cleanup() { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }
+      function terminar(fn, arg) { if (terminado) return; terminado = true; fn(arg); setTimeout(cleanup, 30000); }
+      function rasterizar(tentativas) {
+        try {
+          var win = iframe.contentWindow;
+          if (!win || !win.html2pdf) {
+            if (tentativas > 0) { setTimeout(function() { rasterizar(tentativas - 1); }, 150); return; }
+            terminar(reject, new Error('Falha ao carregar biblioteca de geração de PDF.')); return;
+          }
+          var el = iframe.contentDocument.querySelector('.page');
+          if (!el) { terminar(reject, new Error('Falha ao montar o documento.')); return; }
+          win.html2pdf().set({
+            margin: 0,
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+          }).from(el).outputPdf('blob').then(function(blob) {
+            terminar(resolve, blob);
+          }).catch(function(err) { terminar(reject, err); });
+        } catch (err) { terminar(reject, err); }
+      }
+      iframe.onload = function() { setTimeout(function() { rasterizar(20); }, 150); };
+      setTimeout(function() { terminar(reject, new Error('Tempo esgotado ao montar o documento.')); }, 15000);
+      // CSS "de tela" tem sombra/cartão flutuante pensados pro preview no navegador —
+      // pro PDF achata pro equivalente do @media print (mesmo pdfOverrides de admissao.html).
+      var pdfOverrides = '.page{box-shadow:none;max-width:100%;padding:24px 36px 36px;}'+
+        '.rp-p,.rp-intro,.rp-section{break-inside:avoid;page-break-inside:avoid;}';
+      var htmlDoc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'+
+        '<style>'+AV_RP_CSS+pdfOverrides+'body{padding:0;background:#fff;}</style></head><body>'+pageHtml+
+        '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>'+
+        '</body></html>';
+      iframe.srcdoc = htmlDoc;
+    });
+  }
+
+  // Núcleo de UM envio (gera o PDF, sobe, cria pendência, manda pra
+  // assinatura e grava o vínculo) — reaproveitado pelo modo 1 colaborador e
+  // pelo modo em lote, sem duplicar a cadeia de RPCs.
+  function _avEnviarUmAviso(colab, bloco, dataEmit, cidade, tipoId) {
+    var pageHtml = _avMontarBody(colab, bloco, dataEmit, cidade, _avAgora());
+    var nome = (colab.nome || '').toUpperCase();
+    var periodoTxt = _avFmtData(bloco.ini) + ' a ' + _avFmtData(bloco.fim);
+    return _avHtmlParaPdfBlob(pageHtml).then(function(blob) {
+      var arquivoPath = 'docs/' + _avUuid() + '.pdf';
+      var nomeArquivo = (nome || colab.matricula) + ' - Aviso de Gozo de Férias - ' + periodoTxt + '.pdf';
+      return _avComSupaPromise().then(function(supa) {
+        return supa.storage.from('assinaturas').upload(arquivoPath, blob, { upsert: true, contentType: 'application/pdf' }).then(function(rUp) {
+          if (rUp.error) throw rUp.error;
+          return supa.rpc('colaborador_documento_pendente_assinatura_salvar', {
+            p_matricula: colab.matricula, p_tipo_id: tipoId, p_nome_arquivo: nomeArquivo, p_link: arquivoPath,
+            p_mime: 'application/pdf', p_tamanho: blob.size, p_link_bucket: 'assinaturas'
+          });
+        }).then(function(rRow) {
+          if (rRow.error) throw rRow.error;
+          var linha = rRow.data;
+          var tituloVersionado = 'Aviso de Gozo de Férias — ' + periodoTxt + (linha.versao > 1 ? ' (v' + linha.versao + ')' : '');
+          return supa.schema('tata_plus').rpc('docs_enviar_para_assinatura', {
+            p_matricula: colab.matricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
+            p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
+            p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true
+          }).then(function(rEnvio) {
+            if (rEnvio.error) throw rEnvio.error;
+            var envio = rEnvio.data;
+            if (!envio || !envio.ok) throw new Error((envio && envio.erro) || 'Falha ao enviar pra assinatura.');
+            return supa.rpc('colaborador_documento_definir_atribuicao', {
+              p_id: linha.id, p_assinatura_atribuicao_id: envio.atribuicao_id
+            }).then(function(rLink) {
+              if (rLink.error) throw rLink.error;
+              return rLink.data;
+            });
+          });
+        });
+      });
+    });
+  }
+
+  window.enviarAvisoFeriasParaAssinatura = function(){
+    if (_avLoteMode) { _avEnviarAvisosLote(); return; }
+
+    var f = _avLerFormulario();
+    if (!f) return;
+    if (!f.colab.matricula) { f.err.textContent = 'Colaborador sem matrícula cadastrada — não é possível enviar.'; return; }
+
+    setBtnLoading('av-btn-assinar', true, 'Enviando…');
+    _avCarregarTipoId().then(function(tipoId) {
+      if (!tipoId) throw new Error('Tipo "Aviso de Gozo de Férias" não encontrado no catálogo (dp_rh.doc_tipos).');
+      return _avEnviarUmAviso(f.colab, f.bloco, f.dataEmit, f.cidade, tipoId);
+    }).then(function() {
+      setBtnLoading('av-btn-assinar', false, 'Enviar para Assinatura Digital');
+      fecharModalAvisoFerias();
+      alert('Aviso de Gozo de Férias enviado — pendente de assinatura.');
+    }, function(err2) {
+      setBtnLoading('av-btn-assinar', false, 'Enviar para Assinatura Digital');
+      f.err.textContent = 'Erro ao enviar: ' + (err2 && err2.message || err2);
+    });
+  };
+
+  // ── Modo em lote: processa cada colaborador marcado, um atrás do outro ──
+  function _avEnviarAvisosLote() {
+    var err = document.getElementById('av-err'); err.textContent = '';
+    var dataEmit = document.getElementById('av-data').value;
+    var cidade = 'São Paulo';
+    if (!dataEmit) { err.textContent = 'Informe a data de emissão.'; return; }
+    var boxes = Array.from(document.querySelectorAll('.av-lote-cb:checked'));
+    if (!boxes.length) { err.textContent = 'Selecione ao menos um colaborador.'; return; }
+
+    var total = boxes.length;
+    var ok = 0;
+    var erros = [];
+    setBtnLoading('av-btn-assinar', true, 'Enviando 0/' + total + '…');
+    _avCarregarTipoId().then(function(tipoId) {
+      if (!tipoId) throw new Error('Tipo "Aviso de Gozo de Férias" não encontrado no catálogo (dp_rh.doc_tipos).');
+      return boxes.reduce(function(promise, cb, idx) {
+        return promise.then(function() {
+          var colab = _avColabMap[cb.value] || {};
+          var nomeTxt = colab.nome || cb.value;
+          var bloco;
+          try { bloco = JSON.parse(cb.getAttribute('data-bloco')); } catch (e) { bloco = null; }
+          var passo = (!colab.matricula)
+            ? Promise.reject(new Error('sem matrícula cadastrada'))
+            : !bloco
+              ? Promise.reject(new Error('período de gozo inválido'))
+              : _avEnviarUmAviso(colab, bloco, dataEmit, cidade, tipoId);
+          return passo.then(function() {
+            ok++;
+          }, function(err2) {
+            erros.push(nomeTxt + ' — ' + (err2 && err2.message || err2));
+          }).then(function() {
+            setBtnLoading('av-btn-assinar', true, 'Enviando ' + (idx + 1) + '/' + total + '…');
+          });
+        });
+      }, Promise.resolve());
+    }).then(function() {
+      setBtnLoading('av-btn-assinar', false, 'Enviar para Assinatura Digital');
+      if (!erros.length) {
+        fecharModalAvisoFerias();
+        alert(ok + ' aviso(s) de gozo de férias enviado(s) — pendente(s) de assinatura.');
+      } else {
+        err.textContent = ok + ' de ' + total + ' enviado(s) com sucesso. Falha em: ' + erros.join(' · ');
+      }
+    }, function(err2) {
+      setBtnLoading('av-btn-assinar', false, 'Enviar para Assinatura Digital');
+      err.textContent = 'Erro ao enviar: ' + (err2 && err2.message || err2);
+    });
+  }
 })();
 </script>
 </body>

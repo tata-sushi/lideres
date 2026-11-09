@@ -140,10 +140,11 @@ Fonte: `docs/mapas/dp_rh.md` (mapa do schema, com as regras de leitura). Cada gr
   score de líderes, líderes responsáveis, reconhecimentos, treinamentos, premiações (sem valor), chamados de manutenção,
   **cardápio do TATÁ House** (cardápio do dia por cozinha, itens, cozinha de cada unidade, avaliações anônimas, catálogo de
   restrições — schema `tata_refeicoes`, desde 04/11).
-- **completo** — + schema `agente_restrito`, 15 visões: atas das reuniões de DP/RH, avaliações (experiência, desempenho,
+- **completo** — + schema `agente_restrito`, 16 visões: atas das reuniões de DP/RH, avaliações (experiência, desempenho,
   liderança — só o consolidado) + legado, salários por cargo, pontos da loja, banco de horas com custo, diárias de teste
   e pretensão, salário das vagas, valores de rescisão, VT, custo de estoque, custo de manutenção, premiações com valor,
-  reclamações trabalhistas, restrições alimentares de cada colaborador.
+  reclamações trabalhistas, restrições alimentares de cada colaborador, **recibos de férias com valor líquido pago**
+  (`ferias_recibos`, desde jan/2023, 07/11).
 - **Fora em qualquer nível**: ouvidoria, respostas de clima e de desligamento, CPF/telefone/e-mail, ficha da admissão.
 
 ```sql
@@ -230,6 +231,24 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
   quadro ("Outros" se nenhuma servir) e só põe responsável se a reunião disse quem faz — para o card sair pronto,
   diga o nome na hora ("Cinthia, você divulga a vaga até sexta?"). Prazo dito vira a data do card. Uma vez por
   reunião (`dp_rh.agente_reuniao_cards` liga reunião → cards); o resumo do WhatsApp diz quantas demandas foram criadas.
+- **Quem falou o quê** (`supabase/functions/agente-reuniao/vozes.ts`): além dos trechos, a página grava a reunião
+  inteira em μ-law 8 kHz (~29 MB/hora, AudioWorklet) e manda 1 pedaço por minuto (`acao: gravacao` → storage privado
+  `agente-reuniao` + `dp_rh.agente_reuniao_audio`). No fim, o áudio é separado por vozes no OpenRouter
+  (`elevenlabs/scribe-v2` com `diarize`; o `deepgram/nova-3` de lá não separa) em blocos de até 10 min, e antes de cada
+  bloco vão os trechos das vozes cadastradas (`dp_rh.agente_vozes`, até 12 s por pessoa): a voz da reunião que cai junto
+  com o trecho do Victor é o Victor. A transcrição vira "[HH:MM] Nome: …" ("Pessoa A" = voz não cadastrada; "Sam" pelos
+  intervalos em que ele falou) e é a que a ata usa (fica em `alinhamento_transcricao.transcricao`). Se a separação
+  falhar ou não houver gravação, a ata usa a transcrição ao vivo. A gravação é apagada depois da ata (as que sobrarem,
+  em 3 dias, pela varredura).
+  - **Cadastro**: rodada de nomes — automática na primeira reunião (ninguém cadastrado) e pelo botão "Rodada de nomes"
+    (alguém novo). Cada um diz "aqui é o/a <nome>" + uma frase; o nome é procurado em `agente_config.reuniao_participantes`
+    (`["Victor","Cinthia","Binho","Tito","Luzinho","Leo Young","Fabio Ferraz"]`, aceita um erro de letra). Falar na
+    rodada = consentimento (o Sam avisa); a voz é dado pessoal sensível (LGPD). Apagar a voz de alguém:
+    `delete from dp_rh.agente_vozes where nome = 'Fulano';`.
+  - **Limite conhecido**: voz não cadastrada muito parecida com uma cadastrada pode ser atribuída a ela.
+  - **Custo**: ~US$ 0,25 por hora de reunião (ElevenLabs Scribe), além da transcrição ao vivo.
+  - **Teste interno** (sem cadastrar vozes nem fazer ata): `POST …/agente-reuniao?k=<portal_secret>`
+    `{"acao":"teste_vozes","reuniao":"<id>"}` numa reunião que tenha gravação.
 - **Diagnóstico**: `dp_rh.agente_reuniao_trechos` registra cada trecho (bytes, segundos, formato, resultado
   ok/vazio/alucinacao/erro, modelo, nível do microfone medido na página, navegador). Com `reuniao_diag_audio = '1'` o
   áudio dos trechos que **não** viraram texto fica guardado e some em 3 dias (desligar: `'0'`). Na página, 3 trechos

@@ -420,3 +420,159 @@ revoke execute on function tata_plus.agente_kanban_opcoes() from public, anon, a
 grant execute on function tata_plus.agente_kanban_opcoes() to service_role;
 revoke execute on function tata_plus.agente_reuniao_criar_cards(uuid, jsonb) from public, anon, authenticated;
 grant execute on function tata_plus.agente_reuniao_criar_cards(uuid, jsonb) to service_role;
+
+-- ── 6. quem falou o quê: gravação contínua + vozes cadastradas ───────────────
+-- A página grava a reunião inteira em áudio leve (μ-law 8 kHz, ~29 MB/hora) e manda um pedaço
+-- por minuto (storage privado agente-reuniao, registro em agente_reuniao_audio). No fim, o
+-- servidor separa as vozes (elevenlabs/scribe-v2 com diarize) em blocos de até 10 min, pondo
+-- antes de cada bloco os trechos das vozes cadastradas: a voz da reunião que cai junto com o
+-- trecho do Victor é o Victor. Cadastro: rodada de nomes ("aqui é o Victor…") na primeira
+-- reunião, com consentimento falado (LGPD: voz que identifica a pessoa é dado sensível). O áudio
+-- da reunião é apagado depois da ata; fica só o trecho cadastrado de cada pessoa.
+insert into storage.buckets (id, name, public) values ('agente-reuniao', 'agente-reuniao', false)
+on conflict (id) do nothing;
+
+create table if not exists dp_rh.agente_reuniao_audio (
+  reuniao_id uuid not null references dp_rh.agente_reunioes(id) on delete cascade,
+  parte      int not null,
+  ms         int not null,             -- início do pedaço, em ms desde o começo da reunião
+  bytes      int not null,
+  caminho    text not null,            -- no storage agente-reuniao
+  criado_em  timestamptz not null default now(),
+  primary key (reuniao_id, parte)
+);
+create table if not exists dp_rh.agente_vozes (
+  nome            text primary key,
+  audio           bytea not null,      -- μ-law 8 kHz, mono, sem cabeçalho
+  segundos        numeric not null,
+  consentimento_em timestamptz not null default now(),
+  reuniao_id      uuid,
+  atualizado_em   timestamptz not null default now()
+);
+alter table dp_rh.agente_reuniao_audio enable row level security;
+alter table dp_rh.agente_vozes enable row level security;
+revoke all on dp_rh.agente_reuniao_audio, dp_rh.agente_vozes from public, anon, authenticated;
+
+insert into dp_rh.agente_config (chave, valor) values
+  ('reuniao_participantes', '["Victor", "Cinthia", "Binho", "Tito", "Luzinho", "Leo Young", "Fabio Ferraz"]'),
+  ('reuniao_modelo_vozes', 'elevenlabs/scribe-v2')
+on conflict (chave) do nothing;
+
+create or replace function tata_plus.agente_reuniao_audio_parte(p_id uuid, p_parte int, p_ms int, p_bytes int, p_caminho text)
+returns void
+language sql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  insert into dp_rh.agente_reuniao_audio (reuniao_id, parte, ms, bytes, caminho)
+  values (p_id, p_parte, p_ms, p_bytes, p_caminho)
+  on conflict (reuniao_id, parte) do update set ms = excluded.ms, bytes = excluded.bytes, caminho = excluded.caminho;
+$fn$;
+
+create or replace function tata_plus.agente_reuniao_audio_listar(p_id uuid)
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select coalesce(jsonb_agg(jsonb_build_object('parte', parte, 'ms', ms, 'bytes', bytes, 'caminho', caminho) order by parte), '[]'::jsonb)
+  from dp_rh.agente_reuniao_audio where reuniao_id = p_id;
+$fn$;
+
+-- some com os registros de áudio da reunião (os arquivos no storage a edge apaga)
+create or replace function tata_plus.agente_reuniao_audio_apagar(p_id uuid)
+returns int
+language sql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  with x as (delete from dp_rh.agente_reuniao_audio where reuniao_id = p_id returning 1) select count(*)::int from x;
+$fn$;
+
+create or replace function tata_plus.agente_vozes_listar()
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select coalesce(jsonb_agg(jsonb_build_object('nome', nome, 'segundos', segundos,
+           'audio', translate(encode(audio, 'base64'), E'\n', '')) order by nome), '[]'::jsonb)
+  from dp_rh.agente_vozes;
+$fn$;
+
+create or replace function tata_plus.agente_voz_gravar(p_nome text, p_audio text, p_segundos numeric, p_reuniao uuid)
+returns void
+language sql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  insert into dp_rh.agente_vozes (nome, audio, segundos, reuniao_id)
+  values (btrim(p_nome), decode(p_audio, 'base64'), p_segundos, p_reuniao)
+  on conflict (nome) do update set audio = excluded.audio, segundos = excluded.segundos,
+    reuniao_id = excluded.reuniao_id, consentimento_em = now(), atualizado_em = now();
+$fn$;
+
+-- transcrição com nomes (separada pelas vozes) no lugar da transcrição ao vivo
+create or replace function tata_plus.agente_reuniao_transcricao_gravar(p_id uuid, p_texto text)
+returns void
+language sql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  update dp_rh.alinhamento_transcricao set transcricao = p_texto where id_externo = 'sam-' || p_id::text;
+  update dp_rh.agente_reunioes set meta = meta || jsonb_build_object('transcricao_vozes', true) where id = p_id;
+$fn$;
+
+create or replace function tata_plus.agente_vozes_nomes()
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select coalesce(jsonb_agg(nome order by nome), '[]'::jsonb) from dp_rh.agente_vozes;
+$fn$;
+
+-- reuniões encerradas há mais de N dias que ainda têm gravação (ex.: a ata deu erro)
+create or replace function tata_plus.agente_reuniao_audio_velhas(p_dias int default 3)
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select coalesce(jsonb_agg(distinct a.reuniao_id), '[]'::jsonb)
+  from dp_rh.agente_reuniao_audio a join dp_rh.agente_reunioes r on r.id = a.reuniao_id
+  where r.status in ('concluida', 'erro') and coalesce(r.fim, r.inicio) < now() - make_interval(days => p_dias);
+$fn$;
+revoke execute on function tata_plus.agente_reuniao_audio_velhas(int) from public, anon, authenticated;
+grant execute on function tata_plus.agente_reuniao_audio_velhas(int) to service_role;
+
+-- a edge também precisa dos intervalos em que o Sam falou e das rodadas de nomes
+create or replace function tata_plus.agente_reuniao_ver(p_id uuid)
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select (to_jsonb(r) - 'meta') || jsonb_build_object(
+           'resumo_grupo', r.meta->>'resumo_grupo', 'resumo_falado', r.meta->>'resumo_falado',
+           'sam', coalesce(r.meta->'sam', '[]'::jsonb), 'rodadas', coalesce(r.meta->'rodadas', '[]'::jsonb))
+  from dp_rh.agente_reunioes r where r.id = p_id;
+$fn$;
+
+-- guarda dados extras da reunião (intervalos em que o Sam falou, rodadas de nomes)
+create or replace function tata_plus.agente_reuniao_meta(p_id uuid, p_meta jsonb)
+returns void
+language sql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  update dp_rh.agente_reunioes set meta = coalesce(meta, '{}'::jsonb) || coalesce(p_meta, '{}'::jsonb) where id = p_id;
+$fn$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'tata_plus.agente_vozes_nomes()',
+    'tata_plus.agente_reuniao_meta(uuid,jsonb)',
+    'tata_plus.agente_reuniao_audio_parte(uuid,integer,integer,integer,text)',
+    'tata_plus.agente_reuniao_audio_listar(uuid)',
+    'tata_plus.agente_reuniao_audio_apagar(uuid)',
+    'tata_plus.agente_vozes_listar()',
+    'tata_plus.agente_voz_gravar(text,text,numeric,uuid)',
+    'tata_plus.agente_reuniao_transcricao_gravar(uuid,text)'
+  ] loop
+    execute format('revoke execute on function %s from public, anon, authenticated', f);
+    execute format('grant execute on function %s to service_role', f);
+  end loop;
+end $$;

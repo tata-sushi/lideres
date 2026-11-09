@@ -1760,7 +1760,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 // Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
 var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'];
-var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
+var DRAWER_FORA_APP = ['compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
 function _pintarDrawerMeta(m) {
   var el = function(id) { return document.getElementById(id); };
@@ -1810,43 +1810,29 @@ function openDrawer() {
   }
   document.addEventListener('keydown',function(e){if(e.key==='Escape')closeDrawer();});
 
-  /* ── PREENCHIMENTO AUTOMÁTICO COM SESSÃO ── */
+  /* ── PREENCHIMENTO AUTOMÁTICO COM O NOME DE QUEM ESTÁ LOGADO (gate.js) ── */
   (function() {
-    var session = window.__lideresSession;
-    if (!session) {
-      try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-    }
-    if (!session || !session.displayName) return;
+    var nome = window.__lideresUser || '';
+    if (!nome) return;
 
     function applySession() {
-      var hu = document.getElementById('header-user');
-      if (hu) {
-      var parts = session.displayName.trim().split(/\s+/);
-      var short = parts.length > 1 ? parts[0] : parts[0];
-      hu.textContent = short;
-    }
       var lider = document.getElementById('f-lider');
       if (lider) {
-        lider.value = session.displayName;
+        lider.value = nome;
         lider.setAttribute('readonly', 'readonly');
       }
       var cargoEl = document.getElementById('f-cargo');
       if (cargoEl) {
-        if (session.cargo) cargoEl.value = session.cargo;
         // Cargo do líder pode não vir na sessão → busca no perfil do Supabase.
         _supaReady().then(function(supa){ return supa.schema('tata_plus').rpc('colaborador_logado'); })
           .then(function(res){
             var p = (res && !res.error && res.data && res.data[0]) ? res.data[0] : null;
             if (p && p.cargo) { if (!cargoEl.value) cargoEl.value = p.cargo; return; }
             return carregarColaboradores().then(function(colabs){
-              var eu = (colabs || []).find(function(c){ return c.nome === session.displayName; });
+              var eu = (colabs || []).find(function(c){ return c.nome === nome; });
               if (eu && eu.cargo && !cargoEl.value) cargoEl.value = eu.cargo;
             });
           }).catch(function(){});
-      }
-      if (session.unidade) {
-        var unid = document.getElementById('f-unidade');
-        if (unid && !unid.value) unid.value = session.unidade;
       }
     }
 
@@ -1878,7 +1864,6 @@ function openDrawer() {
         p_tipo:            dados.tipoSancao || '',
         p_dias:            dados.diasSuspensao ? parseInt(dados.diasSuspensao, 10) : null,
         p_descricao:       dados.descricao || '',
-        p_lider:           dados.lider || '',
         p_cargo_lider:     dados.cargoLider || ''
       }).then(function(res){
         if (res && res.error) console.warn('[sancoes] falha ao registrar:', res.error);
@@ -1891,12 +1876,9 @@ function openDrawer() {
     if (__colabCache) return __colabCache;
     try {
       var supa = await _supaReady();
-      var session = window.__lideresSession || JSON.parse(localStorage.getItem('lideres_session') || '{}');
-      var unidade = session && session.unidade ? session.unidade : '';
       // Colaboradores do Supabase (perfis ativos), não mais do Google Sheets.
       var resp = await supa.schema('tata_plus').rpc('colaboradores_listar');
       var rows = (resp && !resp.error && Array.isArray(resp.data)) ? resp.data : [];
-      if (unidade) rows = rows.filter(function(c){ return c.unidade === unidade; });
       __colabCache = rows.map(function(c){
         return { nome:c.nome, matricula:c.matricula, cargo:c.cargo, unidade:c.unidade,
                  departamento:c.departamento, admissao:c.data_admissao, email:c.email };
@@ -1949,30 +1931,24 @@ function openDrawer() {
     document.getElementById('form-modal').classList.add('open');
     document.body.style.overflow = 'hidden';
     // garante que o líder e unidade fiquem preenchidos mesmo se o usuário tiver limpado
-    var session = window.__lideresSession;
-    if (session && session.displayName) {
+    var nome = window.__lideresUser || '';
+    if (nome) {
       var lider = document.getElementById('f-lider');
-      if (lider) { lider.value = session.displayName; lider.setAttribute('readonly', 'readonly'); }
+      if (lider) { lider.value = nome; lider.setAttribute('readonly', 'readonly'); }
       var cargoEl = document.getElementById('f-cargo');
       if (cargoEl) {
-        if (session.cargo) cargoEl.value = session.cargo;
         // Cargo do líder pode não vir na sessão → busca no perfil do Supabase.
         _supaReady().then(function(supa){ return supa.schema('tata_plus').rpc('colaborador_logado'); })
           .then(function(res){
             var p = (res && !res.error && res.data && res.data[0]) ? res.data[0] : null;
             if (p && p.cargo) { if (!cargoEl.value) cargoEl.value = p.cargo; return; }
             return carregarColaboradores().then(function(colabs){
-              var eu = (colabs || []).find(function(c){ return c.nome === session.displayName; });
+              var eu = (colabs || []).find(function(c){ return c.nome === nome; });
               if (eu && eu.cargo && !cargoEl.value) cargoEl.value = eu.cargo;
             });
           }).catch(function(){});
       }
-      if (session.unidade) {
-        var unid = document.getElementById('f-unidade');
-        if (unid && !unid.value) unid.value = session.unidade;
-      }
     }
-    // carrega dropdown de colaboradores filtrado pela unidade
     carregarColaboradores().then(popularSelectColabs);
   }
   function closeFormModal() {
@@ -2309,8 +2285,8 @@ function openDrawer() {
 
   /* ── sessão / rate limit / log ── */
   function aiGetSession() {
-    try { return JSON.parse(localStorage.getItem('lideres_session')); }
-    catch(e) { return null; }
+    // Sessão do modelo novo: o gate.js publica o nome em window.__lideresUser (não há expiresAt).
+    return window.__lideresUser ? { displayName: window.__lideresUser } : null;
   }
   function aiCheckRate() {
     var now = Date.now();
@@ -2362,9 +2338,9 @@ function openDrawer() {
 
     // 1. valida sessão
     var session = aiGetSession();
-    if (!session || !session.displayName || !session.expiresAt || session.expiresAt < Date.now()) {
+    if (!session || !session.displayName) {
       resultEl.className = 'ai-result';
-      resultEl.textContent = 'Sessão expirada. Faça login novamente no portal antes de gerar o texto.';
+      resultEl.textContent = 'Sessão não identificada. Abra a página pelo aplicativo e tente de novo.';
       return;
     }
 

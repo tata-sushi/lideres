@@ -2189,33 +2189,27 @@ function _colabLideres()   { return _evUniqSorted(_colabs.filter(function(c){ re
 function _csUnidades()     { return _evUniqSorted(_csCargos.map(function(c){ return c.unidade; }).filter(Boolean)); }
 function _evPopulateUnidades(current) { _evPopulateCascade('ev-unidade', _csUnidades(), current || '', 'Selecione'); }
 
-// ─── Permissão de ver valores (sandbox: matrícula DEV via localStorage) ───
-function _sandboxMatricula() {
-  try { return localStorage.getItem('sandbox_matricula') || null; } catch (e) { return null; }
-}
-// Nome do usuário logado (mesma fonte do "solicitante" da Nova Solicitação)
-function _usuarioLogadoNome() {
-  var s = window.__lideresSession || (function(){ try { return JSON.parse(localStorage.getItem('lideres_session')); } catch (e) { return null; } })();
-  return (s && s.displayName) ? s.displayName : '';
-}
+// Nome do usuário logado (publicado pelo gate.js). Só para mostrar/imprimir: o autor das
+// gravações é resolvido no servidor pelo login (tata_plus.meu_nome()).
+function _usuarioLogadoNome() { return window.__lideresUser || ''; }
 function fmtValor(v) {
   // Autorizado → valor real; bloqueado → placeholder borrado (o número real nem vem do servidor)
   if (window.__podeVerValores) return v ? _fmtMoney(v) : '—';
   return '<span class="valor-oculto">R$ 0.000,00</span>';
 }
 
-// ─── SANDBOX: dados vêm do Supabase (rec_candidaturas + vagas via RPCs públicos) ───
+// ─── Dados vêm do Supabase (RPCs autenticadas; página e Valor conferidos no servidor) ───
 function loadAllData() {
   state.loading = true; state.error = null;
   showLoading();
   var SB = window.__lideresSupa;
   if (!SB) { window.addEventListener('lideres:supa', loadAllData, { once: true }); return; }
   Promise.all([
-    SB.rpc('rec_candidaturas_sandbox_listar', { p_matricula: _sandboxMatricula() }),  // máscara da pretensão/diária
-    SB.rpc('vagas_sandbox_listar', { p_matricula: _sandboxMatricula() }),   // matrícula DEV p/ testar permissão de valores
-    SB.rpc('colaboradores_sandbox_listar'),   // raiz (profiles) → líder/colaborador do modal
-    SB.rpc('cargos_salarios_sandbox_listar', { p_matricula: _sandboxMatricula() }),  // cargo + salário do modal
-    SB.rpc('rec_agenda_lideres_sandbox_listar')   // agenda fixa de entrevistas dos líderes (aba Agenda)
+    SB.rpc('rec_candidaturas_listar'),      // máscara da pretensão/diária (Valor, no servidor)
+    SB.rpc('rec_vagas_listar'),             // vagas (salários mascarados no servidor)
+    SB.rpc('rec_colaboradores_listar'),     // raiz (profiles) → líder/colaborador do modal
+    SB.rpc('rec_cargos_salarios_listar'),   // cargo + salário do modal
+    SB.rpc('rec_agenda_lideres_listar')     // agenda fixa de entrevistas dos líderes (aba Agenda)
   ]).then(function (results) {
     var res = results[0], vres = results[1], cres = results[2], csres = results[3], ares = results[4];
     agendaLideres = (ares && !ares.error && Array.isArray(ares.data)) ? ares.data : [];
@@ -3444,12 +3438,12 @@ function _aeVagaChanged(){
 function _aeSalvarVaga(){
   var SB=window.__lideresSupa; if(!SB){ alert('Supabase indisponível.'); return; }
   var id=document.getElementById('ae-v-vaga').value||null;
-  SB.rpc('rec_candidatura_vincular_vaga_sandbox', { p_id: document.getElementById('ae-id').value, p_vaga_id: id, p_por: _sandboxMatricula() }).then(function(res){
+  SB.rpc('rec_candidatura_vincular_vaga', { p_id: document.getElementById('ae-id').value, p_vaga_id: id }).then(function(res){
     if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
     closeAeModal(); loadAllData();
   }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
-// ── Aba Vaga/Candidato: edição inline (RPC rec_candidatura_sandbox_salvar) ──
+// ── Aba Vaga/Candidato: edição inline (RPC rec_candidatura_salvar) ──
 function _aeInitCandidato(r){
   document.getElementById('ae-c-nome').value       = r.nome || '';
   document.getElementById('ae-c-contato').value    = r.contato || '';
@@ -3510,10 +3504,9 @@ function _aeSalvarCandidato(){
     p_responsavel: v('ae-c-recrutador').trim(), p_pretensao: v('ae-c-pretensao').trim(),
     p_unidade: v('ae-c-unidade'), p_departamento: v('ae-c-departamento'),
     p_cargo: _cargo + (_niv?' '+_niv:''),
-    p_horario_vaga: v('ae-c-horario-vaga'),
-    p_por: _sandboxMatricula()
+    p_horario_vaga: v('ae-c-horario-vaga')
   };
-  SB.rpc('rec_candidatura_sandbox_salvar', args).then(function(res){
+  SB.rpc('rec_candidatura_salvar', args).then(function(res){
     if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
     closeAeModal(); loadAllData();
   }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
@@ -3597,8 +3590,8 @@ function _aeSalvarProcessos(){
     if(!parts.length){ alert('Selecione ao menos um tipo de processo.'); return; }
     processos='Sim: '+parts.join(', ');
   } else { processos=sit; }
-  var args={ p_id: document.getElementById('ae-id').value, p_processos: processos, p_resumo: v('ae-p-resumo').trim(), p_por: _sandboxMatricula() };
-  SB.rpc('rec_processos_sandbox_salvar', args).then(function(res){
+  var args={ p_id: document.getElementById('ae-id').value, p_processos: processos, p_resumo: v('ae-p-resumo').trim() };
+  SB.rpc('rec_processos_salvar', args).then(function(res){
     if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
     closeAeModal(); loadAllData();
   }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
@@ -3640,10 +3633,9 @@ function _aeSalvarReferencias(){
   var args={
     p_id: document.getElementById('ae-id').value,
     p_tipo_referencia: v('ae-r-tipo'),
-    p_feedback_referencia: v('ae-r-feedback').trim(),
-    p_por: _sandboxMatricula()
+    p_feedback_referencia: v('ae-r-feedback').trim()
   };
-  SB.rpc('rec_referencias_sandbox_salvar', args).then(function(res){
+  SB.rpc('rec_referencias_salvar', args).then(function(res){
     if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
     closeAeModal(); loadAllData();
   }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
@@ -3774,7 +3766,7 @@ function _aeSalvarEntrevistas(){
   for(var i=0; document.getElementById('ae-ent-'+i+'-data'); i++){
     var e=_aeEntList[i], data=v('ae-ent-'+i+'-data'), existing=e&&e.id;
     if(!existing && !data) continue;   // slot sem filha e sem data → ignora
-    calls.push({ rpc:'rec_entrevista_sandbox_salvar', args:{
+    calls.push({ rpc:'rec_entrevista_salvar', args:{
       p_entrevista_id: existing ? e.id : null,
       p_candidatura_id: candId,
       p_data: data||null,
@@ -3782,8 +3774,7 @@ function _aeSalvarEntrevistas(){
       p_entrevistador: v('ae-ent-'+i+'-entrevistador'),
       p_status: v('ae-ent-'+i+'-status'),
       p_selecionado: sel,
-      p_observacoes: v('ae-ent-'+i+'-obs').trim(),
-      p_por: _sandboxMatricula()
+      p_observacoes: v('ae-ent-'+i+'-obs').trim()
     }});
   }
   _aeRunSaves(calls);
@@ -3793,15 +3784,15 @@ function _aeSalvarTestes(){
   function v(id){ return (document.getElementById(id)||{}).value||''; }
   function _money(x){ x=String(x||'').replace(/R\$|\s|\./g,'').replace(',','.'); var nn=parseFloat(x); return isNaN(nn)?null:nn; }
   var candId=document.getElementById('ae-id').value, calls=[];
-  var cam=v('ae-t-camiseta'); if(cam) calls.push({ rpc:'rec_camiseta_sandbox_salvar', args:{ p_id:candId, p_camiseta:cam, p_por:_sandboxMatricula() }});
+  var cam=v('ae-t-camiseta'); if(cam) calls.push({ rpc:'rec_camiseta_salvar', args:{ p_id:candId, p_camiseta:cam }});
   for(var i=0; document.getElementById('ae-t-'+i+'-data'); i++){
     var d=_aeTesteList[i], data=v('ae-t-'+i+'-data'), existing=d&&d.id;
     if(existing && !data){ // dia salvo com data limpa → excluir
-      calls.push({ rpc:'rec_teste_dia_excluir', args:{ p_dia_id:d.id, p_candidatura_id:candId, p_por:_sandboxMatricula() }});
+      calls.push({ rpc:'rec_teste_dia_excluir', args:{ p_dia_id:d.id, p_candidatura_id:candId }});
       continue;
     }
     if(!existing && !data) continue;
-    calls.push({ rpc:'rec_teste_sandbox_salvar', args:{
+    calls.push({ rpc:'rec_teste_salvar', args:{
       p_candidatura_id: candId,
       p_dia_id: existing ? d.id : null,
       p_data_teste: data||null,
@@ -3810,8 +3801,7 @@ function _aeSalvarTestes(){
       p_valor_diaria: window.__podeVerValores ? _money(v('ae-t-'+i+'-valor')) : null,
       p_status: v('ae-t-'+i+'-status'),
       p_responsavel: v('ae-t-'+i+'-responsavel'),
-      p_recibo_status: v('ae-t-'+i+'-recibo'),
-      p_por: _sandboxMatricula()
+      p_recibo_status: v('ae-t-'+i+'-recibo')
     }});
   }
   _aeRunSaves(calls);
@@ -3821,7 +3811,7 @@ function _aeInitFinal(r){ _aeSetSelect('ae-f-status', (r.status_final && r.statu
 function _aeSalvarFinal(){
   var st=(document.getElementById('ae-f-status')||{}).value||'';
   if(!st){ alert('Selecione o status final.'); return; }
-  _aeRunSaves([{ rpc:'rec_status_final_sandbox_salvar', args:{ p_id:document.getElementById('ae-id').value, p_status_final:st, p_por:_usuarioLogadoNome() }}]);
+  _aeRunSaves([{ rpc:'rec_status_final_salvar', args:{ p_id:document.getElementById('ae-id').value, p_status_final:st }}]);
 }
 function closeAeModal(){ document.getElementById('ae-overlay').classList.remove('active'); document.body.style.overflow=''; }
 
@@ -3930,7 +3920,7 @@ function _loadEvColaboradores(callback) {
   if (_evColaboradoresTodos) { _evColaboradores = _evColaboradoresTodos; callback(_evColaboradores); return; }
   var SB = window.__lideresSupa;
   if (!SB) { _evColaboradores = _colabNomes(); callback(_evColaboradores); return; }
-  SB.rpc('colaboradores_anteriores_sandbox_listar').then(function(res) {
+  SB.rpc('colaboradores_anteriores_listar').then(function(res) {
     if (res && !res.error && Array.isArray(res.data) && res.data.length) {
       _evColaboradoresTodos = _evUniqSorted(res.data.map(function(c){ return c.nome; }).filter(Boolean));
     } else {
@@ -4512,7 +4502,7 @@ function salvarEditVaga() {
   };
   var SB = window.__lideresSupa;
   if (!SB) { setBtnLoading(btn, false, 'Salvar'); alert('Supabase indisponível'); return; }
-  SB.rpc('vagas_sandbox_salvar', args).then(function(res) {
+  SB.rpc('rec_vagas_salvar', args).then(function(res) {
     setBtnLoading(btn, false, 'Salvar');
     if (res.error) { alert('Erro ao salvar: ' + res.error.message); return; }
     closeEditVaga();
@@ -4529,7 +4519,7 @@ function excluirVaga() {
   setBtnLoading(btn, true, 'Excluindo…');
   var SB = window.__lideresSupa;
   if (!SB) { setBtnLoading(btn, false, 'Excluir vaga'); alert('Supabase indisponível'); return; }
-  SB.rpc('vagas_sandbox_excluir', { p_id: id }).then(function(res) {
+  SB.rpc('rec_vagas_excluir', { p_id: id }).then(function(res) {
     setBtnLoading(btn, false, 'Excluir vaga');
     if (res.error) { alert('Erro ao excluir: ' + res.error.message); return; }
     if (res.data !== true) { alert('Vaga não encontrada.'); return; }
@@ -4719,10 +4709,9 @@ function salvarNovoCandidato() {
     p_entrevistador:   document.getElementById('nc-entrevistador').value,
     p_selecionado:     document.getElementById('nc-selecionado').value,
     // status inicial só no cadastro; na edição preserva o status atual
-    p_status_entrevista: _editando ? null : 'Aguardando Entrevista',
-    p_por: _sandboxMatricula()
+    p_status_entrevista: _editando ? null : 'Aguardando Entrevista'
   };
-  SB.rpc('rec_candidatura_sandbox_salvar', args).then(function(res){
+  SB.rpc('rec_candidatura_salvar', args).then(function(res){
     setBtnLoading(btn, false, _label);
     if (res.error) { alert('Erro ao salvar:\n' + res.error.message); return; }
     closeNovoCandidato();
@@ -4834,10 +4823,9 @@ function salvarEditarTeste() {
     p_horario:      document.getElementById('et-horario').value.trim(),
     p_horario_saida: document.getElementById('et-horario-saida').value.trim(),
     p_valor_diaria: window.__podeVerValores ? _money(document.getElementById('et-valor').value) : null,
-    p_status:       document.getElementById('et-status').value,
-    p_por: _sandboxMatricula()
+    p_status:       document.getElementById('et-status').value
   };
-  SB.rpc('rec_teste_sandbox_salvar', args).then(function(res){
+  SB.rpc('rec_teste_salvar', args).then(function(res){
     setBtnLoading(btn, false, 'Salvar');
     if (res.error) { alert('Erro ao salvar:\n'+res.error.message); return; }
     closeEditarTeste(); loadAllData();
@@ -5000,7 +4988,7 @@ function _agFmtHorario(h){
 }
 function _agRecarregar() {
   var SB = window.__lideresSupa; if (!SB) return;
-  SB.rpc('rec_agenda_lideres_sandbox_listar').then(function(res){
+  SB.rpc('rec_agenda_lideres_listar').then(function(res){
     agendaLideres = (res && !res.error && Array.isArray(res.data)) ? res.data : [];
     renderAgendaLideres();
   });
@@ -5042,7 +5030,7 @@ function salvarAgenda() {
     alert('Preencha unidade, departamento e líder.');
     return;
   }
-  SB.rpc('rec_agenda_lideres_sandbox_salvar', args).then(function(res){
+  SB.rpc('rec_agenda_lideres_salvar', args).then(function(res){
     if (res && res.error) { alert('Erro ao salvar.'); return; }
     closeAgendaModal(); _agRecarregar();
   });
@@ -5053,7 +5041,7 @@ function excluirAgenda(id) {
   if (!aid) return;
   if (!window.confirm('Excluir esta linha da agenda?')) return;
   var SB = window.__lideresSupa; if (!SB) return;
-  SB.rpc('rec_agenda_lideres_sandbox_excluir', { p_id:aid }).then(function(res){
+  SB.rpc('rec_agenda_lideres_excluir', { p_id:aid }).then(function(res){
     if (res && res.error) { alert('Erro ao excluir.'); return; }
     closeAgendaModal(); _agRecarregar();
   });
@@ -6005,8 +5993,8 @@ function salvarAvaliacao() {
   setBtnLoading(btnSalvar, true, 'Salvando…');
 
   // status_teste (líder) + carimba devolutiva nos dias sem status. Vínculo de vaga fica p/ go-live (falta coluna vaga_id).
-  SB.rpc('rec_devolutiva_teste_sandbox', {
-    p_id: d.id, p_status: valor, p_obs: obs, p_por: _sandboxMatricula(), p_proximo_teste: proximoTeste || null
+  SB.rpc('rec_devolutiva_teste', {
+    p_id: d.id, p_status: valor, p_obs: obs, p_proximo_teste: proximoTeste || null
   }).then(function(res) {
     setBtnLoading(btnSalvar, false, 'Salvar');
     if (res.error) { alert('Erro ao salvar:\n' + res.error.message); return; }
@@ -6171,13 +6159,12 @@ function salvarEntrevista() {
   setBtnLoading(btnSalvar, true, 'Salvando…');
 
   // status_entrevista + feedback + referências. Vínculo de vaga fica p/ go-live (falta coluna vaga_id).
-  SB.rpc('rec_devolutiva_entrevista_sandbox', {
+  SB.rpc('rec_devolutiva_entrevista', {
     p_id: d.id, p_status: status, p_feedback: feedback,
     p_ref1_nome: ref1nome, p_ref1_tel: ref1tel,
     p_ref2_nome: ref2nome, p_ref2_tel: ref2tel,
     p_sem_referencia: (aprovado && semRef),
     p_ref_obs: (aprovado && semRef) ? semRefObs : null,
-    p_por: _sandboxMatricula(),
     p_entrevista_id: d.ent_id || null
   }).then(function(res) {
     setBtnLoading(btnSalvar, false, 'Enviar feedback');
@@ -6219,7 +6206,7 @@ function loadDrawerKPIs() {
 // Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
 var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'];
-var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
+var DRAWER_FORA_APP = ['compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
 function _pintarDrawerMeta(m) {
   var el = function(id) { return document.getElementById(id); };
@@ -6293,8 +6280,7 @@ function gerarRelatorioVagas() {
     return (a.cargo || '').toLowerCase() < (b.cargo || '').toLowerCase() ? -1 : 1;
   });
 
-  var sess = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'));}catch(e){return null;}})();
-  var solicitante = (sess && sess.displayName) ? sess.displayName : '—';
+  var solicitante = window.__lideresUser || '—';
   var hoje = new Date().toLocaleString('pt-BR');
 
   var unidadesSet = {}, deptosSet = {};
@@ -6455,8 +6441,7 @@ function gerarRelatorioTestes() {
 
   if (!listaSemana.length) { alert('Nenhum teste na semana ' + _relTestesFmtBR(ini) + ' – ' + _relTestesFmtBR(fim) + '.'); return; }
 
-  var sess = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'));}catch(e){return null;}})();
-  var solicitante = (sess && sess.displayName) ? sess.displayName : '—';
+  var solicitante = window.__lideresUser || '—';
   var hoje = new Date().toLocaleString('pt-BR');
 
   // ── deriva status do recibo (OK / Pendente / Unidade) ──
@@ -6866,14 +6851,6 @@ function hardRefresh() {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 setTab('sobre');
 loadAllData();
-(function(){
-  var s = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'))}catch(e){return null}})();
-  if (s && s.displayName) {
-    var parts = s.displayName.trim().split(/\s+/);
-    var short = parts.length > 1 ? parts[0] : parts[0];
-    var hu = document.getElementById('header-user'); if (hu) hu.textContent = short;
-  }
-})();
 
 // ─── NOVA SOLICITAÇÃO ─────────────────────────────────────────────────────────
 // AppScript removido. A Solicitação será migrada para o Supabase; até lá o modal fica desativado.
@@ -6882,8 +6859,7 @@ function openNovaSolicitacao() {
   var now = new Date();
   var pad = function(n){ return String(n).padStart(2,'0'); };
   document.getElementById('ns-data').value = pad(now.getDate()) + '/' + pad(now.getMonth()+1) + '/' + now.getFullYear();
-  var sess = window.__lideresSession || (function(){try{return JSON.parse(localStorage.getItem('lideres_session'));}catch(e){return null;}})();
-  document.getElementById('ns-solicitante').value = (sess && sess.displayName) ? sess.displayName : '';
+  document.getElementById('ns-solicitante').value = window.__lideresUser || '';
   document.getElementById('ns-unidade').value = '';
   document.getElementById('ns-departamento').value = '';
   document.getElementById('ns-tipo').value = '';

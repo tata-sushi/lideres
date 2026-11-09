@@ -774,33 +774,12 @@ var ARMARIOS_CONFIG = {
    INIT
    ════════════════════════════════════════════════ */
 function initApp() {
-  var session = window.__lideresSession || null;
-  if (!session) {
-    try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {}
-  }
-  if (!session || !session.displayName) { window.addEventListener('lideres:sessao', initApp, { once: true }); return; }
+  var nome = window.__lideresUser || '';
+  if (!nome) { window.addEventListener('lideres:sessao', initApp, { once: true }); return; }
 
-  var parts = session.displayName.trim().split(/\s+/);
-  currentUser = {
-    name:     session.displayName,
-    short:    parts.length > 1 ? parts[0] : parts[0],
-    initials: parts.map(function(p){return p[0];}).join('').slice(0,2).toUpperCase(),
-    type:     (session.perfil || 'admin').toLowerCase(),
-    unit:     session.unidade || null
-  };
-
-  var _hu = document.getElementById('header-user'); if (_hu) _hu.textContent = currentUser.short;
-
-  // Se líder, restringir tabs à unidade
-  if (currentUser.type === 'lider' && currentUser.unit) {
-    document.querySelectorAll('#unit-tabs .tab-btn').forEach(function(btn) {
-      var txt = btn.textContent.trim();
-      if (txt !== 'Geral' && txt !== currentUser.unit) btn.style.display = 'none';
-    });
-    setUnitFilter(currentUser.unit, null);
-    var unidSel = document.getElementById('f-unidade');
-    if (unidSel) { unidSel.value = currentUser.unit; }
-  }
+  // Só o nome é usado (mostrar/imprimir). Quem decide o que a pessoa vê e faz é a camada de
+  // acesso (data-aba-id) e o servidor (armario_pode_gerir); o autor das gravações vem do login.
+  currentUser = { name: nome };
 
   // Revelar app
   document.getElementById('app').classList.add('visible');
@@ -1095,9 +1074,6 @@ function onTipoChange() {
   armField.style.display = '';
   armRow.style.gridTemplateColumns = '';
 
-  var isLider = currentUser && currentUser.type === 'lider' && currentUser.unit;
-  var isAdmin = currentUser && currentUser.type === 'admin';
-
   // Unidade vem pré-preenchida (do líder, ou do colaborador selecionado), mas sempre
   // editável — trava impedia trocar/atribuir armário quando a unidade do colaborador
   // não batia certinho com a base, ou quando era preciso escolher outra unidade.
@@ -1108,28 +1084,28 @@ function onTipoChange() {
     // Mantém a linha (com unidade), esconde só o campo do armário
     armField.style.display           = 'none';
     armRow.style.gridTemplateColumns = '1fr';
-    unidSel.value    = isLider ? currentUser.unit : '';
+    unidSel.value    = '';
   } else if (tipo === 'excluir') {
     rowColab.style.display   = 'none';
     rowNovo.style.display    = 'none';
     rowNovoNum.style.display = 'none';
-    unidSel.value    = isLider ? currentUser.unit : '';
+    unidSel.value    = '';
   } else if (tipo === 'manut' || tipo === 'liberar_manut') {
     rowColab.style.display   = 'none';
     rowNovo.style.display    = 'none';
     rowNovoNum.style.display = 'none';
-    unidSel.value = isLider ? currentUser.unit : '';
+    unidSel.value = '';
   } else if (tipo === 'trocar') {
     rowColab.style.display   = 'grid';
     rowNovo.style.display    = 'grid';
     rowNovoNum.style.display = 'none';
-    unidSel.value = isLider ? currentUser.unit : '';
+    unidSel.value = '';
   } else {
     // atribuir/recolher
     rowColab.style.display   = 'grid';
     rowNovo.style.display    = 'none';
     rowNovoNum.style.display = 'none';
-    unidSel.value = isLider ? currentUser.unit : '';
+    unidSel.value = '';
   }
   unidSel.disabled = false;
 
@@ -1291,11 +1267,9 @@ function bgCloseInfo(e) {
    ════════════════════════════════════════════════ */
 function carregarColaboradores() {
   if (__colabCache) return Promise.resolve(__colabCache);
-  var isAdmin = currentUser && (currentUser.type === 'admin' || currentUser.type === 'analista-rh');
-  var unit = (!isAdmin && currentUser && currentUser.unit) ? currentUser.unit : '';
   return new Promise(function(resolve){
     comSupa(function(supa){
-      supa.schema('tata_plus').rpc('armario_colaboradores', { p_unidade: unit || null }).then(function(res){
+      supa.schema('tata_plus').rpc('armario_colaboradores', { p_unidade: null }).then(function(res){
         __colabCache = (!res.error && Array.isArray(res.data)) ? res.data : [];
         resolve(__colabCache);
       }, function(){ __colabCache = []; resolve(__colabCache); });
@@ -1316,10 +1290,9 @@ function onColabInput() {
   var v     = document.getElementById('f-colab').value;
   var match = __colabCache.find(function(c){ return c.nome === v; });
   var unidSel = document.getElementById('f-unidade');
-  var isLider = currentUser && currentUser.type === 'lider' && currentUser.unit;
   if (match) {
     document.getElementById('f-matricula').value = match.matricula || '';
-    if (!isLider && match.unidade) {
+    if (match.unidade) {
       var unidNorm = __UNIT_NORM[match.unidade.trim()] || match.unidade.trim();
       unidSel.value = unidNorm;
     }
@@ -1405,7 +1378,6 @@ function doSubmit() {
       colaborador: '',
       matricula:   '',
       obs:         document.getElementById('f-obs').value.trim(),
-      responsavel: currentUser ? currentUser.name : '',
       data:        document.getElementById('f-data').value,
       timestamp:   new Date().toISOString()
     };
@@ -1443,7 +1415,6 @@ function doSubmit() {
       colaborador: armDel.colaborador || '',
       matricula:   armDel.matricula || '',
       obs:         document.getElementById('f-obs').value.trim(),
-      responsavel: currentUser ? currentUser.name : '',
       data:        document.getElementById('f-data').value,
       timestamp:   new Date().toISOString()
     };
@@ -1499,7 +1470,6 @@ function doSubmit() {
     colaborador: (tipo === 'atribuir') ? colab : '',
     matricula:   (tipo === 'atribuir') ? mat   : '',
     obs:         document.getElementById('f-obs').value.trim(),
-    responsavel: currentUser ? currentUser.name : '',
     data:        document.getElementById('f-data').value,
     timestamp:   new Date().toISOString()
   };
@@ -1714,7 +1684,7 @@ function _armCarregarTipoArmario() {
   if (_armDocTipoIdCache) return Promise.resolve(_armDocTipoIdCache);
   return new Promise(function(resolve, reject) {
     comSupa(function(supa) {
-      supa.rpc('doc_tipos_sandbox_listar').then(function(r) {
+      supa.rpc('doc_tipos_listar').then(function(r) {
         if (r.error) { reject(r.error); return; }
         var t = (r.data || []).find(function(x) { return x.nome === 'Termo de Resp. Armário e Vestiário'; });
         if (!t) { reject(new Error('Tipo "Termo de Resp. Armário e Vestiário" não encontrado no catálogo (dp_rh.doc_tipos).')); return; }
@@ -1744,9 +1714,9 @@ function _armEnviarTermoDigital(p, arm) {
         comSupa(function(supa) {
           supa.storage.from('assinaturas').upload(arquivoPath, blob, { upsert: true, contentType: 'application/pdf' }).then(function(rUp) {
             if (rUp.error) throw rUp.error;
-            return supa.rpc('colaborador_documento_pendente_assinatura_sandbox_salvar', {
+            return supa.rpc('colaborador_documento_pendente_assinatura_salvar', {
               p_matricula: p.matricula, p_tipo_id: tipoId, p_nome_arquivo: nomeArquivo, p_link: arquivoPath,
-              p_mime: 'application/pdf', p_tamanho: blob.size, p_enviado_por: currentUser ? currentUser.name : p.matricula,
+              p_mime: 'application/pdf', p_tamanho: blob.size,
               p_link_bucket: 'assinaturas'
             });
           }).then(function(rRow) {
@@ -1756,13 +1726,12 @@ function _armEnviarTermoDigital(p, arm) {
             return supa.schema('tata_plus').rpc('docs_enviar_para_assinatura', {
               p_matricula: p.matricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
               p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
-              p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true,
-              p_atribuido_por: currentUser ? currentUser.name : p.matricula
+              p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true
             }).then(function(rEnvio) {
               if (rEnvio.error) throw rEnvio.error;
               var envio = rEnvio.data;
               if (!envio || !envio.ok) throw new Error((envio && envio.erro) || 'Falha ao enviar pra assinatura.');
-              return supa.rpc('colaborador_documento_definir_atribuicao_sandbox', {
+              return supa.rpc('colaborador_documento_definir_atribuicao', {
                 p_id: linha.id, p_assinatura_atribuicao_id: envio.atribuicao_id
               });
             });
@@ -1962,7 +1931,7 @@ function loadDrawerKPIs() {
 // Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
 var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'];
-var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
+var DRAWER_FORA_APP = ['compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
 function _pintarDrawerMeta(m) {
   var el = function(id) { return document.getElementById(id); };

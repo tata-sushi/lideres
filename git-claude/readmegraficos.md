@@ -2,11 +2,11 @@
 
 Guia operacional para configurar **KPIs, charts SVG, tabelas e cross-filtering** em qualquer página dashboard do portal. Padrões extraídos e validados em `acessorapido/bancodehoras.html` — copiar/colar EXATAMENTE.
 
-Outros readmes relacionados: header/footer em `readmehefdash.md`, layout geral em `readmedash.md`, auth em `readmeauth.md`.
+Outros readmes relacionados: header/footer em `readmehefdash.md`, layout geral em `readmedash.md`, acesso na skill `controle-de-acessos-e-visibilidade`.
 
 ## 1. Escopo
 
-Aplicar quando a página tem **dados operacionais visualizados** — KPIs no topo, charts no meio, tabela embaixo, com filtros e cross-filter entre componentes. Não usar para páginas de menu/hub (`readmemenu.md`) nem formulários puros.
+Aplicar quando a página tem **dados operacionais visualizados** — KPIs no topo, charts no meio, tabela embaixo, com filtros e cross-filter entre componentes. Não usar para páginas de menu/hub (`CLAUDE.md` §3–5) nem formulários puros.
 
 Exemplos canônicos (estado atual):
 

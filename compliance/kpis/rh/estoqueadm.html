@@ -1282,7 +1282,7 @@ function loadDrawerKPIs() {
 // Guarda o resultado 12h no localStorage: a API do GitHub sem login aceita 60 consultas/hora por IP.
 var GITHUB_TREE_URL = 'https://api.github.com/repos/tata-sushi/lideres/git/trees/main?recursive=1';
 var DRAWER_DASH_EXTRA = ['compliance/ps.html', 'compliance/auditoria/docsrh.html', 'compliance/auditoria/paginas.html'];
-var DRAWER_FORA_APP = ['compliance/areas/organograma2.html', 'compliance/areas/rh/ouvidoria-qrcode.html'];
+var DRAWER_FORA_APP = ['compliance/areas/rh/ouvidoria-qrcode.html'];
 var _drawerMetaLoaded = false;
 function _pintarDrawerMeta(m) {
   var el = function(id) { return document.getElementById(id); };
@@ -1342,50 +1342,22 @@ function fetchJSON(url, ms) {
     .finally(function(){ clearTimeout(timer); });
 }
 function initApp() {
-  // Sessão vem do gate.js (window.__lideresSession); fallback pro localStorage antigo.
-  var session = window.__lideresSession || null;
-  if (!session) { try { session = JSON.parse(localStorage.getItem('lideres_session')); } catch(e) {} }
+  // Nome de quem está logado, publicado pelo gate.js (window.__lideresUser).
+  var nome = window.__lideresUser || '';
 
   // Sessão ainda não chegou (gate.js é assíncrono, entrega via window.__lideresSession
   // e evento 'lideres:sessao'): espera o evento em vez de redirecionar pro index.
-  if (!session || !session.displayName) {
+  if (!nome) {
     window.addEventListener('lideres:sessao', initApp, { once: true });
     return;
   }
 
-  // Perfil do logado vem do Supabase (profiles) — substitui o "mapa de liderança" do Sheets.
-  comSupa(function(supa) {
-    supa.schema('tata_plus').rpc('colaborador_logado')
-      .then(function(res) {
-        var p = (res && !res.error && res.data && res.data[0]) ? res.data[0] : null;
-        _inicializar(session, p);
-      })
-      .catch(function() { _inicializar(session, null); });
-  });
+  _inicializar(nome);
 }
 
-function _inicializar(session, perfil) {
-  var info = perfil
-    ? { unit: perfil.unidade, type: perfil.perfil || session.perfil || 'lider', role: perfil.cargo || session.cargo || 'Líder' }
-    : { unit: session.unidade || null, type: session.perfil || 'lider', role: session.cargo || 'Líder' };
-  var parts = session.displayName.trim().split(/\s+/);
-  var short = parts.length > 1 ? parts[0] : parts[0];
-  var initials = parts.map(function(p){ return p[0]; }).join('').slice(0, 2).toUpperCase();
-
-  var u = {
-    name:     session.displayName,
-    short:    short,
-    initials: initials,
-    role:     info.role,
-    type:     info.type,
-    unit:     info.unit
-  };
-  currentUser = u;
-
-  // App revelado após filtro aplicado (loading screen cobre tudo)
-
-  var hu = document.getElementById('header-user');
-  if (hu) hu.textContent = u.short;
+function _inicializar(nome) {
+  // Só o nome é usado (mostrar/imprimir); o autor das gravações vem do login, no servidor.
+  currentUser = { name: nome };
 
   // A visibilidade das abas de unidade vem SÓ do painel admin (gate.js / data-aba-id).
   // A restrição automática antiga (perfil de líder → só a própria unidade, vinda do
@@ -1401,22 +1373,6 @@ function _inicializar(session, perfil) {
 function hideLoading() {
   var el = document.getElementById('loading-overlay');
   if (el) el.classList.remove('show');
-}
-
-function toggleMenu(e) {
-  e.stopPropagation();
-  document.getElementById('profile-menu').classList.toggle('open');
-}
-
-document.addEventListener('click', function() {
-  var m = document.getElementById('profile-menu');
-  if (m) m.classList.remove('open');
-});
-
-function doLogout() {
-  document.getElementById('profile-menu')?.classList.remove('open');
-  localStorage.removeItem('lideres_session');
-  window.location.href = 'index.html';
 }
 
 /* ══ DATA ══ */
@@ -2005,8 +1961,7 @@ function doSubmit() {
                     ? document.getElementById('f-colab-text').value
                     : document.getElementById('f-colab').value),
     matricula:    document.getElementById('f-matricula').value,
-    tipo:         document.getElementById('f-tipo').value,
-    responsavel:  currentUser ? currentUser.name : ''
+    tipo:         document.getElementById('f-tipo').value
   };
 
   if (!meta.unidade) { showToast('Selecione a unidade.', true); return; }
@@ -2332,7 +2287,7 @@ function _estCarregarTipoRecibo() {
   if (_estDocTipoIdCache) return Promise.resolve(_estDocTipoIdCache);
   return new Promise(function(resolve, reject) {
     comSupa(function(supa) {
-      supa.rpc('doc_tipos_sandbox_listar').then(function(r) {
+      supa.rpc('doc_tipos_listar').then(function(r) {
         if (r.error) { reject(r.error); return; }
         var t = (r.data || []).find(function(x) { return x.nome === "Termo de Recebimento de Uniformes e EPI's"; });
         if (!t) { reject(new Error("Tipo \"Termo de Recebimento de Uniformes e EPI's\" não encontrado no catálogo (dp_rh.doc_tipos).")); return; }
@@ -2354,9 +2309,9 @@ function _estEnviarTermoDigital(m, rows) {
         comSupa(function(supa) {
           supa.storage.from('assinaturas').upload(arquivoPath, blob, { upsert: true, contentType: 'application/pdf' }).then(function(rUp) {
             if (rUp.error) throw rUp.error;
-            return supa.rpc('colaborador_documento_pendente_assinatura_sandbox_salvar', {
+            return supa.rpc('colaborador_documento_pendente_assinatura_salvar', {
               p_matricula: m.matricula, p_tipo_id: tipoId, p_nome_arquivo: nomeArquivo, p_link: arquivoPath,
-              p_mime: 'application/pdf', p_tamanho: blob.size, p_enviado_por: currentUser ? currentUser.name : m.matricula,
+              p_mime: 'application/pdf', p_tamanho: blob.size,
               p_link_bucket: 'assinaturas'
             });
           }).then(function(rRow) {
@@ -2366,13 +2321,12 @@ function _estEnviarTermoDigital(m, rows) {
             return supa.schema('tata_plus').rpc('docs_enviar_para_assinatura', {
               p_matricula: m.matricula, p_tipo: 'pdf', p_titulo: tituloVersionado,
               p_arquivo_path: arquivoPath, p_declaracao: 'Li e assino o documento acima.',
-              p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true,
-              p_atribuido_por: currentUser ? currentUser.name : m.matricula
+              p_referencia_externa: linha.id, p_exige_rubrica: true, p_exige_selfie: true
             }).then(function(rEnvio) {
               if (rEnvio.error) throw rEnvio.error;
               var envio = rEnvio.data;
               if (!envio || !envio.ok) throw new Error((envio && envio.erro) || 'Falha ao enviar pra assinatura.');
-              return supa.rpc('colaborador_documento_definir_atribuicao_sandbox', {
+              return supa.rpc('colaborador_documento_definir_atribuicao', {
                 p_id: linha.id, p_assinatura_atribuicao_id: envio.atribuicao_id
               });
             });

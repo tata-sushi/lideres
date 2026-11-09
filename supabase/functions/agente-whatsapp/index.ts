@@ -88,6 +88,10 @@ function lerWebhook(p: any): { ok: true; e: Entrada } | { ok: false; motivo: str
   const m = p?.message ?? p?.data?.message ?? p?.data ?? {};
   if (m.fromMe === true || m.key?.fromMe === true || m.wasSentByApi === true) return { ok: false, motivo: "proprio" };
 
+  // reação (👍 numa mensagem), edição, apagar: não é pergunta
+  const tipo = String(m.messageType ?? m.type ?? "");
+  if (/reaction|protocol|revoke|edited/i.test(tipo) || m.reaction || m.content?.reactionMessage) return { ok: false, motivo: "reacao:" + tipo };
+
   const chatId = String(m.chatid ?? m.key?.remoteJid ?? p?.chat?.wa_chatid ?? "");
   const grupo = m.isGroup === true || chatId.endsWith("@g.us");
   const c = typeof m.content === "object" && m.content ? m.content : {};
@@ -96,6 +100,8 @@ function lerWebhook(p: any): { ok: true; e: Entrada } | { ok: false; motivo: str
     m.text ?? (typeof m.content === "string" ? m.content : c.text ?? c.conversation) ?? m.body ?? m.conversation ?? "",
   ).trim();
   if (!texto) return { ok: false, motivo: "sem_texto:" + String(m.messageType ?? m.type ?? "") };
+  // só emoji/pontuação ("👍🏽", "!!"): agradecimento ou reação mandada como mensagem — o Sam não responde
+  if (!/[\p{L}\p{N}]/u.test(texto)) return { ok: false, motivo: "so_emoji" };
 
   const citado = m.quoted ?? m.quotedMsg ?? null;
   const mencoes = [ctx.mentionedJid, m.mentionedJid, m.mentions, c.mentionedJid]
