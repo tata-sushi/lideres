@@ -145,7 +145,12 @@ Fonte: `docs/mapas/dp_rh.md` (mapa do schema, com as regras de leitura). Cada gr
   e pretensão, salário das vagas, valores de rescisão, VT, custo de estoque, custo de manutenção, premiações com valor,
   reclamações trabalhistas, restrições alimentares de cada colaborador, **recibos de férias com valor líquido pago**
   (`ferias_recibos`, desde jan/2023, 07/11).
-- **Fora em qualquer nível**: ouvidoria, respostas de clima e de desligamento, CPF/telefone/e-mail, ficha da admissão.
+- **Contatos (09/11)**: celular e e-mail de colaborador **só na conversa privada de nível completo** (decisão do
+  responsável), pela ferramenta `contato_colaborador` (`tata_plus.agente_contato`: cadastro do app, até 5 pessoas por
+  nome, mín. 3 letras). Fica fora das visões — a consulta livre ao banco não alcança — e a ferramenta não existe em grupo
+  (nem no DP/RH) nem na reunião.
+- **Fora em qualquer nível**: ouvidoria, respostas de clima e de desligamento, CPF, ficha da admissão (e telefone/e-mail
+  fora do privado completo).
 
 ```sql
 update dp_rh.agente_grupos set nivel = 'completo' where chat_id = '…@g.us';   -- ou 'basico'

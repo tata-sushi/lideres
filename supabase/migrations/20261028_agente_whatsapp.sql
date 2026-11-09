@@ -1325,3 +1325,28 @@ from dp_rh.sancoes;
 comment on view agente.sancoes is 'Sanções disciplinares (1 linha por sanção). Use a coluna sancao (nome por extenso): Advertência verbal | Advertência escrita | Suspensão. Em tipo_sancao, "escrita" e "advertencia" são a MESMA coisa — advertência escrita ("advertencia" = registro do sistema antigo, até ago/2026; "escrita" = atual) — e "verbal" é advertência verbal. "Quantas advertências" = verbais + escritas (diga quantas de cada quando houver verbal); suspensão é outra sanção (dias_suspensao = dias). Escala do TATÁ (gradualidade): advertência verbal → advertência escrita → suspensão (1 a 5 dias, só com validação prévia do RH) → justa causa.';
 comment on column agente.sancoes.sancao is 'Nome da sanção por extenso — use este ao responder.';
 comment on column agente.sancoes.tipo_sancao is 'Código: verbal | escrita | advertencia (= escrita, sistema antigo) | suspensao.';
+
+-- ── 17. contato de colaborador (09/11) ──────────────────────────────────────
+-- Decisão do responsável: celular e e-mail só na conversa PRIVADA de quem tem nível completo
+-- (nunca em grupo, nem no grupo DP/RH, nem falado na reunião). Fica fora das visões (a consulta
+-- livre ao banco não alcança); a edge só oferece a ferramenta contato_colaborador nessa conversa.
+create or replace function tata_plus.agente_contato(p_busca text)
+returns jsonb
+language sql stable security definer
+set search_path = tata_plus, pg_catalog
+as $fn$
+  select coalesce(jsonb_agg(c order by (c->>'status') <> 'Ativo', c->>'nome'), '[]'::jsonb)
+  from (
+    select jsonb_build_object(
+             'nome', p.nome, 'status', p.status, 'cargo', p.cargo, 'unidade', p.unidade,
+             'celular', nullif(btrim(p.telefone), ''), 'email', nullif(btrim(p.email), '')) c
+    from tata_plus.profiles p
+    where length(btrim(coalesce(p_busca, ''))) >= 3
+      and coalesce(p.status, '') <> 'Bot'
+      and tata_plus.agente_norm(p.nome) like '%' || replace(tata_plus.agente_norm(btrim(p_busca)), ' ', '%') || '%'
+    order by p.status <> 'Ativo', p.nome
+    limit 5
+  ) s;
+$fn$;
+revoke execute on function tata_plus.agente_contato(text) from public, anon, authenticated;
+grant execute on function tata_plus.agente_contato(text) to service_role;

@@ -34,6 +34,9 @@
 //   AGENTE_LLM_MODEL       (opcional) padrão anthropic/claude-sonnet-5.5
 // (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY são injetados.)
 //
+// Contatos (09/11): celular e e-mail de colaborador só na conversa PRIVADA de nível completo, pela
+// ferramenta contato_colaborador (tata_plus.agente_contato) — fora das visões; grupo e reunião nunca.
+//
 // Reunião (07/11): POST …?reuniao=<portal_secret> {texto, contexto, nome, titulo} → resposta curta para ser
 // falada na sala (usada pela edge agente-reuniao; página compliance/kpis/rh/sam.html).
 //
@@ -330,8 +333,11 @@ type Local = { grupo: string } | { privadoCom: string } | { reuniao: string };
 // chefe = a quem o Sam se reporta (responsável do RH)
 function sistema(
   estilo: string, local: Local, mapa: string, completo: boolean, avisar: string, chefe: string, saber: string,
+  contatos = false,
 ): any[] {
-  const foraDoAlcance = completo
+  const foraDoAlcance = contatos
+    ? "CPF, dados pessoais da ficha de admissão (endereço, documentos), ouvidoria e respostas confidenciais de clima/desligamento"
+    : completo
     ? "CPF, telefone, e-mail, dados pessoais da ficha de admissão, ouvidoria e respostas confidenciais de clima/desligamento"
     : "CPF, telefone, e-mail, salários e valores em R$, atas de reunião, avaliações, reclamações trabalhistas, ouvidoria e respostas confidenciais de clima/desligamento";
   const onde = "reuniao" in local
@@ -383,7 +389,8 @@ COMO CONSULTAR
 • Nomes: busque sem acento e por parte do nome — agente.sem_acento(nome) ilike agente.sem_acento('%jessica%'). Se aparecer mais de uma pessoa possível, pergunte qual antes de responder.
 • Prefira agregar no banco (count, group by) em vez de trazer linhas soltas. O resultado vem com no máximo 200 linhas.
 • Se der erro, corrija a consulta e tente de novo. Se a pergunta for ambígua (período, unidade), assuma o mais provável.
-• Você só lê dados. Se pedirem para alterar algo, explique que isso é feito no portal.
+• Você só lê dados. Se pedirem para alterar algo, explique que isso é feito no portal.${contatos ? `
+• Celular e e-mail de colaborador: use contato_colaborador (só nesta conversa privada). Passe só o contato pedido, de quem foi pedido; se vierem várias pessoas com o nome, pergunte qual.` : ""}
 • Fora do seu alcance nesta conversa (${foraDoAlcance}): diga que não tem acesso.${avisar ? `
 • Se não der para responder de verdade (o dado não existe no mapa nem no portal, está fora do seu alcance, ou a pergunta pede ação/decisão de alguém do RH), chame a ferramenta sem_resposta com o motivo em poucas palavras e diga à pessoa que passou para ${avisar}. Não chame quando conseguiu responder.` : ""}
 
@@ -438,6 +445,30 @@ async function buscarPortal(busca: string, completo: boolean): Promise<{ conteud
   ).join("\n\n");
   if (conteudo.length > 14_000) conteudo = conteudo.slice(0, 14_000) + "… (cortado)";
   return { conteudo, reg };
+}
+
+// celular e e-mail (cadastro do app) — só entra nas ferramentas da conversa privada de nível completo
+const CONTATO = {
+  type: "function",
+  function: {
+    name: "contato_colaborador",
+    description: "Celular e e-mail de um colaborador pelo nome (cadastro do app Tatá Plus). Devolve até 5 pessoas com o nome. Use só quando pedirem o contato de alguém.",
+    parameters: {
+      type: "object",
+      properties: { nome: { type: "string", description: "Nome ou parte do nome (mín. 3 letras). Ex.: \"Vinicios Everton\"" } },
+      required: ["nome"],
+    },
+  },
+};
+
+async function buscarContato(nome: string): Promise<{ conteudo: string; reg: Consulta }> {
+  const t0 = Date.now();
+  const { data, error } = await supa.rpc("agente_contato", { p_busca: nome });
+  const reg: Consulta = { sql: "contato: " + nome, ms: Date.now() - t0 };
+  if (error) return { conteudo: "ERRO: " + error.message, reg: { ...reg, erro: error.message } };
+  const itens = (data ?? []) as any[];
+  reg.linhas = itens.length;
+  return { conteudo: itens.length ? JSON.stringify(itens) : "Ninguém com esse nome no cadastro (mínimo 3 letras).", reg };
 }
 
 const SEM_RESPOSTA = {
@@ -504,8 +535,9 @@ type Fala = { papel: string; texto: string; autor?: string | null };
 async function responder(local: Local, historico: Fala[], completo: boolean, avisar: string) {
   const { estilo, responsavel } = await parametros();
   const [mapa, saber] = await Promise.all([catalogo(completo), conhecimento(completo)]);
-  const messages: any[] = sistema(estilo, local, mapa, completo, avisar, responsavel.nome, saber);
-  const tools = avisar ? [...FERRAMENTAS, SEM_RESPOSTA] : FERRAMENTAS;
+  const contatos = completo && "privadoCom" in local; // celular/e-mail: só privado de nível completo
+  const messages: any[] = sistema(estilo, local, mapa, completo, avisar, responsavel.nome, saber, contatos);
+  const tools = [...FERRAMENTAS, ...(contatos ? [CONTATO] : []), ...(avisar ? [SEM_RESPOSTA] : [])];
   const semResposta: string[] = [];
   // a conversa precisa começar por mensagem de usuário
   const ini = historico.findIndex((h) => h.papel !== "assistant");
@@ -540,6 +572,8 @@ async function responder(local: Local, historico: Fala[], completo: boolean, avi
       }
       const { conteudo, reg } = tc.function?.name === "buscar_portal"
         ? await buscarPortal(String(args.busca ?? ""), completo)
+        : tc.function?.name === "contato_colaborador"
+        ? (contatos ? await buscarContato(String(args.nome ?? "")) : { conteudo: "Sem acesso a contatos nesta conversa.", reg: { sql: "contato negado", ms: 0 } })
         : await consultar(String(args.sql ?? ""), completo);
       consultas.push(reg);
       messages.push({ role: "tool", tool_call_id: tc.id, content: conteudo });
