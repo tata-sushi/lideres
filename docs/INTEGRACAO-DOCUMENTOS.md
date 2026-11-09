@@ -2262,4 +2262,33 @@ mesmo tipo/colaborador em versões diferentes + 1 linha já `entregue` do
 mesmo tipo): as 3 pendências aparecem como 3 linhas separadas (v1 sem
 sufixo, v2 e v3 com sufixo), e a linha assinada não entra na lista.
 
+**Feito (2026-11-09): `ferias.html` — modo em lote no "Aviso de Gozo de
+Férias".** Mesmo mecanismo de "vários colaboradores de uma vez" já usado em
+`admissao.html` (link que troca o select único por uma lista de
+checkboxes), adaptado pro caso de uso daqui: em vez de um "selecionar
+todos" genérico, o RH escolhe um **período de gozo entre** (data inicial e
+final) e a lista mostra só quem tem um bloco de gozo com situação
+"agendada" cujo início cai dentro desse período — cada linha já mostra o
+período de gozo daquela pessoa (pode ser diferente dia a dia dentro do
+mesmo período escolhido). "Selecionar todos" marca só os candidatos
+filtrados.
+
+Cada colaborador selecionado usa o **próprio** bloco de gozo (guardado no
+`data-bloco` do checkbox, igual ao que `_avColabChange` já monta pro modo
+de 1 colaborador) — não um período compartilhado entre todos. O núcleo de
+envio (`_avEnviarUmAviso`) foi extraído do fluxo de 1 colaborador pra ser
+reaproveitado pelos dois modos, sem duplicar a cadeia de upload + 3 RPCs.
+Processamento sequencial (reduce, não paralelo) com progresso "Enviando
+N/total…" e resumo final de sucesso/falha — mesmo padrão de
+`salvarTermosParaAssinatura` em `admissao.html`. "Gerar PDF" (impressão
+local via pop-up) some no modo lote, pelo mesmo motivo já documentado lá:
+não dá pra abrir N pop-ups de impressão de uma vez.
+
+Testado com Playwright (CDN do `html2pdf.js` interceptado com stub, mesma
+técnica já usada acima): período de dezembro filtra corretamente quem tem
+gozo começando em dezembro (excluindo quem tem gozo em janeiro), "Selecionar
+todos" + enviar processa cada um com seu próprio período no título/nome do
+arquivo, e o estado vazio ("Nenhum colaborador com férias agendadas nesse
+período") aparece quando não há candidatos no intervalo escolhido.
+
 _Última atualização: 2026-11-09._
