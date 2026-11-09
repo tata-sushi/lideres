@@ -5234,8 +5234,38 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
       <select class="adm-status-sel" id="adm-status-sel" data-aba-id="governanca-kpis-rh-admissao::mudar-status-ficha" title="Status da admissão" aria-label="Status da admissão"></select>
       <button class="btn btn--primary" id="adm-mf-salvar" data-aba-id="governanca-kpis-rh-admissao::salvar-status-ficha" onclick="_admSalvarStatus()"><span class="btn-spin"></span><span class="btn-label">Salvar</span></button>
       <button class="btn btn--primary" id="adm-mf-zip" style="margin-left:auto" data-aba-id="governanca-kpis-rh-admissao::baixar-zip-documentos" onclick="_admBaixarZipDocs()"><span class="btn-spin"></span><span class="btn-label">Baixar .zip</span></button>
+      <button class="btn btn--primary" data-aba-id="governanca-kpis-rh-admissao::gerar-declaracao-conta-salario" onclick="_admAbrirDeclaracaoConta()">Abertura de Conta</button>
       <button class="btn btn--primary" data-aba-id="governanca-kpis-rh-admissao::copiar-email-dp" onclick="_admCopiarCorpo()">Copiar corpo</button>
       <button class="btn btn--primary" id="adm-mf-send" data-aba-id="governanca-kpis-rh-admissao::enviar-ficha-dp" onclick="_admEnviarEmail()"><span class="btn-spin"></span><span class="btn-label">Enviar para o DP</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Declaração para Abertura de Conta Salário — pré-admissão (dados ainda não
+     migrados pro RHID), pulla direto de _ficha (admissao + respostas). Só impressão:
+     quem assina é o RH (assinatura/carimbo fixos), não passa por assinatura digital. -->
+<div class="adm-ov" id="adm-conta-ov" style="z-index:410;" onclick="if(event.target===this)_admFecharDeclaracaoConta()">
+  <div class="adm-modal" style="max-width:420px;">
+    <div class="adm-mh">
+      <div class="adm-mh-info">
+        <div class="adm-mh-nome">Declaração para Abertura de Conta</div>
+        <div class="adm-mh-sub">Dados que ainda não estão na ficha</div>
+      </div>
+      <button class="adm-mh-x" onclick="_admFecharDeclaracaoConta()">✕</button>
+    </div>
+    <div class="adm-mb">
+      <div class="form-row">
+        <label class="form-label" for="adm-conta-data-admissao">Data de admissão</label>
+        <input class="form-input" type="date" id="adm-conta-data-admissao">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="adm-conta-salario">Salário (R$)</label>
+        <input class="form-input" type="text" id="adm-conta-salario" placeholder="Ex: 2.070,32">
+      </div>
+      <div id="adm-conta-err" style="display:none;color:#C0392B;font-size:11px;"></div>
+    </div>
+    <div class="adm-mf">
+      <button class="btn btn--primary" id="adm-conta-btn" onclick="_admGerarDeclaracaoConta()"><span class="btn-spin"></span><span class="btn-label">Gerar PDF</span></button>
     </div>
   </div>
 </div>
@@ -5596,6 +5626,122 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
     if(!confirm('Excluir esta informação?')) return;
     TP(function(t){ return t.rpc('admissao_item_excluir',{p_id:id}); }).then(function(r){
       if(r.error){ alert('Erro: '+r.error.message); return; } _carregarFicha();
+    });
+  };
+
+  // ── Declaração para Abertura de Conta Salário — pré-admissão ────────────
+  // Dados ainda não migrados pro RHID: puxa direto de _ficha (admissao + respostas),
+  // igual ao resto do modal de validação — não depende de matrícula/profiles.
+  // Só "Gerar PDF" (impressão): quem assina é o RH (assinatura/carimbo fixos,
+  // guardados como imagem no bucket privado dp-documentos — nunca no código,
+  // que é público), não passa pelo fluxo de assinatura digital do colaborador.
+  var ADM_DC_ASSINATURA_PATH = '_assets/57.png';
+  var ADM_DC_CARIMBO_PATH = '_assets/58.png';
+
+  function _admFmtDataExtenso(iso){
+    if(!iso) return '—';
+    var s=String(iso), d;
+    if(/^\d{4}-\d{2}-\d{2}/.test(s)){ var p=s.slice(0,10).split('-'); d=new Date(+p[0], +p[1]-1, +p[2]); }
+    else { d=new Date(s); if(isNaN(d)) return '—'; }
+    var meses=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    return d.getDate()+' de '+meses[d.getMonth()]+' de '+d.getFullYear();
+  }
+
+  window._admAbrirDeclaracaoConta = function(){
+    document.getElementById('adm-conta-data-admissao').value = '';
+    document.getElementById('adm-conta-salario').value = '';
+    document.getElementById('adm-conta-err').style.display = 'none';
+    document.getElementById('adm-conta-ov').classList.add('show');
+  };
+  window._admFecharDeclaracaoConta = function(){
+    document.getElementById('adm-conta-ov').classList.remove('show');
+  };
+
+  window._admGerarDeclaracaoConta = function(){
+    var err = document.getElementById('adm-conta-err');
+    err.style.display = 'none';
+    var dataAdmissaoRaw = document.getElementById('adm-conta-data-admissao').value;
+    var salario = (document.getElementById('adm-conta-salario').value||'').trim();
+    if (!dataAdmissaoRaw) { err.textContent='Informe a data de admissão.'; err.style.display='block'; return; }
+    if (!salario) { err.textContent='Informe o salário.'; err.style.display='block'; return; }
+
+    var a = _ficha.admissao || {};
+    var resp = _ficha.respostas || [];
+    if (!a.nome) { err.textContent='Ficha sem nome cadastrado.'; err.style.display='block'; return; }
+
+    var rg = _admAdmissaoValor(resp, 'pessoais', 'rg_numero');
+    var enderecoPartes = [
+      _admAdmissaoValor(resp, 'endereco', 'endereco'),
+      _admAdmissaoValor(resp, 'endereco', 'bairro'),
+      _admAdmissaoValor(resp, 'endereco', 'cidade_estado')
+    ].filter(Boolean);
+    var cep = _admAdmissaoValor(resp, 'endereco', 'cep');
+    var endereco = enderecoPartes.join(', ') + (cep ? ' – CEP ' + cep : '');
+
+    setBtnLoading(true, 'Gerando…', 'adm-conta-btn');
+    supaP().then(function(supa){
+      return Promise.all([
+        supa.storage.from('dp-documentos').createSignedUrl(ADM_DC_ASSINATURA_PATH, 3600),
+        supa.storage.from('dp-documentos').createSignedUrl(ADM_DC_CARIMBO_PATH, 3600)
+      ]);
+    }).then(function(results){
+      var sigUrl = (results[0] && results[0].data && results[0].data.signedUrl) || '';
+      var carimboUrl = (results[1] && results[1].data && results[1].data.signedUrl) || '';
+
+      var CSS =
+        '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}'+
+        'body{background:#CBD5E1;font-family:"DM Sans","Helvetica Neue",Arial,sans-serif;padding:32px 16px 64px;display:flex;flex-direction:column;align-items:center;gap:32px;color:#111;}'+
+        '.dc-page{width:100%;max-width:760px;background:#fff;padding:48px 60px 60px;box-shadow:0 4px 32px rgba(0,0,0,.18);font-size:13px;line-height:1.7;color:#222;}'+
+        '.dc-date{text-align:right;margin-bottom:34px;}'+
+        '.dc-title{font-size:15px;font-weight:700;text-align:center;margin-bottom:24px;}'+
+        '.dc-p{margin-bottom:20px;text-align:justify;}'+
+        '.dc-campos{display:flex;flex-direction:column;gap:14px;margin-bottom:40px;}'+
+        '.dc-sig{margin-bottom:28px;}'+
+        '.dc-sig img{width:130px;display:block;margin-bottom:6px;}'+
+        '.dc-sig-nome{text-decoration:underline;}'+
+        '.dc-sig-cargo{font-weight:700;}'+
+        '.dc-carimbo{text-align:right;margin-bottom:40px;}'+
+        '.dc-carimbo img{width:230px;}'+
+        '.dc-footer{text-align:center;font-size:11px;color:#333;}'+
+        '@media print{body{background:#fff;padding:0;}.dc-page{box-shadow:none;max-width:100%;padding:40px 56px;}@page{size:A4 portrait;margin:0;}}';
+
+      var body =
+        '<div class="dc-date">São Paulo, '+_admFmtDataExtenso(new Date().toISOString().slice(0,10))+'</div>'+
+        '<div class="dc-title">AO BANCO ITAÚ</div>'+
+        '<p class="dc-p">'+_escHtml(ADM_RAZAO_SOCIAL)+', CNPJ: '+_escHtml(ADM_UNIDADES_CNPJ['Itaim Bibi'].cnpj)+' declara para a finalidade de abertura de conta salário para o funcionário <strong>'+_escHtml(a.nome)+'</strong>.</p>'+
+        '<div class="dc-campos">'+
+          '<div>RG: '+_escHtml(rg||'—')+'</div>'+
+          '<div>CPF: '+_escHtml(a.cpf||'—')+'</div>'+
+          '<div>ENDEREÇO: '+_escHtml(endereco||'—')+'</div>'+
+          '<div>CARGO : '+_escHtml(a.cargo||'—')+'</div>'+
+          '<div>DATA DE ADMISSÃO:  '+_escHtml(_admFmtAdmissao(dataAdmissaoRaw))+'</div>'+
+          '<div> SALÁRIO: R$: '+_escHtml(salario)+'</div>'+
+        '</div>'+
+        (sigUrl ? '<div class="dc-sig"><img src="'+sigUrl+'" alt="Assinatura"><div class="dc-sig-nome">VICTOR AUGUSTO DI SESSA</div><div class="dc-sig-cargo">Recursos Humanos</div></div>' : '')+
+        (carimboUrl ? '<div class="dc-carimbo"><img src="'+carimboUrl+'" alt="Carimbo"></div>' : '')+
+        '<div class="dc-footer">Tatá Sushi Comercio de Alimento LTDA<br>R. João Cachoeira, 278 – Itaim Bibi – CEP 04535-000<br>Tel. 11-3078-2006 ou (11) 9 1362-5960</div>';
+
+      var html = '<!DOCTYPE html><html lang="pt-BR"><head>'+
+        '<meta charset="UTF-8">'+
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+        '<title>Declaração Abertura de Conta · '+_escHtml(a.nome||'—')+' · TATÁ Sushi</title>'+
+        '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">'+
+        '<style>'+CSS+'</style>'+
+        '</head><body><div class="dc-page">'+body+'</div></body></html>';
+
+      var w = window.open('', '_blank');
+      if (!w) { throw new Error('Permita pop-ups para gerar o PDF.'); }
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      setTimeout(function(){ w.print(); }, 600);
+    }).then(function(){
+      setBtnLoading(false, 'Gerar PDF', 'adm-conta-btn');
+      _admFecharDeclaracaoConta();
+    }, function(e){
+      setBtnLoading(false, 'Gerar PDF', 'adm-conta-btn');
+      err.textContent = 'Erro ao gerar: ' + (e && e.message || e);
+      err.style.display = 'block';
     });
   };
 
