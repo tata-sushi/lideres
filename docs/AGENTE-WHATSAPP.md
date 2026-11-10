@@ -4,7 +4,7 @@ O Sam fica num **grupo de WhatsApp** e responde perguntas sobre a base do RH qua
 Ex.: "Sam, quantas entrevistas a Jéssica agendou?", "@Sam quem folga sábado no Itaim?".
 
 Decisões do usuário (28/10):
-- **Grupo** (todos do grupo perguntam) e, desde 02/11, **privado só para números cadastrados** (Victor, Tito e Binho).
+- **Grupo** (todos do grupo perguntam) e, desde 02/11, **privado só para números cadastrados** (Victor, Tito, Binho e Cinthia).
 - **Todos do grupo podem perguntar**: o controle é o grupo, e grupo novo nasce pendente.
 - **Responde só quando chamado**: "Sam, …", @Sam ou reply a uma mensagem dele.
 - **Instância uazapi do Sam** (`sam`, número 5511939311173). Ela só enviava (resumos, aniversários, pendências)
@@ -59,6 +59,8 @@ Decisões do usuário (28/10):
       responder" quando continua sem cadastro).
 - [x] **Identidade (02/11)**: nas instruções fixas (código): o Sam é o assistente virtual do RH, não uma pessoa, e se reporta
       ao responsável (`responsavel_nome`, Victor) — o que não resolver, alinha com ele. Não anuncia; só diz se perguntarem.
+- [x] **Cinthia liberada (10/11)**: Cinthia Santana Moreno (sócia executiva, matrícula 1), privado, nível completo
+      (número do cadastro do app).
 - [x] **Binho liberado (04/11)**: Fabio Yuzo Shiguematsu (Binho, sócio-chef executivo, matrícula 2, 5511999400971),
       privado, nível completo. Ele tinha escrito ao Sam antes de ser liberado (avisos #38 "Boa tarde" e #40 "término da
       experiência do Diogo"); o #40 foi respondido com `libera 40` (16:02) e desde então ele conversa direto com o Sam
