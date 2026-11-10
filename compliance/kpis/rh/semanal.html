@@ -306,6 +306,14 @@ body:not([data-view="alinhamentos"]) #alinhamentos { display: none; }
 .bar-empty { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); padding: 12px 0; text-align: center; text-transform: uppercase; letter-spacing: 0.5px; }
 .align-layout { padding: 14px 12px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (min-width: 768px) { .align-layout { padding: 14px 24px 0; } }
+/* Filtros dos alinhamentos: busca (tópico/demanda) + status */
+.align-filtros { padding: 14px 12px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+@media (min-width: 768px) { .align-filtros { padding: 14px 24px 0; } }
+.anl-busca { flex: 1 1 220px; min-width: 0; box-sizing: border-box; height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); background: var(--surface); outline: none; }
+.anl-busca:focus { border-color: var(--carbon); }
+.anl-busca::placeholder { color: var(--muted); }
+.align-filtros .align-status-sel { flex: 0 0 auto; width: auto; min-width: 170px; background-color: var(--surface); }
+.align-limpar { flex: 0 0 auto; }
 @media (max-width: 768px) { .align-layout { grid-template-columns: 1fr; } }
 .align-left { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; height: 680px; }
 .align-left-header { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); font-weight: 700; text-align: center; padding: 10px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
@@ -480,6 +488,16 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 </div>
 
 <div id="alinhamentos">
+  <div class="align-filtros">
+    <input type="text" class="anl-busca" id="align-busca" placeholder="Buscar tópico ou demanda…" oninput="setAlignBusca(this.value)" aria-label="Buscar tópico ou demanda">
+    <select class="filter-select align-status-sel" id="align-status-sel" onchange="setAlignStatus(this.value)" aria-label="Filtrar por status">
+      <option value="">Todos os status</option>
+      <option value="Concluído">Concluído</option>
+      <option value="Em Andamento">Em Andamento</option>
+      <option value="Pendente">Pendente</option>
+    </select>
+    <button class="btn-link align-limpar" id="align-limpar" onclick="limparAlignFiltros()">Limpar</button>
+  </div>
   <div class="align-layout">
     <div class="align-left">
       <div class="align-left-header">Assuntos</div>
@@ -1933,6 +1951,28 @@ var _alignDemandas   = null;
 var _alignTransc     = null;
 var _alignOpenDates  = null;
 var _transcOpenDates = null;
+var _alignBusca      = '';   // texto de busca (tópico ou demanda)
+var _alignStatusF    = '';   // filtro de status
+// normaliza (sem acento, minúsculo) p/ busca
+function _alignNorm(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+// demandas filtradas por busca (assunto/demanda) + status
+function _alignFiltradas(){
+  var q=_alignNorm(_alignBusca.trim()), st=_alignStatusF;
+  return (_alignDemandas||[]).filter(function(r){
+    if(st && alignBadgeClass(r.status)!==alignBadgeClass(st)) return false;
+    if(q){ var hay=_alignNorm(r.assunto)+' '+_alignNorm(r.demanda); if(hay.indexOf(q)<0) return false; }
+    return true;
+  });
+}
+function _alignFiltroAtivo(){ return !!(_alignBusca.trim() || _alignStatusF); }
+function setAlignBusca(v){ _alignBusca=v||''; renderAlignTree(); renderAlignDemandasChart(); }
+function setAlignStatus(v){ _alignStatusF=v||''; renderAlignTree(); renderAlignDemandasChart(); }
+function limparAlignFiltros(){
+  _alignBusca=''; _alignStatusF='';
+  var b=document.getElementById('align-busca'); if(b) b.value='';
+  var s=document.getElementById('align-status-sel'); if(s) s.value='';
+  renderAlignTree(); renderAlignDemandasChart();
+}
 
 function parseCsvRows(csv) {
   var rows=[], cur='', inQ=false;
@@ -2025,12 +2065,15 @@ function alignBadgeClass(s){
 }
 function renderAlignTree(){
   var el=document.getElementById('align-tree'); if(!el||!_alignDemandas) return;
+  var filtrado=_alignFiltroAtivo(), base=filtrado?_alignFiltradas():_alignDemandas;
   var groups={};
-  _alignDemandas.forEach(function(r){if(r.data){if(!groups[r.data])groups[r.data]=[];groups[r.data].push(r);}});
+  base.forEach(function(r){if(r.data){if(!groups[r.data])groups[r.data]=[];groups[r.data].push(r);}});
   var dates=sortAlignDates(Object.keys(groups));
+  if(!dates.length){ el.innerHTML='<p class="align-conteudo-empty">'+(filtrado?'Nenhum tópico/demanda encontrado':'Sem dados')+'</p>'; return; }
   var html='';
   dates.forEach(function(date){
-    var items=groups[date], isOpen=_alignOpenDates&&_alignOpenDates.indexOf(date)>=0;
+    // com filtro ativo, abre todas as datas que têm resultado (pra mostrar o que casou)
+    var items=groups[date], isOpen=filtrado||(_alignOpenDates&&_alignOpenDates.indexOf(date)>=0);
     var tipA=isOpen?'Ocultar assuntos':'Mostrar assuntos';
     html+='<div class="align-date-row'+(isOpen?' open':'')+'">';
     html+='<button class="btn-icon" title="'+tipA+'" aria-label="'+tipA+'" aria-expanded="'+(isOpen?'true':'false')+'" onclick="alignSelectDate(\''+date.replace(/'/g,"\\'")+'\')">'+(isOpen?_ALIGN_SVG_MENOS:_ALIGN_SVG_MAIS)+'</button>';
@@ -2051,8 +2094,9 @@ function alignSelectDate(date){
 }
 function renderAlignDemandasChart(){
   var el=document.getElementById('align-demandas-chart'); if(!el||!_alignDemandas) return;
+  var base=_alignFiltroAtivo()?_alignFiltradas():_alignDemandas;
   var counts={};
-  _alignDemandas.forEach(function(r){if(r.demanda)counts[r.demanda]=(counts[r.demanda]||0)+1;});
+  base.forEach(function(r){if(r.demanda)counts[r.demanda]=(counts[r.demanda]||0)+1;});
   var items=Object.keys(counts).map(function(k){return{label:k,n:counts[k]};}).sort(function(a,b){return b.n-a.n;});
   if(!items.length){
     el.innerHTML='<div class="bar-empty">Sem dados</div>';
