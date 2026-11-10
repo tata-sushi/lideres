@@ -27,7 +27,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 |---|---|---|---|---|---|---|---|---|---|---|
 | **1. Dashboards de RH com ação e dado de pessoa (prioridade alta)** | | | | | | | | | | |
 | `kpis/rh/ferias.html` | `governanca-kpis-rh-ferias` | 3 | 6 | 4 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | — | ⏳ |
-| `kpis/rh/recrutamento.html` | `governanca-kpis-rh-recrutamento` | 7 | 21 | 17 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/recrutamento.html` | `governanca-kpis-rh-recrutamento` | 7 | 21 | 17 | 🔶 10/11 (Linha nas vagas, botão nas ações, CPF; falta Contato — liberar pessoas antes) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/doc.html` | `governanca-kpis-rh-doc` | 4 | 13 | 22 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/rh/admissao.html` | `governanca-kpis-rh-admissao` | 3 | 15 | 18 | 🔶 08/11 (sem cliente próprio; resto na passagem do RH) | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/rh/desligamentos.html` | `governanca-kpis-rh-desligamentos` | 3 | 11 | 13 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
@@ -100,6 +100,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Histórico
 
+- 10/11/2026 — Recrutamento (pedido do dono, uma página): corte de linha nas vagas no servidor (líder vê a própria subárvore; admin e RH tudo), botão conferido em cada ação (rec_porta(<botão>)), CPF mascarado como Valor; removido o filtro de equipe no navegador que deixava o líder com 0 vagas. Migration 20261206. Contato (telefones) fica para quando houver pessoas liberadas em contato-recrutamento (hoje nenhuma).
 - 08/11/2026 — Esquema de abastecimento fechado (migration 20261205, aplicada depois do deploy das quatro páginas): sem políticas abertas, sem acesso direto de anon/authenticated; tudo pelas funções do servidor. Testado: admin lista pelas funções; leitura direta e anon negados.
 - 08/11/2026 — Admissão: removido o bloco morto de inventário/estoque com cliente próprio (decisão do dono: só isso agora; o resto da página fica para a passagem do RH). Abre caminho para fechar as tabelas do esquema de abastecimento para anon.
 - 08/11/2026 — Abastecimento pelo servidor (migration 20261204): sem cliente próprio nem Apps Script; leituras com porta da página, cada estágio (pedido, processamento, recebimento, conferência, anexos) com porta do botão e autor do login; upload de anexo só logado e com o botão.
