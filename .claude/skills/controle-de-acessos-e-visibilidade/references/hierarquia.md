@@ -145,7 +145,7 @@ O registro precisa ligar a uma **matrícula** para entrar no corte.
 | Página | O registro liga em | Regra | Situação |
 |---|---|---|---|
 | Férias | `matricula` do colaborador | `matricula = any(sub)` | piloto (ver "Estado atual") |
-| Vagas / Recrutamento | `lider_responsavel` (é um **nome**) | líder responsável na subárvore | pendente: casar nome → matrícula antes |
+| Vagas / Recrutamento | `lider_responsavel` (é um **nome**) | líder responsável na subárvore (nome normalizado casa com `profiles.nome`) **ou** `criado_por` = quem está logado; admin e RH tudo | aplicado em 10/11/2026 (`public.rec_vagas_visiveis`, migration 20261206). Vaga cujo líder não casa com ninguém ativo só aparece para admin e RH |
 | Admissão, Ausências, outras | a definir ao aplicar | — | — |
 
 ---
@@ -159,8 +159,8 @@ O registro precisa ligar a uma **matrícula** para entrar no corte.
 - **Estado vazio:** "sem equipe" pode ver só a própria linha, ou nenhuma. A página precisa de uma
   mensagem de vazio, e o Sobre continua lá.
 - Filtros de equipe no navegador **não protegem nada** e dependem de campos que a sessão do `gate.js`
-  não tem. Mapeamento de 08/11/2026: só o `_liderMatchVaga` do `recrutamento.html` ainda age (o líder vê
-  0 vagas ou todas, conforme o caminho); os filtros por unidade de Armários e Sanções já não fazem nada.
+  não tem. O último (`_liderMatchVaga` do `recrutamento.html`, que deixava o líder com 0 vagas) saiu em
+  10/11/2026 junto com o corte no servidor; os filtros por unidade de Armários e Sanções já não fazem nada.
   Tire cada um **só junto** com o corte de linha no servidor, senão o líder passa a ver mais.
 
 ---
