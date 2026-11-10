@@ -3,13 +3,13 @@
 --    criou; admin e RH veem todas. Vaga cujo líder não casa com ninguém ativo só aparece para admin e RH.
 --    Antes a página filtrava no navegador por "perfil líder" + unidade da sessão (campos que o gate não publica),
 --    e o líder via 0 vagas.
--- 2) Botão em toda ação: rec_porta(<botão>) confere a página e o botão do catálogo e devolve o autor (login).
+-- 2) Botão em toda ação: rec_porta_botao(<botão>) confere a página e o botão do catálogo e devolve o autor (login).
 -- 3) Valor: CPF do candidato mascarado como pretensão e diária.
 -- Contato (telefone do candidato/referências) fica para quando o dono liberar pessoas em contato-recrutamento.
 
 -- ───────────────────────── porta: página + botão, autor do login ─────────────────────────
-drop function if exists public.rec_porta();
-create or replace function public.rec_porta(p_botao text default null)
+-- rec_porta() (só página) continua para quem ainda a chama; a porta com botão é rec_porta_botao(<botão>).
+create or replace function public.rec_porta_botao(p_botao text)
  returns text
  language plpgsql
  stable security definer
@@ -97,7 +97,7 @@ create or replace function public.rec_vagas_salvar(p_id uuid default null::uuid,
  security definer
  set search_path to 'dp_rh', 'tata_plus', 'public'
 as $function$
-declare v_id uuid; v_por text := public.rec_porta(case when p_id is null then 'nova-vaga' else 'editar-vaga' end);
+declare v_id uuid; v_por text := public.rec_porta_botao(case when p_id is null then 'nova-vaga' else 'editar-vaga' end);
 begin
   if p_id is null then
     insert into dp_rh.vagas (cargo, departamento, unidade, escala, horario, lider_responsavel,
@@ -139,7 +139,7 @@ create or replace function public.rec_vagas_excluir(p_id uuid)
  security definer
  set search_path to 'dp_rh', 'tata_plus', 'public'
 as $function$
-declare v_n int; v_por text := public.rec_porta('editar-vaga');
+declare v_n int; v_por text := public.rec_porta_botao('editar-vaga');
 begin
   if p_id is null then return false; end if;
   if not exists (select 1 from public.rec_vagas_visiveis() x where x.id = p_id) then
@@ -197,7 +197,7 @@ create or replace function public.rec_candidatura_salvar(p_id uuid default null:
  security definer
  set search_path to 'dp_rh', 'tata_plus', 'public'
 as $function$
-declare v_id uuid; v_ent_id uuid; v_neg boolean; v_por text := public.rec_porta(case when p_id is null then 'novo-candidato' else 'editar-candidato' end);
+declare v_id uuid; v_ent_id uuid; v_neg boolean; v_por text := public.rec_porta_botao(case when p_id is null then 'novo-candidato' else 'editar-candidato' end);
 begin
   v_neg := btrim(coalesce(p_selecionado,'')) in ('Não','Não respondeu','Não aceitou a proposta');
 
@@ -282,7 +282,7 @@ create or replace function public.rec_candidatura_vincular_vaga(p_id uuid, p_vag
  security definer
  set search_path to 'dp_rh', 'tata_plus', 'public'
 as $function$
-declare v_por text := public.rec_porta('editar-candidato');
+declare v_por text := public.rec_porta_botao('editar-candidato');
 begin
   update dp_rh.rec_candidaturas set vaga_id = p_vaga_id, updated_at = now() where id = p_id;
   return p_id;
@@ -294,7 +294,7 @@ create or replace function public.rec_processos_salvar(p_id uuid, p_processos te
  security definer
  set search_path to 'dp_rh', 'tata_plus', 'public'
 as $function$
-declare v_por text := public.rec_porta('editar-candidato');
+declare v_por text := public.rec_porta_botao('editar-candidato');
 begin
   update dp_rh.rec_candidaturas
      set processos = p_processos, resumo = p_resumo, updated_at = now()
@@ -308,7 +308,7 @@ create or replace function public.rec_referencias_salvar(p_id uuid, p_contato_re
  security definer
  set search_path to 'dp_rh', 'tata_plus', 'public'
 as $function$
-declare v_por text := public.rec_porta('editar-candidato');
+declare v_por text := public.rec_porta_botao('editar-candidato');
 begin
   update dp_rh.rec_candidaturas
      set tipo_referencia     = nullif(p_tipo_referencia,''),
@@ -326,7 +326,7 @@ create or replace function public.rec_teste_salvar(p_candidatura_id uuid, p_nome
  security definer
  set search_path to 'dp_rh', 'tata_plus', 'public'
 as $function$
-declare v_cand dp_rh.rec_candidaturas%rowtype; v_por text := public.rec_porta('editar-teste');
+declare v_cand dp_rh.rec_candidaturas%rowtype; v_por text := public.rec_porta_botao('editar-teste');
 begin
   update dp_rh.rec_candidaturas set
     nome=coalesce(nullif(p_nome,''),nome), contato=coalesce(nullif(p_contato,''),contato),
@@ -364,7 +364,7 @@ create or replace function public.rec_devolutiva_teste(p_id uuid, p_status text,
  set search_path to 'dp_rh', 'tata_plus', 'public'
 as $function$
 declare
-  v_id uuid; v_por text := public.rec_porta('avaliar-teste');
+  v_id uuid; v_por text := public.rec_porta_botao('avaliar-teste');
   v_prox date := nullif(btrim(coalesce(p_proximo_teste,'')), '')::date;
 begin
   update dp_rh.rec_candidaturas set
@@ -393,7 +393,7 @@ create or replace function public.rec_devolutiva_entrevista(p_id uuid, p_status 
  security definer
  set search_path to 'dp_rh', 'tata_plus', 'public'
 as $function$
-declare v_id uuid; v_por text := public.rec_porta('enviar-devolutiva');
+declare v_id uuid; v_por text := public.rec_porta_botao('enviar-devolutiva');
 begin
   update dp_rh.rec_candidaturas set
     status_entrevista      = coalesce(p_status, status_entrevista),
@@ -430,7 +430,7 @@ create or replace function public.rec_agenda_lideres_salvar(p_id uuid default nu
  security definer
  set search_path to 'dp_rh', 'tata_plus', 'public'
 as $function$
-declare v_id uuid; v_por text := public.rec_porta(case when p_id is null then 'nova-agenda' else 'editar-agenda' end);
+declare v_id uuid; v_por text := public.rec_porta_botao(case when p_id is null then 'nova-agenda' else 'editar-agenda' end);
 begin
   if p_id is null then
     insert into dp_rh.rec_agenda_lideres (ordem, unidade, departamento, lider, dias, horario, duracao, ativo)
@@ -455,17 +455,17 @@ create or replace function public.rec_agenda_lideres_excluir(p_id uuid)
  security definer
  set search_path to 'dp_rh', 'tata_plus', 'public'
 as $function$
-declare v_por text := public.rec_porta('editar-agenda');
+declare v_por text := public.rec_porta_botao('editar-agenda');
 begin
   update dp_rh.rec_agenda_lideres set ativo=false, updated_at=now() where id=p_id;
 end $function$;
 
 -- ───────────────────────── nada para anon ─────────────────────────
-revoke execute on function public.rec_porta(text) from public, anon;
+revoke execute on function public.rec_porta_botao(text) from public, anon;
 revoke execute on function public.rec_ve_tudo() from public, anon;
 revoke execute on function public.rec_nome_norm(text) from public, anon;
 revoke execute on function public.rec_vagas_visiveis() from public, anon;
-grant execute on function public.rec_porta(text) to authenticated;
+grant execute on function public.rec_porta_botao(text) to authenticated;
 grant execute on function public.rec_ve_tudo() to authenticated;
 grant execute on function public.rec_nome_norm(text) to authenticated;
 grant execute on function public.rec_vagas_visiveis() to authenticated;
