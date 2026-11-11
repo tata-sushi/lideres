@@ -4,12 +4,15 @@ O Sam fica num **grupo de WhatsApp** e responde perguntas sobre a base do RH qua
 Ex.: "Sam, quantas entrevistas a Jéssica agendou?", "@Sam quem folga sábado no Itaim?".
 
 Decisões do usuário (28/10):
-- **Grupo** (todos do grupo perguntam) e, desde 02/11, **privado só para números cadastrados** (Victor, Tito e Binho).
+- **Grupo** (todos do grupo perguntam) e, desde 02/11, **privado só para números cadastrados** (Victor, Tito, Binho e Cinthia).
 - **Todos do grupo podem perguntar**: o controle é o grupo, e grupo novo nasce pendente.
 - **Responde só quando chamado**: "Sam, …", @Sam ou reply a uma mensagem dele.
 - **Instância uazapi do Sam** (`sam`, número 5511939311173). Ela só enviava (resumos, aniversários, pendências)
   e não tinha webhook. O agente tem **fluxo próprio no n8n** (porteiro). Os fluxos existentes não foram mexidos.
-- **Claude via OpenRouter**, reaproveitando a `LLM_API_KEY`.
+- **IA via OpenRouter**, reaproveitando a `LLM_API_KEY`. No WhatsApp, desde 11/11: **GPT-6 Luna** (`openai/gpt-6-luna`,
+  ~US$ 0,004 por resposta, contra ~US$ 0,05 do Sonnet), definido em `agente_config.modelo_whatsapp` (vale em 1 min,
+  sem publicar; vazio = Sonnet). Se o Luna falhar, a resposta sai pelo Sonnet e `meta.modelo` registra quem respondeu.
+  Reunião ao vivo e ata continuam no **Claude Sonnet 5.5**.
 - **Consulta livre só-leitura**, sem colunas sensíveis.
 
 > ⚠️ Adicionar alguém ao grupo = dar acesso aos dados que o Sam consulta (a resposta é vista por todos do grupo).
@@ -59,6 +62,8 @@ Decisões do usuário (28/10):
       responder" quando continua sem cadastro).
 - [x] **Identidade (02/11)**: nas instruções fixas (código): o Sam é o assistente virtual do RH, não uma pessoa, e se reporta
       ao responsável (`responsavel_nome`, Victor) — o que não resolver, alinha com ele. Não anuncia; só diz se perguntarem.
+- [x] **Cinthia liberada (10/11)**: Cinthia Santana Moreno (sócia executiva, matrícula 1), privado, nível completo
+      (número do cadastro do app).
 - [x] **Binho liberado (04/11)**: Fabio Yuzo Shiguematsu (Binho, sócio-chef executivo, matrícula 2, 5511999400971),
       privado, nível completo. Ele tinha escrito ao Sam antes de ser liberado (avisos #38 "Boa tarde" e #40 "término da
       experiência do Diogo"); o #40 foi respondido com `libera 40` (16:02) e desde então ele conversa direto com o Sam
@@ -221,8 +226,8 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
   pg_cron agente-reuniao-varrer (10 min): reunião sem fala há 20 min é encerrada e ganha ata
 ```
 
-- **Uso**: abrir a página, aparelho no meio da mesa, carregando e com a tela ligada; "Começar reunião" (o Sam avisa em voz
-  alta que está anotando); perguntar com "Sam, …" ou o botão; "Encerrar e gerar ata".
+- **Uso**: abrir a página, aparelho no meio da mesa, carregando e com a tela ligada; "Começar reunião" (só um apito curto
+  avisa que está gravando — desde 11/11 o Sam não fala sozinho); perguntar com "Sam, …" ou o botão; "Encerrar e gerar ata".
 - **Acesso**: admins veem a página; os demais, liberados em Auditoria de páginas. Só quem abriu a reunião mexe nela.
 - **Configuração** (`dp_rh.agente_config`): `reuniao_modelo_transcricao`, `reuniao_modelo_voz`, `reuniao_voz` (outras vozes
   pt-BR: Pedro, Caio, Luana, Harper — `pt-BR-<Nome>:MAI-Voice-2.1-Flash`), `reuniao_grupo_resumo` (chat do grupo).
@@ -245,7 +250,8 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
   intervalos em que ele falou) e é a que a ata usa (fica em `alinhamento_transcricao.transcricao`). Se a separação
   falhar ou não houver gravação, a ata usa a transcrição ao vivo. A gravação é apagada depois da ata (as que sobrarem,
   em 3 dias, pela varredura).
-  - **Cadastro**: rodada de nomes — automática na primeira reunião (ninguém cadastrado) e pelo botão "Rodada de nomes"
+  - **Cadastro**: rodada de nomes — pelo comando de voz **"Sam, se apresente"** (ele conta o que faz e pede a rodada; a
+    página abre a rodada logo depois da fala, por até 3 min ou até "Terminar rodada") e pelo botão "Rodada de nomes"
     (alguém novo). Cada um diz "aqui é o/a <nome>" + uma frase; o nome é procurado em `agente_config.reuniao_participantes`
     (`["Victor","Cinthia","Binho","Tito","Luzinho","Leo Young","Fabio Ferraz"]`, aceita um erro de letra). Falar na
     rodada = consentimento (o Sam avisa); a voz é dado pessoal sensível (LGPD). Apagar a voz de alguém:
@@ -272,7 +278,9 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
 ## Ligar
 
 1. Token da instância `sam`: já no banco (`agente_config.uazapi_token`). Secret `SAM_UAZAPI_TOKEN` é opcional
-   (sobrepõe). Outros opcionais: `SAM_UAZAPI_URL`, `AGENTE_LLM_MODEL` (padrão `anthropic/claude-sonnet-5.5`).
+   (sobrepõe). Outros opcionais: `SAM_UAZAPI_URL`, `AGENTE_LLM_MODEL` (padrão `anthropic/claude-sonnet-5.5`; vale na
+   reunião e como reserva do WhatsApp). Modelo do WhatsApp: `update dp_rh.agente_config set valor = '<modelo>' where
+   chave = 'modelo_whatsapp'` (`''` volta ao Sonnet). Testar outro modelo sem trocar: modo teste com `"modelo": "…"`.
 2. n8n: publicar **Agente RH — Sam (WhatsApp)**. Webhook da instância `sam` na uazapi → URL de produção do fluxo,
    evento **messages**, excluindo **wasSentByApi** e **sem** excluir grupos.
 3. Grupo novo: adicionar o Sam e mandar **"Sam, oi"**. O grupo aparece pendente:

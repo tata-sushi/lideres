@@ -1350,3 +1350,12 @@ as $fn$
 $fn$;
 revoke execute on function tata_plus.agente_contato(text) from public, anon, authenticated;
 grant execute on function tata_plus.agente_contato(text) to service_role;
+
+-- ── 18. modelo das respostas no WhatsApp (11/11) ─────────────────────────────
+-- Decisão do responsável: para gastar menos, o WhatsApp usa um modelo mais barato (GPT-6 Luna, ~20x
+-- mais barato que o Sonnet 5.5). A reunião ao vivo e a ata continuam no Sonnet. A edge relê a config a
+-- cada minuto (vale sem publicar); se o modelo escolhido falhar, a resposta sai pelo Sonnet e
+-- meta.modelo registra quem respondeu. Voltar ao padrão: update … set valor = '' (ou apagar a linha).
+insert into dp_rh.agente_config (chave, valor)
+values ('modelo_whatsapp', 'openai/gpt-6-luna')
+on conflict (chave) do nothing;

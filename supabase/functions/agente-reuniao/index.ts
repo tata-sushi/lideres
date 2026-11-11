@@ -2,7 +2,7 @@
 //
 // A página compliance/kpis/rh/sam.html (dentro do app Tatá Plus) ouve pelo microfone e manda
 // trechos de áudio cortados nas pausas. Aqui:
-//   iniciar   → abre a reunião (dp_rh.agente_reunioes) e devolve a saudação falada
+//   iniciar   → abre a reunião (dp_rh.agente_reunioes); sem saudação (a página só apita)
 //   teste_mic → (antes de começar) transcreve 5 s de fala para o líder conferir o microfone
 //   trecho    → transcreve (OpenRouter) e guarda; avisa se chamaram "Sam, …"
 //               cada trecho fica registrado em dp_rh.agente_reuniao_trechos (tamanho, nível do
@@ -19,6 +19,8 @@
 //   gravacao  → pedaço de 1 min da gravação contínua (μ-law 8 kHz) → storage agente-reuniao; no fim
 //               a reunião é separada por vozes e as vozes cadastradas viram nomes (vozes.ts)
 //   rodada_audio → o Sam pedindo a rodada de nomes (cadastro das vozes, com consentimento)
+//   (11/11) O Sam não fala sozinho: ao começar, a página só dá um apito. Ele fala quando chamado
+//   ("Sam, …"); "Sam, se apresente" = apresentação + rodada de nomes (resposta com rodada: true).
 //   status    → situação da reunião (a página consulta até a ata ficar pronta)
 //   fala_final→ o Sam fala o encerramento na sala (assuntos, decisões, pendências)
 //   varrer    → (pg_cron, ?k=<portal_secret>) encerra reuniões abandonadas há 20 min
@@ -52,6 +54,19 @@ const BUCKET = "agente-reuniao"; // gravação contínua (apagada depois da ata)
 const RODADA_TEXTO = "Antes de começar: para eu reconhecer a voz de vocês nesta e nas próximas reuniões, cada um diga, " +
   "um de cada vez, aqui é o, ou aqui é a, e o seu nome, e uma frase sobre o que faz. Quem falar concorda que eu guarde " +
   "um trecho da sua voz só para isso; dá para pedir para apagar quando quiser.";
+
+// "Sam, se apresente": quem ele é, o que faz na reunião e o pedido da rodada de nomes
+const APRESENTACAO_TEXTO = "Olá, pessoal! Eu sou o Sam, o assistente virtual do RH do TATÁ. Eu acompanho a reunião e, " +
+  "no final, faço a ata, mando o resumo no grupo do DP e RH e coloco as demandas no kanban, cada uma com o seu " +
+  "responsável. Se precisarem de alguma informação do RH, é só dizer: Sam, e a pergunta. Para eu saber quem está " +
+  "falando, nesta e nas próximas reuniões, peço que cada um se apresente, um de cada vez: diga aqui é o, ou aqui é a, " +
+  "o seu nome e uma frase sobre o que faz. Quem falar concorda que eu guarde um trecho da sua voz só para isso; dá " +
+  "para pedir para apagar quando quiser. Pode começar quem quiser.";
+const semAcento = (t: string) =>
+  t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+// "se apresente", "apresente-se", "pode se apresentar", "faz a sua apresentação"…
+const APRESENTE_RE =
+  /^(?:(?:por favor|pode|poderia|voce pode|voce poderia|agora)\s+)*(?:se\s+apresent(?:e|a|ar)\b|apresent[ea]\s+se\b|apresent[ea]\s+(?:voce|vc)\b|fa[cz]\w*\s+(?:a\s+|uma\s+|sua\s+)*apresentacao)/;
 
 const supa = createClient(SUPA_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
@@ -659,13 +674,9 @@ Deno.serve(async (req) => {
       const primeiro = u.nome.split(" ")[0];
       const { data: vn } = await supa.rpc("agente_vozes_nomes");
       const vozes = ((vn ?? []) as unknown[]).map(String);
-      // sem nenhuma voz cadastrada: a página faz a rodada de nomes logo depois da saudação
-      const [saudacao, espera, rodada] = await Promise.all([
-        falar(`Oi, pessoal! Vou acompanhar a reunião e anotar tudo para a ata. Se precisarem de alguma informação, é só dizer: Sam, e a pergunta.`),
-        falar("Deixa eu ver."),
-        vozes.length ? Promise.resolve(null) : falar(RODADA_TEXTO),
-      ]);
-      return json({ ok: true, id, usuario: primeiro, saudacao, espera, vozes, rodada });
+      // o Sam não fala ao começar (a página só apita); a rodada de nomes vem com "Sam, se apresente"
+      const espera = await falar("Deixa eu ver.");
+      return json({ ok: true, id, usuario: primeiro, espera, vozes });
     }
 
     // rodada de nomes pedida pelo botão (alguém novo na sala)
@@ -741,6 +752,10 @@ Deno.serve(async (req) => {
     if (acao === "perguntar") {
       const pergunta = String(corpo.pergunta ?? "").trim();
       if (!pergunta) return json({ ok: false, erro: "pergunta vazia" }, 400);
+      // "Sam, se apresente": texto fixo e a página abre a rodada de nomes logo depois da fala
+      if (APRESENTE_RE.test(semAcento(pergunta))) {
+        return json({ ok: true, texto: APRESENTACAO_TEXTO, audio: await falar(APRESENTACAO_TEXTO), consultas: [], rodada: true });
+      }
       return json({ ok: true, ...(await responderSam(reuniao, pergunta.slice(0, 1000), u)) });
     }
     return json({ ok: false, erro: "ação desconhecida" }, 400);
