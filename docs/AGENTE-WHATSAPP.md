@@ -226,8 +226,8 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
   pg_cron agente-reuniao-varrer (10 min): reunião sem fala há 20 min é encerrada e ganha ata
 ```
 
-- **Uso**: abrir a página, aparelho no meio da mesa, carregando e com a tela ligada; "Começar reunião" (o Sam avisa em voz
-  alta que está anotando); perguntar com "Sam, …" ou o botão; "Encerrar e gerar ata".
+- **Uso**: abrir a página, aparelho no meio da mesa, carregando e com a tela ligada; "Começar reunião" (só um apito curto
+  avisa que está gravando — desde 11/11 o Sam não fala sozinho); perguntar com "Sam, …" ou o botão; "Encerrar e gerar ata".
 - **Acesso**: admins veem a página; os demais, liberados em Auditoria de páginas. Só quem abriu a reunião mexe nela.
 - **Configuração** (`dp_rh.agente_config`): `reuniao_modelo_transcricao`, `reuniao_modelo_voz`, `reuniao_voz` (outras vozes
   pt-BR: Pedro, Caio, Luana, Harper — `pt-BR-<Nome>:MAI-Voice-2.1-Flash`), `reuniao_grupo_resumo` (chat do grupo).
@@ -250,7 +250,8 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
   intervalos em que ele falou) e é a que a ata usa (fica em `alinhamento_transcricao.transcricao`). Se a separação
   falhar ou não houver gravação, a ata usa a transcrição ao vivo. A gravação é apagada depois da ata (as que sobrarem,
   em 3 dias, pela varredura).
-  - **Cadastro**: rodada de nomes — automática na primeira reunião (ninguém cadastrado) e pelo botão "Rodada de nomes"
+  - **Cadastro**: rodada de nomes — pelo comando de voz **"Sam, se apresente"** (ele conta o que faz e pede a rodada; a
+    página abre a rodada logo depois da fala, por até 3 min ou até "Terminar rodada") e pelo botão "Rodada de nomes"
     (alguém novo). Cada um diz "aqui é o/a <nome>" + uma frase; o nome é procurado em `agente_config.reuniao_participantes`
     (`["Victor","Cinthia","Binho","Tito","Luzinho","Leo Young","Fabio Ferraz"]`, aceita um erro de letra). Falar na
     rodada = consentimento (o Sam avisa); a voz é dado pessoal sensível (LGPD). Apagar a voz de alguém:
