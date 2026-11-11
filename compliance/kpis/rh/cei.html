@@ -1228,6 +1228,21 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
           </table></div>
         </div>
       </div>
+      <!-- Reconhecimentos (elogios entre colegas no app) -->
+      <div class="dash-stack">
+        <div class="chart-card" id="card-cei-recon" style="position:relative">
+          <button class="chart-info-btn" onclick="abrirInfoGrafico('reconhecimentos')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+          <div class="chart-title">Reconhecimentos</div>
+          <div class="tbl-scroll"><table class="mini" id="tbl-cei-recon" style="min-width:860px">
+            <thead><tr>
+              <th style="width:96px">Data</th><th style="width:170px">De</th><th style="width:170px">Para</th>
+              <th style="width:130px">Motivo</th><th>Mensagem</th>
+            </tr></thead>
+            <tbody id="cei-recon-body"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">Carregando…</td></tr></tbody>
+          </table></div>
+          <div class="ver-mais-wrap" id="cei-recon-vermais"></div>
+        </div>
+      </div>
     </main>
   </div>
 </div>
@@ -1742,7 +1757,8 @@ var _INFO_GRAFICOS = {
   radar: '<div class="info-note">Média (1 a 5) de cada tema da Pesquisa de Clima, juntando as perguntas do tema. A linha escura é o geral; a verde, as respostas das lideranças. Segue os filtros de unidade e departamento.</div>',
   nuvem: '<div class="info-note">Palavras do Brainstorm dos líderes: quanto maior a palavra, mais vezes ela apareceu. A cor mostra a categoria (legenda embaixo). Não muda com os filtros.</div>',
   analitico: '<div class="info-note">Média (1 a 5) de cada pergunta da Pesquisa de Clima, da maior para a menor, com o tema da pergunta. Clique no cabeçalho para ordenar e arraste a borda da coluna para mudar a largura.</div>',
-  feedback: '<div class="info-note">Comentários livres deixados na Pesquisa de Clima. Os filtros de unidade e departamento valem aqui; o número também aparece no card Feedback.</div>'
+  feedback: '<div class="info-note">Comentários livres deixados na Pesquisa de Clima. Os filtros de unidade e departamento valem aqui; o número também aparece no card Feedback.</div>',
+  reconhecimentos: '<div class="info-note">Elogios que os colaboradores enviam uns aos outros pelo aplicativo: quem reconheceu (De), quem foi reconhecido (Para), o motivo e a mensagem. Mostra os mais recentes primeiro.</div>'
 };
 function abrirInfoGrafico(key){
   var html = _INFO_GRAFICOS[key]; if (!html) return;
@@ -2377,6 +2393,47 @@ function hardRefresh() {
     });
   };
   carregarOpcoesReg(); carregarRegistros();
+})();
+</script>
+
+<!-- Reconhecimentos (elogios entre colegas no app → dp_rh.reconhecimentos) -->
+<script>
+(function(){
+  var MOTIVO={ lideranca:'Liderança', equipe:'Equipe', apoio:'Apoio', proatividade:'Proatividade', qualidade:'Qualidade', atendimento:'Atendimento', outro:'Outro' };
+  var ALL=[], SHOW=12;
+  function _supa(cb){ if(window.__lideresSupa){ cb(window.__lideresSupa); } else { window.addEventListener('lideres:supa', function(){ cb(window.__lideresSupa); }, {once:true}); } }
+  function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function _data(iso){ var s=String(iso||''); var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m? m[3]+'/'+m[2]+'/'+m[1] : '—'; }
+  function _motivo(m){ var k=String(m||'').toLowerCase().trim(); return MOTIVO[k] || (m? _esc(m) : '—'); }
+  function render(){
+    var body=document.getElementById('cei-recon-body'), vm=document.getElementById('cei-recon-vermais');
+    if(!body) return;
+    if(!ALL.length){ body.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">Nenhum reconhecimento ainda</td></tr>'; if(vm) vm.innerHTML=''; return; }
+    var lista=ALL.slice(0,SHOW);
+    body.innerHTML=lista.map(function(x){
+      return '<tr>'+
+        '<td style="white-space:nowrap">'+_data(x.data)+'</td>'+
+        '<td>'+_esc(x.de||'—')+'</td>'+
+        '<td>'+_esc(x.para||'—')+'</td>'+
+        '<td><span class="reg-tipo-pill reg-tipo-fb">'+_motivo(x.motivo)+'</span></td>'+
+        '<td>'+_esc(x.mensagem||'')+'</td>'+
+      '</tr>';
+    }).join('');
+    if(vm){
+      if(ALL.length>SHOW){ vm.innerHTML='<button class="btn btn--primary" onclick="verMaisRecon()">Ver mais ('+(ALL.length-SHOW)+')</button>'; }
+      else { vm.innerHTML=''; }
+    }
+  }
+  window.verMaisRecon=function(){ SHOW=ALL.length; render(); };
+  window.carregarReconhecimentos=function(){
+    _supa(function(supa){
+      supa.schema('tata_plus').rpc('cei_reconhecimentos_listar').then(function(r){
+        ALL=(r&&!r.error&&Array.isArray(r.data))?r.data:[];
+        SHOW=12; render();
+      }, function(){ ALL=[]; render(); });
+    });
+  };
+  carregarReconhecimentos();
 })();
 </script>
 </body>
