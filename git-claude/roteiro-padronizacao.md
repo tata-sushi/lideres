@@ -28,19 +28,19 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 | **1. Dashboards de RH com ação e dado de pessoa (prioridade alta)** | | | | | | | | | | |
 | `kpis/rh/ferias.html` | `governanca-kpis-rh-ferias` | 3 | 6 | 4 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | — | ⏳ |
 | `kpis/rh/recrutamento.html` | `governanca-kpis-rh-recrutamento` | 7 | 21 | 17 | 🔶 10/11 (Linha nas vagas, botão nas ações, CPF; falta Contato — liberar pessoas antes) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/doc.html` | `governanca-kpis-rh-doc` | 4 | 13 | 22 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/admissao.html` | `governanca-kpis-rh-admissao` | 3 | 15 | 18 | 🔶 08/11 (sem cliente próprio; resto na passagem do RH) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/desligamentos.html` | `governanca-kpis-rh-desligamentos` | 3 | 11 | 13 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/sancoes.html` | `governanca-kpis-rh-sancoes` | 2 | 6 | 6 | 🔶 11/11 (página, botões, anon; Linha ⏸ dono) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/ces.html` | `governanca-kpis-rh-ces` | 2 | 6 | 4 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/folha.html` | `governanca-kpis-rh-folha` | 2 | 3 | 4 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/beneficios.html` | `governanca-kpis-rh-beneficios` | 6 | 10 | 20 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/medicina.html` | `governanca-kpis-rh-medicina` | 3 | 5 | 4 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/performance.html` | `governanca-kpis-rh-performance` | 4 | 6 | 27 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/doc.html` | `governanca-kpis-rh-doc` | 4 | 13 | 22 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/admissao.html` | `governanca-kpis-rh-admissao` | 3 | 15 | 18 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/desligamentos.html` | `governanca-kpis-rh-desligamentos` | 3 | 11 | 13 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/sancoes.html` | `governanca-kpis-rh-sancoes` | 2 | 6 | 6 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/ces.html` | `governanca-kpis-rh-ces` | 2 | 6 | 4 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/folha.html` | `governanca-kpis-rh-folha` | 2 | 3 | 4 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/beneficios.html` | `governanca-kpis-rh-beneficios` | 6 | 10 | 20 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/medicina.html` | `governanca-kpis-rh-medicina` | 3 | 5 | 4 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/performance.html` | `governanca-kpis-rh-performance` | 4 | 6 | 27 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/experiencias.html` | `governanca-kpis-rh-experiencias` | 3 | 4 | 2 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/absenteismo.html` | `governanca-kpis-rh-absenteismo` | 3 | 4 | 4 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/bancodehoras.html` | `governanca-kpis-rh-bancodehoras` | 0 | 0 | 1 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/ouvidoria.html` | `governanca-kpis-rh-ouvidoria` | 2 | 3 | 3 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/absenteismo.html` | `governanca-kpis-rh-absenteismo` | 3 | 4 | 4 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/bancodehoras.html` | `governanca-kpis-rh-bancodehoras` | 0 | 0 | 1 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/ouvidoria.html` | `governanca-kpis-rh-ouvidoria` | 2 | 3 | 3 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/escalas.html` | `governanca-app-escala` | 3 | 10 | 27 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/armarios.html` | `governanca-kpis-rh-armarios` | 5 | 8 | 9 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/rh/estoqueadm.html` | `governanca-kpis-rh-estoqueadm` | 6 | 10 | 8 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
@@ -100,6 +100,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Histórico
 
+- 11/11/2026 — RH lote 1 (Sanções, Documentos, Folha, Desligamentos, CES, Benefícios, Medicina, Absenteísmo, Performance, Admissão, Banco de horas, Ouvidoria): HTML pronto; banco num SQL único (`supabase/migrations/20261208_rh_lote1.sql`) que o dono roda; depois: deploy das 4 edge functions, testes e merge. Decisões anotadas no SQL (seção 6).
 - 11/11/2026 — Lote 1 do RH começa por Sanções (migration 20261207): lista e exclusão deixam de ser executáveis por qualquer sessão e passam a conferir página e botão; registrar confere o botão; a lista de colaboradores compartilhada por 8 páginas passa a conferir uma das páginas, mascarar CPF (Valor, área ferias) e não devolver e-mail. Linha nas sanções aguarda o dono.
 - 10/11/2026 — Recrutamento (pedido do dono, uma página): corte de linha nas vagas no servidor (líder vê a própria subárvore; admin e RH tudo), botão conferido em cada ação (rec_porta(<botão>)), CPF mascarado como Valor; removido o filtro de equipe no navegador que deixava o líder com 0 vagas. Migration 20261206. Contato (telefones) fica para quando houver pessoas liberadas em contato-recrutamento (hoje nenhuma).
 - 08/11/2026 — Esquema de abastecimento fechado (migration 20261205, aplicada depois do deploy das quatro páginas): sem políticas abertas, sem acesso direto de anon/authenticated; tudo pelas funções do servidor. Testado: admin lista pelas funções; leitura direta e anon negados.
