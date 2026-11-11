@@ -541,18 +541,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div id="abs-tipos" class="bar-list"></div>
   </div>
 
-  <!-- ══ LINHA: OPERAÇÃO & PESSOAS ══ -->
-  <div class="dash-section">Operação &amp; Pessoas</div>
-  <div class="chart-card chart-card-full">
+  <!-- ══ LINHA: BANCO DE HORAS ══ -->
+  <div class="dash-section">Banco de Horas</div>
+  <div class="dash-kpi-row">
+    <div class="kpi-card"><div class="kpi-label">Saldo líquido (h)</div><div class="kpi-number" id="kpi-bh-saldo">—</div><div class="kpi-sub" id="kpi-bh-saldo-sub">—</div></div>
+    <div class="kpi-card"><div class="kpi-label">Com saldo negativo</div><div class="kpi-number" id="kpi-bh-neg">—</div><div class="kpi-sub" id="kpi-bh-neg-sub">—</div></div>
+  </div>
+  <div class="chart-card">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('bh')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-    <div class="chart-title">Banco de Horas</div>
+    <div class="chart-title">Saldo semanal</div>
     <div class="chart-scroll-wrap"><svg id="hc-banco-horas-line" style="height:auto;display:block;"></svg></div>
     <div class="chart-legend"><span><i style="background:#35383F"></i>Positivo (h)</span><span><i style="background:rgba(53,56,63,0.45)"></i>Negativo (h)</span></div>
   </div>
-  <div class="chart-card chart-card-full">
-    <button class="chart-info-btn" onclick="abrirInfoGrafico('testes')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-    <div class="chart-title">Testes Realizados</div>
-    <div class="chart-scroll-wrap"><svg id="hc-testes-weekly" style="height:auto;display:block;"></svg></div>
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('bhdepto')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Saldo por departamento</div>
+    <div id="bh-depto" class="bar-list"></div>
   </div>
 </div>
 
@@ -1120,10 +1124,8 @@ function renderDashboard() {
   renderTurnoverLinha();
   renderDemandasLinha();
   renderAbsenteismoLinha();
+  renderBancoHorasLinha();
   renderWeeklyEvolutionChart();
-  renderAtestadosChart();
-  renderBancoHorasChart();
-  renderTestesChart();
 }
 function renderContratosChart() {
   if (!_colabs || !_colabs.length) return;
@@ -1204,6 +1206,7 @@ var _INFO_GRAFICOS = {
   mov: '<div class="info-note">Admissões e demissões por semana (a semana começa na segunda-feira), nas últimas 40 semanas. Cada barra mostra a proporção da semana: em cima os admitidos (escuro), embaixo os demitidos (claro). O rótulo é admitidos/demitidos. Os dados são ao vivo: mudou a data de admissão/demissão de alguém, a semana correspondente recalcula no próximo carregamento.</div>',
   atestados: '<div class="info-note">Quantidade de atestados registrados no Absenteísmo por semana (a semana começa na segunda-feira), nas últimas 40 semanas.</div>',
   bh: '<div class="info-note">Soma dos saldos de banco de horas por semana, em horas: linha escura = saldos positivos, linha clara = saldos negativos. Vale o saldo mais recente de cada colaborador na semana; últimas 40 semanas.</div>',
+  bhdepto: '<div class="info-note">Saldo líquido de banco de horas por departamento na semana mais recente (positivos menos negativos, em horas). Barra escura = saldo positivo; barra clara = saldo negativo. Vale o saldo mais recente de cada colaborador.</div>',
   testes: '<div class="info-note">Testes realizados no Recrutamento por semana (a semana começa na segunda-feira), nas últimas 40 semanas.</div>',
   demandas: '<div class="info-note">Quantas demandas dos alinhamentos semanais existem em cada etiqueta (tema), da mais frequente para a menos frequente.</div>',
   abs: '<div class="info-note">Faltas e atestados por semana (a semana começa na segunda-feira), lado a lado, nas últimas 40 semanas. Barra escura = faltas (já abatendo as que viraram folga, banco de horas ou trabalho sem registro); barra clara = atestados.</div>',
@@ -1534,11 +1537,49 @@ function loadBancoHorasData() {
           if (p.length === 3) semKey = p[2] + '-' + (p[1].length<2?'0':'')+p[1] + '-' + (p[0].length<2?'0':'')+p[0];
         } else { semKey = dataStr; }
         if (!semKey || !nome) return;
-        _bhData.push({ semKey: semKey, nome: nome, saldo: saldo, rowIdx: i });
+        _bhData.push({ semKey: semKey, nome: nome, saldo: saldo, rowIdx: i, dep: (r.departamento||'').trim(), uni: (r.unidade||'').trim() });
       });
-      renderBancoHorasChart();
-    }).catch(function(){ _bhData = []; renderBancoHorasChart(); });
+      renderBancoHorasLinha();
+    }).catch(function(){ _bhData = []; renderBancoHorasLinha(); });
   });
+}
+// ─── SUPER PAINEL · LINHA BANCO DE HORAS ───────────────────────────────────────
+function _bhLatestRows() {
+  if (!_bhData || !_bhData.length) return [];
+  var seen={}; _bhData.forEach(function(r){ if(r.semKey) seen[r.semKey]=1; });
+  var keys=Object.keys(seen).sort(); var last=keys[keys.length-1];
+  var mapa={};
+  _bhData.forEach(function(r){ if(r.semKey!==last) return; if(!mapa[r.nome]||r.rowIdx>mapa[r.nome].rowIdx) mapa[r.nome]=r; });
+  return Object.keys(mapa).map(function(k){ return mapa[k]; });
+}
+function renderBancoHorasLinha() {
+  var rows=_bhLatestRows();
+  var pos=0, neg=0, nNeg=0;
+  rows.forEach(function(r){ if(r.saldo>0) pos+=r.saldo; else if(r.saldo<0){ neg+=Math.abs(r.saldo); nNeg++; } });
+  var liquido=Math.round(pos-neg);
+  var el=function(id){ return document.getElementById(id); };
+  if (el('kpi-bh-saldo')) el('kpi-bh-saldo').textContent = rows.length ? (liquido>0?'+':'')+liquido.toLocaleString('pt-BR')+'h' : '—';
+  if (el('kpi-bh-saldo-sub')) el('kpi-bh-saldo-sub').innerHTML = rows.length ? ('+'+Math.round(pos).toLocaleString('pt-BR')+'h / −'+Math.round(neg).toLocaleString('pt-BR')+'h') : '—';
+  var pct = rows.length ? Math.round(nNeg/rows.length*100) : 0;
+  if (el('kpi-bh-neg')) el('kpi-bh-neg').textContent = rows.length ? pct+'%' : '—';
+  if (el('kpi-bh-neg-sub')) el('kpi-bh-neg-sub').innerHTML = rows.length ? ('<strong>'+nNeg+'</strong> de '+rows.length) : '—';
+  renderBancoHorasChart();
+  renderBhDepto(rows);
+}
+function renderBhDepto(rows) {
+  var el=document.getElementById('bh-depto'); if (!el) return;
+  if (!rows || !rows.length){ el.innerHTML='<div class="bar-empty">Sem dados</div>'; return; }
+  var map={};
+  rows.forEach(function(r){ var d=r.dep||'—'; if(!map[d]) map[d]=0; map[d]+=r.saldo; });
+  var arr=Object.keys(map).map(function(k){ return { dep:k, saldo:Math.round(map[k]) }; });
+  arr.sort(function(a,b){ return Math.abs(b.saldo)-Math.abs(a.saldo); });
+  var max=Math.max.apply(null, arr.map(function(x){ return Math.abs(x.saldo); }).concat([1]));
+  el.innerHTML=arr.map(function(x){
+    var w=Math.round(Math.abs(x.saldo)/max*100), neg=x.saldo<0;
+    return '<div class="bar-row" style="cursor:default"><div class="bar-name">'+escH(x.dep)+'</div>'+
+      '<div class="bar-track"><div class="bar-fill" style="width:'+w+'%;background:'+(neg?CARBON2:'#35383F')+'"></div></div>'+
+      '<div class="bar-val">'+(x.saldo>0?'+':'')+x.saldo.toLocaleString('pt-BR')+'h</div></div>';
+  }).join('');
 }
 
 function renderBancoHorasChart() {
@@ -2225,9 +2266,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 setTab('indicadores');
 loadTurnoverData();
-loadAbsenteismoData();
 loadBancoHorasData();
-loadRecrutamentoData();
 loadReportRecrutamento();
 loadReportDemandas();
 loadReportAbsenteismo();
