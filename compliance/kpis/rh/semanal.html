@@ -515,19 +515,27 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 
   </div>
-  <!-- ══ LINHA: TURNOVER ══ -->
-  <div class="dash-section">Turnover</div>
+  <!-- ══ LINHA: HEADCOUNT ══ -->
+  <div class="dash-section">Headcount</div>
   <div class="dash-line dash-line--wide">
     <div class="dash-line-kpis">
-    <div class="kpi-card">
-      <div class="kpi-label">Turnover (ano)</div>
-      <div class="kpi-number" id="kpi-turnover-ano">—</div>
-      <div class="kpi-sub">Semana: <strong id="kpi-turnover-sem">—</strong></div>
-    </div>
     <div class="kpi-card">
       <div class="kpi-label">Headcount</div>
       <div class="kpi-number"><span id="kpi-hc-atual">—</span><span style="color:var(--muted);font-weight:400"> / <span id="kpi-hc-prog">—</span></span></div>
       <div class="kpi-sub"><strong id="kpi-hc-pct">—</strong> preenchido</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Turnover no ano</div>
+      <div class="kpi-number" id="kpi-turnover-ano">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Trocas no ano</div>
+      <div class="kpi-number"><span id="kpi-trocas-adm">—</span><span style="color:var(--muted);font-weight:400"> / <span id="kpi-trocas-dem">—</span></span></div>
+      <div class="kpi-sub">admissões / demissões</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Custo de deslig. no ano</div>
+      <div class="kpi-number" id="kpi-custo-deslig" style="font-size:21px;letter-spacing:-0.5px">—</div>
     </div>
     </div>
   <div class="chart-card">
@@ -1585,28 +1593,35 @@ function getHcProgramadoFiltered() {
   if (df.departamento && df.departamento !== 'Todos') src = src.filter(function(d){ return d.departamento === df.departamento; });
   return src.reduce(function(a,d){ return a + (d.total||0); }, 0);
 }
+var _repCusto = null;
+function loadReportCusto() {
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('report_custo_deslig_ano').then(function(res){
+      _repCusto = (res && !res.error && res.data) ? res.data : null;
+      renderTurnoverLinha();
+    }).catch(function(){ _repCusto = null; renderTurnoverLinha(); });
+  });
+}
 function renderTurnoverLinha() {
   var atual = getHcAtualFiltered();
   var prog  = getHcProgramadoFiltered();
-  var ea=document.getElementById('kpi-hc-atual'), ep=document.getElementById('kpi-hc-prog'), ept=document.getElementById('kpi-hc-pct');
-  if (ea) ea.textContent = (atual!=null ? atual : '—');
-  if (ep) ep.textContent = (prog!=null && prog>0 ? prog : '—');
-  if (ept) ept.textContent = (prog && prog>0 && atual!=null) ? Math.round(atual/prog*100)+'%' : '—';
-  var et=document.getElementById('kpi-turnover-ano'), es=document.getElementById('kpi-turnover-sem');
-  if (!_tvData) { if(et) et.textContent='—'; if(es) es.textContent='—'; return; }
+  var el = function(id){ return document.getElementById(id); };
+  if (el('kpi-hc-atual')) el('kpi-hc-atual').textContent = (atual!=null ? atual : '—');
+  if (el('kpi-hc-prog')) el('kpi-hc-prog').textContent = (prog!=null && prog>0 ? prog : '—');
+  if (el('kpi-hc-pct')) el('kpi-hc-pct').textContent = (prog && prog>0 && atual!=null) ? Math.round(atual/prog*100)+'%' : '—';
+  // Custo de desligamentos no ano (VR + GRRF + saldo devedor)
+  if (el('kpi-custo-deslig')) el('kpi-custo-deslig').textContent = (_repCusto && _repCusto.custo_ano!=null) ? ('R$ '+Math.round(_repCusto.custo_ano).toLocaleString('pt-BR')) : '—';
+  var et=el('kpi-turnover-ano'), ta=el('kpi-trocas-adm'), td=el('kpi-trocas-dem');
+  if (!_tvData) { if(et) et.textContent='—'; if(ta) ta.textContent='—'; if(td) td.textContent='—'; return; }
   var tv = getTvFiltered();
   var ano = new Date().getFullYear();
   var ini = new Date(ano,0,1), fim = new Date(ano+1,0,1);
+  var adm  = tv.filter(function(r){ return r.adm && r.adm>=ini && r.adm<fim; }).length;
   var dems = tv.filter(function(r){ return r.dem && r.dem>=ini && r.dem<fim; }).length;
   var pct = (atual && atual>0) ? Math.round(dems/atual*1000)/10 : 0;
   if (et) et.textContent = (atual && atual>0) ? pct.toFixed(1).replace('.',',')+'%' : '—';
-  // última semana fechada (segunda da semana passada → domingo)
-  var now=new Date(); now.setHours(0,0,0,0); var dow=(now.getDay()+6)%7;
-  var wStart=new Date(now); wStart.setDate(now.getDate()-dow-7);
-  var wEnd=new Date(wStart); wEnd.setDate(wStart.getDate()+7);
-  var a=0, d=0;
-  tv.forEach(function(r){ if(r.adm>=wStart && r.adm<wEnd) a++; if(r.dem && r.dem>=wStart && r.dem<wEnd) d++; });
-  if (es) es.textContent = '+'+a+' adm · −'+d+' dem';
+  if (ta) ta.textContent = adm;
+  if (td) td.textContent = dems;
 }
 // ─── SUPER PAINEL · LINHA CONTROLE DE DEMANDAS ─────────────────────────────────
 var _repDem = null;
@@ -2773,6 +2788,7 @@ loadReportClima();
 loadReportCardapio();
 loadReportMedicina();
 loadReportSancoes();
+loadReportCusto();
 loadHeadcountBase();
 loadAlinhamentosData();
 
