@@ -75,6 +75,8 @@ body[data-sobre] #filters-wrap, body[data-sobre] #content, body[data-sobre] #das
 .filters-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
 .filters-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .filter-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* no celular (2 col) o Status ocupa a linha toda p/ De/Até ficarem lado a lado */
+@media (max-width: 767px) { #dash-filters .fg-status { grid-column: 1 / -1; } }
 .filter-label { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.8px; text-transform: uppercase; color: var(--carbon); }
 .filter-select { appearance: none; background: var(--bg) url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 36px 9px 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--carbon); cursor: pointer; transition: border-color 0.15s; width: 100%; }
 .filter-select:focus { outline: none; border-color: var(--carbon); }
@@ -596,7 +598,7 @@ var dados = [];
 var state = {
   tab: 'pendentes',
   filters:     { unidade: 'Todos', departamento: 'Todos', tipo: 'Todos' },
-  dashFilters: { unidade: 'Todos', departamento: 'Todos', dataIni: '', dataFim: '' }
+  dashFilters: { unidade: 'Todos', departamento: 'Todos', status: 'Todos', dataIni: '', dataFim: '' }
 };
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
@@ -1054,7 +1056,7 @@ function render() {
 function setTab(tab) {
   state.tab = tab;
   state.filters     = { unidade: 'Todos', departamento: 'Todos', tipo: 'Todos' };
-  state.dashFilters = { unidade: 'Todos', departamento: 'Todos', dataIni: '', dataFim: '' };
+  state.dashFilters = { unidade: 'Todos', departamento: 'Todos', status: 'Todos', dataIni: '', dataFim: '' };
   document.getElementById('tab-pendentes').classList.toggle('active', tab === 'pendentes');
   document.getElementById('tab-todos').classList.toggle('active', tab === 'todos');
   if (tab === 'todos') {
@@ -1110,6 +1112,7 @@ function ctxFor(dim) {
     if (!rowMatchesCF(d, dim)) return false;
     if (df.unidade !== 'Todos' && d.unidade !== df.unidade) return false;
     if (df.departamento !== 'Todos' && d.depto !== df.departamento) return false;
+    if (df.status && df.status !== 'Todos' && (d.status || '') !== df.status) return false;
     if (df.dataIni) {
       var dt = parseDateBR(d.data);
       var ini = parseDateBR(df.dataIni.split('-').reverse().join('/'));
@@ -1130,6 +1133,7 @@ function renderDashFilters() {
   var unidades = unique(dados.map(function(d){ return d.unidade; })).filter(Boolean).sort();
   var deptoSrc = df.unidade === 'Todos' ? dados : dados.filter(function(d){ return d.unidade === df.unidade; });
   var deptos   = unique(deptoSrc.map(function(d){ return d.depto; })).filter(Boolean).sort();
+  var statuses = unique(dados.map(function(d){ return d.status; })).filter(Boolean).sort();
 
   function sel(label, key, opts, cur) {
     var h = '<div class="filter-group"><label class="filter-label">' + label + '</label>';
@@ -1149,14 +1153,21 @@ function renderDashFilters() {
     if (devolutivaAbate(d)) return false;   // idem: devolutiva folga/banco/trabalhou abate
     if (df.unidade !== 'Todos' && d.unidade !== df.unidade) return false;
     if (df.departamento !== 'Todos' && d.depto !== df.departamento) return false;
+    if (df.status && df.status !== 'Todos' && (d.status || '') !== df.status) return false;
     if (df.dataIni) { var dt = parseDateBR(d.data); var ini = parseDateBR(df.dataIni.split('-').reverse().join('/')); if (dt && ini && dt < ini) return false; }
     if (df.dataFim) { var dt2 = parseDateBR(d.data); var fim = parseDateBR(df.dataFim.split('-').reverse().join('/')); if (dt2 && fim && dt2 > fim) return false; }
     return true;
   }).length;
 
+  var statusHtml = '<div class="filter-group fg-status"><label class="filter-label">Status</label>' +
+    '<select class="filter-select" onchange="setDashFilter(\'status\',this.value)">' +
+    '<option value="Todos"' + (df.status==='Todos'?' selected':'') + '>Todos</option>' +
+    statuses.map(function(o){ return '<option value="' + escH(o) + '"' + (df.status===o?' selected':'') + '>' + escH(o) + '</option>'; }).join('') +
+    '</select></div>';
   var html = '<div class="filters-row">' +
     sel('Unidade', 'unidade', unidades, df.unidade) +
     sel('Departamento', 'departamento', deptos, df.departamento) +
+    statusHtml +
     dateInput('De', 'dataIni', df.dataIni) +
     dateInput('Até', 'dataFim', df.dataFim) +
   '</div>';
@@ -1175,7 +1186,7 @@ function setDashFilter(key, val) {
 }
 
 function clearDashFilters() {
-  state.dashFilters = { unidade: 'Todos', departamento: 'Todos', dataIni: '', dataFim: '' };
+  state.dashFilters = { unidade: 'Todos', departamento: 'Todos', status: 'Todos', dataIni: '', dataFim: '' };
   renderDashFilters();
   renderDashboard();
 }
