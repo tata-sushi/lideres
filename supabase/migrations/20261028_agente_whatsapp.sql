@@ -1359,3 +1359,8 @@ grant execute on function tata_plus.agente_contato(text) to service_role;
 insert into dp_rh.agente_config (chave, valor)
 values ('modelo_whatsapp', 'openai/gpt-6-luna')
 on conflict (chave) do nothing;
+
+-- ── 19. ata completa pelo WhatsApp (11/11) ────────────────────────────────────
+-- Pedido no grupo DP/RH ("manda a ata completa"): o comentário dizia sempre "resuma"; agora resume para
+-- perguntas e manda a íntegra quando pedirem (o envio divide em mensagens de até 3.500 caracteres).
+comment on view agente_restrito.reunioes_rh is 'Atas das reuniões de DP/RH (pautas, decisões, pendências; as feitas pelo Sam começam com "Síntese executiva da reunião"). conteudo é longo: traga poucas por vez — ex.: order by data_reuniao desc, created_at desc limit 1. Para perguntas sobre a reunião, resuma. Se pedirem a ata completa, na íntegra ou "manda a ata", mande o conteudo inteiro, sem resumir nem cortar (ele é dividido em mais de uma mensagem automaticamente).';
