@@ -232,6 +232,8 @@ body.cf-active #tbody-analitico tr:not(.cf-selected) { opacity: 0.45; }
   .dash-line-kpis { grid-template-columns: 1fr; }               /* desktop: cards empilhados */
   .dashboard .dash-line .kpi-card { min-height: 0; }            /* card no tamanho natural na coluna esquerda */
 }
+/* Cards da coluna de KPIs com a mesma altura (independe do tamanho do número) */
+.dashboard .dash-line-kpis .kpi-card { min-height: 72px; justify-content: center; }
 /* Bar-lists do super painel: 3 colunas (nome · barra · valor) — vence a regra de 2 col das Demandas */
 #abs-tipos .bar-row, #bh-depto .bar-row, #deslig-motivos .bar-row, #fer-pend-uni .bar-row, #ben-recompensas .bar-row, #clima-temas .bar-row, #card-dist .bar-row { grid-template-columns: 116px 1fr 56px; cursor: default; }
 #card-dist .bar-row { grid-template-columns: 60px 1fr 56px; }
@@ -522,20 +524,18 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="kpi-card">
       <div class="kpi-label">Headcount</div>
       <div class="kpi-number"><span id="kpi-hc-atual">—</span><span style="color:var(--muted);font-weight:400"> / <span id="kpi-hc-prog">—</span></span></div>
-      <div class="kpi-sub"><strong id="kpi-hc-pct">—</strong> preenchido</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Turnover no ano</div>
       <div class="kpi-number" id="kpi-turnover-ano">—</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">Trocas no ano</div>
+      <div class="kpi-label">Movimentações (A/D)</div>
       <div class="kpi-number"><span id="kpi-trocas-adm">—</span><span style="color:var(--muted);font-weight:400"> / <span id="kpi-trocas-dem">—</span></span></div>
-      <div class="kpi-sub">admissões / demissões</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Custo de deslig. no ano</div>
-      <div class="kpi-number" id="kpi-custo-deslig" style="font-size:21px;letter-spacing:-0.5px">—</div>
+      <div class="kpi-number" id="kpi-custo-deslig" style="font-size:22px;letter-spacing:-0.5px">—</div>
     </div>
     </div>
   <div class="chart-card">
@@ -1435,10 +1435,15 @@ function getTvFiltered() {
 }
 function getHcAtualFiltered() {
   if (!_colabs || !_colabs.length) return null;
-  // Use getDashFiltered() which relies on getColabsAggregated() — same sócio exclusion logic as Distribuição table
-  var src = getDashFiltered();
-  var tot = src.reduce(function(a, d){ return a + d.total; }, 0);
-  return tot || null;
+  // HC atual = colaboradores ativos, sem sócios (igual à página de Headcount), respeitando o filtro do painel
+  var df = state.dashFilters, n = 0;
+  _colabs.forEach(function(c){
+    if (isExcluded(c.matricula)) return;
+    if (df.unidade && df.unidade !== 'Todos' && (c.unidade||'').trim() !== df.unidade) return;
+    if (df.departamento && df.departamento !== 'Todos' && (c.departamento||'').trim() !== df.departamento) return;
+    n++;
+  });
+  return n || null;
 }
 function parseTvDate(s) {
   if (!s) return null;
@@ -2016,7 +2021,7 @@ function loadHeadcountBase() {
     ? Promise.resolve(_colabs)
     : new Promise(function(resolve){ comSupa(function(supa){
         supa.rpc('hc_colaboradores_listar')
-          .then(function(res){ _colabs = (res.error || !Array.isArray(res.data)) ? [] : res.data; resolve(_colabs); })
+          .then(function(res){ _colabs = (res.error || !Array.isArray(res.data)) ? [] : res.data.filter(function(c){ return (c.status||'')==='Ativo'; }); resolve(_colabs); })
           .catch(function(){ _colabs = []; resolve([]); });
       }); });
   Promise.all([pProg, pColabs]).then(function(r){
