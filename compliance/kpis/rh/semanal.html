@@ -1612,25 +1612,28 @@ function renderDemandasLinha() {
   _demSolChart('dem-weekly', d.dem_semanas);
   _demSolChart('sol-weekly', d.sol_semanas);
 }
-// Abertas × Fechadas por semana — barras lado a lado (abertas escuro, fechadas claro), últimas 40 semanas
+// Abertas × Fechadas por semana — barras empilhadas (abertas em cima escuro, fechadas embaixo claro),
+// altura ABSOLUTA (total real, não 100%), últimas 40 semanas — igual "Gestão de vagas" porém sem normalizar
 function _demSolChart(svgId, semanas) {
   var svg=document.getElementById(svgId); if (!svg) return;
   var weeks=(semanas||[]).map(function(s){ return { label:_recLabelFromISO(s.semana), ab:+s.abertas||0, fe:+s.fechadas||0 }; });
-  var maxV=Math.max.apply(null, weeks.map(function(w){ return Math.max(w.ab,w.fe); }).concat([1]));
+  var maxV=Math.max.apply(null, weeks.map(function(w){ return w.ab+w.fe; }).concat([1]));   // total absoluto
   var H=156, padL=12, padR=12, padTop=24, padBot=26;
-  var n=weeks.length, groupW=SEM_GRUPO, W=padL+padR+n*groupW, plotH=H-padTop-padBot;
-  var barW=15, gap=6;
+  var n=weeks.length, groupW=SEM_GRUPO, W=padL+padR+n*groupW, plotH=H-padTop-padBot, barW=SEM_BARRA;
   svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('width',W); svg.style.width=W+'px'; svg.style.minWidth=W+'px';
+  function bx(i){ return padL+i*groupW+groupW/2-barW/2; }
   var baseline=padTop+plotH, c='';
-  var VAL='font-family="DM Sans, sans-serif" font-size="10" font-weight="800" fill="#35383F"';
   weeks.forEach(function(w,i){
-    var gx=padL+i*groupW+groupW/2, x1=gx-(barW+gap/2), x2=gx+gap/2;
-    var hA=(w.ab/maxV)*plotH, hF=(w.fe/maxV)*plotH;
-    if(hA>0){ c+=_semBarra(x1, baseline-hA, barW, hA, '#35383F', true, false);
-      c+='<text x="'+(x1+barW/2).toFixed(1)+'" y="'+(baseline-hA-5).toFixed(1)+'" text-anchor="middle" '+VAL+'>'+w.ab+'</text>'; }
-    if(hF>0){ c+=_semBarra(x2, baseline-hF, barW, hF, CARBON2, true, false);
-      c+='<text x="'+(x2+barW/2).toFixed(1)+'" y="'+(baseline-hF-5).toFixed(1)+'" text-anchor="middle" '+VAL+'>'+w.fe+'</text>'; }
-    c+='<text x="'+gx.toFixed(1)+'" y="'+(baseline+18)+'" text-anchor="middle" '+SEM_NOME+'>'+w.label+'</text>';
+    var total=w.ab+w.fe;
+    var hAb=(w.ab/maxV)*plotH, hFe=(w.fe/maxV)*plotH;
+    var x=bx(i), cx=x+barW/2;
+    var yFe=baseline-hFe, yAb=baseline-hFe-hAb;   // abertas em cima (escuro), fechadas embaixo (claro)
+    if(total>0){
+      if(hFe>0) c+=_semBarra(x, yFe, barW, hFe, CARBON2, hAb===0, true);
+      if(hAb>0) c+=_semBarra(x, yAb, barW, hAb, '#35383F', true, hFe===0);
+      c+='<text x="'+cx.toFixed(1)+'" y="'+((baseline-(hAb+hFe))-6).toFixed(1)+'" text-anchor="middle" '+SEM_VAL+'>'+w.ab+'/'+w.fe+'</text>';
+    }
+    c+='<text x="'+cx.toFixed(1)+'" y="'+(baseline+18)+'" text-anchor="middle" '+SEM_NOME+'>'+w.label+'</text>';
   });
   svg.innerHTML=c;
 }
