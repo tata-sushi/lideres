@@ -523,13 +523,26 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
   </div>
 
+  <!-- ══ LINHA: ABSENTEÍSMO ══ -->
+  <div class="dash-section">Absenteísmo</div>
+  <div class="dash-kpi-row">
+    <div class="kpi-card"><div class="kpi-label">Faltas (semana)</div><div class="kpi-number" id="kpi-faltas-sem">—</div></div>
+    <div class="kpi-card"><div class="kpi-label">Atestados (semana)</div><div class="kpi-number" id="kpi-atest-sem">—</div></div>
+  </div>
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('abs')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Absenteísmo (semanal)</div>
+    <div class="chart-scroll-wrap"><svg id="abs-weekly" style="height:auto;display:block;"></svg></div>
+    <div class="chart-legend"><span><i style="background:#35383F"></i>Faltas</span><span><i style="background:rgba(53,56,63,0.45)"></i>Atestados</span></div>
+  </div>
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('abstipos')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Tipos de absenteísmo</div>
+    <div id="abs-tipos" class="bar-list"></div>
+  </div>
+
   <!-- ══ LINHA: OPERAÇÃO & PESSOAS ══ -->
   <div class="dash-section">Operação &amp; Pessoas</div>
-  <div class="chart-card chart-card-full">
-    <button class="chart-info-btn" onclick="abrirInfoGrafico('atestados')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-    <div class="chart-title">Atestados</div>
-    <div class="chart-scroll-wrap"><svg id="hc-atestados-weekly" style="height:auto;display:block;"></svg></div>
-  </div>
   <div class="chart-card chart-card-full">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('bh')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Banco de Horas</div>
@@ -1106,6 +1119,7 @@ function renderDashboard() {
   renderRecrutamentoLinha();
   renderTurnoverLinha();
   renderDemandasLinha();
+  renderAbsenteismoLinha();
   renderWeeklyEvolutionChart();
   renderAtestadosChart();
   renderBancoHorasChart();
@@ -1192,6 +1206,8 @@ var _INFO_GRAFICOS = {
   bh: '<div class="info-note">Soma dos saldos de banco de horas por semana, em horas: linha escura = saldos positivos, linha clara = saldos negativos. Vale o saldo mais recente de cada colaborador na semana; últimas 40 semanas.</div>',
   testes: '<div class="info-note">Testes realizados no Recrutamento por semana (a semana começa na segunda-feira), nas últimas 40 semanas.</div>',
   demandas: '<div class="info-note">Quantas demandas dos alinhamentos semanais existem em cada etiqueta (tema), da mais frequente para a menos frequente.</div>',
+  abs: '<div class="info-note">Faltas e atestados por semana (a semana começa na segunda-feira), lado a lado, nas últimas 40 semanas. Barra escura = faltas (já abatendo as que viraram folga, banco de horas ou trabalho sem registro); barra clara = atestados.</div>',
+  abstipos: '<div class="info-note">Distribuição das ausências por tipo nas últimas 40 semanas: Faltas (reais), Atestados, Licenças/Afastamentos, Suspensões e Abonadas (folga, banco de horas, trabalho sem registro).</div>',
   vagas: '<div class="info-note">Vagas por semana (a semana começa na segunda-feira), nas últimas 40 semanas. Em cima (escuro) as vagas abertas na semana (pela data de solicitação); embaixo (claro) as vagas fechadas na semana (pela data de contratação). O rótulo é abertas/fechadas. Os cards mostram as vagas abertas hoje e o total histórico de vagas.</div>',
   enttes: '<div class="info-note">Entrevistas e testes realizados por semana (a semana começa na segunda-feira), lado a lado, nas últimas 40 semanas. Barra escura = entrevistas com desfecho; barra clara = testes em que o candidato compareceu. Não considera agendamentos que não aconteceram.</div>'
 };
@@ -1426,6 +1442,56 @@ function renderDemandasLinha() {
   set('kpi-sol-abertas', d.sol_abertas);
   var es=document.getElementById('kpi-sol-sem');
   if (es) es.textContent = '+'+(d.sol_semana_abertas||0)+' abertas · '+(d.sol_semana_concl||0)+' concl.';
+}
+
+// ─── SUPER PAINEL · LINHA ABSENTEÍSMO ──────────────────────────────────────────
+var _repAbs = null;
+function loadReportAbsenteismo() {
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('report_absenteismo_semanal').then(function(res){
+      _repAbs = (res && !res.error && res.data) ? res.data : { faltas_semana:0, atestados_semana:0, semanas:[], tipos:[] };
+      renderAbsenteismoLinha();
+    }).catch(function(){ _repAbs = { faltas_semana:0, atestados_semana:0, semanas:[], tipos:[] }; renderAbsenteismoLinha(); });
+  });
+}
+function renderAbsenteismoLinha() {
+  if (!_repAbs) return;
+  var ef=document.getElementById('kpi-faltas-sem'), ea=document.getElementById('kpi-atest-sem');
+  if (ef) ef.textContent = (_repAbs.faltas_semana!=null ? _repAbs.faltas_semana : '—');
+  if (ea) ea.textContent = (_repAbs.atestados_semana!=null ? _repAbs.atestados_semana : '—');
+  renderAbsWeeklyChart();
+  renderAbsTipos();
+}
+function renderAbsWeeklyChart() {
+  var svg=document.getElementById('abs-weekly'); if (!svg || !_repAbs) return;
+  var weeks=(_repAbs.semanas||[]).map(function(s){ return { label:_recLabelFromISO(s.semana), f:+s.faltas||0, a:+s.atestados||0 }; });
+  var maxV=Math.max.apply(null, weeks.map(function(w){ return Math.max(w.f,w.a); }).concat([1]));
+  var H=220, padL=12, padR=12, padTop=26, padBot=26;
+  var n=weeks.length, groupW=SEM_GRUPO, W=padL+padR+n*groupW, plotH=H-padTop-padBot;
+  var barW=15, gap=6;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('width',W); svg.style.width=W+'px'; svg.style.minWidth=W+'px';
+  var baseline=padTop+plotH, c='';
+  var VAL='font-family="DM Sans, sans-serif" font-size="10" font-weight="800" fill="#35383F"';
+  weeks.forEach(function(w,i){
+    var gx=padL+i*groupW+groupW/2, x1=gx-(barW+gap/2), x2=gx+gap/2;
+    var hF=(w.f/maxV)*plotH, hA=(w.a/maxV)*plotH;
+    if(hF>0){ c+=_semBarra(x1,baseline-hF,barW,hF,'#35383F',true,false); c+='<text x="'+(x1+barW/2).toFixed(1)+'" y="'+(baseline-hF-5).toFixed(1)+'" text-anchor="middle" '+VAL+'>'+w.f+'</text>'; }
+    if(hA>0){ c+=_semBarra(x2,baseline-hA,barW,hA,CARBON2,true,false); c+='<text x="'+(x2+barW/2).toFixed(1)+'" y="'+(baseline-hA-5).toFixed(1)+'" text-anchor="middle" '+VAL+'>'+w.a+'</text>'; }
+    c+='<text x="'+gx.toFixed(1)+'" y="'+(baseline+18)+'" text-anchor="middle" '+SEM_NOME+'>'+w.label+'</text>';
+  });
+  svg.innerHTML=c;
+}
+function renderAbsTipos() {
+  var el=document.getElementById('abs-tipos'); if (!el || !_repAbs) return;
+  var tipos=(_repAbs.tipos||[]).slice().filter(function(t){ return (t.n||0)>0; }).sort(function(a,b){ return (b.n||0)-(a.n||0); });
+  if (!tipos.length){ el.innerHTML='<div class="bar-empty">Sem dados</div>'; return; }
+  var max=Math.max.apply(null, tipos.map(function(t){ return t.n||0; }).concat([1]));
+  el.innerHTML=tipos.map(function(t){
+    var w=Math.round((t.n||0)/max*100);
+    return '<div class="bar-row" style="cursor:default"><div class="bar-name">'+escH(t.label)+'</div>'+
+      '<div class="bar-track"><div class="bar-fill" style="width:'+w+'%"></div></div>'+
+      '<div class="bar-val">'+(t.n||0)+'</div></div>';
+  }).join('');
 }
 
 // Carrega headcount programado (dados) + colaboradores ativos (_colabs) para o card de Headcount,
@@ -2164,6 +2230,7 @@ loadBancoHorasData();
 loadRecrutamentoData();
 loadReportRecrutamento();
 loadReportDemandas();
+loadReportAbsenteismo();
 loadHeadcountBase();
 loadAlinhamentosData();
 
