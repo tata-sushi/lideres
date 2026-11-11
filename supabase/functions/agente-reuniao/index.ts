@@ -343,27 +343,35 @@ const hora = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }) : "";
 const dia = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
+// 11/11: reunião de 1h16 voltou com a resposta vazia (o raciocínio do modelo gastou os 5.000 tokens antes do
+// texto). Agora: folga de 16.000 tokens, e resposta vazia tenta o próximo modelo, com o motivo no erro/log.
 async function chamarClaude(sistema: string, usuario: string): Promise<string> {
   let ultimo = "";
   for (const modelo of MODELOS_ATA) {
     const r = await fetch(LLM_URL, {
       method: "POST",
-      signal: AbortSignal.timeout(180_000),
+      signal: AbortSignal.timeout(280_000),
       headers: {
         Authorization: `Bearer ${LLM_KEY}`, "Content-Type": "application/json",
         "HTTP-Referer": "https://lideres.tatasushi.tech", "X-Title": "Tata Agente RH - ata",
       },
       body: JSON.stringify({
-        model: modelo, temperature: 0.2, max_tokens: 5000,
+        model: modelo, max_tokens: 16000, reasoning: { effort: "medium" },
         messages: [{ role: "system", content: sistema }, { role: "user", content: usuario }],
       }),
     });
     const txt = await r.text();
     if (r.ok) {
-      const c = JSON.parse(txt)?.choices?.[0]?.message?.content;
-      if (c) return String(c).trim();
+      let j: any = null;
+      try { j = JSON.parse(txt); } catch { /* resposta cortada */ }
+      const ch = j?.choices?.[0];
+      const c = String(ch?.message?.content ?? "").trim();
+      console.log("ata llm", JSON.stringify({ modelo, fim: ch?.finish_reason ?? null, letras: c.length, uso: j?.usage ?? null }));
+      if (c) return c;
+      ultimo = `LLM sem texto (${modelo}): fim=${ch?.finish_reason ?? "?"} erro=${JSON.stringify(ch?.error ?? j?.error ?? null).slice(0, 150)}`;
+      continue; // resposta vazia: tenta o próximo modelo
     }
-    ultimo = `LLM ${r.status} (${modelo}): ${txt.slice(0, 200)}`;
+    ultimo = `LLM ${r.status} (${modelo}): ${txt.trim().slice(0, 200)}`;
     if (!(r.status === 400 || r.status === 404) || !/model/i.test(txt)) break;
   }
   throw new Error(ultimo);
@@ -642,6 +650,14 @@ Deno.serve(async (req) => {
       const r = await chamarClaude(instrucoesAta(await opcoesKanban()),
         `Reunião: Reunião de RH (teste) — ${diaSemana(agora)}.\n\nTRANSCRIÇÃO\n${String(t.transcricao ?? "")}`);
       return json({ ok: true, ...blocos(r, "Reunião de RH (teste)", dia(agora)), ms: Date.now() - t0 });
+    }
+    if (t?.acao === "refazer_ata") {
+      const { data: r } = await supa.rpc("agente_reuniao_ver", { p_id: String(t.reuniao ?? "") });
+      if (!r) return json({ ok: false, erro: "reunião não encontrada" }, 404);
+      if ((r as any).status !== "erro") return json({ ok: false, erro: `reunião está ${(r as any).status}` }, 409);
+      await supa.rpc("agente_reuniao_status", { p_id: (r as any).id, p_status: "gerando_ata", p_erro: null });
+      EdgeRuntime.waitUntil(gerarAta((r as any).id));
+      return json({ ok: true, status: "gerando_ata" });
     }
     if (t?.acao === "teste_vozes") {
       // separa por vozes uma reunião já gravada, sem cadastrar vozes nem fazer ata
