@@ -185,7 +185,12 @@ begin
           or tata_plus.pode_botao('governanca-kpis-rh-doc::gerar-documento')
           or tata_plus.pode_botao('governanca-kpis-rh-doc::enviar-documentos-lote')
           or tata_plus.pode_botao('governanca-kpis-rh-admissao::gerar-doc-admissao')
-          or tata_plus.pode_botao('governanca-app-escala::cartao-ponto')) then
+          or tata_plus.pode_botao('governanca-app-escala::cartao-ponto')
+          or tata_plus.pode_botao('governanca-kpis-rh-beneficios::gerar-termos')
+          or tata_plus.pode_botao('governanca-kpis-rh-armarios::registrar-movimentacao')
+          or tata_plus.pode_botao('governanca-kpis-rh-armarios::reenviar-assinatura-digital')
+          or tata_plus.pode_botao('governanca-kpis-rh-estoqueadm::enviar-assinatura-digital')
+          or tata_plus.pode_botao('governanca-kpis-rh-estoqueadm::termo-troca-epi')) then
     return jsonb_build_object('ok',false,'erro','sem_permissao'); end if;
   if coalesce(p_matricula,'')='' or coalesce(p_titulo,'')='' then
     return jsonb_build_object('ok',false,'erro','dados_incompletos'); end if;
@@ -214,7 +219,10 @@ create or replace function public.colaborador_documento_pendente_assinatura_salv
 as $function$
 declare v_row dp_rh.colaborador_documentos; v_versao integer;
   v_por text := public.doc_porta_botoes('governanca-kpis-rh-doc::gerar-documento', 'governanca-kpis-rh-doc::enviar-documentos-lote',
-                                        'governanca-kpis-rh-admissao::gerar-doc-admissao', 'governanca-app-escala::cartao-ponto');
+                                        'governanca-kpis-rh-admissao::gerar-doc-admissao', 'governanca-app-escala::cartao-ponto',
+                                        'governanca-kpis-rh-beneficios::gerar-termos', 'governanca-kpis-rh-armarios::registrar-movimentacao',
+                                        'governanca-kpis-rh-armarios::reenviar-assinatura-digital', 'governanca-kpis-rh-estoqueadm::enviar-assinatura-digital',
+                                        'governanca-kpis-rh-estoqueadm::termo-troca-epi');
 begin
   select coalesce(max(versao), 0) + 1 into v_versao
     from dp_rh.colaborador_documentos
@@ -235,7 +243,10 @@ create or replace function public.colaborador_documento_definir_atribuicao(p_id 
 as $function$
 declare v_row dp_rh.colaborador_documentos;
   v_por text := public.doc_porta_botoes('governanca-kpis-rh-doc::gerar-documento', 'governanca-kpis-rh-doc::enviar-documentos-lote',
-                                        'governanca-kpis-rh-admissao::gerar-doc-admissao', 'governanca-app-escala::cartao-ponto');
+                                        'governanca-kpis-rh-admissao::gerar-doc-admissao', 'governanca-app-escala::cartao-ponto',
+                                        'governanca-kpis-rh-beneficios::gerar-termos', 'governanca-kpis-rh-armarios::registrar-movimentacao',
+                                        'governanca-kpis-rh-armarios::reenviar-assinatura-digital', 'governanca-kpis-rh-estoqueadm::enviar-assinatura-digital',
+                                        'governanca-kpis-rh-estoqueadm::termo-troca-epi');
 begin
   update dp_rh.colaborador_documentos
      set assinatura_atribuicao_id = p_assinatura_atribuicao_id, updated_at = now()
@@ -253,7 +264,7 @@ create or replace function public.colaborador_documentos_salvar(p_matricula text
  set search_path to 'dp_rh', 'tata_plus', 'public'
 as $function$
 declare v_row dp_rh.colaborador_documentos;
-  v_por text := public.doc_porta_botoes('governanca-kpis-rh-doc::anexar-documento', 'governanca-kpis-rh-folha::enviar-holerites');
+  v_por text := public.doc_porta_botoes('governanca-kpis-rh-doc::anexar-documento', 'governanca-kpis-rh-folha::enviar-holerites', 'governanca-kpis-rh-agenda::certificado');
 begin
   update dp_rh.colaborador_documentos
      set nome_arquivo = p_nome_arquivo, link = p_link, mime = p_mime, tamanho = p_tamanho,
@@ -329,7 +340,7 @@ create or replace function public.doc_tipo_criar(p_categoria text, p_nome text, 
 as $function$
 declare
   v_categoria_ordem int; v_ordem int; v_row dp_rh.doc_tipos;
-  v_por text := public.doc_porta_botoes('governanca-kpis-rh-doc::cadastrar-documento');
+  v_por text := public.doc_porta_botoes('governanca-kpis-rh-doc::cadastrar-documento', 'governanca-kpis-rh-agenda::certificado');
 begin
   select categoria_ordem into v_categoria_ordem from dp_rh.doc_tipos where categoria = p_categoria limit 1;
   if v_categoria_ordem is null then
@@ -465,15 +476,17 @@ drop policy if exists dp_documentos_upload on storage.objects;
 create policy dp_documentos_select on storage.objects for select to authenticated
   using (bucket_id = 'dp-documentos'
          and (split_part(name, '/', 1) = tata_plus.minha_matricula()
-              or tata_plus.gov_tenho_alguma('governanca-kpis-rh-doc', 'governanca-kpis-rh-folha')));
+              or tata_plus.gov_tenho_alguma('governanca-kpis-rh-doc', 'governanca-kpis-rh-folha', 'governanca-kpis-rh-agenda')));
 create policy dp_documentos_upload on storage.objects for insert to authenticated
   with check (bucket_id = 'dp-documentos'
               and (tata_plus.pode_botao('governanca-kpis-rh-doc::anexar-documento')
-                   or tata_plus.pode_botao('governanca-kpis-rh-folha::enviar-holerites')));
+                   or tata_plus.pode_botao('governanca-kpis-rh-folha::enviar-holerites')
+                   or tata_plus.pode_botao('governanca-kpis-rh-agenda::certificado')));
 create policy dp_documentos_update on storage.objects for update to authenticated
   using (bucket_id = 'dp-documentos'
          and (tata_plus.pode_botao('governanca-kpis-rh-doc::anexar-documento')
-              or tata_plus.pode_botao('governanca-kpis-rh-folha::enviar-holerites')))
+              or tata_plus.pode_botao('governanca-kpis-rh-folha::enviar-holerites')
+              or tata_plus.pode_botao('governanca-kpis-rh-agenda::certificado')))
   with check (bucket_id = 'dp-documentos');
 
 revoke execute on function tata_plus.docs_enviar_para_assinatura(text, text, text, text, text, uuid, boolean, boolean, text) from public, anon;
