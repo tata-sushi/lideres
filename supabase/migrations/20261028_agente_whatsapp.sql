@@ -1360,7 +1360,8 @@ insert into dp_rh.agente_config (chave, valor)
 values ('modelo_whatsapp', 'openai/gpt-6-luna')
 on conflict (chave) do nothing;
 
--- ── 19. ata completa pelo WhatsApp (11/11) ────────────────────────────────────
--- Pedido no grupo DP/RH ("manda a ata completa"): o comentário dizia sempre "resuma"; agora resume para
--- perguntas e manda a íntegra quando pedirem (o envio divide em mensagens de até 3.500 caracteres).
-comment on view agente_restrito.reunioes_rh is 'Atas das reuniões de DP/RH (pautas, decisões, pendências; as feitas pelo Sam começam com "Síntese executiva da reunião"). conteudo é longo: traga poucas por vez — ex.: order by data_reuniao desc, created_at desc limit 1. Para perguntas sobre a reunião, resuma. Se pedirem a ata completa, na íntegra ou "manda a ata", mande o conteudo inteiro, sem resumir nem cortar (ele é dividido em mais de uma mensagem automaticamente).';
+-- ── 19. ata pelo WhatsApp: assuntos e íntegra (11/11) ─────────────────────────
+-- Pedido do responsável: "Sam, manda todos os assuntos da reunião" → todos os temas da ata, cada um com o
+-- conteúdo (números, proposta, encaminhamento), + decisões e pendências; "manda a ata completa" → a íntegra.
+-- Também ensinado ao Sam (dp_rh.agente_conhecimento, fonte victor, #2386), que vale acima da regra de ser sucinto.
+comment on view agente_restrito.reunioes_rh is 'Atas das reuniões de DP/RH (pautas, decisões, pendências; as feitas pelo Sam começam com "Síntese executiva da reunião"). conteudo é longo: traga poucas por vez — ex.: order by data_reuniao desc, created_at desc limit 1. Pergunta pontual sobre a reunião: responda curto. Se pedirem os assuntos, os tópicos, as pautas ou o resumo completo da reunião: TODOS os temas da ata, sem pular nenhum, no formato "*Reunião de RH — <data>*", depois "*Assuntos*" com uma linha por tema ("• *Tema*: o principal número, proposta ou encaminhamento; o que ficou em aberto"), depois "*Decisões*" (•) e "*Pendências*" (• responsável — o quê — prazo, se houver), e por fim "Ata completa no portal." Se pedirem a ata completa ou na íntegra: o conteudo inteiro, sem resumir nem cortar (é dividido em mais de uma mensagem automaticamente).';
