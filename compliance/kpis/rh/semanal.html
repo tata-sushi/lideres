@@ -225,6 +225,9 @@ body.cf-active #tbody-analitico tr:not(.cf-selected) { opacity: 0.45; }
 #card-dist .bar-row { grid-template-columns: 60px 1fr 56px; }
 #card-dist .bar-row:hover { background: none; }
 #card-dist .bar-val { text-align: right; }
+#med-tipos .bar-row { grid-template-columns: 150px 1fr 48px; cursor: default; }
+#med-tipos .bar-row:hover { background: none; }
+#med-tipos .bar-val { text-align: right; }
 #deslig-motivos .bar-row, #ben-recompensas .bar-row { grid-template-columns: 160px 1fr 44px; }
 #clima-temas .bar-row { grid-template-columns: 150px 1fr 46px; }
 #abs-tipos .bar-row:hover, #bh-depto .bar-row:hover, #deslig-motivos .bar-row:hover, #fer-pend-uni .bar-row:hover, #ben-recompensas .bar-row:hover, #clima-temas .bar-row:hover { background: none; }
@@ -652,6 +655,23 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <button class="chart-info-btn" onclick="abrirInfoGrafico('carddist')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Distribuição das notas</div>
     <div id="card-dist" class="bar-list"></div>
+  </div>
+
+  <!-- ══ LINHA: SAÚDE OCUPACIONAL ══ -->
+  <div class="dash-section">Saúde ocupacional</div>
+  <div class="dash-kpi-row">
+    <div class="kpi-card"><div class="kpi-label">Exames a vencer (30d)</div><div class="kpi-number" id="kpi-med-avencer">—</div></div>
+    <div class="kpi-card"><div class="kpi-label">Exames vencidos</div><div class="kpi-number" id="kpi-med-vencidos">—</div><div class="kpi-sub"><strong id="kpi-med-validos">—</strong> válidos</div></div>
+  </div>
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('exammes')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Exames vencendo por mês (próximos 12)</div>
+    <div class="chart-scroll-wrap"><svg id="med-meses" style="height:auto;display:block;"></svg></div>
+  </div>
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('examtipos')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Tipos de exames</div>
+    <div id="med-tipos" class="bar-list"></div>
   </div>
 </div>
 
@@ -1225,6 +1245,7 @@ function renderDashboard() {
   renderBeneficiosLinha();
   renderClimaLinha();
   renderCardapioLinha();
+  renderMedicinaLinha();
   renderWeeklyEvolutionChart();
 }
 function renderContratosChart() {
@@ -1309,6 +1330,8 @@ var _INFO_GRAFICOS = {
   bhdepto: '<div class="info-note">Saldo líquido de banco de horas por departamento na semana mais recente (positivos menos negativos, em horas). Barra escura = saldo positivo; barra clara = saldo negativo. Vale o saldo mais recente de cada colaborador.</div>',
   testes: '<div class="info-note">Testes realizados no Recrutamento por semana (a semana começa na segunda-feira), nas últimas 40 semanas.</div>',
   demandas: '<div class="info-note">Quantas demandas dos alinhamentos semanais existem em cada etiqueta (tema), da mais frequente para a menos frequente.</div>',
+  exammes: '<div class="info-note">Exames ocupacionais que vencem em cada um dos próximos 12 meses (pela próxima realização). Ajuda a programar os agendamentos.</div>',
+  examtipos: '<div class="info-note">Exames ocupacionais ativos por tipo. Os cards mostram quantos vencem em até 30 dias, quantos já venceram e quantos estão válidos.</div>',
   cardmedia: '<div class="info-note">Média (1 a 5) das avaliações do cardápio da refeição (Tatá House) feitas pelo aplicativo, por semana. Só aparecem as semanas com avaliações.</div>',
   carddist: '<div class="info-note">Quantas avaliações do cardápio receberam cada nota (★1 a ★5), no total. O card "Média do cardápio" é a média geral de todas as notas.</div>',
   climatema: '<div class="info-note">Média (1 a 5) de cada tema da Pesquisa de Clima, juntando as perguntas do tema, da maior para a menor. O card "Média geral de clima" é a média de todas as respostas.</div>',
@@ -1749,6 +1772,55 @@ function renderClimaReconWeekly() {
     c+='<text x="'+cx.toFixed(1)+'" y="'+(baseline+18)+'" text-anchor="middle" '+SEM_NOME+'>'+w.label+'</text>';
   });
   svg.innerHTML=c;
+}
+
+// ─── SUPER PAINEL · LINHA SAÚDE OCUPACIONAL ────────────────────────────────────
+var _repMed = null;
+function loadReportMedicina() {
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('report_medicina_resumo').then(function(res){
+      _repMed = (res && !res.error && res.data) ? res.data : { avencer30:0, vencidos:0, validos:0, meses:[], tipos:[] };
+      renderMedicinaLinha();
+    }).catch(function(){ _repMed = { avencer30:0, vencidos:0, validos:0, meses:[], tipos:[] }; renderMedicinaLinha(); });
+  });
+}
+function renderMedicinaLinha() {
+  if (!_repMed) return;
+  var set=function(id,v){ var e=document.getElementById(id); if(e) e.textContent=(v!=null?v:'—'); };
+  set('kpi-med-avencer', _repMed.avencer30);
+  set('kpi-med-vencidos', _repMed.vencidos);
+  set('kpi-med-validos', _repMed.validos);
+  renderMedMesesChart();
+  renderMedTipos();
+}
+function renderMedMesesChart() {
+  var svg=document.getElementById('med-meses'); if (!svg || !_repMed) return;
+  var meses=(_repMed.meses||[]).map(function(s){ return { label:_mesLabel(s.mes), n:+s.n||0 }; });
+  var maxV=Math.max.apply(null, meses.map(function(w){ return w.n; }).concat([1]));
+  var H=220, padL=12, padR=12, padTop=24, padBot=26;
+  var n=meses.length, groupW=SEM_GRUPO, W=padL+padR+n*groupW, plotH=H-padTop-padBot, barW=SEM_BARRA;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('width',W); svg.style.width=W+'px'; svg.style.minWidth=W+'px';
+  function bx(i){ return padL+i*groupW+groupW/2-barW/2; }
+  var baseline=padTop+plotH, c='';
+  meses.forEach(function(w,i){
+    var h=(w.n/maxV)*plotH, x=bx(i), cx=x+barW/2;
+    if (h>0){ c+=_semBarra(x, baseline-h, barW, h, '#35383F', true, false);
+      c+='<text x="'+cx.toFixed(1)+'" y="'+(baseline-h-6).toFixed(1)+'" text-anchor="middle" '+SEM_VAL+'>'+w.n+'</text>'; }
+    c+='<text x="'+cx.toFixed(1)+'" y="'+(baseline+18)+'" text-anchor="middle" '+SEM_NOME+'>'+w.label+'</text>';
+  });
+  svg.innerHTML=c;
+}
+function renderMedTipos() {
+  var el=document.getElementById('med-tipos'); if (!el || !_repMed) return;
+  var arr=(_repMed.tipos||[]).slice().filter(function(t){ return (t.n||0)>0; }).sort(function(a,b){ return (b.n||0)-(a.n||0); });
+  if (!arr.length){ el.innerHTML='<div class="bar-empty">Sem dados</div>'; return; }
+  var max=Math.max.apply(null, arr.map(function(t){ return t.n||0; }).concat([1]));
+  el.innerHTML=arr.map(function(t){
+    var w=Math.round((t.n||0)/max*100);
+    return '<div class="bar-row" style="cursor:default"><div class="bar-name" title="'+escH(t.label)+'">'+escH(t.label)+'</div>'+
+      '<div class="bar-track"><div class="bar-fill" style="width:'+w+'%"></div></div>'+
+      '<div class="bar-val">'+(t.n||0)+'</div></div>';
+  }).join('');
 }
 
 // ─── SUPER PAINEL · LINHA CARDÁPIO (REFEIÇÃO) ──────────────────────────────────
@@ -2629,6 +2701,7 @@ loadReportFerias();
 loadReportBeneficios();
 loadReportClima();
 loadReportCardapio();
+loadReportMedicina();
 loadHeadcountBase();
 loadAlinhamentosData();
 
