@@ -9,7 +9,10 @@ Decisões do usuário (28/10):
 - **Responde só quando chamado**: "Sam, …", @Sam ou reply a uma mensagem dele.
 - **Instância uazapi do Sam** (`sam`, número 5511939311173). Ela só enviava (resumos, aniversários, pendências)
   e não tinha webhook. O agente tem **fluxo próprio no n8n** (porteiro). Os fluxos existentes não foram mexidos.
-- **Claude via OpenRouter**, reaproveitando a `LLM_API_KEY`.
+- **IA via OpenRouter**, reaproveitando a `LLM_API_KEY`. No WhatsApp, desde 11/11: **GPT-6 Luna** (`openai/gpt-6-luna`,
+  ~US$ 0,004 por resposta, contra ~US$ 0,05 do Sonnet), definido em `agente_config.modelo_whatsapp` (vale em 1 min,
+  sem publicar; vazio = Sonnet). Se o Luna falhar, a resposta sai pelo Sonnet e `meta.modelo` registra quem respondeu.
+  Reunião ao vivo e ata continuam no **Claude Sonnet 5.5**.
 - **Consulta livre só-leitura**, sem colunas sensíveis.
 
 > ⚠️ Adicionar alguém ao grupo = dar acesso aos dados que o Sam consulta (a resposta é vista por todos do grupo).
@@ -274,7 +277,9 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
 ## Ligar
 
 1. Token da instância `sam`: já no banco (`agente_config.uazapi_token`). Secret `SAM_UAZAPI_TOKEN` é opcional
-   (sobrepõe). Outros opcionais: `SAM_UAZAPI_URL`, `AGENTE_LLM_MODEL` (padrão `anthropic/claude-sonnet-5.5`).
+   (sobrepõe). Outros opcionais: `SAM_UAZAPI_URL`, `AGENTE_LLM_MODEL` (padrão `anthropic/claude-sonnet-5.5`; vale na
+   reunião e como reserva do WhatsApp). Modelo do WhatsApp: `update dp_rh.agente_config set valor = '<modelo>' where
+   chave = 'modelo_whatsapp'` (`''` volta ao Sonnet). Testar outro modelo sem trocar: modo teste com `"modelo": "…"`.
 2. n8n: publicar **Agente RH — Sam (WhatsApp)**. Webhook da instância `sam` na uazapi → URL de produção do fluxo,
    evento **messages**, excluindo **wasSentByApi** e **sem** excluir grupos.
 3. Grupo novo: adicionar o Sam e mandar **"Sam, oi"**. O grupo aparece pendente:
