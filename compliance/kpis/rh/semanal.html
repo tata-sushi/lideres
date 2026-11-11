@@ -225,6 +225,7 @@ body.cf-active #tbody-analitico tr:not(.cf-selected) { opacity: 0.45; }
 /* Linha por área: coluna de KPIs empilhados à esquerda + gráficos à direita */
 .dash-line { display: flex; flex-direction: column; gap: 12px; }
 .dash-line-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 767px) { .dash-line-kpis .kpi-card:last-child:nth-child(odd) { grid-column: 1 / -1; } }
 @media (min-width: 768px) {
   .dashboard .dash-line { grid-column: 1 / -1; display: grid; grid-template-columns: 240px minmax(0,1fr) minmax(0,1fr); gap: 12px; align-items: start; }
   .dashboard .dash-line--wide { grid-template-columns: 240px minmax(0,1fr); }
@@ -572,10 +573,11 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
   <!-- ══ LINHA: ABSENTEÍSMO ══ -->
   <div class="dash-section">Absenteísmo</div>
-  <div class="dash-line">
+  <div class="dash-line dash-line--wide">
     <div class="dash-line-kpis">
-    <div class="kpi-card"><div class="kpi-label">Faltas (semana)</div><div class="kpi-number" id="kpi-faltas-sem">—</div></div>
-    <div class="kpi-card"><div class="kpi-label">Atestados (semana)</div><div class="kpi-number" id="kpi-atest-sem">—</div></div>
+    <div class="kpi-card"><div class="kpi-label">Absenteísmo no ano</div><div class="kpi-number" id="kpi-abs-ano">—</div></div>
+    <div class="kpi-card"><div class="kpi-label">Faltas no ano</div><div class="kpi-number" id="kpi-faltas-ano">—</div></div>
+    <div class="kpi-card"><div class="kpi-label">Atestados no ano</div><div class="kpi-number" id="kpi-atest-ano">—</div></div>
     </div>
   <div class="chart-card">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('abs')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
@@ -583,12 +585,6 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-scroll-wrap"><svg id="abs-weekly" style="height:auto;display:block;"></svg></div>
     <div class="chart-legend"><span><i style="background:#35383F"></i>Faltas</span><span><i style="background:rgba(53,56,63,0.45)"></i>Atestados</span></div>
   </div>
-  <div class="chart-card">
-    <button class="chart-info-btn" onclick="abrirInfoGrafico('abstipos')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-    <div class="chart-title">Tipos de absenteísmo</div>
-    <div id="abs-tipos" class="bar-list"></div>
-  </div>
-
   </div>
   <!-- ══ LINHA: BANCO DE HORAS ══ -->
   <div class="dash-section">Banco de Horas</div>
@@ -1395,8 +1391,7 @@ var _INFO_GRAFICOS = {
   feriaspend: '<div class="info-note">Colaboradores com férias pendentes de agendamento, por unidade. O card "Vencendo em 60 dias" é quem está pendente com o período concessivo terminando nos próximos 60 dias.</div>',
   deslig: '<div class="info-note">Desligamentos por semana (a semana começa na segunda-feira), pela data de demissão, nas últimas 40 semanas.</div>',
   motivos: '<div class="info-note">Motivo da saída (tipo de rescisão) dos desligamentos das últimas 40 semanas, do mais frequente para o menos frequente. O card "Índice de recomendação" é a % de ex-colaboradores que recomendariam o TATÁ (nota 4 ou 5 na pesquisa de desligamento).</div>',
-  abs: '<div class="info-note">Faltas e atestados por semana (a semana começa na segunda-feira), lado a lado, nas últimas 40 semanas. Barra escura = faltas (já abatendo as que viraram folga, banco de horas ou trabalho sem registro); barra clara = atestados.</div>',
-  abstipos: '<div class="info-note">Distribuição das ausências por tipo nas últimas 40 semanas: Faltas (reais), Atestados, Licenças/Afastamentos, Suspensões e Abonadas (folga, banco de horas, trabalho sem registro).</div>',
+  abs: '<div class="info-note">Faltas e atestados por semana (a semana começa na segunda-feira), lado a lado, nas últimas 40 semanas. Barra escura = faltas (já abatendo as que viraram folga, banco de horas ou trabalho sem registro); barra clara = atestados (atestado médico, licença nojo e licença paternidade). Os cards somam o ano: Absenteísmo = faltas + atestados.</div>',
   vagas: '<div class="info-note">Vagas por semana (a semana começa na segunda-feira), nas últimas 40 semanas. Em cima (escuro) as vagas abertas na semana (pela data de solicitação); embaixo (claro) as vagas fechadas na semana (pela data de contratação). O rótulo é abertas/fechadas. Os cards mostram as vagas abertas hoje e o total histórico de vagas.</div>',
   enttes: '<div class="info-note">Entrevistas e testes realizados por semana (a semana começa na segunda-feira), lado a lado, nas últimas 40 semanas. Barra escura = entrevistas com desfecho; barra clara = testes em que o candidato compareceu. Não considera agendamentos que não aconteceram.</div>'
 };
@@ -1964,18 +1959,18 @@ var _repAbs = null;
 function loadReportAbsenteismo() {
   comSupa(function(supa){
     supa.schema('tata_plus').rpc('report_absenteismo_semanal').then(function(res){
-      _repAbs = (res && !res.error && res.data) ? res.data : { faltas_semana:0, atestados_semana:0, semanas:[], tipos:[] };
+      _repAbs = (res && !res.error && res.data) ? res.data : { absenteismo_ano:0, faltas_ano:0, atestados_ano:0, semanas:[] };
       renderAbsenteismoLinha();
-    }).catch(function(){ _repAbs = { faltas_semana:0, atestados_semana:0, semanas:[], tipos:[] }; renderAbsenteismoLinha(); });
+    }).catch(function(){ _repAbs = { absenteismo_ano:0, faltas_ano:0, atestados_ano:0, semanas:[] }; renderAbsenteismoLinha(); });
   });
 }
 function renderAbsenteismoLinha() {
   if (!_repAbs) return;
-  var ef=document.getElementById('kpi-faltas-sem'), ea=document.getElementById('kpi-atest-sem');
-  if (ef) ef.textContent = (_repAbs.faltas_semana!=null ? _repAbs.faltas_semana : '—');
-  if (ea) ea.textContent = (_repAbs.atestados_semana!=null ? _repAbs.atestados_semana : '—');
+  var set=function(id,v){ var e=document.getElementById(id); if(e) e.textContent=(v!=null?Number(v).toLocaleString('pt-BR'):'—'); };
+  set('kpi-abs-ano', _repAbs.absenteismo_ano);
+  set('kpi-faltas-ano', _repAbs.faltas_ano);
+  set('kpi-atest-ano', _repAbs.atestados_ano);
   renderAbsWeeklyChart();
-  renderAbsTipos();
 }
 function renderAbsWeeklyChart() {
   var svg=document.getElementById('abs-weekly'); if (!svg || !_repAbs) return;
@@ -1996,19 +1991,6 @@ function renderAbsWeeklyChart() {
   });
   svg.innerHTML=c;
 }
-function renderAbsTipos() {
-  var el=document.getElementById('abs-tipos'); if (!el || !_repAbs) return;
-  var tipos=(_repAbs.tipos||[]).slice().filter(function(t){ return (t.n||0)>0; }).sort(function(a,b){ return (b.n||0)-(a.n||0); });
-  if (!tipos.length){ el.innerHTML='<div class="bar-empty">Sem dados</div>'; return; }
-  var max=Math.max.apply(null, tipos.map(function(t){ return t.n||0; }).concat([1]));
-  el.innerHTML=tipos.map(function(t){
-    var w=Math.round((t.n||0)/max*100);
-    return '<div class="bar-row" style="cursor:default"><div class="bar-name">'+escH(t.label)+'</div>'+
-      '<div class="bar-track"><div class="bar-fill" style="width:'+w+'%"></div></div>'+
-      '<div class="bar-val">'+(t.n||0)+'</div></div>';
-  }).join('');
-}
-
 // Carrega headcount programado (dados) + colaboradores ativos (_colabs) para o card de Headcount,
 // sem os efeitos de render() da antiga aba Programado (que não existe nesta página).
 function loadHeadcountBase() {
