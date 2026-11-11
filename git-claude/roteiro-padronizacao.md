@@ -31,7 +31,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 | `kpis/rh/doc.html` | `governanca-kpis-rh-doc` | 4 | 13 | 22 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/rh/admissao.html` | `governanca-kpis-rh-admissao` | 3 | 15 | 18 | 🔶 08/11 (sem cliente próprio; resto na passagem do RH) | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/rh/desligamentos.html` | `governanca-kpis-rh-desligamentos` | 3 | 11 | 13 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/sancoes.html` | `governanca-kpis-rh-sancoes` | 2 | 6 | 6 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/sancoes.html` | `governanca-kpis-rh-sancoes` | 2 | 6 | 6 | 🔶 11/11 (página, botões, anon; Linha ⏸ dono) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/ces.html` | `governanca-kpis-rh-ces` | 2 | 6 | 4 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/folha.html` | `governanca-kpis-rh-folha` | 2 | 3 | 4 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/rh/beneficios.html` | `governanca-kpis-rh-beneficios` | 6 | 10 | 20 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
@@ -100,6 +100,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Histórico
 
+- 11/11/2026 — Lote 1 do RH começa por Sanções (migration 20261207): lista e exclusão deixam de ser executáveis por qualquer sessão e passam a conferir página e botão; registrar confere o botão; a lista de colaboradores compartilhada por 8 páginas passa a conferir uma das páginas, mascarar CPF (Valor, área ferias) e não devolver e-mail. Linha nas sanções aguarda o dono.
 - 10/11/2026 — Recrutamento (pedido do dono, uma página): corte de linha nas vagas no servidor (líder vê a própria subárvore; admin e RH tudo), botão conferido em cada ação (rec_porta(<botão>)), CPF mascarado como Valor; removido o filtro de equipe no navegador que deixava o líder com 0 vagas. Migration 20261206. Contato (telefones) fica para quando houver pessoas liberadas em contato-recrutamento (hoje nenhuma).
 - 08/11/2026 — Esquema de abastecimento fechado (migration 20261205, aplicada depois do deploy das quatro páginas): sem políticas abertas, sem acesso direto de anon/authenticated; tudo pelas funções do servidor. Testado: admin lista pelas funções; leitura direta e anon negados.
 - 08/11/2026 — Admissão: removido o bloco morto de inventário/estoque com cliente próprio (decisão do dono: só isso agora; o resto da página fica para a passagem do RH). Abre caminho para fechar as tabelas do esquema de abastecimento para anon.
