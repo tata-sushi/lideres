@@ -225,9 +225,9 @@ body.cf-active #tbody-analitico tr:not(.cf-selected) { opacity: 0.45; }
 #card-dist .bar-row { grid-template-columns: 60px 1fr 56px; }
 #card-dist .bar-row:hover { background: none; }
 #card-dist .bar-val { text-align: right; }
-#med-tipos .bar-row { grid-template-columns: 150px 1fr 48px; cursor: default; }
-#med-tipos .bar-row:hover { background: none; }
-#med-tipos .bar-val { text-align: right; }
+#med-tipos .bar-row, #sanc-tipos .bar-row, #recl-result .bar-row { grid-template-columns: 150px 1fr 48px; cursor: default; }
+#med-tipos .bar-row:hover, #sanc-tipos .bar-row:hover, #recl-result .bar-row:hover { background: none; }
+#med-tipos .bar-val, #sanc-tipos .bar-val, #recl-result .bar-val { text-align: right; }
 #deslig-motivos .bar-row, #ben-recompensas .bar-row { grid-template-columns: 160px 1fr 44px; }
 #clima-temas .bar-row { grid-template-columns: 150px 1fr 46px; }
 #abs-tipos .bar-row:hover, #bh-depto .bar-row:hover, #deslig-motivos .bar-row:hover, #fer-pend-uni .bar-row:hover, #ben-recompensas .bar-row:hover, #clima-temas .bar-row:hover { background: none; }
@@ -672,6 +672,23 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <button class="chart-info-btn" onclick="abrirInfoGrafico('examtipos')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Tipos de exames</div>
     <div id="med-tipos" class="bar-list"></div>
+  </div>
+
+  <!-- ══ LINHA: SANÇÕES & RECLAMAÇÕES ══ -->
+  <div class="dash-section">Sanções &amp; Reclamações</div>
+  <div class="dash-kpi-row">
+    <div class="kpi-card"><div class="kpi-label">Sanções (mês)</div><div class="kpi-number" id="kpi-sanc-mes">—</div></div>
+    <div class="kpi-card"><div class="kpi-label">Reclamações ativas</div><div class="kpi-number" id="kpi-recl-ativas">—</div><div class="kpi-sub"><strong id="kpi-recl-total">—</strong> no total</div></div>
+  </div>
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('tiposanc')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Tipo de sanção</div>
+    <div id="sanc-tipos" class="bar-list"></div>
+  </div>
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('reclresult')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Reclamações por resultado</div>
+    <div id="recl-result" class="bar-list"></div>
   </div>
 </div>
 
@@ -1246,6 +1263,7 @@ function renderDashboard() {
   renderClimaLinha();
   renderCardapioLinha();
   renderMedicinaLinha();
+  renderSancoesLinha();
   renderWeeklyEvolutionChart();
 }
 function renderContratosChart() {
@@ -1330,6 +1348,8 @@ var _INFO_GRAFICOS = {
   bhdepto: '<div class="info-note">Saldo líquido de banco de horas por departamento na semana mais recente (positivos menos negativos, em horas). Barra escura = saldo positivo; barra clara = saldo negativo. Vale o saldo mais recente de cada colaborador.</div>',
   testes: '<div class="info-note">Testes realizados no Recrutamento por semana (a semana começa na segunda-feira), nas últimas 40 semanas.</div>',
   demandas: '<div class="info-note">Quantas demandas dos alinhamentos semanais existem em cada etiqueta (tema), da mais frequente para a menos frequente.</div>',
+  tiposanc: '<div class="info-note">Sanções disciplinares por tipo (advertência, escrita, suspensão, verbal), no total. O card "Sanções (mês)" conta as sanções registradas no mês atual.</div>',
+  reclresult: '<div class="info-note">Reclamações trabalhistas por resultado (acordo, procedente, improcedente, etc.). O card "Reclamações ativas" são as que ainda estão em andamento ou aguardando audiência.</div>',
   exammes: '<div class="info-note">Exames ocupacionais que vencem em cada um dos próximos 12 meses (pela próxima realização). Ajuda a programar os agendamentos.</div>',
   examtipos: '<div class="info-note">Exames ocupacionais ativos por tipo. Os cards mostram quantos vencem em até 30 dias, quantos já venceram e quantos estão válidos.</div>',
   cardmedia: '<div class="info-note">Média (1 a 5) das avaliações do cardápio da refeição (Tatá House) feitas pelo aplicativo, por semana. Só aparecem as semanas com avaliações.</div>',
@@ -1772,6 +1792,39 @@ function renderClimaReconWeekly() {
     c+='<text x="'+cx.toFixed(1)+'" y="'+(baseline+18)+'" text-anchor="middle" '+SEM_NOME+'>'+w.label+'</text>';
   });
   svg.innerHTML=c;
+}
+
+// ─── SUPER PAINEL · LINHA SANÇÕES & RECLAMAÇÕES ────────────────────────────────
+var _repSanc = null;
+var _TIPO_SANC = { advertencia:'Advertência', escrita:'Escrita', suspensao:'Suspensão', verbal:'Verbal' };
+function loadReportSancoes() {
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('report_sancoes_reclamacoes_resumo').then(function(res){
+      _repSanc = (res && !res.error && res.data) ? res.data : { sancoes_mes:0, reclamacoes_ativas:0, reclamacoes_total:0, tipos_sancao:[], recl_resultado:[] };
+      renderSancoesLinha();
+    }).catch(function(){ _repSanc = { sancoes_mes:0, reclamacoes_ativas:0, reclamacoes_total:0, tipos_sancao:[], recl_resultado:[] }; renderSancoesLinha(); });
+  });
+}
+function _barList(elId, arr, labelFn) {
+  var el=document.getElementById(elId); if (!el) return;
+  arr=(arr||[]).slice().filter(function(t){ return (t.n||0)>0; }).sort(function(a,b){ return (b.n||0)-(a.n||0); });
+  if (!arr.length){ el.innerHTML='<div class="bar-empty">Sem dados</div>'; return; }
+  var max=Math.max.apply(null, arr.map(function(t){ return t.n||0; }).concat([1]));
+  el.innerHTML=arr.map(function(t){
+    var lbl=labelFn ? labelFn(t.label) : t.label, w=Math.round((t.n||0)/max*100);
+    return '<div class="bar-row" style="cursor:default"><div class="bar-name" title="'+escH(lbl)+'">'+escH(lbl)+'</div>'+
+      '<div class="bar-track"><div class="bar-fill" style="width:'+w+'%"></div></div>'+
+      '<div class="bar-val">'+(t.n||0)+'</div></div>';
+  }).join('');
+}
+function renderSancoesLinha() {
+  if (!_repSanc) return;
+  var set=function(id,v){ var e=document.getElementById(id); if(e) e.textContent=(v!=null?v:'—'); };
+  set('kpi-sanc-mes', _repSanc.sancoes_mes);
+  set('kpi-recl-ativas', _repSanc.reclamacoes_ativas);
+  set('kpi-recl-total', _repSanc.reclamacoes_total);
+  _barList('sanc-tipos', _repSanc.tipos_sancao, function(l){ return _TIPO_SANC[String(l||'').toLowerCase()] || l; });
+  _barList('recl-result', _repSanc.recl_resultado, null);
 }
 
 // ─── SUPER PAINEL · LINHA SAÚDE OCUPACIONAL ────────────────────────────────────
@@ -2702,6 +2755,7 @@ loadReportBeneficios();
 loadReportClima();
 loadReportCardapio();
 loadReportMedicina();
+loadReportSancoes();
 loadHeadcountBase();
 loadAlinhamentosData();
 
