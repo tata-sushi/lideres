@@ -37,24 +37,24 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 | `kpis/rh/beneficios.html` | `governanca-kpis-rh-beneficios` | 6 | 10 | 20 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/medicina.html` | `governanca-kpis-rh-medicina` | 3 | 5 | 4 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/performance.html` | `governanca-kpis-rh-performance` | 4 | 6 | 27 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/experiencias.html` | `governanca-kpis-rh-experiencias` | 3 | 4 | 2 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/experiencias.html` | `governanca-kpis-rh-experiencias` | 3 | 4 | 2 | 🔶 lote 2 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/rh/absenteismo.html` | `governanca-kpis-rh-absenteismo` | 3 | 4 | 4 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/bancodehoras.html` | `governanca-kpis-rh-bancodehoras` | 0 | 0 | 1 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/ouvidoria.html` | `governanca-kpis-rh-ouvidoria` | 2 | 3 | 3 | 🔶 lote 1 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/escalas.html` | `governanca-app-escala` | 3 | 10 | 27 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/armarios.html` | `governanca-kpis-rh-armarios` | 5 | 8 | 9 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/estoqueadm.html` | `governanca-kpis-rh-estoqueadm` | 6 | 10 | 8 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/agenda.html` | `governanca-kpis-rh-agenda` | 0 | 3 | 7 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/feriados.html` | `governanca-kpis-rh-feriados` | 3 | 4 | 2 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/hc.html` | `governanca-kpis-rh-hc` | 4 | 5 | 7 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/solicitacoes.html` | `governanca-kpis-rh-solicitacoes` | 3 | 4 | 2 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/demandas.html` | `governanca-kpis-rh-demandas` | 0 | 0 | 1 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/reclamacoes.html` | `governanca-kpis-rh-reclamacoes` | 2 | 4 | 3 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/semanal.html` | `governanca-kpis-rh-semanal` | 3 | 3 | 3 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/sam.html` | `governanca-kpis-rh-sam` | 2 | 2 | 0 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/cei.html` | `governanca-kpis-rh-cei` | 2 | 2 | 5 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
-| `kpis/rh/ted.html` | `governanca-kpis-rh-ted` | 2 | 2 | 1 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
-| `kpis/rh/comunicacao.html` | `governanca-kpis-rh-comunicacao` | 2 | 2 | 1 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
+| `kpis/rh/escalas.html` | `governanca-app-escala` | 3 | 10 | 27 | 🔶 lote 2 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/armarios.html` | `governanca-kpis-rh-armarios` | 5 | 8 | 9 | 🔶 lote 2 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/estoqueadm.html` | `governanca-kpis-rh-estoqueadm` | 6 | 10 | 8 | 🔶 lote 2 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/agenda.html` | `governanca-kpis-rh-agenda` | 0 | 3 | 7 | 🔶 lote 2 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/feriados.html` | `governanca-kpis-rh-feriados` | 3 | 4 | 2 | 🔶 lote 2 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/hc.html` | `governanca-kpis-rh-hc` | 4 | 5 | 7 | 🔶 lote 2 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/solicitacoes.html` | `governanca-kpis-rh-solicitacoes` | 3 | 4 | 2 | 🔶 lote 2 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/demandas.html` | `governanca-kpis-rh-demandas` | 0 | 0 | 1 | 🔶 lote 2 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/reclamacoes.html` | `governanca-kpis-rh-reclamacoes` | 2 | 4 | 3 | 🔶 lote 2 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/semanal.html` | `governanca-kpis-rh-semanal` | 3 | 3 | 3 | 🔶 lote 2 (aguarda SQL) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/sam.html` | `governanca-kpis-rh-sam` | 2 | 2 | 0 | ✅ 11/11 (só página) | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/cei.html` | `governanca-kpis-rh-cei` | 2 | 2 | 5 | 🔶 lote 2 (aguarda SQL) | ⏳ | ⏳ | ⏳ | — | — |
+| `kpis/rh/ted.html` | `governanca-kpis-rh-ted` | 2 | 2 | 1 | ✅ 11/11 (só página) | ⏳ | ⏳ | ⏳ | — | — |
+| `kpis/rh/comunicacao.html` | `governanca-kpis-rh-comunicacao` | 2 | 2 | 1 | ✅ 11/11 (só página) | ⏳ | ⏳ | ⏳ | — | — |
 | **2. Dashboards operacionais (compras, estoque, limpeza, manutenção, Tatá House, parceiros)** | | | | | | | | | | |
 | `kpis/compras/abastecimento.html` | `governanca-kpis-compras-abastecimento` | 6 | 15 | 10 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/estoque/estoque_semanal.html` | `governanca-kpis-estoque-semanal` | 3 | 5 | 6 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
@@ -100,6 +100,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Histórico
 
+- 11/11/2026 — RH lote 2 (Escalas, Armários, Estoque ADM, Agenda, Head Count, Feriados, Reclamações, Semanal, Solicitações, Demandas, Experiências, SAM, CEI, TED, Comunicação): sem mudança de HTML; banco num SQL único (`supabase/migrations/20261209_rh_lote2.sql`), a rodar depois do lote 1. SAM, TED e Comunicação só têm página.
 - 11/11/2026 — RH lote 1 (Sanções, Documentos, Folha, Desligamentos, CES, Benefícios, Medicina, Absenteísmo, Performance, Admissão, Banco de horas, Ouvidoria): HTML pronto; banco num SQL único (`supabase/migrations/20261208_rh_lote1.sql`) que o dono roda; depois: deploy das 4 edge functions, testes e merge. Decisões anotadas no SQL (seção 6).
 - 11/11/2026 — Lote 1 do RH começa por Sanções (migration 20261207): lista e exclusão deixam de ser executáveis por qualquer sessão e passam a conferir página e botão; registrar confere o botão; a lista de colaboradores compartilhada por 8 páginas passa a conferir uma das páginas, mascarar CPF (Valor, área ferias) e não devolver e-mail. Linha nas sanções aguarda o dono.
 - 10/11/2026 — Recrutamento (pedido do dono, uma página): corte de linha nas vagas no servidor (líder vê a própria subárvore; admin e RH tudo), botão conferido em cada ação (rec_porta(<botão>)), CPF mascarado como Valor; removido o filtro de equipe no navegador que deixava o líder com 0 vagas. Migration 20261206. Contato (telefones) fica para quando houver pessoas liberadas em contato-recrutamento (hoje nenhuma).
