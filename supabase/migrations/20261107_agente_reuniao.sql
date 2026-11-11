@@ -576,3 +576,11 @@ begin
     execute format('grant execute on function %s to service_role', f);
   end loop;
 end $$;
+
+-- ── 7. textos falados editáveis (11/11) ──────────────────────────────────────
+-- A edge usa estes textos se estiverem preenchidos (vazio = o texto padrão do código); vale em 1 min, sem publicar.
+-- reuniao_texto_apresentacao: "Sam, se apresente" (texto escolhido pelo responsável, sem o aviso de consentimento,
+-- que fica na aba Privacidade da página). reuniao_texto_rodada: botão "Rodada de nomes" (padrão do código).
+insert into dp_rh.agente_config (chave, valor)
+values ('reuniao_texto_apresentacao', 'Olá, pessoal! Eu sou o Sam, o assistente virtual do TATÁ. Eu acompanho a reunião e, no final, faço a ata, mando o resumo no grupo do DP e RH e coloco as demandas no kanban, cada uma com o seu responsável. Se precisarem de alguma informação do RH, é só dizer: Sam, e a pergunta. Agora, para eu aprender a voz de vocês, peço que cada um se apresente, um de cada vez: diga aqui é o, ou aqui é a, o seu nome e uma frase sobre o que faz. Podemos começar com quem quiser.')
+on conflict (chave) do nothing;

@@ -252,7 +252,9 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
   em 3 dias, pela varredura).
   - **Cadastro**: rodada de nomes — pelo comando de voz **"Sam, se apresente"** (ele conta o que faz e pede a rodada; a
     página abre a rodada logo depois da fala, por até 3 min ou até "Terminar rodada") e pelo botão "Rodada de nomes"
-    (alguém novo). Cada um diz "aqui é o/a <nome>" + uma frase; o nome é procurado em `agente_config.reuniao_participantes`
+    (alguém novo). É uma vez só por pessoa: a fala deixa claro que depois disso ele reconhece sozinho. Os dois textos
+    falados podem ser trocados sem publicar: `agente_config.reuniao_texto_apresentacao` e `reuniao_texto_rodada`
+    (vazio = o texto padrão do código). Cada um diz "aqui é o/a <nome>" + uma frase; o nome é procurado em `agente_config.reuniao_participantes`
     (`["Victor","Cinthia","Binho","Tito","Luzinho","Leo Young","Fabio Ferraz"]`, aceita um erro de letra). Falar na
     rodada = consentimento (o Sam avisa); a voz é dado pessoal sensível (LGPD). Apagar a voz de alguém:
     `delete from dp_rh.agente_vozes where nome = 'Fulano';`.

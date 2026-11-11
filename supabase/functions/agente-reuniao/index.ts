@@ -51,17 +51,20 @@ const UAZ_BASE = (Deno.env.get("SAM_UAZAPI_URL") || "https://tatasushi.uazapi.co
 const PAGINA = "governanca-kpis-rh-sam";
 const ORIGENS = ["https://lideres.tatasushi.tech", "https://plus.tatasushi.tech"];
 const BUCKET = "agente-reuniao"; // gravação contínua (apagada depois da ata)
-const RODADA_TEXTO = "Antes de começar: para eu reconhecer a voz de vocês nesta e nas próximas reuniões, cada um diga, " +
-  "um de cada vez, aqui é o, ou aqui é a, e o seu nome, e uma frase sobre o que faz. Quem falar concorda que eu guarde " +
-  "um trecho da sua voz só para isso; dá para pedir para apagar quando quiser.";
+// textos falados (agente_config reuniao_texto_rodada / reuniao_texto_apresentacao sobrepõem, sem publicar)
+// botão "Rodada de nomes": alguém novo na sala
+const RODADA_TEXTO = "Quem ainda não se apresentou: diga, uma vez só, aqui é o, ou aqui é a, o seu nome e uma frase " +
+  "sobre o que faz. Depois disso, eu reconheço a sua voz sozinho nas próximas reuniões. Quem falar concorda que eu " +
+  "guarde um trecho da sua voz só para isso; dá para pedir para apagar quando quiser.";
 
 // "Sam, se apresente": quem ele é, o que faz na reunião e o pedido da rodada de nomes
 const APRESENTACAO_TEXTO = "Olá, pessoal! Eu sou o Sam, o assistente virtual do RH do TATÁ. Eu acompanho a reunião e, " +
   "no final, faço a ata, mando o resumo no grupo do DP e RH e coloco as demandas no kanban, cada uma com o seu " +
-  "responsável. Se precisarem de alguma informação do RH, é só dizer: Sam, e a pergunta. Para eu saber quem está " +
-  "falando, nesta e nas próximas reuniões, peço que cada um se apresente, um de cada vez: diga aqui é o, ou aqui é a, " +
-  "o seu nome e uma frase sobre o que faz. Quem falar concorda que eu guarde um trecho da sua voz só para isso; dá " +
-  "para pedir para apagar quando quiser. Pode começar quem quiser.";
+  "responsável. Se precisarem de alguma informação do RH, é só dizer: Sam, e a pergunta. Agora, para eu aprender a " +
+  "voz de vocês, peço que cada um se apresente, um de cada vez: diga aqui é o, ou aqui é a, o seu nome e uma frase " +
+  "sobre o que faz. É só desta vez: depois disso, eu reconheço vocês sozinho em todas as reuniões. Quem falar " +
+  "concorda que eu guarde um trecho da sua voz só para isso; dá para pedir para apagar quando quiser. Pode começar " +
+  "quem quiser.";
 const semAcento = (t: string) =>
   t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 // "se apresente", "apresente-se", "pode se apresentar", "faz a sua apresentação"…
@@ -88,7 +91,7 @@ function cors(req: Request): Record<string, string> {
 // ── configuração ────────────────────────────────────────────────────────────
 let cfg: {
   transcricao: string; voz: string; modeloVoz: string; modeloVozes: string; participantes: string[];
-  responsavel: string; grupo: string; diag: boolean; em: number;
+  responsavel: string; grupo: string; diag: boolean; textoRodada: string; textoApresentacao: string; em: number;
 } | null = null;
 async function config() {
   if (!cfg || Date.now() - cfg.em > 60_000) {
@@ -103,6 +106,8 @@ async function config() {
       diag: String(d.reuniao_diag_audio ?? "") === "1",
       modeloVozes: d.reuniao_modelo_vozes || "elevenlabs/scribe-v2",
       participantes: (() => { try { return (JSON.parse(d.reuniao_participantes || "[]") as unknown[]).map(String); } catch { return []; } })(),
+      textoRodada: String(d.reuniao_texto_rodada ?? "").trim() || RODADA_TEXTO,
+      textoApresentacao: String(d.reuniao_texto_apresentacao ?? "").trim() || APRESENTACAO_TEXTO,
       em: Date.now(),
     };
   }
@@ -681,7 +686,7 @@ Deno.serve(async (req) => {
 
     // rodada de nomes pedida pelo botão (alguém novo na sala)
     if (acao === "rodada_audio") {
-      return json({ ok: true, audio: await falar(RODADA_TEXTO) });
+      return json({ ok: true, audio: await falar((await config()).textoRodada) });
     }
 
     // teste do microfone antes de começar: só transcreve e devolve o que o Sam entendeu
@@ -754,7 +759,8 @@ Deno.serve(async (req) => {
       if (!pergunta) return json({ ok: false, erro: "pergunta vazia" }, 400);
       // "Sam, se apresente": texto fixo e a página abre a rodada de nomes logo depois da fala
       if (APRESENTE_RE.test(semAcento(pergunta))) {
-        return json({ ok: true, texto: APRESENTACAO_TEXTO, audio: await falar(APRESENTACAO_TEXTO), consultas: [], rodada: true });
+        const { textoApresentacao } = await config();
+        return json({ ok: true, texto: textoApresentacao, audio: await falar(textoApresentacao), consultas: [], rodada: true });
       }
       return json({ ok: true, ...(await responderSam(reuniao, pergunta.slice(0, 1000), u)) });
     }
