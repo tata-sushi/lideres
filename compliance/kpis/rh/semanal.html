@@ -1356,8 +1356,8 @@ var _INFO_GRAFICOS = {
   resgrecomp: '<div class="info-note">Resgates por recompensa nas últimas 40 semanas, da mais resgatada para a menos. O card "Aniversariantes (mês)" é quantos colaboradores ativos fazem aniversário no mês atual.</div>',
   feriasmes: '<div class="info-note">Férias programadas que começam em cada semana à frente (pela data de início do gozo), nas próximas 40 semanas. Ajuda a antecipar a cobertura das equipes.</div>',
   feriasgoz: '<div class="info-note">Férias gozadas em cada semana (pela data de início do gozo que já aconteceu), nas últimas 40 semanas. O card "Férias no ano" soma os inícios de gozo no ano corrente.</div>',
-  demdp: '<div class="info-note">Demandas do kanban do DP RH por semana (a semana começa na segunda-feira), nas últimas 40 semanas. Barra escura = abertas (pela data de abertura); barra clara = fechadas (pela data de conclusão). O card "Demandas no ano" soma as abertas no ano corrente; "Demandas pendentes" são as que ainda estão pendentes ou em andamento.</div>',
-  sollid: '<div class="info-note">Solicitações de líderes ao RH por semana (a semana começa na segunda-feira), nas últimas 40 semanas. Barra escura = abertas (pela data de abertura); barra clara = fechadas (pela data de conclusão). O card "Solicitações no ano" soma as abertas no ano corrente.</div>',
+  demdp: '<div class="info-note">Demandas do DP RH por semana (a semana começa na segunda-feira), nas últimas 40 semanas. Barra escura = abertas (pela data de abertura); barra clara = fechadas (pela data de conclusão). O card "Demandas no ano" soma as abertas no ano corrente; "Demandas pendentes" são as que ainda estão em aberto.</div>',
+  sollid: '<div class="info-note">Solicitações de líderes por semana (a semana começa na segunda-feira), nas últimas 40 semanas. Barra escura = abertas (pela data de abertura); barra clara = fechadas (pela data de conclusão). O card "Solicitações no ano" soma as abertas no ano corrente.</div>',
   deslig: '<div class="info-note">Desligamentos por semana (a semana começa na segunda-feira), pela data de demissão, nas últimas 40 semanas.</div>',
   motivos: '<div class="info-note">Motivo da saída (tipo de rescisão) dos desligamentos das últimas 40 semanas, do mais frequente para o menos frequente. O card "Índice de recomendação" é a % de ex-colaboradores que recomendariam o TATÁ (nota 4 ou 5 na pesquisa de desligamento).</div>',
   abs: '<div class="info-note">Faltas e atestados por semana (a semana começa na segunda-feira), lado a lado, nas últimas 40 semanas. Barra escura = faltas (já abatendo as que viraram folga, banco de horas ou trabalho sem registro); barra clara = atestados (atestado médico, licença nojo e licença paternidade). Os cards somam o ano: Absenteísmo = Faltas + Atestados + Outros (licença maternidade, afastamento INSS e suspensões); não entram folga, banco de horas nem trabalho sem registro.</div>',
@@ -1504,11 +1504,12 @@ function renderRecrutamentoLinha() {
   renderRecVagasChart();
   renderRecEntTesChart();
 }
-// Vagas abertas × fechadas — mesmo padrão de Movimentações (barra única empilhada por proporção)
+// Vagas abertas × fechadas — barra empilhada (abertas em cima, fechadas embaixo), altura absoluta (sem 100%)
 function renderRecVagasChart() {
   var svg=document.getElementById('rec-vagas-weekly');
   if (!svg || !_repRec) return;
   var weeks=(_repRec.semanas||[]).map(function(s){ return { label:_recLabelFromISO(s.semana), ab:+s.vagas_abertas||0, fe:+s.vagas_fechadas||0 }; });
+  var maxV=Math.max.apply(null, weeks.map(function(w){ return w.ab+w.fe; }).concat([1]));   // total absoluto (sem 100%)
   var H=220, padL=12, padR=12, padTop=24, padBot=26;
   var n=weeks.length, groupW=SEM_GRUPO, W=padL+padR+n*groupW;
   var plotH=H-padTop-padBot, barW=SEM_BARRA;
@@ -1517,13 +1518,13 @@ function renderRecVagasChart() {
   var baseline=padTop+plotH, c='';
   weeks.forEach(function(w,i){
     var total=w.ab+w.fe;
-    var hAb=total>0?(w.ab/total)*plotH:0, hFe=total>0?(w.fe/total)*plotH:0;
+    var hAb=(w.ab/maxV)*plotH, hFe=(w.fe/maxV)*plotH;   // altura absoluta (sem normalizar a 100%)
     var x=bx(i), cx=x+barW/2;
     var yFe=baseline-hFe, yAb=baseline-hFe-hAb;   // abertas em cima (escuro), fechadas embaixo (claro)
     if(total>0){
       if(hFe>0) c+=_semBarra(x, yFe, barW, hFe, CARBON2, hAb===0, true);
       if(hAb>0) c+=_semBarra(x, yAb, barW, hAb, '#35383F', true, hFe===0);
-      c+='<text x="'+cx.toFixed(1)+'" y="'+(yAb-6).toFixed(1)+'" text-anchor="middle" '+SEM_VAL+'>'+w.ab+'/'+w.fe+'</text>';
+      c+='<text x="'+cx.toFixed(1)+'" y="'+((baseline-(hAb+hFe))-6).toFixed(1)+'" text-anchor="middle" '+SEM_VAL+'>'+w.ab+'/'+w.fe+'</text>';
     }
     c+='<text x="'+cx.toFixed(1)+'" y="'+(baseline+18)+'" text-anchor="middle" '+SEM_NOME+'>'+w.label+'</text>';
   });
@@ -1606,34 +1607,32 @@ function loadReportDemandas() {
 function renderDemandasLinha() {
   if (!_repDem) return;
   var d = _repDem, set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=(v!=null?Number(v).toLocaleString('pt-BR'):'—'); };
-  set('kpi-dem-ano', d.dem_ano);
-  set('kpi-sol-ano', d.sol_ano);
-  set('kpi-dem-pendentes', d.dem_pendentes);
-  _demSolChart('dem-weekly', d.dem_semanas);
-  _demSolChart('sol-weekly', d.sol_semanas);
+  // "Demandas (DP RH)" = kanban de solicitações (volume menor); "Solicitações de líderes" = kanban de demandas_rh (volume maior)
+  set('kpi-dem-ano', d.sol_ano);
+  set('kpi-sol-ano', d.dem_ano);
+  set('kpi-dem-pendentes', d.sol_pendentes);
+  _demSolChart('dem-weekly', d.sol_semanas);
+  _demSolChart('sol-weekly', d.dem_semanas);
 }
-// Abertas × Fechadas por semana — barras empilhadas (abertas em cima escuro, fechadas embaixo claro),
-// altura ABSOLUTA (total real, não 100%), últimas 40 semanas — igual "Gestão de vagas" porém sem normalizar
+// Abertas × Fechadas por semana — barras lado a lado (abertas escuro, fechadas claro), últimas 40 semanas
 function _demSolChart(svgId, semanas) {
   var svg=document.getElementById(svgId); if (!svg) return;
   var weeks=(semanas||[]).map(function(s){ return { label:_recLabelFromISO(s.semana), ab:+s.abertas||0, fe:+s.fechadas||0 }; });
-  var maxV=Math.max.apply(null, weeks.map(function(w){ return w.ab+w.fe; }).concat([1]));   // total absoluto
+  var maxV=Math.max.apply(null, weeks.map(function(w){ return Math.max(w.ab,w.fe); }).concat([1]));
   var H=156, padL=12, padR=12, padTop=24, padBot=26;
-  var n=weeks.length, groupW=SEM_GRUPO, W=padL+padR+n*groupW, plotH=H-padTop-padBot, barW=SEM_BARRA;
+  var n=weeks.length, groupW=SEM_GRUPO, W=padL+padR+n*groupW, plotH=H-padTop-padBot;
+  var barW=15, gap=6;
   svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('width',W); svg.style.width=W+'px'; svg.style.minWidth=W+'px';
-  function bx(i){ return padL+i*groupW+groupW/2-barW/2; }
   var baseline=padTop+plotH, c='';
+  var VAL='font-family="DM Sans, sans-serif" font-size="10" font-weight="800" fill="#35383F"';
   weeks.forEach(function(w,i){
-    var total=w.ab+w.fe;
-    var hAb=(w.ab/maxV)*plotH, hFe=(w.fe/maxV)*plotH;
-    var x=bx(i), cx=x+barW/2;
-    var yFe=baseline-hFe, yAb=baseline-hFe-hAb;   // abertas em cima (escuro), fechadas embaixo (claro)
-    if(total>0){
-      if(hFe>0) c+=_semBarra(x, yFe, barW, hFe, CARBON2, hAb===0, true);
-      if(hAb>0) c+=_semBarra(x, yAb, barW, hAb, '#35383F', true, hFe===0);
-      c+='<text x="'+cx.toFixed(1)+'" y="'+((baseline-(hAb+hFe))-6).toFixed(1)+'" text-anchor="middle" '+SEM_VAL+'>'+w.ab+'/'+w.fe+'</text>';
-    }
-    c+='<text x="'+cx.toFixed(1)+'" y="'+(baseline+18)+'" text-anchor="middle" '+SEM_NOME+'>'+w.label+'</text>';
+    var gx=padL+i*groupW+groupW/2, x1=gx-(barW+gap/2), x2=gx+gap/2;
+    var hA=(w.ab/maxV)*plotH, hF=(w.fe/maxV)*plotH;
+    if(hA>0){ c+=_semBarra(x1, baseline-hA, barW, hA, '#35383F', true, false);
+      c+='<text x="'+(x1+barW/2).toFixed(1)+'" y="'+(baseline-hA-5).toFixed(1)+'" text-anchor="middle" '+VAL+'>'+w.ab+'</text>'; }
+    if(hF>0){ c+=_semBarra(x2, baseline-hF, barW, hF, CARBON2, true, false);
+      c+='<text x="'+(x2+barW/2).toFixed(1)+'" y="'+(baseline-hF-5).toFixed(1)+'" text-anchor="middle" '+VAL+'>'+w.fe+'</text>'; }
+    c+='<text x="'+gx.toFixed(1)+'" y="'+(baseline+18)+'" text-anchor="middle" '+SEM_NOME+'>'+w.label+'</text>';
   });
   svg.innerHTML=c;
 }
