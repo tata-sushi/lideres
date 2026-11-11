@@ -488,14 +488,28 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-legend"><span><i style="background:#35383F"></i>Entrevistas</span><span><i style="background:rgba(53,56,63,0.45)"></i>Testes</span></div>
   </div>
 
-  <!-- ══ LINHA: OPERAÇÃO & PESSOAS ══ -->
-  <div class="dash-section">Operação &amp; Pessoas</div>
+  <!-- ══ LINHA: TURNOVER ══ -->
+  <div class="dash-section">Turnover</div>
+  <div class="dash-kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Turnover (ano)</div>
+      <div class="kpi-number" id="kpi-turnover-ano">—</div>
+      <div class="kpi-sub">Semana: <strong id="kpi-turnover-sem">—</strong></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Headcount</div>
+      <div class="kpi-number"><span id="kpi-hc-atual">—</span><span style="color:var(--muted);font-weight:400"> / <span id="kpi-hc-prog">—</span></span></div>
+      <div class="kpi-sub"><strong id="kpi-hc-pct">—</strong> preenchido</div>
+    </div>
+  </div>
   <div class="chart-card chart-card-full">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('mov')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Movimentações</div>
     <div class="chart-scroll-wrap"><svg id="hc-weekly-evolution" style="height:auto;display:block;"></svg></div>
     <div class="chart-legend"><span><i style="background:#35383F"></i>Admitidos</span><span><i style="background:rgba(53,56,63,0.45)"></i>Demitidos</span></div>
   </div>
+  <!-- ══ LINHA: OPERAÇÃO & PESSOAS ══ -->
+  <div class="dash-section">Operação &amp; Pessoas</div>
   <div class="chart-card chart-card-full">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('atestados')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Atestados</div>
@@ -729,6 +743,7 @@ function loadData() {
       });
       render();
       renderKPIs();
+      renderTurnoverLinha();
       if (state.tab==='dashboard') renderDashboard();
       loadTurnoverData();
     })
@@ -1074,6 +1089,7 @@ function renderDashFilters() {
 }
 function renderDashboard() {
   renderRecrutamentoLinha();
+  renderTurnoverLinha();
   renderWeeklyEvolutionChart();
   renderAtestadosChart();
   renderBancoHorasChart();
@@ -1344,6 +1360,59 @@ function renderRecEntTesChart() {
   svg.innerHTML=c;
 }
 
+// ─── SUPER PAINEL · LINHA TURNOVER ─────────────────────────────────────────────
+function getHcProgramadoFiltered() {
+  if (!dados || !dados.length) return null;
+  var df = state.dashFilters, src = dados;
+  if (df.unidade && df.unidade !== 'Todos') src = src.filter(function(d){ return d.unidade === df.unidade; });
+  if (df.departamento && df.departamento !== 'Todos') src = src.filter(function(d){ return d.departamento === df.departamento; });
+  return src.reduce(function(a,d){ return a + (d.total||0); }, 0);
+}
+function renderTurnoverLinha() {
+  var atual = getHcAtualFiltered();
+  var prog  = getHcProgramadoFiltered();
+  var ea=document.getElementById('kpi-hc-atual'), ep=document.getElementById('kpi-hc-prog'), ept=document.getElementById('kpi-hc-pct');
+  if (ea) ea.textContent = (atual!=null ? atual : '—');
+  if (ep) ep.textContent = (prog!=null && prog>0 ? prog : '—');
+  if (ept) ept.textContent = (prog && prog>0 && atual!=null) ? Math.round(atual/prog*100)+'%' : '—';
+  var et=document.getElementById('kpi-turnover-ano'), es=document.getElementById('kpi-turnover-sem');
+  if (!_tvData) { if(et) et.textContent='—'; if(es) es.textContent='—'; return; }
+  var tv = getTvFiltered();
+  var ano = new Date().getFullYear();
+  var ini = new Date(ano,0,1), fim = new Date(ano+1,0,1);
+  var dems = tv.filter(function(r){ return r.dem && r.dem>=ini && r.dem<fim; }).length;
+  var pct = (atual && atual>0) ? Math.round(dems/atual*1000)/10 : 0;
+  if (et) et.textContent = (atual && atual>0) ? pct.toFixed(1).replace('.',',')+'%' : '—';
+  // última semana fechada (segunda da semana passada → domingo)
+  var now=new Date(); now.setHours(0,0,0,0); var dow=(now.getDay()+6)%7;
+  var wStart=new Date(now); wStart.setDate(now.getDate()-dow-7);
+  var wEnd=new Date(wStart); wEnd.setDate(wStart.getDate()+7);
+  var a=0, d=0;
+  tv.forEach(function(r){ if(r.adm>=wStart && r.adm<wEnd) a++; if(r.dem && r.dem>=wStart && r.dem<wEnd) d++; });
+  if (es) es.textContent = '+'+a+' adm · −'+d+' dem';
+}
+// Carrega headcount programado (dados) + colaboradores ativos (_colabs) para o card de Headcount,
+// sem os efeitos de render() da antiga aba Programado (que não existe nesta página).
+function loadHeadcountBase() {
+  var pProg = fetchRpc('hc_programado_listar');
+  var pColabs = _colabs !== null
+    ? Promise.resolve(_colabs)
+    : new Promise(function(resolve){ comSupa(function(supa){
+        supa.rpc('hc_colaboradores_listar')
+          .then(function(res){ _colabs = (res.error || !Array.isArray(res.data)) ? [] : res.data; resolve(_colabs); })
+          .catch(function(){ _colabs = []; resolve([]); });
+      }); });
+  Promise.all([pProg, pColabs]).then(function(r){
+    var rows = r[0] || [];
+    dados = rows.map(function(x){ return {
+      unidade:      x.unidade      != null ? String(x.unidade)      : '',
+      departamento: x.departamento != null ? String(x.departamento) : '',
+      total:        parseInt(x.total) || 0
+    }; });
+    renderTurnoverLinha();
+  });
+}
+
 var _bhData = null;
 
 function loadBancoHorasData() {
@@ -1526,6 +1595,7 @@ function loadTurnoverData() {
       _tvData.push({adm:adm, dem:dem, unidade:(r.unidade||'').trim(), departamento:(r.departamento||'').trim()});
     });
     renderWeeklyEvolutionChart();
+    renderTurnoverLinha();
   }).catch(function(){});
 }
 function renderTurnoverChart() {
@@ -2056,6 +2126,7 @@ loadAbsenteismoData();
 loadBancoHorasData();
 loadRecrutamentoData();
 loadReportRecrutamento();
+loadHeadcountBase();
 loadAlinhamentosData();
 
 // ─── ALINHAMENTOS ────────────────────────────────────────────────────────────
