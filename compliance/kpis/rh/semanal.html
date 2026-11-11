@@ -1836,14 +1836,14 @@ function renderCulturaLinha() {
   set('kpi-cult-fbrh', _repCult.feedbacks_rh);
   set('kpi-cult-recon', _repCult.recon_total);
   // Radar: agrupa as dimensões nos 7 temas (ponderado por n), ignora a dim de recomendação
-  var acc={};
-  (_repCult.clima_dims||[]).forEach(function(r){
+  function _roll(arr){ var a={}; (arr||[]).forEach(function(r){
     if (r.rec || !(r.n>0 && r.media!=null)) return;
     var t=_CULT_TEMA[r.dimensao]||'Outros';
-    acc[t]=acc[t]||{s:0,n:0}; acc[t].s+=(+r.media)*(+r.n); acc[t].n+=(+r.n);
-  });
+    a[t]=a[t]||{s:0,n:0}; a[t].s+=(+r.media)*(+r.n); a[t].n+=(+r.n);
+  }); return a; }
+  var acc=_roll(_repCult.clima_dims), accL=_roll(_repCult.clima_dims_lider);
   var ordem=_CULT_TEMA_ORDER.slice(); Object.keys(acc).forEach(function(k){ if(ordem.indexOf(k)<0) ordem.push(k); });
-  var temas=ordem.map(function(t){ return { label:t, media: acc[t]?acc[t].s/acc[t].n:null, mediaLider:null }; });
+  var temas=ordem.map(function(t){ return { label:t, media: acc[t]?acc[t].s/acc[t].n:null, mediaLider: accL[t]?accL[t].s/accL[t].n:null }; });
   _drawRadarCult(temas);
   _drawWordCloudCult((_repCult.brainstorm||[]).map(function(x){ return { w:String(x.w||'').trim(), n:+x.n||1, cat:x.cat||'' }; }).filter(function(x){ return x.w; }));
 }
@@ -1861,14 +1861,33 @@ function _drawRadarCult(pontos){
       c+='<text x="'+pl.x.toFixed(1)+'" y="'+(pl.y+dy+7).toFixed(1)+'" text-anchor="'+anchor+'" font-size="12" font-weight="500" fill="#35383F">'+escH(wrap[1])+'</text>';
     } else { c+='<text x="'+pl.x.toFixed(1)+'" y="'+(pl.y+dy).toFixed(1)+'" text-anchor="'+anchor+'" font-size="12" font-weight="500" fill="#35383F">'+escH(label)+'</text>'; }
   }
-  var COR='#35383F', dd='', started=false, pts=0;
+  var COR='#35383F', COR_LIDER='#1A5C2A';
+  var liderVals=pontos.map(function(p){ return p.mediaLider==null?null:Math.max(0,Math.min(MAX,p.mediaLider)); });
+  var hasLider=liderVals.some(function(v){ return v!=null; });
+  // 1) polígono GERAL
+  var dd='', started=false, pts=0;
   for(var i2=0;i2<n;i2++){ if(pontos[i2].media==null) continue; var v=Math.max(0,Math.min(MAX,pontos[i2].media)), pd=pt(i2,R*(v/MAX)); dd+=(started?'L ':'M ')+pd.x.toFixed(1)+' '+pd.y.toFixed(1)+' '; started=true; pts++; }
   if(pts>=3) dd+='Z';
   if(pts>=2) c+='<path d="'+dd+'" fill="'+(pts>=3?COR:'none')+'" fill-opacity="'+(pts>=3?'0.12':'0')+'" stroke="'+COR+'" stroke-width="2" stroke-linejoin="round"/>';
+  // 2) polígono LIDERANÇA
+  if(hasLider){ var dl='', lStarted=false, lPts=0;
+    for(var il=0;il<n;il++){ if(liderVals[il]==null) continue; var pdl=pt(il,R*(liderVals[il]/MAX)); dl+=(lStarted?'L ':'M ')+pdl.x.toFixed(1)+' '+pdl.y.toFixed(1)+' '; lStarted=true; lPts++; }
+    if(lPts>=3) dl+='Z';
+    if(lPts>=2) c+='<path d="'+dl+'" fill="'+(lPts>=3?COR_LIDER:'none')+'" fill-opacity="'+(lPts>=3?'0.28':'0')+'" stroke="'+COR_LIDER+'" stroke-width="2.5" stroke-linejoin="round"/>';
+  }
+  // 3) pontos GERAL
   for(var i3=0;i3<n;i3++){ if(pontos[i3].media==null) continue; var v3=Math.max(0,Math.min(MAX,pontos[i3].media)), pv=pt(i3,R*(v3/MAX)); c+='<circle cx="'+pv.x.toFixed(1)+'" cy="'+pv.y.toFixed(1)+'" r="3.5" fill="'+COR+'"/>'; }
+  // 4) pontos LIDERANÇA
+  if(hasLider){ for(var i4=0;i4<n;i4++){ if(liderVals[i4]==null) continue; var pvl2=pt(i4,R*(liderVals[i4]/MAX)); c+='<circle cx="'+pvl2.x.toFixed(1)+'" cy="'+pvl2.y.toFixed(1)+'" r="3.2" fill="'+COR_LIDER+'"/>'; } }
+  // 5) rótulos GERAL
   for(var i5=0;i5<n;i5++){ if(pontos[i5].media==null) continue; var v5=Math.max(0,Math.min(MAX,pontos[i5].media)), pvl=pt(i5,R*(v5/MAX)+20); c+='<text x="'+pvl.x.toFixed(1)+'" y="'+(pvl.y+3).toFixed(1)+'" text-anchor="middle" font-size="12" font-weight="800" fill="'+COR+'">'+v5.toFixed(2).replace('.',',')+'</text>'; }
+  // 5b) rótulos LIDERANÇA (para dentro do ponto)
+  if(hasLider){ for(var i5b=0;i5b<n;i5b++){ if(liderVals[i5b]==null) continue; var v5b=liderVals[i5b], pvli=pt(i5b,Math.max(12,R*(v5b/MAX)-18)); c+='<text x="'+pvli.x.toFixed(1)+'" y="'+(pvli.y+3).toFixed(1)+'" text-anchor="middle" font-size="12" font-weight="800" fill="'+COR_LIDER+'">'+v5b.toFixed(2).replace('.',',')+'</text>'; } }
   svg.innerHTML=c;
-  var rl=document.getElementById('cult-radar-legend'); if(rl) rl.innerHTML='<span class="wc-leg"><i style="background:'+COR+'"></i>Geral</span>';
+  var rl=document.getElementById('cult-radar-legend');
+  if(rl) rl.innerHTML = hasLider
+    ? '<span class="wc-leg"><i style="background:'+COR+'"></i>Geral</span><span class="wc-leg"><i style="background:'+COR_LIDER+'"></i>Liderança</span>'
+    : '<span class="wc-leg"><i style="background:'+COR+'"></i>Geral</span>';
 }
 function _drawWordCloudCult(items){
   var svg=document.getElementById('cult-wordcloud'); if(!svg) return;
