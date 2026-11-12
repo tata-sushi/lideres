@@ -2,7 +2,7 @@
 //
 // A página compliance/kpis/rh/sam.html (dentro do app Tatá Plus) ouve pelo microfone e manda
 // trechos de áudio cortados nas pausas. Aqui:
-//   iniciar   → abre a reunião (dp_rh.agente_reunioes) e devolve a saudação falada
+//   iniciar   → abre a reunião (dp_rh.agente_reunioes); sem saudação (a página só apita)
 //   teste_mic → (antes de começar) transcreve 5 s de fala para o líder conferir o microfone
 //   trecho    → transcreve (OpenRouter) e guarda; avisa se chamaram "Sam, …"
 //               cada trecho fica registrado em dp_rh.agente_reuniao_trechos (tamanho, nível do
@@ -19,6 +19,8 @@
 //   gravacao  → pedaço de 1 min da gravação contínua (μ-law 8 kHz) → storage agente-reuniao; no fim
 //               a reunião é separada por vozes e as vozes cadastradas viram nomes (vozes.ts)
 //   rodada_audio → o Sam pedindo a rodada de nomes (cadastro das vozes, com consentimento)
+//   (11/11) O Sam não fala sozinho: ao começar, a página só dá um apito. Ele fala quando chamado
+//   ("Sam, …"); "Sam, se apresente" = apresentação + rodada de nomes (resposta com rodada: true).
 //   status    → situação da reunião (a página consulta até a ata ficar pronta)
 //   fala_final→ o Sam fala o encerramento na sala (assuntos, decisões, pendências)
 //   varrer    → (pg_cron, ?k=<portal_secret>) encerra reuniões abandonadas há 20 min
@@ -49,9 +51,25 @@ const UAZ_BASE = (Deno.env.get("SAM_UAZAPI_URL") || "https://tatasushi.uazapi.co
 const PAGINA = "governanca-kpis-rh-sam";
 const ORIGENS = ["https://lideres.tatasushi.tech", "https://plus.tatasushi.tech"];
 const BUCKET = "agente-reuniao"; // gravação contínua (apagada depois da ata)
-const RODADA_TEXTO = "Antes de começar: para eu reconhecer a voz de vocês nesta e nas próximas reuniões, cada um diga, " +
-  "um de cada vez, aqui é o, ou aqui é a, e o seu nome, e uma frase sobre o que faz. Quem falar concorda que eu guarde " +
-  "um trecho da sua voz só para isso; dá para pedir para apagar quando quiser.";
+// textos falados (agente_config reuniao_texto_rodada / reuniao_texto_apresentacao sobrepõem, sem publicar)
+// botão "Rodada de nomes": alguém novo na sala
+const RODADA_TEXTO = "Quem ainda não se apresentou: diga, uma vez só, aqui é o, ou aqui é a, o seu nome e uma frase " +
+  "sobre o que faz. Depois disso, eu reconheço a sua voz sozinho nas próximas reuniões. Quem falar concorda que eu " +
+  "guarde um trecho da sua voz só para isso; dá para pedir para apagar quando quiser.";
+
+// "Sam, se apresente": quem ele é, o que faz na reunião e o pedido da rodada de nomes
+const APRESENTACAO_TEXTO = "Olá, pessoal! Eu sou o Sam, o assistente virtual do RH do TATÁ. Eu acompanho a reunião e, " +
+  "no final, faço a ata, mando o resumo no grupo do DP e RH e coloco as demandas no kanban, cada uma com o seu " +
+  "responsável. Se precisarem de alguma informação do RH, é só dizer: Sam, e a pergunta. Agora, para eu aprender a " +
+  "voz de vocês, peço que cada um se apresente, um de cada vez: diga aqui é o, ou aqui é a, o seu nome e uma frase " +
+  "sobre o que faz. É só desta vez: depois disso, eu reconheço vocês sozinho em todas as reuniões. Quem falar " +
+  "concorda que eu guarde um trecho da sua voz só para isso; dá para pedir para apagar quando quiser. Pode começar " +
+  "quem quiser.";
+const semAcento = (t: string) =>
+  t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+// "se apresente", "apresente-se", "pode se apresentar", "faz a sua apresentação"…
+const APRESENTE_RE =
+  /^(?:(?:por favor|pode|poderia|voce pode|voce poderia|agora)\s+)*(?:se\s+apresent(?:e|a|ar)\b|apresent[ea]\s+se\b|apresent[ea]\s+(?:voce|vc)\b|fa[cz]\w*\s+(?:a\s+|uma\s+|sua\s+)*apresentacao)/;
 
 const supa = createClient(SUPA_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
@@ -73,7 +91,7 @@ function cors(req: Request): Record<string, string> {
 // ── configuração ────────────────────────────────────────────────────────────
 let cfg: {
   transcricao: string; voz: string; modeloVoz: string; modeloVozes: string; participantes: string[];
-  responsavel: string; grupo: string; diag: boolean; em: number;
+  responsavel: string; grupo: string; diag: boolean; textoRodada: string; textoApresentacao: string; em: number;
 } | null = null;
 async function config() {
   if (!cfg || Date.now() - cfg.em > 60_000) {
@@ -88,6 +106,8 @@ async function config() {
       diag: String(d.reuniao_diag_audio ?? "") === "1",
       modeloVozes: d.reuniao_modelo_vozes || "elevenlabs/scribe-v2",
       participantes: (() => { try { return (JSON.parse(d.reuniao_participantes || "[]") as unknown[]).map(String); } catch { return []; } })(),
+      textoRodada: String(d.reuniao_texto_rodada ?? "").trim() || RODADA_TEXTO,
+      textoApresentacao: String(d.reuniao_texto_apresentacao ?? "").trim() || APRESENTACAO_TEXTO,
       em: Date.now(),
     };
   }
@@ -323,27 +343,35 @@ const hora = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }) : "";
 const dia = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
+// 11/11: reunião de 1h16 voltou com a resposta vazia (o raciocínio do modelo gastou os 5.000 tokens antes do
+// texto). Agora: folga de 16.000 tokens, e resposta vazia tenta o próximo modelo, com o motivo no erro/log.
 async function chamarClaude(sistema: string, usuario: string): Promise<string> {
   let ultimo = "";
   for (const modelo of MODELOS_ATA) {
     const r = await fetch(LLM_URL, {
       method: "POST",
-      signal: AbortSignal.timeout(180_000),
+      signal: AbortSignal.timeout(280_000),
       headers: {
         Authorization: `Bearer ${LLM_KEY}`, "Content-Type": "application/json",
         "HTTP-Referer": "https://lideres.tatasushi.tech", "X-Title": "Tata Agente RH - ata",
       },
       body: JSON.stringify({
-        model: modelo, temperature: 0.2, max_tokens: 5000,
+        model: modelo, max_tokens: 16000, reasoning: { effort: "medium" },
         messages: [{ role: "system", content: sistema }, { role: "user", content: usuario }],
       }),
     });
     const txt = await r.text();
     if (r.ok) {
-      const c = JSON.parse(txt)?.choices?.[0]?.message?.content;
-      if (c) return String(c).trim();
+      let j: any = null;
+      try { j = JSON.parse(txt); } catch { /* resposta cortada */ }
+      const ch = j?.choices?.[0];
+      const c = String(ch?.message?.content ?? "").trim();
+      console.log("ata llm", JSON.stringify({ modelo, fim: ch?.finish_reason ?? null, letras: c.length, uso: j?.usage ?? null }));
+      if (c) return c;
+      ultimo = `LLM sem texto (${modelo}): fim=${ch?.finish_reason ?? "?"} erro=${JSON.stringify(ch?.error ?? j?.error ?? null).slice(0, 150)}`;
+      continue; // resposta vazia: tenta o próximo modelo
     }
-    ultimo = `LLM ${r.status} (${modelo}): ${txt.slice(0, 200)}`;
+    ultimo = `LLM ${r.status} (${modelo}): ${txt.trim().slice(0, 200)}`;
     if (!(r.status === 400 || r.status === 404) || !/model/i.test(txt)) break;
   }
   throw new Error(ultimo);
@@ -623,6 +651,14 @@ Deno.serve(async (req) => {
         `Reunião: Reunião de RH (teste) — ${diaSemana(agora)}.\n\nTRANSCRIÇÃO\n${String(t.transcricao ?? "")}`);
       return json({ ok: true, ...blocos(r, "Reunião de RH (teste)", dia(agora)), ms: Date.now() - t0 });
     }
+    if (t?.acao === "refazer_ata") {
+      const { data: r } = await supa.rpc("agente_reuniao_ver", { p_id: String(t.reuniao ?? "") });
+      if (!r) return json({ ok: false, erro: "reunião não encontrada" }, 404);
+      if ((r as any).status !== "erro") return json({ ok: false, erro: `reunião está ${(r as any).status}` }, 409);
+      await supa.rpc("agente_reuniao_status", { p_id: (r as any).id, p_status: "gerando_ata", p_erro: null });
+      EdgeRuntime.waitUntil(gerarAta((r as any).id));
+      return json({ ok: true, status: "gerando_ata" });
+    }
     if (t?.acao === "teste_vozes") {
       // separa por vozes uma reunião já gravada, sem cadastrar vozes nem fazer ata
       const t0 = Date.now();
@@ -659,18 +695,14 @@ Deno.serve(async (req) => {
       const primeiro = u.nome.split(" ")[0];
       const { data: vn } = await supa.rpc("agente_vozes_nomes");
       const vozes = ((vn ?? []) as unknown[]).map(String);
-      // sem nenhuma voz cadastrada: a página faz a rodada de nomes logo depois da saudação
-      const [saudacao, espera, rodada] = await Promise.all([
-        falar(`Oi, pessoal! Vou acompanhar a reunião e anotar tudo para a ata. Se precisarem de alguma informação, é só dizer: Sam, e a pergunta.`),
-        falar("Deixa eu ver."),
-        vozes.length ? Promise.resolve(null) : falar(RODADA_TEXTO),
-      ]);
-      return json({ ok: true, id, usuario: primeiro, saudacao, espera, vozes, rodada });
+      // o Sam não fala ao começar (a página só apita); a rodada de nomes vem com "Sam, se apresente"
+      const espera = await falar("Deixa eu ver.");
+      return json({ ok: true, id, usuario: primeiro, espera, vozes });
     }
 
     // rodada de nomes pedida pelo botão (alguém novo na sala)
     if (acao === "rodada_audio") {
-      return json({ ok: true, audio: await falar(RODADA_TEXTO) });
+      return json({ ok: true, audio: await falar((await config()).textoRodada) });
     }
 
     // teste do microfone antes de começar: só transcreve e devolve o que o Sam entendeu
@@ -741,6 +773,11 @@ Deno.serve(async (req) => {
     if (acao === "perguntar") {
       const pergunta = String(corpo.pergunta ?? "").trim();
       if (!pergunta) return json({ ok: false, erro: "pergunta vazia" }, 400);
+      // "Sam, se apresente": texto fixo e a página abre a rodada de nomes logo depois da fala
+      if (APRESENTE_RE.test(semAcento(pergunta))) {
+        const { textoApresentacao } = await config();
+        return json({ ok: true, texto: textoApresentacao, audio: await falar(textoApresentacao), consultas: [], rodada: true });
+      }
       return json({ ok: true, ...(await responderSam(reuniao, pergunta.slice(0, 1000), u)) });
     }
     return json({ ok: false, erro: "ação desconhecida" }, 400);

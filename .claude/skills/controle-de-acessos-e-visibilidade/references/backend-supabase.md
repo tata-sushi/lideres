@@ -54,8 +54,8 @@ tabela de liberação usa a mesma área do Valor.
 **Consumidas pelas funções do banco** (o servidor é a porta → `references/servidor.md`):
 - `gov_tenho_acesso(p_pagina_id)` — a pessoa abre a página? (admin passa).
 - `pode_botao(p_aba_id)` — também na função da ação; já confere a página e libera admin.
-- `pode_ver_valores(p_area)` — Valor; olha a área ou `geral`, sem bypass de admin.
-- `pode_ver_contato(p_area)` — Contato, mesma regra do Valor (a tabela guarda a área sem o prefixo `contato-`).
+- `pode_ver_valores(p_area)` — Valor; admin ativo passa; os demais pela área ou `geral`.
+- `pode_ver_contato(p_area)` — Contato; só pela área ou `geral`, **sem bypass de admin** (a tabela guarda a área sem o prefixo `contato-`).
 - `minha_matricula()` / `meu_nome()` — quem é a pessoa (autor de toda ação: matrícula e nome); `minha_subarvore()` — Linha;
   `gov_tenho_alguma(...)` — a pessoa abre alguma das páginas (função compartilhada por várias páginas).
 
@@ -90,9 +90,10 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 
 ## ⚠️ Cuidados ao configurar acesso
 
-- **Admin (`perfil='admin'`) vê tudo** — não precisa de liberação em `aba`/`botao`. **Valor é exceção:**
-  `pode_ver_valores(area)` só olha `dp_rh.perm_ver_valores` (a área ou `geral`); admin sem linha lá não vê R$.
-  **Contato** segue a mesma regra, com liberação separada (`dp_rh.perm_ver_contato`; painel: `perm_contato_areas` / `perm_contato_sync`).
+- **Admin (`perfil='admin'`) vê tudo** — não precisa de liberação em `aba`/`botao` nem em **Valor**:
+  `pode_ver_valores(area)` devolve verdadeiro para admin ativo e, para os demais, olha `dp_rh.perm_ver_valores`
+  (a área ou `geral`). A Auditoria de páginas lista os admins como `geral` (migration 20261212).
+  **Contato é exceção:** só por liberação (`dp_rh.perm_ver_contato`; painel: `perm_contato_areas` / `perm_contato_sync`), admin incluído.
   (Exceção: as features da seção **App** — Kanban/Escala/Limpeza — **não têm bypass de
   admin**; até admin precisa do grant.)
 - **Os setters `gov_admin_*_set` fazem REPLACE TOTAL por pessoa**: apagam **todos** os

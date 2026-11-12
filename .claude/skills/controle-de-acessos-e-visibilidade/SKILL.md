@@ -6,7 +6,7 @@ description: >-
   de quem são os registros. 6 níveis: PÁGINA (window.GOV_PAGE_ID), ABA
   (data-aba-id, visível por padrão, denylist), BOTÃO (data-aba-id ou
   data-botao-id; toda ação; oculto por padrão, allowlist; header sem id), VALOR
-  (máscara no servidor: R$, CPF, nascimento e saúde; sem bypass de admin),
+  (máscara no servidor: R$, CPF, nascimento e saúde; admin vê todos; os demais por área),
   CONTATO (máscara no servidor: e-mail e telefone; separado do Valor) e LINHA
   (organograma: o líder vê os próprios + toda a subárvore; admin e RH tudo). O
   servidor é a porta: toda função de página confere a página (gov_tenho_acesso),
@@ -133,9 +133,10 @@ Regras dos níveis:
 - **Botões de navegação do header NÃO têm id.** Zoom, fixar no menu, abrir o drawer, o
   "+" etc. entram **junto com o acesso à página** — não precisam de controle próprio,
   não recebem `data-aba-id`/`data-botao-id`.
-- **Admin (`perfil='admin'`) vê tudo** nos níveis Página/Aba/Botão. **Valor e Contato não:** só com a
-  liberação da área (ou `geral`), sem bypass de admin. (Outra exceção: as features da seção "App" do
-  Plus — Kanban/Escala/Limpeza — não têm bypass de admin.) Na **Linha**, admin e RH veem todas as linhas.
+- **Admin (`perfil='admin'`) vê tudo** nos níveis Página/Aba/Botão e **Valor** (todo admin vale como
+  `geral`, decisão do dono em 12/11/2026). **Contato não:** só com a liberação da área (ou `geral`), sem
+  bypass de admin. (Outra exceção: as features da seção "App" do Plus — Kanban/Escala/Limpeza — não têm
+  bypass de admin.) Na **Linha**, admin e RH veem todas as linhas.
 
 **Valor** e **Contato** não são atributo num elemento: são **áreas** mascaradas no servidor (detalhe no
 fim e em `references/backend-supabase.md`). A **Linha** é um corte nas funções do banco, decidido pelo
@@ -325,7 +326,7 @@ grep -o 'data-botao-id="[^"]*"' compliance/kpis/rh/escalas.html      | sort -u
 - **`data-aba-id` não pede JS; `data-botao-id` pede** (`GOV_BOTOES` + `aplicarBotoes` +
   checar `GOV_BTN_OK` na ação).
 - **Cadastrar no catálogo é obrigatório** — o atributo sozinho não cria o interruptor.
-- **Admin vê tudo** em Página/Aba/Botão (não em Valor nem Contato: precisa da área ou de `geral`). Em Linha,
+- **Admin vê tudo** em Página/Aba/Botão e Valor (não em Contato: precisa da área ou de `geral`). Em Linha,
   admin e RH veem todas.
 - **Dado de pessoa só sai por função escopada** (nível Linha): o servidor corta pela hierarquia.
   Filtro no navegador não protege nada.
@@ -369,8 +370,9 @@ padrão, liberado por pessoa e área. Diferenças em relação a aba/botão:
 - Não é atributo num elemento; o mascaramento é **na função do banco** (`pode_ver_valores('<área>')`),
   que devolve `null` sem permissão. A página só mostra o marcador (`R$ •••`, `•••`). Nunca mascarar só por CSS.
 - O `aba_id` **é a própria área** (ex.: `recrutamento`), **sem** o prefixo `pagina_id::`.
-- Liberação por pessoa fica em `dp_rh.perm_ver_valores`; `geral` libera todas as áreas. **Sem bypass de
-  admin.** Detalhes em `references/backend-supabase.md`.
+- Liberação por pessoa fica em `dp_rh.perm_ver_valores`; `geral` libera todas as áreas. **Admin ativo vê
+  todos os Valores** sem precisar de linha (`pode_ver_valores` confere o perfil). Detalhes em
+  `references/backend-supabase.md`.
 
 ---
 

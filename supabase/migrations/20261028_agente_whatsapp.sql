@@ -1325,3 +1325,61 @@ from dp_rh.sancoes;
 comment on view agente.sancoes is 'Sanções disciplinares (1 linha por sanção). Use a coluna sancao (nome por extenso): Advertência verbal | Advertência escrita | Suspensão. Em tipo_sancao, "escrita" e "advertencia" são a MESMA coisa — advertência escrita ("advertencia" = registro do sistema antigo, até ago/2026; "escrita" = atual) — e "verbal" é advertência verbal. "Quantas advertências" = verbais + escritas (diga quantas de cada quando houver verbal); suspensão é outra sanção (dias_suspensao = dias). Escala do TATÁ (gradualidade): advertência verbal → advertência escrita → suspensão (1 a 5 dias, só com validação prévia do RH) → justa causa.';
 comment on column agente.sancoes.sancao is 'Nome da sanção por extenso — use este ao responder.';
 comment on column agente.sancoes.tipo_sancao is 'Código: verbal | escrita | advertencia (= escrita, sistema antigo) | suspensao.';
+
+-- ── 17. contato de colaborador (09/11) ──────────────────────────────────────
+-- Decisão do responsável: celular e e-mail só na conversa PRIVADA de quem tem nível completo
+-- (nunca em grupo, nem no grupo DP/RH, nem falado na reunião). Fica fora das visões (a consulta
+-- livre ao banco não alcança); a edge só oferece a ferramenta contato_colaborador nessa conversa.
+create or replace function tata_plus.agente_contato(p_busca text)
+returns jsonb
+language sql stable security definer
+set search_path = tata_plus, pg_catalog
+as $fn$
+  select coalesce(jsonb_agg(c order by (c->>'status') <> 'Ativo', c->>'nome'), '[]'::jsonb)
+  from (
+    select jsonb_build_object(
+             'nome', p.nome, 'status', p.status, 'cargo', p.cargo, 'unidade', p.unidade,
+             'celular', nullif(btrim(p.telefone), ''), 'email', nullif(btrim(p.email), '')) c
+    from tata_plus.profiles p
+    where length(btrim(coalesce(p_busca, ''))) >= 3
+      and coalesce(p.status, '') <> 'Bot'
+      and tata_plus.agente_norm(p.nome) like '%' || replace(tata_plus.agente_norm(btrim(p_busca)), ' ', '%') || '%'
+    order by p.status <> 'Ativo', p.nome
+    limit 5
+  ) s;
+$fn$;
+revoke execute on function tata_plus.agente_contato(text) from public, anon, authenticated;
+grant execute on function tata_plus.agente_contato(text) to service_role;
+
+-- ── 18. modelo das respostas no WhatsApp (11/11) ─────────────────────────────
+-- Decisão do responsável: para gastar menos, o WhatsApp usa um modelo mais barato (GPT-6 Luna, ~20x
+-- mais barato que o Sonnet 5.5). A reunião ao vivo e a ata continuam no Sonnet. A edge relê a config a
+-- cada minuto (vale sem publicar); se o modelo escolhido falhar, a resposta sai pelo Sonnet e
+-- meta.modelo registra quem respondeu. Voltar ao padrão: update … set valor = '' (ou apagar a linha).
+insert into dp_rh.agente_config (chave, valor)
+values ('modelo_whatsapp', 'openai/gpt-6-luna')
+on conflict (chave) do nothing;
+
+-- ── 19. ata pelo WhatsApp: assuntos e íntegra (11/11) ─────────────────────────
+-- Pedido do responsável: "Sam, manda todos os assuntos da reunião" → todos os temas da ata, cada um com o
+-- conteúdo (números, proposta, encaminhamento), + decisões e pendências; "manda a ata completa" → a íntegra.
+-- Também ensinado ao Sam (dp_rh.agente_conhecimento, fonte victor, #2386), que vale acima da regra de ser sucinto.
+comment on view agente_restrito.reunioes_rh is 'Atas das reuniões de DP/RH (pautas, decisões, pendências; as feitas pelo Sam começam com "Síntese executiva da reunião"). conteudo é longo: traga poucas por vez — ex.: order by data_reuniao desc, created_at desc limit 1. Pergunta pontual sobre a reunião: responda curto. Se pedirem os assuntos, os tópicos, as pautas ou o resumo completo da reunião: TODOS os temas da ata, sem pular nenhum, no formato "*Reunião de RH — <data>*", depois "*Assuntos*" com uma linha por tema ("• *Tema*: o principal número, proposta ou encaminhamento; o que ficou em aberto"), depois "*Decisões*" (•) e "*Pendências*" (• responsável — o quê — prazo, se houver), e por fim "Ata completa no portal." Se pedirem a ata completa ou na íntegra: o conteudo inteiro, sem resumir nem cortar (é dividido em mais de uma mensagem automaticamente).';
+
+-- ── 20. pergunta "quebrada" em várias mensagens (12/11) ───────────────────────
+-- A pessoa manda "Oi Sam" / "Posso fazer perguntas?" (ou corrige uma palavra, o que chega como mensagem
+-- nova) e o Sam respondia cada uma. Agora a edge espera agente_config.atraso_resposta_s (padrão 8 s) depois
+-- de gravar a pergunta: se chegou outra da mesma conversa nesse meio-tempo, só a última responde, e o
+-- histórico já traz as mensagens seguidas juntas. '0' desliga.
+create or replace function tata_plus.agente_ultima_pergunta(p_telefone text)
+returns bigint
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select max(id) from dp_rh.agente_mensagens
+  where telefone = p_telefone and papel = 'user' and criado_em > now() - interval '10 minutes';
+$fn$;
+revoke execute on function tata_plus.agente_ultima_pergunta(text) from public, anon, authenticated;
+grant execute on function tata_plus.agente_ultima_pergunta(text) to service_role;
+
+insert into dp_rh.agente_config (chave, valor) values ('atraso_resposta_s', '8') on conflict (chave) do nothing;

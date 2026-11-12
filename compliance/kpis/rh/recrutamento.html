@@ -2140,20 +2140,8 @@ body[data-view="sobre"] #view-sobre { display:block; }
 <script>
 
 // ─── Estado ──────────────────────────────────────────────────────────────────
-var isAdmin = (function(){ var p=(window.__lideresPerfil||''); return p==='admin'||p==='analista-rh'; })();
-var isLider = (window.__lideresPerfil||'') === 'lider';
-function _liderMatchVaga(r) {
-  var sess = window.__lideresSession || {};
-  var myUnidade = norm((sess.unidade||'').toLowerCase().trim());
-  var rawDeptos = Array.isArray(sess.departamentos) ? sess.departamentos : [];
-  if (!rawDeptos.length && sess.departamento) rawDeptos = [sess.departamento];
-  var myDeptos = rawDeptos.map(function(d){ return norm(d.toLowerCase().trim()); });
-  var vagaUnidade = norm((r.unidade||'').toLowerCase().trim());
-  var vagaDepto   = norm((r.departamento||'').toLowerCase().trim());
-  var unitOk  = vagaUnidade === myUnidade || myDeptos.indexOf(vagaUnidade) >= 0;
-  var deptoOk = !myDeptos.length || myDeptos.indexOf(vagaDepto) >= 0;
-  return unitOk && deptoOk;
-}
+// Sem perfil nem filtro de equipe no navegador: a página não decide acesso. As vagas que chegam já são
+// as da subárvore do líder (ou todas, para admin e RH), cortadas no servidor por rec_vagas_listar.
 // (removido) lockVerMais — acesso deixa de ser hardcoded p/ admin; controle fica na config de acessos do app (data-aba-id)
 var entrevistas = [];
 var entrevistasAll = [];   // TODAS as entrevistas (inclusive de quem foi p/ teste) — fonte dos gráficos do dashboard
@@ -2525,7 +2513,6 @@ function getFiltered() {
   var src=getSrc(), f=state.filters;
   if (state.tab === 'vagas') {
     return src.filter(function(r) {
-      if (isLider && !_liderMatchVaga(r)) return false;
       if (f.unidade!=='Todos' && r.unidade!==f.unidade) return false;
       if (f.departamento!=='Todos' && r.departamento!==f.departamento) return false;
       if (f.status!=='Todos' && (r.status||'')!==f.status) return false;
@@ -2694,7 +2681,7 @@ function setAnlBusca(val){
 }
 
 function renderVagasFilters() {
-  var src=vagas.filter(function(v){ return (!isLider||_liderMatchVaga(v)); }), f=state.filters, filtered=getFiltered();
+  var src=vagas, f=state.filters, filtered=getFiltered();
   function sel(label, key, opts, curVal) {
     var h='<div class="filter-group"><label class="filter-label">'+label+'</label><select class="filter-select" onchange="setFilter(\''+key+'\',this.value)">';
     h+='<option value="Todos"'+(curVal==='Todos'?' selected':'')+'>Todos</option>';
@@ -3855,7 +3842,7 @@ function _initVagaColResizers() {
   if (!table) return;
   var ths = table.querySelectorAll('thead th');
   ths.forEach(function(th, i) {
-    if (i === ths.length - 1 && isAdmin) return; // não redimensiona coluna de ações
+    if (i === ths.length - 1 && /a[çc][õo]es/i.test(th.textContent || '')) return; // não redimensiona coluna de ações
     var handle = document.createElement('div');
     handle.className = 'vt-col-resizer';
     handle.addEventListener('mousedown', function(e) {
@@ -6261,7 +6248,6 @@ function gerarRelatorioVagas() {
   var abertas = (vagas || []).filter(function(r) {
     var s = norm((r.status || '').toLowerCase().trim());
     if (s !== 'aberta' && s !== 'aberto' && s.indexOf('andamento') < 0) return false;
-    if (isLider && !_liderMatchVaga(r)) return false;
     return true;
   });
 

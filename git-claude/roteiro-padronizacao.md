@@ -27,34 +27,34 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 |---|---|---|---|---|---|---|---|---|---|---|
 | **1. Dashboards de RH com ação e dado de pessoa (prioridade alta)** | | | | | | | | | | |
 | `kpis/rh/ferias.html` | `governanca-kpis-rh-ferias` | 3 | 6 | 4 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | — | ⏳ |
-| `kpis/rh/recrutamento.html` | `governanca-kpis-rh-recrutamento` | 7 | 21 | 17 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/doc.html` | `governanca-kpis-rh-doc` | 4 | 13 | 22 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/admissao.html` | `governanca-kpis-rh-admissao` | 3 | 15 | 18 | 🔶 08/11 (sem cliente próprio; resto na passagem do RH) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/desligamentos.html` | `governanca-kpis-rh-desligamentos` | 3 | 11 | 13 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/sancoes.html` | `governanca-kpis-rh-sancoes` | 2 | 6 | 6 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/ces.html` | `governanca-kpis-rh-ces` | 2 | 6 | 4 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/folha.html` | `governanca-kpis-rh-folha` | 2 | 3 | 4 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/beneficios.html` | `governanca-kpis-rh-beneficios` | 6 | 10 | 20 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/medicina.html` | `governanca-kpis-rh-medicina` | 3 | 5 | 4 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/performance.html` | `governanca-kpis-rh-performance` | 4 | 6 | 27 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/experiencias.html` | `governanca-kpis-rh-experiencias` | 3 | 4 | 2 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/absenteismo.html` | `governanca-kpis-rh-absenteismo` | 3 | 4 | 4 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/bancodehoras.html` | `governanca-kpis-rh-bancodehoras` | 0 | 0 | 1 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/ouvidoria.html` | `governanca-kpis-rh-ouvidoria` | 2 | 3 | 3 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/escalas.html` | `governanca-app-escala` | 3 | 10 | 27 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/armarios.html` | `governanca-kpis-rh-armarios` | 5 | 8 | 9 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/estoqueadm.html` | `governanca-kpis-rh-estoqueadm` | 6 | 10 | 8 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/agenda.html` | `governanca-kpis-rh-agenda` | 0 | 3 | 7 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/feriados.html` | `governanca-kpis-rh-feriados` | 3 | 4 | 2 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/hc.html` | `governanca-kpis-rh-hc` | 4 | 5 | 7 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/solicitacoes.html` | `governanca-kpis-rh-solicitacoes` | 3 | 4 | 2 | 🔶 parcial (Etapa 5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/demandas.html` | `governanca-kpis-rh-demandas` | 0 | 0 | 1 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/reclamacoes.html` | `governanca-kpis-rh-reclamacoes` | 2 | 4 | 3 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/semanal.html` | `governanca-kpis-rh-semanal` | 3 | 3 | 3 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/sam.html` | `governanca-kpis-rh-sam` | 2 | 2 | 0 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| `kpis/rh/cei.html` | `governanca-kpis-rh-cei` | 2 | 2 | 5 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
-| `kpis/rh/ted.html` | `governanca-kpis-rh-ted` | 2 | 2 | 1 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
-| `kpis/rh/comunicacao.html` | `governanca-kpis-rh-comunicacao` | 2 | 2 | 1 | ⏳ | ⏳ | ⏳ | ⏳ | — | — |
+| `kpis/rh/recrutamento.html` | `governanca-kpis-rh-recrutamento` | 7 | 21 | 17 | ✅ 10/11 (Contato ⏸ liberar pessoas) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/doc.html` | `governanca-kpis-rh-doc` | 4 | 13 | 22 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/admissao.html` | `governanca-kpis-rh-admissao` | 3 | 15 | 18 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/desligamentos.html` | `governanca-kpis-rh-desligamentos` | 3 | 11 | 13 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/sancoes.html` | `governanca-kpis-rh-sancoes` | 2 | 6 | 6 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/ces.html` | `governanca-kpis-rh-ces` | 2 | 6 | 4 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/folha.html` | `governanca-kpis-rh-folha` | 2 | 3 | 4 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/beneficios.html` | `governanca-kpis-rh-beneficios` | 6 | 10 | 20 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/medicina.html` | `governanca-kpis-rh-medicina` | 3 | 5 | 4 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/performance.html` | `governanca-kpis-rh-performance` | 4 | 6 | 27 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/experiencias.html` | `governanca-kpis-rh-experiencias` | 3 | 4 | 2 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/absenteismo.html` | `governanca-kpis-rh-absenteismo` | 3 | 4 | 4 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/bancodehoras.html` | `governanca-kpis-rh-bancodehoras` | 0 | 0 | 1 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/ouvidoria.html` | `governanca-kpis-rh-ouvidoria` | 2 | 3 | 3 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/escalas.html` | `governanca-app-escala` | 3 | 10 | 27 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/armarios.html` | `governanca-kpis-rh-armarios` | 5 | 8 | 9 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/estoqueadm.html` | `governanca-kpis-rh-estoqueadm` | 6 | 10 | 8 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/agenda.html` | `governanca-kpis-rh-agenda` | 0 | 3 | 7 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/feriados.html` | `governanca-kpis-rh-feriados` | 3 | 4 | 2 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/hc.html` | `governanca-kpis-rh-hc` | 4 | 5 | 7 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/solicitacoes.html` | `governanca-kpis-rh-solicitacoes` | 3 | 4 | 2 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/demandas.html` | `governanca-kpis-rh-demandas` | 0 | 0 | 1 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/reclamacoes.html` | `governanca-kpis-rh-reclamacoes` | 2 | 4 | 3 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/semanal.html` | `governanca-kpis-rh-semanal` | 3 | 3 | 3 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/sam.html` | `governanca-kpis-rh-sam` | 2 | 2 | 0 | ✅ 11/11 (só página) | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| `kpis/rh/cei.html` | `governanca-kpis-rh-cei` | 2 | 2 | 5 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | — | — |
+| `kpis/rh/ted.html` | `governanca-kpis-rh-ted` | 2 | 2 | 1 | ✅ 11/11 (só página) | ⏳ | ⏳ | ⏳ | — | — |
+| `kpis/rh/comunicacao.html` | `governanca-kpis-rh-comunicacao` | 2 | 2 | 1 | ✅ 11/11 (só página) | ⏳ | ⏳ | ⏳ | — | — |
 | **2. Dashboards operacionais (compras, estoque, limpeza, manutenção, Tatá House, parceiros)** | | | | | | | | | | |
 | `kpis/compras/abastecimento.html` | `governanca-kpis-compras-abastecimento` | 6 | 15 | 10 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/estoque/estoque_semanal.html` | `governanca-kpis-estoque-semanal` | 3 | 5 | 6 | ✅ 08/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
@@ -90,7 +90,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Ordem sugerida para a skill de acessos
 
-1. **Grupo 1** (RH) fica por último: só quando o dono pedir (decisão de 08/11/2026). Dentro dele, primeiro as páginas com ação e dado sensível — Sanções, Documentos, Recrutamento, Desligamentos, Cargos e Salários, Folha, Benefícios, Medicina, Performance — depois as demais.
+1. **Grupo 1** (RH): concluído em 11/11/2026 em dois lotes (SQLs únicos 20261208 e 20261209, rodados pelo dono). Pendências transversais: máscara de **Contato** (telefone/e-mail) em Recrutamento e Ouvidoria só quando houver pessoas liberadas em contato-<área>; áreas de Valor novas (`cpf`, `desligamentos`, `beneficios`, `reclamacoes`) são liberadas pelo dono no app.
 2. **Grupo 2**: Manutenção e Parceiros & Sistemas feitos. Abastecimento, Estoque semanal e Checklist de limpeza: **liberados pelo dono em 08/11** (item 3, cliente próprio) — um PR por página, tudo pela porta do servidor, sem Apps Script (não existe mais).
 3. **Grupo 3**: Auditoria e Organograma — feito em 08/11 (migration 20261130). Organograma: **Linha é exceção** (mostra a árvore inteira; decisão do dono, 08/11). A máscara de **saúde** (próximo exame) é da função compartilhada com Medicina e entra na passagem dessa página (grupo 1).
 4. **Grupo 4**: todos os menus de uma vez, junto com a camada de acesso (Etapa 2+3). **Só depois que a skill do `gate.js` estiver pronta** (decisão do dono, 08/11).
@@ -100,6 +100,12 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Histórico
 
+- 12/11/2026 — Valor: todo admin vale como `geral` (decisão do dono). `pode_ver_valores` passa a liberar admin ativo sem linha em `perm_ver_valores`; a Auditoria lista os admins como `geral`. Contato segue sem bypass. Migration `20261212_valores_admin_geral.sql`, aplicada e testada por pessoa logada. Motivo: admin criado depois do seed via R$ mascarado no VT e o painel do app não oferece Valor para admin.
+- 11/11/2026 — SQLs dos lotes 1 e 2 rodados pelo dono; 4 edge functions com porta publicadas; testes por pessoa logada ok (admin tudo; líder só a equipe; sem página bloqueado). Roteiro da skill de acessos completo, exceto os menus (Etapa 2+3, após a skill do gate).
+- 11/11/2026 — RH lote 2 (Escalas, Armários, Estoque ADM, Agenda, Head Count, Feriados, Reclamações, Semanal, Solicitações, Demandas, Experiências, SAM, CEI, TED, Comunicação): sem mudança de HTML; banco num SQL único (`supabase/migrations/20261209_rh_lote2.sql`), a rodar depois do lote 1. SAM, TED e Comunicação só têm página.
+- 11/11/2026 — RH lote 1 (Sanções, Documentos, Folha, Desligamentos, CES, Benefícios, Medicina, Absenteísmo, Performance, Admissão, Banco de horas, Ouvidoria): HTML pronto; banco num SQL único (`supabase/migrations/20261208_rh_lote1.sql`) que o dono roda; depois: deploy das 4 edge functions, testes e merge. Decisões anotadas no SQL (seção 6).
+- 11/11/2026 — Lote 1 do RH começa por Sanções (migration 20261207): lista e exclusão deixam de ser executáveis por qualquer sessão e passam a conferir página e botão; registrar confere o botão; a lista de colaboradores compartilhada por 8 páginas passa a conferir uma das páginas, mascarar CPF (Valor, área ferias) e não devolver e-mail. Linha nas sanções aguarda o dono.
+- 10/11/2026 — Recrutamento (pedido do dono, uma página): corte de linha nas vagas no servidor (líder vê a própria subárvore; admin e RH tudo), botão conferido em cada ação (rec_porta(<botão>)), CPF mascarado como Valor; removido o filtro de equipe no navegador que deixava o líder com 0 vagas. Migration 20261206. Contato (telefones) fica para quando houver pessoas liberadas em contato-recrutamento (hoje nenhuma).
 - 08/11/2026 — Esquema de abastecimento fechado (migration 20261205, aplicada depois do deploy das quatro páginas): sem políticas abertas, sem acesso direto de anon/authenticated; tudo pelas funções do servidor. Testado: admin lista pelas funções; leitura direta e anon negados.
 - 08/11/2026 — Admissão: removido o bloco morto de inventário/estoque com cliente próprio (decisão do dono: só isso agora; o resto da página fica para a passagem do RH). Abre caminho para fechar as tabelas do esquema de abastecimento para anon.
 - 08/11/2026 — Abastecimento pelo servidor (migration 20261204): sem cliente próprio nem Apps Script; leituras com porta da página, cada estágio (pedido, processamento, recebimento, conferência, anexos) com porta do botão e autor do login; upload de anexo só logado e com o botão.

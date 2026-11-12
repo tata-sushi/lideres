@@ -21,8 +21,8 @@ configura pessoa a pessoa. O nível **Linha** decide **de quem são os registros
 - **O nível Linha só filtra.** Nunca abre página, aba ou botão. Quem não tem a página liberada
   (nível Página) não chega a ver linha nenhuma, mesmo sendo RH.
 - **Valor e Contato têm as duas travas:** precisam da área liberada (`pode_ver_valores` /
-  `pode_ver_contato`, sem bypass de admin) **e** passam pelo corte de linha. Admin sem a área não vê R$,
-  CPF, nascimento, saúde, e-mail nem telefone, mesmo vendo todas as linhas.
+  `pode_ver_contato`) **e** passam pelo corte de linha. Admin vê todos os Valores (vale como `geral`),
+  mas Contato não tem bypass: admin sem a área não vê e-mail nem telefone, mesmo vendo todas as linhas.
 - **Quem vê, grava.** Se a pessoa vê a linha, pode agir nela (agendar, editar…), inclusive na
   própria. **Se o botão da ação aparece** é decisão do nível Botão, não deste.
 
@@ -145,7 +145,7 @@ O registro precisa ligar a uma **matrícula** para entrar no corte.
 | Página | O registro liga em | Regra | Situação |
 |---|---|---|---|
 | Férias | `matricula` do colaborador | `matricula = any(sub)` | piloto (ver "Estado atual") |
-| Vagas / Recrutamento | `lider_responsavel` (é um **nome**) | líder responsável na subárvore | pendente: casar nome → matrícula antes |
+| Vagas / Recrutamento | `lider_responsavel` (é um **nome**) | líder responsável na subárvore (nome normalizado casa com `profiles.nome`) **ou** `criado_por` = quem está logado; admin e RH tudo | aplicado em 10/11/2026 (`public.rec_vagas_visiveis`, migration 20261206). Vaga cujo líder não casa com ninguém ativo só aparece para admin e RH |
 | Admissão, Ausências, outras | a definir ao aplicar | — | — |
 
 ---
@@ -159,8 +159,8 @@ O registro precisa ligar a uma **matrícula** para entrar no corte.
 - **Estado vazio:** "sem equipe" pode ver só a própria linha, ou nenhuma. A página precisa de uma
   mensagem de vazio, e o Sobre continua lá.
 - Filtros de equipe no navegador **não protegem nada** e dependem de campos que a sessão do `gate.js`
-  não tem. Mapeamento de 08/11/2026: só o `_liderMatchVaga` do `recrutamento.html` ainda age (o líder vê
-  0 vagas ou todas, conforme o caminho); os filtros por unidade de Armários e Sanções já não fazem nada.
+  não tem. O último (`_liderMatchVaga` do `recrutamento.html`, que deixava o líder com 0 vagas) saiu em
+  10/11/2026 junto com o corte no servidor; os filtros por unidade de Armários e Sanções já não fazem nada.
   Tire cada um **só junto** com o corte de linha no servidor, senão o líder passa a ver mais.
 
 ---
@@ -211,8 +211,8 @@ select count(*) as na_subarvore,
 - [ ] A função confere a página (`gov_tenho_acesso`) e, se for ação, o botão (`pode_botao`).
 - [ ] A RPC calcula `minha_subarvore()` uma vez e filtra `todas or matricula = any(sub)`.
 - [ ] A escrita faz a mesma checagem antes de gravar.
-- [ ] Admin/RH pela regra de `ferias_eh_rh`; Valor e Contato continuam exigindo `pode_ver_valores` /
-  `pode_ver_contato`.
+- [ ] Admin/RH pela regra de `ferias_eh_rh`; Valor e Contato continuam passando por `pode_ver_valores` /
+  `pode_ver_contato` (admin passa no Valor, não no Contato).
 - [ ] Tabela e view do dado com `revoke … from anon, authenticated` (a RPC é a única porta).
 - [ ] O Sobre não passa pelo corte; KPIs e gráficos saem das linhas já filtradas.
 - [ ] Estado vazio tratado ("sem equipe").

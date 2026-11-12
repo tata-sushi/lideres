@@ -2350,6 +2350,7 @@ window.toggleFta = toggleFta;
     '10:00 às 16:15 - 15min de intervalo',
     '10:00 às 19:00 - 1h de intervalo',
     '10:45 às 17:00 - 15min de intervalo',
+    '11:00 às 23:20 - 3h de intervalo',
     '12:00 às 21:00 - 1h de intervalo',
     '12:00 às 23:20 - 4h de intervalo',
     '14:00 às 22:20 - 1h de intervalo',
@@ -5234,8 +5235,38 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
       <select class="adm-status-sel" id="adm-status-sel" data-aba-id="governanca-kpis-rh-admissao::mudar-status-ficha" title="Status da admissão" aria-label="Status da admissão"></select>
       <button class="btn btn--primary" id="adm-mf-salvar" data-aba-id="governanca-kpis-rh-admissao::salvar-status-ficha" onclick="_admSalvarStatus()"><span class="btn-spin"></span><span class="btn-label">Salvar</span></button>
       <button class="btn btn--primary" id="adm-mf-zip" style="margin-left:auto" data-aba-id="governanca-kpis-rh-admissao::baixar-zip-documentos" onclick="_admBaixarZipDocs()"><span class="btn-spin"></span><span class="btn-label">Baixar .zip</span></button>
+      <button class="btn btn--primary" data-aba-id="governanca-kpis-rh-admissao::gerar-declaracao-conta-salario" onclick="_admAbrirDeclaracaoConta()">Abertura de Conta</button>
       <button class="btn btn--primary" data-aba-id="governanca-kpis-rh-admissao::copiar-email-dp" onclick="_admCopiarCorpo()">Copiar corpo</button>
       <button class="btn btn--primary" id="adm-mf-send" data-aba-id="governanca-kpis-rh-admissao::enviar-ficha-dp" onclick="_admEnviarEmail()"><span class="btn-spin"></span><span class="btn-label">Enviar para o DP</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Declaração para Abertura de Conta Salário — pré-admissão (dados ainda não
+     migrados pro RHID), pulla direto de _ficha (admissao + respostas). Só impressão:
+     quem assina é o RH (assinatura/carimbo fixos), não passa por assinatura digital. -->
+<div class="adm-ov" id="adm-conta-ov" style="z-index:410;" onclick="if(event.target===this)_admFecharDeclaracaoConta()">
+  <div class="adm-modal" style="max-width:420px;">
+    <div class="adm-mh">
+      <div class="adm-mh-info">
+        <div class="adm-mh-nome">Declaração para Abertura de Conta</div>
+        <div class="adm-mh-sub">Dados que ainda não estão na ficha</div>
+      </div>
+      <button class="adm-mh-x" onclick="_admFecharDeclaracaoConta()">✕</button>
+    </div>
+    <div class="adm-mb">
+      <div class="form-row">
+        <label class="form-label" for="adm-conta-data-admissao">Data de admissão</label>
+        <input class="form-input" type="date" id="adm-conta-data-admissao">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="adm-conta-salario">Salário (R$)</label>
+        <input class="form-input" type="text" id="adm-conta-salario" placeholder="Ex: 2.070,32">
+      </div>
+      <div id="adm-conta-err" style="display:none;color:#C0392B;font-size:11px;"></div>
+    </div>
+    <div class="adm-mf">
+      <button class="btn btn--primary" id="adm-conta-btn" onclick="_admGerarDeclaracaoConta()"><span class="btn-spin"></span><span class="btn-label">Gerar PDF</span></button>
     </div>
   </div>
 </div>
@@ -5452,9 +5483,9 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
         '<td class="td-muted">'+p.enviado+'</td>'+
         '<td class="td-acoes">'+
           '<button class="btn-icon" title="Copiar link da admissão" aria-label="Copiar link" onclick="_admCopiarLink(\''+E(a.token)+'\',this)">'+SVG_LINK+'</button>'+
-          '<button class="btn-icon" title="Estender +48h no prazo" aria-label="+48h" onclick="_admEstender48h(\''+E(a.token)+'\',this)">'+SVG_RELOGIO+'</button>'+
+          '<button class="btn-icon" data-aba-id="governanca-kpis-rh-admissao::estender-prazo-ficha" title="Estender +48h no prazo" aria-label="+48h" onclick="_admEstender48h(\''+E(a.token)+'\',this)">'+SVG_RELOGIO+'</button>'+
           '<button class="btn-icon" title="Abrir ficha" aria-label="Abrir ficha" onclick="_admAbrirFicha(\''+E(a.token)+'\')">'+SVG_OLHO+'</button>'+
-          '<button class="btn-icon btn-icon--danger" title="Apagar de vez (irreversível)" aria-label="Apagar" onclick="_admExcluir(\''+E(a.token)+'\',this)">'+SVG_LIXO+'</button>'+
+          '<button class="btn-icon btn-icon--danger" data-aba-id="governanca-kpis-rh-admissao::excluir-ficha" title="Apagar de vez (irreversível)" aria-label="Apagar" onclick="_admExcluir(\''+E(a.token)+'\',this)">'+SVG_LIXO+'</button>'+
         '</td>'+
       '</tr>';
     },
@@ -5465,9 +5496,9 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
       return cartao({ titulo: E(a.nome||'—'), sub: E(a.cargo||'—'), direita: badge(a.status),
         campos: [['Unidade', E(a.unidade||'—')], ['Validados', p.prog], ['Anexos', String(a.n_docs||0)], ['Enviado', p.enviado]],
         acoes: '<button class="btn btn--sm" onclick="_admCopiarLink(\''+E(a.token)+'\',this)">Copiar link</button>'+
-               '<button class="btn btn--sm" onclick="_admEstender48h(\''+E(a.token)+'\',this)">+48h</button>'+
+               '<button class="btn btn--sm" data-aba-id="governanca-kpis-rh-admissao::estender-prazo-ficha" onclick="_admEstender48h(\''+E(a.token)+'\',this)">+48h</button>'+
                '<button class="btn btn--primary btn--sm" onclick="_admAbrirFicha(\''+E(a.token)+'\')">Abrir ficha</button>'+
-               '<button class="btn btn--sm btn--danger" onclick="_admExcluir(\''+E(a.token)+'\',this)">Apagar</button>' });
+               '<button class="btn btn--sm btn--danger" data-aba-id="governanca-kpis-rh-admissao::excluir-ficha" onclick="_admExcluir(\''+E(a.token)+'\',this)">Apagar</button>' });
     } });
   TAB_PEND.col = 'enviado_em'; TAB_PEND.dir = -1;   // ordem inicial: enviados mais recentes primeiro (como antes)
   window.TAB_ADM_PEND = TAB_PEND;
@@ -5596,6 +5627,134 @@ table.mini td.td-acoes { text-align: center; padding: 4px 10px; overflow: visibl
     if(!confirm('Excluir esta informação?')) return;
     TP(function(t){ return t.rpc('admissao_item_excluir',{p_id:id}); }).then(function(r){
       if(r.error){ alert('Erro: '+r.error.message); return; } _carregarFicha();
+    });
+  };
+
+  // ── Declaração para Abertura de Conta Salário — pré-admissão ────────────
+  // Dados ainda não migrados pro RHID: puxa direto de _ficha (admissao + respostas),
+  // igual ao resto do modal de validação — não depende de matrícula/profiles.
+  // Só "Gerar PDF" (impressão): quem assina é o RH (assinatura/carimbo fixos,
+  // guardados como imagem no bucket privado dp-documentos — nunca no código,
+  // que é público), não passa pelo fluxo de assinatura digital do colaborador.
+  var ADM_DC_ASSINATURA_PATH = '_assets/assinatura-clean.png';
+  var ADM_DC_CARIMBO_PATH = '_assets/carimbo-clean.png';
+
+  function _admFmtDataExtenso(iso){
+    if(!iso) return '—';
+    var s=String(iso), d;
+    if(/^\d{4}-\d{2}-\d{2}/.test(s)){ var p=s.slice(0,10).split('-'); d=new Date(+p[0], +p[1]-1, +p[2]); }
+    else { d=new Date(s); if(isNaN(d)) return '—'; }
+    var meses=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    return d.getDate()+' de '+meses[d.getMonth()]+' de '+d.getFullYear();
+  }
+
+  window._admAbrirDeclaracaoConta = function(){
+    document.getElementById('adm-conta-data-admissao').value = '';
+    document.getElementById('adm-conta-salario').value = '';
+    document.getElementById('adm-conta-err').style.display = 'none';
+    document.getElementById('adm-conta-ov').classList.add('show');
+  };
+  window._admFecharDeclaracaoConta = function(){
+    document.getElementById('adm-conta-ov').classList.remove('show');
+  };
+
+  window._admGerarDeclaracaoConta = function(){
+    var err = document.getElementById('adm-conta-err');
+    err.style.display = 'none';
+    var dataAdmissaoRaw = document.getElementById('adm-conta-data-admissao').value;
+    var salario = (document.getElementById('adm-conta-salario').value||'').trim();
+    if (!dataAdmissaoRaw) { err.textContent='Informe a data de admissão.'; err.style.display='block'; return; }
+    if (!salario) { err.textContent='Informe o salário.'; err.style.display='block'; return; }
+
+    var a = _ficha.admissao || {};
+    var resp = _ficha.respostas || [];
+    if (!a.nome) { err.textContent='Ficha sem nome cadastrado.'; err.style.display='block'; return; }
+
+    var rg = _admAdmissaoValor(resp, 'pessoais', 'rg_numero');
+    var enderecoPartes = [
+      _admAdmissaoValor(resp, 'endereco', 'endereco'),
+      _admAdmissaoValor(resp, 'endereco', 'bairro'),
+      _admAdmissaoValor(resp, 'endereco', 'cidade_estado')
+    ].filter(Boolean);
+    var cep = _admAdmissaoValor(resp, 'endereco', 'cep');
+    var endereco = enderecoPartes.join(', ') + (cep ? ' – CEP ' + cep : '');
+
+    setBtnLoading(true, 'Gerando…', 'adm-conta-btn');
+    supaP().then(function(supa){
+      return Promise.all([
+        supa.storage.from('dp-documentos').createSignedUrl(ADM_DC_ASSINATURA_PATH, 3600),
+        supa.storage.from('dp-documentos').createSignedUrl(ADM_DC_CARIMBO_PATH, 3600)
+      ]);
+    }).then(function(results){
+      var sigUrl = (results[0] && results[0].data && results[0].data.signedUrl) || '';
+      var carimboUrl = (results[1] && results[1].data && results[1].data.signedUrl) || '';
+
+      // Mesmo padrão .rp-* dos demais documentos (ADM_CSS/ADM_LOGO_B64, já usados
+      // em todos os termos) + só o necessário pra assinatura/carimbo em imagem,
+      // que nenhum outro documento tem.
+      var dcOverrides =
+        '.dc-declara{margin-bottom:18px;}'+
+        '.dc-sig{margin:20px 0 16px;text-align:center;}'+
+        '.dc-sig img{max-height:90px;width:auto;display:block;margin:0 auto 6px;border:none;outline:none;}'+
+        '.dc-sig-nome{font-size:10px;color:#111;}'+
+        '.dc-sig-cargo{font-size:10px;font-weight:700;color:#111;}'+
+        '.dc-carimbo{text-align:right;margin-top:-70px;margin-bottom:16px;}'+
+        '.dc-carimbo img{width:204px;border:none;outline:none;}'+
+        '.dc-footer{text-align:center;font-size:9px;color:#777;margin-top:16px;padding-top:10px;border-top:1px solid #ededed;}';
+
+      var now = new Date();
+      var pad = function(n){ return String(n).padStart(2,'0'); };
+      var dateStr = pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear()+', '+pad(now.getHours())+':'+pad(now.getMinutes());
+
+      var body =
+        '<div class="page">' +
+          '<div class="rp-header">' +
+            '<img class="rp-logo" src="'+ADM_LOGO_B64+'" alt="TATÁ Sushi" onerror="this.style.display=\'none\'">' +
+            '<div class="rp-header-title">Declaração para Abertura de Conta Salário</div>' +
+            '<div class="rp-header-right">Emitido em <strong>'+_escHtml(dateStr)+'</strong></div>' +
+          '</div>' +
+          '<div class="rp-intro">' +
+            '<div class="rp-intro-field grow"><span class="rp-intro-label">Colaborador</span><span class="rp-intro-value">'+_escHtml(a.nome)+'</span></div>' +
+            '<div class="rp-intro-field"><span class="rp-intro-label">CPF</span><span class="rp-intro-value">'+_escHtml(a.cpf||'—')+'</span></div>' +
+            '<div class="rp-intro-field"><span class="rp-intro-label">RG</span><span class="rp-intro-value">'+_escHtml(rg||'—')+'</span></div>' +
+            '<div class="rp-intro-field"><span class="rp-intro-label">Cargo</span><span class="rp-intro-value">'+_escHtml(a.cargo||'—')+'</span></div>' +
+            '<div class="rp-intro-field"><span class="rp-intro-label">Admissão</span><span class="rp-intro-value">'+_escHtml(_admFmtAdmissao(dataAdmissaoRaw))+'</span></div>' +
+          '</div>' +
+          '<div class="rp-section">' +
+            '<div class="rp-section-label">Ao Banco Itaú</div>' +
+            '<div class="rp-section-body">' +
+              '<p class="rp-p dc-declara">'+_escHtml(ADM_RAZAO_SOCIAL)+', CNPJ: '+_escHtml(ADM_UNIDADES_CNPJ['Itaim Bibi'].cnpj)+', declara para a finalidade de abertura de conta salário para o funcionário <strong>'+_escHtml(a.nome)+'</strong>.</p>' +
+              '<p class="rp-p"><strong>Endereço:</strong> '+_escHtml(endereco||'—')+'</p>' +
+              '<p class="rp-p"><strong>Salário:</strong> R$ '+_escHtml(salario)+'</p>' +
+            '</div>' +
+          '</div>' +
+          (sigUrl ? '<div class="dc-sig"><img src="'+sigUrl+'" alt="Assinatura"><div class="dc-sig-nome">Victor Augusto di Sessa Carvalho</div><div class="dc-sig-cargo">Recursos Humanos</div></div>' : '') +
+          (carimboUrl ? '<div class="dc-carimbo"><img src="'+carimboUrl+'" alt="Carimbo"></div>' : '') +
+          '<div class="rp-cidade-data">São Paulo, '+_escHtml(_admFmtDataExtenso(new Date().toISOString().slice(0,10)))+'.</div>' +
+          '<div class="dc-footer">Tatá Sushi Comercio de Alimento LTDA — R. João Cachoeira, 278 – Itaim Bibi – CEP 04535-000 — Tel. 11-3078-2006 ou (11) 9 1362-5960</div>' +
+        '</div>';
+
+      var html = '<!DOCTYPE html><html lang="pt-BR"><head>'+
+        '<meta charset="UTF-8">'+
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+        '<title>Declaração Abertura de Conta · '+_escHtml(a.nome||'—')+' · TATÁ Sushi</title>'+
+        '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">'+
+        '<style>'+ADM_CSS+dcOverrides+'</style>'+
+        '</head><body>'+body+'</body></html>';
+
+      var w = window.open('', '_blank');
+      if (!w) { throw new Error('Permita pop-ups para gerar o PDF.'); }
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      setTimeout(function(){ w.print(); }, 600);
+    }).then(function(){
+      setBtnLoading(false, 'Gerar PDF', 'adm-conta-btn');
+      _admFecharDeclaracaoConta();
+    }, function(e){
+      setBtnLoading(false, 'Gerar PDF', 'adm-conta-btn');
+      err.textContent = 'Erro ao gerar: ' + (e && e.message || e);
+      err.style.display = 'block';
     });
   };
 

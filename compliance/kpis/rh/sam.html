@@ -589,7 +589,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="sec-div">Como funciona</div>
   <div class="sobre-bloco">
     <ul class="sobre-lista">
-      <li><strong>Começar:</strong> na aba Reunião, toque em "Começar reunião" e permita o microfone. O Sam se apresenta em voz alta e avisa que está anotando para a ata.</li>
+      <li><strong>Começar:</strong> na aba Reunião, toque em "Começar reunião" e permita o microfone. Um apito curto ("pi") avisa que já está gravando. O Sam não fala sozinho: só responde quando alguém chama "Sam, …".</li>
       <li><strong>Perguntar:</strong> diga "Sam," e a pergunta (ex.: "Sam, quantas vagas abertas no Itaim?"). Ele diz "deixa eu ver" e responde falando, em uns 10 a 20 segundos. Em ambiente barulhento, use o botão "Perguntar ao Sam".</li>
       <li><strong>Encerrar:</strong> toque em "Encerrar e gerar ata". O Sam fala o fechamento da reunião (assuntos, decisões e quem ficou com cada pendência).</li>
     </ul>
@@ -613,7 +613,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <li>Antes de começar, toque em <strong>"Testar o microfone"</strong> e fale uma frase: o Sam mostra o que entendeu. Se ele não entender, chegue o aparelho mais perto de quem fala.</li>
       <li>Fale normalmente; ele grava em trechos curtos, cortados nas pausas.</li>
       <li>Para a pergunta sair certa, faça uma de cada vez e espere a resposta.</li>
-      <li><strong>Rodada de nomes:</strong> na primeira reunião o Sam pede que cada um diga "aqui é o/a <nome>" e uma frase. Daí em diante ele reconhece as vozes sozinho. Chegou alguém novo? Toque em "Rodada de nomes" e a pessoa se apresenta.</li>
+      <li><strong>Rodada de nomes:</strong> na primeira reunião, diga "Sam, se apresente". Ele conta o que faz e pede que cada um diga "aqui é o/a &lt;nome&gt;" e uma frase; quando todos falarem, toque em "Terminar rodada". Daí em diante ele reconhece as vozes sozinho. Chegou alguém novo? "Sam, se apresente" de novo, ou o botão "Rodada de nomes".</li>
       <li>Para a demanda sair pronta no kanban, diga quem faz e até quando ("Cinthia, você divulga a vaga até sexta?").</li>
     </ul>
   </div>
@@ -897,6 +897,21 @@ function tocar(audio) {
     var pr = p.play(); if (pr && pr.catch) pr.catch(fim);
   });
 }
+/* apito curto ("pi") de que a gravação começou — gerado aqui, sem arquivo (1 kHz, 0,22 s) */
+function bipAudio() {
+  var taxa = 16000, n = Math.round(taxa * 0.22), v = new DataView(new ArrayBuffer(44 + n * 2));
+  var txt = function (o, t) { for (var i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  txt(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); txt(8, 'WAVE'); txt(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, taxa, true);
+  v.setUint32(28, taxa * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); txt(36, 'data'); v.setUint32(40, n * 2, true);
+  for (var i = 0; i < n; i++) {
+    var env = Math.min(1, i / (taxa * 0.01), (n - i) / (taxa * 0.04));   // entra em 10 ms, sai em 40 ms
+    v.setInt16(44 + i * 2, Math.round(Math.sin(2 * Math.PI * 1000 * i / taxa) * env * 0.5 * 32767), true);
+  }
+  var b = new Uint8Array(v.buffer), s = '';
+  for (var j = 0; j < b.length; j++) s += String.fromCharCode(b[j]);
+  return { mime: 'audio/wav', base64: btoa(s) };
+}
 /* destrava o áudio no toque do usuário (iPhone/Safari) */
 function destravarAudio() {
   try {
@@ -1088,7 +1103,7 @@ async function rodadaComecar(audio) {
   aviso('Rodada de nomes: um de cada vez, diga "aqui é o/a" + seu nome + uma frase. Toque em "Terminar rodada" quando todos falarem.');
   statusOuvindo();
   clearTimeout(R._tRodada);
-  R._tRodada = setTimeout(rodadaTerminar, 120000);
+  R._tRodada = setTimeout(rodadaTerminar, 180000);
 }
 function rodadaTerminar() {
   if (R.rodadaIni == null) return;
@@ -1189,7 +1204,8 @@ async function responderProxima() {
     resp.classList.remove('is-pensando');
     resp.textContent = r.texto || '(sem resposta)';
     await espera;
-    await tocar(r.audio);
+    if (r.rodada) await rodadaComecar(r.audio);   // "Sam, se apresente": fala e já abre a rodada de nomes
+    else await tocar(r.audio);
   } catch (e) {
     var rr = item.querySelector('.reu-qa-r');
     rr.classList.remove('is-pensando');
@@ -1341,8 +1357,7 @@ async function comecarReuniao() {
     mostrarVozes(r.vozes);
     if (!(await manterTela())) aviso('Deixe a tela ligada (sem bloquear) durante a reunião: com a tela apagada o Sam para de ouvir.');
     statusOuvindo();
-    await tocar(r.saudacao);
-    if (r.rodada) await rodadaComecar(r.rodada);   // primeira reunião: ninguém cadastrado ainda
+    await tocar(bipAudio());   // o Sam não fala sozinho: só o "pi" de que está gravando ("Sam, se apresente" faz a rodada)
   } catch (e) {
     if (R.stream) R.stream.getTracks().forEach(function (t) { t.stop(); });
     erro.textContent = /Permission|NotAllowed/i.test(e.name + e.message)

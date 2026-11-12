@@ -26,18 +26,23 @@
 // Banco (dp_rh.agente_config): webhook_secret (URL ?k=), teste_secret (modo
 // teste), uazapi_token (instância do Sam), prompt_estilo (persona/jeito de
 // responder — editável sem publicar), bot_ids (número e LID do Sam p/
-// reconhecer @menção, separados por vírgula).
+// reconhecer @menção, separados por vírgula), modelo_whatsapp (modelo das
+// respostas no WhatsApp, ex. openai/gpt-6-luna; vazio = padrão; vale em 1 min,
+// sem publicar; se ele falhar, a resposta sai pelo padrão).
 // Secrets (Supabase → Edge Functions → Secrets), todos opcionais:
 //   SAM_UAZAPI_TOKEN       sobrepõe o uazapi_token do banco
 //   SAM_UAZAPI_URL         base da uazapi; padrão https://tatasushi.uazapi.com
 //   LLM_API_URL / LLM_API_KEY  já existem (gerar-cardapio) — OpenRouter
-//   AGENTE_LLM_MODEL       (opcional) padrão anthropic/claude-sonnet-5.5
+//   AGENTE_LLM_MODEL       (opcional) padrão anthropic/claude-sonnet-5.5 (reunião e reserva do WhatsApp)
 // (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY são injetados.)
+//
+// Contatos (09/11): celular e e-mail de colaborador só na conversa PRIVADA de nível completo, pela
+// ferramenta contato_colaborador (tata_plus.agente_contato) — fora das visões; grupo e reunião nunca.
 //
 // Reunião (07/11): POST …?reuniao=<portal_secret> {texto, contexto, nome, titulo} → resposta curta para ser
 // falada na sala (usada pela edge agente-reuniao; página compliance/kpis/rh/sam.html).
 //
-// Teste sem WhatsApp: POST …?teste=<teste_secret> com {"texto":"…"} → devolve a
+// Teste sem WhatsApp: POST …?teste=<teste_secret> com {"texto":"…", "modelo"?: "…"} → devolve a
 // resposta no corpo, não envia nada. Senha separada porque a URL do webhook
 // fica visível no n8n/uazapi.
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -247,8 +252,10 @@ async function segredo(chave: "webhook_secret" | "teste_secret" | "uazapi_token"
 }
 
 // prompt_estilo, bot_ids e responsável pelos avisos — relidos a cada minuto (editar no banco vale sem publicar)
-let params: { estilo: string; botIds: string[]; responsavel: { telefone: string; nome: string }; em: number } | null =
-  null;
+let params: {
+  estilo: string; botIds: string[]; responsavel: { telefone: string; nome: string }; modeloWhats: string; atrasoMs: number;
+  em: number;
+} | null = null;
 
 async function parametros() {
   if (!params || Date.now() - params.em > 60_000) {
@@ -259,6 +266,9 @@ async function parametros() {
       estilo: d.prompt_estilo || "Você é o Sam, assistente do RH do TATÁ. Responda em português, curto, no formato do WhatsApp.",
       botIds: String(d.bot_ids ?? "").split(",").map(soDigitos).filter(Boolean),
       responsavel: { telefone: soDigitos(d.responsavel_telefone), nome: d.responsavel_nome || "o RH" },
+      modeloWhats: String(d.modelo_whatsapp ?? "").trim(), // vazio = padrão (MODELOS)
+      // espera antes de responder (pergunta "quebrada" em várias mensagens): agente_config.atraso_resposta_s
+      atrasoMs: Math.min(30, Math.max(0, Number(d.atraso_resposta_s ?? 8) || 0)) * 1000,
       em: Date.now(),
     };
   }
@@ -330,8 +340,11 @@ type Local = { grupo: string } | { privadoCom: string } | { reuniao: string };
 // chefe = a quem o Sam se reporta (responsável do RH)
 function sistema(
   estilo: string, local: Local, mapa: string, completo: boolean, avisar: string, chefe: string, saber: string,
+  contatos = false,
 ): any[] {
-  const foraDoAlcance = completo
+  const foraDoAlcance = contatos
+    ? "CPF, dados pessoais da ficha de admissão (endereço, documentos), ouvidoria e respostas confidenciais de clima/desligamento"
+    : completo
     ? "CPF, telefone, e-mail, dados pessoais da ficha de admissão, ouvidoria e respostas confidenciais de clima/desligamento"
     : "CPF, telefone, e-mail, salários e valores em R$, atas de reunião, avaliações, reclamações trabalhistas, ouvidoria e respostas confidenciais de clima/desligamento";
   const onde = "reuniao" in local
@@ -383,7 +396,8 @@ COMO CONSULTAR
 • Nomes: busque sem acento e por parte do nome — agente.sem_acento(nome) ilike agente.sem_acento('%jessica%'). Se aparecer mais de uma pessoa possível, pergunte qual antes de responder.
 • Prefira agregar no banco (count, group by) em vez de trazer linhas soltas. O resultado vem com no máximo 200 linhas.
 • Se der erro, corrija a consulta e tente de novo. Se a pergunta for ambígua (período, unidade), assuma o mais provável.
-• Você só lê dados. Se pedirem para alterar algo, explique que isso é feito no portal.
+• Você só lê dados. Se pedirem para alterar algo, explique que isso é feito no portal.${contatos ? `
+• Celular e e-mail de colaborador: use contato_colaborador (só nesta conversa privada). Passe só o contato pedido, de quem foi pedido; se vierem várias pessoas com o nome, pergunte qual.` : ""}
 • Fora do seu alcance nesta conversa (${foraDoAlcance}): diga que não tem acesso.${avisar ? `
 • Se não der para responder de verdade (o dado não existe no mapa nem no portal, está fora do seu alcance, ou a pergunta pede ação/decisão de alguém do RH), chame a ferramenta sem_resposta com o motivo em poucas palavras e diga à pessoa que passou para ${avisar}. Não chame quando conseguiu responder.` : ""}
 
@@ -440,6 +454,30 @@ async function buscarPortal(busca: string, completo: boolean): Promise<{ conteud
   return { conteudo, reg };
 }
 
+// celular e e-mail (cadastro do app) — só entra nas ferramentas da conversa privada de nível completo
+const CONTATO = {
+  type: "function",
+  function: {
+    name: "contato_colaborador",
+    description: "Celular e e-mail de um colaborador pelo nome (cadastro do app Tatá Plus). Devolve até 5 pessoas com o nome. Use só quando pedirem o contato de alguém.",
+    parameters: {
+      type: "object",
+      properties: { nome: { type: "string", description: "Nome ou parte do nome (mín. 3 letras). Ex.: \"Vinicios Everton\"" } },
+      required: ["nome"],
+    },
+  },
+};
+
+async function buscarContato(nome: string): Promise<{ conteudo: string; reg: Consulta }> {
+  const t0 = Date.now();
+  const { data, error } = await supa.rpc("agente_contato", { p_busca: nome });
+  const reg: Consulta = { sql: "contato: " + nome, ms: Date.now() - t0 };
+  if (error) return { conteudo: "ERRO: " + error.message, reg: { ...reg, erro: error.message } };
+  const itens = (data ?? []) as any[];
+  reg.linhas = itens.length;
+  return { conteudo: itens.length ? JSON.stringify(itens) : "Ninguém com esse nome no cadastro (mínimo 3 letras).", reg };
+}
+
 const SEM_RESPOSTA = {
   type: "function",
   function: {
@@ -456,31 +494,51 @@ const SEM_RESPOSTA = {
 // ── LLM (OpenAI-compatible / OpenRouter) ────────────────────────────────────
 let modeloOk: string | null = null;
 
-async function chamarLLM(messages: any[], tools: any[]): Promise<{ msg: any; modelo: string; uso: any }> {
-  const fila = modeloOk ? [modeloOk] : MODELOS;
+// cache_control (desconto de texto repetido) é da Anthropic; para os outros vai texto simples
+const textoSimples = (m: any) =>
+  Array.isArray(m.content) && m.role === "system" ? { ...m, content: m.content.map((p: any) => p.text ?? "").join("") } : m;
+
+// preferido = modelo escolhido para a conversa (WhatsApp: config modelo_whatsapp); se ele falhar, cai
+// para o padrão (MODELOS) na mesma hora — meta.modelo registra quem respondeu de fato
+async function chamarLLM(messages: any[], tools: any[], preferido = ""): Promise<{ msg: any; modelo: string; uso: any }> {
+  const escolhido = preferido && preferido !== MODELOS[0] ? preferido : "";
+  const fila = escolhido ? [escolhido, ...MODELOS] : modeloOk ? [modeloOk] : MODELOS;
   let ultimoErro = "";
   for (const modelo of fila) {
-    const r = await fetch(LLM_URL, {
-      method: "POST",
-      signal: AbortSignal.timeout(90_000),
-      headers: {
-        Authorization: `Bearer ${LLM_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://lideres.tatasushi.tech",
-        "X-Title": "Tata Agente RH",
-      },
-      body: JSON.stringify({ model: modelo, messages, tools, temperature: 0.2, max_tokens: 2000 }),
-    });
-    const txt = await r.text();
+    const anthropic = modelo.startsWith("anthropic/");
+    let r: Response, txt: string;
+    try {
+      r = await fetch(LLM_URL, {
+        method: "POST",
+        signal: AbortSignal.timeout(90_000),
+        headers: {
+          Authorization: `Bearer ${LLM_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://lideres.tatasushi.tech",
+          "X-Title": "Tata Agente RH",
+        },
+        body: JSON.stringify(anthropic
+          ? { model: modelo, messages, tools, temperature: 0.2, max_tokens: 2000 }
+          // modelos que raciocinam antes de responder: sem temperature e com folga para o raciocínio
+          : { model: modelo, messages: messages.map(textoSimples), tools, max_tokens: 6000 }),
+      });
+      txt = await r.text();
+    } catch (err) {
+      ultimoErro = `LLM (${modelo}): ${erroTxt(err)}`;
+      if (modelo === escolhido) continue;
+      throw err;
+    }
     if (r.ok) {
       const out = JSON.parse(txt);
       const msg = out.choices?.[0]?.message;
-      if (msg) {
-        modeloOk = modelo;
+      // do escolhido, resposta vazia também conta como falha (cai para o padrão)
+      if (msg && (modelo !== escolhido || msg.tool_calls?.length || String(msg.content ?? "").trim())) {
+        if (modelo !== escolhido) modeloOk = modelo;
         return { msg, modelo: out.model ?? modelo, uso: out.usage ?? null };
       }
     }
     ultimoErro = `LLM ${r.status} (${modelo}): ${txt.slice(0, 300)}`;
+    if (modelo === escolhido) continue; // o escolhido falhou: tenta o padrão
     // só tenta o próximo modelo se o problema parece ser o nome do modelo
     if (!(r.status === 400 || r.status === 404) || !/model/i.test(txt)) break;
   }
@@ -501,11 +559,12 @@ async function consultar(sql: string, completo: boolean): Promise<{ conteudo: st
 
 type Fala = { papel: string; texto: string; autor?: string | null };
 
-async function responder(local: Local, historico: Fala[], completo: boolean, avisar: string) {
+async function responder(local: Local, historico: Fala[], completo: boolean, avisar: string, modeloPref = "") {
   const { estilo, responsavel } = await parametros();
   const [mapa, saber] = await Promise.all([catalogo(completo), conhecimento(completo)]);
-  const messages: any[] = sistema(estilo, local, mapa, completo, avisar, responsavel.nome, saber);
-  const tools = avisar ? [...FERRAMENTAS, SEM_RESPOSTA] : FERRAMENTAS;
+  const contatos = completo && "privadoCom" in local; // celular/e-mail: só privado de nível completo
+  const messages: any[] = sistema(estilo, local, mapa, completo, avisar, responsavel.nome, saber, contatos);
+  const tools = [...FERRAMENTAS, ...(contatos ? [CONTATO] : []), ...(avisar ? [SEM_RESPOSTA] : [])];
   const semResposta: string[] = [];
   // a conversa precisa começar por mensagem de usuário
   const ini = historico.findIndex((h) => h.papel !== "assistant");
@@ -521,7 +580,7 @@ async function responder(local: Local, historico: Fala[], completo: boolean, avi
   let modelo = "";
   const uso = { entrada: 0, saida: 0 };
   for (let passo = 0; passo < MAX_PASSOS; passo++) {
-    const r = await chamarLLM(messages, tools);
+    const r = await chamarLLM(messages, tools, modeloPref);
     modelo = r.modelo;
     uso.entrada += r.uso?.prompt_tokens ?? 0;
     uso.saida += r.uso?.completion_tokens ?? 0;
@@ -540,6 +599,8 @@ async function responder(local: Local, historico: Fala[], completo: boolean, avi
       }
       const { conteudo, reg } = tc.function?.name === "buscar_portal"
         ? await buscarPortal(String(args.busca ?? ""), completo)
+        : tc.function?.name === "contato_colaborador"
+        ? (contatos ? await buscarContato(String(args.nome ?? "")) : { conteudo: "Sem acesso a contatos nesta conversa.", reg: { sql: "contato negado", ms: 0 } })
         : await consultar(String(args.sql ?? ""), completo);
       consultas.push(reg);
       messages.push({ role: "tool", tool_call_id: tc.id, content: conteudo });
@@ -739,7 +800,8 @@ async function executarComando(verbo: string, a: any, textoManual: string, respo
 
   // responde: a IA responde a pergunta original para a pessoa/grupo (sem novo aviso)
   const local: Local = a.tipo === "grupo" ? { grupo: a.grupo_nome ?? "" } : { privadoCom: a.nome_curto ?? "" };
-  const r = await responder(local, [{ papel: "user", texto: a.pergunta, autor: a.nome_curto }], (atual.nivel ?? a.nivel) === "completo", "");
+  const r = await responder(local, [{ papel: "user", texto: a.pergunta, autor: a.nome_curto }], (atual.nivel ?? a.nivel) === "completo", "",
+    (await parametros()).modeloWhats);
   const meta: Record<string, unknown> = { consultas: r.consultas, modelo: r.modelo, tokens: r.uso, aviso_id: a.id };
   await supa.rpc("agente_registrar", {
     p_telefone: a.destino, p_papel: "user", p_texto: a.pergunta, p_msg_id: null, p_meta: { autor_nome: a.nome_curto, aviso_id: a.id },
@@ -806,13 +868,23 @@ async function processar(e: Entrada, pergunta: string, cv: Conversa) {
   if (eReg) throw new Error("registrar: " + eReg.message);
   if ((reg as any)?.duplicado) return; // webhook reenviado
 
+  // pergunta "quebrada" ("Oi Sam" / "posso perguntar?", ou uma palavra corrigida, que chega como mensagem
+  // nova): espera um pouco; se chegou outra da mesma conversa, só a última responde — o histórico traz as
+  // mensagens seguidas juntas, e o Sam responde tudo de uma vez
+  const { atrasoMs } = await parametros();
+  if (atrasoMs > 0) {
+    await new Promise((ok) => setTimeout(ok, atrasoMs));
+    const { data: ultima } = await supa.rpc("agente_ultima_pergunta", { p_telefone: cv.chave });
+    if (Number(ultima ?? 0) > Number((reg as any)?.id ?? 0)) return;
+  }
+
   let texto: string;
   let meta: Record<string, unknown> = {};
   let motivosAviso: string[] = [];
   try {
     const { data: hist } = await supa.rpc("agente_historico", { p_telefone: cv.chave });
     const hist0 = [{ papel: "user", texto: pergunta, autor: autor.autor_nome }];
-    const r = await responder(cv.local, (hist as Fala[]) ?? hist0, completo, cv.avisar);
+    const r = await responder(cv.local, (hist as Fala[]) ?? hist0, completo, cv.avisar, (await parametros()).modeloWhats);
     texto = r.texto || "Não encontrei uma resposta para isso.";
     motivosAviso = r.semResposta;
     meta = { consultas: r.consultas, modelo: r.modelo, tokens: r.uso, pergunta_id: e.msgId, nivel: completo ? "completo" : "basico" };
@@ -877,7 +949,8 @@ Deno.serve(async (req) => {
       const autor = String(payload?.nome ?? "Teste");
       const fala = [{ papel: "user", texto: String(payload?.texto ?? ""), autor }];
       const local: Local = payload?.privado === true ? { privadoCom: autor } : { grupo: String(payload?.grupo ?? "Teste") };
-      const r = await responder(local, fala, payload?.completo === true, (await parametros()).responsavel.nome);
+      const pr = await parametros();
+      const r = await responder(local, fala, payload?.completo === true, pr.responsavel.nome, String(payload?.modelo ?? "") || pr.modeloWhats);
       return json({ ok: true, ...r, ...separarFotos(r.texto) });
     } catch (err) {
       return json({ ok: false, erro: erroTxt(err) }, 500);
