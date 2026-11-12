@@ -1365,3 +1365,21 @@ on conflict (chave) do nothing;
 -- conteúdo (números, proposta, encaminhamento), + decisões e pendências; "manda a ata completa" → a íntegra.
 -- Também ensinado ao Sam (dp_rh.agente_conhecimento, fonte victor, #2386), que vale acima da regra de ser sucinto.
 comment on view agente_restrito.reunioes_rh is 'Atas das reuniões de DP/RH (pautas, decisões, pendências; as feitas pelo Sam começam com "Síntese executiva da reunião"). conteudo é longo: traga poucas por vez — ex.: order by data_reuniao desc, created_at desc limit 1. Pergunta pontual sobre a reunião: responda curto. Se pedirem os assuntos, os tópicos, as pautas ou o resumo completo da reunião: TODOS os temas da ata, sem pular nenhum, no formato "*Reunião de RH — <data>*", depois "*Assuntos*" com uma linha por tema ("• *Tema*: o principal número, proposta ou encaminhamento; o que ficou em aberto"), depois "*Decisões*" (•) e "*Pendências*" (• responsável — o quê — prazo, se houver), e por fim "Ata completa no portal." Se pedirem a ata completa ou na íntegra: o conteudo inteiro, sem resumir nem cortar (é dividido em mais de uma mensagem automaticamente).';
+
+-- ── 20. pergunta "quebrada" em várias mensagens (12/11) ───────────────────────
+-- A pessoa manda "Oi Sam" / "Posso fazer perguntas?" (ou corrige uma palavra, o que chega como mensagem
+-- nova) e o Sam respondia cada uma. Agora a edge espera agente_config.atraso_resposta_s (padrão 8 s) depois
+-- de gravar a pergunta: se chegou outra da mesma conversa nesse meio-tempo, só a última responde, e o
+-- histórico já traz as mensagens seguidas juntas. '0' desliga.
+create or replace function tata_plus.agente_ultima_pergunta(p_telefone text)
+returns bigint
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select max(id) from dp_rh.agente_mensagens
+  where telefone = p_telefone and papel = 'user' and criado_em > now() - interval '10 minutes';
+$fn$;
+revoke execute on function tata_plus.agente_ultima_pergunta(text) from public, anon, authenticated;
+grant execute on function tata_plus.agente_ultima_pergunta(text) to service_role;
+
+insert into dp_rh.agente_config (chave, valor) values ('atraso_resposta_s', '8') on conflict (chave) do nothing;
