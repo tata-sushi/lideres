@@ -241,7 +241,7 @@ body.cf-active #tbody-analitico tr:not(.cf-selected) { opacity: 0.45; }
   .dashboard .dash-line--wide { grid-template-columns: 240px minmax(0,1fr); }
   .dashboard .dash-line--3 { grid-template-columns: 240px minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr); }  /* 3 gráficos na mesma linha */
   .dashboard .dash-line--bh { grid-template-columns: 240px minmax(0,1.9fr) minmax(0,1fr) minmax(0,0.95fr); }  /* Banco de Horas: "Saldo de horas" mais largo */
-  .dashboard .dash-line--cult { grid-template-columns: 240px minmax(0,1.9fr) minmax(0,1.65fr) minmax(0,0.82fr); }  /* Cultura: Radar largo, Brainstorm com espaço p/ nuvem, Cardápio (2 gráficos) */
+  .dashboard .dash-line--cult { grid-template-columns: 240px minmax(0,1.85fr) minmax(0,1.4fr) minmax(0,1.05fr); }  /* Cultura: Radar largo, Brainstorm, Cardápio+Performance (barras horizontais) mais largo */
   /* Cardápio: no desktop os dois cards de Score dividem a altura da coluna */
   .dashboard .dash-line .dash-subcol .chart-card { flex: 1 1 0; min-height: 0; }
   .dash-line-kpis { grid-template-columns: 1fr; }               /* desktop: cards empilhados */
@@ -266,6 +266,11 @@ body.cf-active #tbody-analitico tr:not(.cf-selected) { opacity: 0.45; }
 #abs-tipos .bar-row:hover, #bh-depto .bar-row:hover, #deslig-motivos .bar-row:hover, #fer-pend-uni .bar-row:hover, #ben-recompensas .bar-row:hover, #clima-temas .bar-row:hover { background: none; }
 #abs-tipos .bar-val, #bh-depto .bar-val, #deslig-motivos .bar-val, #fer-pend-uni .bar-val, #ben-recompensas .bar-val, #clima-temas .bar-val { text-align: right; }
 #clima-temas { max-height: 420px; overflow-y: auto; }
+/* Score de performance das áreas — bar-list horizontal (nome · barra · nota), rola se passar da altura do card */
+#perf-areas-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+#perf-areas-list .bar-row { grid-template-columns: 84px 1fr 40px; cursor: default; align-items: center; }
+#perf-areas-list .bar-row:hover { background: none; }
+#perf-areas-list .bar-val { text-align: right; }
 body:not([data-view="indicadores"]) #dashboard { display: none; }
 body:not([data-view="alinhamentos"]) #alinhamentos { display: none; }
 .cruzamento-section { padding: 14px 20px 80px; display: flex; flex-direction: column; gap: 14px; }
@@ -714,7 +719,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="chart-card">
     <button class="chart-info-btn" onclick="abrirInfoGrafico('perfareas')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
     <div class="chart-title">Score de performance das áreas</div>
-    <div class="chart-scroll-wrap"><svg id="perf-areas-weekly" style="height:auto;display:block;"></svg></div>
+    <div id="perf-areas-list" class="bar-list"></div>
   </div>
   </div>
 </div>
@@ -2032,25 +2037,17 @@ function loadReportPerfAreas() {
     }).catch(function(){ _repPerfAreas = { areas:[] }; renderPerfAreasChart(); });
   });
 }
-// Score de performance de cada área (departamento), média 0–5, barras verticais com rótulo inclinado
+// Score de performance de cada área (departamento), média 0–5 — barras horizontais (nome · barra · nota)
 function renderPerfAreasChart() {
-  var svg=document.getElementById('perf-areas-weekly'); if (!svg || !_repPerfAreas) return;
-  var areas=(_repPerfAreas.areas||[]).map(function(a){ return { label:String(a.rotulo||''), m:Number(a.media)||0 }; });
-  var H=238, padL=12, padR=12, padTop=26, padBot=64, MAX=5;
-  var n=areas.length, groupW=SEM_GRUPO, W=padL+padR+Math.max(1,n)*groupW, plotH=H-padTop-padBot, barW=SEM_BARRA;
-  svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('width',W); svg.style.width=W+'px'; svg.style.minWidth=W+'px';
-  function bx(i){ return padL+i*groupW+groupW/2-barW/2; }
-  var baseline=padTop+plotH, c='';
-  if (!n){ svg.innerHTML='<text x="'+(W/2)+'" y="'+(H/2)+'" text-anchor="middle" '+SEM_NOME+'>Sem dados</text>'; return; }
-  var NOME_R='font-family="DM Sans, sans-serif" font-size="10" font-weight="500" fill="#35383F"';
-  areas.forEach(function(a,i){
-    var h=(a.m/MAX)*plotH, x=bx(i), cx=x+barW/2;
-    if (h>0){ c+=_semBarra(x, baseline-h, barW, h, '#35383F', true, false);
-      c+='<text x="'+cx.toFixed(1)+'" y="'+(baseline-h-6).toFixed(1)+'" text-anchor="middle" '+SEM_VAL+'>'+a.m.toFixed(1).replace('.',',')+'</text>'; }
-    var nome=a.label.length>15 ? a.label.slice(0,14)+'…' : a.label;
-    c+='<text transform="rotate(-35 '+cx.toFixed(1)+' '+(baseline+15)+')" x="'+cx.toFixed(1)+'" y="'+(baseline+15)+'" text-anchor="end" '+NOME_R+'>'+escH(nome)+'</text>';
-  });
-  svg.innerHTML=c;
+  var el=document.getElementById('perf-areas-list'); if (!el || !_repPerfAreas) return;
+  var arr=(_repPerfAreas.areas||[]).map(function(a){ return { label:String(a.rotulo||''), m:Number(a.media)||0 }; });
+  if (!arr.length){ el.innerHTML='<div class="bar-empty">Sem dados</div>'; return; }
+  el.innerHTML=arr.map(function(a){
+    var w=Math.max(2, Math.round(a.m/5*100));
+    return '<div class="bar-row"><div class="bar-name" title="'+escH(a.label)+'">'+escH(a.label)+'</div>'+
+      '<div class="bar-track"><div class="bar-fill" style="width:'+w+'%"></div></div>'+
+      '<div class="bar-val">'+a.m.toFixed(2).replace('.',',')+'</div></div>';
+  }).join('');
 }
 function renderCardMediaWeekly(svgId) {
   var svg=document.getElementById(svgId||'card-media-weekly'); if (!svg || !_repCard) return;
