@@ -253,7 +253,8 @@ async function segredo(chave: "webhook_secret" | "teste_secret" | "uazapi_token"
 
 // prompt_estilo, bot_ids e responsável pelos avisos — relidos a cada minuto (editar no banco vale sem publicar)
 let params: {
-  estilo: string; botIds: string[]; responsavel: { telefone: string; nome: string }; modeloWhats: string; em: number;
+  estilo: string; botIds: string[]; responsavel: { telefone: string; nome: string }; modeloWhats: string; atrasoMs: number;
+  em: number;
 } | null = null;
 
 async function parametros() {
@@ -266,6 +267,8 @@ async function parametros() {
       botIds: String(d.bot_ids ?? "").split(",").map(soDigitos).filter(Boolean),
       responsavel: { telefone: soDigitos(d.responsavel_telefone), nome: d.responsavel_nome || "o RH" },
       modeloWhats: String(d.modelo_whatsapp ?? "").trim(), // vazio = padrão (MODELOS)
+      // espera antes de responder (pergunta "quebrada" em várias mensagens): agente_config.atraso_resposta_s
+      atrasoMs: Math.min(30, Math.max(0, Number(d.atraso_resposta_s ?? 8) || 0)) * 1000,
       em: Date.now(),
     };
   }
@@ -864,6 +867,16 @@ async function processar(e: Entrada, pergunta: string, cv: Conversa) {
   });
   if (eReg) throw new Error("registrar: " + eReg.message);
   if ((reg as any)?.duplicado) return; // webhook reenviado
+
+  // pergunta "quebrada" ("Oi Sam" / "posso perguntar?", ou uma palavra corrigida, que chega como mensagem
+  // nova): espera um pouco; se chegou outra da mesma conversa, só a última responde — o histórico traz as
+  // mensagens seguidas juntas, e o Sam responde tudo de uma vez
+  const { atrasoMs } = await parametros();
+  if (atrasoMs > 0) {
+    await new Promise((ok) => setTimeout(ok, atrasoMs));
+    const { data: ultima } = await supa.rpc("agente_ultima_pergunta", { p_telefone: cv.chave });
+    if (Number(ultima ?? 0) > Number((reg as any)?.id ?? 0)) return;
+  }
 
   let texto: string;
   let meta: Record<string, unknown> = {};

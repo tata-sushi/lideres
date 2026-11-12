@@ -7,6 +7,9 @@ Decisões do usuário (28/10):
 - **Grupo** (todos do grupo perguntam) e, desde 02/11, **privado só para números cadastrados** (Victor, Tito, Binho e Cinthia).
 - **Todos do grupo podem perguntar**: o controle é o grupo, e grupo novo nasce pendente.
 - **Responde só quando chamado**: "Sam, …", @Sam ou reply a uma mensagem dele.
+- **Pergunta em várias mensagens** (12/11): o Sam espera `agente_config.atraso_resposta_s` (padrão 8 s) antes de
+  responder; se chegar outra mensagem da mesma conversa nesse tempo, responde uma vez só, juntando tudo ("Oi Sam" /
+  "posso perguntar?", ou uma palavra corrigida, que o WhatsApp manda como mensagem nova). `'0'` desliga.
 - **Instância uazapi do Sam** (`sam`, número 5511939311173). Ela só enviava (resumos, aniversários, pendências)
   e não tinha webhook. O agente tem **fluxo próprio no n8n** (porteiro). Os fluxos existentes não foram mexidos.
 - **IA via OpenRouter**, reaproveitando a `LLM_API_KEY`. No WhatsApp, desde 11/11: **GPT-6 Luna** (`openai/gpt-6-luna`,
