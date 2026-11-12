@@ -12,10 +12,10 @@ Decisões do usuário (28/10):
   "posso perguntar?", ou uma palavra corrigida, que o WhatsApp manda como mensagem nova). `'0'` desliga.
 - **Instância uazapi do Sam** (`sam`, número 5511939311173). Ela só enviava (resumos, aniversários, pendências)
   e não tinha webhook. O agente tem **fluxo próprio no n8n** (porteiro). Os fluxos existentes não foram mexidos.
-- **IA via OpenRouter**, reaproveitando a `LLM_API_KEY`. No WhatsApp, desde 11/11: **GPT-6 Luna** (`openai/gpt-6-luna`,
-  ~US$ 0,004 por resposta, contra ~US$ 0,05 do Sonnet), definido em `agente_config.modelo_whatsapp` (vale em 1 min,
-  sem publicar; vazio = Sonnet). Se o Luna falhar, a resposta sai pelo Sonnet e `meta.modelo` registra quem respondeu.
-  Reunião ao vivo e ata continuam no **Claude Sonnet 5.5**.
+- **IA via OpenRouter**, reaproveitando a `LLM_API_KEY`: **Claude Sonnet 5.5** no WhatsApp, na reunião e na ata. O modelo
+  do WhatsApp fica em `agente_config.modelo_whatsapp` (vale em 1 min, sem publicar; vazio = Sonnet). De 11 a 12/11 o
+  WhatsApp rodou no GPT-6 Luna (~US$ 0,004 por resposta, contra ~US$ 0,05 do Sonnet) e voltou para o Sonnet: com as
+  mesmas regras, o Luna errou estimativas (folga provável pelo histórico) e trocou nomes de quem perguntou.
 - **Consulta livre só-leitura**, sem colunas sensíveis.
 
 > ⚠️ Adicionar alguém ao grupo = dar acesso aos dados que o Sam consulta (a resposta é vista por todos do grupo).
