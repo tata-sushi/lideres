@@ -21,8 +21,8 @@ configura pessoa a pessoa. O nível **Linha** decide **de quem são os registros
 - **O nível Linha só filtra.** Nunca abre página, aba ou botão. Quem não tem a página liberada
   (nível Página) não chega a ver linha nenhuma, mesmo sendo RH.
 - **Valor e Contato têm as duas travas:** precisam da área liberada (`pode_ver_valores` /
-  `pode_ver_contato`, sem bypass de admin) **e** passam pelo corte de linha. Admin sem a área não vê R$,
-  CPF, nascimento, saúde, e-mail nem telefone, mesmo vendo todas as linhas.
+  `pode_ver_contato`) **e** passam pelo corte de linha. Admin vê todos os Valores (vale como `geral`),
+  mas Contato não tem bypass: admin sem a área não vê e-mail nem telefone, mesmo vendo todas as linhas.
 - **Quem vê, grava.** Se a pessoa vê a linha, pode agir nela (agendar, editar…), inclusive na
   própria. **Se o botão da ação aparece** é decisão do nível Botão, não deste.
 
@@ -211,8 +211,8 @@ select count(*) as na_subarvore,
 - [ ] A função confere a página (`gov_tenho_acesso`) e, se for ação, o botão (`pode_botao`).
 - [ ] A RPC calcula `minha_subarvore()` uma vez e filtra `todas or matricula = any(sub)`.
 - [ ] A escrita faz a mesma checagem antes de gravar.
-- [ ] Admin/RH pela regra de `ferias_eh_rh`; Valor e Contato continuam exigindo `pode_ver_valores` /
-  `pode_ver_contato`.
+- [ ] Admin/RH pela regra de `ferias_eh_rh`; Valor e Contato continuam passando por `pode_ver_valores` /
+  `pode_ver_contato` (admin passa no Valor, não no Contato).
 - [ ] Tabela e view do dado com `revoke … from anon, authenticated` (a RPC é a única porta).
 - [ ] O Sobre não passa pelo corte; KPIs e gráficos saem das linhas já filtradas.
 - [ ] Estado vazio tratado ("sem equipe").

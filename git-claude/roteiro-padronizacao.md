@@ -100,6 +100,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Histórico
 
+- 12/11/2026 — Valor: todo admin vale como `geral` (decisão do dono). `pode_ver_valores` passa a liberar admin ativo sem linha em `perm_ver_valores`; a Auditoria lista os admins como `geral`. Contato segue sem bypass. Migration `20261212_valores_admin_geral.sql`, aplicada e testada por pessoa logada. Motivo: admin criado depois do seed via R$ mascarado no VT e o painel do app não oferece Valor para admin.
 - 11/11/2026 — SQLs dos lotes 1 e 2 rodados pelo dono; 4 edge functions com porta publicadas; testes por pessoa logada ok (admin tudo; líder só a equipe; sem página bloqueado). Roteiro da skill de acessos completo, exceto os menus (Etapa 2+3, após a skill do gate).
 - 11/11/2026 — RH lote 2 (Escalas, Armários, Estoque ADM, Agenda, Head Count, Feriados, Reclamações, Semanal, Solicitações, Demandas, Experiências, SAM, CEI, TED, Comunicação): sem mudança de HTML; banco num SQL único (`supabase/migrations/20261209_rh_lote2.sql`), a rodar depois do lote 1. SAM, TED e Comunicação só têm página.
 - 11/11/2026 — RH lote 1 (Sanções, Documentos, Folha, Desligamentos, CES, Benefícios, Medicina, Absenteísmo, Performance, Admissão, Banco de horas, Ouvidoria): HTML pronto; banco num SQL único (`supabase/migrations/20261208_rh_lote1.sql`) que o dono roda; depois: deploy das 4 edge functions, testes e merge. Decisões anotadas no SQL (seção 6).
