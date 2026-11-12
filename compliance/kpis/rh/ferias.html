@@ -1594,9 +1594,9 @@ var _dirDias = 30;   // dias de direito do período selecionado
 var MT_EXCLUIDOS = ['8', '9', '10']; // diretoria — não aparece na tabela de férias
 
 // ── Travas do agendamento (as mesmas de tata_plus.ferias_gravar no banco) ────────
-//   início ≥ hoje + 60 dias e dentro do concessivo · só do dia 01 ao 04 · nunca em
+//   início ≥ hoje + 30 dias e dentro do concessivo · só do dia 01 ao 04 · nunca em
 //   feriado nem nos 2 dias antes de um · término até o fim do concessivo.
-var FER_ANTECEDENCIA = 60;
+var FER_ANTECEDENCIA = 30;
 function _pad2(x){ return String(x).padStart(2,'0'); }
 function _iso(d){ return d.getFullYear() + '-' + _pad2(d.getMonth()+1) + '-' + _pad2(d.getDate()); }
 function _dt(iso){ return new Date(iso + 'T00:00:00'); }
@@ -1815,11 +1815,12 @@ function setAbono(sim) {
   if (sim && _semVendaMsg) { showFeriasToast(_semVendaMsg, true); return; }
   document.getElementById('toggle-abono-sim').classList.toggle('active', sim);
   document.getElementById('toggle-abono-nao').classList.toggle('active', !sim);
-  var opts = _opcoesFrac(_dirDias, sim);
+  // só os fracionamentos que têm datas cabendo no prazo (cada período começa do dia 01 ao 04)
+  var opts = _opcoesFrac(_dirDias, sim).filter(function(v){ return _fracCabe(parseFrac(v)); });
   var selFrac = document.getElementById('f-fracionamento');
-  selFrac.innerHTML = '<option value="">Selecionar…</option>' + opts.map(function(v){
+  selFrac.innerHTML = opts.length ? '<option value="">Selecionar…</option>' + opts.map(function(v){
     return '<option value="' + v + '">' + v + (sim ? ' (dias de descanso + dias vendidos)' : '') + '</option>';
-  }).join('');
+  }).join('') : '<option value="">Nenhum fracionamento cabe no prazo · fale com o RH</option>';
   selFrac.value = '';
   document.getElementById('f-fracionamento-wrap').style.display = 'block';
   document.getElementById('f-periodos-container').innerHTML = '';
@@ -1869,6 +1870,21 @@ function onFFracChange() {
   }
 }
 
+// Começando o período k em `iniIso`, os períodos seguintes ainda cabem até o fim do prazo?
+// (cada um na primeira data permitida depois do anterior: se assim não couber, não cabe de jeito nenhum)
+function _cabemDepois(iniIso, dias, k) {
+  var prox = _addDias(iniIso, dias[k - 1]);
+  for (var j = k; j < dias.length; j++) {
+    var d = _datasInicio(prox, _concFim, dias[j]);
+    if (!d.length) return false;
+    prox = _addDias(d[0], dias[j]);
+  }
+  return true;
+}
+// O fracionamento tem pelo menos uma combinação de datas que cabe no prazo?
+function _fracCabe(dias) {
+  return dias.length > 0 && _datasInicio(_minIniFerias(_concIni), _concFim, dias[0]).some(function(iso){ return _cabemDepois(iso, dias, 1); });
+}
 // Monta as opções de início do período n (e trava os seguintes até o anterior ser escolhido)
 function _preencherInicio(n) {
   var dias = parseFrac(document.getElementById('f-fracionamento').value);
@@ -1883,7 +1899,8 @@ function _preencherInicio(n) {
       fimAnt = fimAnt && fimAnt.iso;
       if (fimAnt && _addDias(fimAnt, 1) > min) min = _addDias(fimAnt, 1);
     }
-    var datas = _datasInicio(min, _concFim, dias[k - 1]);
+    // só as datas que ainda deixam os períodos seguintes caberem no prazo
+    var datas = _datasInicio(min, _concFim, dias[k - 1]).filter(function(iso){ return _cabemDepois(iso, dias, k); });
     sel.innerHTML = datas.length
       ? '<option value="">Selecionar…</option>' + datas.map(function(iso){ return '<option value="' + iso + '">' + _rotuloData(iso) + '</option>'; }).join('')
       : '<option value="">Nenhuma data possível</option>';
