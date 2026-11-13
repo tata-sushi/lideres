@@ -244,6 +244,7 @@ body.cf-active #tbody-analitico tr:not(.cf-selected) { opacity: 0.45; }
   .dashboard .dash-line--wide { grid-template-columns: 240px minmax(0,1fr); }
   .dashboard .dash-line--3 { grid-template-columns: 240px minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr); }  /* 3 gráficos na mesma linha */
   .dashboard .dash-line--bh { grid-template-columns: 240px minmax(0,1.9fr) minmax(0,1fr) minmax(0,0.95fr); }  /* Banco de Horas: "Saldo de horas" mais largo */
+  .dashboard .dash-line--full { grid-template-columns: 1fr; }   /* linha de 1 gráfico ocupando a largura toda */
   .dashboard .dash-line--cult { grid-template-columns: 240px minmax(0,1.85fr) minmax(0,1.4fr) minmax(0,1.05fr); }  /* Cultura: Radar largo, Brainstorm, Cardápio+Performance (barras horizontais) mais largo */
   /* Cardápio: no desktop os dois cards de Score dividem a altura da coluna */
   .dashboard .dash-line .dash-subcol .chart-card { flex: 1 1 0; min-height: 0; }
@@ -572,6 +573,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-title">Movimentações</div>
     <div class="chart-scroll-wrap"><svg id="hc-weekly-evolution" style="height:auto;display:block;"></svg></div>
     <div class="chart-legend"><span><i style="background:#35383F"></i>Admitidos</span><span><i style="background:rgba(53,56,63,0.45)"></i>Demitidos</span></div>
+  </div>
+  </div>
+  <!-- ══ LINHA: HEADCOUNT PROGRAMADO × REALIZADO (largura total) ══ -->
+  <div class="dash-line dash-line--full">
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('hcprog')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Headcount programado × realizado</div>
+    <div class="chart-scroll-wrap"><svg id="hc-hist-line" style="height:auto;display:block;"></svg></div>
+    <div class="chart-legend"><span><i style="background:#35383F"></i>Realizado</span><span><i style="background:rgba(53,56,63,0.45)"></i>Programado (meta)</span></div>
   </div>
   </div>
   <!-- ══ LINHA: ABSENTEÍSMO ══ -->
@@ -1383,6 +1393,7 @@ function _semBarra(x, y, w, h, fill, topo, base) {
 }
 // ─── Info dos gráficos (botão "i") ───────────────────────────────────────────
 var _INFO_GRAFICOS = {
+  hcprog: '<div class="info-note">Evolução semanal do headcount <b>programado (meta)</b> × <b>realizado</b> (colaboradores ativos, sem sócios), nas últimas 40 semanas. O realizado das semanas passadas é reconstruído pelas datas de admissão/demissão; a cada domingo o sistema grava a foto da semana. A foto é o mesmo histórico usado na página de Headcount.</div>',
   mov: '<div class="info-note">Admissões e demissões por semana (a semana começa na segunda-feira), nas últimas 40 semanas. Cada barra mostra a proporção da semana: em cima os admitidos (escuro), embaixo os demitidos (claro). O rótulo é admitidos/demitidos. Os dados são ao vivo: mudou a data de admissão/demissão de alguém, a semana correspondente recalcula no próximo carregamento.</div>',
   atestados: '<div class="info-note">Quantidade de atestados registrados no Absenteísmo por semana (a semana começa na segunda-feira), nas últimas 40 semanas.</div>',
   bh: '<div class="info-note">Soma dos saldos de banco de horas por semana, em horas: linha escura = saldos positivos, linha clara = saldos negativos; últimas 40 semanas. O card "Saldo atual" é o saldo líquido (positivos − negativos) da semana mais recente.</div>',
@@ -1428,7 +1439,7 @@ var CHART_PAGINA = {
   feriasmes:'kpis/rh/ferias.html', feriasgoz:'kpis/rh/ferias.html',
   advsusp:'kpis/rh/sancoes.html', examvenc:'kpis/rh/medicina.html',
   demdp:'kpis/rh/demandas.html', sollid:'kpis/rh/solicitacoes.html',
-  radar:'kpis/rh/cei.html', nuvem:'kpis/rh/cei.html',
+  radar:'kpis/rh/cei.html', nuvem:'kpis/rh/cei.html', hcprog:'kpis/rh/hc.html',
   cardmedia:'kpis/tatahouse/cardapio.html', perfareas:'kpis/rh/performance.html',
   demandas:'kpis/rh/demandas.html'
 };
@@ -2173,6 +2184,53 @@ function loadHeadcountBase() {
   });
 }
 
+// ─── SUPER PAINEL · HEADCOUNT PROGRAMADO × REALIZADO (linha de largura total) ───
+var _repHcHist = null;
+function loadReportHcHist() {
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('report_hc_programado_historico').then(function(res){
+      _repHcHist = (res && !res.error && res.data) ? res.data : { semanas:[] };
+      renderHcHistChart();
+    }).catch(function(){ _repHcHist = { semanas:[] }; renderHcHistChart(); });
+  });
+}
+// Padrão "Saldo de horas" (Banco de Horas): linha com scroll, 2 tons de carbon, área, bolinhas e valor por semana
+function renderHcHistChart() {
+  var svg=document.getElementById('hc-hist-line'); if(!svg || !_repHcHist) return;
+  var weeks=(_repHcHist.semanas||[]).map(function(s){ return { label:_recLabelFromISO(s.semana), p:(s.programado==null?null:+s.programado), r:(s.realizado==null?null:+s.realizado) }; });
+  if(!weeks.length){ svg.innerHTML=''; return; }
+  var H=196, padL=24, padR=24, padTop=26, padBot=26;
+  var n=weeks.length, spacing=SEM_GRUPO;
+  var W=padL+padR+Math.max(1,n-1)*spacing;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('width',W); svg.style.width=W+'px'; svg.style.minWidth=W+'px';
+  // escala com piso automático (valores altos) — aproxima o eixo pra destacar o gap programado × realizado
+  var vals=[]; weeks.forEach(function(w){ if(w.p!=null) vals.push(w.p); if(w.r!=null) vals.push(w.r); });
+  var maxV=vals.length?Math.max.apply(null,vals):1, minV=vals.length?Math.min.apply(null,vals):0;
+  var yMax=Math.ceil(maxV/10)*10, yMin=Math.max(0, Math.floor(minV/10)*10 - 10);
+  if (yMax-yMin < 10) yMin=Math.max(0, yMax-10);
+  var plotH=H-padTop-padBot, baseline=padTop+plotH;
+  function px(i){ return padL+i*spacing; }
+  function py(v){ return baseline-((v-yMin)/(yMax-yMin))*plotH; }
+  function line(k){ var a=[]; weeks.forEach(function(w,i){ if(w[k]!=null) a.push(px(i).toFixed(1)+','+py(w[k]).toFixed(1)); }); return a.join(' '); }
+  var c='';
+  // área sob o realizado (igual ao banco de horas)
+  var rPts=line('r');
+  if(rPts){ var arr=rPts.split(' '); var x0=arr[0].split(',')[0], x1=arr[arr.length-1].split(',')[0];
+    c+='<polygon points="'+x0+','+baseline+' '+rPts+' '+x1+','+baseline+'" fill="#35383F" fill-opacity="0.07"/>'; }
+  // linhas: programado (claro, meta) e realizado (escuro)
+  c+='<polyline points="'+line('p')+'" fill="none" stroke="'+CARBON2+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+  c+='<polyline points="'+line('r')+'" fill="none" stroke="#35383F" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+  weeks.forEach(function(w,i){
+    var x=px(i);
+    if(w.p!=null){ c+='<circle cx="'+x.toFixed(1)+'" cy="'+py(w.p).toFixed(1)+'" r="3" fill="'+CARBON2+'"/>'; }
+    if(w.r!=null){ var yr=py(w.r);
+      c+='<circle cx="'+x.toFixed(1)+'" cy="'+yr.toFixed(1)+'" r="3" fill="#35383F"/>';
+      c+='<text x="'+x.toFixed(1)+'" y="'+(yr-7).toFixed(1)+'" text-anchor="middle" '+SEM_VAL+'>'+Math.round(w.r)+'</text>'; }
+    c+='<text x="'+x.toFixed(1)+'" y="'+(baseline+18)+'" text-anchor="middle" '+SEM_NOME+'>'+w.label+'</text>';
+  });
+  svg.innerHTML=c;
+}
+
 // ─── SUPER PAINEL · LINHA BANCO DE HORAS ───────────────────────────────────────
 var _repBH = null;
 function loadReportBancoHoras() {
@@ -2910,6 +2968,7 @@ loadReportPerfAreas();
 loadReportSancoesMedicina();
 loadReportCusto();
 loadHeadcountBase();
+loadReportHcHist();
 loadAlinhamentosData();
 
 // ─── ALINHAMENTOS ────────────────────────────────────────────────────────────
