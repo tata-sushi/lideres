@@ -1522,6 +1522,13 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
         <button class="btn btn--primary btn--block esc-addmarc" id="hor-add" onclick="horAddMarc()">+ incluir marcação</button>
       </div>
       <div class="esc-field">
+        <span class="esc-field-label">Onde este horário aparece</span>
+        <div class="esc-marc-row">
+          <select class="esc-select" id="hor-unidade" onchange="horUnidadeChange()" style="flex:1;"></select>
+          <select class="esc-select" id="hor-depto" style="flex:1;"></select>
+        </div>
+      </div>
+      <div class="esc-field">
         <span class="esc-field-label">Horários cadastrados</span>
         <div id="hor-lista"></div>
       </div>
@@ -1693,9 +1700,23 @@ function marcToPairs(h){
     : [[hm(h.entrada), hm(h.saida)]];
 }
 function presetLabel(marc){ return marc.map(function(p){ return p[0]+'–'+p[1]; }).join(' · '); }
+/* Um horário aparece: se for global (sem unidade), em qualquer unidade;
+   se for de uma unidade, só quando essa unidade está selecionada — e, se tiver
+   departamento, só no departamento certo (ou quando o filtro está em "Todos"). */
+function presetVisivel(pr){
+  if(!pr) return true;
+  var u = pr.unidade;
+  if(u==null || u==='') return true;
+  if(u !== ST.unidade) return false;
+  var d = pr.departamento;
+  if(!d) return true;
+  return ST.depto==='Todos' || !ST.depto || d===ST.depto;
+}
 function presetOptionsHtml(placeholder){
   return '<option value="">'+placeholder+'</option>' +
-    PRESETS.map(function(pr,i){ return '<option value="'+i+'">'+presetLabel(pr.marc)+'</option>'; }).join('');
+    PRESETS.map(function(pr,i){ return { pr:pr, i:i }; })
+      .filter(function(o){ return presetVisivel(o.pr); })
+      .map(function(o){ return '<option value="'+o.i+'">'+presetLabel(o.pr.marc)+'</option>'; }).join('');
 }
 
 /* Carrega os horários pré-definidos do banco e atualiza o seletor do pontual. */
@@ -1703,7 +1724,7 @@ function carregarHorarios(){
   return TP().rpc('escala_horarios_listar').then(function(r){
     if (!r.error && Array.isArray(r.data) && r.data.length){
       HORARIOS = r.data;
-      PRESETS = r.data.map(function(h){ return { id:h.id, marc: marcToPairs(h) }; });
+      PRESETS = r.data.map(function(h){ return { id:h.id, marc: marcToPairs(h), unidade:(h.unidade==null?null:String(h.unidade)), departamento:(h.departamento==null?null:String(h.departamento)) }; });
     }
     renderPtPreset();
   }, function(){});
@@ -1718,8 +1739,38 @@ function renderPtPreset(){
 function abrirCadastroHorario(){
   HOR = [{ entrada:'', saida:'' }];
   renderHorMarc();
+  // Escopo: preenche unidade (todas + global) e departamento a partir dos filtros da página
+  var uSel = document.getElementById('hor-unidade');
+  if (uSel){
+    var opts = '<option value="">Todas as unidades (global)</option>';
+    var src = document.getElementById('esc-unidade');
+    if (src){ Array.prototype.forEach.call(src.options, function(o){
+      if (o.value) opts += '<option value="'+esc(o.value)+'">'+esc(o.textContent)+'</option>';
+    }); }
+    uSel.innerHTML = opts;
+    uSel.value = ST.unidade || '';
+  }
+  _horPopularDeptos(ST.unidade);
   renderListaHorarios();
   document.getElementById('hor-overlay').classList.add('open');
+}
+/* Departamentos do cadastro: só sabemos os da unidade que está carregada (ST.equipe).
+   Para outra unidade, oferece apenas "Toda a unidade". */
+function _horPopularDeptos(forUnidade){
+  var sel = document.getElementById('hor-depto'); if(!sel) return;
+  var cur = sel.value;
+  var opts = '<option value="">Toda a unidade</option>';
+  if (forUnidade && forUnidade === ST.unidade){
+    var vistos = {};
+    ST.equipe.forEach(function(p){ var d = String(p.departamento||'').trim(); if(d && !vistos[d]){ vistos[d]=1; } });
+    Object.keys(vistos).sort().forEach(function(d){ opts += '<option value="'+esc(d)+'">'+esc(d)+'</option>'; });
+  }
+  sel.innerHTML = opts;
+  sel.value = cur || (ST.depto && ST.depto!=='Todos' ? ST.depto : '');
+}
+function horUnidadeChange(){
+  var u = document.getElementById('hor-unidade').value;
+  _horPopularDeptos(u);
 }
 function fecharCadastroHorario(){ document.getElementById('hor-overlay').classList.remove('open'); }
 function renderHorMarc(){
@@ -1743,8 +1794,9 @@ function renderListaHorarios(){
   if (!HORARIOS.length){ box.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 0;">Nenhum horário cadastrado.</div>'; return; }
   box.innerHTML = HORARIOS.map(function(h){
     var lbl = presetLabel(marcToPairs(h));
+    var escopo = h.unidade ? (esc(String(h.unidade)) + (h.departamento ? ' · '+esc(String(h.departamento)) : '')) : 'Global (todas as unidades)';
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--border);border-radius:4px;margin-bottom:6px;">'+
-      '<span style="font-size:13px;font-weight:600;">'+lbl+'</span>'+
+      '<span style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:13px;font-weight:600;">'+lbl+'</span><span style="font-size:10px;color:var(--muted);">'+escopo+'</span></span>'+
       '<button type="button" class="btn-icon btn-icon--danger" onclick="removerHorario('+h.id+')" title="Remover" aria-label="Remover">'+
       '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>'+
     '</div>';
@@ -1753,7 +1805,11 @@ function renderListaHorarios(){
 function salvarNovoHorario(){
   var marc = HOR.filter(function(m){ return m.entrada && m.saida; });
   if (!marc.length){ toast('Informe ao menos uma marcação (entrada e saída).'); return; }
-  TP().rpc('escala_horario_add', { p_marcacoes: marc }).then(function(r){
+  var uEl = document.getElementById('hor-unidade');
+  var dEl = document.getElementById('hor-depto');
+  var pUni = (uEl && uEl.value) ? uEl.value : null;
+  var pDep = (pUni && dEl && dEl.value) ? dEl.value : null;
+  TP().rpc('escala_horario_add', { p_marcacoes: marc, p_unidade: pUni, p_departamento: pDep }).then(function(r){
     if (r.error){ erroRPC(r.error); return; }
     HOR = [{ entrada:'', saida:'' }];
     renderHorMarc();
