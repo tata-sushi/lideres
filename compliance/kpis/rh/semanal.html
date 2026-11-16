@@ -549,7 +549,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
   <!-- ══ LINHA: PERÍODO DE EXPERIÊNCIA ══ -->
   <div class="dash-section">Período de Experiência</div>
-  <div class="dash-line dash-line--wide dash-line--eq">
+  <div class="dash-line dash-line--eq">
     <div class="dash-line-kpis">
     <div class="kpi-card"><div class="kpi-label">Em experiência (1º / 2º)</div><div class="kpi-number"><span id="kpi-exp-total">—</span><span style="font-size:15px;color:var(--muted);font-weight:700;letter-spacing:-0.3px"> (<span id="kpi-exp-p1">—</span> / <span id="kpi-exp-p2">—</span>)</span></div></div>
     <div class="kpi-card"><div class="kpi-label">Avaliações vencidas</div><div class="kpi-number" id="kpi-exp-vencidas">—</div></div>
@@ -561,6 +561,14 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     <div class="chart-title">Aprovados no período (1º + 2º)</div>
     <div class="chart-scroll-wrap"><svg id="exp-weekly" style="height:auto;display:block;"></svg></div>
     <div class="chart-legend"><span><i style="background:#35383F"></i>1º Período</span><span><i style="background:rgba(53,56,63,0.45)"></i>2º Período</span></div>
+  </div>
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('expradar')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Satisfação por categoria (1º × 2º)</div>
+    <div class="radar-wrap">
+      <svg id="exp-radar" viewBox="0 0 560 470" preserveAspectRatio="xMidYMid meet" style="width:100%;max-width:560px;height:auto;max-height:520px;display:block;margin:0 auto;"></svg>
+      <div class="wc-legend" id="exp-radar-legend"></div>
+    </div>
   </div>
   </div>
   <!-- ══ LINHA: HEADCOUNT ══ -->
@@ -1410,6 +1418,7 @@ function _semBarra(x, y, w, h, fill, topo, base) {
 // ─── Info dos gráficos (botão "i") ───────────────────────────────────────────
 var _INFO_GRAFICOS = {
   hcprog: '<div class="info-note">Evolução semanal do headcount <b>programado (meta)</b> × <b>realizado</b> (colaboradores ativos, sem sócios), nas últimas 40 semanas. O realizado das semanas passadas é reconstruído pelas datas de admissão/demissão; a cada domingo o sistema grava a foto da semana. A foto é o mesmo histórico usado na página de Headcount.</div>',
+  expradar: '<div class="info-note">Autoavaliação do <b>contratado</b> (percepção de 1 a 5) por categoria, comparando o <b>1º período</b> (14 dias) e o <b>2º período</b> (60 dias), nas últimas 40 semanas. Cada período tem seu próprio questionário no app, então categorias que só existem em um deles aparecem só na linha correspondente (as 4 em comum são Trabalho, Equipe, Liderança e Clima).</div>',
   exppass: '<div class="info-note">Colaboradores que <b>passaram</b> em cada período de experiência por semana (a semana começa na segunda-feira), nas últimas 40 semanas. Barras empilhadas (valores absolutos, não proporção): embaixo (escuro) os aprovados no <b>1º período</b> (14 dias, decisão "continua"); em cima (claro) os aprovados no <b>2º período</b> (60 dias, decisão "efetivar"). A semana é a da data da avaliação.</div>',
   mov: '<div class="info-note">Admissões e demissões por semana (a semana começa na segunda-feira), nas últimas 40 semanas. Cada barra mostra a proporção da semana: em cima os admitidos (escuro), embaixo os demitidos (claro). O rótulo é admitidos/demitidos. Os dados são ao vivo: mudou a data de admissão/demissão de alguém, a semana correspondente recalcula no próximo carregamento.</div>',
   atestados: '<div class="info-note">Quantidade de atestados registrados no Absenteísmo por semana (a semana começa na segunda-feira), nas últimas 40 semanas.</div>',
@@ -3004,6 +3013,45 @@ function renderExperienciasLinha() {
   if (g('kpi-exp-sat1'))     g('kpi-exp-sat1').textContent     = _expNota(_repExp.sat_p1_media);
   if (g('kpi-exp-sat2'))     g('kpi-exp-sat2').textContent     = _expNota(_repExp.sat_p2_media);
   renderExpWeekly();
+  _drawRadarExp(_repExp.radar || []);
+}
+function _wrapLabel(s, maxLen){
+  s=String(s||''); if(s.length<=maxLen) return [s];
+  var words=s.split(' '), lines=[], cur='';
+  for(var i=0;i<words.length;i++){ var t=cur?cur+' '+words[i]:words[i]; if(t.length>maxLen && cur){ lines.push(cur); cur=words[i]; } else cur=t; }
+  if(cur) lines.push(cur);
+  return lines;
+}
+// Radar das autoavaliações do contratado por categoria (1º × 2º período), estilo Clima.
+function _drawRadarExp(pontos){
+  var svg=document.getElementById('exp-radar'); var lg=document.getElementById('exp-radar-legend');
+  if(!svg) return;
+  pontos=(pontos||[]).filter(function(p){ return p && (p.p1!=null || p.p2!=null); });
+  var n=pontos.length;
+  if(n<3){ svg.innerHTML=''; if(lg) lg.innerHTML=''; return; }
+  var W=560,H=470,cx=W/2,cy=H/2+4,R=128,MAX=5;
+  function pt(i,r){ var a=-Math.PI/2+i*(2*Math.PI/n); return {x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)}; }
+  var c='';
+  for(var k=1;k<=MAX;k++){ var rr=R*(k/MAX),d=''; for(var i=0;i<n;i++){ var p=pt(i,rr); d+=(i===0?'M ':'L ')+p.x.toFixed(1)+' '+p.y.toFixed(1)+' '; } d+='Z'; c+='<path d="'+d+'" fill="none" stroke="#E2E2E2" stroke-width="1"/>'; }
+  for(var j=0;j<n;j++){ var po=pt(j,R); c+='<line x1="'+cx+'" y1="'+cy+'" x2="'+po.x.toFixed(1)+'" y2="'+po.y.toFixed(1)+'" stroke="#E2E2E2" stroke-width="1"/>';
+    var pl=pt(j,R+34),anchor='middle'; if(pl.x>cx+4)anchor='start'; else if(pl.x<cx-4)anchor='end';
+    var dy=pl.y<cy-4?-1:(pl.y>cy+4?10:4), lines=_wrapLabel(pontos[j].dim,15);
+    for(var li=0; li<lines.length; li++){ var yoff=dy+(li-(lines.length-1)/2)*12;
+      c+='<text x="'+pl.x.toFixed(1)+'" y="'+(pl.y+yoff).toFixed(1)+'" text-anchor="'+anchor+'" font-size="11" font-weight="500" fill="#35383F">'+escH(lines[li])+'</text>'; }
+  }
+  var C1='#35383F', C2='#1A5C2A';
+  function poly(key,color,op,sw,voff){
+    var dd='', started=false, pts=0;
+    for(var i=0;i<n;i++){ var val=pontos[i][key]; if(val==null) continue; var v=Math.max(0,Math.min(MAX,+val)), pd=pt(i,R*(v/MAX)); dd+=(started?'L ':'M ')+pd.x.toFixed(1)+' '+pd.y.toFixed(1)+' '; started=true; pts++; }
+    if(pts>=3) dd+='Z';
+    if(pts>=2) c+='<path d="'+dd+'" fill="'+(pts>=3?color:'none')+'" fill-opacity="'+(pts>=3?op:'0')+'" stroke="'+color+'" stroke-width="'+sw+'" stroke-linejoin="round"/>';
+    for(var i2=0;i2<n;i2++){ var val2=pontos[i2][key]; if(val2==null) continue; var v2=Math.max(0,Math.min(MAX,+val2)), pv=pt(i2,R*(v2/MAX)); c+='<circle cx="'+pv.x.toFixed(1)+'" cy="'+pv.y.toFixed(1)+'" r="3.2" fill="'+color+'"/>';
+      var pvl=pt(i2,R*(v2/MAX)+voff); c+='<text x="'+pvl.x.toFixed(1)+'" y="'+(pvl.y+3).toFixed(1)+'" text-anchor="middle" font-size="10" font-weight="800" fill="'+color+'">'+v2.toFixed(1).replace('.',',')+'</text>'; }
+  }
+  poly('p1',C1,'0.10','2',12);
+  poly('p2',C2,'0.14','2.5',-13);
+  svg.innerHTML=c;
+  if(lg) lg.innerHTML='<span class="wc-leg"><i style="background:'+C1+'"></i>1º Período</span><span class="wc-leg"><i style="background:'+C2+'"></i>2º Período</span>';
 }
 // Barras empilhadas ABSOLUTAS (não 100%): base = aprovados 1º período, topo = aprovados 2º.
 function renderExpWeekly(){
