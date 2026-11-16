@@ -547,6 +547,22 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 
   </div>
+  <!-- ══ LINHA: PERÍODO DE EXPERIÊNCIA ══ -->
+  <div class="dash-section">Período de Experiência</div>
+  <div class="dash-line dash-line--wide dash-line--eq">
+    <div class="dash-line-kpis">
+    <div class="kpi-card"><div class="kpi-label">Em experiência (1º / 2º)</div><div class="kpi-number"><span id="kpi-exp-total">—</span><span style="font-size:15px;color:var(--muted);font-weight:700;letter-spacing:-0.3px"> (<span id="kpi-exp-p1">—</span> / <span id="kpi-exp-p2">—</span>)</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">Avaliações vencidas</div><div class="kpi-number" id="kpi-exp-vencidas">—</div></div>
+    <div class="kpi-card"><div class="kpi-label">Aprovação 1º / 2º</div><div class="kpi-number" style="font-size:24px"><span id="kpi-exp-ap1">—</span><span> /<span id="kpi-exp-ap2">—</span></span></div></div>
+    <div class="kpi-card"><div class="kpi-label">Satisfação dos contratados</div><div class="kpi-number" id="kpi-exp-satisf">—</div></div>
+    </div>
+  <div class="chart-card">
+    <button class="chart-info-btn" onclick="abrirInfoGrafico('exppass')" title="Informações do gráfico" aria-label="Informações"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+    <div class="chart-title">Aprovados no período (1º + 2º)</div>
+    <div class="chart-scroll-wrap"><svg id="exp-weekly" style="height:auto;display:block;"></svg></div>
+    <div class="chart-legend"><span><i style="background:#35383F"></i>1º Período</span><span><i style="background:rgba(53,56,63,0.45)"></i>2º Período</span></div>
+  </div>
+  </div>
   <!-- ══ LINHA: HEADCOUNT ══ -->
   <div class="dash-section">Headcount</div>
   <div class="dash-line dash-line--wide dash-line--eq">
@@ -1394,6 +1410,7 @@ function _semBarra(x, y, w, h, fill, topo, base) {
 // ─── Info dos gráficos (botão "i") ───────────────────────────────────────────
 var _INFO_GRAFICOS = {
   hcprog: '<div class="info-note">Evolução semanal do headcount <b>programado (meta)</b> × <b>realizado</b> (colaboradores ativos, sem sócios), nas últimas 40 semanas. O realizado das semanas passadas é reconstruído pelas datas de admissão/demissão; a cada domingo o sistema grava a foto da semana. A foto é o mesmo histórico usado na página de Headcount.</div>',
+  exppass: '<div class="info-note">Colaboradores que <b>passaram</b> em cada período de experiência por semana (a semana começa na segunda-feira), nas últimas 40 semanas. Barras empilhadas (valores absolutos, não proporção): embaixo (escuro) os aprovados no <b>1º período</b> (14 dias, decisão "continua"); em cima (claro) os aprovados no <b>2º período</b> (60 dias, decisão "efetivar"). A semana é a da data da avaliação.</div>',
   mov: '<div class="info-note">Admissões e demissões por semana (a semana começa na segunda-feira), nas últimas 40 semanas. Cada barra mostra a proporção da semana: em cima os admitidos (escuro), embaixo os demitidos (claro). O rótulo é admitidos/demitidos. Os dados são ao vivo: mudou a data de admissão/demissão de alguém, a semana correspondente recalcula no próximo carregamento.</div>',
   atestados: '<div class="info-note">Quantidade de atestados registrados no Absenteísmo por semana (a semana começa na segunda-feira), nas últimas 40 semanas.</div>',
   bh: '<div class="info-note">Soma dos saldos de banco de horas por semana, em horas: linha escura = saldos positivos, linha clara = saldos negativos; últimas 40 semanas. O card "Saldo atual" é o saldo líquido (positivos − negativos) da semana mais recente.</div>',
@@ -1441,7 +1458,7 @@ var CHART_PAGINA = {
   demdp:'kpis/rh/demandas.html', sollid:'kpis/rh/solicitacoes.html',
   radar:'kpis/rh/cei.html', nuvem:'kpis/rh/cei.html', hcprog:'kpis/rh/hc.html',
   cardmedia:'kpis/tatahouse/cardapio.html', perfareas:'kpis/rh/performance.html',
-  demandas:'kpis/rh/demandas.html'
+  demandas:'kpis/rh/demandas.html', exppass:'kpis/rh/experiencias.html'
 };
 function irParaPaginaGrafico(key){ var p = CHART_PAGINA[key]; if (p) location.href = CHART_BASE_URL + p; }
 function montarLinksGraficos(){
@@ -2962,6 +2979,56 @@ function closeDrawer() {
 }
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer();fecharModalHC();}});
 
+// ─── SUPER PAINEL · PERÍODO DE EXPERIÊNCIA ─────────────────────────────────────
+var _repExp = null;
+var _EXP_VAZIO = { em_experiencia:0, p1:0, p2:0, vencidas:0, aprov_p1_num:0, aprov_p1_den:0, aprov_p2_num:0, aprov_p2_den:0, semanas:[] };
+function loadReportExperiencias() {
+  comSupa(function(supa){
+    supa.schema('tata_plus').rpc('report_experiencias_resumo').then(function(res){
+      _repExp = (res && !res.error && res.data) ? res.data : _EXP_VAZIO;
+      renderExperienciasLinha();
+    }, function(){ _repExp = _EXP_VAZIO; renderExperienciasLinha(); });
+  });
+}
+function _expPct(num, den){ return (den>0) ? Math.round(100*num/den)+'%' : '—'; }
+function renderExperienciasLinha() {
+  if (!_repExp) return;
+  var g = function(id){ return document.getElementById(id); };
+  if (g('kpi-exp-total'))    g('kpi-exp-total').textContent    = (_repExp.em_experiencia!=null ? _repExp.em_experiencia : '—');
+  if (g('kpi-exp-p1'))       g('kpi-exp-p1').textContent       = (_repExp.p1!=null ? _repExp.p1 : '—');
+  if (g('kpi-exp-p2'))       g('kpi-exp-p2').textContent       = (_repExp.p2!=null ? _repExp.p2 : '—');
+  if (g('kpi-exp-vencidas')) g('kpi-exp-vencidas').textContent = (_repExp.vencidas!=null ? _repExp.vencidas : '—');
+  if (g('kpi-exp-ap1'))      g('kpi-exp-ap1').textContent      = _expPct(_repExp.aprov_p1_num, _repExp.aprov_p1_den);
+  if (g('kpi-exp-ap2'))      g('kpi-exp-ap2').textContent      = _expPct(_repExp.aprov_p2_num, _repExp.aprov_p2_den);
+  renderExpWeekly();
+}
+// Barras empilhadas ABSOLUTAS (não 100%): base = aprovados 1º período, topo = aprovados 2º.
+function renderExpWeekly(){
+  var svg=document.getElementById('exp-weekly'); if(!svg||!_repExp) return;
+  var weeks=(_repExp.semanas||[]).map(function(s){ return { label:_recLabelFromISO(s.semana), p1:+s.p1||0, p2:+s.p2||0 }; });
+  if(!weeks.length){ svg.innerHTML=''; return; }
+  var maxV=Math.max.apply(null, weeks.map(function(w){ return w.p1+w.p2; }).concat([1]));
+  var H=220, padL=12, padR=12, padTop=24, padBot=26;
+  var n=weeks.length, groupW=_fillGroupW(svg,n,padL,padR), W=padL+padR+n*groupW, plotH=H-padTop-padBot;
+  var barW=18;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('width',W); svg.style.width=W+'px'; svg.style.minWidth=W+'px';
+  var baseline=padTop+plotH, c='';
+  var VAL='font-family="DM Sans, sans-serif" font-size="10" font-weight="800" fill="#35383F"';
+  weeks.forEach(function(w,i){
+    var gx=padL+i*groupW+groupW/2, x=gx-barW/2;
+    var tot=w.p1+w.p2;
+    var h1=(w.p1/maxV)*plotH, h2=(w.p2/maxV)*plotH;
+    if(h1>0) c+=_semBarra(x, baseline-h1, barW, h1, '#35383F', h2<=0, false);
+    if(h2>0) c+=_semBarra(x, baseline-h1-h2, barW, h2, CARBON2, true, false);
+    if(h1>=13) c+='<text x="'+gx.toFixed(1)+'" y="'+(baseline-h1/2+3).toFixed(1)+'" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="9" font-weight="800" fill="#FFF">'+w.p1+'</text>';
+    if(h2>=13) c+='<text x="'+gx.toFixed(1)+'" y="'+(baseline-h1-h2/2+3).toFixed(1)+'" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="9" font-weight="800" fill="#35383F">'+w.p2+'</text>';
+    if(tot>0) c+='<text x="'+gx.toFixed(1)+'" y="'+(baseline-h1-h2-5).toFixed(1)+'" text-anchor="middle" '+VAL+'>'+tot+'</text>';
+    c+='<text x="'+gx.toFixed(1)+'" y="'+(baseline+18)+'" text-anchor="middle" '+SEM_NOME+'>'+w.label+'</text>';
+  });
+  svg.innerHTML=c;
+  if(svg.parentElement) svg.parentElement.scrollLeft=svg.parentElement.scrollWidth;
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 setTab('indicadores');
 montarLinksGraficos();
@@ -2978,6 +3045,7 @@ loadReportSancoesMedicina();
 loadReportCusto();
 loadHeadcountBase();
 loadReportHcHist();
+loadReportExperiencias();
 loadAlinhamentosData();
 
 // ─── ALINHAMENTOS ────────────────────────────────────────────────────────────
