@@ -439,7 +439,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
     </div>
     <div class="modal-footer">
       <button class="btn btn--primary" onclick="fecharModalContagem()">Cancelar</button>
-      <button class="btn btn--primary" id="btn-registrar-contagem" onclick="registrarContagem()"><span class="btn-spin"></span><span class="btn-label">Registrar Contagem</span></button>
+      <button class="btn btn--primary" onclick="registrarContagem()">Registrar Contagem</button>
     </div>
   </div>
 </div>
@@ -1288,18 +1288,7 @@ async function salvarEstoqueMinimo(idx) {
   } catch(e) { toast('Erro ao salvar: ' + e.message, true); }
 }
 
-// Loading canônico (skill botoes): disabled + .btn-spin girando (btnRot) + texto em gerúndio no .btn-label
-function setBtnLoading(on, label, id) {
-  var b = document.getElementById(id); if (!b) return;
-  b.disabled = on; b.classList.toggle('is-loading', on);
-  var l = b.querySelector('.btn-label'); if (label && l) l.textContent = label;
-}
-
-// Trava de reenvio: enquanto a contagem está indo pro servidor, o botão fica desabilitado e um 2º clique
-// é ignorado. Em 16/11/2026, com o banco lento, a mesma contagem foi enviada 69 vezes e gerou 25 pedidos.
-var _contagemEnviando = false;
 async function registrarContagem() {
-  if (_contagemEnviando) return;
   if (!CONTAGEM_ITENS || !CONTAGEM_ITENS.length) return;
   if (!UNIDADE || !ESTOQUE_DEPTO) { alert('Selecione a unidade e o departamento.'); return; }
   var linhas = [];
@@ -1334,19 +1323,14 @@ async function registrarContagem() {
     }
   });
   if (!linhas.length) { alert('Informe ao menos uma quantidade de estoque atual.'); return; }
-  _contagemEnviando = true;
-  setBtnLoading(true, 'Registrando…', 'btn-registrar-contagem');
   try {
     // O servidor grava a contagem, gera o pedido automático (se houver déficit) e liga os dois.
-    // Se a mesma contagem já foi registrada há pouco (reenvio), ele devolve a anterior com repetido=true.
     var res = await rpc('inventario_contagem_registrar', { p_linhas: linhas, p_deficits: deficits });
     if (res.error) throw new Error(res.error.message);
     var d = res.data || {};
-    var msg = d.repetido
-      ? 'Esta contagem já havia sido registrada (' + (d.itens || linhas.length) + ' itens).'
-      : 'Contagem registrada: ' + (d.itens || linhas.length) + ' itens.';
+    var msg = 'Contagem registrada: ' + (d.itens || linhas.length) + ' itens.';
     if (deficits.length) {
-      if (d.pedido) msg += ' ' + deficits.length + ' item(ns) abaixo do mínimo — pedido ' + d.pedido + (d.repetido ? ' já gerado.' : ' gerado automaticamente.');
+      if (d.pedido) msg += ' ' + deficits.length + ' item(ns) abaixo do mínimo — pedido ' + d.pedido + ' gerado automaticamente.';
       else msg += ' ' + deficits.length + ' item(ns) abaixo do mínimo, mas houve erro ao gerar o pedido automático.';
     } else {
       msg += ' Nenhum item abaixo do mínimo.';
@@ -1354,7 +1338,6 @@ async function registrarContagem() {
     alert(msg);
     fecharModalContagem();
   } catch(e) { toast('Erro ao registrar contagem: ' + e.message, true); }
-  finally { _contagemEnviando = false; setBtnLoading(false, 'Registrar Contagem', 'btn-registrar-contagem'); }
 }
 
 // ── TOAST ─────────────────────────────────────────────────────────────────────
