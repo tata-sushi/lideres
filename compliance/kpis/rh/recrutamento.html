@@ -2204,7 +2204,20 @@ function loadAllData() {
     renderAgendaLideres();
     _colabs = (cres && !cres.error && Array.isArray(cres.data)) ? cres.data : [];
     _csCargos = (csres && !csres.error && csres.data && Array.isArray(csres.data.cargos)) ? csres.data.cargos : [];
-    // ── Vagas ── (RPC devolve { pode_ver, vagas }; salários mascarados no servidor se não pode ver)
+    _recMontarVagas(vres);
+    // ── Candidaturas (entrevistas/testes) ──
+    if (res.error) { entrevistas = []; testes = []; analitico = []; finishLoad(['Supabase: ' + res.error.message]); return; }
+    _recMontarListas(Array.isArray(res.data) ? res.data : []);
+    finishLoad([]);
+  }, function () {
+    entrevistas = []; testes = []; analitico = []; vagas = []; agendaLideres = [];
+    renderAgendaLideres();
+    finishLoad(['Supabase indisponível']);
+  });
+}
+
+// ── Vagas ── (RPC devolve { pode_ver, vagas }; salários mascarados no servidor se não pode ver)
+function _recMontarVagas(vres) {
     var vd = (vres && !vres.error && vres.data) ? vres.data : {};
     window.__podeVerValores = !!vd.pode_ver;
     var vrows = Array.isArray(vd.vagas) ? vd.vagas : [];
@@ -2223,9 +2236,12 @@ function loadAllData() {
         };
       });
     }
-    // ── Candidaturas (entrevistas/testes) ──
-    if (res.error) { entrevistas = []; testes = []; analitico = []; finishLoad(['Supabase: ' + res.error.message]); return; }
-    var rows = Array.isArray(res.data) ? res.data : [];
+}
+
+// ── Candidaturas → listas das abas (Entrevistas / Testes / Analítico) ──
+// Recebe as candidaturas cruas (mãe + dias + entrevistas) e monta as listas derivadas.
+// Usada no carregamento completo e na atualização de uma única candidatura (refreshCandidatura).
+function _recMontarListas(rows) {
     entrevistas = []; entrevistasAll = []; testes = []; analitico = rows;   // Analítico usa a candidatura crua (mãe + dias)
     rows.forEach(function (r) {
       var dias = Array.isArray(r.dias) ? r.dias : []; // filha rec_teste_dias (aninhada pelo RPC)
@@ -2283,12 +2299,37 @@ function loadAllData() {
         });
       }
     });
-    finishLoad([]);
-  }, function () {
-    entrevistas = []; testes = []; analitico = []; vagas = []; agendaLideres = [];
-    renderAgendaLideres();
-    finishLoad(['Supabase indisponível']);
-  });
+}
+
+// Atualiza UMA candidatura depois de salvar, em vez de recarregar as ~5,6 mil (rec_candidaturas_listar
+// leva de 2 a 8 s e, chamada a cada salvamento, derrubou o banco em 16/11). Busca só a linha alterada
+// (rec_candidatura_listar_uma), troca na lista em memória e redesenha a aba atual, sem overlay.
+// Se a busca falhar (função ausente, sem rede), cai no carregamento completo.
+function refreshCandidatura(id) {
+  var SB = window.__lideresSupa;
+  if (!SB || !id) { loadAllData(); return; }
+  SB.rpc('rec_candidatura_listar_uma', { p_id: id }).then(function (res) {
+    if (res.error) { loadAllData(); return; }
+    var novo = Array.isArray(res.data) ? res.data[0] : res.data;
+    var lista = (analitico || []).slice();
+    var pos = -1;
+    for (var i = 0; i < lista.length; i++) { if (String(lista[i].id) === String(id)) { pos = i; break; } }
+    if (novo) { if (pos >= 0) lista[pos] = novo; else lista.unshift(novo); }   // nova candidatura entra no topo
+    else if (pos >= 0) lista.splice(pos, 1);                                   // excluída no servidor: sai da lista
+    _recMontarListas(lista);
+    render();
+  }, function () { loadAllData(); });
+}
+
+// Recarrega só as vagas (rec_vagas_listar é leve) depois de salvar/excluir uma vaga.
+function refreshVagas() {
+  var SB = window.__lideresSupa;
+  if (!SB) { loadAllData(); return; }
+  SB.rpc('rec_vagas_listar').then(function (vres) {
+    if (vres.error) { loadAllData(); return; }
+    _recMontarVagas(vres);
+    render();
+  }, function () { loadAllData(); });
 }
 
 function finishLoad(errors) {
@@ -3427,7 +3468,7 @@ function _aeSalvarVaga(){
   var id=document.getElementById('ae-v-vaga').value||null;
   SB.rpc('rec_candidatura_vincular_vaga', { p_id: document.getElementById('ae-id').value, p_vaga_id: id }).then(function(res){
     if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
-    closeAeModal(); loadAllData();
+    var _aeIdRef=document.getElementById('ae-id').value; closeAeModal(); refreshCandidatura(_aeIdRef);
   }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
 // ── Aba Vaga/Candidato: edição inline (RPC rec_candidatura_salvar) ──
@@ -3495,7 +3536,7 @@ function _aeSalvarCandidato(){
   };
   SB.rpc('rec_candidatura_salvar', args).then(function(res){
     if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
-    closeAeModal(); loadAllData();
+    var _aeIdRef=document.getElementById('ae-id').value; closeAeModal(); refreshCandidatura(_aeIdRef);
   }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
 // ── Aba Processos: situação + tipos com quantidade + resumo (rec_candidaturas) ──
@@ -3580,7 +3621,7 @@ function _aeSalvarProcessos(){
   var args={ p_id: document.getElementById('ae-id').value, p_processos: processos, p_resumo: v('ae-p-resumo').trim() };
   SB.rpc('rec_processos_salvar', args).then(function(res){
     if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
-    closeAeModal(); loadAllData();
+    var _aeIdRef=document.getElementById('ae-id').value; closeAeModal(); refreshCandidatura(_aeIdRef);
   }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
 // ── Aba Referências: 2 contatos (da devolutiva) + check + avaliação + resumo ──
@@ -3624,7 +3665,7 @@ function _aeSalvarReferencias(){
   };
   SB.rpc('rec_referencias_salvar', args).then(function(res){
     if(res.error){ alert('Erro ao salvar:\n'+res.error.message); return; }
-    closeAeModal(); loadAllData();
+    var _aeIdRef=document.getElementById('ae-id').value; closeAeModal(); refreshCandidatura(_aeIdRef);
   }, function(err){ alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
 function aeTab(name){
@@ -3743,7 +3784,7 @@ function _aeRunSaves(calls){
   Promise.all(calls.map(function(c){ return SB.rpc(c.rpc, c.args); })).then(function(results){
     done();
     for(var i=0;i<results.length;i++){ if(results[i] && results[i].error){ alert('Erro ao salvar:\n'+results[i].error.message); return; } }
-    closeAeModal(); loadAllData();
+    var _aeIdRef=document.getElementById('ae-id').value; closeAeModal(); refreshCandidatura(_aeIdRef);
   }, function(err){ done(); alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
 // Salva todas as entrevistas preenchidas (uma só ação, botão do rodapé)
@@ -4493,7 +4534,7 @@ function salvarEditVaga() {
     setBtnLoading(btn, false, 'Salvar');
     if (res.error) { alert('Erro ao salvar: ' + res.error.message); return; }
     closeEditVaga();
-    loadAllData();
+    refreshVagas();
   }, function() { setBtnLoading(btn, false, 'Salvar'); alert('Erro de conexão'); });
 }
 
@@ -4511,7 +4552,7 @@ function excluirVaga() {
     if (res.error) { alert('Erro ao excluir: ' + res.error.message); return; }
     if (res.data !== true) { alert('Vaga não encontrada.'); return; }
     closeEditVaga();
-    loadAllData();
+    refreshVagas();
   }, function() { setBtnLoading(btn, false, 'Excluir vaga'); alert('Erro de conexão'); });
 }
 
@@ -4702,7 +4743,7 @@ function salvarNovoCandidato() {
     setBtnLoading(btn, false, _label);
     if (res.error) { alert('Erro ao salvar:\n' + res.error.message); return; }
     closeNovoCandidato();
-    loadAllData();
+    refreshCandidatura(res.data || _id);
   }, function(err){
     setBtnLoading(btn, false, _label);
     alert('Erro de conexão:\n' + (err && err.message || err));
@@ -4815,7 +4856,7 @@ function salvarEditarTeste() {
   SB.rpc('rec_teste_salvar', args).then(function(res){
     setBtnLoading(btn, false, 'Salvar');
     if (res.error) { alert('Erro ao salvar:\n'+res.error.message); return; }
-    closeEditarTeste(); loadAllData();
+    var _etCand=document.getElementById('et-cand-id').value; closeEditarTeste(); refreshCandidatura(res.data || _etCand);
   }, function(err){ setBtnLoading(btn, false, 'Salvar'); alert('Erro de conexão:\n'+(err&&err.message||err)); });
 }
 
@@ -5986,7 +6027,7 @@ function salvarAvaliacao() {
     setBtnLoading(btnSalvar, false, 'Salvar');
     if (res.error) { alert('Erro ao salvar:\n' + res.error.message); return; }
     fecharModal();
-    loadAllData();
+    refreshCandidatura(d.id);
   }, function(err) {
     setBtnLoading(btnSalvar, false, 'Salvar');
     alert('Erro de conexão:\n' + (err && err.message || err));
@@ -6157,7 +6198,7 @@ function salvarEntrevista() {
     setBtnLoading(btnSalvar, false, 'Enviar feedback');
     if (res.error) { alert('Erro ao salvar:\n' + res.error.message); return; }
     fecharModalEntrevista();
-    loadAllData();
+    refreshCandidatura(d.id);
   }, function(err) {
     setBtnLoading(btnSalvar, false, 'Enviar feedback');
     alert('Erro de conexão:\n' + (err && err.message || err));
