@@ -253,6 +253,10 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
   intervalos em que ele falou) e é a que a ata usa (fica em `alinhamento_transcricao.transcricao`). Se a separação
   falhar ou não houver gravação, a ata usa a transcrição ao vivo. A gravação é apagada depois da ata (as que sobrarem,
   em 3 dias, pela varredura).
+  - **Em etapas** (18/11): a edge tem ~2 s de CPU por chamada, e uma reunião de 1h25 estourou ao separar tudo de uma
+    vez. Cada chamada cadastra as vozes da rodada ou separa até 2 blocos e grava em `dp_rh.agente_reuniao_blocos`; a
+    seguinte é chamada pela própria edge (`?k=` `continuar_ata`), e a última faz a ata. Reunião parada em
+    "gerando_ata": `?k=` `{"acao":"refazer_ata","reuniao":"<id>","forcar":true}` continua de onde parou.
   - **Cadastro**: rodada de nomes — pelo comando de voz **"Sam, se apresente"** (ele conta o que faz e pede a rodada; a
     página abre a rodada logo depois da fala, por até 3 min ou até "Terminar rodada") e pelo botão "Rodada de nomes"
     (alguém novo). É uma vez só por pessoa: a fala deixa claro que depois disso ele reconhece sozinho. Os dois textos
