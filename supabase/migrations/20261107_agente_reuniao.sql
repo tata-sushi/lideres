@@ -584,3 +584,57 @@ end $$;
 insert into dp_rh.agente_config (chave, valor)
 values ('reuniao_texto_apresentacao', 'Olá, pessoal! Eu sou o Sam, o assistente virtual do TATÁ. Eu acompanho a reunião e, no final, faço a ata, mando o resumo no grupo do DP e RH e coloco as demandas no kanban, cada uma com o seu responsável. Se precisarem de alguma informação do RH, é só dizer: Sam, e a pergunta. Agora, para eu aprender a voz de vocês, peço que cada um se apresente, um de cada vez: diga aqui é o, ou aqui é a, o seu nome e uma frase sobre o que faz. Podemos começar com quem quiser.')
 on conflict (chave) do nothing;
+
+-- ── 8. separação das vozes em etapas (18/11) ─────────────────────────────────
+-- A reunião de 18/11 (1h25, 9 blocos de 10 min) estourou o limite de CPU da edge (~2 s por chamada) ao separar
+-- as vozes e fazer a ata numa chamada só. Agora cada chamada separa até 2 blocos e grava aqui; a seguinte é
+-- chamada pela própria edge (?k= continuar_ata); a última junta tudo e faz a ata. Bloco -1 = vozes da rodada de
+-- nomes já cadastradas. Some depois que a ata fica pronta.
+create table if not exists dp_rh.agente_reuniao_blocos (
+  reuniao_id uuid not null references dp_rh.agente_reunioes(id) on delete cascade,
+  bloco int not null,
+  linhas jsonb not null default '[]'::jsonb,
+  criado_em timestamptz not null default now(),
+  primary key (reuniao_id, bloco)
+);
+alter table dp_rh.agente_reuniao_blocos enable row level security;
+
+create or replace function tata_plus.agente_reuniao_bloco_gravar(p_id uuid, p_bloco int, p_linhas jsonb)
+returns void
+language sql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  insert into dp_rh.agente_reuniao_blocos (reuniao_id, bloco, linhas)
+  values (p_id, p_bloco, coalesce(p_linhas, '[]'::jsonb))
+  on conflict (reuniao_id, bloco) do update set linhas = excluded.linhas, criado_em = now();
+$fn$;
+
+create or replace function tata_plus.agente_reuniao_blocos(p_id uuid)
+returns jsonb
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  select coalesce(jsonb_agg(jsonb_build_object('bloco', bloco, 'linhas', linhas) order by bloco), '[]'::jsonb)
+  from dp_rh.agente_reuniao_blocos where reuniao_id = p_id;
+$fn$;
+
+create or replace function tata_plus.agente_reuniao_blocos_apagar(p_id uuid)
+returns integer
+language sql security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  with x as (delete from dp_rh.agente_reuniao_blocos where reuniao_id = p_id returning 1) select count(*)::int from x;
+$fn$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'tata_plus.agente_reuniao_bloco_gravar(uuid, integer, jsonb)',
+    'tata_plus.agente_reuniao_blocos(uuid)',
+    'tata_plus.agente_reuniao_blocos_apagar(uuid)'
+  ] loop
+    execute format('revoke execute on function %s from public, anon, authenticated', f);
+    execute format('grant execute on function %s to service_role', f);
+  end loop;
+end $$;

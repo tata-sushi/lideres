@@ -475,17 +475,11 @@ async function baixar(p: Parte): Promise<Uint8Array> {
   return new Uint8Array(await data.arrayBuffer());
 }
 
-// rodadas de nomes → vozes cadastradas; depois a reunião inteira separada por vozes, com nomes.
-// Devolve a transcrição "[HH:MM] Nome: texto" ou "" se não houver gravação.
-async function transcricaoComVozes(reuniao: any, gravarVozes = true): Promise<string> {
-  const t0 = Date.now();
-  const { data: lp } = await supa.rpc("agente_reuniao_audio_listar", { p_id: reuniao.id });
-  const partes = ((lp ?? []) as Parte[]).filter((p) => p.bytes > 0);
-  if (!partes.length) return "";
+// rodadas de nomes → vozes cadastradas (gravar = false: só devolve, para teste)
+async function cadastrarRodadas(reuniao: any, partes: Parte[], gravarVozes = true): Promise<Voz[]> {
   const { modeloVozes, participantes } = await config();
   const msDe = (p: Parte) => p.ms + (p.bytes / TAXA) * 1000;
   const novas: Voz[] = [];
-
   for (const [de, ate] of (reuniao.rodadas ?? []) as Array<[number, number]>) {
     const ps = partes.filter((p) => p.ms < ate + 1000 && msDe(p) > de - 1000);
     if (!ps.length) continue;
@@ -500,12 +494,29 @@ async function transcricaoComVozes(reuniao: any, gravarVozes = true): Promise<st
       if (error) console.error("voz", v.nome, error.message);
     }
   }
+  return novas;
+}
 
+const vozesCadastradas = async (): Promise<Voz[]> => {
   const { data: lv } = await supa.rpc("agente_vozes_listar");
-  const vozes: Voz[] = [
-    ...novas,
-    ...((lv ?? []) as any[]).map((v) => ({ nome: String(v.nome), audio: deBase64(String(v.audio)) })).filter((v) => !novas.some((n) => n.nome === v.nome)),
-  ];
+  return ((lv ?? []) as any[]).map((v) => ({ nome: String(v.nome), audio: deBase64(String(v.audio)) }));
+};
+const linhasComHora = (reuniao: any, linhas: Linha[]) => {
+  const base = new Date(reuniao.inicio).getTime();
+  return linhas.map((l) => `[${hora(new Date(base + l.ms).toISOString())}] ${l.quem}: ${l.texto}`).join("\n");
+};
+
+// reunião inteira separada por vozes numa chamada só — usada só no teste interno (teste_vozes, sem gravar
+// vozes); a ata usa vozesEmEtapas, que cabe no limite de CPU da edge em reunião longa
+async function transcricaoComVozes(reuniao: any, gravarVozes = true): Promise<string> {
+  const t0 = Date.now();
+  const { data: lp } = await supa.rpc("agente_reuniao_audio_listar", { p_id: reuniao.id });
+  const partes = ((lp ?? []) as Parte[]).filter((p) => p.bytes > 0);
+  if (!partes.length) return "";
+  const { modeloVozes } = await config();
+  const novas = await cadastrarRodadas(reuniao, partes, gravarVozes);
+  const lv = await vozesCadastradas();
+  const vozes: Voz[] = [...novas, ...lv.filter((v) => !novas.some((n) => n.nome === v.nome))];
   const sam = (reuniao.sam ?? []) as Array<[number, number]>;
   const grupos = blocosDeAudio(partes);
   const linhas: Linha[][] = new Array(grupos.length);
@@ -521,9 +532,63 @@ async function transcricaoComVozes(reuniao: any, gravarVozes = true): Promise<st
     }
   };
   await Promise.all([trabalhar(), trabalhar(), trabalhar()]);
-  const base = new Date(reuniao.inicio).getTime();
   console.log("vozes", JSON.stringify({ reuniao: reuniao.id, partes: partes.length, blocos: grupos.length, vozes: vozes.map((v) => v.nome), ms: Date.now() - t0 }));
-  return linhas.flat().map((l) => `[${hora(new Date(base + l.ms).toISOString())}] ${l.quem}: ${l.texto}`).join("\n");
+  return linhasComHora(reuniao, linhas.flat());
+}
+
+// 18/11: a reunião de 1h25 (9 blocos) estourou o limite de CPU da edge (~2 s por chamada) separando tudo de uma
+// vez. Agora em etapas: cada chamada faz uma coisa — cadastra as vozes da rodada (marca bloco -1) ou separa até
+// BLOCOS_POR_ETAPA blocos de 10 min — e grava em dp_rh.agente_reuniao_blocos; gerarAta chama a próxima etapa
+// (?k= continuar_ata). Quando todos os blocos estão gravados, devolve a transcrição com nomes.
+const BLOCOS_POR_ETAPA = 2;
+async function vozesEmEtapas(reuniao: any): Promise<{ pronto: boolean; texto: string }> {
+  const t0 = Date.now();
+  const { data: lp } = await supa.rpc("agente_reuniao_audio_listar", { p_id: reuniao.id });
+  const partes = ((lp ?? []) as Parte[]).filter((p) => p.bytes > 0);
+  if (!partes.length) return { pronto: true, texto: "" };
+  const { data: lb, error: eb } = await supa.rpc("agente_reuniao_blocos", { p_id: reuniao.id });
+  if (eb) throw new Error("blocos: " + eb.message);
+  const feitos = new Map<number, Linha[]>(((lb ?? []) as any[]).map((b) => [Number(b.bloco), (b.linhas ?? []) as Linha[]]));
+  const gravarBloco = async (k: number, linhas: Linha[]) => {
+    const { error } = await supa.rpc("agente_reuniao_bloco_gravar", { p_id: reuniao.id, p_bloco: k, p_linhas: linhas });
+    if (error) throw new Error("bloco: " + error.message);
+  };
+  if (((reuniao.rodadas ?? []) as unknown[]).length && !feitos.has(-1)) {
+    await cadastrarRodadas(reuniao, partes);
+    await gravarBloco(-1, []);
+    console.log("vozes etapa", JSON.stringify({ reuniao: reuniao.id, etapa: "rodada", ms: Date.now() - t0 }));
+    return { pronto: false, texto: "" };
+  }
+  const grupos = blocosDeAudio(partes);
+  const faltam = grupos.map((_, k) => k).filter((k) => !feitos.has(k));
+  if (faltam.length) {
+    const { modeloVozes } = await config();
+    const vozes = await vozesCadastradas();
+    const sam = (reuniao.sam ?? []) as Array<[number, number]>;
+    const agora = faltam.slice(0, BLOCOS_POR_ETAPA);
+    await Promise.all(agora.map(async (k) => {
+      const g = grupos[k];
+      const { audio, marcas, inicio } = comPrefixo(vozes, juntar(await Promise.all(g.map(baixar))));
+      const palavras = await separar(AUDIO_BASE, LLM_KEY, modeloVozes, audio);
+      await gravarBloco(k, falasDoBloco(palavras, nomesDasVozes(palavras, marcas), inicio, g[0].ms, sam));
+    }));
+    console.log("vozes etapa", JSON.stringify({ reuniao: reuniao.id, blocos: agora, faltam: faltam.length - agora.length, total: grupos.length, ms: Date.now() - t0 }));
+    return { pronto: false, texto: "" };
+  }
+  console.log("vozes", JSON.stringify({ reuniao: reuniao.id, partes: partes.length, blocos: grupos.length }));
+  return { pronto: true, texto: linhasComHora(reuniao, grupos.flatMap((_, k) => feitos.get(k) ?? [])) };
+}
+
+// próxima etapa da ata numa chamada nova (com o seu próprio limite de CPU)
+async function continuarAta(id: string) {
+  const k = await segredo("portal_secret");
+  const r = await fetch(`${SUPA_URL}/functions/v1/agente-reuniao?k=${encodeURIComponent(k)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ acao: "continuar_ata", reuniao: id }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!r.ok) throw new Error(`continuar a ata: HTTP ${r.status}`);
 }
 
 // apaga a gravação contínua de uma reunião (storage + registros)
@@ -539,18 +604,20 @@ async function apagarAudio(id: string) {
 
 async function gerarAta(id: string) {
   try {
-    const [{ data: r }, { data: transcricao }] = await Promise.all([
-      supa.rpc("agente_reuniao_ver", { p_id: id }),
-      supa.rpc("agente_reuniao_transcricao", { p_id: id, p_minutos: null }),
-    ]);
+    const { data: r } = await supa.rpc("agente_reuniao_ver", { p_id: id });
     const reuniao = r as any;
-    // com a gravação contínua: transcrição separada por vozes, com nomes; senão (ou se falhar), a ao vivo
-    let comVozes = "";
+    if (!reuniao || reuniao.status !== "gerando_ata") return; // já feita, ou outra etapa cuidando
+    // com a gravação contínua: transcrição separada por vozes, com nomes (em etapas); senão (ou se falhar), a ao vivo
+    let vozes = { pronto: true, texto: "" };
     try {
-      comVozes = await transcricaoComVozes(reuniao);
+      vozes = await vozesEmEtapas(reuniao);
     } catch (err) {
       console.error("vozes", erroTxt(err));
+      vozes = { pronto: true, texto: "" };
     }
+    if (!vozes.pronto) return await continuarAta(id);
+    const comVozes = vozes.texto;
+    const { data: transcricao } = await supa.rpc("agente_reuniao_transcricao", { p_id: id, p_minutos: null });
     const texto = comVozes || String(transcricao ?? "").trim();
     if (!texto) throw new Error("nenhuma fala foi transcrita");
     const fim = reuniao.fim ?? new Date().toISOString();
@@ -582,7 +649,8 @@ async function gerarAta(id: string) {
         p_telefone: destino, p_papel: "assistant", p_texto: msg, p_msg_id: ids[0] ?? null, p_meta: { reuniao_id: id },
       });
     }
-    // a gravação contínua só serve para a ata: some depois que ela fica pronta
+    // a gravação contínua (e as etapas da separação) só servem para a ata: somem depois que ela fica pronta
+    await supa.rpc("agente_reuniao_blocos_apagar", { p_id: id });
     await apagarAudio(id).catch((e) => console.error("apagar áudio", erroTxt(e)));
   } catch (err) {
     await supa.rpc("agente_reuniao_status", { p_id: id, p_status: "erro", p_erro: erroTxt(err).slice(0, 500) });
@@ -651,10 +719,19 @@ Deno.serve(async (req) => {
         `Reunião: Reunião de RH (teste) — ${diaSemana(agora)}.\n\nTRANSCRIÇÃO\n${String(t.transcricao ?? "")}`);
       return json({ ok: true, ...blocos(r, "Reunião de RH (teste)", dia(agora)), ms: Date.now() - t0 });
     }
+    // próxima etapa da ata (chamada pela própria edge)
+    if (t?.acao === "continuar_ata") {
+      const id = String(t.reuniao ?? "");
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ ok: false, erro: "reunião inválida" }, 400);
+      EdgeRuntime.waitUntil(gerarAta(id));
+      return json({ ok: true });
+    }
+    // refazer: reunião com erro, ou (forcar) parada em "gerando_ata" — continua das etapas já gravadas
     if (t?.acao === "refazer_ata") {
       const { data: r } = await supa.rpc("agente_reuniao_ver", { p_id: String(t.reuniao ?? "") });
       if (!r) return json({ ok: false, erro: "reunião não encontrada" }, 404);
-      if ((r as any).status !== "erro") return json({ ok: false, erro: `reunião está ${(r as any).status}` }, 409);
+      const st = (r as any).status;
+      if (!(st === "erro" || (t.forcar === true && st === "gerando_ata"))) return json({ ok: false, erro: `reunião está ${st}` }, 409);
       await supa.rpc("agente_reuniao_status", { p_id: (r as any).id, p_status: "gerando_ata", p_erro: null });
       EdgeRuntime.waitUntil(gerarAta((r as any).id));
       return json({ ok: true, status: "gerando_ata" });
