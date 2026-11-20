@@ -3,7 +3,8 @@
 //
 // Para cada pessoa ATIVA (public.ponto_dia_pessoas; inativos não são puxados, decisão do dono 20/11/2026),
 // chama a apuracao_ponto do RHiD no período e grava 1 linha por dia:
-//   • marcacao_1..6 = batidas do dia em ordem (dateTime local de SP), sem as ocultas
+//   • marcacao_1..6 = batidas REAIS do dia em ordem (dateTime local de SP), sem as ocultas e sem os
+//     registros fictícios que o RHiD cria nos horários da jornada em dia de falta/justificativa
 //   • jornada_rhid  = horário contratual do RHiD ([{entrada, saida}], formato de escala_dias.marcacoes)
 //   • números da apuração do RHiD (previsto, trabalhado, extra, falta/atraso, banco de horas) p/ conferência
 // Dia sem batida, sem jornada, sem falta e sem justificativa não é gravado.
@@ -99,8 +100,13 @@ async function getApuracao(token: string, idPerson: string, ini: string, fim: st
 function linhaDoDia(matricula: string, d: any): any | null {
   const data = horaLocal(d.date)?.slice(0, 10);
   if (!data) return null;
+  // Batida real: tem idAfd (registro do relógio/app) ou é entrada/saída (E/S, inclui as incluídas por ajuste).
+  // Em falta/justificativa o RHiD preenche a jornada com registros fictícios: _typeRegister "I",
+  // _typeEntradaSaida "D", _typeClassification "F" (falta) ou "J" (justificada), sem idAfd,
+  // reason "Falta no período entre…". Esses NÃO são batidas.
   const batidas = (d.listAfdtManutencao || [])
     .filter((x: any) => !x.oculto)
+    .filter((x: any) => x.idAfd != null || x._typeEntradaSaida === "E" || x._typeEntradaSaida === "S")
     .map((x: any) => horaLocal(x.dateTime))
     .filter((x: string | null): x is string => !!x)
     .sort();
