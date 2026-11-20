@@ -41,7 +41,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 | `kpis/rh/absenteismo.html` | `governanca-kpis-rh-absenteismo` | 3 | 4 | 4 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/bancodehoras.html` | `governanca-kpis-rh-bancodehoras` | 0 | 0 | 1 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/ouvidoria.html` | `governanca-kpis-rh-ouvidoria` | 2 | 3 | 3 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| `kpis/rh/escalas.html` | `governanca-app-escala` | 3 | 10 | 27 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| `kpis/rh/escalas.html` | `governanca-app-escala` | 4 | 10 | 27 | ✅ 11/11 · aba Ponto 20/11 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | `kpis/rh/armarios.html` | `governanca-kpis-rh-armarios` | 5 | 8 | 9 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/rh/estoqueadm.html` | `governanca-kpis-rh-estoqueadm` | 6 | 10 | 8 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | `kpis/rh/agenda.html` | `governanca-kpis-rh-agenda` | 0 | 3 | 7 | ✅ 11/11 | ⏳ | ⏳ | ⏳ | ⏳ | — |
@@ -100,6 +100,7 @@ Legenda das colunas de componentes (do inventário automático): Abas = `tab-btn
 
 ## Histórico
 
+- 20/11/2026 — Escalas: aba nova **Ponto** (marcações do RHiD × escala) reaplicada à skill a pedido do dono. HTML já tinha `data-aba-id="governanca-app-escala::ponto"`; servidor já no padrão (`escala_ponto_semana`: página, Linha por `escala_meu_time`, `__int` sem execute, `dp_rh.ponto_dia` sem leitura direta; só leitura, sem botão). Faltava o catálogo: migration `20261220_escala_aba_ponto.sql` (aplicada). Sem mudança de HTML.
 - 12/11/2026 — Valor: todo admin vale como `geral` (decisão do dono). `pode_ver_valores` passa a liberar admin ativo sem linha em `perm_ver_valores`; a Auditoria lista os admins como `geral`. Contato segue sem bypass. Migration `20261212_valores_admin_geral.sql`, aplicada e testada por pessoa logada. Motivo: admin criado depois do seed via R$ mascarado no VT e o painel do app não oferece Valor para admin.
 - 11/11/2026 — SQLs dos lotes 1 e 2 rodados pelo dono; 4 edge functions com porta publicadas; testes por pessoa logada ok (admin tudo; líder só a equipe; sem página bloqueado). Roteiro da skill de acessos completo, exceto os menus (Etapa 2+3, após a skill do gate).
 - 11/11/2026 — RH lote 2 (Escalas, Armários, Estoque ADM, Agenda, Head Count, Feriados, Reclamações, Semanal, Solicitações, Demandas, Experiências, SAM, CEI, TED, Comunicação): sem mudança de HTML; banco num SQL único (`supabase/migrations/20261209_rh_lote2.sql`), a rodar depois do lote 1. SAM, TED e Comunicação só têm página.
