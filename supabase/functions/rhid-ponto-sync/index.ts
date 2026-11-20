@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // rhid-ponto-sync — RHiD → dp_rh.ponto_dia (marcações de ponto por pessoa/dia)
 //
-// Para cada pessoa (ativos/bloqueados + quem saiu dentro do período, via public.ponto_dia_pessoas),
+// Para cada pessoa ATIVA (public.ponto_dia_pessoas; inativos não são puxados, decisão do dono 20/11/2026),
 // chama a apuracao_ponto do RHiD no período e grava 1 linha por dia:
 //   • marcacao_1..6 = batidas do dia em ordem (dateTime local de SP), sem as ocultas
 //   • jornada_rhid  = horário contratual do RHiD ([{entrada, saida}], formato de escala_dias.marcacoes)
@@ -10,8 +10,7 @@
 // Upsert via public.ponto_dia_sync (atualiza se o RHiD mudou algo depois).
 //
 // O RHiD não devolve todas as pessoas numa chamada (apuracao_ponto exige idPerson):
-// ~150 chamadas por rodada (1 por pessoa a cada bloco de 31 dias + 1 login), 6 em paralelo. Período longo
-// é quebrado em blocos de 31 dias; blocos antes da admissão ou depois da demissão são pulados.
+// ~150 chamadas por rodada (1 por pessoa ativa a cada bloco de 31 dias + 1 login), 6 em paralelo.
 //
 // Chamada: POST …/rhid-ponto-sync?k=<portal_secret>   (mesmo segredo do agente-portal)
 // Body (opcional): { dataIni, dataFinal, matriculas: ["24740", …] }
@@ -162,7 +161,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: pessoasDb, error: pErr } = await supa.rpc("ponto_dia_pessoas", { p_ini: dataIni });
     if (pErr) return json({ ok: false, erro: "ponto_dia_pessoas: " + pErr.message }, 500);
-    let pessoas: { matricula: string; id_pessoa: string; data_admissao: string | null; data_demissao: string | null }[] = pessoasDb || [];
+    let pessoas: { matricula: string; id_pessoa: string }[] = pessoasDb || [];
     if (Array.isArray(body.matriculas) && body.matriculas.length) {
       const so = new Set(body.matriculas.map(String));
       pessoas = pessoas.filter((p) => so.has(p.matricula));
@@ -176,9 +175,6 @@ Deno.serve(async (req: Request) => {
     const porPessoa = await mapPool(pessoas, CONCURRENCY, async (p) => {
       const rows: any[] = [];
       for (const [a, b] of periodos) {
-        // fora do período na empresa: não gasta chamada
-        if (p.data_admissao && p.data_admissao > b) continue;
-        if (p.data_demissao && p.data_demissao < a) continue;
         const dias = await getApuracao(token, p.id_pessoa, a, b);
         if (!dias) { falhas++; continue; }
         for (const d of dias) { const r = linhaDoDia(p.matricula, d); if (r) rows.push(r); }

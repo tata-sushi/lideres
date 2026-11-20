@@ -17,7 +17,7 @@
 -- para o controle: o RHiD desloca a hora prevista para a batida quando o horário contratual difere da
 -- escala, e o atraso dele sai zero.
 --
--- Ativos e inativos ficam guardados (decisão do dono, 19/11/2026: não apagar os inativos).
+-- Só ativos são sincronizados, a partir de 20/11/2026; o que já está gravado não é apagado (decisões do dono).
 -- Peso estimado: ~54 mil linhas por ano, ~14 MB por ano.
 --
 -- Registro: quando o schema registro existir, ligar só o gatilho carimbar_atualizacao. NÃO ligar
@@ -59,7 +59,7 @@ alter table dp_rh.ponto_dia enable row level security;
 revoke all on dp_rh.ponto_dia from public, anon, authenticated;
 
 comment on table dp_rh.ponto_dia is
-  'Marcações de ponto por pessoa/dia vindas do RHiD (rhid-ponto-sync). marcacao_1..6 em horário local de SP. Ativos e inativos.';
+  'Marcações de ponto por pessoa/dia vindas do RHiD (rhid-ponto-sync). marcacao_1..6 em horário local de SP. Só ativos, a partir de 20/11/2026; nada é apagado.';
 comment on column dp_rh.ponto_dia.qtd_marcacoes is 'Total de batidas do dia no RHiD (mais de 6: as demais não cabem nas colunas).';
 comment on column dp_rh.ponto_dia.jornada_rhid is 'Jornada contratual do RHiD no formato de escala_dias.marcacoes: [{"entrada":"12:00","saida":"15:00"}, …]. Prevista para quem não tem escala.';
 comment on column dp_rh.ponto_dia.falta_dia is 'faltaDiaInteiro do RHiD.';
@@ -129,20 +129,19 @@ end $$;
 revoke all on function public.ponto_dia_sync(jsonb) from public, anon, authenticated;
 grant execute on function public.ponto_dia_sync(jsonb) to service_role;
 
--- Quem a sincronização consulta no RHiD: ativos/bloqueados e quem saiu dentro do período pedido.
--- Admissão e demissão vão junto: a sincronização pula os blocos de 31 dias fora do período em que a
--- pessoa estava na empresa (histórico desde 01/01/2026: 3.300 → 1.672 chamadas).
+-- Quem a sincronização consulta no RHiD: só os ativos (decisão do dono, 20/11/2026: começa hoje, não
+-- puxa inativos nem histórico; o que já existe no banco não é apagado).
 create or replace function public.ponto_dia_pessoas(p_ini date)
-returns table (matricula text, id_pessoa text, data_admissao date, data_demissao date)
+returns table (matricula text, id_pessoa text)
 language sql
 stable
 security definer
 set search_path to 'tata_plus', 'public'
 as $$
-  select p.matricula, p.id_pessoa, p.data_admissao, p.data_demissao
+  select p.matricula, p.id_pessoa
     from tata_plus.profiles p
    where p.id_pessoa is not null and p.id_pessoa <> ''
-     and (p.status in ('Ativo', 'Bloqueado') or p.data_demissao >= p_ini);
+     and p.status = 'Ativo';
 $$;
 
 revoke all on function public.ponto_dia_pessoas(date) from public, anon, authenticated;
