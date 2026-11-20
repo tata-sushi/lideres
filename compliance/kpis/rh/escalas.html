@@ -631,6 +631,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div class="tabs">
   <button data-aba-id="governanca-app-escala::sobre" class="tab-btn active" id="tab-sobre" onclick="setTab('sobre')">Sobre</button>
   <button data-aba-id="governanca-app-escala::escala" class="tab-btn" id="tab-escala" onclick="setTab('programacao')">Programação</button>
+  <button data-aba-id="governanca-app-escala::ponto" class="tab-btn" id="tab-ponto" onclick="setTab('ponto')">Ponto</button>
   <button data-aba-id="governanca-app-escala::dashboard" class="tab-btn" id="tab-kpis" onclick="setTab('kpis')">KPIs</button>
 </div>
 
@@ -660,6 +661,31 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <main class="esc-grid-wrap" id="esc-content" style="display:none"></main>
 <div class="esc-grid-wrap" id="esc-kpis" style="display:none;"></div>
+<div id="esc-ponto" style="display:none;"></div>
+<style id="ponto-css">
+#esc-ponto{ padding:12px 16px 80px; overflow-x:auto; }
+.pt-grid{ display:flex; flex-direction:column; gap:6px; min-width:760px; }
+.pt-row{ display:grid; grid-template-columns:140px repeat(7,1fr); gap:6px; align-items:stretch; }
+.pt-colh{ font-family:'DM Mono',monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); text-align:center; padding:6px 4px; background:var(--bg); border-radius:6px; }
+.pt-colh span{ display:block; font-size:9px; color:var(--t3,#999); margin-top:2px; }
+.pt-colh.pt-hoje{ background:var(--carbon); color:var(--citric); }
+.pt-name{ display:flex; flex-direction:column; justify-content:center; padding:6px 8px; background:#fff; border:1px solid var(--border); border-radius:6px; }
+.pt-name b{ font-size:12px; color:var(--t1,#111); line-height:1.2; }
+.pt-name span{ font-size:10px; color:var(--t2,#555); }
+.pt-head .pt-name{ background:var(--bg); border:none; }
+.pt-cell{ background:#fff; border:1px solid var(--border); border-radius:6px; padding:6px 4px; text-align:center; font-family:'DM Mono',monospace; font-size:11px; color:var(--t1,#111); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; min-height:54px; }
+.pt-marks{ line-height:1.35; }
+.pt-tag{ font-family:'DM Sans',sans-serif; font-size:11px; font-weight:600; color:var(--t3,#999); }
+.pt-tag-mini{ font-size:9px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:1px; }
+.pt-foot{ font-size:9px; color:var(--t3,#999); margin-top:2px; }
+.pt-empty{ color:var(--t3,#999); }
+.pt-hoje{ outline:2px solid var(--carbon); outline-offset:-2px; }
+.pt-folga{ background:#F1F1F3; color:var(--t3,#999); }
+.pt-feriado{ background:#EEF3FF; }
+.pt-feriado .pt-tag{ color:#2B4B8C; }
+.pt-falta{ background:#FDECEA; }
+.pt-falta .pt-tag, .pt-falta .pt-tag-mini{ color:#8B1A1A; }
+</style>
 <!-- INFO DO GRÁFICO (botão "i") -->
 <div id="info-overlay">
   <div class="info-modal">
@@ -2260,16 +2286,16 @@ function carregarUnidades(){
 function onUnidadeChange(){
   ST.unidade = document.getElementById('esc-unidade').value;
   ST.depto = 'Todos';
-  carregarSemana();
+  if (ST.tab === 'ponto') carregarPonto(); else carregarSemana();
 }
 function onDeptoChange(){
   ST.depto = document.getElementById('esc-depto').value || 'Todos';
-  _rerenderViews();
+  if (ST.tab === 'ponto') renderPonto(); else _rerenderViews();
 }
 function limparFiltros(){
   ST.depto = 'Todos';
   var sel = document.getElementById('esc-depto'); if(sel) sel.value = 'Todos';
-  _rerenderViews();
+  if (ST.tab === 'ponto') renderPonto(); else _rerenderViews();
 }
 function setCount(n){ var el = document.getElementById('esc-count'); if(el) el.textContent = n; }
 function popularDeptos(){
@@ -2286,7 +2312,7 @@ function _deptoOk(p){ return ST.depto==='Todos' || !ST.depto || String(p.departa
 // os KPIs também precisam refiltrar, não só a grade.
 function _rerenderViews(){ renderGrade(); if (ST.tab === 'kpis') renderKpis(); }
 
-function navSemana(delta){ ST.inicio = addDias(ST.inicio, delta*7); carregarSemana(); }
+function navSemana(delta){ ST.inicio = addDias(ST.inicio, delta*7); if (ST.tab === 'ponto') carregarPonto(); else carregarSemana(); }
 
 /* Líder confirma/revisa a semana → +10 pts por membro do time com escala (idempotente). */
 function confirmarSemana(){
@@ -2305,14 +2331,19 @@ function setTab(tab){
   ST.tab = tab;
   var isSobre = tab === 'sobre';
   var isK = tab === 'kpis';
+  var isPonto = tab === 'ponto';
+  var isProg = tab === 'programacao';
   var bs=document.getElementById('tab-sobre'); if(bs) bs.classList.toggle('active', isSobre);
-  document.getElementById('tab-escala').classList.toggle('active', tab === 'programacao');
+  document.getElementById('tab-escala').classList.toggle('active', isProg);
+  var bp=document.getElementById('tab-ponto'); if(bp) bp.classList.toggle('active', isPonto);
   document.getElementById('tab-kpis').classList.toggle('active', isK);
   var vs=document.getElementById('view-sobre'); if(vs) vs.style.display = isSobre ? '' : 'none';
   var tb=document.querySelector('.esc-toolbar'); if(tb) tb.style.display = isSobre ? 'none' : '';
-  document.getElementById('esc-content').style.display = (!isSobre && !isK) ? '' : 'none';
-  document.getElementById('esc-kpis').style.display = (!isSobre && isK) ? '' : 'none';
+  document.getElementById('esc-content').style.display = isProg ? '' : 'none';
+  document.getElementById('esc-kpis').style.display = isK ? '' : 'none';
+  var pv=document.getElementById('esc-ponto'); if(pv) pv.style.display = isPonto ? '' : 'none';
   if (isK) renderKpis();
+  if (isPonto) carregarPonto();
 }
 /* ══════════════════════════════════════════════════════════════════════════
    KPIs — Grade Visual, Mapa de Calor e Resumo Semanal (adaptados do app de
@@ -2586,6 +2617,75 @@ function imprimirEscala(){
 function atualizarLabelSemana(){
   var fim = addDias(ST.inicio, 6);
   document.getElementById('esc-week-range').textContent = ddmm(ST.inicio)+' – '+ddmm(fim);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PONTO — marcações do RHiD (dp_rh.ponto_dia via escala_ponto_semana).
+   Mesmo recorte de líder/unidade/semana da Programação; só leitura.
+   ══════════════════════════════════════════════════════════════════════════ */
+var _PT_DOW = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+function _ptFmtMin(m){ if(m==null) return '—'; var neg=m<0; m=Math.abs(m|0); return (neg?'-':'')+Math.floor(m/60)+':'+String(m%60).padStart(2,'0'); }
+function _ptDiaDe(p, iso){
+  var ds = p && p.dias; if(!Array.isArray(ds)) return null;
+  for(var i=0;i<ds.length;i++){ if(String(ds[i].data)===iso) return ds[i]; }
+  return null;
+}
+function carregarPonto(){
+  atualizarLabelSemana();
+  var box = document.getElementById('esc-ponto');
+  if (ST.admin && !ST.unidade){ if(box) box.innerHTML = '<div class="esc-empty-state"><p>Selecione uma unidade.</p></div>'; setCount(0); return; }
+  showLoading();
+  TP().rpc('escala_ponto_semana', { p_inicio: isoLocal(ST.inicio), p_unidade: ST.unidade }).then(function(r){
+    hideLoading();
+    if (r.error){ erroRPC(r.error); if(box) box.innerHTML = '<div class="esc-empty-state"><p>Não foi possível carregar o ponto.</p></div>'; return; }
+    ST.ponto = Array.isArray(r.data) ? r.data : [];
+    _ptPopularDeptos();
+    renderPonto();
+  }, function(e){ hideLoading(); erroRPC(e); if(box) box.innerHTML = '<div class="esc-empty-state"><p>Não foi possível carregar o ponto.</p></div>'; });
+}
+function _ptPopularDeptos(){
+  var sel = document.getElementById('esc-depto'); if(!sel) return;
+  var vistos={}, lista=[];
+  (ST.ponto||[]).forEach(function(p){ var d=String(p.departamento||'').trim(); if(d && !vistos[d]){ vistos[d]=1; lista.push(d); } });
+  lista.sort();
+  if (lista.indexOf(ST.depto)===-1) ST.depto='Todos';
+  sel.innerHTML = '<option value="Todos">Todos</option>' + lista.map(function(d){ return '<option value="'+esc(d)+'"'+(d===ST.depto?' selected':'')+'>'+esc(d)+'</option>'; }).join('');
+  sel.value = ST.depto;
+}
+function _ptCell(dia, isHoje){
+  if(!dia){ return '<div class="pt-cell pt-empty'+(isHoje?' pt-hoje':'')+'">—</div>'; }
+  var cls='pt-cell', tag='';
+  var ms = Array.isArray(dia.marcacoes)? dia.marcacoes : [];
+  if(isHoje) cls+=' pt-hoje';
+  if(dia.folga){ cls+=' pt-folga'; tag='Folga'; }
+  else if(dia.falta){ cls+=' pt-falta'; tag='Falta'; }
+  else if(dia.feriado && !ms.length){ cls+=' pt-feriado'; tag='Feriado'; }
+  var marks = ms.length ? '<div class="pt-marks">'+ms.map(function(t){ return esc(t); }).join('<br>')+'</div>' : '';
+  var body;
+  if(marks && tag){ body = '<div class="pt-tag pt-tag-mini">'+tag+'</div>'+marks; }
+  else if(marks){ body = marks; }
+  else { body = '<div class="pt-tag">'+(tag||'—')+'</div>'; }
+  var foot='';
+  if(dia.previsto_min!=null || dia.trabalhado_min!=null){
+    foot = '<div class="pt-foot">'+_ptFmtMin(dia.trabalhado_min)+' / '+_ptFmtMin(dia.previsto_min)+'</div>';
+  }
+  var alerta = dia.alerta ? ' title="'+esc(dia.alerta)+'"' : '';
+  return '<div class="'+cls+'"'+alerta+'>'+body+foot+'</div>';
+}
+function renderPonto(){
+  var box = document.getElementById('esc-ponto'); if(!box) return;
+  var lista = (ST.ponto||[]).filter(_deptoOk);
+  setCount(lista.length);
+  if(!lista.length){ box.innerHTML = '<div class="esc-empty-state"><p>Nenhum colaborador no recorte atual.</p></div>'; return; }
+  var hojeIso = isoLocal(new Date());
+  var dias=[]; for(var i=0;i<7;i++){ var d=addDias(ST.inicio,i); dias.push({iso:isoLocal(d), dow:_PT_DOW[d.getDay()], dd:ddmm(d), hoje:isoLocal(d)===hojeIso}); }
+  var head = '<div class="pt-row pt-head"><div class="pt-name">Colaborador</div>'+
+    dias.map(function(d){ return '<div class="pt-colh'+(d.hoje?' pt-hoje':'')+'">'+d.dow+'<span>'+d.dd+'</span></div>'; }).join('')+'</div>';
+  var rows = lista.map(function(p){
+    var cells = dias.map(function(d){ return _ptCell(_ptDiaDe(p, d.iso), d.hoje); }).join('');
+    return '<div class="pt-row"><div class="pt-name"><b>'+esc(primeiroNome(p.nome))+'</b><span>'+esc(p.cargo||'')+'</span></div>'+cells+'</div>';
+  }).join('');
+  box.innerHTML = '<div class="pt-grid">'+head+rows+'</div>';
 }
 
 function carregarSemana(){
