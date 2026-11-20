@@ -10,7 +10,8 @@
 // Upsert via public.ponto_dia_sync (atualiza se o RHiD mudou algo depois).
 //
 // O RHiD não devolve todas as pessoas numa chamada (apuracao_ponto exige idPerson):
-// ~160 chamadas por rodada, 6 em paralelo. Período longo é quebrado em blocos de 31 dias.
+// ~150 chamadas por rodada (1 por pessoa a cada bloco de 31 dias + 1 login), 6 em paralelo. Período longo
+// é quebrado em blocos de 31 dias; blocos antes da admissão ou depois da demissão são pulados.
 //
 // Chamada: POST …/rhid-ponto-sync?k=<portal_secret>   (mesmo segredo do agente-portal)
 // Body (opcional): { dataIni, dataFinal, matriculas: ["24740", …] }
@@ -23,6 +24,7 @@ const RHID = "https://rhid.com.br/v2/api.svc";
 const CONCURRENCY = 6;
 const BLOCO_DIAS = 31;
 const MAX_COLUNAS = 6;
+let chamadas = 0; // chamadas ao RHiD nesta rodada (login + apuração)
 
 function paraMinutos(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
@@ -74,6 +76,7 @@ function blocos(ini: string, fim: string): [string, string][] {
 async function login(): Promise<string | null> {
   const email = Deno.env.get("RHID_EMAIL"), password = Deno.env.get("RHID_PASSWORD");
   if (!email || !password) return null;
+  chamadas++;
   const r = await fetch(`${RHID}/login`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, domain: "" }),
@@ -85,6 +88,7 @@ async function login(): Promise<string | null> {
 
 async function getApuracao(token: string, idPerson: string, ini: string, fim: string): Promise<any[] | null> {
   const url = `${RHID}/apuracao_ponto?dataIni=${ini}&dataFinal=${fim}&idPerson=${encodeURIComponent(idPerson)}`;
+  chamadas++;
   const r = await fetch(url, { headers: { Authorization: "Bearer " + token } });
   if (!r.ok) return null;
   let parsed: any = await r.json();
@@ -114,6 +118,7 @@ function linhaDoDia(matricula: string, d: any): any | null {
     jornada_rhid: jor,
     folga_rhid: !!d.folga,
     feriado: d.isHoliday === 1,
+    feriado_nome: d.isHoliday === 1 && d.holiday && d.holiday.name ? String(d.holiday.name) : null,
     falta_dia: falta,
     previsto_min: paraMinutos(d.horasUteis),
     trabalhado_min: paraMinutos(d.totalHorasTrabalhadas),
@@ -121,6 +126,7 @@ function linhaDoDia(matricula: string, d: any): any | null {
     falta_atraso_min: paraMinutos(d.horasFaltaAtraso),
     bh_dia_min: paraMinutos(d.saldoBancoCredDeb),
     bh_final_min: paraMinutos(d.saldoBancoFinalDia),
+    bh_ajustado_min: paraMinutos(d.saldoBancoAjustado),
     justificativa: just ? String(just).trim() : null,
     alerta_rhid: d.toolTipAlert ? String(d.toolTipAlert).trim() : null,
   };
@@ -138,6 +144,7 @@ async function mapPool<T, R>(items: T[], size: number, fn: (x: T) => Promise<R>)
 
 Deno.serve(async (req: Request) => {
   const t0 = Date.now();
+  chamadas = 0;
   try {
     const url = new URL(req.url);
     const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -155,7 +162,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: pessoasDb, error: pErr } = await supa.rpc("ponto_dia_pessoas", { p_ini: dataIni });
     if (pErr) return json({ ok: false, erro: "ponto_dia_pessoas: " + pErr.message }, 500);
-    let pessoas: { matricula: string; id_pessoa: string }[] = pessoasDb || [];
+    let pessoas: { matricula: string; id_pessoa: string; data_admissao: string | null; data_demissao: string | null }[] = pessoasDb || [];
     if (Array.isArray(body.matriculas) && body.matriculas.length) {
       const so = new Set(body.matriculas.map(String));
       pessoas = pessoas.filter((p) => so.has(p.matricula));
@@ -169,6 +176,9 @@ Deno.serve(async (req: Request) => {
     const porPessoa = await mapPool(pessoas, CONCURRENCY, async (p) => {
       const rows: any[] = [];
       for (const [a, b] of periodos) {
+        // fora do período na empresa: não gasta chamada
+        if (p.data_admissao && p.data_admissao > b) continue;
+        if (p.data_demissao && p.data_demissao < a) continue;
         const dias = await getApuracao(token, p.id_pessoa, a, b);
         if (!dias) { falhas++; continue; }
         for (const d of dias) { const r = linhaDoDia(p.matricula, d); if (r) rows.push(r); }
@@ -185,7 +195,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const mais6 = rows.filter((r) => r.qtd_marcacoes > MAX_COLUNAS).length;
-    return json({ ok: true, periodo: { dataIni, dataFinal }, pessoas: pessoas.length, falhas_rhid: falhas,
+    return json({ ok: true, periodo: { dataIni, dataFinal }, pessoas: pessoas.length, chamadas_rhid: chamadas, falhas_rhid: falhas,
       linhas: rows.length, gravadas, dias_com_mais_de_6: mais6, ms: Date.now() - t0 });
   } catch (e) {
     return json({ ok: false, erro: String(e) }, 500);
