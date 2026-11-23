@@ -230,8 +230,12 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
   era 20 até 23/11, quando a tela bloqueou e o resumo foi para o grupo no meio da reunião) é encerrada e ganha ata
 ```
 
-- **Uso**: abrir a página, aparelho no meio da mesa, carregando e com a tela ligada; "Começar reunião" (só um apito curto
-  avisa que está gravando — desde 11/11 o Sam não fala sozinho); perguntar com "Sam, …" ou o botão; "Encerrar e gerar ata".
+- **Uso**: abrir a página, aparelho no meio da mesa, carregando; "Começar reunião" (só um apito curto avisa que está
+  gravando — desde 11/11 o Sam não fala sozinho); perguntar com "Sam, …" ou o botão; "Encerrar e gerar ata".
+- **Tela ligada** (23/11): com a tela apagada o celular congela a página e o Sam para de ouvir. A página pede ao celular para
+  não apagar a tela (Wake Lock; o app Tatá Plus libera `screen-wake-lock` no iframe desde 23/11) e, se não der, toca um
+  vídeo mudo de 2 s em loop. Indicador: "🔒 A tela vai ficar ligada" (verde) ou aviso vermelho. Ao voltar para a página,
+  pede de novo; ao encerrar, solta. Bloquear na mão ou trocar de app ainda para a gravação.
 - **Acesso**: admins veem a página; os demais, liberados em Auditoria de páginas. Só quem abriu a reunião mexe nela.
 - **Configuração** (`dp_rh.agente_config`): `reuniao_modelo_transcricao`, `reuniao_modelo_voz`, `reuniao_voz` (outras vozes
   pt-BR: Pedro, Caio, Luana, Harper — `pt-BR-<Nome>:MAI-Voice-2.1-Flash`), `reuniao_grupo_resumo` (chat do grupo).
