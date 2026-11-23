@@ -226,7 +226,8 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
                → cada pendência vira card em "Pendentes" no quadro "Binho, Cinthia e Victor"
                  (etiqueta do quadro + responsável quando ficou claro na reunião + prazo, se dito)
       fala_final → o Sam fala o fechamento na sala
-  pg_cron agente-reuniao-varrer (10 min): reunião sem fala há 20 min é encerrada e ganha ata
+  pg_cron agente-reuniao-varrer (10 min): reunião sem fala há `agente_config.reuniao_varredura_min` minutos (padrão 120;
+  era 20 até 23/11, quando a tela bloqueou e o resumo foi para o grupo no meio da reunião) é encerrada e ganha ata
 ```
 
 - **Uso**: abrir a página, aparelho no meio da mesa, carregando e com a tela ligada; "Começar reunião" (só um apito curto

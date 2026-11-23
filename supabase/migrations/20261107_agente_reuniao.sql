@@ -638,3 +638,27 @@ begin
     execute format('grant execute on function %s to service_role', f);
   end loop;
 end $$;
+
+-- ── 9. varredura mais paciente (23/11) ───────────────────────────────────────
+-- Em 23/11 o celular parou de mandar áudio às 16:49 (tela bloqueada) com a reunião ainda acontecendo; 20 min
+-- depois a varredura encerrou e mandou o resumo no grupo. Agora a reunião só é dada como abandonada depois de
+-- agente_config.reuniao_varredura_min minutos sem fala nova (padrão 120; a edge ainda passa 20, vale o maior).
+create or replace function tata_plus.agente_reunioes_paradas(p_minutos integer default 20)
+returns uuid[]
+language sql stable security definer
+set search_path = dp_rh, pg_catalog
+as $fn$
+  with lim as (
+    select greatest(coalesce(p_minutos, 0),
+                    coalesce((select nullif(valor, '')::int from dp_rh.agente_config where chave = 'reuniao_varredura_min'), 120)) m
+  )
+  select coalesce(array_agg(r.id), '{}')
+  from dp_rh.agente_reunioes r, lim
+  where r.status = 'gravando'
+    and greatest(r.inicio, coalesce((select max(f.criado_em) from dp_rh.agente_reuniao_falas f where f.reuniao_id = r.id), r.inicio))
+        < now() - make_interval(mins => lim.m);
+$fn$;
+revoke execute on function tata_plus.agente_reunioes_paradas(integer) from public, anon, authenticated;
+grant execute on function tata_plus.agente_reunioes_paradas(integer) to service_role;
+
+insert into dp_rh.agente_config (chave, valor) values ('reuniao_varredura_min', '120') on conflict (chave) do nothing;
