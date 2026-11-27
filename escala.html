@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Regras da escala</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root { --bg:#F4F4F4; --surface:#FFFFFF; --carbon:#35383F; --citric:#CFFF00; --text:#111111; --mid:#555555; --border:#E2E2E2; }
+* { box-sizing:border-box; }
+html, body { margin:0; }
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+header { position:sticky; top:0; z-index:10; height:52px; background:var(--carbon); color:#fff;
+  display:flex; align-items:center; gap:8px; padding:0 16px; }
+header h1 { flex:1; min-width:0; margin:0; font-size:14px; font-weight:600;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.btn { height:34px; min-width:34px; padding:0 10px; border:0; border-radius:8px; background:var(--citric); color:var(--carbon);
+  font-family:'DM Mono',monospace; font-size:10px; font-weight:400; text-transform:uppercase; letter-spacing:.5px;
+  display:inline-flex; align-items:center; justify-content:center; text-decoration:none; cursor:pointer; }
+.btn:hover { opacity:.85; }
+.btn:disabled { opacity:.4; cursor:default; }
+#zoom-val { min-width:40px; text-align:center; font-family:'DM Mono',monospace; font-size:10px; color:#fff; }
+main { overflow-x:auto; padding:16px; }
+#pages { margin:0 auto; }
+#pages canvas { display:block; width:100%; height:auto; background:#fff; border-radius:8px;
+  box-shadow:0 1px 4px rgba(0,0,0,.07); margin:0 0 12px; }
+#msg { padding:32px 0; text-align:center; color:var(--mid); font-size:14px; }
+#msg a { color:var(--carbon); }
+@media (min-width:768px) { .btn { height:40px; min-width:40px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Regras da escala</h1>
+  <button class="btn" id="zoom-out" type="button" aria-label="Diminuir">−</button>
+  <span id="zoom-val">100%</span>
+  <button class="btn" id="zoom-in" type="button" aria-label="Aumentar">+</button>
+  <a class="btn" href="escala.pdf" download>Baixar</a>
+</header>
+<main>
+  <div id="msg">Carregando…</div>
+  <div id="pages"></div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+(function () {
+  var PDF_URL = 'escala.pdf';
+  var MAX_BASE = 1400;                 // largura máxima (px) no zoom 100%
+  var ZOOMS = [1, 1.5, 2, 3, 4];
+  var zi = 0;
+  var pagesEl = document.getElementById('pages');
+  var msgEl = document.getElementById('msg');
+  var mainEl = document.querySelector('main');
+  var outBtn = document.getElementById('zoom-out');
+  var inBtn = document.getElementById('zoom-in');
+  var valEl = document.getElementById('zoom-val');
+
+  function baseWidth() {
+    var cs = getComputedStyle(mainEl);
+    var w = mainEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    return Math.min(w, MAX_BASE);
+  }
+  function applyZoom() {
+    var z = ZOOMS[zi];
+    pagesEl.style.width = Math.round(baseWidth() * z) + 'px';
+    valEl.textContent = Math.round(z * 100) + '%';
+    outBtn.disabled = zi === 0;
+    inBtn.disabled = zi === ZOOMS.length - 1;
+  }
+  outBtn.addEventListener('click', function () { if (zi > 0) { zi--; applyZoom(); } });
+  inBtn.addEventListener('click', function () { if (zi < ZOOMS.length - 1) { zi++; applyZoom(); } });
+  window.addEventListener('resize', applyZoom);
+  applyZoom();
+
+  function fail() {
+    msgEl.innerHTML = 'Não foi possível abrir a escala. <a href="' + PDF_URL + '">Abrir o PDF</a>';
+  }
+  if (!window.pdfjsLib) { fail(); return; }
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  // Acha a área com conteúdo (fora da margem branca) numa renderização pequena.
+  function contentBox(page) {
+    var vp0 = page.getViewport({ scale: 1 });
+    var vp = page.getViewport({ scale: 700 / vp0.width });
+    var c = document.createElement('canvas');
+    c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+    var ctx = c.getContext('2d', { willReadFrequently: true });
+    return page.render({ canvasContext: ctx, viewport: vp }).promise.then(function () {
+      var d = ctx.getImageData(0, 0, c.width, c.height).data;
+      var x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+      for (var y = 0; y < c.height; y++) {
+        for (var x = 0; x < c.width; x++) {
+          var i = (y * c.width + x) * 4;
+          if (d[i + 3] > 0 && (d[i] < 245 || d[i + 1] < 245 || d[i + 2] < 245)) {
+            if (x < x0) x0 = x; if (x > x1) x1 = x;
+            if (y < y0) y0 = y; if (y > y1) y1 = y;
+          }
+        }
+      }
+      if (x1 < 0) return { x: 0, y: 0, w: 1, h: 1 };
+      var pad = 6;
+      x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad);
+      x1 = Math.min(c.width, x1 + pad); y1 = Math.min(c.height, y1 + pad);
+      return { x: x0 / c.width, y: y0 / c.height, w: (x1 - x0) / c.width, h: (y1 - y0) / c.height };
+    });
+  }
+
+  // Renderiza só a área com conteúdo, em alta resolução, para o zoom ficar nítido.
+  function renderPage(pdf, n) {
+    return pdf.getPage(n).then(function (page) {
+      return contentBox(page).then(function (box) {
+        var vp0 = page.getViewport({ scale: 1 });
+        var target = Math.min(3000, Math.max(1600, baseWidth() * (window.devicePixelRatio || 1) * 2.5));
+        var scale = target / (vp0.width * box.w);
+        var vp = page.getViewport({ scale: scale });
+        var cx = Math.floor(box.x * vp.width), cy = Math.floor(box.y * vp.height);
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(box.w * vp.width);
+        canvas.height = Math.ceil(box.h * vp.height);
+        canvas.setAttribute('role', 'img');
+        canvas.setAttribute('aria-label', 'Página ' + n);
+        pagesEl.appendChild(canvas);
+        return page.render({
+          canvasContext: canvas.getContext('2d'),
+          viewport: vp,
+          transform: [1, 0, 0, 1, -cx, -cy]
+        }).promise;
+      });
+    });
+  }
+
+  pdfjsLib.getDocument(PDF_URL).promise.then(function (pdf) {
+    var chain = Promise.resolve();
+    for (var n = 1; n <= pdf.numPages; n++) {
+      (function (n) {
+        chain = chain.then(function () { return renderPage(pdf, n); })
+          .then(function () { if (n === 1) msgEl.style.display = 'none'; });
+      })(n);
+    }
+    return chain;
+  }).catch(fail);
+})();
+</script>
+</body>
+</html>
