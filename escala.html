@@ -3,16 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Regras da escala</title>
+<title>Escala</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
 :root { --bg:#F4F4F4; --surface:#FFFFFF; --carbon:#35383F; --citric:#CFFF00; --text:#111111; --mid:#555555; --border:#E2E2E2; }
 * { box-sizing:border-box; }
-html, body { margin:0; }
-body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
-header { position:sticky; top:0; z-index:10; height:52px; background:var(--carbon); color:#fff;
+html, body { margin:0; height:100%; }
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text);
+  display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; }
+header { flex:0 0 52px; background:var(--carbon); color:#fff;
   display:flex; align-items:center; gap:8px; padding:0 16px; }
 header h1 { flex:1; min-width:0; margin:0; font-size:14px; font-weight:600;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -22,18 +23,20 @@ header h1 { flex:1; min-width:0; margin:0; font-size:14px; font-weight:600;
 .btn:hover { opacity:.85; }
 .btn:disabled { opacity:.4; cursor:default; }
 #zoom-val { min-width:40px; text-align:center; font-family:'DM Mono',monospace; font-size:10px; color:#fff; }
-main { overflow-x:auto; padding:16px; }
-#pages { margin:0 auto; }
-#pages canvas { display:block; width:100%; height:auto; background:#fff; border-radius:8px;
+main { flex:1; min-height:0; overflow:auto; padding:16px; -webkit-overflow-scrolling:touch; }
+#pages { margin:0 auto; touch-action:manipulation; }
+.pg { position:relative; width:100%; background:#fff; border-radius:8px; overflow:hidden;
   box-shadow:0 1px 4px rgba(0,0,0,.07); margin:0 0 12px; }
+.pg canvas { position:absolute; display:block; }
 #msg { padding:32px 0; text-align:center; color:var(--mid); font-size:14px; }
 #msg a { color:var(--carbon); }
+#hint { text-align:center; color:var(--mid); font-size:12px; margin:4px 0 0; }
 @media (min-width:768px) { .btn { height:40px; min-width:40px; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>Regras da escala</h1>
+  <h1>Escala</h1>
   <button class="btn" id="zoom-out" type="button" aria-label="Diminuir">−</button>
   <span id="zoom-val">100%</span>
   <button class="btn" id="zoom-in" type="button" aria-label="Aumentar">+</button>
@@ -42,39 +45,102 @@ main { overflow-x:auto; padding:16px; }
 <main>
   <div id="msg">Carregando…</div>
   <div id="pages"></div>
+  <p id="hint" hidden>Toque duas vezes para aproximar ou afastar</p>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
 (function () {
   var PDF_URL = 'escala.pdf';
-  var MAX_BASE = 1400;                 // largura máxima (px) no zoom 100%
-  var ZOOMS = [1, 1.5, 2, 3, 4];
-  var zi = 0;
+  var MAX_BASE = 1400;          // largura máxima (px) no zoom 100%
+  var ZOOMS = [1, 1.5, 2, 3, 4, 6, 8, 10, 12];
+  var BUDGET = 24e6;            // total de pixels de canvas (memória do celular)
+  var TILE = 4000;              // lado máximo de cada canvas (limite do iOS)
+  var READ_PX = 10;             // tamanho de letra (px) do zoom "de leitura"
+
+  var mainEl = document.querySelector('main');
   var pagesEl = document.getElementById('pages');
   var msgEl = document.getElementById('msg');
-  var mainEl = document.querySelector('main');
+  var hintEl = document.getElementById('hint');
   var outBtn = document.getElementById('zoom-out');
   var inBtn = document.getElementById('zoom-in');
   var valEl = document.getElementById('zoom-val');
 
+  var recs = [];                // { page, box, w0, h0, wrap, task }
+  var zi = 0, maxZi = ZOOMS.length - 1, readZi = 0, fontPt = 0;
+  var gen = 0, renderTimer = null, lastBase = 0;
+
   function baseWidth() {
     var cs = getComputedStyle(mainEl);
     var w = mainEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-    return Math.min(w, MAX_BASE);
+    return Math.max(100, Math.min(w, MAX_BASE));
   }
-  function applyZoom() {
-    var z = ZOOMS[zi];
-    pagesEl.style.width = Math.round(baseWidth() * z) + 'px';
-    valEl.textContent = Math.round(z * 100) + '%';
+  function cssWidth() { return Math.round(baseWidth() * ZOOMS[zi]); }
+
+  // Área (px de tela) de todas as páginas numa largura W.
+  function cssArea(W) {
+    var a = 0;
+    recs.forEach(function (r) { a += W * W * r.h0 / r.w0; });
+    return a;
+  }
+  // Zoom máximo: o que ainda cabe no orçamento com 1 pixel por px de tela.
+  function computeLimits() {
+    var base = baseWidth();
+    maxZi = 0;
+    for (var i = 0; i < ZOOMS.length; i++) if (cssArea(base * ZOOMS[i]) <= BUDGET) maxZi = i;
+    readZi = maxZi;
+    if (fontPt && recs.length) {
+      var need = READ_PX * recs[0].w0 / (fontPt * base);
+      for (var j = 0; j <= maxZi; j++) if (ZOOMS[j] >= need) { readZi = j; break; }
+    }
+    if (zi > maxZi) zi = maxZi;
+  }
+
+  function layout() {
+    pagesEl.style.width = cssWidth() + 'px';
+    valEl.textContent = Math.round(ZOOMS[zi] * 100) + '%';
     outBtn.disabled = zi === 0;
-    inBtn.disabled = zi === ZOOMS.length - 1;
+    inBtn.disabled = zi >= maxZi;
   }
-  outBtn.addEventListener('click', function () { if (zi > 0) { zi--; applyZoom(); } });
-  inBtn.addEventListener('click', function () { if (zi < ZOOMS.length - 1) { zi++; applyZoom(); } });
-  window.addEventListener('resize', applyZoom);
-  applyZoom();
+
+  // Muda o zoom mantendo fixo o ponto (ax, ay) da área rolável (padrão: centro).
+  function setZoom(nz, ax, ay) {
+    nz = Math.max(0, Math.min(maxZi, nz));
+    if (nz === zi) return;
+    var r = mainEl.getBoundingClientRect();
+    if (ax == null) { ax = r.left + mainEl.clientWidth / 2; ay = r.top + mainEl.clientHeight / 2; }
+    var p = pagesEl.getBoundingClientRect();
+    var fx = (ax - p.left) / p.width, fy = (ay - p.top) / p.height;
+    zi = nz;
+    layout();
+    var p2 = pagesEl.getBoundingClientRect();
+    mainEl.scrollLeft += (p2.left + fx * p2.width) - ax;
+    mainEl.scrollTop += (p2.top + fy * p2.height) - ay;
+    scheduleRender();
+  }
+  outBtn.addEventListener('click', function () { setZoom(zi - 1); });
+  inBtn.addEventListener('click', function () { setZoom(zi + 1); });
+
+  // Toque duplo (ou clique duplo): alterna entre 100% e o zoom de leitura.
+  var lastTap = 0, lx = 0, ly = 0;
+  pagesEl.addEventListener('pointerup', function (e) {
+    if (e.button > 0) return;
+    var now = Date.now();
+    if (now - lastTap < 350 && Math.abs(e.clientX - lx) < 30 && Math.abs(e.clientY - ly) < 30) {
+      lastTap = 0;
+      setZoom(zi === 0 ? Math.max(readZi, 1) : 0, e.clientX, e.clientY);
+    } else { lastTap = now; lx = e.clientX; ly = e.clientY; }
+  });
+
+  window.addEventListener('resize', function () {
+    if (!recs.length) return;
+    var b = baseWidth();
+    if (b === lastBase) return;
+    lastBase = b;
+    computeLimits(); layout(); scheduleRender();
+  });
 
   function fail() {
+    msgEl.style.display = '';
     msgEl.innerHTML = 'Não foi possível abrir a escala. <a href="' + PDF_URL + '">Abrir o PDF</a>';
   }
   if (!window.pdfjsLib) { fail(); return; }
@@ -84,7 +150,7 @@ main { overflow-x:auto; padding:16px; }
   // Acha a área com conteúdo (fora da margem branca) numa renderização pequena.
   function contentBox(page) {
     var vp0 = page.getViewport({ scale: 1 });
-    var vp = page.getViewport({ scale: 700 / vp0.width });
+    var vp = page.getViewport({ scale: 800 / vp0.width });
     var c = document.createElement('canvas');
     c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
     var ctx = c.getContext('2d', { willReadFrequently: true });
@@ -100,47 +166,112 @@ main { overflow-x:auto; padding:16px; }
           }
         }
       }
+      c.width = c.height = 0;
       if (x1 < 0) return { x: 0, y: 0, w: 1, h: 1 };
       var pad = 6;
       x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad);
-      x1 = Math.min(c.width, x1 + pad); y1 = Math.min(c.height, y1 + pad);
-      return { x: x0 / c.width, y: y0 / c.height, w: (x1 - x0) / c.width, h: (y1 - y0) / c.height };
+      x1 = Math.min(vp.width, x1 + pad); y1 = Math.min(vp.height, y1 + pad);
+      return { x: x0 / vp.width, y: y0 / vp.height, w: (x1 - x0) / vp.width, h: (y1 - y0) / vp.height };
     });
   }
 
-  // Renderiza só a área com conteúdo, em alta resolução, para o zoom ficar nítido.
-  function renderPage(pdf, n) {
-    return pdf.getPage(n).then(function (page) {
-      return contentBox(page).then(function (box) {
-        var vp0 = page.getViewport({ scale: 1 });
-        var target = Math.min(3000, Math.max(1600, baseWidth() * (window.devicePixelRatio || 1) * 2.5));
-        var scale = target / (vp0.width * box.w);
-        var vp = page.getViewport({ scale: scale });
-        var cx = Math.floor(box.x * vp.width), cy = Math.floor(box.y * vp.height);
-        var canvas = document.createElement('canvas');
-        canvas.width = Math.ceil(box.w * vp.width);
-        canvas.height = Math.ceil(box.h * vp.height);
-        canvas.setAttribute('role', 'img');
-        canvas.setAttribute('aria-label', 'Página ' + n);
-        pagesEl.appendChild(canvas);
-        return page.render({
-          canvasContext: canvas.getContext('2d'),
-          viewport: vp,
-          transform: [1, 0, 0, 1, -cx, -cy]
-        }).promise;
+  // Tamanho típico da letra (pt) na 1ª página, para achar o zoom de leitura.
+  function medianFont(page) {
+    return page.getTextContent().then(function (tc) {
+      var hs = tc.items.filter(function (i) { return i.str && i.str.trim(); })
+        .map(function (i) { return Math.hypot(i.transform[2], i.transform[3]); })
+        .sort(function (a, b) { return a - b; });
+      return hs.length ? hs[hs.length >> 1] : 0;
+    }).catch(function () { return 0; });
+  }
+
+  // Desenha a página na largura W (px de tela), em blocos, na resolução que cabe na memória.
+  function renderPage(rec, W, g) {
+    var H = W * rec.h0 / rec.w0;
+    var dpr = window.devicePixelRatio || 1;
+    var d = Math.min(dpr, Math.sqrt(BUDGET / cssArea(W)));
+    var PW = Math.max(1, Math.round(W * d)), PH = Math.max(1, Math.round(H * d));
+    var vp = rec.page.getViewport({ scale: PW / rec.w0 });
+    var ox = rec.box.x * vp.width, oy = rec.box.y * vp.height;
+    var cols = Math.ceil(PW / TILE), rows = Math.ceil(PH / TILE);
+    var tw = Math.ceil(PW / cols), th = Math.ceil(PH / rows);
+    var tiles = [], chain = Promise.resolve();
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        (function (x, y) {
+          var w = Math.min(tw, PW - x), h = Math.min(th, PH - y);
+          var cv = document.createElement('canvas');
+          cv.width = w; cv.height = h;
+          cv.style.left = (x / PW * 100) + '%';
+          cv.style.top = (y / PH * 100) + '%';
+          cv.style.width = (w / PW * 100) + '%';
+          cv.style.height = (h / PH * 100) + '%';
+          tiles.push(cv);
+          chain = chain.then(function () {
+            if (g !== gen) throw 'old';
+            rec.task = rec.page.render({
+              canvasContext: cv.getContext('2d'),
+              viewport: vp,
+              transform: [1, 0, 0, 1, -(ox + x), -(oy + y)]
+            });
+            return rec.task.promise;
+          });
+        })(c * tw, r * th);
+      }
+    }
+    return chain.then(function () {
+      if (g !== gen) throw 'old';
+      Array.prototype.forEach.call(rec.wrap.querySelectorAll('canvas'), function (o) { o.width = o.height = 0; });
+      rec.wrap.replaceChildren.apply(rec.wrap, tiles);
+    }, function (err) {
+      tiles.forEach(function (t) { t.width = t.height = 0; });
+      throw err;
+    });
+  }
+
+  function renderAll() {
+    var g = ++gen, W = cssWidth();
+    recs.forEach(function (r) { if (r.task) r.task.cancel(); });
+    var chain = Promise.resolve();
+    recs.forEach(function (r, idx) {
+      chain = chain.then(function () { return renderPage(r, W, g); }).then(function () {
+        if (idx === 0) { msgEl.style.display = 'none'; hintEl.hidden = false; }
       });
     });
+    chain.catch(function (err) {
+      if (err === 'old' || (err && err.name === 'RenderingCancelledException')) return;
+      fail();
+    });
+  }
+  function scheduleRender() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(renderAll, 150);
   }
 
   pdfjsLib.getDocument(PDF_URL).promise.then(function (pdf) {
     var chain = Promise.resolve();
     for (var n = 1; n <= pdf.numPages; n++) {
       (function (n) {
-        chain = chain.then(function () { return renderPage(pdf, n); })
-          .then(function () { if (n === 1) msgEl.style.display = 'none'; });
+        chain = chain.then(function () { return pdf.getPage(n); }).then(function (page) {
+          return contentBox(page).then(function (box) {
+            var vp0 = page.getViewport({ scale: 1 });
+            var rec = { page: page, box: box, w0: box.w * vp0.width, h0: box.h * vp0.height };
+            rec.wrap = document.createElement('div');
+            rec.wrap.className = 'pg';
+            rec.wrap.style.aspectRatio = rec.w0 + ' / ' + rec.h0;
+            rec.wrap.setAttribute('role', 'img');
+            rec.wrap.setAttribute('aria-label', 'Página ' + n);
+            pagesEl.appendChild(rec.wrap);
+            recs.push(rec);
+            if (n === 1) return medianFont(page).then(function (f) { fontPt = f; });
+          });
+        });
       })(n);
     }
     return chain;
+  }).then(function () {
+    lastBase = baseWidth();
+    computeLimits(); layout(); renderAll();
   }).catch(fail);
 })();
 </script>
