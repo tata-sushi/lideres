@@ -226,11 +226,16 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
                → cada pendência vira card em "Pendentes" no quadro "Binho, Cinthia e Victor"
                  (etiqueta do quadro + responsável quando ficou claro na reunião + prazo, se dito)
       fala_final → o Sam fala o fechamento na sala
-  pg_cron agente-reuniao-varrer (10 min): reunião sem fala há 20 min é encerrada e ganha ata
+  pg_cron agente-reuniao-varrer (10 min): reunião sem fala há `agente_config.reuniao_varredura_min` minutos (padrão 120;
+  era 20 até 23/11, quando a tela bloqueou e o resumo foi para o grupo no meio da reunião) é encerrada e ganha ata
 ```
 
-- **Uso**: abrir a página, aparelho no meio da mesa, carregando e com a tela ligada; "Começar reunião" (só um apito curto
-  avisa que está gravando — desde 11/11 o Sam não fala sozinho); perguntar com "Sam, …" ou o botão; "Encerrar e gerar ata".
+- **Uso**: abrir a página, aparelho no meio da mesa, carregando; "Começar reunião" (só um apito curto avisa que está
+  gravando — desde 11/11 o Sam não fala sozinho); perguntar com "Sam, …" ou o botão; "Encerrar e gerar ata".
+- **Tela ligada** (23/11): com a tela apagada o celular congela a página e o Sam para de ouvir. A página pede ao celular para
+  não apagar a tela (Wake Lock; o app Tatá Plus libera `screen-wake-lock` no iframe desde 23/11) e, se não der, toca um
+  vídeo mudo de 2 s em loop. Indicador: "🔒 A tela vai ficar ligada" (verde) ou aviso vermelho. Ao voltar para a página,
+  pede de novo; ao encerrar, solta. Bloquear na mão ou trocar de app ainda para a gravação.
 - **Acesso**: admins veem a página; os demais, liberados em Auditoria de páginas. Só quem abriu a reunião mexe nela.
 - **Configuração** (`dp_rh.agente_config`): `reuniao_modelo_transcricao`, `reuniao_modelo_voz`, `reuniao_voz` (outras vozes
   pt-BR: Pedro, Caio, Luana, Harper — `pt-BR-<Nome>:MAI-Voice-2.1-Flash`), `reuniao_grupo_resumo` (chat do grupo).
@@ -253,6 +258,10 @@ Página sam.html (celular/notebook na mesa, dentro do app Plus)
   intervalos em que ele falou) e é a que a ata usa (fica em `alinhamento_transcricao.transcricao`). Se a separação
   falhar ou não houver gravação, a ata usa a transcrição ao vivo. A gravação é apagada depois da ata (as que sobrarem,
   em 3 dias, pela varredura).
+  - **Em etapas** (18/11): a edge tem ~2 s de CPU por chamada, e uma reunião de 1h25 estourou ao separar tudo de uma
+    vez. Cada chamada cadastra as vozes da rodada ou separa até 2 blocos e grava em `dp_rh.agente_reuniao_blocos`; a
+    seguinte é chamada pela própria edge (`?k=` `continuar_ata`), e a última faz a ata. Reunião parada em
+    "gerando_ata": `?k=` `{"acao":"refazer_ata","reuniao":"<id>","forcar":true}` continua de onde parou.
   - **Cadastro**: rodada de nomes — pelo comando de voz **"Sam, se apresente"** (ele conta o que faz e pede a rodada; a
     página abre a rodada logo depois da fala, por até 3 min ou até "Terminar rodada") e pelo botão "Rodada de nomes"
     (alguém novo). É uma vez só por pessoa: a fala deixa claro que depois disso ele reconhece sozinho. Os dois textos
