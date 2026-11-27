@@ -461,6 +461,10 @@ body[data-view="sobre"] #view-sobre, body[data-view="reuniao"] #view-reuniao { d
 .reu-erro { background: #FDECEA; color: #8B1A1A; border: 1px solid #F5C6C1; }
 .reu-aviso { background: #FFF8DB; color: #6B5300; border: 1px solid #F1E2A0; }
 .reu-erro[hidden], .reu-aviso[hidden] { display: none; }
+.reu-tela { font-size: 12px; line-height: 1.45; border-radius: 6px; padding: 7px 10px; }
+.reu-tela[data-st="ok"] { background: #E8F6EE; color: #15603A; border: 1px solid #BFE3CD; }
+.reu-tela[data-st="falhou"] { background: #FDECEA; color: #8B1A1A; border: 1px solid #F5C6C1; }
+.reu-tela[hidden] { display: none; }
 .reu-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .reu-status { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; padding: 6px 10px; border-radius: 100px; background: var(--bg); color: var(--carbon); display: inline-flex; align-items: center; gap: 7px; }
 .reu-status::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
@@ -609,7 +613,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   <div class="sec-div">Para dar certo</div>
   <div class="sobre-bloco">
     <ul class="sobre-lista">
-      <li>Deixe o aparelho no meio da mesa, <strong>carregando e com a tela ligada</strong>. Se a tela apagar ou você trocar de aplicativo, o Sam para de ouvir.</li>
+      <li>Deixe o aparelho no meio da mesa, <strong>carregando</strong>. A página mantém a tela ligada sozinha (aparece "🔒 A tela vai ficar ligada"); se aparecer o aviso vermelho, não deixe a tela apagar. Bloquear a tela na mão ou trocar de aplicativo faz o Sam parar de ouvir.</li>
       <li>Antes de começar, toque em <strong>"Testar o microfone"</strong> e fale uma frase: o Sam mostra o que entendeu. Se ele não entender, chegue o aparelho mais perto de quem fala.</li>
       <li>Fale normalmente; ele grava em trechos curtos, cortados nas pausas.</li>
       <li>Para a pergunta sair certa, faça uma de cada vez e espere a resposta.</li>
@@ -665,6 +669,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <span class="reu-tempo" id="reu-tempo">00:00</span>
     </div>
     <div class="reu-nivel"><i id="reu-nivel"></i></div>
+    <div class="reu-tela" id="reu-tela" hidden></div>
     <div class="reu-aviso" id="reu-aviso" hidden></div>
     <p class="reu-texto" id="reu-vozes" hidden></p>
     <div class="reu-botoes">
@@ -1232,15 +1237,63 @@ function terminarPergunta() {
   statusOuvindo();
 }
 
-/* ── tela ligada (quando o navegador deixa) ───────────────────────────────── */
+/* ── tela ligada durante a gravação ─────────────────────────────────────────
+   Com a tela apagada o celular congela a página e o Sam para de ouvir (23/11). A página pede ao celular para
+   não apagar a tela (Wake Lock — o app Tatá Plus libera esse pedido no iframe desde 23/11); se o navegador
+   não deixar, um vídeo mudo de 2 s em loop segura a tela. O indicador mostra se deu certo. O sistema solta o
+   pedido quando a página sai da frente (troca de app, bloqueio na mão); ao voltar, ela pede de novo. */
+var VIDEO_MUDO = 'data:video/mp4;base64,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';
+function pintarTela(st) {
+  var t = el('reu-tela'); if (!t) return;
+  t.dataset.st = st;
+  t.textContent = st === 'ok'
+    ? '🔒 A tela vai ficar ligada durante a reunião.'
+    : '⚠️ Não consegui manter a tela ligada. Deixe o celular carregando e não bloqueie a tela: com ela apagada, o Sam para de ouvir.';
+  t.hidden = !R.gravando;
+}
+async function videoMudo(ligar) {
+  if (!ligar) { if (R.video) { try { R.video.pause(); } catch (e) {} } return false; }
+  try {
+    var v = R.video;
+    if (!v) {
+      v = R.video = document.createElement('video');
+      v.muted = true; v.loop = true;
+      v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
+      v.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none';
+      v.src = VIDEO_MUDO;
+      document.body.appendChild(v);
+    }
+    await v.play();
+    return true;
+  } catch (e) { return false; }
+}
 async function manterTela() {
+  if (!R.gravando) return false;
   try {
     if (navigator.wakeLock && navigator.wakeLock.request) {
-      R.wakeLock = await navigator.wakeLock.request('screen');
+      if (!R.wakeLock || R.wakeLock.released) {
+        var wl = await navigator.wakeLock.request('screen');
+        R.wakeLock = wl;
+        wl.addEventListener('release', function () {
+          if (R.wakeLock === wl) R.wakeLock = null;
+          // soltou com a página na frente (ex.: economia de bateria): pede de novo
+          if (R.gravando && !R.encerrando && document.visibilityState === 'visible') setTimeout(manterTela, 1000);
+        });
+      }
+      videoMudo(false);
+      pintarTela('ok');
       return true;
     }
   } catch (e) {}
+  if (await videoMudo(true)) { pintarTela('ok'); return true; }
+  pintarTela('falhou');
   return false;
+}
+function soltarTela() {
+  var wl = R.wakeLock; R.wakeLock = null;
+  try { if (wl) wl.release(); } catch (e) {}
+  videoMudo(false);
+  var t = el('reu-tela'); if (t) t.hidden = true;
 }
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'visible' && R.gravando) {
@@ -1269,6 +1322,7 @@ async function retomar() {
     gravacaoComecar().catch(function () {});
     aviso('');
     statusOuvindo();
+    manterTela();
   } catch (e) { aviso('Não consegui abrir o microfone: ' + e.message); }
 }
 
@@ -1355,7 +1409,7 @@ async function comecarReuniao() {
     gravacaoComecar().catch(function () {});
     R.laco = setInterval(medir, 100);
     mostrarVozes(r.vozes);
-    if (!(await manterTela())) aviso('Deixe a tela ligada (sem bloquear) durante a reunião: com a tela apagada o Sam para de ouvir.');
+    await manterTela();   // indicador verde (tela vai ficar ligada) ou vermelho (não deu: não bloquear a tela)
     statusOuvindo();
     await tocar(bipAudio());   // o Sam não fala sozinho: só o "pi" de que está gravando ("Sam, se apresente" faz a rodada)
   } catch (e) {
@@ -1383,7 +1437,7 @@ function encerrarReuniao() {
     R.gravando = false;
     clearInterval(R.laco); clearInterval(R.relogio);
     if (R.stream) R.stream.getTracks().forEach(function (t) { t.stop(); });
-    try { if (R.wakeLock) R.wakeLock.release(); } catch (e) {}
+    soltarTela();
     var g = R.grav;
     if (g && (g.enviando || g.fila.length)) { g.aoEsvaziar = enviarEncerrar; gravacaoEnviar(); } else enviarEncerrar();
   };
