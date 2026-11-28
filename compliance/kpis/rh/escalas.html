@@ -674,6 +674,19 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 .el-niv.erro { background: var(--red-bg); color: var(--red); } .el-niv.aviso { background: #FFF4D6; color: #7A5A00; } .el-niv.info { background: var(--bg); color: var(--mid); }
 .el-lista-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .el-lista-item small { display: block; font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); text-transform: uppercase; }
+.el-rg { display: flex; flex-direction: column; gap: 12px; }
+.el-rg-sec { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.el-rg-sec h4 { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--carbon); font-weight: 500; }
+.el-rg-sec > p { font-size: 12px; color: var(--mid); }
+.el-rg-linha { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.el-rg-linha > .el-input, .el-rg-linha > .esc-select { flex: 1 1 130px; width: auto; min-width: 0; }
+.el-rg-linha > input[type="number"] { flex: 0 1 84px; }
+.el-rg-chk, .el-rg-dias label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--mid); }
+.el-rg-dias { display: flex; flex-wrap: wrap; gap: 14px; }
+.el-rg .btn-link { align-self: flex-start; }
+/* modal de lista (rascunhos / equipes): mais baixo e com o cabeçalho sempre à vista */
+#el-lista-overlay .modal-box, #el-cel-overlay .modal-box { max-height: min(80vh, 560px); overflow: hidden; }
+#el-lista-overlay .modal-header, #el-cel-overlay .modal-header { flex-shrink: 0; }
 .el-eq-linha { display: grid; grid-template-columns: 1fr 96px 120px; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
 </style>
 
@@ -728,6 +741,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <button class="btn btn--primary" id="el-btn-salvar" data-botao-id="governanca-app-escala::elaborar-escala" onclick="elabSalvar()" disabled>Salvar rascunho</button>
       <button class="btn-link" data-botao-id="governanca-app-escala::elaborar-escala" onclick="elabAbrirRascunhos()">Rascunhos salvos</button>
       <button class="btn-link" data-botao-id="governanca-app-escala::elaborar-escala" onclick="elabAbrirEquipes()">Equipes</button>
+      <button class="btn-link" data-botao-id="governanca-app-escala::elaborar-escala" onclick="elabAbrirRegras()">Regras</button>
       <span class="results-count" id="el-status" style="margin-left:auto"></span>
     </div>
   </div>
@@ -1501,7 +1515,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 
 <!-- LOADING -->
 <!-- Elaboração: editar um dia -->
-<div class="modal-overlay" id="el-cel-overlay">
+<div class="modal-overlay" id="el-cel-overlay" onclick="if(event.target===this)elabFecharCel()">
   <div class="modal-box">
     <div class="modal-handle"></div>
     <div class="modal-header">
@@ -1515,7 +1529,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
   </div>
 </div>
 <!-- Elaboração: rascunhos / equipes -->
-<div class="modal-overlay" id="el-lista-overlay">
+<div class="modal-overlay" id="el-lista-overlay" onclick="if(event.target===this)elabFecharLista()">
   <div class="modal-box">
     <div class="modal-handle"></div>
     <div class="modal-header">
@@ -1523,6 +1537,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
       <button class="btn-icon" onclick="elabFecharLista()" title="Fechar" aria-label="Fechar"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="modal-body" id="el-lista-corpo" style="gap:0"></div>
+    <div class="modal-footer"><button class="btn btn--primary btn--block" onclick="elabFecharLista()">Fechar</button></div>
   </div>
 </div>
 <div class="loading-overlay" id="loading-overlay">
@@ -2401,7 +2416,7 @@ function elabVazio(){
   var c = document.getElementById('el-content');
   c.innerHTML = EL.regras.length
     ? '<div class="esc-empty-state"><p>Escolha o período e toque em Gerar escala</p></div>'
-    : '<div class="esc-empty-state"><p>Nenhuma regra de escala disponível para você</p></div>';
+    : '<div class="esc-empty-state"><p>Nenhuma regra de escala disponível para você</p>' + (ST.admin ? '<p style="margin-top:14px"><button class="btn btn--primary" onclick="elabNovaRegra()">Criar regra</button></p>' : '') + '</div>';
 }
 function elabTrocouRegra(){ EL.ctx = null; EL.grade = null; EL.av = null; EL.id = null; EL.status = null; document.getElementById('el-btn-salvar').disabled = true; elStatus(''); elabVazio(); }
 function elabAjustaInicio(){
@@ -2672,6 +2687,186 @@ function elabEquipeSet(sel, trocouEquipe){
   }, function(e){ se.disabled = ss.disabled = false; erroRPC(e); });
 }
 document.addEventListener('keydown', function(ev){ if (ev.key === 'Escape') { elabFecharCel(); elabFecharLista(); } });
+
+/* ── regras do departamento (tela dentro da aba) ──────────────────────────
+   Mostra e edita os parâmetros que o motor usa. Salvar é só para admin da
+   escala (o servidor confere); os demais veem a regra sem poder alterar. */
+var RG = null;
+var RG_PADRAO = { jornada: { semanal: 42, mensal: 210, tolerancia: 1, max_dias_seguidos: 5, feriado_horas: 8.4 },
+  folgas: { por_semana: 2, domingo_cada: 4, max_seguidas: 2, casada_janela: 15, max_sub: 2, fechado_conta_folga: false },
+  dobras_semana: 0, dias_fortes: [0, 4, 5, 6],
+  turnos: { turno: { nome: 'Turno', marc: [['08:00', '12:00'], ['13:00', '17:00']] } },
+  equipes: { A: { nome: 'Equipe', normal: 'turno', dobra: '', dobra_quando: 'antes_folga' } },
+  subequipes: {}, quadro: [], particularidades: [] };
+function rgSlug(s){ return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'turno'; }
+function rgMarcTxt(m){ return (m || []).map(function(x){ return x[0] + '-' + x[1]; }).join(', '); }
+function rgMarcDe(t){
+  var out = [];
+  String(t || '').split(/[,;\/]+/).forEach(function(p){
+    var m = p.match(/(\d{1,2})[:h](\d{2})\s*(?:-|–|a|às)\s*(\d{1,2})[:h](\d{2})/i);
+    if (m) out.push([pad(+m[1]) + ':' + m[2], pad(+m[3]) + ':' + m[4]]);
+  });
+  return out;
+}
+function elabAbrirRegras(){
+  if (!elPode()) return;
+  if (!EL.regras.length) { if (ST.admin) elabNovaRegra(); else toast('Nenhuma regra de escala disponível para você.'); return; }
+  showLoading();
+  TP().rpc('escala_elab_regra_abrir', { p_regra_id: +document.getElementById('el-regra').value }).then(function(r){
+    hideLoading();
+    if (r.error) { erroRPC(r.error); return; }
+    var d = r.data;
+    RG = { id: d.id, unidade: d.unidade, departamento: d.departamento, p: JSON.parse(JSON.stringify(d.params || {})), pessoas: d.pessoas || [], edita: !!d.pode_editar };
+    rgRender();
+  }, function(e){ hideLoading(); erroRPC(e); });
+}
+function elabNovaRegra(){
+  if (!elPode()) return;
+  showLoading();
+  TP().rpc('escala_elab_deptos').then(function(r){
+    hideLoading();
+    if (r.error) { erroRPC(r.error); return; }
+    var l = r.data || [];
+    if (!l.length) { toast('Todos os departamentos já têm regra.'); return; }
+    RG = { id: null, deptos: l, p: JSON.parse(JSON.stringify(RG_PADRAO)), pessoas: [], edita: true };
+    rgRender();
+  }, function(e){ hideLoading(); erroRPC(e); });
+}
+function rgFechar(){ RG = null; if (EL.ctx && EL.grade) elabRender(); else elabVazio(); }
+
+function rgRender(){
+  var p = RG.p, J = p.jornada || {}, F = p.folgas || {}, dis = RG.edita ? '' : ' disabled', h = '';
+  function num(id, rot, v, passo){ return '<div class="esc-uni"><span class="esc-uni-label">'+rot+'</span><input class="el-input" type="number" step="'+(passo || 1)+'" id="'+id+'" value="'+(v == null ? '' : v)+'"'+dis+'></div>'; }
+  function sec(t, sub){ return '<div class="el-rg-sec"><h4>'+t+'</h4>'+(sub ? '<p>'+sub+'</p>' : ''); }
+  function rm(fn, i){ return RG.edita ? '<button class="btn-icon btn-icon--danger" onclick="'+fn+'('+i+')" title="Remover" aria-label="Remover"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' : ''; }
+  function add(fn, rot){ return RG.edita ? '<button class="btn-link" onclick="'+fn+'()">+ '+rot+'</button>' : ''; }
+  var tk = Object.keys(p.turnos || {}), ek = Object.keys(p.equipes || {});
+  function optT(sel, vazio){ return (vazio ? '<option value="">— não tem —</option>' : '') + tk.map(function(k){ return '<option value="'+esc(k)+'"'+(k === sel ? ' selected' : '')+'>'+esc(p.turnos[k].nome || k)+'</option>'; }).join(''); }
+  function optP(sel){ return '<option value="">—</option>' + RG.pessoas.map(function(x){ return '<option value="'+esc(x.matricula)+'"'+(String(x.matricula) === String(sel) ? ' selected' : '')+'>'+esc(x.nome)+'</option>'; }).join(''); }
+
+  h += '<div class="el-aviso"><span><b>'+(RG.id ? 'Regra · '+esc(RG.unidade+' · '+RG.departamento) : 'Nova regra')+'</b>'+(RG.edita ? '' : ' — somente leitura (quem altera é o administrador da escala)')+'</span><span class="el-acoes">'
+    + (RG.edita ? '<button class="btn btn--primary btn--sm" id="rg-salvar" onclick="rgSalvar()">Salvar regra</button>' : '')
+    + (RG.edita && RG.id ? '<button class="btn-link" onclick="elabNovaRegra()">Nova regra</button>' : '')
+    + '<button class="btn-link" onclick="rgFechar()">Voltar</button></span></div>';
+  if (!RG.id) h += sec('Departamento', 'A regra vale para um departamento de uma unidade.') + '<div class="el-campos"><div class="esc-uni"><span class="esc-uni-label">Unidade · departamento</span><select class="esc-select" id="rg-depto">'
+    + RG.deptos.map(function(x, i){ return '<option value="'+i+'">'+esc(x.unidade+' · '+x.departamento)+' ('+x.pessoas+')</option>'; }).join('') + '</select></div></div></div>';
+
+  h += sec('Jornada') + '<div class="el-campos">' + num('rg-j-sem', 'Horas por semana', J.semanal) + num('rg-j-tol', 'Tolerância (horas)', J.tolerancia, 0.5)
+    + num('rg-j-seg', 'Máx. dias seguidos', J.max_dias_seguidos) + num('rg-j-fer', 'Horas do feriado / comp.', J.feriado_horas, 0.1) + num('rg-dobras', 'Dobras por semana', p.dobras_semana) + '</div></div>';
+  h += sec('Folgas') + '<div class="el-campos">' + num('rg-f-sem', 'Folgas por semana', F.por_semana) + num('rg-f-dom', 'Domingo: 1 a cada (semanas)', F.domingo_cada)
+    + num('rg-f-seg', 'Máx. folgas seguidas', F.max_seguidas) + num('rg-f-cas', 'Folga casada a cada (dias)', F.casada_janela) + num('rg-f-sub', 'Máx. folgas juntas na subequipe', F.max_sub)
+    + '<div class="esc-uni"><span class="esc-uni-label">Loja fechada conta como folga</span><select class="esc-select" id="rg-f-fx"'+dis+'><option value="0">Não</option><option value="1"'+(F.fechado_conta_folga ? ' selected' : '')+'>Sim</option></select></div></div></div>';
+  h += sec('Dias fortes', 'Nos dias fortes vale o máximo do quadro; nos outros, o mínimo.') + '<div class="el-rg-dias">'
+    + EL_DOW.map(function(n, i){ return '<label><input type="checkbox" class="rg-forte" value="'+i+'"'+((p.dias_fortes || []).indexOf(i) >= 0 ? ' checked' : '')+dis+'> '+n+'</label>'; }).join('') + '</div></div>';
+
+  h += sec('Turnos', 'Horários no formato 08:30-11:00, 12:00-17:00 (separe os períodos por vírgula).');
+  tk.forEach(function(k, i){ var t = p.turnos[k];
+    h += '<div class="el-rg-linha rg-turno" data-k="'+esc(k)+'"><input class="el-input" data-c="nome" placeholder="Nome" value="'+esc(t.nome || k)+'"'+dis+'><input class="el-input" data-c="marc" placeholder="08:30-11:00, 12:00-17:00" value="'+esc(rgMarcTxt(t.marc))+'"'+dis+'>'
+      + '<label class="el-rg-chk"><input type="checkbox" data-c="dobra"'+(t.dobra ? ' checked' : '')+dis+'> dobra</label>'+rm('rgRemTurno', i)+'</div>'; });
+  h += add('rgAddTurno', 'turno') + '</div>';
+
+  h += sec('Equipes', 'Cada equipe tem um turno normal e, se houver, um turno de dobra. Subequipes separadas por vírgula.');
+  ek.forEach(function(k, i){ var e = p.equipes[k];
+    h += '<div class="el-rg-linha rg-equipe" data-k="'+esc(k)+'"><input class="el-input" data-c="nome" placeholder="Nome" value="'+esc(e.nome || k)+'"'+dis+'>'
+      + '<select class="esc-select" data-c="normal"'+dis+'>'+optT(e.normal)+'</select><select class="esc-select" data-c="dobra"'+dis+'>'+optT(e.dobra, true)+'</select>'
+      + '<select class="esc-select" data-c="quando"'+dis+'><option value="antes_folga">Dobra antes da folga</option><option value="depois_folga"'+(e.dobra_quando === 'depois_folga' ? ' selected' : '')+'>Dobra depois da folga</option></select>'
+      + '<input class="el-input" data-c="subs" placeholder="Subequipes" value="'+esc(((p.subequipes || {})[k] || []).join(', '))+'"'+dis+'>'+rm('rgRemEquipe', i)+'</div>'; });
+  h += add('rgAddEquipe', 'equipe') + '</div>';
+
+  h += sec('Quadro por horário', 'Quantas pessoas precisam estar na casa em cada horário: mínimo no dia normal, máximo no dia forte.');
+  (p.quadro || []).forEach(function(q, i){
+    h += '<div class="el-rg-linha rg-quadro"><input class="el-input" data-c="rotulo" placeholder="Nome" value="'+esc(q.rotulo || '')+'"'+dis+'><input class="el-input" type="time" data-c="hora" value="'+esc(q.hora || '')+'"'+dis+'>'
+      + '<select class="esc-select" data-c="modo"'+dis+'><option value="presente">Presente às</option><option value="sai_apos"'+(q.modo === 'sai_apos' ? ' selected' : '')+'>Sai após</option></select>'
+      + '<input class="el-input" type="number" data-c="min" placeholder="Mín." value="'+(q.min == null ? '' : q.min)+'"'+dis+'><input class="el-input" type="number" data-c="max" placeholder="Máx." value="'+(q.max == null ? '' : q.max)+'"'+dis+'>'+rm('rgRemQuadro', i)+'</div>'; });
+  h += add('rgAddQuadro', 'horário') + '</div>';
+
+  h += sec('Particularidades', RG.id ? 'Preferências de pessoas. A operação tem prioridade: são atendidas quando o quadro permite.' : 'Salve a regra primeiro; depois dá para incluir as particularidades das pessoas.');
+  if (RG.id) {
+    (p.particularidades || []).forEach(function(x, i){
+      var ms = x.tipo === 'nao_coincidir_folga' ? (x.matriculas || []) : [x.matricula];
+      h += '<div class="el-rg-linha rg-part"><select class="esc-select" data-c="tipo" onchange="rgColher();rgRender()"'+dis+'><option value="folga_dia_semana">Folga fixa no dia da semana</option><option value="nao_coincidir_folga"'+(x.tipo === 'nao_coincidir_folga' ? ' selected' : '')+'>Não folgar no mesmo dia</option></select>'
+        + '<select class="esc-select" data-c="p1"'+dis+'>'+optP(ms[0])+'</select>'
+        + (x.tipo === 'nao_coincidir_folga' ? '<select class="esc-select" data-c="p2"'+dis+'>'+optP(ms[1])+'</select>'
+           : '<select class="esc-select" data-c="dow"'+dis+'>'+EL_DOW.map(function(n, d){ return '<option value="'+d+'"'+(+x.dow === d ? ' selected' : '')+'>'+n+'</option>'; }).join('')+'</select>')
+        + '<select class="esc-select" data-c="pri"'+dis+'><option value="media">Prioridade média</option><option value="alta"'+(x.prioridade === 'alta' ? ' selected' : '')+'>Prioridade alta</option></select>'+rm('rgRemPart', i)+'</div>'; });
+    h += add('rgAddPart', 'particularidade');
+  }
+  h += '</div>';
+  document.getElementById('el-content').innerHTML = '<div class="el-rg">' + h + '</div>';
+}
+
+// lê a tela de volta para RG.p (preserva as chaves que a tela não mostra)
+function rgColher(){
+  if (!RG || !RG.edita) return;
+  var p = RG.p, g = function(id){ var e = document.getElementById(id); return e ? e.value : ''; }, n = function(id, d){ var v = parseFloat(g(id)); return isNaN(v) ? d : v; };
+  p.jornada = Object.assign({}, p.jornada, { semanal: n('rg-j-sem', 42), tolerancia: n('rg-j-tol', 1), max_dias_seguidos: n('rg-j-seg', 5), feriado_horas: n('rg-j-fer', 8.4) });
+  p.dobras_semana = n('rg-dobras', 0);
+  p.folgas = Object.assign({}, p.folgas, { por_semana: n('rg-f-sem', 2), domingo_cada: n('rg-f-dom', 4), max_seguidas: n('rg-f-seg', 2), casada_janela: n('rg-f-cas', 15), max_sub: n('rg-f-sub', 2), fechado_conta_folga: g('rg-f-fx') === '1' });
+  p.dias_fortes = [].slice.call(document.querySelectorAll('.rg-forte:checked')).map(function(c){ return +c.value; });
+  function c(l, k){ var e = l.querySelector('[data-c="'+k+'"]'); return e ? (e.type === 'checkbox' ? e.checked : e.value) : ''; }
+  var turnos = {};
+  [].forEach.call(document.querySelectorAll('.rg-turno'), function(l){
+    var k = l.getAttribute('data-k') || rgSlug(c(l, 'nome')); while (turnos[k]) k += '_2';
+    var t = { nome: String(c(l, 'nome')).trim() || k, marc: rgMarcDe(c(l, 'marc')) }; if (c(l, 'dobra')) t.dobra = true; turnos[k] = t;
+  });
+  p.turnos = turnos;
+  var eqs = {}, subs = {};
+  [].forEach.call(document.querySelectorAll('.rg-equipe'), function(l){
+    var k = l.getAttribute('data-k'), nome = String(c(l, 'nome')).trim();
+    if (!k) { k = (rgSlug(nome).slice(0, 1) || 'e').toUpperCase(); while (eqs[k]) k += '2'; }
+    eqs[k] = { nome: nome || k, normal: c(l, 'normal'), dobra: c(l, 'dobra') || '', dobra_quando: c(l, 'quando') || 'antes_folga' };
+    subs[k] = String(c(l, 'subs')).split(',').map(function(s){ return s.trim().toUpperCase(); }).filter(Boolean);
+  });
+  p.equipes = eqs; p.subequipes = subs;
+  p.quadro = [].map.call(document.querySelectorAll('.rg-quadro'), function(l, i){
+    var hora = c(l, 'hora'), modo = c(l, 'modo');
+    return { id: 'q' + i, rotulo: String(c(l, 'rotulo')).trim() || ((modo === 'sai_apos' ? 'Sai após ' : 'Às ') + hora), hora: hora, modo: modo, min: +c(l, 'min') || 0, max: +c(l, 'max') || 0 };
+  }).filter(function(q){ return !!q.hora; });
+  if (RG.id) p.particularidades = [].map.call(document.querySelectorAll('.rg-part'), function(l){
+    var tipo = c(l, 'tipo'), pri = c(l, 'pri');
+    return tipo === 'nao_coincidir_folga' ? { tipo: tipo, prioridade: pri, matriculas: [c(l, 'p1'), c(l, 'p2')].filter(Boolean) }
+                                          : { tipo: tipo, prioridade: pri, matricula: c(l, 'p1'), dow: +c(l, 'dow') || 0 };
+  });
+}
+function rgMuda(fn){ if (!RG || !RG.edita) return; rgColher(); fn(RG.p); rgRender(); }
+function rgAddTurno(){ rgMuda(function(p){ var k = 'turno_' + (Object.keys(p.turnos).length + 1); while (p.turnos[k]) k += '_2'; p.turnos[k] = { nome: 'Novo turno', marc: [] }; }); }
+function rgRemTurno(i){ rgMuda(function(p){ delete p.turnos[Object.keys(p.turnos)[i]]; }); }
+function rgAddEquipe(){ rgMuda(function(p){ var k = 'E' + (Object.keys(p.equipes).length + 1); while (p.equipes[k]) k += '2'; p.equipes[k] = { nome: 'Nova equipe', normal: Object.keys(p.turnos)[0] || '', dobra: '', dobra_quando: 'antes_folga' }; }); }
+function rgRemEquipe(i){ rgMuda(function(p){ var k = Object.keys(p.equipes)[i]; delete p.equipes[k]; if (p.subequipes) delete p.subequipes[k]; }); }
+function rgAddQuadro(){ rgMuda(function(p){ (p.quadro = p.quadro || []).push({ rotulo: '', hora: '12:00', modo: 'presente', min: 1, max: 1 }); }); }
+function rgRemQuadro(i){ rgMuda(function(p){ p.quadro.splice(i, 1); }); }
+function rgAddPart(){ rgMuda(function(p){ (p.particularidades = p.particularidades || []).push({ tipo: 'folga_dia_semana', prioridade: 'media', matricula: '', dow: 1 }); }); }
+function rgRemPart(i){ rgMuda(function(p){ p.particularidades.splice(i, 1); }); }
+
+function rgSalvar(){
+  if (!RG || !RG.edita || !elPode()) return;
+  rgColher();
+  var p = RG.p, tk = Object.keys(p.turnos), ek = Object.keys(p.equipes), erro = '';
+  if (!tk.length) erro = 'Cadastre pelo menos um turno.';
+  tk.forEach(function(k){ if (!p.turnos[k].marc.length) erro = erro || 'Turno "' + p.turnos[k].nome + '": informe os horários (ex.: 08:30-11:00, 12:00-17:00).'; });
+  if (!ek.length) erro = erro || 'Cadastre pelo menos uma equipe.';
+  ek.forEach(function(k){ var e = p.equipes[k];
+    if (!p.turnos[e.normal]) erro = erro || 'Equipe "' + e.nome + '": escolha o turno normal.';
+    if (e.dobra && !p.turnos[e.dobra]) e.dobra = ''; });
+  (p.particularidades || []).forEach(function(x){ if (x.tipo === 'nao_coincidir_folga' ? (x.matriculas || []).length < 2 : !x.matricula) erro = erro || 'Particularidade sem pessoa escolhida.'; });
+  if (erro) { toast(erro); return; }
+  var d = RG.id ? null : RG.deptos[+document.getElementById('rg-depto').value];
+  setBtnLoading('rg-salvar', true, 'Salvando');
+  TP().rpc('escala_elab_regra_salvar', { p_id: RG.id, p_unidade: d ? d.unidade : null, p_departamento: d ? d.departamento : null, p_params: p }).then(function(r){
+    setBtnLoading('rg-salvar', false, 'Salvar regra');
+    if (r.error) { erroRPC(r.error); return; }
+    var id = r.data && r.data.id, nova = !RG.id;
+    EL.ctx = null; EL.grade = null; EL.av = null; EL.id = null; EL.status = null; document.getElementById('el-btn-salvar').disabled = true;
+    TP().rpc('escala_elab_regras').then(function(r2){
+      if (!r2.error) { EL.regras = r2.data || [];
+        document.getElementById('el-regra').innerHTML = EL.regras.map(function(x){ return '<option value="'+x.id+'">'+esc(x.unidade+' · '+x.departamento)+'</option>'; }).join('');
+        document.getElementById('el-regra').value = id; }
+      elStatus(nova ? 'Regra criada — defina as equipes das pessoas em Equipes' : 'Regra salva — gere a escala de novo');
+      elabAbrirRegras();
+    });
+  }, function(e){ setBtnLoading('rg-salvar', false, 'Salvar regra'); erroRPC(e); });
+}
+
 
 // Depois de GOV_BOTOES/GOV_BTN_OK: se o cliente já existir, comSupa roda na hora.
 comSupa(function(){ carregarHorarios(); iniciarEscala(); aplicarBotoes(); });
