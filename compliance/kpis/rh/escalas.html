@@ -687,7 +687,7 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 /* modal de lista (rascunhos / equipes): mais baixo e com o cabeçalho sempre à vista */
 #el-lista-overlay .modal-box, #el-cel-overlay .modal-box { max-height: min(80vh, 560px); overflow: hidden; }
 #el-lista-overlay .modal-header, #el-cel-overlay .modal-header { flex-shrink: 0; }
-.el-eq-linha { display: grid; grid-template-columns: 1fr 96px 120px; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.el-eq-linha { display: grid; grid-template-columns: 1fr minmax(96px, 150px) minmax(110px, 170px); gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
 </style>
 
 <div class="tabs">
@@ -728,19 +728,15 @@ html[data-auth="denied"]  #auth-gate .gate-loading { display:none; }
 <div id="esc-elab" style="display:none">
   <div class="el-bar">
     <div class="el-campos">
-      <div class="esc-uni"><span class="esc-uni-label">Regra (unidade · departamento)</span><select class="esc-select" id="el-regra" onchange="elabTrocouRegra()"></select></div>
+      <div class="esc-uni"><span class="esc-uni-label">Regra (unidade / departamento)</span><select class="esc-select" id="el-regra" onchange="elabTrocouRegra()"></select></div>
       <div class="esc-uni"><span class="esc-uni-label">Início (domingo)</span><input class="el-input" type="date" id="el-inicio" onchange="elabAjustaInicio()"></div>
-      <div class="esc-uni"><span class="esc-uni-label">Semanas</span><select class="esc-select" id="el-semanas"><option value="1">1 semana</option><option value="2">2 semanas</option><option value="3">3 semanas</option><option value="4">4 semanas</option><option value="5" selected>5 semanas (35 dias)</option></select></div>
-      <div class="esc-uni"><span class="esc-uni-label">Loja fechada em</span><input class="el-input" type="date" id="el-fechado" onchange="elabAddFechado()"></div>
-      <div class="esc-uni"><span class="esc-uni-label">Sem extras de</span><input class="el-input" type="date" id="el-sx-de"></div>
-      <div class="esc-uni"><span class="esc-uni-label">Sem extras até</span><input class="el-input" type="date" id="el-sx-ate"></div>
+      <div class="esc-uni"><span class="esc-uni-label">Término (sábado)</span><input class="el-input" type="date" id="el-fim" onchange="elabAjustaFim()"></div>
     </div>
-    <div class="el-chips" id="el-fechados"></div>
+    <div class="el-chips" id="el-per-resumo"></div>
     <div class="el-acoes">
       <button class="btn btn--primary" id="el-btn-gerar" data-botao-id="governanca-app-escala::elaborar-escala" onclick="elabGerar()">Gerar escala</button>
       <button class="btn btn--primary" id="el-btn-salvar" data-botao-id="governanca-app-escala::elaborar-escala" onclick="elabSalvar()" disabled>Salvar rascunho</button>
       <button class="btn-link" data-botao-id="governanca-app-escala::elaborar-escala" onclick="elabAbrirRascunhos()">Rascunhos salvos</button>
-      <button class="btn-link" data-botao-id="governanca-app-escala::elaborar-escala" onclick="elabAbrirEquipes()">Equipes</button>
       <button class="btn-link" data-botao-id="governanca-app-escala::elaborar-escala" onclick="elabAbrirRegras()">Regras</button>
       <span class="results-count" id="el-status" style="margin-left:auto"></span>
     </div>
@@ -2390,7 +2386,7 @@ function aplicarBotoes(){
    Nada daqui aparece para o colaborador: é pré-visualização do líder.
    ══════════════════════════════════════════════════════════════════════════ */
 var EL_BTN = 'governanca-app-escala::elaborar-escala';
-var EL = { pronto: false, regras: [], ctx: null, bruto: null, grade: null, av: null, id: null, status: null, fechados: [], cel: null };
+var EL = { pronto: false, regras: [], ctx: null, bruto: null, grade: null, av: null, id: null, status: null, fechados: [], sxDe: '', sxAte: '', cel: null };
 var EL_ROT = { F: 'Folga', FA: 'Aniv.', CF: 'Comp.', FX: 'Fechado', FE: 'Férias', NA: '—', DL: 'Deslig.' };
 var EL_NOME = { F: 'Folga', FA: 'Folga de aniversário', CF: 'Compensação de feriado', FX: 'Loja fechada', FE: 'Férias', NA: 'Não admitido', DL: 'Desligado' };
 var EL_DOW = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -2403,6 +2399,7 @@ function elabInit(){
   EL.pronto = true;
   var ini = inicioSemana(1);
   document.getElementById('el-inicio').value = isoLocal(ini);
+  document.getElementById('el-fim').value = isoLocal(addDias(ini, 34));
   document.getElementById('el-content').innerHTML = '<div class="esc-empty-state"><p>Carregando regras…</p></div>';
   TP().rpc('escala_elab_regras').then(function(r){
     if (r.error) { EL.pronto = false; erroRPC(r.error); return; }
@@ -2420,28 +2417,49 @@ function elabVazio(){
 }
 function elabTrocouRegra(){ EL.ctx = null; EL.grade = null; EL.av = null; EL.id = null; EL.status = null; document.getElementById('el-btn-salvar').disabled = true; elStatus(''); elabVazio(); }
 function elabAjustaInicio(){
-  var i = document.getElementById('el-inicio'); if (!i.value) return;
+  var i = document.getElementById('el-inicio'), f = document.getElementById('el-fim'); if (!i.value) return;
   var d = elD(i.value); if (d.getDay() !== 0) { d = addDias(d, -d.getDay()); i.value = isoLocal(d); }
+  var n = f.value ? Math.round((elD(f.value) - d) / 86400000) : -1;
+  if (n < 0 || n > 34) f.value = isoLocal(addDias(d, 34));
+}
+function elabAjustaFim(){
+  var i = document.getElementById('el-inicio'), f = document.getElementById('el-fim'); if (!f.value || !i.value) return;
+  var ini = elD(i.value), d = elD(f.value);
+  if (d.getDay() !== 6) d = addDias(d, 6 - d.getDay());
+  if (d < ini) d = addDias(ini, 6);
+  if (Math.round((d - ini) / 86400000) > 34) { d = addDias(ini, 34); toast('O período da escala vai até 35 dias.'); }
+  f.value = isoLocal(d);
 }
 function elabPeriodo(){
-  var v = document.getElementById('el-inicio').value; if (!v) return null;
-  var ini = elD(v), n = Math.min(5, Math.max(1, +document.getElementById('el-semanas').value || 5));
-  return { inicio: isoLocal(ini), fim: isoLocal(addDias(ini, n * 7 - 1)) };
+  var a = document.getElementById('el-inicio').value, b = document.getElementById('el-fim').value;
+  if (!a || !b) { toast('Informe o início e o término do período.'); return null; }
+  var n = Math.round((elD(b) - elD(a)) / 86400000);
+  if (n < 0 || n > 34) { toast('O período da escala vai de 1 a 35 dias.'); return null; }
+  return { inicio: a, fim: b };
 }
+/* particularidades do período (loja fechada, sem extras): ficam na tela de Regras */
 function elabAddFechado(){
-  var i = document.getElementById('el-fechado'); if (!i.value) return;
+  var i = document.getElementById('el-fechado'); if (!i || !i.value) return;
   if (EL.fechados.indexOf(i.value) < 0) { EL.fechados.push(i.value); EL.fechados.sort(); }
-  i.value = ''; elabChips();
+  i.value = ''; elabChips(); elabPerMudou();
 }
-function elabRemFechado(s){ EL.fechados = EL.fechados.filter(function(x){ return x !== s; }); elabChips(); }
+function elabRemFechado(s){ EL.fechados = EL.fechados.filter(function(x){ return x !== s; }); elabChips(); elabPerMudou(); }
+function elabSxSet(){
+  EL.sxDe = (document.getElementById('el-sx-de') || {}).value || ''; EL.sxAte = (document.getElementById('el-sx-ate') || {}).value || '';
+  elabChips(); elabPerMudou();
+}
+function elabPerMudou(){ if (EL.grade) elStatus('Particularidades do período alteradas — gere a escala de novo'); }
 function elabChips(){
-  document.getElementById('el-fechados').innerHTML = EL.fechados.map(function(s){
+  var ed = document.getElementById('el-fechados');
+  if (ed) ed.innerHTML = EL.fechados.map(function(s){
     return '<span class="el-chip">Fechada '+ddmm(elD(s))+'<button onclick="elabRemFechado(\''+s+'\')" aria-label="Remover">×</button></span>';
   }).join('');
+  var r = document.getElementById('el-per-resumo');
+  if (r) r.innerHTML = EL.fechados.map(function(s){ return '<span class="el-chip" style="padding-right:10px">Fechada '+ddmm(elD(s))+'</span>'; }).join('')
+    + (EL.sxDe && EL.sxAte && EL.sxAte >= EL.sxDe ? '<span class="el-chip" style="padding-right:10px">Sem extras '+ddmm(elD(EL.sxDe))+' a '+ddmm(elD(EL.sxAte))+'</span>' : '');
 }
 function elabParams(){
-  var de = document.getElementById('el-sx-de').value, ate = document.getElementById('el-sx-ate').value;
-  return { fechados: EL.fechados.slice(), sem_extras: (de && ate && ate >= de) ? [{ de: de, ate: ate }] : [] };
+  return { fechados: EL.fechados.slice(), sem_extras: (EL.sxDe && EL.sxAte && EL.sxAte >= EL.sxDe) ? [{ de: EL.sxDe, ate: EL.sxAte }] : [] };
 }
 function elabMontaCtx(bruto, params){
   EL.bruto = bruto;
@@ -2459,7 +2477,7 @@ function elabContexto(per, params){
 function elabGerar(){
   if (!elPode()) return;
   if (!EL.regras.length) { toast('Nenhuma regra de escala disponível para você.'); return; }
-  var per = elabPeriodo(); if (!per) { toast('Informe o início do período.'); return; }
+  var per = elabPeriodo(); if (!per) { return; }
   if (EL.status === 'publicada') { toast('Esta escala já foi programada. Gere uma nova para outro período.'); return; }
   if (EL.grade && !confirm('Gerar de novo substitui a escala que está na tela. Continuar?')) return;
   var params = elabParams(), btn = document.getElementById('el-btn-gerar');
@@ -2506,7 +2524,7 @@ function elabRender(){
     + '<div class="kpi-card'+(rs.erros ? ' ruim' : '')+'"><b>'+rs.erros+'</b><span>Regras quebradas</span></div>'
     + '<div class="kpi-card"><b>'+rs.avisos+'</b><span>Avisos</span></div></div>';
   var semEq = EL.ctx.pessoas.filter(function(p){ return !p.equipe; });
-  if (semEq.length) h += '<div class="el-aviso"><span>'+semEq.length+' pessoa(s) do departamento sem equipe definida — não entram na escala.</span><button class="btn-link" onclick="elabAbrirEquipes()">Definir equipes</button></div>';
+  if (semEq.length) h += '<div class="el-aviso"><span>'+semEq.length+' pessoa(s) do departamento sem equipe definida — não entram na escala.</span><button class="btn-link" onclick="elabAbrirRegras()">Definir equipes</button></div>';
 
   h += '<div class="el-scroll"><table class="el-tab"><thead><tr><th class="el-nome">Colaborador</th>';
   av.dias.forEach(function(d){
@@ -2641,10 +2659,10 @@ function elabAbrir(id){
     var e = r.data, pr = e.params || {};
     document.getElementById('el-regra').value = e.regra_id;
     document.getElementById('el-inicio').value = e.inicio;
-    document.getElementById('el-semanas').value = Math.min(5, Math.max(1, Math.round(((elD(e.fim) - elD(e.inicio)) / 86400000 + 1) / 7)));
-    EL.fechados = (pr.fechados || []).slice(); elabChips();
+    document.getElementById('el-fim').value = e.fim;
+    EL.fechados = (pr.fechados || []).slice();
     var sx = (pr.sem_extras || [])[0] || {};
-    document.getElementById('el-sx-de').value = sx.de || ''; document.getElementById('el-sx-ate').value = sx.ate || '';
+    EL.sxDe = sx.de || ''; EL.sxAte = sx.ate || ''; elabChips();
     return elabContexto({ inicio: e.inicio, fim: e.fim }, { fechados: pr.fechados || [], sem_extras: pr.sem_extras || [] }).then(function(){
       EL.grade = { cel: (e.grade && e.grade.cel) || {}, semente: pr.semente }; EL.id = e.id; EL.status = e.status;
       hideLoading(); elabRender(); elStatus(e.status === 'publicada' ? 'Escala já programada (somente leitura)' : 'Rascunho aberto');
@@ -2652,40 +2670,6 @@ function elabAbrir(id){
   }).then(null, function(e){ hideLoading(); erroRPC(e); });
 }
 
-/* ── equipes da regra ── */
-function elabAbrirEquipes(){
-  if (!elPode() || !EL.regras.length) return;
-  var per = elabPeriodo(); if (!per) { toast('Informe o início do período.'); return; }
-  showLoading();
-  var rid = +document.getElementById('el-regra').value;
-  TP().rpc('escala_elab_contexto', { p_regra_id: rid, p_inicio: per.inicio, p_fim: per.fim }).then(function(r){
-    hideLoading();
-    if (r.error) { erroRPC(r.error); return; }
-    var R = (r.data.regra && r.data.regra.params) || {}, eqs = R.equipes || {}, subs = R.subequipes || {};
-    EL.eqSubs = subs;
-    var h = '<p style="font-size:12px;color:var(--mid);margin-bottom:8px">Equipe e subequipe de cada pessoa nesta regra. Quem fica sem equipe não entra na escala. Depois de mudar, gere a escala de novo.</p>';
-    h += (r.data.pessoas || []).map(function(p){
-      var m = esc(p.matricula);
-      var oe = '<option value="">— fora —</option>' + Object.keys(eqs).map(function(k){ return '<option value="'+esc(k)+'"'+(p.equipe === k ? ' selected' : '')+'>'+esc(eqs[k].nome || k)+'</option>'; }).join('');
-      var os = '<option value="">—</option>' + (subs[p.equipe] || []).map(function(s){ return '<option'+(p.subequipe === s ? ' selected' : '')+'>'+esc(s)+'</option>'; }).join('');
-      return '<div class="el-eq-linha" data-m="'+m+'"><span>'+esc(p.nome)+'</span>'
-        + '<select class="modal-select" data-k="eq" onchange="elabEquipeSet(this, true)">'+oe+'</select>'
-        + '<select class="modal-select" data-k="sub" onchange="elabEquipeSet(this, false)">'+os+'</select></div>';
-    }).join('');
-    elabAbrirLista('Equipes da regra', h);
-  }, function(e){ hideLoading(); erroRPC(e); });
-}
-function elabEquipeSet(sel, trocouEquipe){
-  if (!elPode()) return;
-  var linha = sel.closest('.el-eq-linha'), m = linha.getAttribute('data-m');
-  var se = linha.querySelector('[data-k="eq"]'), ss = linha.querySelector('[data-k="sub"]');
-  if (trocouEquipe) ss.innerHTML = '<option value="">—</option>' + ((EL.eqSubs || {})[se.value] || []).map(function(s){ return '<option>'+esc(s)+'</option>'; }).join('');
-  se.disabled = ss.disabled = true;
-  TP().rpc('escala_elab_pessoa_set', { p_regra_id: +document.getElementById('el-regra').value, p_matricula: m, p_equipe: se.value, p_subequipe: ss.value }).then(function(r){
-    se.disabled = ss.disabled = false;
-    if (r.error) erroRPC(r.error); else elStatus('Equipes alteradas — gere a escala de novo');
-  }, function(e){ se.disabled = ss.disabled = false; erroRPC(e); });
-}
 document.addEventListener('keydown', function(ev){ if (ev.key === 'Escape') { elabFecharCel(); elabFecharLista(); } });
 
 /* ── regras do departamento (tela dentro da aba) ──────────────────────────
@@ -2708,6 +2692,7 @@ function rgMarcDe(t){
   });
   return out;
 }
+function rgVinc(pessoas){ var v = {}; (pessoas || []).forEach(function(x){ if (x.equipe) v[String(x.matricula)] = { e: x.equipe, s: x.subequipe || '' }; }); return v; }
 function elabAbrirRegras(){
   if (!elPode()) return;
   if (!EL.regras.length) { if (ST.admin) elabNovaRegra(); else toast('Nenhuma regra de escala disponível para você.'); return; }
@@ -2716,7 +2701,8 @@ function elabAbrirRegras(){
     hideLoading();
     if (r.error) { erroRPC(r.error); return; }
     var d = r.data;
-    RG = { id: d.id, unidade: d.unidade, departamento: d.departamento, p: JSON.parse(JSON.stringify(d.params || {})), pessoas: d.pessoas || [], edita: !!d.pode_editar };
+    RG = { id: d.id, unidade: d.unidade, departamento: d.departamento, p: JSON.parse(JSON.stringify(d.params || {})), pessoas: d.pessoas || [], edita: !!d.pode_editar,
+           vinc: rgVinc(d.pessoas), salvas: Object.keys((d.params || {}).equipes || {}), pend: {} };
     rgRender();
   }, function(e){ hideLoading(); erroRPC(e); });
 }
@@ -2724,13 +2710,38 @@ function elabNovaRegra(){
   if (!elPode()) return;
   showLoading();
   TP().rpc('escala_elab_deptos').then(function(r){
-    hideLoading();
-    if (r.error) { erroRPC(r.error); return; }
+    if (r.error) { hideLoading(); erroRPC(r.error); return; }
     var l = r.data || [];
-    if (!l.length) { toast('Todos os departamentos já têm regra.'); return; }
-    RG = { id: null, deptos: l, p: JSON.parse(JSON.stringify(RG_PADRAO)), pessoas: [], edita: true };
-    rgRender();
+    if (!l.length) { hideLoading(); toast('Todos os departamentos já têm regra.'); return; }
+    RG = { id: null, deptos: l, dep: 0, p: JSON.parse(JSON.stringify(RG_PADRAO)), pessoas: [], edita: true, vinc: {}, salvas: [], pend: {} };
+    rgCarregaPessoasDepto();
   }, function(e){ hideLoading(); erroRPC(e); });
+}
+// regra nova: ao escolher o departamento, traz as pessoas dele para apontar a equipe de cada uma
+function rgCarregaPessoasDepto(){
+  var d = RG.deptos[RG.dep]; showLoading();
+  TP().rpc('escala_elab_depto_pessoas', { p_unidade: d.unidade, p_departamento: d.departamento }).then(function(r){
+    hideLoading();
+    if (r.error) { erroRPC(r.error); RG.pessoas = []; } else RG.pessoas = r.data || [];
+    RG.vinc = {}; rgRender();
+  }, function(e){ hideLoading(); erroRPC(e); RG.pessoas = []; rgRender(); });
+}
+function rgTrocaDepto(){ rgColher(); rgCarregaPessoasDepto(); }
+// equipe / subequipe de uma pessoa: grava na hora quando a equipe já existe na regra salva;
+// se a regra (ou a equipe) ainda não foi salva, fica pendente e vai junto no "Salvar regra"
+function rgPessoaSet(sel, trocouEquipe){
+  if (!RG || !elPode()) return;
+  if (RG.edita) rgColher();
+  var linha = sel.closest('.el-eq-linha'), m = linha.getAttribute('data-m');
+  var se = linha.querySelector('[data-k="eq"]'), ss = linha.querySelector('[data-k="sub"]');
+  if (trocouEquipe) ss.innerHTML = '<option value="">—</option>' + (((RG.p.subequipes || {})[se.value]) || []).map(function(x){ return '<option>'+esc(x)+'</option>'; }).join('');
+  if (se.value) RG.vinc[m] = { e: se.value, s: ss.value }; else delete RG.vinc[m];
+  if (!RG.id || (se.value && RG.salvas.indexOf(se.value) < 0)) { RG.pend[m] = 1; elStatus('Salve a regra para gravar as equipes das pessoas'); return; }
+  se.disabled = ss.disabled = true;
+  TP().rpc('escala_elab_pessoa_set', { p_regra_id: RG.id, p_matricula: m, p_equipe: se.value, p_subequipe: ss.value }).then(function(r){
+    se.disabled = ss.disabled = false;
+    if (r.error) erroRPC(r.error); else { delete RG.pend[m]; EL.ctx = null; elStatus('Equipes alteradas — gere a escala de novo'); }
+  }, function(e){ se.disabled = ss.disabled = false; erroRPC(e); });
 }
 function rgFechar(){ RG = null; if (EL.ctx && EL.grade) elabRender(); else elabVazio(); }
 
@@ -2748,8 +2759,8 @@ function rgRender(){
     + (RG.edita ? '<button class="btn btn--primary btn--sm" id="rg-salvar" onclick="rgSalvar()">Salvar regra</button>' : '')
     + (RG.edita && RG.id ? '<button class="btn-link" onclick="elabNovaRegra()">Nova regra</button>' : '')
     + '<button class="btn-link" onclick="rgFechar()">Voltar</button></span></div>';
-  if (!RG.id) h += sec('Departamento', 'A regra vale para um departamento de uma unidade.') + '<div class="el-campos"><div class="esc-uni"><span class="esc-uni-label">Unidade · departamento</span><select class="esc-select" id="rg-depto">'
-    + RG.deptos.map(function(x, i){ return '<option value="'+i+'">'+esc(x.unidade+' · '+x.departamento)+' ('+x.pessoas+')</option>'; }).join('') + '</select></div></div></div>';
+  if (!RG.id) h += sec('Departamento', 'A regra vale para um departamento de uma unidade.') + '<div class="el-campos"><div class="esc-uni"><span class="esc-uni-label">Unidade · departamento</span><select class="esc-select" id="rg-depto" onchange="rgTrocaDepto()">'
+    + RG.deptos.map(function(x, i){ return '<option value="'+i+'"'+(i === RG.dep ? ' selected' : '')+'>'+esc(x.unidade+' · '+x.departamento)+' ('+x.pessoas+')</option>'; }).join('') + '</select></div></div></div>';
 
   h += sec('Jornada') + '<div class="el-campos">' + num('rg-j-sem', 'Horas por semana', J.semanal) + num('rg-j-tol', 'Tolerância (horas)', J.tolerancia, 0.5)
     + num('rg-j-seg', 'Máx. dias seguidos', J.max_dias_seguidos) + num('rg-j-fer', 'Horas do feriado / comp.', J.feriado_horas, 0.1) + num('rg-dobras', 'Dobras por semana', p.dobras_semana) + '</div></div>';
@@ -2767,11 +2778,20 @@ function rgRender(){
 
   h += sec('Equipes', 'Cada equipe tem um turno normal e, se houver, um turno de dobra. Subequipes separadas por vírgula.');
   ek.forEach(function(k, i){ var e = p.equipes[k];
-    h += '<div class="el-rg-linha rg-equipe" data-k="'+esc(k)+'"><input class="el-input" data-c="nome" placeholder="Nome" value="'+esc(e.nome || k)+'"'+dis+'>'
+    h += '<div class="el-rg-linha rg-equipe" data-k="'+esc(k)+'"><input class="el-input" data-c="nome" onchange="rgColher();rgRender()" placeholder="Nome" value="'+esc(e.nome || k)+'"'+dis+'>'
       + '<select class="esc-select" data-c="normal"'+dis+'>'+optT(e.normal)+'</select><select class="esc-select" data-c="dobra"'+dis+'>'+optT(e.dobra, true)+'</select>'
       + '<select class="esc-select" data-c="quando"'+dis+'><option value="antes_folga">Dobra antes da folga</option><option value="depois_folga"'+(e.dobra_quando === 'depois_folga' ? ' selected' : '')+'>Dobra depois da folga</option></select>'
-      + '<input class="el-input" data-c="subs" placeholder="Subequipes" value="'+esc(((p.subequipes || {})[k] || []).join(', '))+'"'+dis+'>'+rm('rgRemEquipe', i)+'</div>'; });
-  h += add('rgAddEquipe', 'equipe') + '</div>';
+      + '<input class="el-input" data-c="subs" onchange="rgColher();rgRender()" placeholder="Subequipes" value="'+esc(((p.subequipes || {})[k] || []).join(', '))+'"'+dis+'>'+rm('rgRemEquipe', i)+'</div>'; });
+  h += add('rgAddEquipe', 'equipe');
+  h += '<h4 style="margin-top:10px">Pessoas do departamento ('+RG.pessoas.length+')</h4><p>Aponte a equipe e a subequipe de cada pessoa. Quem fica "fora" não entra na escala.</p>';
+  if (!RG.pessoas.length) h += '<p>Nenhuma pessoa ativa neste departamento.</p>';
+  RG.pessoas.forEach(function(x){
+    var v = RG.vinc[String(x.matricula)] || {}, eqOk = v.e && p.equipes[v.e];
+    h += '<div class="el-eq-linha" data-m="'+esc(x.matricula)+'"><span>'+esc(x.nome)+'</span>'
+      + '<select class="esc-select" data-k="eq" onchange="rgPessoaSet(this, true)"><option value="">— fora —</option>'+ek.map(function(k){ return '<option value="'+esc(k)+'"'+(v.e === k ? ' selected' : '')+'>'+esc(p.equipes[k].nome || k)+'</option>'; }).join('')+'</select>'
+      + '<select class="esc-select" data-k="sub" onchange="rgPessoaSet(this, false)"><option value="">—</option>'+(eqOk ? ((p.subequipes || {})[v.e] || []) : []).map(function(sb){ return '<option'+(v.s === sb ? ' selected' : '')+'>'+esc(sb)+'</option>'; }).join('')+'</select></div>';
+  });
+  h += '</div>';
 
   h += sec('Quadro por horário', 'Quantas pessoas precisam estar na casa em cada horário: mínimo no dia normal, máximo no dia forte.');
   (p.quadro || []).forEach(function(q, i){
@@ -2780,7 +2800,7 @@ function rgRender(){
       + '<input class="el-input" type="number" data-c="min" placeholder="Mín." value="'+(q.min == null ? '' : q.min)+'"'+dis+'><input class="el-input" type="number" data-c="max" placeholder="Máx." value="'+(q.max == null ? '' : q.max)+'"'+dis+'>'+rm('rgRemQuadro', i)+'</div>'; });
   h += add('rgAddQuadro', 'horário') + '</div>';
 
-  h += sec('Particularidades', RG.id ? 'Preferências de pessoas. A operação tem prioridade: são atendidas quando o quadro permite.' : 'Salve a regra primeiro; depois dá para incluir as particularidades das pessoas.');
+  h += sec('Particularidades da equipe', RG.id ? 'Preferências de pessoas. A operação tem prioridade: são atendidas quando o quadro permite.' : 'Salve a regra primeiro; depois dá para incluir as particularidades das pessoas.');
   if (RG.id) {
     (p.particularidades || []).forEach(function(x, i){
       var ms = x.tipo === 'nao_coincidir_folga' ? (x.matriculas || []) : [x.matricula];
@@ -2792,12 +2812,19 @@ function rgRender(){
     h += add('rgAddPart', 'particularidade');
   }
   h += '</div>';
+  h += sec('Particularidades do período', 'Valem só para o período que você está elaborando (não ficam gravadas na regra): dias de loja fechada e intervalo sem extras.')
+    + '<div class="el-campos"><div class="esc-uni"><span class="esc-uni-label">Loja fechada em</span><input class="el-input" type="date" id="el-fechado" onchange="elabAddFechado()"></div>'
+    + '<div class="esc-uni"><span class="esc-uni-label">Sem extras de</span><input class="el-input" type="date" id="el-sx-de" value="'+esc(EL.sxDe)+'" onchange="elabSxSet()"></div>'
+    + '<div class="esc-uni"><span class="esc-uni-label">Sem extras até</span><input class="el-input" type="date" id="el-sx-ate" value="'+esc(EL.sxAte)+'" onchange="elabSxSet()"></div></div>'
+    + '<div class="el-chips" id="el-fechados"></div></div>';
   document.getElementById('el-content').innerHTML = '<div class="el-rg">' + h + '</div>';
+  elabChips();
 }
 
 // lê a tela de volta para RG.p (preserva as chaves que a tela não mostra)
 function rgColher(){
   if (!RG || !RG.edita) return;
+  var dsel = document.getElementById('rg-depto'); if (dsel) RG.dep = +dsel.value || 0;
   var p = RG.p, g = function(id){ var e = document.getElementById(id); return e ? e.value : ''; }, n = function(id, d){ var v = parseFloat(g(id)); return isNaN(v) ? d : v; };
   p.jornada = Object.assign({}, p.jornada, { semanal: n('rg-j-sem', 42), tolerancia: n('rg-j-tol', 1), max_dias_seguidos: n('rg-j-seg', 5), feriado_horas: n('rg-j-fer', 8.4) });
   p.dobras_semana = n('rg-dobras', 0);
@@ -2850,18 +2877,25 @@ function rgSalvar(){
     if (e.dobra && !p.turnos[e.dobra]) e.dobra = ''; });
   (p.particularidades || []).forEach(function(x){ if (x.tipo === 'nao_coincidir_folga' ? (x.matriculas || []).length < 2 : !x.matricula) erro = erro || 'Particularidade sem pessoa escolhida.'; });
   if (erro) { toast(erro); return; }
-  var d = RG.id ? null : RG.deptos[+document.getElementById('rg-depto').value];
+  var d = RG.id ? null : RG.deptos[RG.dep];
   setBtnLoading('rg-salvar', true, 'Salvando');
   TP().rpc('escala_elab_regra_salvar', { p_id: RG.id, p_unidade: d ? d.unidade : null, p_departamento: d ? d.departamento : null, p_params: p }).then(function(r){
     setBtnLoading('rg-salvar', false, 'Salvar regra');
     if (r.error) { erroRPC(r.error); return; }
     var id = r.data && r.data.id, nova = !RG.id;
+    // grava as equipes das pessoas que ficaram pendentes (regra nova: todas as apontadas)
+    var ms = nova ? Object.keys(RG.vinc) : Object.keys(RG.pend), vinc = RG.vinc;
+    var grava = Promise.all(ms.map(function(m){ var v = vinc[m] || {};
+      return TP().rpc('escala_elab_pessoa_set', { p_regra_id: id, p_matricula: m, p_equipe: v.e || '', p_subequipe: v.s || '' }); }));
     EL.ctx = null; EL.grade = null; EL.av = null; EL.id = null; EL.status = null; document.getElementById('el-btn-salvar').disabled = true;
-    TP().rpc('escala_elab_regras').then(function(r2){
+    grava.then(function(rs){
+      var falha = (rs || []).filter(function(x){ return x && x.error; })[0]; if (falha) erroRPC(falha.error);
+      return TP().rpc('escala_elab_regras');
+    }).then(function(r2){
       if (!r2.error) { EL.regras = r2.data || [];
         document.getElementById('el-regra').innerHTML = EL.regras.map(function(x){ return '<option value="'+x.id+'">'+esc(x.unidade+' · '+x.departamento)+'</option>'; }).join('');
         document.getElementById('el-regra').value = id; }
-      elStatus(nova ? 'Regra criada — defina as equipes das pessoas em Equipes' : 'Regra salva — gere a escala de novo');
+      elStatus(nova ? 'Regra criada' : 'Regra salva — gere a escala de novo');
       elabAbrirRegras();
     });
   }, function(e){ setBtnLoading('rg-salvar', false, 'Salvar regra'); erroRPC(e); });
